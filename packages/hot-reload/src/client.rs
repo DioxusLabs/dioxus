@@ -13,7 +13,7 @@ pub fn apply_changes(dom: &mut VirtualDom, msg: &HotReloadMsg) {
             let id = &template.location;
             let value = template.template.clone();
             if let Some(mut signal) = ctx.get_signal_with_key(id) {
-                signal.set(value);
+                signal.set(Some(value));
             }
         }
     });

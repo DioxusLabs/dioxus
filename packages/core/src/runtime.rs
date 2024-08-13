@@ -1,4 +1,6 @@
+use crate::arena::ElementRef;
 use crate::innerlude::{DirtyTasks, Effect};
+use crate::nodes::VNodeMount;
 use crate::scope_context::SuspenseLocation;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
@@ -6,13 +8,17 @@ use crate::{
     scopes::ScopeId,
     Task,
 };
+use crate::{AttributeValue, ElementId, Event};
+use slab::Slab;
 use slotmap::DefaultKey;
+use std::any::Any;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
 };
+use tracing::instrument;
 
 thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
@@ -48,10 +54,23 @@ pub struct Runtime {
 
     // Tasks that are waiting to be polled
     pub(crate) dirty_tasks: RefCell<BTreeSet<DirtyTasks>>,
+
+    // The element ids that are used in the renderer
+    // These mark a specific place in a whole rsx block
+    pub(crate) elements: RefCell<Slab<Option<ElementRef>>>,
+
+    // Once nodes are mounted, the information about where they are mounted is stored here
+    // We need to store this information on the virtual dom so that we know what nodes are mounted where when we bubble events
+    // Each mount is associated with a whole rsx block. [`VirtualDom::elements`] link to a specific node in the block
+    pub(crate) mounts: RefCell<Slab<VNodeMount>>,
 }
 
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
+        let mut elements = Slab::default();
+        // the root element is always given element ID 0 since it's the container for the entire tree
+        elements.insert(None);
+
         Rc::new(Self {
             sender,
             rendering: Cell::new(true),
@@ -63,6 +82,8 @@ impl Runtime {
             suspended_tasks: Default::default(),
             pending_effects: Default::default(),
             dirty_tasks: Default::default(),
+            elements: RefCell::new(elements),
+            mounts: Default::default(),
         })
     }
 
@@ -244,6 +265,150 @@ impl Runtime {
         let scopes = self.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
         !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
+    }
+
+    /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
+    ///
+    /// This method will identify the appropriate element. The data must match up with the listener declared. Note that
+    /// this method does not give any indication as to the success of the listener call. If the listener is not found,
+    /// nothing will happen.
+    ///
+    /// It is up to the listeners themselves to mark nodes as dirty.
+    ///
+    /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
+    #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
+    pub fn handle_event(self: &Rc<Self>, name: &str, event: Event<dyn Any>, element: ElementId) {
+        let _runtime = RuntimeGuard::new(self.clone());
+        let elements = self.elements.borrow();
+
+        if let Some(Some(parent_path)) = elements.get(element.0).copied() {
+            if event.propagates() {
+                self.handle_bubbling_event(parent_path, name, event);
+            } else {
+                self.handle_non_bubbling_event(parent_path, name, event);
+            }
+        }
+    }
+
+    /*
+    ------------------------
+    The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
+    we find the target path.
+
+    With the target path, we try and move up to the parent until there is no parent.
+    Due to how bubbling works, we call the listeners before walking to the parent.
+
+    If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
+    ----------------------
+
+    For a visual demonstration, here we present a tree on the left and whether or not a listener is collected on the
+    right.
+
+    |           <-- yes (is ascendant)
+    | | |       <-- no  (is not direct ascendant)
+    | |         <-- yes (is ascendant)
+    | | | | |   <--- target element, break early, don't check other listeners
+    | | |       <-- no, broke early
+    |           <-- no, broke early
+    */
+    #[instrument(
+        skip(self, uievent),
+        level = "trace",
+        name = "VirtualDom::handle_bubbling_event"
+    )]
+    fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
+        let mounts = self.mounts.borrow();
+
+        // If the event bubbles, we traverse through the tree until we find the target element.
+        // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
+        let mut parent = Some(parent);
+        while let Some(path) = parent {
+            let mut listeners = vec![];
+
+            let Some(mount) = mounts.get(path.mount.0) else {
+                // If the node is suspended and not mounted, we can just ignore the event
+                return;
+            };
+            let el_ref = &mount.node;
+            let node_template = el_ref.template;
+            let target_path = path.path;
+
+            // Accumulate listeners into the listener list bottom to top
+            for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
+                let attrs = &*el_ref.dynamic_attrs[idx];
+
+                for attr in attrs.iter() {
+                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                    if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path) {
+                        listeners.push(&attr.value);
+
+                        // Break if this is the exact target element.
+                        // This means we won't call two listeners with the same name on the same element. This should be
+                        // documented, or be rejected from the rsx! macro outright
+                        if target_path == this_path {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+            // We check the bubble state between each call to see if the event has been stopped from bubbling
+            tracing::event!(
+                tracing::Level::TRACE,
+                "Calling {} listeners",
+                listeners.len()
+            );
+            for listener in listeners.into_iter().rev() {
+                if let AttributeValue::Listener(listener) = listener {
+                    self.rendering.set(false);
+                    listener.call(uievent.clone());
+                    self.rendering.set(true);
+                    let metadata = uievent.metadata.borrow();
+
+                    if !metadata.propagates {
+                        return;
+                    }
+                }
+            }
+
+            let mount = el_ref.mount.get().as_usize();
+            parent = mount.and_then(|id| mounts.get(id).and_then(|el| el.parent));
+        }
+    }
+
+    /// Call an event listener in the simplest way possible without bubbling upwards
+    #[instrument(
+        skip(self, uievent),
+        level = "trace",
+        name = "VirtualDom::handle_non_bubbling_event"
+    )]
+    fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
+        let mounts = self.mounts.borrow();
+        let Some(mount) = mounts.get(node.mount.0) else {
+            // If the node is suspended and not mounted, we can just ignore the event
+            return;
+        };
+        let el_ref = &mount.node;
+        let node_template = el_ref.template;
+        let target_path = node.path;
+
+        for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
+            let attrs = &*el_ref.dynamic_attrs[idx];
+
+            for attr in attrs.iter() {
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                // Only call the listener if this is the exact target element.
+                if attr.name.get(2..) == Some(name) && target_path == this_path {
+                    if let AttributeValue::Listener(listener) = &attr.value {
+                        self.rendering.set(false);
+                        listener.call(uievent.clone());
+                        self.rendering.set(true);
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 

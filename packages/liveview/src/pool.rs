@@ -11,7 +11,7 @@ use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use serde::Serialize;
-use std::{rc::Rc, time::Duration};
+use std::{any::Any, rc::Rc, time::Duration};
 use tokio_util::task::LocalPoolHandle;
 
 #[derive(Clone)]
@@ -177,22 +177,23 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                             match message {
                                 IpcMessage::Event(evt) => {
                                     // Intercept the mounted event and insert a custom element type
-                                    if let EventData::Mounted = &evt.data {
+                                    let event = if let EventData::Mounted = &evt.data {
                                         let element = LiveviewElement::new(evt.element, query_engine.clone());
-                                        vdom.handle_event(
-                                            &evt.name,
-                                            Rc::new(PlatformEventData::new(Box::new(element))),
-                                            evt.element,
+                                        Event::new(
+                                            Rc::new(PlatformEventData::new(Box::new(element))) as Rc<dyn Any>,
                                             evt.bubbles,
-                                        );
+                                        )
                                     } else {
-                                        vdom.handle_event(
-                                            &evt.name,
+                                        Event::new(
                                             evt.data.into_any(),
-                                            evt.element,
                                             evt.bubbles,
-                                        );
-                                    }
+                                        )
+                                    };
+                                    vdom.runtime().handle_event(
+                                        &evt.name,
+                                        event,
+                                        evt.element,
+                                    );
                                 }
                                 IpcMessage::Query(result) => {
                                     query_engine.send(result);

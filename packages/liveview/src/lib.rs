@@ -60,7 +60,7 @@ fn handle_edits_code() -> String {
             if (realId === null) {
               return;
             }
-            const message = window.interpreter.serializeIpcMessage("user_event", {
+            const message = window.interpreter.sendSerializedEvent({
               name: name,
               element: parseInt(realId),
               data: contents,

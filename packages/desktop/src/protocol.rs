@@ -1,4 +1,4 @@
-use crate::{assets::*, edits::EditQueue};
+use crate::{assets::*, webview::WebviewEdits};
 use dioxus_html::document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
@@ -14,10 +14,16 @@ use wry::{
 };
 
 #[cfg(any(target_os = "android", target_os = "windows"))]
-const EDITS_PATH: &str = "http://dioxus.index.html/edits";
+const EDITS_PATH: &str = "http://dioxus.index.html/__edits";
 
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
-const EDITS_PATH: &str = "dioxus://index.html/edits";
+const EDITS_PATH: &str = "dioxus://index.html/__edits";
+
+#[cfg(any(target_os = "android", target_os = "windows"))]
+const EVENTS_PATH: &str = "http://dioxus.index.html/__events";
+
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
+const EVENTS_PATH: &str = "dioxus://index.html/__events";
 
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
@@ -149,12 +155,18 @@ fn resolve_resource(path: &Path) -> PathBuf {
 pub(super) fn desktop_handler(
     request: Request<Vec<u8>>,
     asset_handlers: AssetHandlerRegistry,
-    edit_queue: &EditQueue,
     responder: RequestAsyncResponder,
+    edit_state: &WebviewEdits,
 ) {
-    // If the request is asking for edits (ie binary protocol streaming, do that)
-    if request.uri().path().trim_matches('/') == "edits" {
-        return edit_queue.handle_request(responder);
+    // If the request is asking for edits (ie binary protocol streaming), do that
+    let trimmed_uri = request.uri().path().trim_matches('/');
+    if trimmed_uri == "__edits" {
+        return edit_state.wry_queue.handle_request(responder);
+    }
+
+    // If the request is asking for an event response, do that
+    if trimmed_uri == "__events" {
+        return edit_state.handle_event(request, responder);
     }
 
     // If the user provided a custom asset handler, then call it and return the response if the request was handled.
@@ -222,7 +234,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     {NATIVE_JS}
 
     // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
-    window.interpreter = new NativeInterpreter("{EDITS_PATH}");
+    window.interpreter = new NativeInterpreter("{EDITS_PATH}", "{EVENTS_PATH}");
 
     // Wait for the page to load before sending the initialize message
     window.onload = function() {{

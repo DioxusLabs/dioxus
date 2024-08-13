@@ -28,7 +28,7 @@ impl ProxyClient {
             .with_native_roots()
             .unwrap()
             .https_or_http()
-            .enable_http1()
+            .enable_all_versions()
             .build();
         Self {
             inner: legacy::Client::builder(TokioExecutor::new()).build(https),

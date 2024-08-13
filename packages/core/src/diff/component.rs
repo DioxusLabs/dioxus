@@ -168,10 +168,10 @@ impl VNode {
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
     ) {
-        let scope = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
+        let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
 
         // Remove the scope id from the mount
-        dom.mounts[mount.0].mounted_dynamic_nodes[idx] = ScopeId::PLACEHOLDER.0;
+        dom.set_mounted_dyn_node(mount, idx, ScopeId::PLACEHOLDER.0);
         let m = self.create_component_node(mount, idx, new, parent, dom, to.as_deref_mut());
 
         // Instead of *just* removing it, we can use the replace mutation
@@ -195,7 +195,7 @@ impl VNode {
             return SuspenseBoundaryProps::create(mount, idx, component, parent, dom, to);
         }
 
-        let mut scope_id = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
+        let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
 
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
@@ -205,7 +205,7 @@ impl VNode {
                 .id;
 
             // Store the scope id for the next render
-            dom.mounts[mount.0].mounted_dynamic_nodes[idx] = scope_id.0;
+            dom.set_mounted_dyn_node(mount, idx, scope_id.0);
 
             // If this is a new scope, we also need to run it once to get the initial state
             let new = dom.run_scope(scope_id);
@@ -214,7 +214,7 @@ impl VNode {
             dom.scopes[scope_id.0].last_rendered_node = Some(new);
         }
 
-        let scope = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
+        let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
 
         let new_node = dom.scopes[scope.0]
             .last_rendered_node
