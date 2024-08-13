@@ -86,7 +86,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
-            websys_dom.write_mutations = true;
+            websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
                 export function get_initial_hydration_data() {
@@ -106,7 +106,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
             with_server_data(server_data, || {
                 dom.rebuild(&mut websys_dom);
             });
-            websys_dom.write_mutations = false;
+            websys_dom.skip_mutations = false;
 
             let rx = websys_dom.rehydrate(&dom).unwrap();
             hydration_receiver = Some(rx);

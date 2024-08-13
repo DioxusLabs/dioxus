@@ -43,7 +43,7 @@ pub struct WebsysDom {
     // NOTE: running the virtual dom with the `write_mutations` flag set to true is different from running
     // it with no mutation writer because it still assigns ids to nodes, but it doesn't write them to the dom
     #[cfg(feature = "hydrate")]
-    pub(crate) write_mutations: bool,
+    pub(crate) skip_mutations: bool,
 
     #[cfg(feature = "hydrate")]
     pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
@@ -149,7 +149,7 @@ impl WebsysDom {
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
             #[cfg(feature = "hydrate")]
-            write_mutations: false,
+            skip_mutations: false,
             #[cfg(feature = "hydrate")]
             suspense_hydration_ids: Default::default(),
         }
