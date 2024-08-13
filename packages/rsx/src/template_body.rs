@@ -152,7 +152,7 @@ impl ToTokens for TemplateBody {
                     static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
                     fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
                         if __ORIGINAL_TEMPLATE.get().is_none() {
-                            __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
+                            _ = __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
                         }
                         __ORIGINAL_TEMPLATE.get().unwrap()
                     }
