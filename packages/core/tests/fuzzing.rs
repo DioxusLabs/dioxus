@@ -258,7 +258,7 @@ fn create_random_element(cx: DepthProps) -> Element {
             let (template, dynamic_nodes) = match *last_template.borrow() {
                 Some(template) => (
                     template,
-                    (0..template.attr_paths.len())
+                    (0..template.node_paths.len())
                         .map(|_| create_random_dynamic_node(cx.depth + 1))
                         .collect(),
                 ),
