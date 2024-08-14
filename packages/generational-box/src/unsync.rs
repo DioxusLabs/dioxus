@@ -11,6 +11,10 @@ use std::{
     num::NonZeroU64,
 };
 
+type RefCellStorageEntryRef = Ref<'static, FullStorageEntry<Box<dyn Any>>>;
+
+type RefCellStorageEntryMut = RefMut<'static, FullStorageEntry<Box<dyn Any>>>;
+
 thread_local! {
     static UNSYNC_RUNTIME: RefCell<Vec<&'static UnsyncStorage>> = const { RefCell::new(Vec::new()) };
 }
@@ -41,18 +45,13 @@ pub struct UnsyncStorage {
 }
 
 impl UnsyncStorage {
-    pub(crate) fn read(
-        pointer: GenerationalPointer<Self>,
-    ) -> BorrowResult<Ref<'static, FullStorageEntry<Box<dyn Any>>>> {
+    pub(crate) fn read(pointer: GenerationalPointer<Self>) -> BorrowResult<RefCellStorageEntryRef> {
         Self::get_split_ref(pointer).map(|(_, guard)| guard)
     }
 
     pub(crate) fn get_split_ref(
         mut pointer: GenerationalPointer<Self>,
-    ) -> BorrowResult<(
-        GenerationalPointer<Self>,
-        Ref<'static, FullStorageEntry<Box<dyn Any>>>,
-    )> {
+    ) -> BorrowResult<(GenerationalPointer<Self>, RefCellStorageEntryRef)> {
         loop {
             let borrow = pointer
                 .storage
@@ -93,16 +92,13 @@ impl UnsyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<RefMut<'static, FullStorageEntry<Box<dyn Any>>>> {
+    ) -> BorrowMutResult<RefCellStorageEntryMut> {
         Self::get_split_mut(pointer).map(|(_, guard)| guard)
     }
 
     pub(crate) fn get_split_mut(
         mut pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<(
-        GenerationalPointer<Self>,
-        RefMut<'static, FullStorageEntry<Box<dyn Any>>>,
-    )> {
+    ) -> BorrowMutResult<(GenerationalPointer<Self>, RefCellStorageEntryMut)> {
         loop {
             let borrow = pointer
                 .storage

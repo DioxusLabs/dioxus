@@ -15,6 +15,12 @@ use crate::{
     GenerationalPointer, Storage,
 };
 
+type RwLockStorageEntryRef =
+    MappedRwLockReadGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>;
+
+type RwLockStorageEntryMut =
+    MappedRwLockWriteGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>;
+
 pub(crate) enum RwLockStorageEntryData<T: 'static> {
     Reference(GenerationalPointer<SyncStorage>),
     Data(FullStorageEntry<T>),
@@ -41,19 +47,13 @@ pub struct SyncStorage {
 }
 
 impl SyncStorage {
-    pub(crate) fn read(
-        pointer: GenerationalPointer<Self>,
-    ) -> BorrowResult<MappedRwLockReadGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>>
-    {
+    pub(crate) fn read(pointer: GenerationalPointer<Self>) -> BorrowResult<RwLockStorageEntryRef> {
         Self::get_split_ref(pointer).map(|(_, guard)| guard)
     }
 
     pub(crate) fn get_split_ref(
         mut pointer: GenerationalPointer<Self>,
-    ) -> BorrowResult<(
-        GenerationalPointer<Self>,
-        MappedRwLockReadGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
-    )> {
+    ) -> BorrowResult<(GenerationalPointer<Self>, RwLockStorageEntryRef)> {
         loop {
             let borrow = pointer.storage.data.read();
             if !borrow.valid(&pointer.location) {
@@ -90,18 +90,13 @@ impl SyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<
-        MappedRwLockWriteGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
-    > {
+    ) -> BorrowMutResult<RwLockStorageEntryMut> {
         Self::get_split_mut(pointer).map(|(_, guard)| guard)
     }
 
     pub(crate) fn get_split_mut(
         mut pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<(
-        GenerationalPointer<Self>,
-        MappedRwLockWriteGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
-    )> {
+    ) -> BorrowMutResult<(GenerationalPointer<Self>, RwLockStorageEntryMut)> {
         loop {
             let borrow = pointer.storage.data.write();
             if !borrow.valid(&pointer.location) {
