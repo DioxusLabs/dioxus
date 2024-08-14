@@ -127,6 +127,17 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
             None
         }
     }
+
+    /// Get a reference to the value
+    #[track_caller]
+    pub fn reference(&self) -> GenerationalBox<T, S> {
+        let ptr = S::claim(std::panic::Location::caller());
+        S::reference(ptr, self.raw).unwrap();
+        Self {
+            raw: ptr,
+            _marker: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<T, S> Copy for GenerationalBox<T, S> {}
