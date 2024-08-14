@@ -435,14 +435,9 @@ impl<'a> RouteTreeSegmentData<'a> {
                     .map(|seg| !matches!(seg, RouteSegment::CatchAll(_, _)))
                     .unwrap_or(true);
 
-                let redirect_function = &redirect.function;
-
-                let return_redirect = match redirect_function {
-                    RedirectExpr::Struct(fun) => {
-                        let thing = quote!(#fun);
-                        //panic!("{:?}", thing.to_string());
-                        thing
-                    }
+                let return_redirect = match &redirect.function {
+                    RedirectExpr::Struct(fun) => quote!(#fun),
+                    RedirectExpr::Path(fun) => quote!(#fun ()),
                     RedirectExpr::Closure(fun) => {
                         let args = fun.inputs.iter().map(|pat| match pat {
                             syn::Pat::Type(ident) => {

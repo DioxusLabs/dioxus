@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{ExprClosure, ExprStruct, Ident, LitStr, Type};
+use syn::{ExprClosure, ExprPath, ExprStruct, Ident, LitStr, Type};
 
 use crate::{
     hash::HashFragment,
@@ -24,6 +24,7 @@ pub(crate) struct Redirect {
 pub(crate) enum RedirectExpr {
     Closure(ExprClosure),
     Struct(ExprStruct),
+    Path(ExprPath),
 }
 
 impl Redirect {
@@ -63,18 +64,28 @@ impl Redirect {
         let path = input.parse::<syn::LitStr>()?;
         let _ = input.parse::<syn::Token![,]>();
 
+        let input_fork = input.fork();
+
+        // Allow closures `|id: u32| BlogPost { id }`
+        // Route variants `Route::Home`
+        // And paths to functions `Route::default`
+        // The macro already verifies that the supplied value is of the correct type.
         let function = match input.parse::<syn::ExprClosure>() {
             Ok(c) => RedirectExpr::Closure(c),
-            Err(_) => RedirectExpr::Struct(
-                input
-                    .parse::<syn::ExprStruct>()
-                    .expect("redirect function must be a closure or a route variant"),
-            ),
+            Err(_) => match input.parse::<syn::ExprStruct>() {
+                Ok(s) => RedirectExpr::Struct(s),
+                Err(_) => RedirectExpr::Path(
+                    input_fork
+                        .parse::<syn::ExprPath>()
+                        .expect("redirect function must be a closure or a route variant"),
+                ),
+            },
         };
 
         let (segments, query, hash) = match function {
             RedirectExpr::Closure(ref fun) => Self::parse_expr_closure(&path, fun)?,
-            RedirectExpr::Struct(ref fun) => Self::parse_expr_struct(&path, fun)?,
+            RedirectExpr::Struct(_) => Self::parse_blank_path(&path)?,
+            RedirectExpr::Path(_) => Self::parse_blank_path(&path)?,
         };
 
         Ok(Redirect {
@@ -127,9 +138,9 @@ impl Redirect {
         )?)
     }
 
-    fn parse_expr_struct(
+    /// Parses a path url without any url parameters.
+    fn parse_blank_path(
         path: &LitStr,
-        _variant: &ExprStruct,
     ) -> syn::Result<(
         Vec<RouteSegment>,
         Option<QuerySegment>,
