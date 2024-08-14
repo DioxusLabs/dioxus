@@ -130,12 +130,12 @@ impl Redirect {
             }
         }
 
-        Ok(parse_route_segments(
+        parse_route_segments(
             path.span(),
             #[allow(clippy::map_identity)]
             closure_arguments.iter().map(|(name, ty)| (name, ty)),
             &path.value(),
-        )?)
+        )
     }
 
     /// Parses a path url without any url parameters.
@@ -146,10 +146,10 @@ impl Redirect {
         Option<QuerySegment>,
         Option<HashFragment>,
     )> {
-        Ok(parse_route_segments(
+        parse_route_segments(
             path.span(),
             std::iter::empty::<(&Ident, &Type)>(),
             &path.value(),
-        )?)
+        )
     }
 }
