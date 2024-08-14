@@ -56,6 +56,11 @@ fn MyOutlet() -> Element {
 fn MyNav() -> Element {
     rsx!(
         div { "trailing nav" }
+        div { "whhhhh"}
+        MySearch {}
+        MySearch {}
+        MySearch {}
+        div { "hi" }
         MySearch {}
     )
 }
