@@ -170,21 +170,34 @@ impl DynamicLiteralPool {
             *(Box::new(t) as Box<dyn Any>).downcast::<T2>().unwrap()
         }
         let grab_float = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_float).expect("Expected a float component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_float).unwrap_or_else(|| {
+                tracing::error!("Expected a float component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
+                Default::default()
+
+        })
         };
         let grab_int = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_int).expect("Expected an int component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_int).unwrap_or_else(|| {
+                tracing::error!("Expected a integer component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
+                Default::default()
+            })
         };
         let grab_bool = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_bool).expect("Expected a bool component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_bool).unwrap_or_else(|| {
+                tracing::error!("Expected a bool component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
+                Default::default()
+            })
         };
         let grab_fmted = || {
-            self.get_component_property(id, hot_reload, |fmted| HotReloadLiteral::as_fmted(fmted).map(|segments| self.render_formatted(segments))).expect("Expected a string component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+            self.get_component_property(id, hot_reload, |fmted| HotReloadLiteral::as_fmted(fmted).map(|segments| self.render_formatted(segments))).unwrap_or_else(|| {
+                tracing::error!("Expected a string component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
+                Default::default()
+            })
         };
         match TypeId::of::<T>() {
             // Any string types that accept a literal
             _ if TypeId::of::<String>() == TypeId::of::<T>() => assert_type(grab_fmted()),
-            _ if TypeId::of::<&'static str>() == TypeId::of::<T>() => {
+            _ if TypeId::of::<&str>() == TypeId::of::<T>() => {
                 assert_type(Box::leak(grab_fmted().into_boxed_str()) as &'static str)
             }
             // Any integer types that accept a literal
