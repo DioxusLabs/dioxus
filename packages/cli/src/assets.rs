@@ -55,7 +55,11 @@ pub(crate) fn process_assets(
         || progress.clone(),
         move |progress, asset| {
             if let AssetType::File(file_asset) = asset {
-                match process_file(file_asset, &static_asset_output_dir) {
+                match process_file(
+                    file_asset,
+                    &static_asset_output_dir,
+                    build.build_arguments.release,
+                ) {
                     Ok(_) => {
                         // Update the progress
                         _ = progress.start_send(UpdateBuildProgress {
@@ -63,7 +67,7 @@ pub(crate) fn process_assets(
                             update: UpdateStage::AddMessage(BuildMessage {
                                 level: Level::INFO,
                                 message: MessageType::Text(format!(
-                                    "Optimized static asset {}",
+                                    "Copied static asset {}",
                                     file_asset
                                 )),
                                 source: MessageSource::Build,

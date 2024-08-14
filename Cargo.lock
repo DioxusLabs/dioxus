@@ -6109,14 +6109,12 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.3.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d41fe05b5ee629e1ac2f6edc1345dbdcc776570188bbbf26078a9d77bcd527e"
 dependencies = [
  "anyhow",
  "image 0.25.2",
  "imagequant",
  "lightningcss",
- "manganis-common",
+ "manganis-common 0.3.0-alpha.1",
  "mozjpeg",
  "object",
  "png",
@@ -6129,6 +6127,21 @@ dependencies = [
  "serde_json",
  "swc",
  "swc_common",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "manganis-common"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "base64 0.21.7",
+ "built",
+ "home",
+ "infer 0.11.0",
+ "serde",
+ "toml 0.7.8",
  "tracing",
  "url",
 ]
@@ -6157,7 +6170,7 @@ version = "0.3.0-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ca00f3c266ba409900d32707f4bc66a60fbb707cf9d4d8d44d8e265c431c149"
 dependencies = [
- "manganis-common",
+ "manganis-common 0.3.0-alpha.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2",
  "quote",
  "serde_json",
