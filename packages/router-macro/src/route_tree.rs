@@ -438,8 +438,12 @@ impl<'a> RouteTreeSegmentData<'a> {
                 let redirect_function = &redirect.function;
 
                 let return_redirect = match redirect_function {
-                    RedirectExpr::RouteVariant(fun) => quote!(#fun),
-                    RedirectExpr::TypedClosure(fun) => {
+                    RedirectExpr::Struct(fun) => {
+                        let thing = quote!(#fun);
+                        //panic!("{:?}", thing.to_string());
+                        thing
+                    }
+                    RedirectExpr::Closure(fun) => {
                         let args = fun.inputs.iter().map(|pat| match pat {
                             syn::Pat::Type(ident) => {
                                 let name = &ident.pat;

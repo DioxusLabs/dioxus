@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{ExprClosure, Ident, LitStr, Type, Variant};
+use syn::{ExprClosure, ExprStruct, Ident, LitStr, Type};
 
 use crate::{
     hash::HashFragment,
@@ -22,8 +22,8 @@ pub(crate) struct Redirect {
 
 #[derive(Debug)]
 pub(crate) enum RedirectExpr {
-    TypedClosure(ExprClosure),
-    RouteVariant(Variant),
+    Closure(ExprClosure),
+    Struct(ExprStruct),
 }
 
 impl Redirect {
@@ -64,19 +64,18 @@ impl Redirect {
         let _ = input.parse::<syn::Token![,]>();
 
         let function = match input.parse::<syn::ExprClosure>() {
-            Ok(c) => RedirectExpr::TypedClosure(c),
-            Err(_) => RedirectExpr::RouteVariant(
+            Ok(c) => RedirectExpr::Closure(c),
+            Err(_) => RedirectExpr::Struct(
                 input
-                    .parse::<syn::Variant>()
+                    .parse::<syn::ExprStruct>()
                     .expect("redirect function must be a closure or a route variant"),
             ),
         };
 
         let (segments, query, hash) = match function {
-            RedirectExpr::TypedClosure(ref fun) => Self::parse_closure_redirect(&path, fun)?,
-            RedirectExpr::RouteVariant(ref fun) => Self::parse_field_redirect(&path, fun)?,
+            RedirectExpr::Closure(ref fun) => Self::parse_expr_closure(&path, fun)?,
+            RedirectExpr::Struct(ref fun) => Self::parse_expr_struct(&path, fun)?,
         };
-
 
         Ok(Redirect {
             route: path,
@@ -89,16 +88,16 @@ impl Redirect {
         })
     }
 
-    fn parse_closure_redirect(
+    fn parse_expr_closure(
         path: &LitStr,
-        function: &ExprClosure,
+        closure: &ExprClosure,
     ) -> syn::Result<(
         Vec<RouteSegment>,
         Option<QuerySegment>,
         Option<HashFragment>,
     )> {
         let mut closure_arguments = Vec::new();
-        for arg in function.inputs.iter() {
+        for arg in closure.inputs.iter() {
             match arg {
                 syn::Pat::Type(pat) => match &*pat.pat {
                     syn::Pat::Ident(ident) => {
@@ -128,9 +127,9 @@ impl Redirect {
         )?)
     }
 
-    fn parse_field_redirect(
+    fn parse_expr_struct(
         path: &LitStr,
-        _variant: &Variant,
+        _variant: &ExprStruct,
     ) -> syn::Result<(
         Vec<RouteSegment>,
         Option<QuerySegment>,
