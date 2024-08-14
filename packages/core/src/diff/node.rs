@@ -35,8 +35,6 @@ impl VNode {
             return self.replace(std::slice::from_ref(new), parent, dom, to);
         }
 
-        let mount_id = self.mount.get();
-
         self.move_mount_to(new, dom);
 
         // If the templates are the same, we don't need to do anything, except copy over the mount information
@@ -52,6 +50,7 @@ impl VNode {
         }
 
         // Now diff the dynamic nodes
+        let mount_id = new.mount.get();
         for (dyn_node_idx, (old, new)) in self
             .dynamic_nodes
             .iter()
@@ -64,7 +63,7 @@ impl VNode {
 
     fn move_mount_to(&self, new: &VNode, dom: &mut VirtualDom) {
         // Copy over the mount information
-        let mount_id = self.mount.get();
+        let mount_id = self.mount.take();
         new.mount.set(mount_id);
 
         if mount_id.mounted() {
@@ -72,7 +71,7 @@ impl VNode {
             let mount = &mut mounts[mount_id.0];
 
             // Update the reference to the node for bubbling events
-            mount.node = new.clone_mounted();
+            mount.node = new.clone();
         }
     }
 
@@ -293,6 +292,7 @@ impl VNode {
         self.reclaim_roots(mount, dom, to, destroy_component_state, replace_with);
 
         if destroy_component_state {
+            let mount = self.mount.take();
             // Remove the mount information
             dom.runtime.mounts.borrow_mut().remove(mount.0);
         }
@@ -416,7 +416,7 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
-        let mount_id = self.mount.get();
+        let mount_id = new.mount.get();
         for (idx, (old_attrs, new_attrs)) in self
             .dynamic_attrs
             .iter()
@@ -535,7 +535,7 @@ impl VNode {
             self.mount.set(mount);
             tracing::trace!(?self, ?mount, "creating template");
             entry.insert(VNodeMount {
-                node: self.clone_mounted(),
+                node: self.clone(),
                 parent,
                 root_ids: vec![ElementId(0); template.roots.len()].into_boxed_slice(),
                 mounted_attributes: vec![ElementId(0); template.attr_paths.len()]
@@ -559,7 +559,8 @@ impl VNode {
                     .as_usize()
                     .expect("node should already be mounted"),
             ),
-            "Node mount should be valid"
+            "Tried to find mount {:?} in dom.mounts, but it wasn't there",
+            self.mount.get()
         );
         let mount = self.mount.get();
 

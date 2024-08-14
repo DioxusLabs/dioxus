@@ -1,4 +1,5 @@
-use crate::innerlude::{RenderError, VProps};
+use crate::innerlude::VProps;
+use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
@@ -6,7 +7,7 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
 use std::{
@@ -14,77 +15,6 @@ use std::{
     cell::Cell,
     fmt::{Arguments, Debug},
 };
-
-/// The actual state of the component's most recent computation
-///
-/// If the component returned early (e.g. `return None`), this will be Aborted(None)
-#[derive(Debug)]
-pub struct RenderReturn {
-    /// The node that was rendered
-    pub(crate) node: Element,
-}
-
-impl From<RenderReturn> for VNode {
-    fn from(val: RenderReturn) -> Self {
-        match val.node {
-            Ok(node) => node,
-            Err(RenderError::Aborted(e)) => e.render,
-            Err(RenderError::Suspended(fut)) => fut.placeholder,
-        }
-    }
-}
-
-impl From<Element> for RenderReturn {
-    fn from(node: Element) -> Self {
-        RenderReturn { node }
-    }
-}
-
-impl Clone for RenderReturn {
-    fn clone(&self) -> Self {
-        match &self.node {
-            Ok(node) => RenderReturn {
-                node: Ok(node.clone_mounted()),
-            },
-            Err(RenderError::Aborted(err)) => RenderReturn {
-                node: Err(RenderError::Aborted(err.clone_mounted())),
-            },
-            Err(RenderError::Suspended(fut)) => RenderReturn {
-                node: Err(RenderError::Suspended(fut.clone_mounted())),
-            },
-        }
-    }
-}
-
-impl Default for RenderReturn {
-    fn default() -> Self {
-        RenderReturn {
-            node: Ok(VNode::placeholder()),
-        }
-    }
-}
-
-impl Deref for RenderReturn {
-    type Target = VNode;
-
-    fn deref(&self) -> &Self::Target {
-        match &self.node {
-            Ok(node) => node,
-            Err(RenderError::Aborted(err)) => &err.render,
-            Err(RenderError::Suspended(fut)) => &fut.placeholder,
-        }
-    }
-}
-
-impl DerefMut for RenderReturn {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match &mut self.node {
-            Ok(node) => node,
-            Err(RenderError::Aborted(err)) => &mut err.render,
-            Err(RenderError::Suspended(fut)) => &mut fut.placeholder,
-        }
-    }
-}
 
 /// The information about the
 #[derive(Debug)]
@@ -162,7 +92,7 @@ pub struct VNodeInner {
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VNode {
     vnode: Rc<VNodeInner>,
 
@@ -170,12 +100,41 @@ pub struct VNode {
     pub(crate) mount: Cell<MountId>,
 }
 
-impl Clone for VNode {
-    fn clone(&self) -> Self {
-        Self {
-            vnode: self.vnode.clone(),
-            mount: Default::default(),
+impl AsRef<VNode> for Element {
+    fn as_ref(&self) -> &VNode {
+        match self {
+            Element::Ok(node) => node,
+            Element::Err(RenderError::Aborted(err)) => &err.render,
+            Element::Err(RenderError::Suspended(fut)) => &fut.placeholder,
         }
+    }
+}
+
+impl From<&Element> for VNode {
+    fn from(val: &Element) -> Self {
+        AsRef::as_ref(val).clone()
+    }
+}
+
+impl From<Element> for VNode {
+    fn from(val: Element) -> Self {
+        match val {
+            Element::Ok(node) => node,
+            Element::Err(RenderError::Aborted(err)) => err.render,
+            Element::Err(RenderError::Suspended(fut)) => fut.placeholder,
+        }
+    }
+}
+
+/// A tiny helper trait to get the vnode for a Element
+pub(crate) trait AsVNode {
+    /// Get the vnode for this element
+    fn as_vnode(&self) -> &VNode;
+}
+
+impl AsVNode for Element {
+    fn as_vnode(&self) -> &VNode {
+        AsRef::as_ref(self)
     }
 }
 
@@ -223,14 +182,6 @@ impl Deref for VNode {
 }
 
 impl VNode {
-    /// Clone the element while retaining the mount information of the node
-    pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            vnode: self.vnode.clone(),
-            mount: self.mount.clone(),
-        }
-    }
-
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
         Ok(Self::default())
