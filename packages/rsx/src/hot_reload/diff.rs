@@ -446,7 +446,7 @@ impl HotReloadResult {
             }
         }
 
-        literal_component_properties.into_iter().collect()
+        Some(literal_component_properties.into_iter().flatten().collect())
     }
 
     /// Hot reload an if chain
