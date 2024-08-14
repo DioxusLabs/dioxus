@@ -95,11 +95,6 @@ impl WriteMutations for MutationState {
     }
 
     fn load_template(&mut self, template: Template, index: usize, id: dioxus_core::ElementId) {
-        println!(
-            "loading template:\n {:#?}\n {:#?}\n {:#?}\n\n",
-            template, index, id
-        );
-
         // Get the template or create it if we haven't seen it before
         let tmpl_id = self.templates.get(&template).cloned().unwrap_or_else(|| {
             let tmpl_id = self.templates.len() as u16;
@@ -124,7 +119,6 @@ impl WriteMutations for MutationState {
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        println!("replace placeholder with nodes: {m} - {:?}", path);
         self.channel.replace_placeholder_ref(path, m as u16);
     }
 

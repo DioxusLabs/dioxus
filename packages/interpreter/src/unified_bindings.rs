@@ -130,11 +130,7 @@ mod js {
         "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($ptr$, $len$); node.replaceWith(...els);}"
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
-        r#"{
-            let node = this.templates[$tmpl_id$][$index$].cloneNode(true);
-            this.nodes[$id$] = node;
-            this.stack.push(node);
-        }"#
+        "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
     }
 
     #[cfg(feature = "binary-protocol")]
@@ -150,17 +146,12 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn set_top_attribute(field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
-        r#"{
-            this.setAttributeInner(this.stack[this.stack.length-1], $field$, $value$, $ns$);
-        }"#
+        "{this.setAttributeInner(this.stack[this.stack.length-1], $field$, $value$, $ns$);}"
     }
 
     #[cfg(feature = "binary-protocol")]
     fn add_placeholder() {
-        r#"{
-            let node = document.createComment('placeholder');
-            this.stack.push(node);
-        }"#
+        "{let node = document.createComment('placeholder'); this.stack.push(node);}"
     }
 
     #[cfg(feature = "binary-protocol")]
@@ -208,36 +199,6 @@ mod js {
     }"#
     }
 
-    /// The coolest ID ever!
-    #[cfg(feature = "binary-protocol")]
-    fn hydrate_text_ref(array: &[u8], value: &str, id: u32) {
-        r#"{
-        let node = this.loadChild($array$);
-        if (node.nodeType == node.TEXT_NODE) {
-            node.textContent = value;
-        } else {
-            let text = document.createTextNode(value);
-            node.replaceWith(text);
-            node = text;
-        }
-        this.nodes[$id$] = node;
-    }"#
-    }
-    /// The coolest ID ever!
-    fn hydrate_text(array: &[u8], value: &str, id: u32) {
-        r#"{
-        let node = this.loadChild($array$);
-        if (node.nodeType == node.TEXT_NODE) {
-            node.textContent = value;
-        } else {
-            let text = document.createTextNode(value);
-            node.replaceWith(text);
-            node = text;
-        }
-        this.nodes[$id$] = node;
-    }"#
-    }
-
     /// Assign the ID
     #[cfg(feature = "binary-protocol")]
     fn assign_id_ref(array: &[u8], id: u32) {
@@ -246,12 +207,6 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn replace_placeholder_ref(array: &[u8], n: u16) {
-        r#"{
-            console.log('[before] array:', array, 'n:', n, 'len:', this.stack.length, 'stack:', this.stack);
-            let els = this.stack.splice(this.stack.length - n);
-            let node = this.loadChild(array);
-            console.log('[after] len:', this.stack.length, 'node:', node, 'els:', els, 'stack:', this.stack);
-            node.replaceWith(...els);
-        }"#
+        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($array$); node.replaceWith(...els);}"
     }
 }

@@ -17,35 +17,6 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
-        div {
-            MyNav {} // 1 -> 3
-            MyOutlet {}
-        }
+        div { "Hello, world!" }
     }
 }
-
-fn MyNav() -> Element {
-    rsx!(
-        div { "trailing nav" }
-        div { "whhhhh"}
-        div { "bhhhh" }
-    )
-}
-
-fn MyOutlet() -> Element {
-    rsx!(
-        div { "homepage 1" }
-    )
-}
-
-/*
-root
-root app
-root app search
-root app search trailing
-root app
-root app homepage
-root app
-root app footer
-root
-*/
