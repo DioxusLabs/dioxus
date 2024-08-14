@@ -694,9 +694,50 @@ impl VNode {
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
     ) {
-        // Only take nodes that are under this root node
-        let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
-        while let Some((dynamic_node_id, path)) = dynamic_nodes_iter.next_if(from_root_node) {
+        fn collect_dyn_node_range(
+            dynamic_nodes: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+            root_idx: u8,
+        ) -> Option<(usize, usize)> {
+            let start = match dynamic_nodes.peek() {
+                Some((idx, [first, ..])) if *first == root_idx => *idx,
+                _ => return None,
+            };
+
+            let mut end = start;
+
+            while let Some((idx, p)) =
+                dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
+            {
+                if p.len() == 1 {
+                    continue;
+                }
+
+                end = idx;
+            }
+
+            Some((start, end))
+        }
+
+        let (start, end) = match collect_dyn_node_range(dynamic_nodes_iter, root_idx) {
+            Some((a, b)) => (a, b),
+            None => return,
+        };
+
+        // !!VERY IMPORTANT!!
+        //
+        // We need to walk the dynamic nodes in reverse order because we are going to replace the
+        // placeholder with the new nodes, which will invalidate our paths into the template.
+        // If we go in reverse, we leave a "wake of destruction" in our path, but our next iteration
+        // will still be "clean" since we only invalidated downstream nodes.
+        //
+        // Forgetting to do this will cause weird bugs like:
+        //  https://github.com/DioxusLabs/dioxus/issues/2809
+        //
+        // Which are quite serious.
+        // There might be more places in this codebase where we need to do `.rev()`
+        let reversed_iter = (start..=end).rev();
+
+        for dynamic_node_id in reversed_iter {
             let m = self.create_dynamic_node(
                 &self.dynamic_nodes[dynamic_node_id],
                 mount,
@@ -708,7 +749,7 @@ impl VNode {
                 // If we actually created real new nodes, we need to replace the placeholder for this dynamic node with the new dynamic nodes
                 if m > 0 {
                     // The path is one shorter because the top node is the root
-                    let path = &path[1..];
+                    let path = &self.template.node_paths[dynamic_node_id][1..];
                     to.replace_placeholder_with_nodes(path, m);
                 }
             }
