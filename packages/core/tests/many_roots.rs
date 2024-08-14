@@ -47,6 +47,32 @@ fn many_roots() {
 
     println!("{:#?}", edits.edits);
 
+    let mut stack = vec![];
+
+    for edit in edits.edits {
+        println!("stack: {stack:?}\nedit\n{edit:?}\n ");
+        match edit {
+            LoadTemplate { template, index, id } => stack.push(id),
+            ReplacePlaceholder { path, m } => stack.truncate(stack.len() - m),
+            AppendChildren { id, m } => stack.truncate(stack.len() - m),
+
+            AssignId { path, id } => todo!(),
+            CreatePlaceholder { id } => todo!(),
+            CreateTextNode { value, id } => todo!(),
+            ReplaceWith { id, m } => todo!(),
+            InsertAfter { id, m } => todo!(),
+            InsertBefore { id, m } => todo!(),
+            SetAttribute { name, ns, value, id } => todo!(),
+            SetText { value, id } => todo!(),
+            NewEventListener { name, id } => todo!(),
+            RemoveEventListener { name, id } => todo!(),
+            Remove { id } => todo!(),
+            PushRoot { id } => todo!(),
+        }
+    }
+
+    dbg!(stack);
+
     // assert_eq!(
     //     edits.edits,
     //     [

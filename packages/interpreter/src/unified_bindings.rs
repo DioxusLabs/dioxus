@@ -204,6 +204,36 @@ mod js {
     }"#
     }
 
+    /// The coolest ID ever!
+    #[cfg(feature = "binary-protocol")]
+    fn hydrate_text_ref(array: &[u8], value: &str, id: u32) {
+        r#"{
+        let node = this.loadChild($array$);
+        if (node.nodeType == node.TEXT_NODE) {
+            node.textContent = value;
+        } else {
+            let text = document.createTextNode(value);
+            node.replaceWith(text);
+            node = text;
+        }
+        this.nodes[$id$] = node;
+    }"#
+    }
+    /// The coolest ID ever!
+    fn hydrate_text(array: &[u8], value: &str, id: u32) {
+        r#"{
+        let node = this.loadChild($array$);
+        if (node.nodeType == node.TEXT_NODE) {
+            node.textContent = value;
+        } else {
+            let text = document.createTextNode(value);
+            node.replaceWith(text);
+            node = text;
+        }
+        this.nodes[$id$] = node;
+    }"#
+    }
+
     /// Assign the ID
     #[cfg(feature = "binary-protocol")]
     fn assign_id_ref(array: &[u8], id: u32) {
