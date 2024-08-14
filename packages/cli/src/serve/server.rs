@@ -44,6 +44,11 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
+pub enum ServerUpdate {
+    NewConnection,
+    Message(Message),
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 enum Status {
@@ -231,7 +236,7 @@ impl Server {
     }
 
     /// Wait for new clients to be connected and then save them
-    pub async fn wait(&mut self) -> Option<Message> {
+    pub async fn wait(&mut self) -> Option<ServerUpdate> {
         let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
         let mut new_build_status_socket = self.new_build_status_sockets.next();
         let mut new_message = self
@@ -247,7 +252,7 @@ impl Server {
                 if let Some(new_socket) = new_hot_reload_socket {
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
-                    return None;
+                    return Some(ServerUpdate::NewConnection);
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
@@ -269,7 +274,7 @@ impl Server {
             }
             (idx, message) = next_new_message => {
                 match message {
-                    Some(Ok(message)) => return Some(message),
+                    Some(Ok(message)) => return Some(ServerUpdate::Message(message)),
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
