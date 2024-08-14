@@ -11,34 +11,20 @@ fn many_roots() {
                 MyNav {}
                 MyOutlet {}
             }
-            MyFooter {}
-        }
-    }
-
-    fn MyFooter() -> Element {
-        rsx! {
-            div { "footer" }
         }
     }
 
     fn MyNav() -> Element {
         rsx!(
             div { "trailing nav" }
-            MySearch {}
+            div { "whhhhh"}
+            div { "bhhhh" }
         )
-    }
-
-    fn MySearch() -> Element {
-        rsx!("search")
     }
 
     fn MyOutlet() -> Element {
         rsx!(
-            if true {
-                div {
-                    "homepage"
-                }
-            }
+            div { "homepage 1" }
         )
     }
 
@@ -48,7 +34,6 @@ fn many_roots() {
     println!("{:#?}", edits.edits);
 
     let mut stack = vec![];
-
     for edit in edits.edits {
         println!("stack: {stack:?}\nedit\n{edit:?}\n ");
         match edit {

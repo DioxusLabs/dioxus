@@ -15,58 +15,27 @@ fn main() {
     launch(app);
 }
 
-// fn app() -> Element {
-//     rsx! {
-//         div { "Hello, world!" }
-//     }
-// }
-
 fn app() -> Element {
     rsx! {
         div {
-            MyNav {}
+            MyNav {} // 1 -> 3
             MyOutlet {}
         }
-        MyFooter {}
     }
-}
-
-fn MyFooter() -> Element {
-    rsx! {
-        div { "footer" }
-    }
-}
-
-fn MyLink() -> Element {
-    rsx! {
-        div { "link" }
-    }
-}
-
-fn MyOutlet() -> Element {
-    rsx!(
-        if true {
-            div {
-                "homepage"
-            }
-        }
-    )
 }
 
 fn MyNav() -> Element {
     rsx!(
         div { "trailing nav" }
         div { "whhhhh"}
-        MySearch {}
-        MySearch {}
-        MySearch {}
-        div { "hi" }
-        MySearch {}
+        div { "bhhhh" }
     )
 }
 
-fn MySearch() -> Element {
-    rsx!("search")
+fn MyOutlet() -> Element {
+    rsx!(
+        div { "homepage 1" }
+    )
 }
 
 /*

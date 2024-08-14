@@ -124,7 +124,7 @@ impl WriteMutations for MutationState {
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        println!("{:?}", path);
+        println!("replace placeholder with nodes: {m} - {:?}", path);
         self.channel.replace_placeholder_ref(path, m as u16);
     }
 

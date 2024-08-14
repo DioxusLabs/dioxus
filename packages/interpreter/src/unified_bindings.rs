@@ -130,7 +130,11 @@ mod js {
         "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($ptr$, $len$); node.replaceWith(...els);}"
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
-        "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
+        r#"{
+            let node = this.templates[$tmpl_id$][$index$].cloneNode(true);
+            this.nodes[$id$] = node;
+            this.stack.push(node);
+        }"#
     }
 
     #[cfg(feature = "binary-protocol")]
@@ -146,18 +150,18 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn set_top_attribute(field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
-        "{this.setAttributeInner(this.stack[this.stack.length-1], $field$, $value$, $ns$);}"
+        r#"{
+            this.setAttributeInner(this.stack[this.stack.length-1], $field$, $value$, $ns$);
+        }"#
     }
 
     #[cfg(feature = "binary-protocol")]
     fn add_placeholder() {
-        "{let node = document.createComment('placeholder'); this.stack.push(node);}"
+        r#"{
+            let node = document.createComment('placeholder');
+            this.stack.push(node);
+        }"#
     }
-
-    // #[cfg(feature = "binary-protocol")]
-    // fn add_placeholder() {
-    //     "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node);}"
-    // }
 
     #[cfg(feature = "binary-protocol")]
     fn create_element(element: &'static str<u8, el>) {
@@ -242,6 +246,12 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn replace_placeholder_ref(array: &[u8], n: u16) {
-        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($array$); console.log(els, node); node.replaceWith(...els);}"
+        r#"{
+            console.log('[before] array:', array, 'n:', n, 'len:', this.stack.length, 'stack:', this.stack);
+            let els = this.stack.splice(this.stack.length - n);
+            let node = this.loadChild(array);
+            console.log('[after] len:', this.stack.length, 'node:', node, 'els:', els, 'stack:', this.stack);
+            node.replaceWith(...els);
+        }"#
     }
 }
