@@ -11,7 +11,8 @@ use crate::{
     entry::{FullStorageEntry, MemoryLocationBorrowInfo, StorageEntry},
     error::{self, ValueDroppedError},
     references::{GenerationalRef, GenerationalRefMut},
-    AnyStorage, BorrowError, BorrowMutError, GenerationalLocation, GenerationalPointer, Storage,
+    AnyStorage, BorrowError, BorrowMutError, BorrowMutResult, BorrowResult, GenerationalLocation,
+    GenerationalPointer, Storage,
 };
 
 pub(crate) enum RwLockStorageEntryData<T: 'static> {
@@ -42,22 +43,17 @@ pub struct SyncStorage {
 impl SyncStorage {
     pub(crate) fn read(
         pointer: GenerationalPointer<Self>,
-    ) -> Result<
-        MappedRwLockReadGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
-        BorrowError,
-    > {
+    ) -> BorrowResult<MappedRwLockReadGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>>
+    {
         Self::get_split_ref(pointer).map(|(_, guard)| guard)
     }
 
     pub(crate) fn get_split_ref(
         mut pointer: GenerationalPointer<Self>,
-    ) -> Result<
-        (
-            GenerationalPointer<Self>,
-            MappedRwLockReadGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
-        ),
-        BorrowError,
-    > {
+    ) -> BorrowResult<(
+        GenerationalPointer<Self>,
+        MappedRwLockReadGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
+    )> {
         loop {
             let borrow = pointer.storage.data.read();
             if !borrow.valid(&pointer.location) {
@@ -94,22 +90,18 @@ impl SyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> Result<
+    ) -> BorrowMutResult<
         MappedRwLockWriteGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
-        BorrowMutError,
     > {
         Self::get_split_mut(pointer).map(|(_, guard)| guard)
     }
 
     pub(crate) fn get_split_mut(
         mut pointer: GenerationalPointer<Self>,
-    ) -> Result<
-        (
-            GenerationalPointer<Self>,
-            MappedRwLockWriteGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
-        ),
-        BorrowMutError,
-    > {
+    ) -> BorrowMutResult<(
+        GenerationalPointer<Self>,
+        MappedRwLockWriteGuard<'static, FullStorageEntry<Box<dyn Any + Send + Sync>>>,
+    )> {
         loop {
             let borrow = pointer.storage.data.write();
             if !borrow.valid(&pointer.location) {

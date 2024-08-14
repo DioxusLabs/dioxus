@@ -2,8 +2,8 @@ use crate::{
     entry::{FullStorageEntry, MemoryLocationBorrowInfo, StorageEntry},
     error,
     references::{GenerationalRef, GenerationalRefMut},
-    AnyStorage, BorrowError, BorrowMutError, GenerationalLocation, GenerationalPointer, Storage,
-    ValueDroppedError,
+    AnyStorage, BorrowError, BorrowMutError, BorrowMutResult, BorrowResult, GenerationalLocation,
+    GenerationalPointer, Storage, ValueDroppedError,
 };
 use std::{
     any::Any,
@@ -43,19 +43,16 @@ pub struct UnsyncStorage {
 impl UnsyncStorage {
     pub(crate) fn read(
         pointer: GenerationalPointer<Self>,
-    ) -> Result<Ref<'static, FullStorageEntry<Box<dyn Any>>>, BorrowError> {
+    ) -> BorrowResult<Ref<'static, FullStorageEntry<Box<dyn Any>>>> {
         Self::get_split_ref(pointer).map(|(_, guard)| guard)
     }
 
     pub(crate) fn get_split_ref(
         mut pointer: GenerationalPointer<Self>,
-    ) -> Result<
-        (
-            GenerationalPointer<Self>,
-            Ref<'static, FullStorageEntry<Box<dyn Any>>>,
-        ),
-        BorrowError,
-    > {
+    ) -> BorrowResult<(
+        GenerationalPointer<Self>,
+        Ref<'static, FullStorageEntry<Box<dyn Any>>>,
+    )> {
         loop {
             let borrow = pointer
                 .storage
@@ -96,19 +93,16 @@ impl UnsyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> Result<RefMut<'static, FullStorageEntry<Box<dyn Any>>>, BorrowMutError> {
+    ) -> BorrowMutResult<RefMut<'static, FullStorageEntry<Box<dyn Any>>>> {
         Self::get_split_mut(pointer).map(|(_, guard)| guard)
     }
 
     pub(crate) fn get_split_mut(
         mut pointer: GenerationalPointer<Self>,
-    ) -> Result<
-        (
-            GenerationalPointer<Self>,
-            RefMut<'static, FullStorageEntry<Box<dyn Any>>>,
-        ),
-        BorrowMutError,
-    > {
+    ) -> BorrowMutResult<(
+        GenerationalPointer<Self>,
+        RefMut<'static, FullStorageEntry<Box<dyn Any>>>,
+    )> {
         loop {
             let borrow = pointer
                 .storage
