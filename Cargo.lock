@@ -2714,6 +2714,7 @@ dependencies = [
  "tokio-stream",
  "tokio-tungstenite 0.23.1",
  "tracing",
+ "warnings",
 ]
 
 [[package]]
