@@ -357,44 +357,6 @@ fn no_common_keys() {
     );
 }
 
-/*
-shared middle:
-A B C J | K L | D E F I
-A B C J | L K | D E F
-        ^     ^
-
-no shared:
-A B C J K L D E F
-F E D L K J C B A
-Some((0, 0))
-
-new middle empty:
-A B C J | K L | D E F
-A B C J || D E F
-        ^^
-
-old middle empty:
-A B C J || D E F
-A B C J | K L | D E F
-        ^
-        ^
-
-old middle empty (l-o-z):
-|| D E F
-| K L | D E F
-^
-^
-
-old middle empty (r-o-z):
-A B C J || D E F
-A B C J | K L | D E F
-        ^     ^
-
-old middle empty (r-o-z):
-A B C J || K L D E F
-A B C J | O P | K L D E F
-        ^^
- */
 #[test]
 fn perfect_reverse() {
     let mut dom = VirtualDom::new(|| {
@@ -411,17 +373,22 @@ fn perfect_reverse() {
 
     dom.mark_dirty(ScopeId::APP);
     let edits = dom.render_immediate_to_vec().edits;
-    print!("{:#?}", edits);
-    // assert_eq!(
-    //     [
-    //         LoadTemplate { index: 0, id: ElementId(4) },
-    //         LoadTemplate { index: 0, id: ElementId(5) },
-    //         LoadTemplate { index: 0, id: ElementId(6) },
-    //         Remove { id: ElementId(3) },
-    //         Remove { id: ElementId(2) },
-    //         ReplaceWith { id: ElementId(1), m: 3 }
-    //     ]
-    // );
+    assert_eq!(
+        edits,
+        [
+            LoadTemplate { index: 0, id: ElementId(9,) },
+            InsertAfter { id: ElementId(1,), m: 1 },
+            LoadTemplate { index: 0, id: ElementId(10,) },
+            PushRoot { id: ElementId(8,) },
+            PushRoot { id: ElementId(7,) },
+            PushRoot { id: ElementId(6,) },
+            PushRoot { id: ElementId(5,) },
+            PushRoot { id: ElementId(4,) },
+            PushRoot { id: ElementId(3,) },
+            PushRoot { id: ElementId(2,) },
+            InsertBefore { id: ElementId(1,), m: 8 },
+        ]
+    )
 }
 
 #[test]
@@ -440,17 +407,14 @@ fn old_middle_empty_left_pivot() {
 
     dom.mark_dirty(ScopeId::APP);
     let edits = dom.render_immediate_to_vec().edits;
-    print!("{:#?}", edits);
-    // assert_eq!(
-    //     [
-    //         LoadTemplate { index: 0, id: ElementId(4) },
-    //         LoadTemplate { index: 0, id: ElementId(5) },
-    //         LoadTemplate { index: 0, id: ElementId(6) },
-    //         Remove { id: ElementId(3) },
-    //         Remove { id: ElementId(2) },
-    //         ReplaceWith { id: ElementId(1), m: 3 }
-    //     ]
-    // );
+    assert_eq!(
+        edits,
+        [
+            LoadTemplate { index: 0, id: ElementId(6,) },
+            LoadTemplate { index: 0, id: ElementId(7,) },
+            InsertBefore { id: ElementId(1,), m: 2 },
+        ]
+    )
 }
 
 #[test]
@@ -472,15 +436,12 @@ fn old_middle_empty_right_pivot() {
 
     dom.mark_dirty(ScopeId::APP);
     let edits = dom.render_immediate_to_vec().edits;
-    print!("{:#?}", edits);
-    // assert_eq!(
-    //     [
-    //         LoadTemplate { index: 0, id: ElementId(4) },
-    //         LoadTemplate { index: 0, id: ElementId(5) },
-    //         LoadTemplate { index: 0, id: ElementId(6) },
-    //         Remove { id: ElementId(3) },
-    //         Remove { id: ElementId(2) },
-    //         ReplaceWith { id: ElementId(1), m: 3 }
-    //     ]
-    // );
+    assert_eq!(
+        edits,
+        [
+            LoadTemplate { index: 0, id: ElementId(9) },
+            LoadTemplate { index: 0, id: ElementId(10) },
+            InsertBefore { id: ElementId(4), m: 2 },
+        ]
+    );
 }
