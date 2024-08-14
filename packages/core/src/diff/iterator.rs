@@ -219,11 +219,6 @@ impl VirtualDom {
             return None;
         }
 
-        println!("left_offset: {left_offset}");
-        println!("right_offset: {right_offset}");
-        println!("new.len(): {}", new.len());
-        println!("old.len(): {}", old.len());
-
         Some((left_offset, right_offset))
     }
 
