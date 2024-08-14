@@ -206,8 +206,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Drop the value out of the signal, invalidating the signal in the process.
-    pub fn manually_drop(&self) -> Option<T> {
-        self.inner.manually_drop().map(|i| i.value)
+    pub fn manually_drop(&self) {
+        self.inner.manually_drop()
     }
 
     /// Get the scope the signal was created in.

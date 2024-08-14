@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::{
     fmt::Debug,
     marker::PhantomData,
+    num::NonZeroU64,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -24,7 +25,7 @@ mod unsync;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GenerationalBoxId {
     data_ptr: *const (),
-    generation: u64,
+    generation: NonZeroU64,
 }
 
 // Safety: GenerationalBoxId is Send and Sync because there is no way to access the pointer.
@@ -108,12 +109,11 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     }
 
     /// Drop the value out of the generational box and invalidate the generational box.
-    /// This will return the value if the value was taken.
-    pub fn manually_drop(&self) -> Option<T>
+    pub fn manually_drop(&self)
     where
         T: 'static,
     {
-        self.raw.take()
+        self.raw.recycle();
     }
 
     /// Try to get the location the generational box was created at. In release mode this will always return None.
@@ -151,6 +151,12 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
 
     /// Set the value if the location is valid
     fn set(location: GenerationalPointer<Self>, value: Data);
+
+    /// Reference another location if the location is valid
+    fn reference(
+        location: GenerationalPointer<Self>,
+        other: GenerationalPointer<Self>,
+    ) -> Result<(), BorrowMutError>;
 }
 
 /// A trait for any storage backing type.
@@ -206,7 +212,7 @@ pub trait AnyStorage: Default + 'static {
     fn data_ptr(&self) -> *const ();
 
     /// Recycle a memory location. This will drop the memory location and return it to the runtime.
-    fn recycle(location: GenerationalPointer<Self>) -> Option<Box<dyn std::any::Any>>;
+    fn recycle(location: GenerationalPointer<Self>);
 
     /// Claim a new memory location. This will either create a new memory location or recycle an old one.
     fn claim(caller: &'static std::panic::Location<'static>) -> GenerationalPointer<Self>;
@@ -222,7 +228,7 @@ pub trait AnyStorage: Default + 'static {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GenerationalLocation {
     /// The generation this location is associated with. Using the location after this generation is invalidated will return errors.
-    generation: u64,
+    generation: NonZeroU64,
     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
     created_at: &'static std::panic::Location<'static>,
 }
@@ -261,13 +267,6 @@ impl<S: 'static> Clone for GenerationalPointer<S> {
 impl<S: 'static> Copy for GenerationalPointer<S> {}
 
 impl<S> GenerationalPointer<S> {
-    fn take<T: 'static>(self) -> Option<T>
-    where
-        S: Storage<T>,
-    {
-        S::recycle(self).map(|value| *(value.downcast().unwrap()))
-    }
-
     fn set<T>(self, value: T)
     where
         S: Storage<T>,

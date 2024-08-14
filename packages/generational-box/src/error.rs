@@ -50,6 +50,15 @@ impl Display for BorrowMutError {
 
 impl Error for BorrowMutError {}
 
+impl From<BorrowError> for BorrowMutError {
+    fn from(error: BorrowError) -> Self {
+        match error {
+            BorrowError::Dropped(error) => BorrowMutError::Dropped(error),
+            BorrowError::AlreadyBorrowedMut(error) => BorrowMutError::AlreadyBorrowedMut(error),
+        }
+    }
+}
+
 /// An error that can occur when trying to use a value that has been dropped.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ValueDroppedError {

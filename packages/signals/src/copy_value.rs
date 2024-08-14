@@ -105,7 +105,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 
     /// Manually drop the value in the CopyValue, invalidating the value in the process.
-    pub fn manually_drop(&self) -> Option<T> {
+    pub fn manually_drop(&self) {
         self.value.manually_drop()
     }
 
