@@ -171,11 +171,9 @@ export class NativeInterpreter extends JSChannel_ {
   loadChild(array: number[]) {
     // iterate through each number and get that child
     let node = this.stack[this.stack.length - 1];
-    console.log('loadChild starting', node, array, this.stack.length);
 
     for (let i = 0; i < array.length; i++) {
       let end = array[i];
-      console.log('loadChild step', node.firstChild, node.nextSibling, end);
       for (node = node.firstChild; end > 0; end--) {
         node = node.nextSibling;
       }
