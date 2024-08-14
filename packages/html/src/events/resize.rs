@@ -82,12 +82,12 @@ impl From<&ResizeData> for SerializedResizeData {
 impl HasResizeData for SerializedResizeData {
     /// Get the border box size of the observed element
     fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
-        Ok(self.border_box_size.clone())
+        Ok(self.border_box_size)
     }
 
     /// Get the content box size of the observed element
     fn get_content_box_size(&self) -> ResizeResult<PixelsSize> {
-        Ok(self.content_box_size.clone())
+        Ok(self.content_box_size)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

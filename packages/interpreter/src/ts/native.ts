@@ -5,11 +5,7 @@
 
 import { BaseInterpreter, NodeId } from "./core";
 import { SerializedEvent, serializeEvent } from "./serialize";
-// TODO: We should import ResizeEventDetail from "./types/events" to fix the
-// handleResizeEvent warnings. However, uncommenting the following line
-// causes a SyntaxError (Cannot declare a class twice: 'ResizeEventDetail')
-// during the app loading.
-// import { ResizeEventDetail } from "./types/events";
+import { ResizeEventDetail } from "./types/events";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
 // we want to extend it, and it technically extends base interpreter. To make typescript happy,
@@ -49,7 +45,7 @@ export class NativeInterpreter extends JSChannel_ {
     // this is because the browser will try to navigate to the file if it's dropped on the window
     window.addEventListener(
       "dragover",
-      function(e) {
+      function (e) {
         // // check which element is our target
         if (e.target instanceof Element && e.target.tagName != "INPUT") {
           e.preventDefault();
@@ -60,7 +56,7 @@ export class NativeInterpreter extends JSChannel_ {
 
     window.addEventListener(
       "drop",
-      function(e) {
+      function (e) {
         let target = e.target;
 
         if (!(target instanceof Element)) {
@@ -104,7 +100,11 @@ export class NativeInterpreter extends JSChannel_ {
     const handler: EventListener = (event) =>
       this.handleEvent(event, event.type, true);
 
-    super.initialize(root, handler);
+    // handle resize events
+    const handleResizeEvent = (entry: ResizeEventDetail) =>
+      this.handleNativeResizeEvent(entry);
+
+    super.initialize(root, handler, handleResizeEvent);
   }
 
   serializeIpcMessage(method: string, params = {}) {
@@ -215,7 +215,7 @@ export class NativeInterpreter extends JSChannel_ {
     // This is to support the prevent_default: "onclick" attribute that dioxus has had for a while, but is not necessary
     // now that we expose preventDefault to the virtualdom on desktop
     // Liveview will still need to use this
-    this.preventDefaults(event, target);
+    this.preventDefaults(event);
 
     // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
@@ -263,31 +263,20 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  handleResizeEvent(entries: ResizeObserverEntry[], _observer: ResizeObserver) {
-    for (const entry of entries) {
-      const target = entry.target;
-      const realId = getTargetId(target)!;
+  handleNativeResizeEvent(detail: ResizeEventDetail) {
+    const event = new CustomEvent<ResizeEventDetail>("resize", {
+      detail,
+    });
+    const target = event.target!;
+    const realId = getTargetId(target)!;
+    const contents = serializeEvent(event, target);
 
-      const details = new ResizeEventDetail(
-        entry.borderBoxSize?.[0],
-        entry.contentBoxSize?.[0],
-        entry.contentRect,
-        entry.target
-      );
-
-      const event = new CustomEvent<ResizeEventDetail>("resize", { detail: details });
-      const contents = serializeEvent(event, target);
-
-      const body = {
-        name: "resize",
-        data: contents,
-        element: realId,
-        bubbles: false,
-      };
-
-      const message = this.serializeIpcMessage("user_event", body);
-      this.ipc.postMessage(message);
-    }
+    this.sendSerializedEvent({
+      name: "resize",
+      data: contents,
+      element: realId,
+      bubbles: false,
+    });
   }
 
   // This should:
@@ -295,7 +284,7 @@ export class NativeInterpreter extends JSChannel_ {
   // - prevent anchor tags from navigating
   // - prevent buttons from submitting forms
   // - let the virtualdom attempt to prevent the event
-  preventDefaults(event: Event, target: EventTarget) {
+  preventDefaults(event: Event) {
     if (event.type === "submit") {
       event.preventDefault();
     }

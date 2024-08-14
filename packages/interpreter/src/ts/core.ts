@@ -20,7 +20,8 @@ export class BaseInterpreter {
 
   root: HTMLElement;
   handler: EventListener;
-  resize_observer: ResizeObserver;
+  resizeObserver: ResizeObserver;
+  handleResizeEvent: (entry: ResizeEventDetail) => void;
 
   nodes: Node[];
   stack: Node[];
@@ -33,7 +34,11 @@ export class BaseInterpreter {
 
   constructor() {}
 
-  initialize(root: HTMLElement, handler: EventListener | null = null) {
+  initialize(
+    root: HTMLElement,
+    handler: EventListener | null = null,
+    handleResizeEvent: (entry: ResizeEventDetail) => void = null
+  ) {
     this.global = {};
     this.local = {};
     this.root = root;
@@ -42,39 +47,23 @@ export class BaseInterpreter {
     this.stack = [root];
     this.templates = {};
 
-    if (handler) {
-      this.handler = handler;
-
-      this.resize_observer = new ResizeObserver(this.onResizeEvent);
-    }
-  }
-
-  onResizeEvent(entries: ResizeObserverEntry[], _observer: ResizeObserver) {
-    for (const entry of entries) {
-      const target = entry.target;
-
-      let event = new CustomEvent<ResizeEventDetail>("resize", {
-        bubbles: false,
-        detail: new ResizeEventDetail(
-          entry.borderBoxSize?.[0],
-          entry.contentBoxSize?.[0],
-          entry.contentRect,
-          entry.target
-        ),
-      });
-
-      target.dispatchEvent(event);
-    }
+    this.handler = handler;
+    this.handleResizeEvent = handleResizeEvent;
   }
 
   createObserver(event_name: string, element: HTMLElement) {
     switch (event_name) {
       case "resize":
-        if (this.resize_observer) {
-          this.resize_observer.observe(element);
-        } else {
-          console.error("No resize observer initialized");
+        // Lazily create the resize observer
+        if (!this.resizeObserver) {
+          this.resizeObserver = new ResizeObserver((entries) => {
+            console.log(entries);
+            for (const entry of entries) {
+              this.handleResizeEvent(new ResizeEventDetail(entry));
+            }
+          });
         }
+        this.resizeObserver.observe(element);
         break;
       default:
         console.warn(`No observer for ${event_name} events`);
@@ -84,8 +73,8 @@ export class BaseInterpreter {
   removeObserver(event_name: String, element: HTMLElement) {
     switch (event_name) {
       case "resize":
-        if (this.resize_observer) {
-          this.resize_observer.unobserve(element);
+        if (this.resizeObserver) {
+          this.resizeObserver.unobserve(element);
         }
         break;
       default:

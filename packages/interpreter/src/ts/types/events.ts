@@ -1,22 +1,15 @@
 class ResizeEventDetail {
   readonly borderBoxSize: ResizeObserverSize;
   readonly contentBoxSize: ResizeObserverSize;
-  readonly contentRect: DOMRectReadOnly
+  readonly contentRect: DOMRectReadOnly;
   readonly target: Element;
 
-  constructor(
-    borderBoxSize: ResizeObserverSize,
-    contentBoxSize: ResizeObserverSize,
-    contentRect: DOMRectReadOnly,
-    target: Element,
-  ) {
-    this.borderBoxSize = borderBoxSize;
-    this.contentBoxSize = contentBoxSize;
-    this.contentRect = contentRect;
-    this.target = target;
+  constructor(entry: ResizeObserverEntry) {
+    this.borderBoxSize = entry.borderBoxSize?.[0];
+    this.contentBoxSize = entry.contentBoxSize?.[0];
+    this.contentRect = entry.contentRect;
+    this.target = entry.target;
   }
 }
 
-export {
-  ResizeEventDetail
-};
+export { ResizeEventDetail };
