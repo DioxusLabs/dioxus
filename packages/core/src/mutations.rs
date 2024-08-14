@@ -175,6 +175,9 @@ pub enum Mutation {
     /// Dioxus guarantees that the renderer will have already been provided the template.
     /// When the template is picked up in the template list, it should be saved under its "name" - here, the name
     LoadTemplate {
+        /// Hash of the template?
+        template: Template,
+
         /// Which root are we loading from the template?
         ///
         /// The template is stored as a list of nodes. This index represents the position of that root
@@ -308,8 +311,12 @@ impl WriteMutations for Mutations {
         })
     }
 
-    fn load_template(&mut self, _template: Template, index: usize, id: ElementId) {
-        self.edits.push(Mutation::LoadTemplate { index, id })
+    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        self.edits.push(Mutation::LoadTemplate {
+            template,
+            index,
+            id,
+        })
     }
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {

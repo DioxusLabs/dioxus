@@ -545,6 +545,8 @@ impl VNode {
             });
         }
 
+        // self.load_template_root(mount, 1000, dom, to.as_deref_mut());
+
         // Walk the roots, creating nodes and assigning IDs
         // nodes in an iterator of (dynamic_node_index, path) and attrs in an iterator of (attr_index, path)
         let mut nodes = template.node_paths.iter().copied().enumerate().peekable();
@@ -708,6 +710,7 @@ impl VNode {
                 if m > 0 {
                     // The path is one shorter because the top node is the root
                     let path = &path[1..];
+                    assert!(path.len() > 0);
                     to.replace_placeholder_with_nodes(path, m);
                 }
             }

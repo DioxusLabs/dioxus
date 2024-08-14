@@ -154,6 +154,11 @@ mod js {
         "{let node = document.createComment('placeholder'); this.stack.push(node);}"
     }
 
+    // #[cfg(feature = "binary-protocol")]
+    // fn add_placeholder() {
+    //     "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node);}"
+    // }
+
     #[cfg(feature = "binary-protocol")]
     fn create_element(element: &'static str<u8, el>) {
         "{this.stack.push(document.createElement($element$))}"
@@ -207,6 +212,6 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn replace_placeholder_ref(array: &[u8], n: u16) {
-        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($array$); node.replaceWith(...els);}"
+        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($array$); console.log(els, node); node.replaceWith(...els);}"
     }
 }

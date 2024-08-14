@@ -15,8 +15,63 @@ fn main() {
     launch(app);
 }
 
+// fn app() -> Element {
+//     rsx! {
+//         div { "Hello, world!" }
+//     }
+// }
+
 fn app() -> Element {
     rsx! {
-        div { "Hello, world!" }
+        div {
+            MyNav {}
+            MyOutlet {}
+        }
+        MyFooter {}
     }
 }
+
+fn MyFooter() -> Element {
+    rsx! {
+        div { "footer" }
+    }
+}
+
+fn MyLink() -> Element {
+    rsx! {
+        div { "link" }
+    }
+}
+
+fn MyOutlet() -> Element {
+    rsx!(
+        if true {
+            div {
+                "homepage"
+            }
+        }
+    )
+}
+
+fn MyNav() -> Element {
+    rsx!(
+        div { "trailing nav" }
+        MySearch {}
+    )
+}
+
+fn MySearch() -> Element {
+    rsx!("search")
+}
+
+/*
+root
+root app
+root app search
+root app search trailing
+root app
+root app homepage
+root app
+root app footer
+root
+*/
