@@ -8,6 +8,7 @@ use dioxus::prelude::*;
 use dioxus_elements::geometry::euclid::Size2D;
 
 fn main() {
+    tracing_subscriber::fmt::init();
     launch(app);
 }
 

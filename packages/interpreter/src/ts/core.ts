@@ -51,34 +51,21 @@ export class BaseInterpreter {
     this.handleResizeEvent = handleResizeEvent;
   }
 
-  createObserver(event_name: string, element: HTMLElement) {
-    switch (event_name) {
-      case "resize":
-        // Lazily create the resize observer
-        if (!this.resizeObserver) {
-          this.resizeObserver = new ResizeObserver((entries) => {
-            console.log(entries);
-            for (const entry of entries) {
-              this.handleResizeEvent(new ResizeEventDetail(entry));
-            }
-          });
+  createObserver(element: HTMLElement) {
+    // Lazily create the resize observer
+    if (!this.resizeObserver) {
+      this.resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          this.handleResizeEvent(new ResizeEventDetail(entry));
         }
-        this.resizeObserver.observe(element);
-        break;
-      default:
-        console.warn(`No observer for ${event_name} events`);
+      });
     }
+    this.resizeObserver.observe(element);
   }
 
-  removeObserver(event_name: String, element: HTMLElement) {
-    switch (event_name) {
-      case "resize":
-        if (this.resizeObserver) {
-          this.resizeObserver.unobserve(element);
-        }
-        break;
-      default:
-        console.warn(`No observer for ${event_name} events`);
+  removeObserver(element: HTMLElement) {
+    if (this.resizeObserver) {
+      this.resizeObserver.unobserve(element);
     }
   }
 
@@ -99,7 +86,7 @@ export class BaseInterpreter {
     }
 
     if (event_name == "resize") {
-      this.createObserver(event_name, element);
+      this.createObserver(element);
     }
   }
 

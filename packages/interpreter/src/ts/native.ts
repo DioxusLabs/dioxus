@@ -267,7 +267,7 @@ export class NativeInterpreter extends JSChannel_ {
     const event = new CustomEvent<ResizeEventDetail>("resize", {
       detail,
     });
-    const target = event.target!;
+    const target = detail.target!;
     const realId = getTargetId(target)!;
     const contents = serializeEvent(event, target);
 
