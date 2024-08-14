@@ -1,10 +1,6 @@
 use crate::{global_context::current_scope_id, properties::SuperFrom, Runtime, ScopeId};
 use generational_box::GenerationalBox;
-use std::{
-    cell::{Cell, RefCell},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -26,19 +22,29 @@ use std::{
 pub struct Event<T: 'static + ?Sized> {
     /// The data associated with this event
     pub data: Rc<T>,
-    pub(crate) propagates: Rc<Cell<bool>>,
+    pub(crate) metadata: Rc<RefCell<EventMetadata>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct EventMetadata {
+    pub(crate) propagates: bool,
+    pub(crate) prevent_default: bool,
 }
 
 impl<T: ?Sized + 'static> Event<T> {
-    pub(crate) fn new(data: Rc<T>, bubbles: bool) -> Self {
+    /// Create a new event from the inner data
+    pub fn new(data: Rc<T>, propagates: bool) -> Self {
         Self {
             data,
-            propagates: Rc::new(Cell::new(bubbles)),
+            metadata: Rc::new(RefCell::new(EventMetadata {
+                propagates,
+                prevent_default: false,
+            })),
         }
     }
 }
 
-impl<T> Event<T> {
+impl<T: ?Sized> Event<T> {
     /// Map the event data to a new type
     ///
     /// # Example
@@ -57,7 +63,7 @@ impl<T> Event<T> {
     pub fn map<U: 'static, F: FnOnce(&T) -> U>(&self, f: F) -> Event<U> {
         Event {
             data: Rc::new(f(&self.data)),
-            propagates: self.propagates.clone(),
+            metadata: self.metadata.clone(),
         }
     }
 
@@ -78,7 +84,12 @@ impl<T> Event<T> {
     /// ```
     #[deprecated = "use stop_propagation instead"]
     pub fn cancel_bubble(&self) {
-        self.propagates.set(false);
+        self.metadata.borrow_mut().propagates = false;
+    }
+
+    /// Check if the event propagates up the tree to parent elements
+    pub fn propagates(&self) -> bool {
+        self.metadata.borrow().propagates
     }
 
     /// Prevent this event from continuing to bubble up the tree to parent elements.
@@ -96,7 +107,7 @@ impl<T> Event<T> {
     /// };
     /// ```
     pub fn stop_propagation(&self) {
-        self.propagates.set(false);
+        self.metadata.borrow_mut().propagates = false;
     }
 
     /// Get a reference to the inner data from this event
@@ -117,12 +128,49 @@ impl<T> Event<T> {
     pub fn data(&self) -> Rc<T> {
         self.data.clone()
     }
+
+    /// Prevent the default action of the event.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         a {
+    ///             // You can prevent the default action of the event with `prevent_default`
+    ///             onclick: move |event| {
+    ///                 event.prevent_default();
+    ///             },
+    ///             href: "https://dioxuslabs.com",
+    ///             "don't go to the link"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Note: This must be called synchronously when handling the event. Calling it after the event has been handled will have no effect.
+    ///
+    /// <div class="warning">
+    ///
+    /// This method is not available on the LiveView renderer because LiveView handles all events over a websocket which cannot block.
+    ///
+    /// </div>
+    #[track_caller]
+    pub fn prevent_default(&self) {
+        self.metadata.borrow_mut().prevent_default = true;
+    }
+
+    /// Check if the default action of the event is enabled.
+    pub fn default_action_enabled(&self) -> bool {
+        !self.metadata.borrow().prevent_default
+    }
 }
 
 impl<T: ?Sized> Clone for Event<T> {
     fn clone(&self) -> Self {
         Self {
-            propagates: self.propagates.clone(),
+            metadata: self.metadata.clone(),
             data: self.data.clone(),
         }
     }
@@ -138,7 +186,8 @@ impl<T> std::ops::Deref for Event<T> {
 impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UiEvent")
-            .field("bubble_state", &self.propagates)
+            .field("bubble_state", &self.propagates())
+            .field("prevent_default", &!self.default_action_enabled())
             .field("data", &self.data)
             .finish()
     }
@@ -209,7 +258,7 @@ pub struct Callback<Args = (), Ret = ()> {
     /// fn Child(onclick: EventHandler<MouseEvent>) -> Element {
     ///     rsx!{
     ///         button {
-    ///             // Diffing Child will not rerun this component, it will just update the EventHandler in place so that if this callback is called, it will run the latest version of the callback
+    ///             // Diffing Child will not rerun this component, it will just update the callback in place so that if this callback is called, it will run the latest version of the callback
     ///             onclick: move |evt| onclick(evt),
     ///         }
     ///     }
@@ -270,14 +319,42 @@ impl<Ret> SpawnIfAsync<(), Ret> for Ret {
     }
 }
 
-// Support for FnMut -> async { anything } for the unit return type
+// Support for FnMut -> async { unit } for the unit return type
 #[doc(hidden)]
-pub struct AsyncMarker<O>(PhantomData<O>);
-impl<F: std::future::Future<Output = O> + 'static, O> SpawnIfAsync<AsyncMarker<O>, ()> for F {
+pub struct AsyncMarker;
+impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> for F {
     fn spawn(self) {
         crate::prelude::spawn(async move {
             self.await;
         });
+    }
+}
+
+// Support for FnMut -> async { Result(()) } for the unit return type
+#[doc(hidden)]
+pub struct AsyncResultMarker;
+
+impl<T> SpawnIfAsync<AsyncResultMarker> for T
+where
+    T: std::future::Future<Output = crate::Result<()>> + 'static,
+{
+    #[inline]
+    fn spawn(self) {
+        crate::prelude::spawn(async move {
+            if let Err(err) = self.await {
+                crate::prelude::throw_error(err)
+            }
+        });
+    }
+}
+
+// Support for FnMut -> Result(()) for the unit return type
+impl SpawnIfAsync<()> for crate::Result<()> {
+    #[inline]
+    fn spawn(self) {
+        if let Err(err) = self {
+            crate::prelude::throw_error(err)
+        }
     }
 }
 
@@ -299,6 +376,22 @@ impl<
     }
 }
 
+#[doc(hidden)]
+pub struct UnitClosure<Marker>(PhantomData<Marker>);
+
+// Closure can be created from FnMut -> async { () } or FnMut -> Ret
+impl<
+        Function: FnMut() -> Spawn + 'static,
+        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+        Ret: 'static,
+        Marker,
+    > SuperFrom<Function, UnitClosure<Marker>> for Callback<(), Ret>
+{
+    fn super_from(mut input: Function) -> Self {
+        Callback::new(move |()| input())
+    }
+}
+
 #[test]
 fn closure_types_infer() {
     #[allow(unused)]
@@ -314,6 +407,11 @@ fn closure_types_infer() {
         // Or pass in a value
         let callback: Callback<u32, ()> = Callback::new(|value: u32| async move {
             println!("{}", value);
+        });
+
+        // Unit closures shouldn't require an argument
+        let callback: Callback<(), ()> = Callback::super_from(|| async move {
+            println!("hello world");
         });
     }
 }
@@ -348,7 +446,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         ));
         Self {
             callback,
-            origin: current_scope_id().expect("to be in a dioxus runtime"),
+            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
         }
     }
 
@@ -360,22 +458,26 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
                 as Rc<RefCell<dyn FnMut(Args) -> Ret>>));
         Self {
             callback,
-            origin: current_scope_id().expect("to be in a dioxus runtime"),
+            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
         }
     }
 
     /// Call this callback with the appropriate argument type
     ///
     /// This borrows the callback using a RefCell. Recursively calling a callback will cause a panic.
+    #[track_caller]
     pub fn call(&self, arguments: Args) -> Ret {
         if let Some(callback) = self.callback.read().as_ref() {
-            Runtime::with(|rt| rt.scope_stack.borrow_mut().push(self.origin));
-            let value = {
-                let mut callback = callback.borrow_mut();
-                callback(arguments)
-            };
-            Runtime::with(|rt| rt.scope_stack.borrow_mut().pop());
-            value
+            Runtime::with(|rt| {
+                rt.with_scope_on_stack(self.origin, || {
+                    let value = {
+                        let mut callback = callback.borrow_mut();
+                        callback(arguments)
+                    };
+                    value
+                })
+            })
+            .unwrap_or_else(|e| panic!("{}", e))
         } else {
             panic!("Callback was manually dropped")
         }

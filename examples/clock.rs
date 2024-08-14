@@ -5,6 +5,8 @@
 
 use dioxus::prelude::*;
 
+const STYLE: &str = asset!("./examples/assets/clock.css");
+
 fn main() {
     launch_desktop(app);
 }
@@ -36,7 +38,7 @@ fn app() -> Element {
     );
 
     rsx! {
-        style { {include_str!("./assets/clock.css")} }
+        head::Link { rel: "stylesheet", href: STYLE }
         div { id: "app",
             div { id: "title", "Carpe diem 🎉" }
             div { id: "clock-display", "{time}" }

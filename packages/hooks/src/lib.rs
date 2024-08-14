@@ -26,7 +26,7 @@
 ///     });
 /// };
 /// # handle_thing(());
-/// # None }
+/// # VNode::empty() }
 /// ```
 macro_rules! to_owned {
     // Rule matching simple symbols without a path

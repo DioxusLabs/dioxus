@@ -15,10 +15,13 @@ extern "C" {
     pub fn save_template(this: &BaseInterpreter, nodes: Vec<Node>, tmpl_id: u16);
 
     #[wasm_bindgen(method)]
-    pub fn hydrate(this: &BaseInterpreter, ids: Vec<u32>);
+    pub fn hydrate(this: &BaseInterpreter, ids: Vec<u32>, under: Vec<Node>);
 
     #[wasm_bindgen(method, js_name = "getNode")]
     pub fn get_node(this: &BaseInterpreter, id: u32) -> Node;
+
+    #[wasm_bindgen(method, js_name = "pushRoot")]
+    pub fn push_root(this: &BaseInterpreter, node: Node);
 }
 
 // Note that this impl is for the sledgehammer interpreter to allow us dropping down to the base interpreter
@@ -45,7 +48,7 @@ mod js {
         "{this.appendChildren(this.root, this.stack.length-1);}"
     }
     fn push_root(root: u32) {
-        "{this.stack.push(this.nodes[$root$]);}"
+        "{this.pushRoot(this.nodes[$root$]);}"
     }
     fn append_children(id: u32, many: u16) {
         "{this.appendChildren($id$, $many$);}"
@@ -57,10 +60,10 @@ mod js {
         "{const root = this.nodes[$id$]; let els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.removeAllNonBubblingListeners(root); } root.replaceWith(...els);}"
     }
     fn insert_after(id: u32, n: u16) {
-        "{this.nodes[$id$].after(...this.stack.splice(this.stack.length-$n$));}"
+        "{let node = this.nodes[$id$];node.after(...this.stack.splice(this.stack.length-$n$));}"
     }
     fn insert_before(id: u32, n: u16) {
-        "{this.nodes[$id$].before(...this.stack.splice(this.stack.length-$n$));}"
+        "{let node = this.nodes[$id$];node.before(...this.stack.splice(this.stack.length-$n$));}"
     }
     fn remove(id: u32) {
         "{let node = this.nodes[$id$]; if (node !== undefined) { if (node.listening) { this.removeAllNonBubblingListeners(node); } node.remove(); }}"
@@ -72,7 +75,7 @@ mod js {
         "{let node = document.createTextNode($text$); this.nodes[$id$] = node; this.stack.push(node);}"
     }
     fn create_placeholder(id: u32) {
-        "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node); this.nodes[$id$] = node;}"
+        "{let node = document.createComment('placeholder'); this.stack.push(node); this.nodes[$id$] = node;}"
     }
 
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
@@ -124,19 +127,6 @@ mod js {
     fn assign_id(ptr: u32, len: u8, id: u32) {
         "{this.nodes[$id$] = this.loadChild($ptr$, $len$);}"
     }
-    fn hydrate_text(ptr: u32, len: u8, value: &str, id: u32) {
-        r#"{
-            let node = this.loadChild($ptr$, $len$);
-            if (node.nodeType == node.TEXT_NODE) {
-                node.textContent = value;
-            } else {
-                let text = document.createTextNode(value);
-                node.replaceWith(text);
-                node = text;
-            }
-            this.nodes[$id$] = node;
-        }"#
-    }
     fn replace_placeholder(ptr: u32, len: u8, n: u16) {
         "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($ptr$, $len$); node.replaceWith(...els);}"
     }
@@ -147,11 +137,11 @@ mod js {
     #[cfg(feature = "binary-protocol")]
     fn append_children_to_top(many: u16) {
         "{
-        let root = this.stack[this.stack.length-many-1];
-        let els = this.stack.splice(this.stack.length-many);
-        for (let k = 0; k < many; k++) {
-            root.appendChild(els[k]);
-        }
+            let root = this.stack[this.stack.length-many-1];
+            let els = this.stack.splice(this.stack.length-many);
+            for (let k = 0; k < many; k++) {
+                root.appendChild(els[k]);
+            }
         }"
     }
 
@@ -162,7 +152,7 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn add_placeholder() {
-        "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node);}"
+        "{let node = document.createComment('placeholder'); this.stack.push(node);}"
     }
 
     #[cfg(feature = "binary-protocol")]
@@ -196,7 +186,7 @@ mod js {
     // if this is a mounted listener, we send the event immediately
     if (event_name === "mounted") {
         window.ipc.postMessage(
-            this.serializeIpcMessage("user_event", {
+            this.sendSerializedEvent({
                 name: event_name,
                 element: id,
                 data: null,
@@ -214,22 +204,6 @@ mod js {
     #[cfg(feature = "binary-protocol")]
     fn assign_id_ref(array: &[u8], id: u32) {
         "{this.nodes[$id$] = this.loadChild($array$);}"
-    }
-
-    /// The coolest ID ever!
-    #[cfg(feature = "binary-protocol")]
-    fn hydrate_text_ref(array: &[u8], value: &str, id: u32) {
-        r#"{
-        let node = this.loadChild($array$);
-        if (node.nodeType == node.TEXT_NODE) {
-            node.textContent = value;
-        } else {
-            let text = document.createTextNode(value);
-            node.replaceWith(text);
-            node = text;
-        }
-        this.nodes[$id$] = node;
-    }"#
     }
 
     #[cfg(feature = "binary-protocol")]

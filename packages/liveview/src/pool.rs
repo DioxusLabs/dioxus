@@ -6,11 +6,12 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::prelude::*;
+use dioxus_hot_reload::DevserverMsg;
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use serde::Serialize;
-use std::{rc::Rc, time::Duration};
+use std::{any::Any, rc::Rc, time::Duration};
 use tokio_util::task::LocalPoolHandle;
 
 #[derive(Clone)]
@@ -119,9 +120,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        dioxus_hot_reload::connect(move |template| {
-            let _ = tx.send(template);
-        });
+        dioxus_hot_reload::connect(move |template| _ = tx.send(template));
         rx
     };
 
@@ -178,22 +177,23 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                             match message {
                                 IpcMessage::Event(evt) => {
                                     // Intercept the mounted event and insert a custom element type
-                                    if let EventData::Mounted = &evt.data {
+                                    let event = if let EventData::Mounted = &evt.data {
                                         let element = LiveviewElement::new(evt.element, query_engine.clone());
-                                        vdom.handle_event(
-                                            &evt.name,
-                                            Rc::new(PlatformEventData::new(Box::new(element))),
-                                            evt.element,
+                                        Event::new(
+                                            Rc::new(PlatformEventData::new(Box::new(element))) as Rc<dyn Any>,
                                             evt.bubbles,
-                                        );
+                                        )
                                     } else {
-                                        vdom.handle_event(
-                                            &evt.name,
+                                        Event::new(
                                             evt.data.into_any(),
-                                            evt.element,
                                             evt.bubbles,
-                                        );
-                                    }
+                                        )
+                                    };
+                                    vdom.runtime().handle_event(
+                                        &evt.name,
+                                        event,
+                                        evt.element,
+                                    );
                                 }
                                 IpcMessage::Query(result) => {
                                     query_engine.send(result);
@@ -215,13 +215,17 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             Some(msg) = hot_reload_wait => {
                 #[cfg(all(feature = "hot-reload", debug_assertions))]
                 match msg{
-                    dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
-                        vdom.replace_template(new_template);
+                    DevserverMsg::HotReload(msg)=> {
+                        dioxus_hot_reload::apply_changes(&mut vdom, &msg);
                     }
-                    // todo: enable hotreloading in liveview
-                    dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {}
-                    dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                    DevserverMsg::Shutdown => {
                         std::process::exit(0);
+                    },
+                    DevserverMsg::FullReloadCommand
+                    | DevserverMsg::FullReloadStart
+                    | DevserverMsg::FullReloadFailed => {
+                        // usually only web gets this message - what are we supposed to do?
+                        // Maybe we could just binary patch ourselves in place without losing window state?
                     },
                 }
                 #[cfg(not(all(feature = "hot-reload", debug_assertions)))]

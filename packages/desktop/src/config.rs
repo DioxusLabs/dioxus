@@ -49,15 +49,21 @@ impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
-        let window: WindowBuilder = WindowBuilder::new()
-            .with_title(
-                dioxus_cli_config::CURRENT_CONFIG
-                    .as_ref()
-                    .map(|c| c.dioxus_config.application.name.clone())
-                    .unwrap_or("Dioxus App".to_string()),
-            )
-            // During development we want the window to be on top so we can see it while we work
-            .with_always_on_top(cfg!(debug_assertions));
+        let dioxus_config = dioxus_cli_config::CURRENT_CONFIG.as_ref();
+
+        let mut window: WindowBuilder = WindowBuilder::new().with_title(
+            dioxus_config
+                .map(|c| c.application.name.clone())
+                .unwrap_or("Dioxus App".to_string()),
+        );
+
+        // During development we want the window to be on top so we can see it while we work
+        let always_on_top = dioxus_config
+            .map(|c| c.desktop.always_on_top)
+            .unwrap_or(true);
+        if cfg!(debug_assertions) {
+            window = window.with_always_on_top(always_on_top);
+        }
 
         Self {
             window,
@@ -107,6 +113,13 @@ impl Config {
         // gots to do a swap because the window builder only takes itself as muy self
         // I wish more people knew about returning &mut Self
         self.window = window;
+        if self.window.window.decorations {
+            if self.menu.is_none() {
+                self.menu = Some(default_menu_bar());
+            }
+        } else {
+            self.menu = None;
+        }
         self
     }
 
@@ -203,12 +216,16 @@ impl Config {
 
     /// Sets the menu the window will use. This will override the default menu bar.
     ///
-    /// > Note: A default menu bar will be enabled unless the menu is overridden or set to `None`.
+    /// > Note: Menu will be hidden if
+    /// > [`with_decorations`](tao::window::WindowBuilder::with_decorations)
+    /// > is set to false and passed into [`with_window`](Config::with_window)
     #[allow(unused)]
     pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            self.menu = menu.into();
+            if self.window.window.decorations {
+                self.menu = menu.into();
+            }
         }
         self
     }

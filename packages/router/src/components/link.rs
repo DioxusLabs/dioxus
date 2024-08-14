@@ -195,9 +195,10 @@ impl Debug for LinkProps {
 /// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
-/// #     r#"<a href="/" dioxus-prevent-default="" class="link_class active" rel="link_rel" target="_blank" id="link_id">A fully configured link</a>"#
+/// #     r#"<a href="/" class="link_class active" rel="link_rel" target="_blank" aria-current="page" id="link_id">A fully configured link</a>"#
 /// # );
 /// ```
+#[doc(alias = "<a>")]
 #[allow(non_snake_case)]
 pub fn Link(props: LinkProps) -> Element {
     let LinkProps {
@@ -222,7 +223,7 @@ pub fn Link(props: LinkProps) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            return None;
+            return VNode::empty();
         }
     };
 
@@ -252,16 +253,27 @@ pub fn Link(props: LinkProps) -> Element {
         Some(class_)
     };
 
+    let aria_current = (href == current_url).then_some("page");
+
     let tag_target = new_tab.then_some("_blank");
 
     let is_external = matches!(parsed_route, NavigationTarget::External(_));
     let is_router_nav = !is_external && !new_tab;
-    let prevent_default = is_router_nav.then_some("onclick").unwrap_or_default();
     let rel = rel.or_else(|| is_external.then_some("noopener noreferrer".to_string()));
 
     let do_default = onclick.is_none() || !onclick_only;
 
-    let action = move |event| {
+    let action = move |event: MouseEvent| {
+        // Only handle events without modifiers
+        if !event.modifiers().is_empty() {
+            return;
+        }
+        // only handle left clicks
+        if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
+            return;
+        }
+        event.prevent_default();
+
         if do_default && is_router_nav {
             router.push_any(router.resolve_into_routable(to.clone()));
         }
@@ -277,15 +289,27 @@ pub fn Link(props: LinkProps) -> Element {
         }
     };
 
+    // In liveview, we need to prevent the default action if the user clicks on the link with modifiers
+    // in javascript. The prevent_default method is not available in the liveview renderer because
+    // event handlers are handled over a websocket.
+    let liveview_prevent_default = {
+        // If the event is a click with the left mouse button and no modifiers, prevent the default action
+        // and navigate to the href with client side routing
+        router.is_liveview().then_some(
+            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"   
+        )
+    };
+
     rsx! {
         a {
             onclick: action,
+            "onclick": liveview_prevent_default,
             href,
             onmounted: onmounted,
-            prevent_default,
             class,
             rel,
             target: tag_target,
+            aria_current,
             ..attributes,
             {children}
         }

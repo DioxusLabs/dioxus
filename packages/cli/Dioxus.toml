@@ -25,24 +25,5 @@ reload_html = true
 # Which files or dirs will be monitored
 watch_path = ["src", "public"]
 
-# Include style or script assets
-[web.resource]
-
-# CSS style file
-style = []
-
-# Javascript code file
-script = []
-
-[web.resource.dev]
-
-# Same as [web.resource], but for development servers
-
-# CSS style file
-style = []
-
-# JavaScript files
-script = []
-
 [[web.proxy]]
 backend = "http://localhost:8000/api/"

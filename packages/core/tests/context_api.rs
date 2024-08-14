@@ -20,36 +20,36 @@ fn state_shares() {
 
     let mut dom = VirtualDom::new(app);
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().edits,
         [
             CreateTextNode { value: "Value is 0".to_string(), id: ElementId(1,) },
             AppendChildren { m: 1, id: ElementId(0) },
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();
     dom.in_runtime(|| {
-        assert_eq!(ScopeId::ROOT.consume_context::<i32>().unwrap(), 1);
+        assert_eq!(ScopeId::APP.consume_context::<i32>().unwrap(), 1);
     });
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();
     dom.in_runtime(|| {
-        assert_eq!(ScopeId::ROOT.consume_context::<i32>().unwrap(), 2);
+        assert_eq!(ScopeId::APP.consume_context::<i32>().unwrap(), 2);
     });
 
-    dom.mark_dirty(ScopeId(2));
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 2));
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().edits,
         [SetText { value: "Value is 2".to_string(), id: ElementId(1,) },]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
-    dom.mark_dirty(ScopeId(2));
+    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 2));
     let edits = dom.render_immediate_to_vec();
     assert_eq!(
-        edits.santize().edits,
+        edits.edits,
         [SetText { value: "Value is 3".to_string(), id: ElementId(1,) },]
     );
 }

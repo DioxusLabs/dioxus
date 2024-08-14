@@ -3,7 +3,7 @@ name = "dioxus-interpreter-js"
 version = { workspace = true }
 edition = "2021"
 authors = ["Jonathan Kelley"]
-description = "JS Intepreter for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
+description = "JS Interpreter for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
@@ -26,7 +26,7 @@ dioxus-core = { workspace = true, optional = true }
 dioxus-html = { workspace = true, optional = true }
 
 [build-dependencies]
-md5 = "0.7.0"
+lazy-js-bundle = { workspace = true }
 
 [features]
 default = []
@@ -42,4 +42,3 @@ webonly = [
 ]
 binary-protocol = ["sledgehammer", "dep:dioxus-core", "dep:dioxus-html"]
 minimal_bindings = []
-eval = []

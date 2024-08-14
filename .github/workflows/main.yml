@@ -38,22 +38,31 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: 1
+  rust_nightly: nightly-2024-07-01
 
 jobs:
-  check:
+  check-msrv:
     if: github.event.pull_request.draft == false
-    name: Check
+    name: Check MSRV
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo check --all --examples --tests --all-features --all-targets
+      # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
+      - name: install_cargo_msrv
+        run: cargo install cargo-msrv --all-features
+      - name: version_of_cargo_msrv
+        run: cargo msrv --version
+      - name: run_cargo_msrv
+        run: cargo msrv --output-format json verify -- cargo check
+      - name: run_cargo_msrv_on_verify_failure
+        if: ${{ failure() }}
+        run: cargo msrv --output-format json -- cargo check
 
   test:
     if: github.event.pull_request.draft == false
@@ -61,6 +70,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -71,12 +86,6 @@ jobs:
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
       - run: cargo make tests
 
   release-test:
@@ -85,6 +94,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -95,12 +110,6 @@ jobs:
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
       - run: cargo test --profile release-unoptimized --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile
 
   fmt:
@@ -117,6 +126,72 @@ jobs:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all -- --check
+
+  typos:
+    if: github.event.pull_request.draft == false
+    name: Check for typos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for typos
+        uses: crate-ci/typos@master
+
+  docs:
+    if: github.event.pull_request.draft == false
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust ${{ env.rust_nightly }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_nightly }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: "doc --lib --all-features"
+        run: |
+          cargo doc --workspace --no-deps --all-features --document-private-items
+        env:
+          RUSTFLAGS: --cfg docsrs
+          RUSTDOCFLAGS: --cfg docsrs
+          # todo: re-enable warnings
+          # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+
+  # Check for invalid links in the repository
+  link-check:
+    if: github.event.pull_request.draft == false
+    name: Check For Invalid Links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore lychee cache
+        uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: cache-lychee-${{ github.sha }}
+          restore-keys: cache-lychee-
+      - name: Run lychee
+        uses: lycheeverse/lychee-action@v1
+        with:
+          args: --base . --config ./lychee.toml './**/*.md'
+          fail: true
+
+  check:
+    if: github.event.pull_request.draft == false
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo check --workspace --all-features --all-targets
 
   clippy:
     if: github.event.pull_request.draft == false
@@ -222,15 +297,23 @@ jobs:
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
-              toolchain: "1.75.0",
+              toolchain: "1.79.0",
+              cross: false,
+              command: "test",
+              args: "--all --tests",
+            }
+          - {
+              target: aarch64-apple-darwin,
+              os: macos-latest,
+              toolchain: "1.79.0",
               cross: false,
               command: "test",
               args: "--all --tests",
             }
           - {
               target: x86_64-apple-darwin,
-              os: macos-latest,
-              toolchain: "1.75.0",
+              os: macos-13,
+              toolchain: "1.79.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -238,7 +321,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
-              toolchain: "1.75.0",
+              toolchain: "1.79.0",
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
@@ -246,7 +329,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: ubuntu-latest,
-              toolchain: "1.75.0",
+              toolchain: "1.79.0",
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
@@ -254,18 +337,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: install stable
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.platform.toolchain }}
-          targets: ${{ matrix.platform.target }}
-          components: rustfmt
-
-      - name: Install cross
-        if: ${{ matrix.platform.cross == true }}
-
-        uses: taiki-e/install-action@cross
-
       - name: Free Disk Space (Ubuntu)
         if: ${{ matrix.platform.os == 'ubuntu-latest' }}
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -273,6 +344,21 @@ jobs:
           large-packages: false
           docker-images: false
           swap-storage: false
+      - name: install stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.platform.toolchain }}
+          targets: ${{ matrix.platform.target }}
+          components: rustfmt
+
+      - name: Install nasm for windows (tls)
+        if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
+        uses: ilammy/setup-nasm@v1
+
+      - name: Install cross
+        if: ${{ matrix.platform.cross == true }}
+
+        uses: taiki-e/install-action@cross
 
       - uses: Swatinem/rust-cache@v2
         with:

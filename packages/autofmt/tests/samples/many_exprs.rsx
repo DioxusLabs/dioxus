@@ -103,12 +103,21 @@ fn app() -> Element {
     rsx! {
         div {
             {
-                let millis = timer.with(|t| t.duration().saturating_sub(t.started_at.map(|x| x.elapsed()).unwrap_or(Duration::ZERO)).as_millis());
-                format!("{:02}:{:02}:{:02}.{:01}",
-                        millis / 1000 / 3600 % 3600,
-                        millis / 1000 / 60 % 60,
-                        millis / 1000 % 60,
-                        millis / 100 % 10)
+                let millis = timer
+                    .with(|t| {
+                        t.duration()
+                            .saturating_sub(
+                                t.started_at.map(|x| x.elapsed()).unwrap_or(Duration::ZERO),
+                            )
+                            .as_millis()
+                    });
+                format!(
+                    "{:02}:{:02}:{:02}.{:01}",
+                    millis / 1000 / 3600 % 3600,
+                    millis / 1000 / 60 % 60,
+                    millis / 1000 % 60,
+                    millis / 100 % 10,
+                )
             }
         }
         div {
@@ -119,7 +128,7 @@ fn app() -> Element {
                 value: format!("{:02}", timer.read().hours),
                 oninput: move |e| {
                     timer.write().hours = e.value().parse().unwrap_or(0);
-                }
+                },
             }
 
             input {
@@ -129,7 +138,7 @@ fn app() -> Element {
                 value: format!("{:02}", timer.read().minutes),
                 oninput: move |e| {
                     timer.write().minutes = e.value().parse().unwrap_or(0);
-                }
+                },
             }
 
             input {
@@ -139,7 +148,7 @@ fn app() -> Element {
                 value: format!("{:02}", timer.read().seconds),
                 oninput: move |e| {
                     timer.write().seconds = e.value().parse().unwrap_or(0);
-                }
+                },
             }
         }
 
@@ -155,7 +164,7 @@ fn app() -> Element {
                         }
                     })
             },
-            { timer.with(|t| if t.started_at.is_none() { "Start" } else { "Stop" }) }
+            {timer.with(|t| if t.started_at.is_none() { "Start" } else { "Stop" })}
         }
         div { id: "app",
             button {
@@ -165,7 +174,10 @@ fn app() -> Element {
                     window_preferences.write().with_decorations = !decorations;
                 },
                 {
-                    format!("with decorations{}", if window_preferences.read().with_decorations { " ✓" } else { "" }).to_string()
+                    format!(
+                        "with decorations{}",
+                        if window_preferences.read().with_decorations { " ✓" } else { "" },
+                    )
                 }
             }
             button {
@@ -178,16 +190,28 @@ fn app() -> Element {
                 },
                 width: 100,
                 {
-                    format!("always on top{}", if window_preferences.read().always_on_top { " ✓" } else { "" })
+                    format!(
+                        "always on top{}",
+                        if window_preferences.read().always_on_top { " ✓" } else { "" },
+                    )
                 }
             }
         }
         {
             exit_button(
                 Duration::from_secs(3),
-                |trigger, delay| rsx! {
-                    {format!("{:0.1?}", trigger.read().map(|inst| (delay.as_secs_f32() - inst.elapsed().as_secs_f32()))) }
-                }
+                |trigger, delay| {
+                    rsx! {
+                        {
+                            format!(
+                                "{:0.1?}",
+                                trigger
+                                    .read()
+                                    .map(|inst| (delay.as_secs_f32() - inst.elapsed().as_secs_f32())),
+                            )
+                        }
+                    }
+                },
             )
         }
     }

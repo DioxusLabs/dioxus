@@ -3,7 +3,7 @@
 # dioxus project name
 name = "OpenID Connect authentication demo"
 
-# default platfrom
+# default platform
 # you can also use `dioxus serve/build --platform XXX` to use other platform
 # value: web | desktop
 default_platform = "web"
@@ -27,21 +27,6 @@ title = "OpenID Connect authentication demo"
 index_on_404 = true
 
 watch_path = ["src"]
-
-# include `assets` in web platform
-[web.resource]
-
-# CSS style file
-style = []
-
-# Javascript code file
-script = []
-
-[web.resource.dev]
-
-# Javascript code file
-# serve: [dev-server] only
-script = []
 
 [application.plugins]
 

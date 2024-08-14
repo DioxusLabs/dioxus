@@ -53,7 +53,7 @@ jobs:
         run: cargo doc --no-deps --workspace --all-features
 
       - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@v4.6.1
+        uses: JamesIves/github-pages-deploy-action@v4.6.3
         with:
           branch: gh-pages
           folder: target/doc

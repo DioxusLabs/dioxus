@@ -8,8 +8,8 @@ use crate::use_callback;
 #[doc = include_str!("../docs/side_effects.md")]
 #[doc = include_str!("../docs/rules_of_hooks.md")]
 #[track_caller]
-pub fn use_effect(callback: impl FnMut() + 'static) -> Effect {
-    let callback = use_callback(callback);
+pub fn use_effect(mut callback: impl FnMut() + 'static) -> Effect {
+    let callback = use_callback(move |_| callback());
 
     let location = std::panic::Location::caller();
 
@@ -31,7 +31,7 @@ pub fn use_effect(callback: impl FnMut() + 'static) -> Effect {
             effect_queued.set(true);
             let effect_queued = effect_queued.clone();
             queue_effect(move || {
-                rc.reset_and_run_in(&*callback);
+                rc.reset_and_run_in(|| callback(()));
                 effect_queued.set(false);
             });
         };

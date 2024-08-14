@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 #[tokio::test]
 async fn values_memoize_in_place() {
@@ -23,7 +23,7 @@ async fn values_memoize_in_place() {
         use_hook(|| {
             spawn(async move {
                 for _ in 0..15 {
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
                     count += 1;
                 }
             });
@@ -36,8 +36,9 @@ async fn values_memoize_in_place() {
                     let _ = &x;
                     println!("num is {num}");
                 },
-                children: count() / 2
+                number: count() / 2
             }
+            TakesSignal { sig: count(), number: count() / 2 }
         }
     }
 
@@ -46,14 +47,13 @@ async fn values_memoize_in_place() {
 
     let mutations = dom.rebuild_to_vec();
     println!("{:#?}", mutations);
-    dom.mark_dirty(ScopeId::ROOT);
-    for _ in 0..20 {
-        dom.handle_event(
-            "click",
-            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-            ElementId(1),
+    dom.mark_dirty(ScopeId::APP);
+    for _ in 0..40 {
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
+        dom.runtime().handle_event("click", event, ElementId(1));
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_millis(20)) => {},
             _ = dom.wait_for_work() => {}
@@ -74,7 +74,8 @@ fn cloning_event_handler_components_work() {
             TakesEventHandler {
                 click: move |evt| {
                     println!("Clicked {evt:?}!");
-                }
+                },
+                number: 0
             }
         };
 
@@ -91,38 +92,36 @@ fn cloning_event_handler_components_work() {
 
     let mutations = dom.rebuild_to_vec();
     println!("{:#?}", mutations);
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     for _ in 0..20 {
-        dom.handle_event(
-            "click",
-            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-            ElementId(1),
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
+        dom.runtime().handle_event("click", event, ElementId(1));
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
 }
 
 #[component]
-fn TakesEventHandler(click: EventHandler<usize>, children: usize) -> Element {
-    println!("children is{children}");
+fn TakesEventHandler(click: EventHandler<usize>, number: usize) -> Element {
     let first_render_click = use_hook(move || click);
     if generation() > 0 {
         // Make sure the event handler is memoized in place and never gets dropped
-        first_render_click(children);
+        first_render_click(number);
     }
 
     rsx! {
         button {
-            onclick: move |_| click(children),
-            "{children}"
+            onclick: move |_| click(number),
+            "{number}"
         }
     }
 }
 
 #[component]
-fn TakesSignal(sig: ReadOnlySignal<usize>, children: usize) -> Element {
+fn TakesSignal(sig: ReadOnlySignal<usize>, number: usize) -> Element {
     let first_render_sig = use_hook(move || sig);
     if generation() > 0 {
         // Make sure the signal is memoized in place and never gets dropped
@@ -130,6 +129,35 @@ fn TakesSignal(sig: ReadOnlySignal<usize>, children: usize) -> Element {
     }
 
     rsx! {
-        button { "{children}" }
+        button { "{number}" }
     }
+}
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/2582
+#[test]
+fn spreads_memorize_in_place() {
+    #[derive(Props, Clone, PartialEq)]
+    struct CompProps {
+        #[props(extends = GlobalAttributes)]
+        attributes: Vec<Attribute>,
+    }
+
+    let mut props = CompProps::builder().build();
+    assert!(!props.memoize(&CompProps::builder().all("123").build()));
+    assert_eq!(
+        props.attributes,
+        vec![Attribute::new("all", "123", Some("style"), false)]
+    );
+
+    assert!(!props.memoize(&CompProps::builder().width("123").build()));
+    assert_eq!(
+        props.attributes,
+        vec![Attribute::new("width", "123", Some("style"), false)]
+    );
+
+    assert!(!props.memoize(&CompProps::builder().build()));
+    assert_eq!(props.attributes, vec![]);
+
+    assert!(props.memoize(&CompProps::builder().build()));
+    assert_eq!(props.attributes, vec![]);
 }

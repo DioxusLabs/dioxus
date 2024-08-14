@@ -1,10 +1,11 @@
 #![allow(non_upper_case_globals)]
+#![allow(deprecated)]
 
 use dioxus_core::prelude::IntoAttributeValue;
 use dioxus_core::HasAttributes;
 use dioxus_html_internal_macro::impl_extension_attributes;
 
-use crate::AttributeDiscription;
+use crate::AttributeDescription;
 
 #[cfg(feature = "hot-reload-context")]
 macro_rules! mod_method_mapping {
@@ -161,7 +162,7 @@ macro_rules! mod_methods {
         ///     }
         /// };
         /// ```
-        pub const $name: AttributeDiscription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
+        pub const $name: AttributeDescription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
     };
 
     (
@@ -192,7 +193,7 @@ macro_rules! mod_methods {
         $(
             #[doc(alias = $js_name)]
         )?
-        pub const $name: AttributeDiscription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
+        pub const $name: AttributeDescription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
     };
 
     // Rename the incoming ident and apply a custom namespace
@@ -215,10 +216,8 @@ mod_methods! {
     map_global_attributes;
     map_html_global_attributes_to_rsx;
 
-    /// Prevent the default action for this element.
-    ///
-    /// For more information, see the MDN docs:
-    /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
+    #[deprecated(note = "This attribute does nothing. For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead. For liveview, you can use `\"onclick\": (evt) => evt.prevent_default()` to prevent the default action for this element.")]
+    /// This attribute has been deprecated in favor of [`dioxus_core::Event::prevent_default`]
     prevent_default: "dioxus-prevent-default";
 
 
@@ -1530,8 +1529,8 @@ mod_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-stress>
     voice_stress: "voice-stress" in "style";
 
-    /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-volumn>
-    voice_volumn: "voice-volumn" in "style";
+    /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-volume>
+    voice_volume: "voice-volume" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/volume>
     volume in "style";
@@ -1746,11 +1745,22 @@ mod_methods! {
     map_svg_attributes;
     map_html_svg_attributes_to_rsx;
 
-    /// Prevent the default action for this element.
+    /// Prevent the default action for this element. This attribute is only recommended in the LiveView renderer
+    /// which does not support the prevent default method on events.
+    ///
+    ///
+    /// For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead.
+    ///
     ///
     /// For more information, see the MDN docs:
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
     prevent_default: "dioxus-prevent-default";
+
+    /// dangerous_inner_html is Dioxus's replacement for using innerHTML in the browser DOM. In general, setting
+    /// HTML from code is risky because it’s easy to inadvertently expose your users to a cross-site scripting (XSS)
+    /// attack. So, you can set HTML directly from Dioxus, but you have to type out dangerous_inner_html to remind
+    /// yourself that it’s dangerous
+    dangerous_inner_html;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/accent-height>
     accent_height: "accent-height";

@@ -1,8 +1,4 @@
-use crate::{
-    innerlude::{throw_error, CapturedPanic},
-    nodes::RenderReturn,
-    ComponentFunction,
-};
+use crate::{innerlude::CapturedPanic, ComponentFunction, Element};
 use std::{any::Any, panic::AssertUnwindSafe};
 
 pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
@@ -10,11 +6,13 @@ pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
 /// A trait for a component that can be rendered.
 pub(crate) trait AnyProps: 'static {
     /// Render the component with the internal props.
-    fn render(&self) -> RenderReturn;
+    fn render(&self) -> Element;
     /// Make the old props equal to the new type erased props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &dyn Any) -> bool;
     /// Get the props as a type erased `dyn Any`.
     fn props(&self) -> &dyn Any;
+    /// Get the props as a type erased `dyn Any`.
+    fn props_mut(&mut self) -> &mut dyn Any;
     /// Duplicate this component into a new boxed component.
     fn duplicate(&self) -> BoxedAnyProps;
 }
@@ -72,19 +70,22 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
         &self.props
     }
 
-    fn render(&self) -> RenderReturn {
+    fn props_mut(&mut self) -> &mut dyn Any {
+        &mut self.props
+    }
+
+    fn render(&self) -> Element {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
             self.render_fn.rebuild(self.props.clone())
         }));
 
         match res {
-            Ok(Some(e)) => RenderReturn::Ready(e),
-            Ok(None) => RenderReturn::default(),
+            Ok(node) => node,
             Err(err) => {
                 let component_name = self.name;
-                tracing::error!("Error while rendering component `{component_name}`: {err:?}");
-                throw_error::<()>(CapturedPanic { error: err });
-                RenderReturn::default()
+                tracing::error!("Panic while rendering component `{component_name}`: {err:?}");
+                let panic = CapturedPanic { error: err };
+                Element::Err(panic.into())
             }
         }
     }

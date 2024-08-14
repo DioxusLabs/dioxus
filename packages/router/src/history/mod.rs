@@ -54,9 +54,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { None }
+    /// # fn Index() -> Element { VNode::empty() }
     /// # #[component]
-    /// # fn OtherPage() -> Element { None }
+    /// # fn OtherPage() -> Element { VNode::empty() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -92,8 +92,8 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { None }
-    /// # fn Other() -> Element { None }
+    /// # fn Index() -> Element { VNode::empty() }
+    /// # fn Other() -> Element { VNode::empty() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -121,9 +121,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { None }
+    /// # fn Index() -> Element { VNode::empty() }
     /// # #[component]
-    /// # fn OtherPage() -> Element { None }
+    /// # fn OtherPage() -> Element { VNode::empty() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -153,9 +153,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { None }
+    /// # fn Index() -> Element { VNode::empty() }
     /// # #[component]
-    /// # fn OtherPage() -> Element { None }
+    /// # fn OtherPage() -> Element { VNode::empty() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -186,9 +186,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { None }
+    /// # fn Index() -> Element { VNode::empty() }
     /// # #[component]
-    /// # fn OtherPage() -> Element { None }
+    /// # fn OtherPage() -> Element { VNode::empty() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -219,9 +219,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { None }
+    /// # fn Index() -> Element { VNode::empty() }
     /// # #[component]
-    /// # fn OtherPage() -> Element { None }
+    /// # fn OtherPage() -> Element { VNode::empty() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -248,9 +248,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { None }
+    /// # fn Index() -> Element { VNode::empty() }
     /// # #[component]
-    /// # fn OtherPage() -> Element { None }
+    /// # fn OtherPage() -> Element { VNode::empty() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -317,6 +317,9 @@ pub(crate) trait AnyHistoryProvider {
 
     #[allow(unused_variables)]
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+
+    #[cfg(feature = "liveview")]
+    fn is_liveview(&self) -> bool;
 }
 
 pub(crate) struct AnyHistoryProviderImplWrapper<R, H> {
@@ -339,7 +342,7 @@ impl<R, H: Default> Default for AnyHistoryProviderImplWrapper<R, H> {
     }
 }
 
-impl<R, H> AnyHistoryProvider for AnyHistoryProviderImplWrapper<R, H>
+impl<R, H: 'static> AnyHistoryProvider for AnyHistoryProviderImplWrapper<R, H>
 where
     R: Routable,
     <R as std::str::FromStr>::Err: std::fmt::Display,
@@ -388,5 +391,12 @@ where
 
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
         self.inner.updater(callback)
+    }
+
+    #[cfg(feature = "liveview")]
+    fn is_liveview(&self) -> bool {
+        use std::any::TypeId;
+
+        TypeId::of::<H>() == TypeId::of::<LiveviewHistory<R>>()
     }
 }

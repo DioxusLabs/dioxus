@@ -59,7 +59,7 @@
 <br>
 <br>
 
-使用单个代码库构建Web、桌面和移动应用，以及更多。零配置启动、集成的热重载和基于信号的状态管理。使用服务器功能添加后端功能，并使用我们的CLI进行捆绑。
+使用单个代码库构建 Web、桌面和移动应用，以及更多。零配置启动、集成的热重载和基于信号的状态管理。使用服务器功能添加后端功能，并使用我们的 CLI 进行捆绑。
 
 ```rust
 fn app() -> Element {
@@ -73,26 +73,25 @@ fn app() -> Element {
 }
 ```
 
-
 ## ⭐️ 独特功能：
 
 - 三行代码即可实现跨平台应用（Web、桌面、移动、服务器等）
-- [人体工程学的状态管理](https://dioxuslabs.com/blog/release-050)，结合了React、Solid和Svelte的优点
-- 非常高效，由Rust最快的wasm框架 [sledgehammer](https://dioxuslabs.com/blog/templates-diffing) 提供支持
-- 集成的捆绑包，可部署到Web、macOS、Linux和Windows
-- 还有更多！阅读 [Dioxus漫游之旅](https://dioxuslabs.com/learn/0.5/)。
+- [人体工程学的状态管理](https://dioxuslabs.com/blog/release-050)，结合了 React、Solid 和 Svelte 的优点
+- 非常高效，由 Rust 最快的 wasm 框架 [sledgehammer](https://dioxuslabs.com/blog/templates-diffing) 提供支持
+- 集成的捆绑包，可部署到 Web、macOS、Linux 和 Windows
+- 还有更多！阅读 [Dioxus 漫游之旅](https://dioxuslabs.com/learn/0.5/)。
 
 ## 瞬时热重载
 
-使用一个命令 `dx serve`，您的应用程序即可运行。编辑您的标记和样式，并实时查看结果。目前Rust代码热重载尚未达到一流水平，但也许可以使用 [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/) 实现。
+使用一个命令 `dx serve`，您的应用程序即可运行。编辑您的标记和样式，并实时查看结果。目前 Rust 代码热重载尚未达到一流水平，但也许可以使用 [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/) 实现。
 
 <div align="center">
   <img src="../../notes/hotreload.gif">
 </div>
 
-## 用于Web和桌面部署的捆绑包
+## 用于 Web 和桌面部署的捆绑包
 
-只需运行 `dx bundle`，您的应用程序将被构建和捆绑，并进行最大化的优化。在Web上，利用 [`.avif` 生成，`.wasm` 压缩，代码缩小](https://dioxuslabs.com/learn/0.5/reference/assets)，等等。构建的Web应用程序大小 [不到50kb](https://github.com/ealmloff/tiny-dioxus/)，桌面/移动应用程序小于15mb。
+只需运行 `dx bundle`，您的应用程序将被构建和捆绑，并进行最大化的优化。在 Web 上，利用 [`.avif` 生成，`.wasm` 压缩，代码缩小](https://dioxuslabs.com/learn/0.5/reference/assets)，等等。构建的 Web 应用程序大小 [不到 50kb](https://github.com/ealmloff/tiny-dioxus/)，桌面/移动应用程序小于 15mb。
 
 <div align="center">
   <img src="../../notes/bundle.gif">
@@ -100,7 +99,7 @@ fn app() -> Element {
 
 ## 出色的文档
 
-我们花费了大量精力构建清晰、易读和全面的文档。所有HTML元素和监听器都使用MDN文档进行了记录，并且我们的文档站点通过Dioxus本身进行持续集成，以确保文档始终保持最新。查看 [Dioxus网站](https://dioxuslabs.com/learn/0.5/) 获取指南、参考资料、示例和更多信息。有趣的事实：我们将Dioxus网站用作新特性的测试平台 - [来看看吧！](https://github.com/dioxusLabs/docsite)
+我们花费了大量精力构建清晰、易读和全面的文档。所有 HTML 元素和监听器都使用 MDN 文档进行了记录，并且我们的文档站点通过 Dioxus 本身进行持续集成，以确保文档始终保持最新。查看 [Dioxus 网站](https://dioxuslabs.com/learn/0.5/) 获取指南、参考资料、示例和更多信息。有趣的事实：我们将 Dioxus 网站用作新特性的测试平台 - [来看看吧！](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="../../notes/docs.avif">
@@ -108,7 +107,7 @@ fn app() -> Element {
 
 ## 开发者体验的重点
 
-Dioxus优先考虑开发者体验，我们为端到端工具链付出了大量努力。我们构建了一个 [VSCode扩展](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)，可以自动格式化您的RSX代码，将HTML转换为RSX等等。我们还建立了一个非常强大的 [CLI](https://dioxuslabs.com/learn/0.5/CLI)，支持创建新应用程序、提供服务和跨平台捆绑，并且部署正在路上。
+Dioxus 优先考虑开发者体验，我们为端到端工具链付出了大量努力。我们构建了一个 [VSCode 扩展](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)，可以自动格式化您的 RSX 代码，将 HTML 转换为 RSX 等等。我们还建立了一个非常强大的 [CLI](https://dioxuslabs.com/learn/0.5/CLI)，支持创建新应用程序、提供服务和跨平台捆绑，并且部署正在路上。
 
 <div align="center">
   <img src="./notes/autofmt.gif">
@@ -116,7 +115,7 @@ Dioxus优先考虑开发者体验，我们为端到端工具链付出了大量�
 
 ## 社区
 
-Dioxus是一个社区驱动的项目，拥有非常活跃的 [Discord](https://discord.gg/XgGxMSkvUM) 和 [GitHub](https://github.com/DioxusLabs/dioxus/issues) 社区。我们一直在寻求帮助，乐意回答问题并帮助您入门。 [我们的SDK](https://github.com/DioxusLabs/dioxus-std) 由社区运行，我们甚至有一个 [GitHub组织](https://github.com/dioxus-community/)，用于最好的Dioxus crates，这些crate可以获得免费升级和支持。
+Dioxus 是一个社区驱动的项目，拥有非常活跃的 [Discord](https://discord.gg/XgGxMSkvUM) 和 [GitHub](https://github.com/DioxusLabs/dioxus/issues) 社区。我们一直在寻求帮助，乐意回答问题并帮助您入门。 [我们的 SDK](https://github.com/DioxusLabs/dioxus-std) 由社区运行，我们甚至有一个 [GitHub 组织](https://github.com/dioxus-community/)，用于最好的 Dioxus crates，这些 crate 可以获得免费升级和支持。
 
 <div align="center">
   <img src="../../notes/dioxus-community.avif">
@@ -124,7 +123,7 @@ Dioxus是一个社区驱动的项目，拥有非常活跃的 [Discord](https://d
 
 ## 全职核心团队
 
-Dioxus已经从一个副业项目发展成为一个由全职工程师组成的小团队。由于FutrueWei、Satellite.im和GitHub Accelerator项目的慷慨支持，我们能够全职工作在Dioxus上。我们的长期目标是通过提供高质量的付费企业工具使Dioxus自我维持。如果您的公司有兴趣采用Dioxus，并希望与我们合作，请联系我们！
+Dioxus 已经从一个副业项目发展成为一个由全职工程师组成的小团队。由于 FutrueWei、Satellite.im 和 GitHub Accelerator 项目的慷慨支持，我们能够全职工作在 Dioxus 上。我们的长期目标是通过提供高质量的付费企业工具使 Dioxus 自我维持。如果您的公司有兴趣采用 Dioxus，并希望与我们合作，请联系我们！
 
 ## 支持的平台
 
@@ -222,36 +221,36 @@ Dioxus已经从一个副业项目发展成为一个由全职工程师组成的�
 
 ## 运行示例
 
-该存储库顶层的示例可以通过 `cargo run --example <example>` 运行。但是，我们建议您下载dioxus-cli并使用 `dx serve` 运行示例，因为许多示例还支持web。在运行web时，您可以修改Cargo.toml以禁用默认的desktop功能，或者使用
+该存储库顶层的示例可以通过 `cargo run --example <example>` 运行。但是，我们建议您下载 dioxus-cli 并使用 `dx serve` 运行示例，因为许多示例还支持 web。在运行 web 时，您可以修改 Cargo.toml 以禁用默认的 desktop 功能，或者使用
 
-## Dioxus与其他框架
+## Dioxus 与其他框架
 
-我们喜欢Rust生态系统中的所有框架，并享受着Rust生态系统中的创新。事实上，我们的许多项目都与其他框架共享。例如，我们的flex-box库 [Taffy](https://github.com/DioxusLabs/taffy) 被 [Bevy](https://bevyengine.org/)、[Zed](https://zed.dev/)、[Lapce](https://lapce.dev/)、[Iced](https://github.com/iced-rs/iced) 等项目使用。
+我们喜欢 Rust 生态系统中的所有框架，并享受着 Rust 生态系统中的创新。事实上，我们的许多项目都与其他框架共享。例如，我们的 flex-box 库 [Taffy](https://github.com/DioxusLabs/taffy) 被 [Bevy](https://bevyengine.org/)、[Zed](https://zed.dev/)、[Lapce](https://lapce.dev/)、[Iced](https://github.com/iced-rs/iced) 等项目使用。
 
-Dioxus侧重于几个与其他框架不同的重点，这些重点使其与其他框架不同：
+Dioxus 侧重于几个与其他框架不同的重点，这些重点使其与其他框架不同：
 
-- **类似React**：我们依赖于组件、props和hooks等概念来构建UI，我们的状态管理更接近于Svelte而不是SolidJS。
-- **HTML和CSS**：我们完全依赖HTML和CSS，包括怪癖和全部。
-- **渲染器不可知**：您可以根据需要将渲染器替换为任何平台，感谢我们的快速VirtualDOM。
-- **合作**：只要有可能，我们就会拆分出像[Taffy](https://github.com/DioxusLabs/taffy)、[magnanis](https://github.com/DioxusLabs/collect-assets)、[include_mdbook](https://github.com/DioxusLabs/include_mdbook)和[blitz](http://github.com/dioxusLabs/blitz)这样的crate，以便生态系统能够共同成长。
+- **类似 React**：我们依赖于组件、props 和 hooks 等概念来构建 UI，我们的状态管理更接近于 Svelte 而不是 SolidJS。
+- **HTML 和 CSS**：我们完全依赖 HTML 和 CSS，包括怪癖和全部。
+- **渲染器不可知**：您可以根据需要将渲染器替换为任何平台，感谢我们的快速 VirtualDOM。
+- **合作**：只要有可能，我们就会拆分出像[Taffy](https://github.com/DioxusLabs/taffy)、[magnanis](https://github.com/DioxusLabs/manganis)、[include_mdbook](https://github.com/DioxusLabs/include_mdbook)和[blitz](http://github.com/dioxusLabs/blitz)这样的 crate，以便生态系统能够共同成长。
 
-### Dioxus与Tauri
+### Dioxus 与 Tauri
 
-Tauri是一个用于构建桌面（和即将到来的移动）应用程序的框架，其中前端使用诸如React、Vue、Svelte等的基于web的框架编写。每当需要进行本机工作时，您可以编写Rust函数并从前端调用它们。
+Tauri 是一个用于构建桌面（和即将到来的移动）应用程序的框架，其中前端使用诸如 React、Vue、Svelte 等的基于 web 的框架编写。每当需要进行本机工作时，您可以编写 Rust 函数并从前端调用它们。
 
-- **纯Rust**：Tauri的架构将您的UI限制为JavaScript或WebAssembly。使用Dioxus，您的Rust代码在用户的计算机上本地运行，使您可以执行诸如生成线程、访问文件系统等操作，而无需任何IPC。这大大简化了应用程序的架构，并使其更易于构建。您可以使用Dioxus-Web作为前端构建Tauri应用程序。
+- **纯 Rust**：Tauri 的架构将您的 UI 限制为 JavaScript 或 WebAssembly。使用 Dioxus，您的 Rust 代码在用户的计算机上本地运行，使您可以执行诸如生成线程、访问文件系统等操作，而无需任何 IPC。这大大简化了应用程序的架构，并使其更易于构建。您可以使用 Dioxus-Web 作为前端构建 Tauri 应用程序。
 
-- **不同的范围**：Tauri需要支持JavaScript及其复杂的构建工具链，从而限制了您可以使用的范围。由于Dioxus专注于Rust，我们能够提供额外的实用工具，如服务器函数、高级捆绑和本机渲染器。
+- **不同的范围**：Tauri 需要支持 JavaScript 及其复杂的构建工具链，从而限制了您可以使用的范围。由于 Dioxus 专注于 Rust，我们能够提供额外的实用工具，如服务器函数、高级捆绑和本机渲染器。
 
-- **共享DNA**：虽然Tauri和Dioxus是独立的项目，但它们确实共享库，如Tao和Wry：由Tauri团队维护的窗口和webview库。
+- **共享 DNA**：虽然 Tauri 和 Dioxus 是独立的项目，但它们确实共享库，如 Tao 和 Wry：由 Tauri 团队维护的窗口和 webview 库。
 
-### Dioxus与Leptos
+### Dioxus 与 Leptos
 
-Leptos是用于构建全栈web应用程序的库，类似于SolidJS和SolidStart。两个库在web上有着相似的目标，但有几个关键区别：
+Leptos 是用于构建全栈 web 应用程序的库，类似于 SolidJS 和 SolidStart。两个库在 web 上有着相似的目标，但有几个关键区别：
 
-- **响应模型**：Leptos使用信号作为其基础的响应性，而Dioxus选择使用VirtualDom和重新渲染。虽然从理论上讲，信号更高效，但实际上，由于我们的[block-dom](https://dioxuslabs.com/blog/templates-diffing)模板并没有进行实际的diffing，而是直接重新渲染了UI，Dioxus的VirtualDom的表现与Leptos相比几乎没有什么差异，并且[实际上比Leptos更快](https://krausest.github.io/js-framework-benchmark/2024/table_chrome_123.0.6312.59.html)。
+- **响应模型**：Leptos 使用信号作为其基础的响应性，而 Dioxus 选择使用 VirtualDom 和重新渲染。虽然从理论上讲，信号更高效，但实际上，由于我们的[block-dom](https://dioxuslabs.com/blog/templates-diffing)模板并没有进行实际的 diffing，而是直接重新渲染了 UI，Dioxus 的 VirtualDom 的表现与 Leptos 相比几乎没有什么差异，并且[实际上比 Leptos 更快](https://krausest.github.io/js-framework-benchmark/2024/table_chrome_123.0.6312.59.html)。
 
-- **控制流**：因为Leptos使用信号来实现响应性，所以您只能使用Leptos的原语来进行 `for` 循环和 `if` 语句。如果您搞错了这一点，您的应用程序将失去响应性，导致难以调试的UI问题。使用Dioxus，您可以使用迭代器、常规的Rust `for` 循环和 `if` 语句，您的应用程序仍然是响应式的。在实践中，一个向列表中插入计数器的Dioxus组件可能如下所示：
+- **控制流**：因为 Leptos 使用信号来实现响应性，所以您只能使用 Leptos 的原语来进行 `for` 循环和 `if` 语句。如果您搞错了这一点，您的应用程序将失去响应性，导致难以调试的 UI 问题。使用 Dioxus，您可以使用迭代器、常规的 Rust `for` 循环和 `if` 语句，您的应用程序仍然是响应式的。在实践中，一个向列表中插入计数器的 Dioxus 组件可能如下所示：
 
 ```rust
 fn Counters() -> Element {
@@ -271,7 +270,7 @@ fn Counters() -> Element {
 }
 ```
 
-[在Leptos中，您将使用`<For>`组件。](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
+[在 Leptos 中，您将使用`<For>`组件。](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
 
 ```rust
 fn Counters() -> impl IntoView {
@@ -358,4 +357,3 @@ Dioxus 和 Electron 是两个完全不同的项目，目标相似。Electron 使
 [mit 许可证]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 除非您明确说明，否则您提交的任何贡献都将由您自己有意提交，以 MIT 许可证许可，不附加任何其他条款或条件。
-

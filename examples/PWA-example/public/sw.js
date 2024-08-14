@@ -137,7 +137,7 @@ self.addEventListener("fetch", function (event) {
              - You should also consider the origin. It's easier to decide what
                "unavailable" means for requests against your origins than for requests
                against a third party, such as an ad provider.
-             - Generate a Response programmaticaly, as shown below, and return that.
+             - Generate a Response programmatically, as shown below, and return that.
           */
 
           //console.log('WORKER: fetch request failed in both cache and network.');

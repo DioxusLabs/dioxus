@@ -1,18 +1,29 @@
-use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::eval::NATIVE_EVAL_JS;
+use crate::{assets::*, webview::WebviewEdits};
+use dioxus_html::document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
-use std::path::{Component, Path, PathBuf};
+use serde::Deserialize;
+use std::{
+    path::{Component, Path, PathBuf},
+    process::Command,
+    sync::OnceLock,
+};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
 };
 
 #[cfg(any(target_os = "android", target_os = "windows"))]
-const EDITS_PATH: &str = "http://dioxus.index.html/edits";
+const EDITS_PATH: &str = "http://dioxus.index.html/__edits";
 
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
-const EDITS_PATH: &str = "dioxus://index.html/edits";
+const EDITS_PATH: &str = "dioxus://index.html/__edits";
+
+#[cfg(any(target_os = "android", target_os = "windows"))]
+const EVENTS_PATH: &str = "http://dioxus.index.html/__events";
+
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
+const EVENTS_PATH: &str = "dioxus://index.html/__events";
 
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
@@ -108,8 +119,17 @@ fn assets_head() -> Option<String> {
 
 fn resolve_resource(path: &Path) -> PathBuf {
     let mut base_path = get_asset_root_or_default();
+
     if running_in_dev_mode() {
         base_path.push(path);
+
+        // Special handler for Manganis filesystem fallback.
+        // We need this since Manganis provides assets from workspace root.
+        if !base_path.exists() {
+            let workspace_root = get_workspace_root_from_cargo();
+            let asset_path = workspace_root.join(path);
+            return asset_path;
+        }
     } else {
         let mut resource_path = PathBuf::new();
         for component in path.components() {
@@ -135,12 +155,18 @@ fn resolve_resource(path: &Path) -> PathBuf {
 pub(super) fn desktop_handler(
     request: Request<Vec<u8>>,
     asset_handlers: AssetHandlerRegistry,
-    edit_queue: &EditQueue,
     responder: RequestAsyncResponder,
+    edit_state: &WebviewEdits,
 ) {
-    // If the request is asking for edits (ie binary protocol streaming, do that)
-    if request.uri().path().trim_matches('/') == "edits" {
-        return edit_queue.handle_request(responder);
+    // If the request is asking for edits (ie binary protocol streaming), do that
+    let trimmed_uri = request.uri().path().trim_matches('/');
+    if trimmed_uri == "__edits" {
+        return edit_state.wry_queue.handle_request(responder);
+    }
+
+    // If the request is asking for an event response, do that
+    if trimmed_uri == "__events" {
+        return edit_state.handle_event(request, responder);
     }
 
     // If the user provided a custom asset handler, then call it and return the response if the request was handled.
@@ -187,6 +213,7 @@ fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
 
     Ok(Response::builder()
         .header("Content-Type", get_mime_from_path(&asset)?)
+        .header("Access-Control-Allow-Origin", "*")
         .body(std::fs::read(asset)?)?)
 }
 
@@ -207,7 +234,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     {NATIVE_JS}
 
     // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
-    window.interpreter = new NativeInterpreter("{EDITS_PATH}");
+    window.interpreter = new NativeInterpreter("{EDITS_PATH}", "{EVENTS_PATH}");
 
     // Wait for the page to load before sending the initialize message
     window.onload = function() {{
@@ -255,7 +282,7 @@ fn get_asset_root() -> Option<PathBuf> {
     if running_in_dev_mode() {
         return dioxus_cli_config::CURRENT_CONFIG
             .as_ref()
-            .map(|c| c.out_dir())
+            .map(|c| c.application.out_dir.clone())
             .ok();
     }
 
@@ -304,4 +331,32 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
         // using octet stream according to this:
         None => "application/octet-stream",
     }
+}
+
+/// A global that stores the workspace root. Used in [`get_workspace_root_from_cargo`].
+static WORKSPACE_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Describes the metadata we need from `cargo metadata`.
+#[derive(Deserialize)]
+struct CargoMetadata {
+    workspace_root: PathBuf,
+}
+
+/// Get the workspace root using `cargo metadata`. Should not be used in release mode.
+pub(crate) fn get_workspace_root_from_cargo() -> PathBuf {
+    WORKSPACE_ROOT
+        .get_or_init(|| {
+            let out = Command::new("cargo")
+                .args(["metadata", "--format-version", "1", "--no-deps"])
+                .output()
+                .expect("`cargo metadata` failed to run");
+
+            let out =
+                String::from_utf8(out.stdout).expect("failed to parse output of `cargo metadata`");
+            let metadata = serde_json::from_str::<CargoMetadata>(&out)
+                .expect("failed to deserialize data from `cargo metadata`");
+
+            metadata.workspace_root
+        })
+        .to_owned()
 }

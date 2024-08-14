@@ -67,7 +67,11 @@ impl ReactiveContext {
             }
             let _ = tx.unbounded_send(());
         };
-        let _self = Self::new_with_callback(callback, current_scope_id().unwrap(), origin);
+        let _self = Self::new_with_callback(
+            callback,
+            current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
+            origin,
+        );
         (_self, rx)
     }
 
@@ -138,6 +142,8 @@ impl ReactiveContext {
 
     /// Clear all subscribers to this context
     pub fn clear_subscribers(&self) {
+        // The key type is mutable, but the hash is stable through mutations because we hash by pointer
+        #[allow(clippy::mutable_key_type)]
         let old_subscribers = std::mem::take(&mut self.inner.write().subscribers);
         for subscriber in old_subscribers {
             subscriber.0.lock().unwrap().remove(self);
@@ -146,6 +152,7 @@ impl ReactiveContext {
 
     /// Update the subscribers
     pub(crate) fn update_subscribers(&self) {
+        #[allow(clippy::mutable_key_type)]
         let subscribers = &self.inner.read().subscribers;
         for subscriber in subscribers.iter() {
             subscriber.0.lock().unwrap().insert(*self);
@@ -159,7 +166,7 @@ impl ReactiveContext {
     /// # use futures_util::StreamExt;
     /// fn use_simplified_memo(mut closure: impl FnMut() -> i32 + 'static) -> Signal<i32> {
     ///     use_hook(|| {
-    ///         // Create a new reactive context and channel that will recieve a value every time a value the reactive context subscribes to changes
+    ///         // Create a new reactive context and channel that will receive a value every time a value the reactive context subscribes to changes
     ///         let (reactive_context, mut changed) = ReactiveContext::new();
     ///         // Compute the value of the memo inside the reactive context. This will subscribe the reactive context to any values you read inside the closure
     ///         let value = reactive_context.reset_and_run_in(&mut closure);

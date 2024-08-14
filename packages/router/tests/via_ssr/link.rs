@@ -41,7 +41,7 @@ where
         rsx! {
             h1 { "App" }
             Router::<R> {
-                config: || RouterConfig::default().history(MemoryHistory::default())
+                config: |_| RouterConfig::default().history(MemoryHistory::default())
             }
         }
     }
@@ -72,11 +72,7 @@ fn href_internal() {
         }
     }
 
-    let expected = format!(
-        "<h1>App</h1><a {href} {default}>Link</a>",
-        href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
-    );
+    let expected = format!("<h1>App</h1><a {href}>Link</a>", href = r#"href="/test""#,);
 
     assert_eq!(prepare::<Route>(), expected);
 }
@@ -107,9 +103,8 @@ fn href_external() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {rel}>Link</a>",
+        "<h1>App</h1><a {href} {rel}>Link</a>",
         href = r#"href="https://dioxuslabs.com/""#,
-        default = r#"dioxus-prevent-default="""#,
         rel = r#"rel="noopener noreferrer""#,
     );
 
@@ -143,9 +138,8 @@ fn with_class() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class}>Link</a>",
+        "<h1>App</h1><a {href} {class}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class""#,
     );
 
@@ -173,10 +167,10 @@ fn with_active_class_active() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class}>Link</a>",
+        "<h1>App</h1><a {href} {class} {aria}>Link</a>",
         href = r#"href="/""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class active_class""#,
+        aria = r#"aria-current="page""#,
     );
 
     assert_eq!(prepare::<Route>(), expected);
@@ -210,9 +204,8 @@ fn with_active_class_inactive() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class}>Link</a>",
+        "<h1>App</h1><a {href} {class}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class""#,
     );
 
@@ -246,9 +239,8 @@ fn with_id() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {id}>Link</a>",
+        "<h1>App</h1><a {href} {id}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         id = r#"id="test_id""#,
     );
 
@@ -282,9 +274,8 @@ fn with_new_tab() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {target}>Link</a>",
+        "<h1>App</h1><a {href} {target}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="""#,
         target = r#"target="_blank""#
     );
 
@@ -311,9 +302,8 @@ fn with_new_tab_external() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {rel} {target}>Link</a>",
         href = r#"href="https://dioxuslabs.com/""#,
-        default = r#"dioxus-prevent-default="""#,
         rel = r#"rel="noopener noreferrer""#,
         target = r#"target="_blank""#
     );
@@ -348,9 +338,8 @@ fn with_rel() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {rel}>Link</a>",
+        "<h1>App</h1><a {href} {rel}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         rel = r#"rel="test_rel""#,
     );
 

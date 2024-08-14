@@ -4,13 +4,13 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    DragData, FileEngine, FormData, FormValue, HasDragData, HasFileData, HasFormData, HasImageData,
+    DragData, FormData, FormValue, HasDragData, HasFileData, HasFormData, HasImageData,
     HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData, ResizeData,
     ScrollData,
 };
 use js_sys::Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{CustomEvent, Document, DragEvent, Element, Event, MouseEvent};
+use web_sys::{CustomEvent, Document, Element, Event, MouseEvent};
 
 pub(crate) struct WebEventConverter;
 
@@ -173,135 +173,147 @@ impl HtmlEventConverter for WebEventConverter {
 
 /// A extension trait for web-sys events that provides a way to get the event as a web-sys event.
 pub trait WebEventExt<E> {
-    /// Get the event as a web-sys event.
-    fn web_event(&self) -> &E;
+    /// Try to downcast this event as a `web-sys` event.
+    fn try_as_web_event(&self) -> Option<&E>;
+
+    /// Downcast this event as a `web-sys` event.
+    #[inline(always)]
+    fn as_web_event(&self) -> &E
+    where
+        E: 'static,
+    {
+        self.try_as_web_event().unwrap_or_else(|| {
+            panic!(
+                "Error downcasting to `web-sys`, event should be a {}.",
+                std::any::type_name::<E>()
+            )
+        })
+    }
 }
 
 impl WebEventExt<web_sys::AnimationEvent> for dioxus_html::AnimationData {
-    fn web_event(&self) -> &web_sys::AnimationEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::AnimationEvent> {
         self.downcast::<web_sys::AnimationEvent>()
-            .expect("event should be a WebAnimationEvent")
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::ClipboardData {
-    fn web_event(&self) -> &web_sys::Event {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
-            .expect("event should be a web_sys::Event")
     }
 }
 
 impl WebEventExt<web_sys::CompositionEvent> for dioxus_html::CompositionData {
-    fn web_event(&self) -> &web_sys::CompositionEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::CompositionEvent> {
         self.downcast::<web_sys::CompositionEvent>()
-            .expect("event should be a WebCompositionEvent")
     }
 }
 
 impl WebEventExt<web_sys::MouseEvent> for dioxus_html::DragData {
-    fn web_event(&self) -> &web_sys::MouseEvent {
-        &self
-            .downcast::<WebDragData>()
-            .expect("event should be a WebMouseEvent")
-            .raw
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::MouseEvent> {
+        self.downcast::<WebDragData>().map(|data| &data.raw)
     }
 }
 
 impl WebEventExt<web_sys::FocusEvent> for dioxus_html::FocusData {
-    fn web_event(&self) -> &web_sys::FocusEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::FocusEvent> {
         self.downcast::<web_sys::FocusEvent>()
-            .expect("event should be a WebFocusEvent")
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::FormData {
-    fn web_event(&self) -> &web_sys::Event {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
-            .expect("event should be a WebFormData")
     }
 }
 
 impl WebEventExt<WebImageEvent> for dioxus_html::ImageData {
-    fn web_event(&self) -> &WebImageEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&WebImageEvent> {
         self.downcast::<WebImageEvent>()
-            .expect("event should be a WebImageEvent")
     }
 }
 
 impl WebEventExt<web_sys::KeyboardEvent> for dioxus_html::KeyboardData {
-    fn web_event(&self) -> &web_sys::KeyboardEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::KeyboardEvent> {
         self.downcast::<web_sys::KeyboardEvent>()
-            .expect("event should be a WebKeyboardEvent")
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::MediaData {
-    fn web_event(&self) -> &web_sys::Event {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
-            .expect("event should be a WebMediaEvent")
     }
 }
 
 impl WebEventExt<web_sys::Element> for MountedData {
-    fn web_event(&self) -> &web_sys::Element {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::Element> {
         self.downcast::<web_sys::Element>()
-            .expect("event should be a web_sys::Element")
     }
 }
 
 impl WebEventExt<web_sys::MouseEvent> for dioxus_html::MouseData {
-    fn web_event(&self) -> &web_sys::MouseEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::MouseEvent> {
         self.downcast::<web_sys::MouseEvent>()
-            .expect("event should be a WebMouseEvent")
     }
 }
 
 impl WebEventExt<web_sys::PointerEvent> for dioxus_html::PointerData {
-    fn web_event(&self) -> &web_sys::PointerEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::PointerEvent> {
         self.downcast::<web_sys::PointerEvent>()
-            .expect("event should be a WebPointerEvent")
     }
 }
 
 impl WebEventExt<web_sys::Event> for ScrollData {
-    fn web_event(&self) -> &web_sys::Event {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
-            .expect("event should be a WebScrollEvent")
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::SelectionData {
-    fn web_event(&self) -> &web_sys::Event {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
-            .expect("event should be a WebSelectionEvent")
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::ToggleData {
-    fn web_event(&self) -> &web_sys::Event {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
-            .expect("event should be a WebToggleEvent")
     }
 }
 
 impl WebEventExt<web_sys::TouchEvent> for dioxus_html::TouchData {
-    fn web_event(&self) -> &web_sys::TouchEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::TouchEvent> {
         self.downcast::<web_sys::TouchEvent>()
-            .expect("event should be a WebTouchEvent")
     }
 }
 
 impl WebEventExt<web_sys::TransitionEvent> for dioxus_html::TransitionData {
-    fn web_event(&self) -> &web_sys::TransitionEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::TransitionEvent> {
         self.downcast::<web_sys::TransitionEvent>()
-            .expect("event should be a WebTransitionEvent")
     }
 }
 
 impl WebEventExt<web_sys::WheelEvent> for dioxus_html::WheelData {
-    fn web_event(&self) -> &web_sys::WheelEvent {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<&web_sys::WheelEvent> {
         self.downcast::<web_sys::WheelEvent>()
-            .expect("event should be a WebWheelEvent")
     }
 }
 
@@ -454,18 +466,15 @@ impl HasFormData for WebFormData {
 }
 
 impl HasFileData for WebFormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        #[cfg(not(feature = "file_engine"))]
-        let files = None;
-
-        #[cfg(feature = "file_engine")]
+    #[cfg(feature = "file_engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
         let files = self
             .element
             .dyn_ref()
             .and_then(|input: &web_sys::HtmlInputElement| {
                 input.files().and_then(|files| {
                     #[allow(clippy::arc_with_non_send_sync)]
-                    crate::file_engine::WebFileEngine::new(files).map(|f| {
+                    dioxus_html::WebFileEngine::new(files).map(|f| {
                         std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
                     })
                 })
@@ -538,20 +547,21 @@ impl InteractionLocation for WebDragData {
 }
 
 impl HasFileData for WebDragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        #[cfg(not(feature = "file_engine"))]
-        let files = None;
-        #[cfg(feature = "file_engine")]
-        let files = self.raw.dyn_ref::<DragEvent>().and_then(|drag_event| {
-            drag_event.data_transfer().and_then(|dt| {
-                dt.files().and_then(|files| {
-                    #[allow(clippy::arc_with_non_send_sync)]
-                    crate::file_engine::WebFileEngine::new(files).map(|f| {
-                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+    #[cfg(feature = "file_engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
+        let files = self
+            .raw
+            .dyn_ref::<web_sys::DragEvent>()
+            .and_then(|drag_event| {
+                drag_event.data_transfer().and_then(|dt| {
+                    dt.files().and_then(|files| {
+                        #[allow(clippy::arc_with_non_send_sync)]
+                        dioxus_html::WebFileEngine::new(files).map(|f| {
+                            std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+                        })
                     })
                 })
-            })
-        });
+            });
 
         files
     }

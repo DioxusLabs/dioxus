@@ -1,8 +1,8 @@
-use crate::write::Writable;
 use crate::{read::Readable, ReadableRef};
+use crate::{write::Writable, GlobalKey};
 use crate::{WritableRef, Write};
-use dioxus_core::prelude::ScopeId;
-use generational_box::UnsyncStorage;
+use dioxus_core::{prelude::ScopeId, Runtime};
+use generational_box::{BorrowResult, UnsyncStorage};
 use std::ops::Deref;
 
 use super::get_global_context;
@@ -12,18 +12,44 @@ use crate::Signal;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalSignal<T> {
     initializer: fn() -> T,
+    key: GlobalKey<'static>,
+    created_at: &'static std::panic::Location<'static>,
 }
 
 impl<T: 'static> GlobalSignal<T> {
     /// Create a new global signal with the given initializer.
+    #[track_caller]
     pub const fn new(initializer: fn() -> T) -> GlobalSignal<T> {
-        GlobalSignal { initializer }
+        let key = std::panic::Location::caller();
+        GlobalSignal {
+            initializer,
+            key: GlobalKey::new(key),
+            created_at: key,
+        }
     }
 
-    /// Get the signal that backs this global.
+    /// Get the key for this global
+    pub fn key(&self) -> GlobalKey<'static> {
+        self.key.clone()
+    }
+
+    /// Create this global signal with a specific key.
+    /// This is useful for ensuring that the signal is unique across the application and accessible from
+    /// outside the application too.
+    #[track_caller]
+    pub const fn with_key(initializer: fn() -> T, key: &'static str) -> GlobalSignal<T> {
+        GlobalSignal {
+            initializer,
+            key: GlobalKey::new_from_str(key),
+            created_at: std::panic::Location::caller(),
+        }
+    }
+
+    /// Get the signal that backs this .
     pub fn signal(&self) -> Signal<T> {
-        let key = self as *const _ as *const ();
+        let key = self.key();
         let context = get_global_context();
+
         let read = context.signal.borrow();
 
         match read.get(&key) {
@@ -34,13 +60,26 @@ impl<T: 'static> GlobalSignal<T> {
                 // Constructors are always run in the root scope
                 // The signal also exists in the root scope
                 let value = ScopeId::ROOT.in_runtime(self.initializer);
-                let signal = Signal::new_in_scope(value, ScopeId::ROOT);
+                let signal = Signal::new_maybe_sync_in_scope_with_caller(
+                    value,
+                    ScopeId::ROOT,
+                    self.created_at,
+                );
 
                 let entry = context.signal.borrow_mut().insert(key, Box::new(signal));
                 debug_assert!(entry.is_none(), "Global signal already exists");
 
                 signal
             }
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn maybe_with_rt<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+        if Runtime::current().is_err() {
+            f(&(self.initializer)())
+        } else {
+            self.with(f)
         }
     }
 
@@ -79,8 +118,8 @@ impl<T: 'static> Readable for GlobalSignal<T> {
     }
 
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.signal().peek_unchecked()
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+        self.signal().try_peek_unchecked()
     }
 }
 

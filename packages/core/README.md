@@ -12,13 +12,16 @@ let real_dom = SomeRenderer::new();
 
 loop {
     tokio::select! {
-        evt = real_dom.event() => vdom.handle_event("onclick", evt, ElementId(0), true),
+        evt = real_dom.event() => {
+            let evt = Event::new(evt, true);
+            vdom.runtime().handle_event("onclick", evt, ElementId(0))
+        },
         _ = vdom.wait_for_work() => {}
     }
     vdom.render_immediate(&mut real_dom.apply())
 }
 
-# fn app() -> Element { None }
+# fn app() -> Element { VNode::empty() }
 # struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer } async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() } fn apply(&self) -> Mutations { Mutations::default() } }
 # });
 ```
@@ -40,7 +43,7 @@ If you are just starting, check out the Guides first.
 
 ## Understanding the implementation
 
-`dioxus-core` is designed to be a lightweight crate that. It exposes a number of flexible primitives without being deeply concerned about the intracices of state management itself. We proivde a number of useful abstractions built on these primitives in the `dioxus-hooks` crate as well as the `dioxus-signals` crate.
+`dioxus-core` is designed to be a lightweight crate that. It exposes a number of flexible primitives without being deeply concerned about the intracices of state management itself. We provide a number of useful abstractions built on these primitives in the `dioxus-hooks` crate as well as the `dioxus-signals` crate.
 
 The important abstractions to understand are:
 

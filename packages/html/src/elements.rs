@@ -9,7 +9,7 @@ use dioxus_rsx::HotReloadingContext;
 #[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};
 
-pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
+pub type AttributeDescription = (&'static str, Option<&'static str>, bool);
 
 macro_rules! impl_attribute {
     (
@@ -38,7 +38,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = (stringify!($fil), None, false);
+        pub const $fil: AttributeDescription = (stringify!($fil), None, false);
     };
 
     (
@@ -67,7 +67,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = ($name, None, false);
+        pub const $fil: AttributeDescription = ($name, None, false);
     };
 
     (
@@ -96,7 +96,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = (stringify!($fil), None, true);
+        pub const $fil: AttributeDescription = (stringify!($fil), None, true);
     };
 
     (
@@ -125,7 +125,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), false)
+        pub const $fil: AttributeDescription = (stringify!($fil), Some($ns), false)
     };
 
     (
@@ -154,7 +154,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), true)
+        pub const $fil: AttributeDescription = (stringify!($fil), Some($ns), true)
     };
 }
 
@@ -230,7 +230,7 @@ macro_rules! impl_element {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { todo!() }
+        /// # fn ChildComponent() -> Element { unimplemented!() }
         /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
@@ -283,7 +283,7 @@ macro_rules! impl_element {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { todo!() }
+        /// # fn ChildComponent() -> Element { unimplemented!() }
         /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
@@ -337,7 +337,7 @@ macro_rules! impl_element {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { todo!() }
+        /// # fn ChildComponent() -> Element { unimplemented!() }
         /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
@@ -584,7 +584,7 @@ macro_rules! builder_constructors {
                     /// ```rust, no_run
                     /// # use dioxus::prelude::*;
                     /// # let attributes = vec![];
-                    /// # fn ChildComponent() -> Element { todo!() }
+                    /// # fn ChildComponent() -> Element { unimplemented!() }
                     /// # let raw_expression: Element = rsx! {};
                     /// rsx! {
                     ///     // Elements are followed by braces that surround any attributes and children for that element
@@ -621,7 +621,7 @@ macro_rules! builder_constructors {
 //
 // Does not include obsolete elements.
 //
-// This namespace represents a collection of modern HTML-5 compatiable elements.
+// This namespace represents a collection of modern HTML-5 compatible elements.
 //
 // This list does not include obsolete, deprecated, experimental, or poorly supported elements.
 builder_constructors! {
@@ -655,6 +655,11 @@ builder_constructors! {
         title: String DEFAULT, // FIXME
         r#type: Mime "type",
         integrity: String DEFAULT,
+        disabled: Bool DEFAULT,
+        referrerpolicy: ReferrerPolicy DEFAULT,
+        fetchpriority: FetchPriority DEFAULT,
+        blocking: Blocking DEFAULT,
+        r#as: As "as",
     };
 
     /// Build a
@@ -665,6 +670,7 @@ builder_constructors! {
         content: String DEFAULT,
         http_equiv: String "http-equiv",
         name: Metadata DEFAULT,
+        property: Metadata DEFAULT,
     };
 
     /// Build a
@@ -1261,6 +1267,8 @@ builder_constructors! {
         nonce: Nonce DEFAULT,
         src: Uri DEFAULT,
         text: String DEFAULT,
+        fetchpriority: String DEFAULT,
+        referrerpolicy: String DEFAULT,
 
         r#async: Bool "async",
         r#type: String "type", // TODO could be an enum

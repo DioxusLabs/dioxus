@@ -11,7 +11,7 @@ pub struct ComponentBody {
 impl Parse for ComponentBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let item_fn: ItemFn = input.parse()?;
-        validate_component_fn_signature(&item_fn)?;
+        validate_component_fn(&item_fn)?;
         Ok(Self { item_fn })
     }
 }
@@ -22,12 +22,13 @@ impl ToTokens for ComponentBody {
         // If there's only one input and the input is `props: Props`, we don't need to generate a props struct
         // Just attach the non_snake_case attribute to the function
         // eventually we'll dump this metadata into devtooling that lets us find all these components
-        if self.is_explicit_props_ident() {
+        //
+        // Components can also use the struct pattern to "inline" their props.
+        // Freya uses this a bunch (because it's clean),
+        // e.g. `fn Navbar(NavbarProps { title }: NavbarProps)` was previously being incorrectly parsed
+        if self.is_explicit_props_ident() || self.has_struct_parameter_pattern() {
             let comp_fn = &self.item_fn;
-            tokens.append_all(quote! {
-                #[allow(non_snake_case)]
-                #comp_fn
-            });
+            tokens.append_all(allow_camel_case_for_fn_ident(comp_fn).into_token_stream());
             return;
         }
 
@@ -40,7 +41,7 @@ impl ToTokens for ComponentBody {
             // No props declared, so we don't need to generate a props struct
             true => quote! {},
 
-            // Props declared, so we generate a props struct and thatn also attach the doc attributes to it
+            // Props declared, so we generate a props struct and then also attach the doc attributes to it
             false => {
                 let doc = format!("Properties for the [`{}`] component.", &comp_fn.sig.ident);
                 let props_struct = self.props_struct();
@@ -55,8 +56,6 @@ impl ToTokens for ComponentBody {
 
         tokens.append_all(quote! {
             #props_struct
-
-            #[allow(non_snake_case)]
             #comp_fn
 
             #completion_hints
@@ -79,41 +78,38 @@ impl ComponentBody {
             ident: fn_ident,
             generics,
             output: fn_output,
-            asyncness,
             ..
         } = sig;
+
         let Generics { where_clause, .. } = generics;
-        let (_, ty_generics, _) = generics.split_for_impl();
-        let generics_turbofish = ty_generics.as_turbofish();
+        let (_, impl_generics, _) = generics.split_for_impl();
+        let generics_turbofish = impl_generics.as_turbofish();
 
         // We generate a struct with the same name as the component but called `Props`
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
         // We pull in the field names from the original function signature, but need to strip off the mutability
-        let struct_field_names = inputs.iter().filter_map(rebind_mutability);
+        let struct_field_names = inputs.iter().map(rebind_mutability);
 
-        let props_docs = self.props_docs(inputs.iter().skip(1).collect());
+        let props_docs = self.props_docs(inputs.iter().collect());
 
-        // Don't generate the props argument if there are no inputs
-        // This means we need to skip adding the argument to the function signature, and also skip the expanded struct
-        let props_ident = match inputs.is_empty() {
-            true => quote! {},
-            false => quote! { mut __props: #struct_ident #ty_generics },
-        };
-        let expanded_struct = match inputs.is_empty() {
-            true => quote! {},
-            false => quote! { let #struct_ident { #(#struct_field_names),* } = __props; },
+        let inlined_props_argument = if inputs.is_empty() {
+            quote! {}
+        } else {
+            quote! { #struct_ident { #(#struct_field_names),* }: #struct_ident #impl_generics }
         };
 
+        // The extra nest is for the snake case warning to kick back in
         parse_quote! {
             #(#attrs)*
             #(#props_docs)*
-            #asyncness #vis fn #fn_ident #generics (#props_ident) #fn_output #where_clause {
-                // In debug mode we can detect if the user is calling the component like a function
-                dioxus_core::internal::verify_component_called_as_component(#fn_ident #generics_turbofish);
-
-                #expanded_struct
-                #block
+            #[allow(non_snake_case)]
+            #vis fn #fn_ident #generics (#inlined_props_argument) #fn_output #where_clause {
+                {
+                    // In debug mode we can detect if the user is calling the component like a function
+                    dioxus_core::internal::verify_component_called_as_component(#fn_ident #generics_turbofish);
+                    #block
+                }
             }
         }
     }
@@ -153,7 +149,7 @@ impl ComponentBody {
     fn props_docs(&self, inputs: Vec<&FnArg>) -> Vec<Attribute> {
         let fn_ident = &self.item_fn.sig.ident;
 
-        if inputs.len() <= 1 {
+        if inputs.is_empty() {
             return Vec::new();
         }
 
@@ -179,7 +175,7 @@ impl ComponentBody {
                 input_arg_doc,
             } = arg;
 
-            let arg_name = arg_name.into_token_stream().to_string();
+            let arg_name = strip_pat_mutability(arg_name).to_token_stream().to_string();
             let arg_type = crate::utils::format_type_string(arg_type);
 
             let input_arg_doc = keep_up_to_n_consecutive_chars(input_arg_doc.trim(), 2, '\n')
@@ -219,11 +215,19 @@ impl ComponentBody {
     }
 
     fn is_explicit_props_ident(&self) -> bool {
-        if self.item_fn.sig.inputs.len() == 1 {
-            if let FnArg::Typed(PatType { pat, .. }) = &self.item_fn.sig.inputs[0] {
-                if let Pat::Ident(ident) = pat.as_ref() {
-                    return ident.ident == "props";
-                }
+        if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first() {
+            if let Pat::Ident(ident) = pat.as_ref() {
+                return ident.ident == "props";
+            }
+        }
+
+        false
+    }
+
+    fn has_struct_parameter_pattern(&self) -> bool {
+        if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first() {
+            if matches!(pat.as_ref(), Pat::Struct(_)) {
+                return true;
             }
         }
 
@@ -300,7 +304,7 @@ fn build_doc_fields(f: &FnArg) -> Option<DocField> {
         arg_name: &pt.pat,
         arg_type: &pt.ty,
         deprecation: pt.attrs.iter().find_map(|attr| {
-            if attr.path() != &parse_quote!(deprecated) {
+            if !attr.path().is_ident("deprecated") {
                 return None;
             }
 
@@ -315,7 +319,7 @@ fn build_doc_fields(f: &FnArg) -> Option<DocField> {
     })
 }
 
-fn validate_component_fn_signature(item_fn: &ItemFn) -> Result<()> {
+fn validate_component_fn(item_fn: &ItemFn) -> Result<()> {
     // Do some validation....
     // 1. Ensure the component returns *something*
     if item_fn.sig.output == ReturnType::Default {
@@ -395,20 +399,23 @@ fn make_prop_struct_field(f: &FnArg, vis: &Visibility) -> TokenStream {
     }
 }
 
-fn rebind_mutability(f: &FnArg) -> Option<TokenStream> {
+fn rebind_mutability(f: &FnArg) -> TokenStream {
     // There's no receivers (&self) allowed in the component body
     let FnArg::Typed(pt) = f else { unreachable!() };
 
-    let pat = &pt.pat;
+    let immutable = strip_pat_mutability(&pt.pat);
 
+    quote!(mut #immutable)
+}
+
+fn strip_pat_mutability(pat: &Pat) -> Pat {
     let mut pat = pat.clone();
-
     // rip off mutability, but still write it out eventually
-    if let Pat::Ident(ref mut pat_ident) = pat.as_mut() {
+    if let Pat::Ident(ref mut pat_ident) = &mut pat {
         pat_ident.mutability = None;
     }
 
-    Some(quote!(mut  #pat))
+    pat
 }
 
 /// Checks if the attribute is a `#[doc]` attribute.
@@ -442,4 +449,20 @@ fn keep_up_to_n_consecutive_chars(
     }
 
     output
+}
+
+/// Takes a function and returns a clone of it where an `UpperCamelCase` identifier is allowed by the compiler.
+fn allow_camel_case_for_fn_ident(item_fn: &ItemFn) -> ItemFn {
+    let mut clone = item_fn.clone();
+    let block = &item_fn.block;
+
+    clone.attrs.push(parse_quote! { #[allow(non_snake_case)] });
+
+    clone.block = parse_quote! {
+        {
+            #block
+        }
+    };
+
+    clone
 }

@@ -39,7 +39,14 @@ fn app() -> Element {
             }
 
             h3 { "Illustrious Dog Photo" }
-            Doggo {}
+            SuspenseBoundary {
+                fallback: move |suspense: SuspenseContext| suspense.suspense_placeholder().unwrap_or_else(|| rsx! {
+                    div {
+                        "Loading..."
+                    }
+                }),
+                Doggo {}
+            }
         }
     }
 }
@@ -49,7 +56,7 @@ fn app() -> Element {
 /// actually renders the data.
 #[component]
 fn Doggo() -> Element {
-    let mut fut = use_resource(move || async move {
+    let mut resource = use_resource(move || async move {
         #[derive(serde::Deserialize)]
         struct DogApi {
             message: String,
@@ -62,12 +69,26 @@ fn Doggo() -> Element {
             .await
     });
 
-    match fut.read_unchecked().as_ref() {
-        Some(Ok(resp)) => rsx! {
-            button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
+    // You can suspend the future and only continue rendering when it's ready
+    let value = resource.suspend().with_loading_placeholder(|| {
+        rsx! {
+            div {
+                "Loading doggos..."
+            }
+        }
+    })?;
+
+    match value.read_unchecked().as_ref() {
+        Ok(resp) => rsx! {
+            button { onclick: move |_| resource.restart(), "Click to fetch another doggo" }
             div { img { max_width: "500px", max_height: "500px", src: "{resp.message}" } }
         },
-        Some(Err(_)) => rsx! { div { "loading dogs failed" } },
-        None => rsx! { div { "loading dogs..." } },
+        Err(_) => rsx! {
+            div { "loading dogs failed" }
+            button {
+                onclick: move |_| resource.restart(),
+                "retry"
+            }
+        },
     }
 }

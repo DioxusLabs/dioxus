@@ -1,0 +1,1 @@
+function register_rehydrate_chunk_for_streaming(callback){window.hydration_callback=callback;for(let i=0;i<window.hydrate_queue.length;i++){const[id,data]=window.hydrate_queue[i];window.hydration_callback(id,data)}}export{register_rehydrate_chunk_for_streaming};

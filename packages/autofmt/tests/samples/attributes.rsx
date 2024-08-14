@@ -16,8 +16,8 @@ rsx! {
             div { "hi" }
             h2 { class: "asd" }
         }
+        Component::<Generic> {}
         Component {}
-        Component<Generic> {}
     }
 
     // Long attributes
@@ -30,7 +30,7 @@ rsx! {
         a: "123",
         a: "123",
         a: "123",
-        a: "123"
+        a: "123",
     }
 
     div {
@@ -42,6 +42,6 @@ rsx! {
         a: "123",
         a: "123",
         a: "123",
-        a: "123"
+        a: "123",
     }
 }

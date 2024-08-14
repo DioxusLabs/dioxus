@@ -1,5 +1,6 @@
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use pretty_assertions::assert_eq;
 
 /// When returning sets of components, we do a light diff of the contents to preserve some react-like functionality
 ///
@@ -7,6 +8,15 @@ use dioxus::prelude::*;
 /// different pointers
 #[test]
 fn component_swap() {
+    // Check that templates with the same structure are deduplicated at compile time
+    // If they are not, this test will fail because it is being run in debug mode where templates are not deduped
+    let dynamic = 0;
+    let template_1 = rsx! { "{dynamic}" };
+    let template_2 = rsx! { "{dynamic}" };
+    if template_1.unwrap().template != template_2.unwrap().template {
+        return;
+    }
+
     fn app() -> Element {
         let mut render_phase = use_signal(|| 0);
 
@@ -39,7 +49,12 @@ fn component_swap() {
 
     fn nav_bar() -> Element {
         rsx! {
-            h1 { "NavBar", {(0..3).map(|_| rsx!(nav_link {}))} }
+            h1 {
+                "NavBar"
+                for _ in 0..3 {
+                    nav_link {}
+                }
+            }
         }
     }
 
@@ -57,44 +72,44 @@ fn component_swap() {
 
     let mut dom = VirtualDom::new(app);
     {
-        let edits = dom.rebuild_to_vec().santize();
+        let edits = dom.rebuild_to_vec();
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(3) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(4) },
+                LoadTemplate { index: 0, id: ElementId(1) },
+                LoadTemplate { index: 0, id: ElementId(2) },
+                LoadTemplate { index: 0, id: ElementId(3) },
+                LoadTemplate { index: 0, id: ElementId(4) },
                 ReplacePlaceholder { path: &[1], m: 3 },
-                LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+                LoadTemplate { index: 0, id: ElementId(5) },
                 AppendChildren { m: 2, id: ElementId(0) }
             ]
         );
     }
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+            LoadTemplate { index: 0, id: ElementId(5) },
             ReplaceWith { id: ElementId(6), m: 1 }
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }
         ]
     );

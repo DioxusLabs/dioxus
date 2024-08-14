@@ -5,7 +5,7 @@ type FormValues = {
   values: { [key: string]: FormDataEntryValue[] };
 }
 
-export function retriveValues(event: Event, target: HTMLElement): FormValues {
+export function retrieveValues(event: Event, target: HTMLElement): FormValues {
   let contents: FormValues = {
     values: {}
   };
@@ -47,7 +47,7 @@ export function retrieveFormValues(form: HTMLFormElement): FormValues {
   };
 }
 
-export function retriveSelectValue(target: HTMLSelectElement): string[] {
+export function retrieveSelectValue(target: HTMLSelectElement): string[] {
   // there might be multiple...
   let options = target.selectedOptions;
   let values = [];

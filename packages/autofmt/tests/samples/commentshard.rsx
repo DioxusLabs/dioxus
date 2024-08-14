@@ -8,17 +8,17 @@ rsx! {
         "hello world"
 
         // Comments
-        {expr1},
+        {expr1}
 
         // Comments
-        {expr2},
+        {expr2}
 
         // Comments
         // Comments
         // Comments
         // Comments
         // Comments
-        {expr3},
+        {expr3}
 
         div {
             // todo some work in here
@@ -36,7 +36,11 @@ rsx! {
             class: "hello world",
 
             // todo some work in here
-            class: "hello world"
+            class: "hello world",
+        }
+
+        div {
+            div {}
         }
     }
 }

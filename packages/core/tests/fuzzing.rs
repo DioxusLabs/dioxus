@@ -1,10 +1,8 @@
 #![cfg(not(miri))]
 
 use dioxus::prelude::*;
-use dioxus_core::{AttributeValue, DynamicNode, NoOpMutations, VComponent, VNode, *};
-use std::{
-    cfg, collections::HashSet, default::Default, sync::atomic::AtomicUsize, sync::atomic::Ordering,
-};
+use dioxus_core::{AttributeValue, DynamicNode, NoOpMutations, Template, VComponent, VNode, *};
+use std::{any::Any, cell::RefCell, cfg, collections::HashSet, default::Default, rc::Rc};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -75,7 +73,7 @@ fn create_random_template_node(
         1 => TemplateNode::Text {
             text: Box::leak(format!("{}", rand::random::<usize>()).into_boxed_str()),
         },
-        2 => TemplateNode::DynamicText {
+        2 => TemplateNode::Dynamic {
             id: {
                 let old_idx = *template_idx;
                 *template_idx += 1;
@@ -118,9 +116,6 @@ fn generate_paths(
             }
         }
         TemplateNode::Text { .. } => {}
-        TemplateNode::DynamicText { .. } => {
-            node_paths.push(current_path.to_vec());
-        }
         TemplateNode::Dynamic { .. } => {
             node_paths.push(current_path.to_vec());
         }
@@ -132,13 +127,18 @@ enum DynamicNodeType {
     Other,
 }
 
-fn create_random_template(name: &'static str) -> (Template, Vec<DynamicNodeType>) {
-    let mut dynamic_node_type = Vec::new();
+fn create_random_template(depth: usize) -> (Template, Box<[DynamicNode]>) {
+    let mut dynamic_node_types = Vec::new();
     let mut template_idx = 0;
     let mut attr_idx = 0;
     let roots = (0..(1 + rand::random::<usize>() % 5))
         .map(|_| {
-            create_random_template_node(&mut dynamic_node_type, &mut template_idx, &mut attr_idx, 0)
+            create_random_template_node(
+                &mut dynamic_node_types,
+                &mut template_idx,
+                &mut attr_idx,
+                0,
+            )
         })
         .collect::<Vec<_>>();
     assert!(!roots.is_empty());
@@ -162,10 +162,16 @@ fn create_random_template(name: &'static str) -> (Template, Vec<DynamicNodeType>
             .collect::<Vec<_>>()
             .into_boxed_slice(),
     );
-    (
-        Template { name, roots, node_paths, attr_paths },
-        dynamic_node_type,
-    )
+    let dynamic_nodes = dynamic_node_types
+        .iter()
+        .map(|ty| match ty {
+            DynamicNodeType::Text => {
+                DynamicNode::Text(VText::new(format!("{}", rand::random::<usize>())))
+            }
+            DynamicNodeType::Other => create_random_dynamic_node(depth + 1),
+        })
+        .collect();
+    (Template { roots, node_paths, attr_paths }, dynamic_nodes)
 }
 
 fn create_random_dynamic_node(depth: usize) -> DynamicNode {
@@ -177,7 +183,6 @@ fn create_random_dynamic_node(depth: usize) -> DynamicNode {
                 VNode::new(
                     None,
                     Template {
-                        name: create_template_location(),
                         roots: &[TemplateNode::Dynamic { id: 0 }],
                         node_paths: &[&[0]],
                         attr_paths: &[],
@@ -222,19 +227,6 @@ fn create_random_dynamic_attr() -> Attribute {
     )
 }
 
-static TEMPLATE_COUNT: AtomicUsize = AtomicUsize::new(0);
-
-fn create_template_location() -> &'static str {
-    Box::leak(
-        format!(
-            "{}{}",
-            concat!(file!(), ":", line!(), ":", column!(), ":"),
-            TEMPLATE_COUNT.fetch_add(1, Ordering::Relaxed)
-        )
-        .into_boxed_str(),
-    )
-}
-
 #[derive(PartialEq, Props, Clone)]
 struct DepthProps {
     depth: usize,
@@ -242,35 +234,49 @@ struct DepthProps {
 }
 
 fn create_random_element(cx: DepthProps) -> Element {
+    let last_template = use_hook(|| Rc::new(RefCell::new(None)));
     if rand::random::<usize>() % 10 == 0 {
         needs_update();
     }
     let range = if cx.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
-        0 | 1 => {
-            let (template, dynamic_node_types) = create_random_template(create_template_location());
-            let node = VNode::new(
+        // Change both the template and the dynamic nodes
+        0 => {
+            let (template, dynamic_nodes) = create_random_template(cx.depth + 1);
+            last_template.replace(Some(template));
+            VNode::new(
                 None,
                 template,
-                dynamic_node_types
-                    .iter()
-                    .map(|ty| match ty {
-                        DynamicNodeType::Text => {
-                            DynamicNode::Text(VText::new(format!("{}", rand::random::<usize>())))
-                        }
-                        DynamicNodeType::Other => create_random_dynamic_node(cx.depth + 1),
-                    })
-                    .collect(),
+                dynamic_nodes,
                 (0..template.attr_paths.len())
                     .map(|_| Box::new([create_random_dynamic_attr()]) as Box<[Attribute]>)
                     .collect(),
-            );
-            Some(node)
+            )
         }
-        _ => None,
+        // Change just the dynamic nodes
+        1 => {
+            let (template, dynamic_nodes) = match *last_template.borrow() {
+                Some(template) => (
+                    template,
+                    (0..template.node_paths.len())
+                        .map(|_| create_random_dynamic_node(cx.depth + 1))
+                        .collect(),
+                ),
+                None => create_random_template(cx.depth + 1),
+            };
+            VNode::new(
+                None,
+                template,
+                dynamic_nodes,
+                (0..template.attr_paths.len())
+                    .map(|_| Box::new([create_random_dynamic_attr()]) as Box<[Attribute]>)
+                    .collect(),
+            )
+        }
+        // Remove the template
+        _ => VNode::default(),
     };
-    // println!("{node:#?}");
-    node
+    Element::Ok(node)
 }
 
 // test for panics when creating random nodes and templates
@@ -299,12 +305,11 @@ fn diff() {
         for _ in 0..100 {
             for &id in &event_listeners {
                 println!("firing event on {:?}", id);
-                vdom.handle_event(
-                    "data",
-                    std::rc::Rc::new(String::from("hello world")),
-                    id,
+                let event = Event::new(
+                    std::rc::Rc::new(String::from("hello world")) as Rc<dyn Any>,
                     true,
                 );
+                vdom.runtime().handle_event("data", event, id);
             }
             {
                 vdom.render_immediate(&mut InsertEventListenerMutationHandler(
@@ -318,8 +323,6 @@ fn diff() {
 struct InsertEventListenerMutationHandler<'a>(&'a mut HashSet<ElementId>);
 
 impl WriteMutations for InsertEventListenerMutationHandler<'_> {
-    fn register_template(&mut self, _: Template) {}
-
     fn append_children(&mut self, _: ElementId, _: usize) {}
 
     fn assign_node_id(&mut self, _: &'static [u8], _: ElementId) {}
@@ -328,9 +331,7 @@ impl WriteMutations for InsertEventListenerMutationHandler<'_> {
 
     fn create_text_node(&mut self, _: &str, _: ElementId) {}
 
-    fn hydrate_text_node(&mut self, _: &'static [u8], _: &str, _: ElementId) {}
-
-    fn load_template(&mut self, _: &'static str, _: usize, _: ElementId) {}
+    fn load_template(&mut self, _: Template, _: usize, _: ElementId) {}
 
     fn replace_node_with(&mut self, _: ElementId, _: usize) {}
 

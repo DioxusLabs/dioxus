@@ -8,7 +8,7 @@
 [crates-badge]: https://img.shields.io/crates/v/rsx-rosetta.svg
 [crates-url]: https://crates.io/crates/rsx-rosetta
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
@@ -27,9 +27,9 @@ However, it's NOT HTML. This is done since HTML is verbose and you'd need a dedi
 
 RSX is simple... It's similar enough to regular Rust code to trick most IDEs into automatically providing support for things like block selections, folding, highlighting, etc.
 
-To accomodate the transition from HTML to RSX, you might need to translate some existing code.
+To accommodate the transition from HTML to RSX, you might need to translate some existing code.
 
-This library provids a central AST that can accept a number of inputs:
+This library provides a central AST that can accept a number of inputs:
 
 - HTML
 - Syn (todo)
@@ -47,7 +47,7 @@ From there, you can convert directly to a string or into some other AST.
 
 This project is licensed under the [MIT license].
 
-[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+[mit license]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you, shall be licensed as MIT, without any additional

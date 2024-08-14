@@ -26,7 +26,7 @@ fn app() -> Element {
     });
 
     if expected != 0 && received == expected {
-        println!("all events recieved");
+        println!("all events received");
         desktop_context.close();
     }
 
@@ -165,11 +165,11 @@ fn test_mouse_dblclick_div() -> Element {
     utils::mock_event(
         "mouse_dblclick_div",
         r#"new MouseEvent("dblclick", {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        buttons: 1|2,
-        button: 2,
+            view: window,
+            bubbles: true,
+            cancelable: true,
+            buttons: 1|2,
+            button: 2,
         })"#,
     );
 
@@ -205,11 +205,11 @@ fn test_mouse_down_div() -> Element {
     utils::mock_event(
         "mouse_down_div",
         r#"new MouseEvent("mousedown", {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        buttons: 2,
-        button: 2,
+            view: window,
+            bubbles: true,
+            cancelable: true,
+            buttons: 2,
+            button: 2,
         })"#,
     );
 
@@ -239,11 +239,11 @@ fn test_mouse_up_div() -> Element {
     utils::mock_event(
         "mouse_up_div",
         r#"new MouseEvent("mouseup", {
-        view: window,
-        bubbles: true,
-        cancelable: true,
-        buttons: 0,
-        button: 0,
+            view: window,
+            bubbles: true,
+            cancelable: true,
+            buttons: 0,
+            button: 0,
         })"#,
     );
 
@@ -268,12 +268,12 @@ fn test_mouse_scroll_div() -> Element {
     utils::mock_event(
         "wheel_div",
         r#"new WheelEvent("wheel", {
-        view: window,
-        deltaX: 1.0,
-        deltaY: 2.0,
-        deltaZ: 3.0,
-        deltaMode: 0x00,
-        bubbles: true,
+            view: window,
+            deltaX: 1.0,
+            deltaY: 2.0,
+            deltaZ: 3.0,
+            deltaMode: 0x00,
+            bubbles: true,
         })"#,
     );
 

@@ -1,17 +1,16 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    element::DesktopElement,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileDragEvent, DesktopFileUploadForm, FileDialogRequest},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
-use dioxus_core::ElementId;
-use dioxus_core::VirtualDom;
-use dioxus_html::{native_bind::NativeFileEngine, HasFileData, HtmlEvent, PlatformEventData};
+use dioxus_core::{ElementId, VirtualDom};
+use dioxus_html::{native_bind::NativeFileEngine, PlatformEventData};
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
@@ -148,14 +147,16 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn connect_hotreload(&self) {
-        let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() else {
-            return;
-        };
+        let proxy = self.shared.proxy.clone();
 
-        dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
-            let proxy = self.shared.proxy.clone();
-            move |template| {
-                let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
+        tokio::task::spawn(async move {
+            let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
+            else {
+                return;
+            };
+
+            while let Some(Ok(msg)) = receiver.next().await {
+                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
             }
         });
     }
@@ -173,6 +174,9 @@ impl App {
 
         match self.window_behavior {
             LastWindowExitsApp => {
+                #[cfg(debug_assertions)]
+                self.persist_window_state();
+
                 self.webviews.remove(&id);
                 if self.webviews.is_empty() {
                     self.control_flow = ControlFlow::Exit
@@ -206,9 +210,10 @@ impl App {
 
     pub fn handle_start_cause_init(&mut self) {
         let virtual_dom = self.unmounted_dom.take().unwrap();
-        let cfg = self.cfg.take().unwrap();
+        let mut cfg = self.cfg.take().unwrap();
 
         self.is_visible_before_start = cfg.window.window.visible;
+        cfg.window = cfg.window.with_visible(false);
 
         let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
@@ -238,9 +243,9 @@ impl App {
         let view = self.webviews.get_mut(&id).unwrap();
 
         view.dom
-            .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
+            .rebuild(&mut *view.edits.wry_queue.mutation_state_mut());
 
-        view.desktop_context.send_edits();
+        view.edits.wry_queue.send_edits();
 
         view.desktop_context
             .window
@@ -271,77 +276,36 @@ impl App {
         view.desktop_context.query.send(result);
     }
 
-    pub fn handle_user_event_msg(&mut self, msg: IpcMessage, id: WindowId) {
-        let parsed_params = serde_json::from_value(msg.params())
-            .map_err(|err| tracing::error!("Error parsing user_event: {:?}", err));
-
-        let Ok(evt) = parsed_params else { return };
-
-        let HtmlEvent {
-            element,
-            name,
-            bubbles,
-            data,
-        } = evt;
-
-        let view = self.webviews.get_mut(&id).unwrap();
-        let query = view.desktop_context.query.clone();
-        let recent_file = view.desktop_context.file_hover.clone();
-
-        // check for a mounted event placeholder and replace it with a desktop specific element
-        let as_any = match data {
-            dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, view.desktop_context.clone(), query);
-                Rc::new(PlatformEventData::new(Box::new(element)))
-            }
-            dioxus_html::EventData::Drag(ref drag) => {
-                // we want to override this with a native file engine, provided by the most recent drag event
-                if drag.files().is_some() {
-                    let file_event = recent_file.current().unwrap();
-                    let paths = match file_event {
-                        wry::FileDropEvent::Hovered { paths, .. } => paths,
-                        wry::FileDropEvent::Dropped { paths, .. } => paths,
-                        _ => vec![],
-                    };
-                    Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
-                        mouse: drag.mouse.clone(),
-                        files: Arc::new(NativeFileEngine::new(paths)),
-                    })))
-                } else {
-                    data.into_any()
-                }
-            }
-            _ => data.into_any(),
-        };
-
-        view.dom.handle_event(&name, as_any, element, bubbles);
-        view.dom
-            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
-        view.desktop_context.send_edits();
-    }
-
     #[cfg(all(
         feature = "hot-reload",
         debug_assertions,
         not(target_os = "android"),
         not(target_os = "ios")
     ))]
-    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::HotReloadMsg) {
+    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
+        use dioxus_hot_reload::DevserverMsg;
+
         match msg {
-            dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
+            DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    webview.dom.replace_template(template);
+                    dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
-            }
-            dioxus_hot_reload::HotReloadMsg::Shutdown => {
-                self.control_flow = ControlFlow::Exit;
-            }
 
-            dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {
-                for webview in self.webviews.values_mut() {
-                    webview.kick_stylsheets();
+                if !hr_msg.assets.is_empty() {
+                    for webview in self.webviews.values_mut() {
+                        webview.kick_stylsheets();
+                    }
                 }
+            }
+            DevserverMsg::FullReloadCommand
+            | DevserverMsg::FullReloadStart
+            | DevserverMsg::FullReloadFailed => {
+                // usually only web gets this message - what are we supposed to do?
+                // Maybe we could just binary patch ourselves in place without losing window state?
+            }
+            DevserverMsg::Shutdown => {
+                self.control_flow = ControlFlow::Exit;
             }
         }
     }
@@ -364,17 +328,13 @@ impl App {
 
         let view = self.webviews.get_mut(&window).unwrap();
 
+        let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
         if event_name == "change&input" {
-            view.dom
-                .handle_event("input", data.clone(), id, event_bubbles);
-            view.dom.handle_event("change", data, id, event_bubbles);
+            view.dom.runtime().handle_event("input", event.clone(), id);
+            view.dom.runtime().handle_event("change", event, id);
         } else {
-            view.dom.handle_event(event_name, data, id, event_bubbles);
+            view.dom.runtime().handle_event(event_name, event, id);
         }
-
-        view.dom
-            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
-        view.desktop_context.send_edits();
     }
 
     /// Poll the virtualdom until it's pending
@@ -457,12 +417,9 @@ impl App {
                 monitor: monitor.name().unwrap().to_string(),
             };
 
+            // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
             if let Ok(state) = serde_json::to_string(&state) {
-                // Write this to the target dir so we can pick back up in resume_from_state
-                if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
-                    let path = cfg.target_dir.join("window_state.json");
-                    _ = std::fs::write(path, state);
-                }
+                _ = std::fs::write(restore_file(), state);
             }
         }
     }
@@ -470,18 +427,13 @@ impl App {
     // Write this to the target dir so we can pick back up
     #[cfg(debug_assertions)]
     fn resume_from_state(&mut self, webview: &WebviewInstance) {
-        if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
-            let path = cfg.target_dir.join("window_state.json");
-            if let Ok(state) = std::fs::read_to_string(path) {
-                if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
-                    let window = &webview.desktop_context.window;
-                    let position = (state.x, state.y);
-                    let size = (state.width, state.height);
-                    window.set_outer_position(tao::dpi::PhysicalPosition::new(
-                        position.0, position.1,
-                    ));
-                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
-                }
+        if let Ok(state) = std::fs::read_to_string(restore_file()) {
+            if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
+                let window = &webview.desktop_context.window;
+                let position = (state.x, state.y);
+                let size = (state.width, state.height);
+                window.set_outer_position(tao::dpi::PhysicalPosition::new(position.0, position.1));
+                window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
             }
         }
     }
@@ -550,4 +502,25 @@ pub fn hide_app_window(window: &wry::WebView) {
             let _: () = msg_send![app, hide: nil];
         });
     }
+}
+
+/// Return the location of a tempfile with our window state in it such that we can restore it later
+#[cfg(debug_assertions)]
+fn restore_file() -> std::path::PathBuf {
+    /// Get the name of the program or default to "dioxus" so we can hash it
+    fn get_prog_name_or_default() -> Option<String> {
+        Some(
+            std::env::current_exe()
+                .ok()?
+                .file_name()?
+                .to_str()?
+                .to_string(),
+        )
+    }
+
+    let name = get_prog_name_or_default().unwrap_or_else(|| "dioxus".to_string());
+    let hashed_id = name.chars().map(|c| c as usize).sum::<usize>();
+    let mut path = std::env::temp_dir();
+    path.push(format!("{}-window-state.json", hashed_id));
+    path
 }

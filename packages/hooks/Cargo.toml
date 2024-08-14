@@ -18,12 +18,11 @@ dioxus-core = { workspace = true }
 dioxus-signals = { workspace = true }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
-thiserror = { workspace = true }
 slab = { workspace = true }
-dioxus-debug-cell = "0.1.1"
 futures-util = { workspace = true}
 generational-box.workspace = true
 rustversion = "1.0.17"
+warnings = { workspace = true }
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }

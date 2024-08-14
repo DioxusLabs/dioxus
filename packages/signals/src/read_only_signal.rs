@@ -4,7 +4,7 @@ use std::ops::Deref;
 
 use crate::{default_impl, read_impls};
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
-use generational_box::{Storage, UnsyncStorage};
+use generational_box::{BorrowResult, Storage, UnsyncStorage};
 
 /// A signal that can only be read from.
 pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
@@ -46,7 +46,13 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     /// This should only be used by the `rsx!` macro.
     pub fn __set(&mut self, value: T) {
         use crate::write::Writable;
-        self.inner.set(value);
+        use warnings::Warning;
+        // This is only called when converting T -> ReadOnlySignal<T> which will not cause loops
+        crate::warnings::signal_write_in_component_body::allow(|| {
+            crate::warnings::signal_read_and_write_in_reactive_scope::allow(|| {
+                self.inner.set(value);
+            });
+        });
     }
 
     #[doc(hidden)]
@@ -73,8 +79,8 @@ impl<T, S: Storage<SignalData<T>>> Readable for ReadOnlySignal<T, S> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek_unchecked(&self) -> S::Ref<'static, T> {
-        self.inner.peek_unchecked()
+    fn try_peek_unchecked(&self) -> BorrowResult<S::Ref<'static, T>> {
+        self.inner.try_peek_unchecked()
     }
 }
 

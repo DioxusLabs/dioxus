@@ -1,5 +1,8 @@
+use crate::build::TargetArgs;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::Path, process::exit};
+
+use crate::DioxusCrate;
 
 use super::*;
 
@@ -12,6 +15,10 @@ pub struct Check {
     /// Input file
     #[clap(short, long)]
     pub file: Option<PathBuf>,
+
+    /// Information about the target to check
+    #[clap(flatten)]
+    pub target_args: TargetArgs,
 }
 
 impl Check {
@@ -20,7 +27,8 @@ impl Check {
         match self.file {
             // Default to checking the project
             None => {
-                if let Err(e) = check_project_and_report().await {
+                let dioxus_crate = DioxusCrate::new(&self.target_args)?;
+                if let Err(e) = check_project_and_report(dioxus_crate).await {
                     eprintln!("error checking project: {}", e);
                     exit(1);
                 }
@@ -46,11 +54,9 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 /// Runs using Tokio for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
-async fn check_project_and_report() -> Result<()> {
-    let crate_config = dioxus_cli_config::CrateConfig::new(None)?;
-
-    let mut files_to_check = vec![];
-    collect_rs_files(&crate_config.crate_dir, &mut files_to_check);
+async fn check_project_and_report(dioxus_crate: DioxusCrate) -> Result<()> {
+    let mut files_to_check = vec![dioxus_crate.main_source_file()];
+    collect_rs_files(&dioxus_crate.crate_dir(), &mut files_to_check);
     check_files_and_report(files_to_check).await
 }
 

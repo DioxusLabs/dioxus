@@ -44,7 +44,7 @@ impl std::fmt::Debug for ResizeData {
 }
 
 impl PartialEq for ResizeData {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         true
     }
 }

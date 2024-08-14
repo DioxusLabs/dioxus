@@ -158,11 +158,11 @@ impl IntoAccelerator for &str {
     }
 }
 
-pub trait IntoModifersState {
+pub trait IntoModifiersState {
     fn into_modifiers_state(self) -> Modifiers;
 }
 
-impl IntoModifersState for ModifiersState {
+impl IntoModifiersState for ModifiersState {
     fn into_modifiers_state(self) -> Modifiers {
         let mut modifiers = Modifiers::default();
         if self.shift_key() {
@@ -182,7 +182,7 @@ impl IntoModifersState for ModifiersState {
     }
 }
 
-impl IntoModifersState for Modifiers {
+impl IntoModifiersState for Modifiers {
     fn into_modifiers_state(self) -> Modifiers {
         self
     }
@@ -295,7 +295,7 @@ impl IntoKeyCode for dioxus_html::KeyCode {
             dioxus_html::KeyCode::GraveAccent => Code::Backquote,
             dioxus_html::KeyCode::OpenBracket => Code::BracketLeft,
             dioxus_html::KeyCode::BackSlash => Code::Backslash,
-            dioxus_html::KeyCode::CloseBraket => Code::BracketRight,
+            dioxus_html::KeyCode::CloseBracket => Code::BracketRight,
             dioxus_html::KeyCode::SingleQuote => Code::Quote,
             key => panic!("Failed to convert {:?} to tao::keyboard::KeyCode, try using tao::keyboard::KeyCode directly", key),
         }

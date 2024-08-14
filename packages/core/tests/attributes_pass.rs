@@ -15,7 +15,7 @@ fn attributes_pass_properly() {
 
     let o = h.unwrap();
 
-    let template = &o.template.get();
+    let template = &o.template;
 
     assert_eq!(template.attr_paths.len(), 3);
 

@@ -165,6 +165,19 @@ impl RouterContext {
         }
     }
 
+    /// Check if the router is running in a liveview context
+    /// We do some slightly weird things for liveview because of the network boundary
+    pub fn is_liveview(&self) -> bool {
+        #[cfg(feature = "liveview")]
+        {
+            self.inner.read().history.is_liveview()
+        }
+        #[cfg(not(feature = "liveview"))]
+        {
+            false
+        }
+    }
+
     pub(crate) fn route_from_str(&self, route: &str) -> Result<Rc<dyn Any>, String> {
         self.inner.read().history.parse_route(route)
     }
@@ -316,12 +329,12 @@ impl RouterContext {
         self.inner.read().site_map
     }
 
-    pub(crate) fn render_error(&self) -> Element {
+    pub(crate) fn render_error(&self) -> Option<Element> {
         let inner_read = self.inner.write_unchecked();
         inner_read
             .unresolved_error
             .as_ref()
-            .and_then(|_| (inner_read.failure_external_navigation)())
+            .map(|_| (inner_read.failure_external_navigation)())
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {

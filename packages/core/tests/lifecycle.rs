@@ -5,6 +5,7 @@
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::html::SerializedHtmlEventConverter;
 use dioxus::prelude::*;
+use std::any::Any;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -30,10 +31,11 @@ fn manual_diffing() {
     *value.lock().unwrap() = "goodbye";
 
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
-            HydrateText { path: &[0], value: "goodbye".to_string(), id: ElementId(4) },
+            LoadTemplate { index: 0, id: ElementId(3) },
+            CreateTextNode { value: "goodbye".to_string(), id: ElementId(4) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             AppendChildren { m: 1, id: ElementId(0) }
         ]
     );
@@ -52,21 +54,20 @@ fn events_generate() {
                     "Click me!"
                 }
             },
-            _ => None,
+            _ => VNode::empty(),
         }
     };
 
     let mut dom = VirtualDom::new(app);
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.handle_event(
-        "click",
-        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-        ElementId(1),
+    let event = Event::new(
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
         true,
     );
+    dom.runtime().handle_event("click", event, ElementId(1));
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     let edits = dom.render_immediate_to_vec();
 
     assert_eq!(

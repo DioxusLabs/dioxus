@@ -7,7 +7,7 @@
 //! in a way that works across pages.
 //!
 //! We implement a number of important details here too, like focusing inputs, handling form submits, navigating the router,
-//! platform-specific configuration, and importing 3rd party CSS libaries.
+//! platform-specific configuration, and importing 3rd party CSS libraries.
 
 use dioxus::prelude::*;
 
@@ -20,13 +20,13 @@ fn main() {
         }))
         .launch(|| {
             rsx! {
-                link {
+                head::Link {
                     rel: "stylesheet",
-                    href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css",
+                    href: asset!("https://unpkg.com/purecss@2.0.6/build/pure-min.css"), 
                     integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
                     crossorigin: "anonymous"
                 }
-                style { {include_str!("./assets/crm.css")} }
+                head::Link { rel: "stylesheet", href: asset!("./examples/assets/crm.css") }
                 h1 { "Dioxus CRM Example" }
                 Router::<Route> {}
             }

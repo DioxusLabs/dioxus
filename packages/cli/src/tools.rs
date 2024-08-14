@@ -217,7 +217,7 @@ impl Tool {
                 "windows" => tool_path.join(&dir_name).join(self.name()).join(".exe"),
                 _ => tool_path.join(&dir_name).join(self.name()),
             };
-            // Manualy creating tool directory because we directly download the binary via Github
+            // Manually creating tool directory because we directly download the binary via Github
             std::fs::create_dir(tool_path.join(dir_name))?;
 
             let mut final_file = std::fs::File::create(&bin_path)?;

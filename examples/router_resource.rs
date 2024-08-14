@@ -1,7 +1,7 @@
 //! Example: Updating components with use_resource
 //! -----------------
 //!
-//! This example shows how to use use_reactive to update a component properly
+//! This example shows how to use ReadOnlySignal to make props reactive
 //! when linking to it from the same component, when using use_resource
 
 use dioxus::prelude::*;
@@ -25,16 +25,15 @@ fn App() -> Element {
     }
 }
 
+// We use id: ReadOnlySignal<i32> instead of id: i32 to make id work with reactive hooks
+// Any i32 we pass in will automatically be converted into a ReadOnlySignal<i32>
 #[component]
 fn Blog(id: ReadOnlySignal<i32>) -> Element {
     async fn future(n: i32) -> i32 {
         n
     }
 
-    // if you use the naive approach, the "Blog post {id}" below will never update when clicking links!
-    // let res = use_resource(move || future(id));
-
-    // the use_reactive hook is required to properly update when clicking links to this component, from this component
+    // Because we accept ReadOnlySignal<i32> instead of i32, the resource will automatically subscribe to the id when we read it
     let res = use_resource(move || future(id()));
 
     match res() {

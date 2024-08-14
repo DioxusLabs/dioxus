@@ -1,6 +1,6 @@
-// Handle serialization of the event data across the IPC boundarytype SerialziedEvent = {};
+// Handle serialization of the event data across the IPC boundarytype SerializedEvent = {};
 
-import { retriveSelectValue, retriveValues } from "./form";
+import { retrieveSelectValue, retrieveValues } from "./form";
 import { ResizeEventDetail } from "./types/events";
 
 export type AppTouchEvent = TouchEvent;
@@ -11,31 +11,70 @@ export type SerializedEvent = {
   [key: string]: any;
 };
 
-export function serializeEvent(event: Event, target: EventTarget): SerializedEvent {
+export function serializeEvent(
+  event: Event,
+  target: EventTarget
+): SerializedEvent {
   let contents = {};
 
   // merge the object into the contents
   let extend = (obj: any) => (contents = { ...contents, ...obj });
 
-  if (event instanceof WheelEvent) { extend(serializeWheelEvent(event)) };
-  if (event instanceof MouseEvent) { extend(serializeMouseEvent(event)) }
-  if (event instanceof KeyboardEvent) { extend(serializeKeyboardEvent(event)) }
+  if (event instanceof WheelEvent) {
+    extend(serializeWheelEvent(event));
+  }
+  if (event instanceof MouseEvent) {
+    extend(serializeMouseEvent(event));
+  }
+  if (event instanceof KeyboardEvent) {
+    extend(serializeKeyboardEvent(event));
+  }
 
-  if (event instanceof InputEvent) { extend(serializeInputEvent(event, target)) }
-  if (event instanceof PointerEvent) { extend(serializePointerEvent(event)) }
-  if (event instanceof AnimationEvent) { extend(serializeAnimationEvent(event)) }
-  if (event instanceof TransitionEvent) { extend({ property_name: event.propertyName, elapsed_time: event.elapsedTime, pseudo_element: event.pseudoElement, }) }
-  if (event instanceof CompositionEvent) { extend({ data: event.data, }) }
-  if (event instanceof DragEvent) { extend(serializeDragEvent(event)) }
-  if (event instanceof FocusEvent) { extend({}) }
-  if (event instanceof ClipboardEvent) { extend({}) }
+  if (event instanceof InputEvent) {
+    extend(serializeInputEvent(event, target));
+  }
+  if (event instanceof PointerEvent) {
+    extend(serializePointerEvent(event));
+  }
+  if (event instanceof AnimationEvent) {
+    extend(serializeAnimationEvent(event));
+  }
+  if (event instanceof TransitionEvent) {
+    extend({
+      property_name: event.propertyName,
+      elapsed_time: event.elapsedTime,
+      pseudo_element: event.pseudoElement,
+    });
+  }
+  if (event instanceof CompositionEvent) {
+    extend({ data: event.data });
+  }
+  if (event instanceof DragEvent) {
+    extend(serializeDragEvent(event));
+  }
+  if (event instanceof FocusEvent) {
+    extend({});
+  }
+  if (event instanceof ClipboardEvent) {
+    extend({});
+  }
 
-  if (event instanceof CustomEvent) { extend(serializeResizeEventDetail(event.detail)) }
+  if (event instanceof CustomEvent) {
+    extend(serializeResizeEventDetail(event.detail));
+  }
 
   // safari is quirky and doesn't have TouchEvent
-  if (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent) { extend(serializeTouchEvent(event)); }
+  if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
+    extend(serializeTouchEvent(event));
+  }
 
-  if (event.type === "submit" || event.type === "reset" || event.type === "click" || event.type === "change" || event.type === "input") {
+  if (
+    event.type === "submit" ||
+    event.type === "reset" ||
+    event.type === "click" ||
+    event.type === "change" ||
+    event.type === "input"
+  ) {
     extend(serializeInputEvent(event as InputEvent, target));
   }
 
@@ -62,14 +101,19 @@ export function serializeEvent(event: Event, target: EventTarget): SerializedEve
   return contents;
 }
 
-function toSerializableResizeObserverSize(size: ResizeObserverSize, is_inline_width: boolean): Object {
+function toSerializableResizeObserverSize(
+  size: ResizeObserverSize,
+  is_inline_width: boolean
+): Object {
   return [
     is_inline_width ? size.inlineSize : size.blockSize,
     is_inline_width ? size.blockSize : size.inlineSize,
   ];
 }
 
-export function serializeResizeEventDetail(detail: ResizeEventDetail): SerializedEvent {
+export function serializeResizeEventDetail(
+  detail: ResizeEventDetail
+): SerializedEvent {
   let is_inline_width = true;
   if (detail.target instanceof HTMLElement) {
     let target_style = window.getComputedStyle(detail.target);
@@ -80,23 +124,33 @@ export function serializeResizeEventDetail(detail: ResizeEventDetail): Serialize
   }
 
   return {
-    border_box_size: detail.borderBoxSize !== undefined ?
-      toSerializableResizeObserverSize(detail.borderBoxSize, is_inline_width) :
-      detail.contentRect,
-    content_box_size: detail.contentBoxSize !== undefined ?
-      toSerializableResizeObserverSize(detail.contentBoxSize, is_inline_width) :
-      detail.contentRect,
+    border_box_size:
+      detail.borderBoxSize !== undefined
+        ? toSerializableResizeObserverSize(
+            detail.borderBoxSize,
+            is_inline_width
+          )
+        : detail.contentRect,
+    content_box_size:
+      detail.contentBoxSize !== undefined
+        ? toSerializableResizeObserverSize(
+            detail.contentBoxSize,
+            is_inline_width
+          )
+        : detail.contentRect,
     content_rect: detail.contentRect,
   };
 }
 
-
-function serializeInputEvent(event: InputEvent, target: EventTarget): SerializedEvent {
+function serializeInputEvent(
+  event: InputEvent,
+  target: EventTarget
+): SerializedEvent {
   let contents: SerializedEvent = {};
 
   // Attempt to retrieve the values from the form
   if (target instanceof HTMLElement) {
-    let values = retriveValues(event, target);
+    let values = retrieveValues(event, target);
     contents.values = values.values;
     contents.valid = values.valid;
   }
@@ -119,7 +173,7 @@ function serializeInputEvent(event: InputEvent, target: EventTarget): Serialized
   }
 
   if (event.target instanceof HTMLSelectElement) {
-    contents.value = retriveSelectValue(event.target).join(",");
+    contents.value = retrieveSelectValue(event.target).join(",");
   }
 
   // Ensure the serializer isn't quirky
@@ -127,11 +181,8 @@ function serializeInputEvent(event: InputEvent, target: EventTarget): Serialized
     contents.value = "";
   }
 
-
   return contents;
 }
-
-
 
 function serializeWheelEvent(event: WheelEvent): SerializedEvent {
   return {

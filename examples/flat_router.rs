@@ -1,5 +1,5 @@
 //! This example shows how to use the `Router` component to create a simple navigation system.
-//! The more complex router example uses all of the router features, while this simple exmaple showcases
+//! The more complex router example uses all of the router features, while this simple example showcases
 //! just the `Layout` and `Route` features.
 //!
 //! Layouts let you wrap chunks of your app with a component. This is useful for things like a footers, heeaders, etc.
@@ -9,10 +9,12 @@
 
 use dioxus::prelude::*;
 
+const STYLE: &str = asset!("./examples/assets/flat_router.css");
+
 fn main() {
     launch(|| {
         rsx! {
-            style { {include_str!("./assets/flat_router.css")} }
+            head::Link { rel: "stylesheet", href: STYLE }
             Router::<Route> {}
         }
     })

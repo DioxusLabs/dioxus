@@ -83,6 +83,7 @@ impl KeyboardData {
     }
 
     /// Downcast this KeyboardData to a concrete type.
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }
@@ -622,7 +623,7 @@ pub enum KeyCode {
     // numpad period (chrome), = 194
     OpenBracket = 219,
     BackSlash = 220,
-    CloseBraket = 221,
+    CloseBracket = 221,
     SingleQuote = 222,
     // `, = 223
     // left or right ⌘ key (firefox), = 224
@@ -742,7 +743,7 @@ impl KeyCode {
             192 => GraveAccent,
             219 => OpenBracket,
             220 => BackSlash,
-            221 => CloseBraket,
+            221 => CloseBracket,
             222 => SingleQuote,
             _ => Unknown,
         }

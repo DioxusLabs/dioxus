@@ -5,16 +5,10 @@
 mod cache;
 pub mod config;
 #[cfg(feature = "incremental")]
-mod fs_cache;
-#[cfg(feature = "incremental")]
 pub mod incremental;
-#[cfg(feature = "incremental")]
-mod incremental_cfg;
-
 pub mod renderer;
 pub mod template;
 
-use dioxus_core::NoOpMutations;
 use dioxus_core::{Element, VirtualDom};
 
 pub use crate::renderer::Renderer;
@@ -23,14 +17,7 @@ pub use crate::renderer::Renderer;
 ///
 /// For advanced rendering, create a new `SsrRender`.
 pub fn render_element(element: Element) -> String {
-    fn lazy_app(props: Element) -> Element {
-        props
-    }
-
-    let mut dom = VirtualDom::new_with_props(lazy_app, element);
-    dom.rebuild(&mut NoOpMutations);
-
-    Renderer::new().render(&dom)
+    Renderer::new().render_element(element)
 }
 
 /// A convenience function to render an existing VirtualDom to a string

@@ -1,4 +1,4 @@
-# `dioxus-hot-reload`: Hot Reloading Utilites for Dioxus
+# `dioxus-hot-reload`: Hot Reloading Utilities for Dioxus
 
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
@@ -8,7 +8,7 @@
 [crates-badge]: https://img.shields.io/crates/v/dioxus-hot-reload.svg
 [crates-url]: https://crates.io/crates/dioxus-hot-reload
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
@@ -68,7 +68,7 @@ rsx! {
 
 ## Usage
 
-> This crate implements hot reloading for native compilation targets not WASM. For hot relaoding with the web renderer, see the [dioxus-cli](https://github.com/DioxusLabs/dioxus/tree/master/packages/cli) project.
+> This crate implements hot reloading for native compilation targets not WASM. For hot reloading with the web renderer, see the [dioxus-cli](https://github.com/DioxusLabs/dioxus/tree/master/packages/cli) project.
 
 Add this to the top of your main function on any renderer that supports hot reloading to start the hot reloading server:
 
@@ -106,7 +106,7 @@ fn main(){
 }
 ```
 
-If you are using a namespace other than html, you can implement the [HotReloadingContext](https://docs.rs/dioxus-rsx/latest/dioxus_rsx/trait.HotReloadingContext.html) trait to provide a mapping between the rust names of your elements/attributes and the resulting strings.
+If you are using a namespace other than html, you can implement the [HotReloadingContext](https://docs.rs/dioxus-rsx/latest/dioxus_rsx/index.html#reexport.HotReloadingContext) trait to provide a mapping between the rust names of your elements/attributes and the resulting strings.
 
 You can then provide the Context to the builder to make hot reloading work with your custom namespace:
 
@@ -164,7 +164,7 @@ async fn launch(app: Component) {
 
 This project is licensed under the [MIT license].
 
-[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+[mit license]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you shall be licensed as MIT without any additional

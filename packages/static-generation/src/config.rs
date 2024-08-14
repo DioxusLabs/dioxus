@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-/// Settings for a staticly generated site that may be hydrated in the browser
+/// Settings for a statically generated site that may be hydrated in the browser
 pub struct Config {
     #[cfg(feature = "server")]
     pub(crate) output_dir: PathBuf,
@@ -158,10 +158,7 @@ impl Config {
 
 #[cfg(feature = "server")]
 impl Config {
-    pub(crate) fn fullstack_template(
-        &self,
-        server_context: &dioxus_fullstack::prelude::DioxusServerContext,
-    ) -> impl dioxus_ssr::incremental::WrapBody {
+    pub(crate) fn fullstack_template(&self) -> dioxus_fullstack::prelude::FullstackHTMLTemplate {
         use dioxus_fullstack::prelude::{FullstackHTMLTemplate, ServeConfig};
         let mut cfg_builder = ServeConfig::builder();
         if let Some(index_html) = &self.index_html {
@@ -175,16 +172,21 @@ impl Config {
         }
         let cfg = cfg_builder.build();
 
-        FullstackHTMLTemplate::new(&cfg, server_context)
+        FullstackHTMLTemplate::new(&cfg)
     }
 
-    pub(crate) fn create_renderer(&mut self) -> dioxus_ssr::incremental::IncrementalRenderer {
+    pub(crate) fn create_cache(&mut self) -> dioxus_ssr::incremental::IncrementalRenderer {
         let mut builder = dioxus_ssr::incremental::IncrementalRenderer::builder()
-            .static_dir(self.output_dir.clone())
-            .pre_render(true);
+            .static_dir(self.output_dir.clone());
         if let Some(map_path) = self.map_path.take() {
             builder = builder.map_path(map_path);
         }
         builder.build()
+    }
+
+    pub(crate) fn create_renderer(&mut self) -> dioxus_ssr::Renderer {
+        let mut renderer = dioxus_ssr::Renderer::new();
+        renderer.pre_render = true;
+        renderer
     }
 }

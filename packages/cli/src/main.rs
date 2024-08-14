@@ -1,26 +1,39 @@
-use dioxus_cli_config::DioxusConfig;
-use std::{env, path::PathBuf};
-use tracing_subscriber::EnvFilter;
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
+pub mod assets;
+pub mod dx_build_info;
+pub mod serve;
+pub mod tools;
+pub mod tracer;
+
+pub mod cli;
+pub use cli::*;
+
+pub mod error;
+pub use error::*;
+
+pub(crate) mod builder;
+
+mod dioxus_crate;
+pub use dioxus_crate::*;
+
+mod settings;
+pub(crate) use settings::*;
+
+pub(crate) mod metadata;
 
 use anyhow::Context;
 use clap::Parser;
-use dioxus_cli::*;
 
 use Commands::*;
-
-const LOG_ENV: &str = "DIOXUS_LOG";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    // If {LOG_ENV} is set, default to env, otherwise filter to cli
-    // and manganis warnings and errors from other crates
-    let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
-    if env::var(LOG_ENV).is_ok() {
-        filter = EnvFilter::from_env(LOG_ENV);
-    }
-    tracing_subscriber::fmt().with_env_filter(filter).init();
+    let log_control = tracer::build_tracing();
 
     match args.action {
         Translate(opts) => opts
@@ -33,17 +46,11 @@ async fn main() -> anyhow::Result<()> {
 
         Init(opts) => opts
             .init()
-            .context(error_wrapper("Initialising a new project failed")),
+            .context(error_wrapper("Initializing a new project failed")),
 
         Config(opts) => opts
             .config()
             .context(error_wrapper("Configuring new project failed")),
-
-        #[cfg(feature = "plugin")]
-        Plugin(opts) => opts
-            .plugin()
-            .await
-            .context(error_wrapper("Error with plugin")),
 
         Autoformat(opts) => opts
             .autoformat()
@@ -54,68 +61,29 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context(error_wrapper("Error checking RSX")),
 
-        action => {
-            let bin = get_bin(args.bin)?;
-            let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
-                .context("Failed to load Dioxus config because")?
-                .unwrap_or_else(|| {
-                    tracing::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
-                    DioxusConfig::default()
-                });
+        Link(opts) => opts
+            .link()
+            .context(error_wrapper("Error with linker passthrough")),
 
-            #[cfg(feature = "plugin")]
-            use dioxus_cli::plugin::PluginManager;
+        Build(mut opts) => opts
+            .run()
+            .await
+            .context(error_wrapper("Building project failed")),
 
-            #[cfg(feature = "plugin")]
-            PluginManager::init(_dioxus_config.plugin)
-                .context(error_wrapper("Plugin system initialization failed"))?;
+        Clean(opts) => opts
+            .clean()
+            .context(error_wrapper("Cleaning project failed")),
 
-            match action {
-                Build(opts) => opts
-                    .build(Some(bin.clone()), None, None)
-                    .context(error_wrapper("Building project failed")),
+        Serve(opts) => opts
+            .serve(log_control)
+            .await
+            .context(error_wrapper("Serving project failed")),
 
-                Clean(opts) => opts
-                    .clean(Some(bin.clone()))
-                    .context(error_wrapper("Cleaning project failed")),
-
-                Serve(opts) => opts
-                    .serve(Some(bin.clone()))
-                    .await
-                    .context(error_wrapper("Serving project failed")),
-
-                Bundle(opts) => opts
-                    .bundle(Some(bin.clone()))
-                    .context(error_wrapper("Bundling project failed")),
-
-                _ => unreachable!(),
-            }
-        }
+        Bundle(opts) => opts
+            .bundle()
+            .await
+            .context(error_wrapper("Bundling project failed")),
     }
-}
-
-fn get_bin(bin: Option<String>) -> Result<PathBuf> {
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .exec()
-        .map_err(Error::CargoMetadata)?;
-    let package = if let Some(bin) = bin {
-        metadata
-            .workspace_packages()
-            .into_iter()
-            .find(|p| p.name == bin)
-            .ok_or(Error::CargoError(format!("no such package: {}", bin)))?
-    } else {
-        metadata
-            .root_package()
-            .ok_or(Error::CargoError("no root package?".to_string()))?
-    };
-
-    let crate_dir = package
-        .manifest_path
-        .parent()
-        .ok_or(Error::CargoError("couldn't take parent dir".to_string()))?;
-
-    Ok(crate_dir.into())
 }
 
 /// Simplifies error messages that use the same pattern.

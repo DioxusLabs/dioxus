@@ -6,10 +6,11 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
-use dioxus_core::ElementId;
-use dioxus_html::PlatformEventData;
+use std::{any::Any, rc::Rc};
+
+use dioxus_core::Runtime;
+use dioxus_core::{ElementId, Template};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
-use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event};
@@ -23,26 +24,37 @@ pub struct WebsysDom {
     #[allow(dead_code)]
     pub(crate) root: Element,
     pub(crate) document: Document,
-    pub(crate) templates: FxHashMap<String, u16>,
-    pub(crate) max_template_id: u16,
+    pub(crate) templates: FxHashMap<Template, u16>,
     pub(crate) interpreter: Interpreter,
 
     #[cfg(feature = "mounted")]
-    pub(crate) event_channel: mpsc::UnboundedSender<UiEvent>,
+    pub(crate) runtime: Rc<Runtime>,
 
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
-}
 
-pub struct UiEvent {
-    pub name: String,
-    pub bubbles: bool,
-    pub element: ElementId,
-    pub data: PlatformEventData,
+    // We originally started with a different `WriteMutations` for collecting templates during hydration.
+    // When profiling the binary size of web applications, this caused a large increase in binary size
+    // because diffing code in core is generic over the `WriteMutation` object.
+    //
+    // The fact that diffing is generic over WriteMutations instead of dynamic dispatch or a vec is nice
+    // because we can directly write mutations to sledgehammer and avoid the runtime and binary size overhead
+    // of dynamic dispatch
+    //
+    // Instead we now store a flag to see if we should be writing templates at all if hydration is enabled.
+    // This has a small overhead, but it avoids dynamic dispatch and reduces the binary size
+    //
+    // NOTE: running the virtual dom with the `write_mutations` flag set to true is different from running
+    // it with no mutation writer because it still assigns ids to nodes, but it doesn't write them to the dom
+    #[cfg(feature = "hydrate")]
+    pub(crate) skip_mutations: bool,
+
+    #[cfg(feature = "hydrate")]
+    pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
 }
 
 impl WebsysDom {
-    pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<UiEvent>) -> Self {
+    pub fn new(cfg: Config, runtime: Rc<Runtime>) -> Self {
         let (document, root) = match cfg.root {
             crate::cfg::ConfigRoot::RootName(rootname) => {
                 // eventually, we just want to let the interpreter do all the work of decoding events into our event type
@@ -72,55 +84,46 @@ impl WebsysDom {
         let interpreter = Interpreter::default();
 
         let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
-            let event_channel = event_channel.clone();
-            move |event: &web_sys::Event| {
-                let name = event.type_();
-                let element = walk_event_for_id(event);
-                let bubbles = event.bubbles();
+            let runtime = runtime.clone();
+            move |web_sys_event: &web_sys::Event| {
+                let name = web_sys_event.type_();
+                let element = walk_event_for_id(web_sys_event);
+                let bubbles = web_sys_event.bubbles();
 
                 let Some((element, target)) = element else {
                     return;
                 };
 
-                let prevent_event;
-                if let Some(prevent_requests) = target
-                    .get_attribute("dioxus-prevent-default")
-                    .as_deref()
-                    .map(|f| f.split_whitespace())
-                {
-                    prevent_event = prevent_requests
-                        .map(|f| f.trim_start_matches("on"))
-                        .any(|f| f == name);
-                } else {
-                    prevent_event = false;
-                }
+                let handle_resize_event = || {
+                    if name == "resize" {
+                        if let Ok(event) = web_sys_event.clone().dyn_into::<web_sys::CustomEvent>()
+                        {
+                            return Some(virtual_event_from_websys_custom_event(
+                                event,
+                                target.clone(),
+                            ));
+                        }
+                    }
+                    None
+                };
 
+                let data = handle_resize_event().unwrap_or_else(|| {
+                    virtual_event_from_websys_event(web_sys_event.clone(), target)
+                });
+
+                let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
+                runtime.handle_event(name.as_str(), event.clone(), element);
+
+                // Prevent the default action if the user set prevent default on the event
+                let prevent_default = !event.default_action_enabled();
                 // Prevent forms from submitting and redirecting
                 if name == "submit" {
                     // On forms the default behavior is not to submit, if prevent default is set then we submit the form
-                    if !prevent_event {
-                        event.prevent_default();
+                    if !prevent_default {
+                        web_sys_event.prevent_default();
                     }
-                } else if prevent_event {
-                    event.prevent_default();
-                }
-
-                let mut data = None;
-                if name == "resize" {
-                    if let Ok(event) = event.clone().dyn_into::<web_sys::CustomEvent>() {
-                        data = Some(virtual_event_from_websys_custom_event(event, target));
-                    }
-                } else {
-                    data = Some(virtual_event_from_websys_event(event.clone(), target));
-                }
-
-                if let Some(data) = data {
-                    let _ = event_channel.unbounded_send(UiEvent {
-                        name,
-                        bubbles,
-                        element,
-                        data,
-                    });
+                } else if prevent_default {
+                    web_sys_event.prevent_default();
                 }
             }
         }));
@@ -139,11 +142,14 @@ impl WebsysDom {
             root,
             interpreter,
             templates: FxHashMap::default(),
-            max_template_id: 0,
             #[cfg(feature = "mounted")]
-            event_channel,
+            runtime,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
+            #[cfg(feature = "hydrate")]
+            skip_mutations: false,
+            #[cfg(feature = "hydrate")]
+            suspense_hydration_ids: Default::default(),
         }
     }
 

@@ -3,15 +3,14 @@ use crate::events::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
-use crate::file_data::{FileEngine, HasFileData};
-use crate::geometry::{
-    ClientPoint, ElementPoint, PagePoint, PixelsRect, PixelsSize, PixelsVector2D, ScreenPoint,
-};
+use crate::file_data::HasFileData;
+use crate::geometry::PixelsSize;
+use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::prelude::*;
 use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 use web_sys::{
     AnimationEvent, CompositionEvent, CustomEvent, Event, KeyboardEvent, MouseEvent, PointerEvent,
     Touch, TouchEvent, TransitionEvent, WheelEvent,
@@ -380,6 +379,63 @@ impl HasWheelData for WheelEvent {
     }
 }
 
+impl HasMouseData for WheelEvent {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl InteractionLocation for WheelEvent {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.client_x().into(), self.client_y().into())
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.screen_x().into(), self.screen_y().into())
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.page_x().into(), self.page_y().into())
+    }
+}
+
+impl InteractionElementOffset for WheelEvent {
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.offset_x().into(), self.offset_y().into())
+    }
+}
+
+impl ModifiersInteraction for WheelEvent {
+    fn modifiers(&self) -> Modifiers {
+        let mut modifiers = Modifiers::empty();
+
+        if self.alt_key() {
+            modifiers.insert(Modifiers::ALT);
+        }
+        if self.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if self.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if self.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        modifiers
+    }
+}
+
+impl PointerInteraction for WheelEvent {
+    fn held_buttons(&self) -> crate::input_data::MouseButtonSet {
+        decode_mouse_button_set(self.buttons())
+    }
+
+    fn trigger_button(&self) -> Option<MouseButton> {
+        Some(MouseButton::from_web_code(self.button()))
+    }
+}
+
 impl HasAnimationData for AnimationEvent {
     fn animation_name(&self) -> String {
         self.animation_name()
@@ -433,30 +489,41 @@ impl From<&web_sys::CustomEvent> for ResizeData {
 impl crate::RenderedElementBacking for web_sys::Element {
     fn get_scroll_offset(
         &self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsVector2D>>>>
-    {
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = crate::MountedResult<crate::geometry::PixelsVector2D>>,
+        >,
+    > {
         let left = self.scroll_left();
         let top = self.scroll_top();
-        let result = Ok(PixelsVector2D::new(left as f64, top as f64));
+        let result = Ok(crate::geometry::PixelsVector2D::new(
+            left as f64,
+            top as f64,
+        ));
         Box::pin(async { result })
     }
 
     fn get_scroll_size(
         &self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsSize>>>>
-    {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = crate::MountedResult<crate::geometry::PixelsSize>>>,
+    > {
         let width = self.scroll_width();
         let height = self.scroll_height();
-        let result = Ok(PixelsSize::new(width as f64, height as f64));
+        let result = Ok(crate::geometry::PixelsSize::new(
+            width as f64,
+            height as f64,
+        ));
         Box::pin(async { result })
     }
 
     fn get_client_rect(
         &self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsRect>>>>
-    {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = crate::MountedResult<crate::geometry::PixelsRect>>>,
+    > {
         let rect = self.get_bounding_client_rect();
-        let result = Ok(PixelsRect::new(
+        let result = Ok(crate::geometry::PixelsRect::new(
             euclid::Point2D::new(rect.left(), rect.top()),
             euclid::Size2D::new(rect.width(), rect.height()),
         ));
@@ -471,14 +538,16 @@ impl crate::RenderedElementBacking for web_sys::Element {
         &self,
         behavior: crate::ScrollBehavior,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<()>>>> {
+        let options = web_sys::ScrollIntoViewOptions::new();
         match behavior {
-            crate::ScrollBehavior::Instant => self.scroll_into_view_with_scroll_into_view_options(
-                web_sys::ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Instant),
-            ),
-            crate::ScrollBehavior::Smooth => self.scroll_into_view_with_scroll_into_view_options(
-                web_sys::ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Smooth),
-            ),
+            crate::ScrollBehavior::Instant => {
+                options.set_behavior(web_sys::ScrollBehavior::Instant);
+            }
+            crate::ScrollBehavior::Smooth => {
+                options.set_behavior(web_sys::ScrollBehavior::Smooth);
+            }
         }
+        self.scroll_into_view_with_scroll_into_view_options(&options);
 
         Box::pin(async { Ok(()) })
     }
@@ -487,6 +556,17 @@ impl crate::RenderedElementBacking for web_sys::Element {
         &self,
         focus: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<()>>>> {
+        #[derive(Debug)]
+        struct FocusError(wasm_bindgen::JsValue);
+
+        impl std::fmt::Display for FocusError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "failed to focus element {:?}", self.0)
+            }
+        }
+
+        impl std::error::Error for FocusError {}
+
         let result = self
             .dyn_ref::<web_sys::HtmlElement>()
             .ok_or_else(|| crate::MountedError::OperationFailed(Box::new(FocusError(self.into()))))
@@ -511,21 +591,20 @@ extern "C" {
     pub fn get_content_box_size(this: &ResizeCustomEvent) -> web_sys::ResizeObserverSize;
 }
 
-macro_rules! get_custom_resize_event_box_size {
-    ($meth_name:ident, $field_name:literal) => {
-        #[doc = concat!("Get the ", $field_name, " size of the observed element")]
-        fn $meth_name(&self) -> ResizeResult<PixelsSize> {
-            let detail = ResizeCustomEvent::from(self.detail());
+fn handle_resize_event(
+    event: &CustomEvent,
+    handle_event_with: fn(detail: &ResizeCustomEvent) -> web_sys::ResizeObserverSize,
+) -> ResizeResult<PixelsSize> {
+    let detail = ResizeCustomEvent::from(event.detail());
 
-            let size = detail.$meth_name();
-            // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
-            let inline_size = size.inline_size();
-            // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
-            let block_size = size.block_size();
+    let size = handle_event_with(&detail);
 
-            Ok(PixelsSize::new(inline_size, block_size))
-        }
-    };
+    // inline_size matches the width of the element if its writing-mode is horizontal, the height otherwise
+    let inline_size = size.inline_size();
+    // block_size matches the height of the element if its writing-mode is horizontal, the width otherwise
+    let block_size = size.block_size();
+
+    Ok(PixelsSize::new(inline_size, block_size))
 }
 
 impl HasResizeData for CustomEvent {
@@ -533,20 +612,14 @@ impl HasResizeData for CustomEvent {
         self
     }
 
-    get_custom_resize_event_box_size!(get_border_box_size, "border box");
-    get_custom_resize_event_box_size!(get_content_box_size, "content box");
-}
+    fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
+        handle_resize_event(self, ResizeCustomEvent::get_border_box_size)
+    }
 
-#[derive(Debug)]
-struct FocusError(JsValue);
-
-impl std::fmt::Display for FocusError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "failed to focus element {:?}", self.0)
+    fn get_content_box_size(&self) -> ResizeResult<PixelsSize> {
+        handle_resize_event(self, ResizeCustomEvent::get_content_box_size)
     }
 }
-
-impl std::error::Error for FocusError {}
 
 impl HasScrollData for Event {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -591,18 +664,15 @@ impl HasMediaData for web_sys::Event {
 }
 
 impl HasFileData for web_sys::Event {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        #[cfg(not(feature = "file_engine"))]
-        let files = None;
-        #[cfg(feature = "file_engine")]
-        let files = element
+    #[cfg(feature = "file-engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
+        let files = self
             .dyn_ref()
             .and_then(|input: &web_sys::HtmlInputElement| {
                 input.files().and_then(|files| {
                     #[allow(clippy::arc_with_non_send_sync)]
-                    crate::file_engine::WebFileEngine::new(files).map(|f| {
-                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
-                    })
+                    crate::web_sys_bind::file_engine::WebFileEngine::new(files)
+                        .map(|f| std::sync::Arc::new(f) as std::sync::Arc<dyn crate::FileEngine>)
                 })
             });
 

@@ -17,13 +17,13 @@ fn test_original_diff() {
         }
     });
 
-    let edits = dom.rebuild_to_vec().santize();
+    let edits = dom.rebuild_to_vec();
 
     assert_eq!(
         edits.edits,
         [
             // add to root
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             AppendChildren { m: 1, id: ElementId(0) }
         ]
     )
@@ -46,7 +46,7 @@ fn create() {
         }
     });
 
-    let _edits = dom.rebuild_to_vec().santize();
+    let _edits = dom.rebuild_to_vec();
 
     // todo: we don't test template mutations anymore since the templates are passed along
 
@@ -64,11 +64,11 @@ fn create() {
     //         AppendChildren { m: 1 },
     //         AppendChildren { m: 2 },
     //         AppendChildren { m: 1 },
-    //         SaveTemplate { name: "template", m: 1 },
+    //         SaveTemplate {  m: 1 },
     //         // The fragment child template
     //         CreateStaticText { value: "hello" },
     //         CreateStaticText { value: "world" },
-    //         SaveTemplate { name: "template", m: 2 },
+    //         SaveTemplate {  m: 2 },
     //     ]
     // );
 }
@@ -77,7 +77,7 @@ fn create() {
 fn create_list() {
     let mut dom = VirtualDom::new(|| rsx! {{(0..3).map(|f| rsx!( div { "hello" } ))}});
 
-    let _edits = dom.rebuild_to_vec().santize();
+    let _edits = dom.rebuild_to_vec();
 
     // note: we dont test template edits anymore
     // assert_eq!(
@@ -87,7 +87,7 @@ fn create_list() {
     //         CreateElement { name: "div" },
     //         CreateStaticText { value: "hello" },
     //         AppendChildren { m: 1 },
-    //         SaveTemplate { name: "template", m: 1 }
+    //         SaveTemplate {  m: 1 }
     //     ]
     // );
 }
@@ -103,7 +103,7 @@ fn create_simple() {
         }
     });
 
-    let edits = dom.rebuild_to_vec().santize();
+    let edits = dom.rebuild_to_vec();
 
     // note: we dont test template edits anymore
     // assert_eq!(
@@ -115,7 +115,7 @@ fn create_simple() {
     //         CreateElement { name: "div" },
     //         CreateElement { name: "div" },
     //         // add to root
-    //         SaveTemplate { name: "template", m: 4 }
+    //         SaveTemplate {  m: 4 }
     //     ]
     // );
 }
@@ -142,7 +142,7 @@ fn create_components() {
         }
     }
 
-    let _edits = dom.rebuild_to_vec().santize();
+    let _edits = dom.rebuild_to_vec();
 
     // todo: test this
 }
@@ -161,7 +161,7 @@ fn anchors() {
     });
 
     // note that the template under "false" doesn't show up since it's not loaded
-    let edits = dom.rebuild_to_vec().santize();
+    let edits = dom.rebuild_to_vec();
 
     // note: we dont test template edits anymore
     // assert_eq!(
@@ -178,7 +178,7 @@ fn anchors() {
     assert_eq!(
         edits.edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             CreatePlaceholder { id: ElementId(2) },
             AppendChildren { m: 2, id: ElementId(0) }
         ]

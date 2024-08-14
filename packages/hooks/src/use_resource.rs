@@ -28,7 +28,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let cb = use_callback(move || {
+    let cb = use_callback(move |_| {
         // Create the user's task
         let fut = rc.reset_and_run_in(&mut future);
 
@@ -54,7 +54,7 @@ where
         })
     });
 
-    let mut task = use_hook(|| Signal::new(cb()));
+    let mut task = use_hook(|| Signal::new(cb(())));
 
     use_hook(|| {
         let mut changed = changed.take().unwrap();
@@ -67,7 +67,7 @@ where
                 task.write().cancel();
 
                 // Start a new task
-                task.set(cb());
+                task.set(cb(()));
             }
         })
     });
@@ -110,7 +110,7 @@ pub struct Resource<T: 'static> {
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
-    callback: UseCallback<Task>,
+    callback: UseCallback<(), Task>,
 }
 
 impl<T> PartialEq for Resource<T> {
@@ -149,8 +149,7 @@ pub enum UseResourceState {
 impl<T> Resource<T> {
     /// Restart the resource's future.
     ///
-    /// Will not cancel the previous future, but will ignore any values that it
-    /// generates.
+    /// This will cancel the current future and start a new one.
     ///
     /// ## Example
     /// ```rust, no_run
@@ -175,7 +174,7 @@ impl<T> Resource<T> {
     /// ```
     pub fn restart(&mut self) {
         self.task.write().cancel();
-        let new_task = self.callback.call();
+        let new_task = self.callback.call(());
         self.task.set(new_task);
     }
 
@@ -407,6 +406,21 @@ impl<T> Resource<T> {
     pub fn value(&self) -> ReadOnlySignal<Option<T>> {
         self.value.into()
     }
+
+    /// Suspend the resource's future and only continue rendering when the future is ready
+    pub fn suspend(&self) -> std::result::Result<MappedSignal<T>, RenderError> {
+        match self.state.cloned() {
+            UseResourceState::Stopped | UseResourceState::Paused | UseResourceState::Pending => {
+                let task = self.task();
+                if task.paused() {
+                    Ok(self.value.map(|v| v.as_ref().unwrap()))
+                } else {
+                    Err(RenderError::Suspended(SuspendedFuture::new(task)))
+                }
+            }
+            _ => Ok(self.value.map(|v| v.as_ref().unwrap())),
+        }
+    }
 }
 
 impl<T> From<Resource<T>> for ReadOnlySignal<Option<T>> {
@@ -427,8 +441,10 @@ impl<T> Readable for Resource<T> {
     }
 
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.value.peek_unchecked()
+    fn try_peek_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.value.try_peek_unchecked()
     }
 }
 

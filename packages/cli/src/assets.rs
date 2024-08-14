@@ -1,44 +1,92 @@
+use crate::builder::{
+    BuildMessage, BuildRequest, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
+};
+use crate::Result;
+use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
+use futures_channel::mpsc::UnboundedSender;
+use manganis_cli_support::{process_file, AssetManifest, AssetManifestExt, AssetType};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use std::fs;
 use std::path::Path;
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
 use std::{ffi::OsString, path::PathBuf};
+use std::{fs::File, io::Write};
+use tracing::Level;
 use walkdir::WalkDir;
 
-use std::{fs::File, io::Write};
+/// The temp file name for passing manganis json from linker to current exec.
+pub const MG_JSON_OUT: &str = "mg-out";
 
-use crate::Result;
-use dioxus_cli_config::CrateConfig;
-use dioxus_cli_config::Platform;
-use manganis_cli_support::{AssetManifest, AssetManifestExt};
+pub fn asset_manifest(build: &BuildRequest) -> AssetManifest {
+    let file_path = build.target_out_dir().join(MG_JSON_OUT);
+    let read = fs::read_to_string(&file_path).unwrap();
+    _ = fs::remove_file(file_path);
+    let json: Vec<String> = serde_json::from_str(&read).unwrap();
 
-pub fn asset_manifest(bin: Option<&str>, crate_config: &CrateConfig) -> AssetManifest {
-    AssetManifest::load_from_path(
-        bin,
-        crate_config.crate_dir.join("Cargo.toml"),
-        crate_config.workspace_dir.join("Cargo.lock"),
-    )
+    AssetManifest::load(json)
 }
 
 /// Create a head file that contains all of the imports for assets that the user project uses
-pub fn create_assets_head(config: &CrateConfig, manifest: &AssetManifest) -> Result<()> {
-    let mut file = File::create(config.out_dir().join("__assets_head.html"))?;
+pub fn create_assets_head(build: &BuildRequest, manifest: &AssetManifest) -> Result<()> {
+    let out_dir = build.target_out_dir();
+    std::fs::create_dir_all(&out_dir)?;
+    let mut file = File::create(out_dir.join("__assets_head.html"))?;
     file.write_all(manifest.head().as_bytes())?;
     Ok(())
 }
 
 /// Process any assets collected from the binary
-pub(crate) fn process_assets(config: &CrateConfig, manifest: &AssetManifest) -> anyhow::Result<()> {
-    let static_asset_output_dir = PathBuf::from(
-        config
-            .dioxus_config
-            .web
-            .app
-            .base_path
-            .clone()
-            .unwrap_or_default(),
-    );
-    let static_asset_output_dir = config.out_dir().join(static_asset_output_dir);
+pub(crate) fn process_assets(
+    build: &BuildRequest,
+    manifest: &AssetManifest,
+    progress: &mut UnboundedSender<UpdateBuildProgress>,
+) -> anyhow::Result<()> {
+    let static_asset_output_dir = build.target_out_dir();
 
-    manifest.copy_static_assets_to(static_asset_output_dir)?;
+    std::fs::create_dir_all(&static_asset_output_dir)
+        .context("Failed to create static asset output directory")?;
+
+    let assets_finished = Arc::new(AtomicUsize::new(0));
+    let assets = manifest.assets();
+    let asset_count = assets.len();
+    assets.par_iter().try_for_each_init(
+        || progress.clone(),
+        move |progress, asset| {
+            if let AssetType::File(file_asset) = asset {
+                match process_file(file_asset, &static_asset_output_dir) {
+                    Ok(_) => {
+                        // Update the progress
+                        _ = progress.start_send(UpdateBuildProgress {
+                            stage: Stage::OptimizingAssets,
+                            update: UpdateStage::AddMessage(BuildMessage {
+                                level: Level::INFO,
+                                message: MessageType::Text(format!(
+                                    "Optimized static asset {}",
+                                    file_asset
+                                )),
+                                source: MessageSource::Build,
+                            }),
+                        });
+                        let assets_finished =
+                            assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        _ = progress.start_send(UpdateBuildProgress {
+                            stage: Stage::OptimizingAssets,
+                            update: UpdateStage::SetProgress(
+                                assets_finished as f64 / asset_count as f64,
+                            ),
+                        });
+                    }
+                    Err(err) => {
+                        tracing::error!("Failed to copy static asset: {}", err);
+                        return Err(err);
+                    }
+                }
+            }
+            Ok::<(), anyhow::Error>(())
+        },
+    )?;
 
     Ok(())
 }
@@ -47,10 +95,14 @@ pub(crate) fn process_assets(config: &CrateConfig, manifest: &AssetManifest) -> 
 pub(crate) struct AssetConfigDropGuard;
 
 impl AssetConfigDropGuard {
-    pub fn new() -> Self {
+    pub fn new(base_path: Option<&str>) -> Self {
         // Set up the collect asset config
+        let base = match base_path {
+            Some(base) => format!("/{}/", base.trim_matches('/')),
+            None => "/".to_string(),
+        };
         manganis_cli_support::Config::default()
-            .with_assets_serve_location("/")
+            .with_assets_serve_location(base)
             .save();
         Self {}
     }
@@ -63,21 +115,11 @@ impl Drop for AssetConfigDropGuard {
     }
 }
 
-pub fn copy_assets_dir(config: &CrateConfig, platform: Platform) -> anyhow::Result<()> {
-    tracing::info!("Copying public assets to the output directory...");
-    let out_dir = config.out_dir();
-    let asset_dir = config.asset_dir();
-
-    if asset_dir.is_dir() {
-        // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-        let pre_compress = platform == Platform::Web && config.should_pre_compress_web_assets();
-
-        copy_dir_to(asset_dir, out_dir, pre_compress)?;
-    }
-    Ok(())
-}
-
-fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::io::Result<()> {
+pub(crate) fn copy_dir_to(
+    src_dir: PathBuf,
+    dest_dir: PathBuf,
+    pre_compress: bool,
+) -> std::io::Result<()> {
     let entries = std::fs::read_dir(&src_dir)?;
     let mut children: Vec<std::thread::JoinHandle<std::io::Result<()>>> = Vec::new();
 
@@ -105,13 +147,16 @@ fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::
 
                 // Then pre-compress the file if needed
                 if pre_compress {
-                    if let Err(err) = pre_compress_file(&entry_path.clone()) {
+                    if let Err(err) = pre_compress_file(&output_file_location) {
                         tracing::error!(
                             "Failed to pre-compress static assets {}: {}",
-                            entry_path.display(),
+                            output_file_location.display(),
                             err
                         );
                     }
+                    // If pre-compression isn't enabled, we should remove the old compressed file if it exists
+                } else if let Some(compressed_path) = compressed_path(&output_file_location) {
+                    _ = std::fs::remove_file(compressed_path);
                 }
             }
 
@@ -124,12 +169,12 @@ fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::
     Ok(())
 }
 
-/// pre-compress a file with brotli
-pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
+/// Get the path to the compressed version of a file
+fn compressed_path(path: &Path) -> Option<PathBuf> {
     let new_extension = match path.extension() {
         Some(ext) => {
             if ext.to_string_lossy().to_lowercase().ends_with("br") {
-                return Ok(());
+                return None;
             }
             let mut ext = ext.to_os_string();
             ext.push(".br");
@@ -137,22 +182,37 @@ pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
         }
         None => OsString::from("br"),
     };
+    Some(path.with_extension(new_extension))
+}
+
+/// pre-compress a file with brotli
+pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
+    let Some(compressed_path) = compressed_path(path) else {
+        return Ok(());
+    };
     let file = std::fs::File::open(path)?;
     let mut stream = std::io::BufReader::new(file);
-    let output = path.with_extension(new_extension);
-    let mut buffer = std::fs::File::create(output)?;
+    let mut buffer = std::fs::File::create(compressed_path)?;
     let params = BrotliEncoderParams::default();
     brotli::BrotliCompress(&mut stream, &mut buffer, &params)?;
     Ok(())
 }
 
 /// pre-compress all files in a folder
-pub(crate) fn pre_compress_folder(path: &Path) -> std::io::Result<()> {
+pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<()> {
     let walk_dir = WalkDir::new(path);
     for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
         let entry_path = entry.path();
         if entry_path.is_file() {
-            pre_compress_file(entry_path)?;
+            if pre_compress {
+                if let Err(err) = pre_compress_file(entry_path) {
+                    tracing::error!("Failed to pre-compress file {entry_path:?}: {err}");
+                }
+            }
+            // If pre-compression isn't enabled, we should remove the old compressed file if it exists
+            else if let Some(compressed_path) = compressed_path(entry_path) {
+                _ = std::fs::remove_file(compressed_path);
+            }
         }
     }
     Ok(())

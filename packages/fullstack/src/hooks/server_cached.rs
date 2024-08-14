@@ -1,3 +1,4 @@
+use dioxus_lib::prelude::use_hook;
 use serde::{de::DeserializeOwned, Serialize};
 
 /// This allows you to send data from the server to the client. The data is serialized into the HTML on the server and hydrated on the client.
@@ -12,25 +13,38 @@ use serde::{de::DeserializeOwned, Serialize};
 /// use dioxus_fullstack::prelude::*;
 ///
 /// fn app() -> Element {
-///    let state1 = server_cached(|| {
+///    let state1 = use_server_cached(|| {
 ///       1234
 ///    });
 ///
-///    None
+///    todo!()
 /// }
 /// ```
-pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
+pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
+    server_fn: impl Fn() -> O,
+) -> O {
+    use_hook(|| server_cached(server_fn))
+}
+
+pub(crate) fn server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
+    value: impl FnOnce() -> O,
+) -> O {
     #[cfg(feature = "server")]
     {
-        let data = server_fn();
-        let sc = crate::prelude::server_context();
-        if let Err(err) = sc.push_html_data(&data) {
-            tracing::error!("Failed to push HTML data: {}", err);
-        }
+        let serialize = crate::html_storage::serialize_context();
+        let data = value();
+        serialize.push(&data);
         data
     }
-    #[cfg(not(feature = "server"))]
+    #[cfg(all(not(feature = "server"), feature = "web"))]
     {
-        crate::html_storage::deserialize::take_server_data().unwrap_or_else(server_fn)
+        dioxus_web::take_server_data()
+            .ok()
+            .flatten()
+            .unwrap_or_else(value)
+    }
+    #[cfg(not(any(feature = "server", feature = "web")))]
+    {
+        value()
     }
 }

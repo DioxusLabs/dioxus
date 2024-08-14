@@ -12,7 +12,11 @@ pub(crate) fn Nav() -> Element {
                         let mut sidebar = SHOW_SIDEBAR.write();
                         *sidebar = !*sidebar;
                     },
-                    MaterialIcon { name: "menu", size: 24, color: MaterialIconColor::Dark }
+                    MaterialIcon {
+                        name: "menu",
+                        size: 24,
+                        color: MaterialIconColor::Dark,
+                    }
                 }
                 div { class: "flex z-50 md:flex-1 px-2", LinkList {} }
 
@@ -55,7 +59,7 @@ pub(crate) fn Nav() -> Element {
                                 Link { to: Route::Homepage {},
                                     img {
                                         src: "https://avatars.githubusercontent.com/u/10237910?s=40&v=4",
-                                        class: "ml-4 h-10 rounded-full w-auto"
+                                        class: "ml-4 h-10 rounded-full w-auto",
                                     }
                                 }
                             }

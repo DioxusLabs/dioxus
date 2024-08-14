@@ -2,14 +2,15 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod app;
 mod assets;
 mod config;
 mod desktop_context;
+mod document;
 mod edits;
 mod element;
-mod eval;
 mod event_handlers;
 mod events;
 mod file_upload;
