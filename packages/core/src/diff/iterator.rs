@@ -133,28 +133,17 @@ impl VirtualDom {
         let new_middle = &new[left_offset..(new.len() - right_offset)];
 
         debug_assert!(
-            !((old_middle.len() == new_middle.len()) && old_middle.is_empty()),
-            "keyed children must have the same number of children"
+            !old_middle.is_empty(),
+            "Old middle returned from `diff_keyed_ends` should not be empty"
+        );
+        debug_assert!(
+            !new_middle.is_empty(),
+            "New middle returned from `diff_keyed_ends` should not be empty"
         );
 
+        // A few nodes in the middle were removed, just remove the old nodes
         if new_middle.is_empty() {
-            // remove the old elements
             self.remove_nodes(to, old_middle, None);
-        } else if old_middle.is_empty() {
-            // there were no old elements, so just create the new elements
-            // we need to find the right "foothold" though - we shouldn't use the "append" at all
-            if left_offset == 0 {
-                // insert at the beginning of the old list
-                let foothold = &new[new.len() - right_offset];
-                self.create_and_insert_before(to, new_middle, foothold, parent);
-            } else {
-                // Double check that if old middle is empty and right offset is 0, then it was just an append
-                debug_assert!(right_offset != 0);
-
-                // inserting in the middle
-                let foothold = &new[left_offset - 1];
-                self.create_and_insert_after(to, new_middle, foothold, parent);
-            }
         } else {
             self.diff_keyed_middle(to, old_middle, new_middle, parent);
         }
@@ -190,13 +179,6 @@ impl VirtualDom {
             return None;
         }
 
-        // And if that was all of the new children, then remove all of the remaining
-        // old children and we're finished.
-        if left_offset == new.len() {
-            self.remove_nodes(to, &old[left_offset..], None);
-            return None;
-        }
-
         // if the shared prefix is less than either length, then we need to walk backwards
         let mut right_offset = 0;
         for (old, new) in old.iter().rev().zip(new.iter().rev()) {
@@ -207,6 +189,40 @@ impl VirtualDom {
             old.diff_node(new, self, to.as_deref_mut());
             right_offset += 1;
         }
+
+        // If that was all of the old children, then create and prepend the remaining
+        // new children and we're finished.
+        if right_offset == old.len() {
+            self.create_and_insert_before(
+                to,
+                &new[..new.len() - right_offset],
+                &new[new.len() - right_offset],
+                parent,
+            );
+            return None;
+        }
+
+        // If the right offset + the left offset is the same as the new length, then we just need to remove the old nodes
+        if right_offset + left_offset == new.len() {
+            self.remove_nodes(to, &old[left_offset..old.len() - right_offset], None);
+            return None;
+        }
+
+        // If the right offset + the left offset is the same as the old length, then we just need to add the new nodes
+        if right_offset + left_offset == old.len() {
+            self.create_and_insert_before(
+                to,
+                &new[left_offset..new.len() - right_offset],
+                &new[new.len() - right_offset],
+                parent,
+            );
+            return None;
+        }
+
+        println!("left_offset: {left_offset}");
+        println!("right_offset: {right_offset}");
+        println!("new.len(): {}", new.len());
+        println!("old.len(): {}", old.len());
 
         Some((left_offset, right_offset))
     }
