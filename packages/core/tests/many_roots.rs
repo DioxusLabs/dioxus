@@ -37,7 +37,7 @@ fn many_roots() {
     for edit in edits.edits {
         println!("stack: {stack:?}\nedit\n{edit:?}\n ");
         match edit {
-            LoadTemplate { template, index, id } => stack.push(id),
+            LoadTemplate { index, id, .. } => stack.push(id),
             ReplacePlaceholder { path, m } => stack.truncate(stack.len() - m),
             AppendChildren { id, m } => stack.truncate(stack.len() - m),
 
