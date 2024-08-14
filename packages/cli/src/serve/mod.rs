@@ -96,6 +96,9 @@ pub async fn serve_all(
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
                     builder.build();
 
+                    // Clear the hot reload changes
+                    watcher.clear_hot_reload_changes();
+
                     // Tell the server to show a loading page for any new requests
                     server.start_build().await;
                 }
@@ -105,8 +108,16 @@ pub async fn serve_all(
             msg = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
-                if let Some(msg) = msg {
-                    screen.new_ws_message(TargetPlatform::Web, msg);
+                match msg {
+                    Some(ServerUpdate::NewConnection) => {
+                        if let Some(msg) = watcher.applied_hot_reload_changes() {
+                            server.send_hotreload(msg).await;
+                        }
+                    }
+                    Some(ServerUpdate::Message(msg)) => {
+                        screen.new_ws_message(TargetPlatform::Web, msg);
+                    }
+                    None => {}
                 }
             }
 
