@@ -1,7 +1,7 @@
 use dioxus_core::ElementId;
 use dioxus_html::{
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
-    HasResizeData, MountedResult, RenderedElementBacking,
+    MountedResult, RenderedElementBacking,
 };
 
 use crate::query::QueryEngine;
