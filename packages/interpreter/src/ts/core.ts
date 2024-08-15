@@ -2,7 +2,6 @@
 // This always lives in the JS side of things, and is extended by the native and web interpreters
 
 import { setAttributeInner } from "./set_attribute";
-import { ResizeEventDetail } from "./types/events";
 
 export type NodeId = number;
 
@@ -21,7 +20,6 @@ export class BaseInterpreter {
   root: HTMLElement;
   handler: EventListener;
   resizeObserver: ResizeObserver;
-  handleResizeEvent: (entry: ResizeEventDetail) => void;
 
   nodes: Node[];
   stack: Node[];
@@ -34,11 +32,7 @@ export class BaseInterpreter {
 
   constructor() {}
 
-  initialize(
-    root: HTMLElement,
-    handler: EventListener | null = null,
-    handleResizeEvent: (entry: ResizeEventDetail) => void = null
-  ) {
+  initialize(root: HTMLElement, handler: EventListener | null = null) {
     this.global = {};
     this.local = {};
     this.root = root;
@@ -48,7 +42,17 @@ export class BaseInterpreter {
     this.templates = {};
 
     this.handler = handler;
-    this.handleResizeEvent = handleResizeEvent;
+  }
+
+  handleResizeEvent(entry: ResizeObserverEntry) {
+    const target = entry.target;
+
+    let event = new CustomEvent<ResizeObserverEntry>("resize", {
+      bubbles: false,
+      detail: entry,
+    });
+
+    target.dispatchEvent(event);
   }
 
   createObserver(element: HTMLElement) {
@@ -56,7 +60,7 @@ export class BaseInterpreter {
     if (!this.resizeObserver) {
       this.resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          this.handleResizeEvent(new ResizeEventDetail(entry));
+          this.handleResizeEvent(entry);
         }
       });
     }

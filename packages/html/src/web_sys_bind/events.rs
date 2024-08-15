@@ -11,6 +11,7 @@ use crate::prelude::*;
 use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
 use wasm_bindgen::JsCast;
+use web_sys::{js_sys, ResizeObserverEntry};
 use web_sys::{
     AnimationEvent, CompositionEvent, CustomEvent, Event, KeyboardEvent, MouseEvent, PointerEvent,
     Touch, TouchEvent, TransitionEvent, WheelEvent,
@@ -51,6 +52,22 @@ uncheck_convert![
     web_sys::MouseEvent       => DragData,
     web_sys::FocusEvent       => FocusData,
 ];
+
+impl From<Event> for ResizeData {
+    #[inline]
+    fn from(e: Event) -> Self {
+        <ResizeData as From<&Event>>::from(&e)
+    }
+}
+
+impl From<&Event> for ResizeData {
+    #[inline]
+    fn from(e: &Event) -> Self {
+        let e: &CustomEvent = e.unchecked_ref();
+        let value = e.detail();
+        Self::from(value.unchecked_into::<ResizeObserverEntry>())
+    }
+}
 
 impl HasCompositionData for CompositionEvent {
     fn data(&self) -> std::string::String {
@@ -479,12 +496,6 @@ impl From<&web_sys::Element> for MountedData {
     }
 }
 
-impl From<&web_sys::CustomEvent> for ResizeData {
-    fn from(e: &web_sys::CustomEvent) -> Self {
-        ResizeData::new(e.clone())
-    }
-}
-
 #[cfg(feature = "mounted")]
 impl crate::RenderedElementBacking for web_sys::Element {
     fn get_scroll_offset(
@@ -578,26 +589,9 @@ impl crate::RenderedElementBacking for web_sys::Element {
     }
 }
 
-use wasm_bindgen::prelude::*;
-use web_sys::js_sys;
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(extends = js_sys :: Object , js_name = ResizeCustomEvent , typescript_type = "ResizeCustomEvent")]
-    #[derive(Debug)]
-    pub type ResizeCustomEvent;
-    #[wasm_bindgen(structural , method , getter , js_class = "ResizeCustomEvent" , js_name = borderBoxSize)]
-    pub fn get_border_box_size(this: &ResizeCustomEvent) -> web_sys::ResizeObserverSize;
-    #[wasm_bindgen(structural, method, getter, js_class = "ResizeCustomEvent" , js_name = contentBoxSize)]
-    pub fn get_content_box_size(this: &ResizeCustomEvent) -> web_sys::ResizeObserverSize;
-}
-
-fn handle_resize_event(
-    event: &CustomEvent,
-    handle_event_with: fn(detail: &ResizeCustomEvent) -> web_sys::ResizeObserverSize,
-) -> ResizeResult<PixelsSize> {
-    let detail = ResizeCustomEvent::from(event.detail());
-
-    let size = handle_event_with(&detail);
+fn extract_first_size(resize_observer_output: js_sys::Array) -> ResizeResult<PixelsSize> {
+    let first = resize_observer_output.get(0);
+    let size = first.unchecked_into::<web_sys::ResizeObserverSize>();
 
     // inline_size matches the width of the element if its writing-mode is horizontal, the height otherwise
     let inline_size = size.inline_size();
@@ -607,17 +601,17 @@ fn handle_resize_event(
     Ok(PixelsSize::new(inline_size, block_size))
 }
 
-impl HasResizeData for CustomEvent {
+impl HasResizeData for ResizeObserverEntry {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
-        handle_resize_event(self, ResizeCustomEvent::get_border_box_size)
+        extract_first_size(self.border_box_size())
     }
 
     fn get_content_box_size(&self) -> ResizeResult<PixelsSize> {
-        handle_resize_event(self, ResizeCustomEvent::get_content_box_size)
+        extract_first_size(self.content_box_size())
     }
 }
 

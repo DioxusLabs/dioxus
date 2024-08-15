@@ -5,7 +5,6 @@
 
 import { BaseInterpreter, NodeId } from "./core";
 import { SerializedEvent, serializeEvent } from "./serialize";
-import { ResizeEventDetail } from "./types/events";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
 // we want to extend it, and it technically extends base interpreter. To make typescript happy,
@@ -100,11 +99,7 @@ export class NativeInterpreter extends JSChannel_ {
     const handler: EventListener = (event) =>
       this.handleEvent(event, event.type, true);
 
-    // handle resize events
-    const handleResizeEvent = (entry: ResizeEventDetail) =>
-      this.handleNativeResizeEvent(entry);
-
-    super.initialize(root, handler, handleResizeEvent);
+    super.initialize(root, handler);
   }
 
   serializeIpcMessage(method: string, params = {}) {
@@ -261,22 +256,6 @@ export class NativeInterpreter extends JSChannel_ {
       // Run the event handler on the virtualdom
       return handleVirtualdomEventSync(this.eventsPath, JSON.stringify(body));
     }
-  }
-
-  handleNativeResizeEvent(detail: ResizeEventDetail) {
-    const event = new CustomEvent<ResizeEventDetail>("resize", {
-      detail,
-    });
-    const target = detail.target!;
-    const realId = getTargetId(target)!;
-    const contents = serializeEvent(event, target);
-
-    this.sendSerializedEvent({
-      name: "resize",
-      data: contents,
-      element: realId,
-      bubbles: false,
-    });
   }
 
   // This should:

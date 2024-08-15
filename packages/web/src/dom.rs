@@ -13,12 +13,9 @@ use dioxus_core::{ElementId, Template};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Element, Event};
+use web_sys::{Document, Element, Event, Node};
 
-use crate::{
-    load_document, virtual_event_from_websys_custom_event, virtual_event_from_websys_event, Config,
-    WebEventConverter,
-};
+use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
 
 pub struct WebsysDom {
     #[allow(dead_code)]
@@ -94,22 +91,7 @@ impl WebsysDom {
                     return;
                 };
 
-                let handle_resize_event = || {
-                    if name == "resize" {
-                        if let Ok(event) = web_sys_event.clone().dyn_into::<web_sys::CustomEvent>()
-                        {
-                            return Some(virtual_event_from_websys_custom_event(
-                                event,
-                                target.clone(),
-                            ));
-                        }
-                    }
-                    None
-                };
-
-                let data = handle_resize_event().unwrap_or_else(|| {
-                    virtual_event_from_websys_event(web_sys_event.clone(), target)
-                });
+                let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 
                 let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
                 runtime.handle_event(name.as_str(), event.clone(), element);
@@ -164,6 +146,11 @@ fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Elem
         .expect("missing target")
         .dyn_into::<web_sys::Node>()
         .expect("not a valid node");
+
+    walk_element_for_id(&target)
+}
+
+fn walk_element_for_id(target: &Node) -> Option<(ElementId, web_sys::Element)> {
     let mut current_target_element = target.dyn_ref::<web_sys::Element>().cloned();
 
     loop {

@@ -51,6 +51,7 @@ features = [
     "FocusEvent",
     "CompositionEvent",
     "CustomEvent",
+    "ResizeObserverEntry",
     "ResizeObserverSize"
 ]
 

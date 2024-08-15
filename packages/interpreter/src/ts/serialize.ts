@@ -1,7 +1,6 @@
 // Handle serialization of the event data across the IPC boundarytype SerializedEvent = {};
 
 import { retrieveSelectValue, retrieveValues } from "./form";
-import { ResizeEventDetail } from "./types/events";
 
 export type AppTouchEvent = TouchEvent;
 
@@ -60,7 +59,10 @@ export function serializeEvent(
   }
 
   if (event instanceof CustomEvent) {
-    extend(serializeResizeEventDetail(event.detail));
+    const detail = event.detail;
+    if (detail instanceof ResizeObserverEntry) {
+      extend(serializeResizeEventDetail(detail));
+    }
   }
 
   // safari is quirky and doesn't have TouchEvent
@@ -112,7 +114,7 @@ function toSerializableResizeObserverSize(
 }
 
 export function serializeResizeEventDetail(
-  detail: ResizeEventDetail
+  detail: ResizeObserverEntry
 ): SerializedEvent {
   let is_inline_width = true;
   if (detail.target instanceof HTMLElement) {
@@ -127,14 +129,14 @@ export function serializeResizeEventDetail(
     border_box_size:
       detail.borderBoxSize !== undefined
         ? toSerializableResizeObserverSize(
-            detail.borderBoxSize,
+            detail.borderBoxSize[0],
             is_inline_width
           )
         : detail.contentRect,
     content_box_size:
       detail.contentBoxSize !== undefined
         ? toSerializableResizeObserverSize(
-            detail.contentBoxSize,
+            detail.contentBoxSize[0],
             is_inline_width
           )
         : detail.contentRect,
