@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::{fs, path::PathBuf, time::Duration};
 
+use super::hot_reloading_file_map::HotreloadError;
 use crate::serve::hot_reloading_file_map::FileMap;
 use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
 use dioxus_hot_reload::HotReloadMsg;
@@ -246,12 +247,21 @@ impl Watcher {
         }
 
         for rust_file in edited_rust_files {
-            let hotreloaded_templates = self
-                .file_map
-                .update_rsx::<HtmlCtx>(&rust_file, &crate_dir)
-                .ok()?;
-
-            templates.extend(hotreloaded_templates);
+            match self.file_map.update_rsx::<HtmlCtx>(&rust_file, &crate_dir) {
+                Ok(hotreloaded_templates) => {
+                    templates.extend(hotreloaded_templates);
+                }
+                // If the file is not reloadable, we need to rebuild
+                Err(HotreloadError::Notreloadable) => return None,
+                // Otherwise just log the error
+                // The rust file may have failed to parse, but that is most likely
+                // because the user is in the middle of adding new code
+                // We just ignore the error and let Rust analyzer warn about the problem
+                Err(HotreloadError::Parse) => {}
+                Err(err) => {
+                    tracing::error!("Error hotreloading file {rust_file:?}: {err}")
+                }
+            }
         }
 
         let msg = HotReloadMsg {
