@@ -253,11 +253,11 @@ impl Watcher {
                 }
                 // If the file is not reloadable, we need to rebuild
                 Err(HotreloadError::Notreloadable) => return None,
-                // Otherwise just log the error
                 // The rust file may have failed to parse, but that is most likely
                 // because the user is in the middle of adding new code
                 // We just ignore the error and let Rust analyzer warn about the problem
                 Err(HotreloadError::Parse) => {}
+                // Otherwise just log the error
                 Err(err) => {
                     tracing::error!("Error hotreloading file {rust_file:?}: {err}")
                 }
