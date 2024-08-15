@@ -599,6 +599,8 @@ impl Output {
                         [
                             // Body
                             Constraint::Min(0),
+                            // Border Seperator
+                            Constraint::Length(1),
                             // Footer Keybinds
                             Constraint::Length(1),
                             // Border Seperator
@@ -634,24 +636,21 @@ impl Output {
                         ]
                         .as_ref(),
                     )
-                    .split(body[3]);
+                    .split(body[4]);
 
                 let keybinds = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Fill(1), Constraint::Fill(1)].as_ref())
-                    .split(body[1]);
+                    .split(body[2]);
 
-                frame.render_widget(Block::new().borders(Borders::BOTTOM), body[0]);
+                frame.render_widget(Block::new().borders(Borders::TOP), body[1]);
                 frame.render_widget(
                     Block::new()
                         .borders(Borders::TOP)
                         .border_style(Style::new().dark_gray()),
-                    body[2],
+                    body[3],
                 );
-                //frame.render_widget(Block::new().borders(Borders::TOP), keybinds[1]);
 
-                // // Render a border for the header
-                // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
 
                 // Render the metadata
                 let mut spans = vec![
