@@ -50,6 +50,9 @@ features = [
     "PointerEvent",
     "FocusEvent",
     "CompositionEvent",
+    "CustomEvent",
+    "ResizeObserverEntry",
+    "ResizeObserverSize"
 ]
 
 [build-dependencies]
