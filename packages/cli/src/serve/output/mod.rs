@@ -24,13 +24,13 @@ use crossterm::{
 use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
-use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
-use render::ScrollPosition;
+use ratatui::{prelude::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Display,
     io::{self, stdout},
+    ops::{Deref, DerefMut},
     rc::Rc,
     sync::atomic::Ordering,
     time::{Duration, Instant},
@@ -94,6 +94,96 @@ impl BuildProgress {
     }
 }
 
+/// Represents the terminal height in lines.
+#[derive(Default, Clone, Copy)]
+pub struct ConsoleHeight(pub u16);
+
+impl ConsoleHeight {
+    pub fn zero() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u16> for ConsoleHeight {
+    fn from(value: u16) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for ConsoleHeight {
+    type Target = u16;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ConsoleHeight {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// Represent where the scroll is currently at.
+#[derive(Default, Clone, Copy)]
+pub struct ScrollPosition(pub u16);
+
+impl ScrollPosition {
+    pub fn zero() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u16> for ScrollPosition {
+    fn from(value: u16) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for ScrollPosition {
+    type Target = u16;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ScrollPosition {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// The number of lines in the console that are wrapping.
+#[derive(Default, Clone, Copy)]
+pub struct NumLinesWrapping(pub u16);
+
+impl NumLinesWrapping {
+    pub fn zero() -> Self {
+        Self(0)
+    }
+}
+
+impl From<u16> for NumLinesWrapping {
+    fn from(value: u16) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for NumLinesWrapping {
+    type Target = u16;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for NumLinesWrapping {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
     log_control: CLILogControl,
@@ -110,10 +200,11 @@ pub struct Output {
     is_cli_release: bool,
     platform: Platform,
 
-    num_lines_with_wrapping: u16,
-    term_height: u16,
-    scroll: u16,
-    fly_modal_open: bool,
+    num_lines_wrapping: NumLinesWrapping,
+    console_height: ConsoleHeight,
+    scroll_position: ScrollPosition,
+
+    more_modal_open: bool,
     anim_start: Instant,
 
     tab: Tab,
@@ -191,12 +282,12 @@ impl Output {
             interactive,
             is_cli_release,
             platform,
-            fly_modal_open: false,
+            more_modal_open: false,
             build_progress: Default::default(),
             running_apps: HashMap::new(),
-            scroll: 0,
-            term_height: 0,
-            num_lines_with_wrapping: 0,
+            scroll_position: ScrollPosition::zero(),
+            console_height: ConsoleHeight::zero(),
+            num_lines_wrapping: NumLinesWrapping::zero(),
             anim_start: Instant::now(),
             tab: Tab::BuildLog,
             addr: cfg.server_arguments.address.clone(),
@@ -392,7 +483,7 @@ impl Output {
 
         if let Event::Key(key) = input {
             if let KeyCode::Char('/') = key.code {
-                self.fly_modal_open = !self.fly_modal_open;
+                self.more_modal_open = !self.more_modal_open;
             }
         }
 
@@ -402,28 +493,28 @@ impl Output {
                 if mouse.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
                 }
-                self.scroll = self.scroll.saturating_sub(scroll_speed);
+                self.scroll_position = self.scroll_position.saturating_sub(scroll_speed).into();
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollDown => {
                 let mut scroll_speed = SCROLL_SPEED;
                 if mouse.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
                 }
-                self.scroll += scroll_speed;
+                *self.scroll_position += scroll_speed;
             }
             Event::Key(key) if key.code == KeyCode::Up => {
                 let mut scroll_speed = SCROLL_SPEED;
                 if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
                 }
-                self.scroll = self.scroll.saturating_sub(scroll_speed);
+                *self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
             }
             Event::Key(key) if key.code == KeyCode::Down => {
                 let mut scroll_speed = SCROLL_SPEED;
                 if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
                 }
-                self.scroll += scroll_speed;
+                *self.scroll_position += scroll_speed;
             }
             Event::Key(key) if key.code == KeyCode::Char('r') => {
                 // todo: reload the app
@@ -451,14 +542,15 @@ impl Output {
             _ => {}
         }
 
-        if self.scroll
+        if *self.scroll_position
             > self
-                .num_lines_with_wrapping
-                .saturating_sub(self.term_height + 1)
+                .num_lines_wrapping
+                .saturating_sub(*self.console_height + 1)
         {
-            self.scroll = self
-                .num_lines_with_wrapping
-                .saturating_sub(self.term_height + 1);
+            self.scroll_position = self
+                .num_lines_wrapping
+                .saturating_sub(*self.console_height + 1)
+                .into();
         }
 
         Ok(false)
@@ -517,7 +609,10 @@ impl Output {
     }
 
     pub fn scroll_to_bottom(&mut self) {
-        self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+        self.scroll_position = self
+            .num_lines_wrapping
+            .saturating_sub(*self.console_height)
+            .into();
     }
 
     pub fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
@@ -625,16 +720,15 @@ impl Output {
             .unwrap()
             .draw(|frame| {
                 let layout = render::TuiLayout::new(frame.size());
-                self.term_height = layout.get_console_height().0;
+                self.console_height = layout.get_console_height();
 
                 // Render console
-                let num_lines_wrapping = layout.render_console(
+                self.num_lines_wrapping = layout.render_console(
                     frame,
-                    ScrollPosition(self.scroll),
+                    self.scroll_position,
                     self.tab,
                     &self.build_progress,
                 );
-                self.num_lines_with_wrapping = num_lines_wrapping.0;
 
                 // Render info bar, status bar, and borders.
                 layout.render_info_bar(frame, self.tab);
@@ -646,259 +740,9 @@ impl Output {
                 );
                 layout.render_borders(frame);
 
-                // a layout that has a title with stats about the program and then the actual console itself
-                // let body = Layout::default()
-                //     .direction(Direction::Vertical)
-                //     .constraints(
-                //         [
-                //             // Body
-                //             Constraint::Min(0),
-                //             // Border Seperator
-                //             Constraint::Length(1),
-                //             // Footer Keybinds
-                //             Constraint::Length(1),
-                //             // Border Seperator
-                //             Constraint::Length(1),
-                //             // Footer Status
-                //             Constraint::Length(1),
-                //             // Padding
-                //             Constraint::Length(1),
-                //         ]
-                //         .as_ref(),
-                //     )
-                //     .split(frame.size());
-
-                // let console = Layout::default()
-                //     .direction(Direction::Vertical)
-                //     .constraints([Constraint::Fill(1)].as_ref())
-                //     .split(body[0]);
-
-                // let addr = format!("http://{}:{}", self.addr.addr, self.addr.port);
-                // let listening_len = format!("listening at {addr}").len() + 3;
-                // let listening_len = if listening_len > body[0].width as usize {
-                //     0
-                // } else {
-                //     listening_len
-                // };
-
-                // let footer_status = Layout::default()
-                //     .direction(Direction::Horizontal)
-                //     .constraints(
-                //         [
-                //             Constraint::Fill(1),
-                //             Constraint::Length(listening_len as u16),
-                //         ]
-                //         .as_ref(),
-                //     )
-                //     .split(body[4]);
-
-                // let keybinds = Layout::default()
-                //     .direction(Direction::Horizontal)
-                //     .constraints([Constraint::Fill(1), Constraint::Fill(1)].as_ref())
-                //     .split(body[2]);
-
-                // frame.render_widget(Block::new().borders(Borders::TOP), body[1]);
-                // frame.render_widget(
-                //     Block::new()
-                //         .borders(Borders::TOP)
-                //         .border_style(Style::new().dark_gray()),
-                //     body[3],
-                // );
-
-                // Render the metadata
-                // let mut spans = vec![
-                //     Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
-                //     Span::from(" ").green(),
-                //     Span::from("serve").green(),
-                //     Span::from(" | ").white(),
-                //     Span::from(self.platform.to_string()).green(),
-                //     Span::from(" | ").white(),
-                // ];
-
-                // // If there is build progress, display that next to the platform
-                // if !self.build_progress.build_logs.is_empty() {
-                //     if self
-                //         .build_progress
-                //         .build_logs
-                //         .values()
-                //         .any(|b| b.failed.is_some())
-                //     {
-                //         spans.push(Span::from("build failed ❌").red());
-                //     } else {
-                //         spans.push(Span::from("status: ").green());
-                //         let build = self
-                //             .build_progress
-                //             .build_logs
-                //             .values()
-                //             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                //             .unwrap();
-                //         spans.extend_from_slice(&build.spans(Rect::new(
-                //             0,
-                //             0,
-                //             build.max_layout_size(),
-                //             1,
-                //         )));
-                //     }
-                // }
-
-                // frame.render_widget(
-                //     Paragraph::new(Line::from(spans)).left_aligned(),
-                //     footer_status[0],
-                // );
-
-                // Split apart the footer into a center and a right side
-                // We only want to show the sidebar if there's enough space
-                // if listening_len > 0 {
-                // frame.render_widget(
-                //     Paragraph::new(Line::from(vec![
-                //         Span::from("listening at ").dark_gray(),
-                //         Span::from(format!("http://{}", server.ip).as_str()).gray(),
-                //     ])),
-                //     footer_status[1],
-                // );
-                // }
-
-                // frame.render_widget(
-                //     Paragraph::new(Line::from(vec![
-                //         {
-                //             let mut line = Span::from("[1] console").dark_gray();
-                //             if self.tab == Tab::Console {
-                //                 line.style = Style::default().fg(Color::LightYellow);
-                //             }
-                //             line
-                //         },
-                //         Span::from(" | ").gray(),
-                //         {
-                //             let mut line = Span::from("[2] build").dark_gray();
-                //             if self.tab == Tab::BuildLog {
-                //                 line.style = Style::default().fg(Color::LightYellow);
-                //             }
-                //             line
-                //         },
-                //     ]))
-                //     .left_aligned(),
-                //     keybinds[0],
-                // );
-                // // Draw the tabs in the right region of the console
-                // // First draw the left border
-                // frame.render_widget(
-                //     Paragraph::new(Line::from(vec![
-                //         Span::from("[/] more").gray(),
-                //         Span::from(" | ").gray(),
-                //         Span::from("[r] reload").gray(),
-                //         Span::from(" | ").gray(),
-                //         Span::from("[c] clear").gray(),
-                //         Span::from(" | ").gray(),
-                //         Span::from("[o] open").gray(),
-                //         Span::from(" | ").gray(),
-                //         Span::from("[h] hide").gray(),
-                //     ]))
-                //     .right_aligned(),
-                //     // .block(Block::default().borders(Borders::TOP).border_set(
-                //     //     symbols::border::Set {
-                //     //         top_left: symbols::line::NORMAL.horizontal_down,
-                //     //         ..symbols::border::PLAIN
-                //     //     },
-                //     // )),
-                //     keybinds[1],
-                // );
-
-                // We're going to assemble a text buffer directly and then let the paragraph widgets
-                // handle the wrapping and scrolling
-                // let mut paragraph_text: Text<'_> = Text::default();
-
-                // let mut add_build_message = |message: &BuildMessage| {
-                //     use ansi_to_tui::IntoText;
-                //     match &message.message {
-                //         MessageType::Text(line) => {
-                //             for line in line.lines() {
-                //                 let text = line.into_text().unwrap_or_default();
-                //                 for line in text.lines {
-                //                     let source = format!("[{}] ", message.source);
-
-                //                     let msg_span = Span::from(source);
-                //                     let msg_span = match message.source {
-                //                         MessageSource::App => msg_span.light_blue(),
-                //                         MessageSource::Dev => msg_span.dark_gray(),
-                //                         MessageSource::Build => msg_span.light_yellow(),
-                //                     };
-
-                //                     let mut out_line = vec![msg_span];
-                //                     for span in line.spans {
-                //                         out_line.push(span);
-                //                     }
-                //                     let newline = Line::from(out_line);
-                //                     paragraph_text.push_line(newline);
-                //                 }
-                //             }
-                //         }
-                //         MessageType::Cargo(diagnostic) => {
-                //             let diagnostic = diagnostic.rendered.as_deref().unwrap_or_default();
-
-                //             for line in diagnostic.lines() {
-                //                 paragraph_text.extend(line.into_text().unwrap_or_default());
-                //             }
-                //         }
-                //     };
-                // };
-
-                // // First log each platform's build logs
-                // for platform in self.build_progress.build_logs.keys() {
-                //     let build = self.build_progress.build_logs.get(platform).unwrap();
-
-                //     let msgs = match self.tab {
-                //         Tab::Console => &build.stdout_logs,
-                //         Tab::BuildLog => &build.messages,
-                //     };
-
-                //     for span in msgs.iter() {
-                //         add_build_message(span);
-                //     }
-                // }
-                // // Then log the internal logs
-                // for message in self.build_progress.internal_logs.iter() {
-                //     add_build_message(message);
-                // }
-
-                // let paragraph = Paragraph::new(paragraph_text)
-                //     .left_aligned()
-                //     .wrap(Wrap { trim: false });
-
-                // self.term_height = console[0].height;
-                // self.num_lines_with_wrapping = paragraph.line_count(console[0].width) as u16;
-
-                // let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                //     .begin_symbol(None)
-                //     .end_symbol(None)
-                //     .track_symbol(None)
-                //     .thumb_symbol("▐");
-
-                // let mut scrollbar_state = ScrollbarState::new(
-                //     self.num_lines_with_wrapping
-                //         .saturating_sub(self.term_height) as usize,
-                // )
-                // .position(self.scroll as usize);
-
-                // let paragraph = paragraph.scroll((self.scroll, 0));
-                // paragraph
-                //     .block(Block::new())
-                //     .render(console[0], frame.buffer_mut());
-
-                // // and the scrollbar, those are separate widgets
-                // frame.render_stateful_widget(
-                //     scrollbar,
-                //     console[0].inner(Margin {
-                //         // todo: dont use margin - just push down the body based on its top border
-                //         // using an inner vertical margin of 1 unit makes the scrollbar inside the block
-                //         vertical: 1,
-                //         horizontal: 0,
-                //     }),
-                //     &mut scrollbar_state,
-                // );
-
-                // TODO: this
-                // render the fly modal
-                //self.render_fly_modal(frame, console[0]);
+                if self.more_modal_open {
+                    layout.render_more_modal(frame);
+                }
             });
     }
 
@@ -934,29 +778,9 @@ impl Output {
         Ok(false)
     }
 
-    fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {
-        if !self.fly_modal_open {
-            return;
-        }
-
-        // Create a frame slightly smaller than the area
-        let panel = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1)].as_ref())
-            .split(area)[0];
-
-        // Wipe the panel
-        frame.render_widget(Clear, panel);
-        frame.render_widget(Block::default().borders(Borders::ALL), panel);
-
-        let modal = Paragraph::new("Under construction, please check back at a later date!\n")
-            .alignment(Alignment::Center);
-        frame.render_widget(modal, panel);
-    }
-
     fn set_tab(&mut self, tab: Tab) {
         self.tab = tab;
-        self.scroll = 0;
+        self.scroll_position = ScrollPosition::zero();
     }
 }
 

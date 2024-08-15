@@ -12,17 +12,17 @@
 use crate::builder::{BuildMessage, MessageSource, MessageType};
 use dioxus_cli_config::Platform;
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Margin, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget, Wrap,
+        Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget, Wrap
     },
     Frame,
 };
 use std::rc::Rc;
 
-use super::{BuildProgress, Tab};
+use super::{BuildProgress, ConsoleHeight, NumLinesWrapping, ScrollPosition, Tab};
 
 pub struct TuiLayout {
     /// The console where build logs are displayed.
@@ -42,41 +42,38 @@ impl TuiLayout {
         // The full layout
         let body = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(
-                [
-                    // Body
-                    Constraint::Min(0),
-                    // Border Seperator
-                    Constraint::Length(1),
-                    // Footer Keybinds
-                    Constraint::Length(1),
-                    // Border Seperator
-                    Constraint::Length(1),
-                    // Footer Status
-                    Constraint::Length(1),
-                    // Padding
-                    Constraint::Length(1),
-                ]
-                .as_ref(),
-            )
+            .constraints(&[
+                // Body
+                Constraint::Min(0),
+                // Border Seperator
+                Constraint::Length(1),
+                // Footer Keybinds
+                Constraint::Length(1),
+                // Border Seperator
+                Constraint::Length(1),
+                // Footer Status
+                Constraint::Length(1),
+                // Padding
+                Constraint::Length(1),
+            ])
             .split(frame_size);
 
         // Build the console, where logs go.
         let console = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1)].as_ref())
+            .constraints(&[Constraint::Fill(1)])
             .split(body[0]);
 
         // Build the info bar for display keybinds.
         let info_bar = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Fill(1), Constraint::Fill(1)].as_ref())
+            .constraints(&[Constraint::Fill(1), Constraint::Fill(1)])
             .split(body[2]);
 
         // Build the status bar.
         let status_bar = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Fill(1)].as_ref())
+            .constraints(&[Constraint::Fill(1)])
             .split(body[4]);
 
         // Specify borders
@@ -215,7 +212,7 @@ impl TuiLayout {
     pub fn render_info_bar(&self, frame: &mut Frame, current_tab: Tab) {
         let mut console_line = Span::from("[1] console");
         let mut build_line = Span::from("[2] build");
-        let divider = Span::from(" | ").gray();
+        let divider = Span::from("  | ").gray();
 
         // Display the current tab
         match current_tab {
@@ -296,14 +293,23 @@ impl TuiLayout {
         );
     }
 
+    /// Renders the "more" modal to show extra info/keybinds accessible via the more keybind.
+    pub fn render_more_modal(&self, frame: &mut Frame) {
+        let area = self.console[0];
+        let modal = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(&[Constraint::Fill(1)])
+            .split(area)[0];
+
+        frame.render_widget(Clear, modal);
+        frame.render_widget(Block::default().borders(Borders::ALL), modal);
+        
+        // Render under construction message
+        let msg = Paragraph::new("Under construction, please check back at a later date!").alignment(Alignment::Center);
+        frame.render_widget(msg, modal);
+    }
+
     pub fn get_console_height(&self) -> ConsoleHeight {
         ConsoleHeight(self.console[0].height)
     }
 }
-
-/// Represents the terminal height in lines.
-pub struct ConsoleHeight(pub u16);
-/// Represent where the scroll is currently at.
-pub struct ScrollPosition(pub u16);
-/// The number of lines in the console that are wrapping.
-pub struct NumLinesWrapping(pub u16);
