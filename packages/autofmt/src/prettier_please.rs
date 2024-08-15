@@ -85,11 +85,12 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     // now we can replace the macros with the formatted blocks
     for fmted in replacer.formatted_stack.drain(..) {
         let is_multiline = fmted.contains('{');
+        let is_empty = fmted.trim().is_empty();
 
         let mut out_fmt = String::from("rsx! {");
         if is_multiline {
             out_fmt.push('\n');
-        } else {
+        } else if !is_empty {
             out_fmt.push(' ');
         }
 
@@ -122,7 +123,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         if is_multiline {
             out_fmt.push('\n');
             out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
-        } else {
+        } else if !is_empty {
             out_fmt.push(' ');
         }
 

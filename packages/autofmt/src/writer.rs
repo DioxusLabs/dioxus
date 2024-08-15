@@ -836,13 +836,20 @@ impl<'a> Writer<'a> {
             }
 
             // TODO: let rawexprs to be inlined
-            [BodyNode::Component(ref comp)] if comp.fields.is_empty() => Some(
-                comp.name
-                    .segments
-                    .iter()
-                    .map(|s| s.ident.to_string().len() + 2)
-                    .sum::<usize>(),
-            ),
+            [BodyNode::Component(ref comp)]
+            // basically if the component is completely empty, we can inline it
+                if comp.fields.is_empty()
+                    && comp.children.is_empty()
+                    && comp.spreads.is_empty() =>
+            {
+                Some(
+                    comp.name
+                        .segments
+                        .iter()
+                        .map(|s| s.ident.to_string().len() + 2)
+                        .sum::<usize>(),
+                )
+            }
 
             // Feedback on discord indicates folks don't like combining multiple children on the same line
             // We used to do a lot of math to figure out if we should expand out the line, but folks just
