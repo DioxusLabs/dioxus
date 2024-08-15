@@ -1,4 +1,4 @@
-//! This file contains functions to render different elements on the TUI frame.
+//! This module contains functions to render different elements on the TUI frame.
 //!
 //! The current TUI layout is:
 //! ------------
@@ -9,6 +9,7 @@
 //! ---BORDER---
 //! -STATUS BAR-
 
+use super::{BuildProgress, ConsoleHeight, NumLinesWrapping, ScrollPosition, Tab};
 use crate::builder::{BuildMessage, MessageSource, MessageType};
 use dioxus_cli_config::Platform;
 use ratatui::{
@@ -16,13 +17,12 @@ use ratatui::{
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget, Wrap
+        Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget,
+        Wrap,
     },
     Frame,
 };
 use std::rc::Rc;
-
-use super::{BuildProgress, ConsoleHeight, NumLinesWrapping, ScrollPosition, Tab};
 
 pub struct TuiLayout {
     /// The console where build logs are displayed.
@@ -107,6 +107,7 @@ impl TuiLayout {
         scroll: ScrollPosition,
         current_tab: Tab,
         build_progress: &BuildProgress,
+        messages: Vec<Message>,
     ) -> NumLinesWrapping {
         // TODO: This doesn't render logs in the order they were created.
         // TODO: Clean and fix this.
@@ -303,12 +304,14 @@ impl TuiLayout {
 
         frame.render_widget(Clear, modal);
         frame.render_widget(Block::default().borders(Borders::ALL), modal);
-        
+
         // Render under construction message
-        let msg = Paragraph::new("Under construction, please check back at a later date!").alignment(Alignment::Center);
+        let msg = Paragraph::new("Under construction, please check back at a later date!")
+            .alignment(Alignment::Center);
         frame.render_widget(msg, modal);
     }
 
+    /// Returns the height of the console TUI area in number of lines.
     pub fn get_console_height(&self) -> ConsoleHeight {
         ConsoleHeight(self.console[0].height)
     }

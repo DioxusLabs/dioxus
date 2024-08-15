@@ -71,12 +71,10 @@ impl From<TargetPlatform> for LogSource {
     }
 }
 
-pub type BuildLogs = HashMap<TargetPlatform, ActiveBuild>;
-
 #[derive(Default)]
 pub struct BuildProgress {
     internal_logs: Vec<BuildMessage>,
-    build_logs: BuildLogs,
+    build_logs: HashMap<TargetPlatform, ActiveBuild>,
 }
 
 impl BuildProgress {
@@ -898,4 +896,24 @@ struct RunningAppOutput {
     stderr: Lines<BufReader<ChildStderr>>,
     stdout_line: String,
     stderr_line: String,
+}
+
+pub struct Message {
+    source: MessageSource,
+    level: MessageLevel,
+    content: String,
+}
+
+pub enum MessageSource {
+    App(TargetPlatform),
+    Dev,
+    Build,
+}
+
+pub enum MessageLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
 }
