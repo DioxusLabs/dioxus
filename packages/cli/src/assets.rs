@@ -19,13 +19,13 @@ use walkdir::WalkDir;
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";
 
-pub fn asset_manifest(build: &BuildRequest) -> AssetManifest {
+pub fn asset_manifest(build: &BuildRequest) -> Option<AssetManifest> {
     let file_path = build.target_out_dir().join(MG_JSON_OUT);
-    let read = fs::read_to_string(&file_path).unwrap();
+    let read = fs::read_to_string(&file_path).ok()?;
     _ = fs::remove_file(file_path);
     let json: Vec<String> = serde_json::from_str(&read).unwrap();
 
-    AssetManifest::load(json)
+    Some(AssetManifest::load(json))
 }
 
 /// Create a head file that contains all of the imports for assets that the user project uses

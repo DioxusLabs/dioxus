@@ -1,3 +1,4 @@
+use super::{Builder, Server, Watcher};
 use crate::{
     builder::{
         BuildMessage, MessageSource, MessageType, Stage, TargetPlatform, UpdateBuildProgress,
@@ -36,7 +37,8 @@ use tokio::{
 };
 use tracing::Level;
 
-use super::{Builder, Server, Watcher};
+// How many lines should be scroll on each mouse scroll or arrow key input.
+const SCROLL_SPEED: u16 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogSource {
@@ -380,16 +382,16 @@ impl Output {
 
         match input {
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollUp => {
-                self.scroll = self.scroll.saturating_sub(1);
+                self.scroll = self.scroll.saturating_sub(SCROLL_SPEED);
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollDown => {
-                self.scroll += 1;
+                self.scroll += SCROLL_SPEED;
             }
             Event::Key(key) if key.code == KeyCode::Up => {
-                self.scroll = self.scroll.saturating_sub(1);
+                self.scroll = self.scroll.saturating_sub(SCROLL_SPEED);
             }
             Event::Key(key) if key.code == KeyCode::Down => {
-                self.scroll += 1;
+                self.scroll += SCROLL_SPEED;
             }
             Event::Key(key) if key.code == KeyCode::Char('r') => {
                 // todo: reload the app
@@ -595,20 +597,25 @@ impl Output {
                     .direction(Direction::Vertical)
                     .constraints(
                         [
-                            // Title
-                            Constraint::Length(1),
                             // Body
                             Constraint::Min(0),
+                            // Footer Keybinds
+                            Constraint::Length(1),
+                            // Border Seperator
+                            Constraint::Length(1),
+                            // Footer Status
+                            Constraint::Length(1),
+                            // Padding
+                            Constraint::Length(1),
                         ]
                         .as_ref(),
                     )
                     .split(frame.size());
 
-                // Split the body into a left and a right
                 let console = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Fill(1), Constraint::Length(14)].as_ref())
-                    .split(body[1]);
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Fill(1)].as_ref())
+                    .split(body[0]);
 
                 let addr = format!("http://{}:{}", self.addr.addr, self.addr.port);
                 let listening_len = format!("listening at {addr}").len() + 3;
@@ -618,7 +625,7 @@ impl Output {
                     listening_len
                 };
 
-                let header = Layout::default()
+                let footer_status = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints(
                         [
@@ -627,7 +634,21 @@ impl Output {
                         ]
                         .as_ref(),
                     )
-                    .split(body[0]);
+                    .split(body[3]);
+
+                let keybinds = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Fill(1), Constraint::Fill(1)].as_ref())
+                    .split(body[1]);
+
+                frame.render_widget(Block::new().borders(Borders::BOTTOM), body[0]);
+                frame.render_widget(
+                    Block::new()
+                        .borders(Borders::TOP)
+                        .border_style(Style::new().dark_gray()),
+                    body[2],
+                );
+                //frame.render_widget(Block::new().borders(Borders::TOP), keybinds[1]);
 
                 // // Render a border for the header
                 // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
@@ -668,55 +689,66 @@ impl Output {
                     }
                 }
 
-                frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
-
-                // Split apart the body into a center and a right side
-                // We only want to show the sidebar if there's enough space
-                if listening_len > 0 {
-                    frame.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            Span::from("listening at ").dark_gray(),
-                            Span::from(format!("http://{}", server.ip).as_str()).gray(),
-                        ])),
-                        header[1],
-                    );
-                }
-
-                // Draw the tabs in the right region of the console
-                // First draw the left border
                 frame.render_widget(
-                    Paragraph::new(vec![
+                    Paragraph::new(Line::from(spans)).left_aligned(),
+                    footer_status[0],
+                );
+
+                // Split apart the footer into a center and a right side
+                // We only want to show the sidebar if there's enough space
+                // if listening_len > 0 {
+                frame.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::from("listening at ").dark_gray(),
+                        Span::from(format!("http://{}", server.ip).as_str()).gray(),
+                    ])),
+                    footer_status[1],
+                );
+                // }
+
+                frame.render_widget(
+                    Paragraph::new(Line::from(vec![
                         {
-                            let mut line = Line::from(" [1] console").dark_gray();
+                            let mut line = Span::from("[1] console").dark_gray();
                             if self.tab == Tab::Console {
                                 line.style = Style::default().fg(Color::LightYellow);
                             }
                             line
                         },
+                        Span::from(" | ").gray(),
                         {
-                            let mut line = Line::from(" [2] build").dark_gray();
+                            let mut line = Span::from("[2] build").dark_gray();
                             if self.tab == Tab::BuildLog {
                                 line.style = Style::default().fg(Color::LightYellow);
                             }
                             line
                         },
-                        Line::from("  ").gray(),
-                        Line::from(" [/] more").gray(),
-                        Line::from(" [r] reload").gray(),
-                        Line::from(" [c] clear").gray(),
-                        Line::from(" [o] open").gray(),
-                        Line::from(" [h] hide").gray(),
-                    ])
-                    .left_aligned()
-                    .block(
-                        Block::default()
-                            .borders(Borders::LEFT | Borders::TOP)
-                            .border_set(symbols::border::Set {
-                                top_left: symbols::line::NORMAL.horizontal_down,
-                                ..symbols::border::PLAIN
-                            }),
-                    ),
-                    console[1],
+                    ]))
+                    .left_aligned(),
+                    keybinds[0],
+                );
+                // Draw the tabs in the right region of the console
+                // First draw the left border
+                frame.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::from("[/] more").gray(),
+                        Span::from(" | ").gray(),
+                        Span::from("[r] reload").gray(),
+                        Span::from(" | ").gray(),
+                        Span::from("[c] clear").gray(),
+                        Span::from(" | ").gray(),
+                        Span::from("[o] open").gray(),
+                        Span::from(" | ").gray(),
+                        Span::from("[h] hide").gray(),
+                    ]))
+                    .right_aligned(),
+                    // .block(Block::default().borders(Borders::TOP).border_set(
+                    //     symbols::border::Set {
+                    //         top_left: symbols::line::NORMAL.horizontal_down,
+                    //         ..symbols::border::PLAIN
+                    //     },
+                    // )),
+                    keybinds[1],
                 );
 
                 // We're going to assemble a text buffer directly and then let the paragraph widgets
@@ -797,7 +829,7 @@ impl Output {
 
                 let paragraph = paragraph.scroll((self.scroll, 0));
                 paragraph
-                    .block(Block::new().borders(Borders::TOP))
+                    .block(Block::new())
                     .render(console[0], frame.buffer_mut());
 
                 // and the scrollbar, those are separate widgets

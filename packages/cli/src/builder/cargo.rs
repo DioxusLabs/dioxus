@@ -19,6 +19,7 @@ use manganis_cli_support::AssetManifest;
 use manganis_cli_support::ManganisSupportGuard;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
+use tracing::error;
 
 impl BuildRequest {
     /// Create a list of arguments for cargo builds
@@ -222,7 +223,10 @@ impl BuildRequest {
                 cargo_args,
                 Some(linker_args),
             )?;
-            let assets = asset_manifest(&build);
+            let Some(assets) = asset_manifest(&build) else {
+                error!("the asset manifest was not provided by manganis and we were not able to collect assets");
+                return Err(anyhow::anyhow!("asset manifest was not provided by manganis"));
+            };
             // Collect assets from the asset manifest the linker intercept created
             process_assets(&build, &assets, &mut progress)?;
             // Create the __assets_head.html file for bundling
@@ -230,8 +234,7 @@ impl BuildRequest {
 
             Ok(Some(assets))
         })
-        .await
-        .unwrap()
+        .await?
     }
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
