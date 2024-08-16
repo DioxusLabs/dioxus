@@ -39,7 +39,7 @@ where
     type Target = dyn Fn() -> R;
 
     fn deref(&self) -> &Self::Target {
-        Readable::deref_impl(&self.resolve())
+        unsafe { Readable::deref_impl(self) }
     }
 }
 

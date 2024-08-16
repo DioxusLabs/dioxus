@@ -222,7 +222,7 @@ pub trait Readable {
     }
 
     #[doc(hidden)]
-    fn deref_impl<'a>(&self) -> &'a dyn Fn() -> Self::Target
+    unsafe fn deref_impl<'a>(&self) -> &'a dyn Fn() -> Self::Target
     where
         Self: Sized + 'a,
         Self::Target: Clone,
