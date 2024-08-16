@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, UseCallback};
+use crate::{use_live_callback, use_signal};
 use dioxus_core::prelude::*;
 use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
@@ -28,7 +28,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let cb = use_callback(move |_| {
+    let cb = use_live_callback(move |_| {
         // Create the user's task
         let fut = rc.reset_and_run_in(&mut future);
 
@@ -110,7 +110,7 @@ pub struct Resource<T: 'static> {
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
-    callback: UseCallback<(), Task>,
+    callback: Callback<(), Task>,
 }
 
 impl<T> PartialEq for Resource<T> {
