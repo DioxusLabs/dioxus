@@ -52,7 +52,7 @@ fn Display() -> Element {
 fn Reset() -> Element {
     // Not all write methods are available on global signals since `write` requires a mutable reference. In these cases,
     // We can simply pull out the actual signal using the signal() method.
-    let mut as_signal = use_hook(|| COUNT.signal());
+    let mut as_signal = use_hook(|| COUNT.resolve());
 
     rsx! {
         button { onclick: move |_| as_signal.set(0), "Reset" }
