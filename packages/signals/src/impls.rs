@@ -99,7 +99,7 @@ macro_rules! default_impl {
 #[macro_export]
 macro_rules! read_impls {
     (
-        $ty:tt
+        $ty:ident
         // Accept generics
         < T $(, $gen:ident $(: $gen_bound:path)?)* $(,)?>
         // Accept extra bounds
