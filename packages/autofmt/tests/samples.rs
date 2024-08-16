@@ -16,8 +16,6 @@ macro_rules! twoway {
                 let src = include_str!(concat!("./samples/", stringify!($name), ".rsx"));
                 let formatted = dioxus_autofmt::fmt_file(src, Default::default());
                 let out = dioxus_autofmt::apply_formats(src, formatted);
-
-
                 // normalize line endings
                 let out = out.replace("\r", "");
                 let src = src.replace("\r", "");
