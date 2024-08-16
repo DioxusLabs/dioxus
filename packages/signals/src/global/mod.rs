@@ -167,7 +167,7 @@ where
         // Otherwise, create it
         // Constructors are always run in the root scope
         let signal =
-            ScopeId::ROOT.in_runtime(|| T::initialize_from_function(self.constructor.clone()));
+            ScopeId::ROOT.in_runtime(|| T::initialize_from_function(self.constructor));
         context
             .map
             .borrow_mut()
