@@ -15,7 +15,7 @@ test("text appears in the body without javascript", async ({ page }) => {
     if (building_count === 0) {
       break;
     }
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(10);
     await page.goto("http://localhost:5050", { waitUntil: "commit" });
   }
   // If we wait until the whole page loads, the content of the site should still be in the body even if javascript is disabled
