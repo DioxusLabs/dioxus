@@ -99,7 +99,7 @@ impl<T: 'static> Memo<T> {
     /// # use dioxus::prelude::*;
     /// static SIGNAL: GlobalSignal<i32> = Signal::global(|| 0);
     /// // Create a new global memo that can be used anywhere in your app
-    /// static DOUBLED: GlobalMemo<i32> = Signal::global_memo(|| SIGNAL() * 2);
+    /// static DOUBLED: GlobalMemo<i32> = Memo::global(|| SIGNAL() * 2);
     ///
     /// fn App() -> Element {
     ///     rsx! {

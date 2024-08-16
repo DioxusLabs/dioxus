@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/counter.css");
 
 static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
-static DOUBLED_COUNT: GlobalMemo<i32> = Signal::global_memo(|| COUNT() * 2);
+static DOUBLED_COUNT: GlobalMemo<i32> = Memo::global(|| COUNT() * 2);
 
 fn main() {
     launch(app);
