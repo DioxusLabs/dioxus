@@ -118,7 +118,12 @@ pub fn try_fmt_file(
         let body_is_solo_expr = body.body.roots.len() == 1
             && matches!(body.body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
 
-        if formatted.len() <= 80 && !formatted.contains('\n') && !body_is_solo_expr {
+        // If it's short, and it's not a single expression, and it's not empty, then we can collapse it
+        if formatted.len() <= 80
+            && !formatted.contains('\n')
+            && !body_is_solo_expr
+            && !formatted.trim().is_empty()
+        {
             formatted = format!(" {formatted} ");
         }
 
