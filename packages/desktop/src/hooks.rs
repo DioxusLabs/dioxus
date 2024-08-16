@@ -9,7 +9,7 @@ use dioxus_core::{
     use_hook, Runtime,
 };
 
-use dioxus_hooks::use_live_callback;
+use dioxus_hooks::use_callback;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
 use wry::RequestAsyncResponder;
 
@@ -65,7 +65,7 @@ pub fn use_asset_handler(
     mut handler: impl FnMut(AssetRequest, RequestAsyncResponder) + 'static,
 ) {
     // wrap the user's handler in something that keeps it up to date
-    let cb = use_live_callback(move |(asset, responder)| handler(asset, responder));
+    let cb = use_callback(move |(asset, responder)| handler(asset, responder));
 
     use_hook_with_cleanup(
         || {
@@ -91,7 +91,7 @@ pub fn use_global_shortcut(
     mut handler: impl FnMut() + 'static,
 ) -> Result<ShortcutHandle, ShortcutRegistryError> {
     // wrap the user's handler in something that keeps it up to date
-    let cb = use_live_callback(move |_| handler());
+    let cb = use_callback(move |_| handler());
 
     use_hook_with_cleanup(
         move || {

@@ -3,13 +3,13 @@ use std::{cell::Cell, rc::Rc};
 use dioxus_core::prelude::*;
 use futures_util::StreamExt;
 
-use crate::use_live_callback;
+use crate::use_callback;
 
 #[doc = include_str!("../docs/side_effects.md")]
 #[doc = include_str!("../docs/rules_of_hooks.md")]
 #[track_caller]
 pub fn use_effect(mut callback: impl FnMut() + 'static) -> Effect {
-    let callback = use_live_callback(move |_| callback());
+    let callback = use_callback(move |_| callback());
 
     let location = std::panic::Location::caller();
 

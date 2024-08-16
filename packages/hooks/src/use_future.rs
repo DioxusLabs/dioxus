@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-use crate::{use_hook_did_run, use_live_callback, use_signal};
+use crate::{use_callback, use_hook_did_run, use_signal};
 use dioxus_core::prelude::*;
 use dioxus_signals::*;
 use std::future::Future;
@@ -48,7 +48,7 @@ where
 {
     let mut state = use_signal(|| UseFutureState::Pending);
 
-    let callback = use_live_callback(move |_| {
+    let callback = use_callback(move |_| {
         let fut = future();
         spawn(async move {
             state.set(UseFutureState::Pending);

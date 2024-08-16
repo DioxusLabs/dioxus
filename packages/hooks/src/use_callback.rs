@@ -10,9 +10,7 @@ use dioxus_core::prelude::Callback;
 ///
 /// This API is in flux and might not remain.
 #[doc = include_str!("../docs/rules_of_hooks.md")]
-pub fn use_live_callback<T: 'static, O: 'static>(
-    f: impl FnMut(T) -> O + 'static,
-) -> Callback<T, O> {
+pub fn use_callback<T: 'static, O: 'static>(f: impl FnMut(T) -> O + 'static) -> Callback<T, O> {
     let mut callback = Some(f);
 
     // Create a copyvalue with no contents
