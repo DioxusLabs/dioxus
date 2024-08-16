@@ -1,7 +1,4 @@
-use dioxus_core::{
-    prelude::{provide_root_context, try_consume_context},
-    ScopeId,
-};
+use dioxus_core::ScopeId;
 use generational_box::BorrowResult;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, panic::Location, rc::Rc};
 
@@ -160,7 +157,7 @@ where
 
         let context = get_global_context();
 
-        let read = context.signal.borrow();
+        let read = context.map.borrow();
         match read.get(&key) {
             Some(signal) => signal.downcast_ref::<T>().cloned().unwrap(),
             None => {
@@ -169,7 +166,7 @@ where
                 let signal =
                     ScopeId::ROOT.in_runtime(|| T::initialize_from_function(self.constructor));
                 context
-                    .signal
+                    .map
                     .borrow_mut()
                     .insert(key, Box::new(signal.clone()));
                 signal
@@ -184,9 +181,9 @@ where
 }
 
 /// The context for global signals
-#[derive(Clone)]
-pub struct GlobalSignalContext {
-    signal: Rc<RefCell<HashMap<GlobalKey<'static>, Box<dyn Any>>>>,
+#[derive(Clone, Default)]
+pub struct GlobalLazyContext {
+    map: Rc<RefCell<HashMap<GlobalKey<'static>, Box<dyn Any>>>>,
 }
 
 /// A key used to identify a signal in the global signal context
@@ -231,18 +228,18 @@ impl From<&'static Location<'static>> for GlobalKey<'static> {
     }
 }
 
-impl GlobalSignalContext {
+impl GlobalLazyContext {
     /// Get a signal with the given string key
     /// The key will be converted to a UUID with the appropriate internal namespace
     pub fn get_signal_with_key<T>(&self, key: &str) -> Option<Signal<T>> {
         let key = GlobalKey::new_from_str(key);
 
-        self.signal.borrow().get(&key).map(|f| {
+        self.map.borrow().get(&key).map(|f| {
             *f.downcast_ref::<Signal<T>>().unwrap_or_else(|| {
                 panic!(
                     "Global signal with key {:?} is not of the expected type. Keys are {:?}",
                     key,
-                    self.signal.borrow().keys()
+                    self.map.borrow().keys()
                 )
             })
         })
@@ -250,15 +247,10 @@ impl GlobalSignalContext {
 }
 
 /// Get the global context for signals
-pub fn get_global_context() -> GlobalSignalContext {
-    match try_consume_context() {
+pub fn get_global_context() -> GlobalLazyContext {
+    match ScopeId::ROOT.has_context() {
         Some(context) => context,
-        None => {
-            let context = GlobalSignalContext {
-                signal: Rc::new(RefCell::new(HashMap::new())),
-            };
-            provide_root_context(context)
-        }
+        None => ScopeId::ROOT.provide_context(Default::default()),
     }
 }
 
