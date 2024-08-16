@@ -69,11 +69,9 @@ pub fn use_asset_handler(
 
     use_hook_with_cleanup(
         || {
-            let in_runtime =
-                Runtime::wrap_closure(move |(asset, responder)| cb((asset, responder)));
             crate::window().asset_handlers.register_handler(
                 name.to_string(),
-                Box::new(move |asset, responder| in_runtime((asset, responder))),
+                Box::new(move |asset, responder| cb((asset, responder))),
                 current_scope_id().unwrap(),
             );
 
@@ -94,10 +92,7 @@ pub fn use_global_shortcut(
     let cb = use_callback(move |_| handler());
 
     use_hook_with_cleanup(
-        move || {
-            let in_runtime = Runtime::wrap_closure(move |_| cb(()));
-            window().create_shortcut(accelerator.accelerator(), move || in_runtime(()))
-        },
+        move || window().create_shortcut(accelerator.accelerator(), move || cb(())),
         |handle| {
             if let Ok(handle) = handle {
                 handle.remove();
