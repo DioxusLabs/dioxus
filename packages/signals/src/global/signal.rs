@@ -17,6 +17,11 @@ impl<T: 'static> GlobalSignal<T> {
     pub fn id(&self) -> generational_box::GenerationalBoxId {
         self.resolve().id()
     }
+
+    /// Resolve the global signal. This will try to get the existing value from the current virtual dom, and if it doesn't exist, it will create a new one.
+    pub fn signal(&self) -> Signal<T> {
+        self.resolve()
+    }
 }
 
 read_impls!(GlobalSignal<T>);

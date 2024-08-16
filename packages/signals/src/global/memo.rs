@@ -17,6 +17,11 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
     pub fn id(&self) -> generational_box::GenerationalBoxId {
         self.resolve().id()
     }
+
+    /// Resolve the global memo. This will try to get the existing value from the current virtual dom, and if it doesn't exist, it will create a new one.
+    pub fn memo(&self) -> Memo<T> {
+        self.resolve()
+    }
 }
 
 read_impls!(GlobalMemo<T> where T: PartialEq);
