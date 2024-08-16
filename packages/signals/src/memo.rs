@@ -1,6 +1,6 @@
-use crate::read_impls;
 use crate::write::Writable;
 use crate::{read::Readable, ReadableRef, Signal};
+use crate::{read_impls, GlobalMemo};
 use crate::{CopyValue, ReadOnlySignal};
 use std::{
     cell::RefCell,
@@ -90,6 +90,39 @@ impl<T: 'static> Memo<T> {
         });
 
         memo
+    }
+
+    /// Creates a new [`GlobalMemo`] that can be used anywhere inside your dioxus app. This memo will automatically be created once per app the first time you use it.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// static SIGNAL: GlobalSignal<i32> = Signal::global(|| 0);
+    /// // Create a new global memo that can be used anywhere in your app
+    /// static DOUBLED: GlobalMemo<i32> = Signal::global_memo(|| SIGNAL() * 2);
+    ///
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         button {
+    ///             // When SIGNAL changes, the memo will update because the SIGNAL is read inside DOUBLED
+    ///             onclick: move |_| *SIGNAL.write() += 1,
+    ///             "{DOUBLED}"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// <div class="warning">
+    ///
+    /// Global memos are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
+    ///
+    /// </div>
+    #[track_caller]
+    pub const fn global(constructor: fn() -> T) -> GlobalMemo<T>
+    where
+        T: PartialEq,
+    {
+        GlobalMemo::new(constructor)
     }
 
     /// Rerun the computation and update the value of the memo if the result has changed.

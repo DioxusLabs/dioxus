@@ -1,4 +1,7 @@
-use dioxus_core::prelude::{provide_root_context, try_consume_context};
+use dioxus_core::{
+    prelude::{provide_root_context, try_consume_context},
+    ScopeId,
+};
 use std::{any::Any, cell::RefCell, collections::HashMap, panic::Location, rc::Rc};
 
 mod memo;
@@ -8,6 +11,87 @@ mod signal;
 pub use signal::*;
 
 use crate::Signal;
+
+/// A trait for an item that can be constructed from an initialization function
+pub trait InitializeFromFunction<T> {
+    /// Create an instance of this type from an initialization function
+    fn initialize_from_function(f: fn() -> T) -> Self;
+}
+
+impl<T> InitializeFromFunction<T> for T {
+    fn initialize_from_function(f: fn() -> T) -> Self {
+        f()
+    }
+}
+
+/// A lazy value that is created once per application and can be accessed from anywhere in that application
+pub struct LazyGlobal<T, R = T> {
+    constructor: fn() -> R,
+    key: GlobalKey<'static>,
+    phantom: std::marker::PhantomData<fn() -> T>,
+}
+
+impl<T: Clone + 'static, R> LazyGlobal<T, R>
+where
+    T: InitializeFromFunction<R>,
+{
+    #[track_caller]
+    /// Create a new global value
+    pub const fn new(constructor: fn() -> R) -> Self {
+        let key = std::panic::Location::caller();
+        Self {
+            constructor,
+            key: GlobalKey::new(key),
+            phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Create this global signal with a specific key.
+    /// This is useful for ensuring that the signal is unique across the application and accessible from
+    /// outside the application too.
+    #[track_caller]
+    pub const fn with_key(constructor: fn() -> R, key: &'static str) -> Self {
+        Self {
+            constructor,
+            key: GlobalKey::new_from_str(key),
+            phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Get the key for this global
+    pub fn key(&self) -> GlobalKey<'static> {
+        self.key.clone()
+    }
+
+    /// Resolve the global value. This will try to get the existing value from the current virtual dom, and if it doesn't exist, it will create a new one.
+    // NOTE: This is not called "get" or "value" because those methods overlap with Readable and Writable
+    pub fn resolve(&self) -> T {
+        let key = self.key();
+
+        let context = get_global_context();
+
+        let read = context.signal.borrow();
+        match read.get(&key) {
+            Some(signal) => signal.downcast_ref::<T>().cloned().unwrap(),
+            None => {
+                drop(read);
+                // Constructors are always run in the root scope
+                let signal =
+                    ScopeId::ROOT.in_runtime(|| T::initialize_from_function(self.constructor));
+                context
+                    .signal
+                    .borrow_mut()
+                    .insert(key, Box::new(signal.clone()));
+                signal
+            }
+        }
+    }
+
+    /// Get the scope the signal was created in.
+    pub fn origin_scope(&self) -> ScopeId {
+        ScopeId::ROOT
+    }
+}
 
 /// The context for global signals
 #[derive(Clone)]
