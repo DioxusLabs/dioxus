@@ -1,6 +1,9 @@
 use dioxus_rsx::CallBody;
 use proc_macro2::TokenStream as TokenStream2;
 
+/// Ensure we can write RSX blocks without a source file
+///
+/// Useful in code generation use cases where we still want formatted code.
 #[test]
 fn write_block_out() {
     let src = include_str!("./srcless/basic_expr.rsx");
