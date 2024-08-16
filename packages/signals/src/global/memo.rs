@@ -1,4 +1,4 @@
-use super::{InitializeFromFunction, LazyGlobal};
+use super::{Global, InitializeFromFunction};
 use crate::read::Readable;
 use crate::read_impls;
 use crate::Memo;
@@ -10,7 +10,7 @@ impl<T: PartialEq> InitializeFromFunction<T> for Memo<T> {
 }
 
 /// A memo that can be accessed from anywhere in the application and created in a static
-pub type GlobalMemo<T> = LazyGlobal<Memo<T>, T>;
+pub type GlobalMemo<T> = Global<Memo<T>, T>;
 
 impl<T: PartialEq + 'static> GlobalMemo<T> {
     /// Get the generational id of the signal.

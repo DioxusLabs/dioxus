@@ -23,7 +23,7 @@ impl<T> InitializeFromFunction<T> for T {
 }
 
 /// A lazy value that is created once per application and can be accessed from anywhere in that application
-pub struct LazyGlobal<T, R = T> {
+pub struct Global<T, R = T> {
     constructor: fn() -> R,
     key: GlobalKey<'static>,
     phantom: std::marker::PhantomData<fn() -> T>,
@@ -32,7 +32,7 @@ pub struct LazyGlobal<T, R = T> {
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T: Clone + 'static, R: Clone + 'static> Deref for LazyGlobal<T, R>
+impl<T: Clone + 'static, R: Clone + 'static> Deref for Global<T, R>
 where
     T: Readable<Target = R> + InitializeFromFunction<R>,
 {
@@ -43,7 +43,7 @@ where
     }
 }
 
-impl<T: Clone + 'static, R: 'static> Readable for LazyGlobal<T, R>
+impl<T: Clone + 'static, R: 'static> Readable for Global<T, R>
 where
     T: Readable<Target = R> + InitializeFromFunction<R>,
 {
@@ -63,7 +63,7 @@ where
     }
 }
 
-impl<T: Clone + 'static, R: 'static> Writable for LazyGlobal<T, R>
+impl<T: Clone + 'static, R: 'static> Writable for Global<T, R>
 where
     T: Writable<Target = R> + InitializeFromFunction<R>,
 {
@@ -101,7 +101,7 @@ where
     }
 }
 
-impl<T: Clone + 'static, R: 'static> LazyGlobal<T, R>
+impl<T: Clone + 'static, R: 'static> Global<T, R>
 where
     T: Writable<Target = R> + InitializeFromFunction<R>,
 {
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<T: Clone + 'static, R> LazyGlobal<T, R>
+impl<T: Clone + 'static, R> Global<T, R>
 where
     T: InitializeFromFunction<R>,
 {
@@ -157,21 +157,22 @@ where
 
         let context = get_global_context();
 
-        let read = context.map.borrow();
-        match read.get(&key) {
-            Some(signal) => signal.downcast_ref::<T>().cloned().unwrap(),
-            None => {
-                drop(read);
-                // Constructors are always run in the root scope
-                let signal =
-                    ScopeId::ROOT.in_runtime(|| T::initialize_from_function(self.constructor));
-                context
-                    .map
-                    .borrow_mut()
-                    .insert(key, Box::new(signal.clone()));
-                signal
+        // Get the entry if it already exists
+        {
+            let read = context.map.borrow();
+            if let Some(signal) = read.get(&key) {
+                return signal.downcast_ref::<T>().cloned().unwrap();
             }
         }
+        // Otherwise, create it
+        // Constructors are always run in the root scope
+        let signal =
+            ScopeId::ROOT.in_runtime(|| T::initialize_from_function(self.constructor.clone()));
+        context
+            .map
+            .borrow_mut()
+            .insert(key, Box::new(signal.clone()));
+        signal
     }
 
     /// Get the scope the signal was created in.

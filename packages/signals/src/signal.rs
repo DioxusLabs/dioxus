@@ -1,4 +1,4 @@
-use crate::{default_impl, fmt_impls, write_impls, LazyGlobal};
+use crate::{default_impl, fmt_impls, write_impls, Global};
 use crate::{read::*, write::*, CopyValue, GlobalMemo, GlobalSignal, ReadableRef};
 use crate::{Memo, WritableRef};
 use dioxus_core::prelude::*;
@@ -87,7 +87,7 @@ impl<T: 'static> Signal<T> {
     /// </div>
     #[track_caller]
     pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
-        LazyGlobal::new(constructor)
+        Global::new(constructor)
     }
 }
 
