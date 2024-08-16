@@ -93,7 +93,7 @@ pub fn try_fmt_file(
         writer.out.indent_level = writer
             .out
             .indent
-            .count_indents(writer.src[rsx_start.line - 1]);
+            .count_indents(writer.src.get(rsx_start.line - 1).unwrap_or(&""));
 
         // TESTME
         // Writing *should* not fail but it's possible that it does
