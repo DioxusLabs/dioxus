@@ -86,12 +86,12 @@ mod tests {
         let mut command = Command::cargo_bin(env!("CARGO_BIN_NAME"))?;
         command
             .arg("init")
+            .arg("--yes") // Skip any questions by choosing default answer.
             .arg("--subtemplate")
-            .arg("Fullstack")
-            .arg("-o")
-            .arg("styling=Vanilla")
-            .arg("-o")
-            .arg("router=false");
+            // Probably should use some template that doesn't require specifying
+            // either `--subtemplate` or `--option`.
+            // Maybe a simple template in tests/ dir?
+            .arg("Fullstack");
         Ok(command)
     }
 
