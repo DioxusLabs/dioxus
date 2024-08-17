@@ -13,5 +13,9 @@ fn write_block_out() {
 
     let block = dioxus_autofmt::write_block_out(&parsed).unwrap();
 
-    pretty_assertions::assert_eq!(block.trim(), src.trim());
+    // normalize line endings for windows tests to pass
+    pretty_assertions::assert_eq!(
+        block.trim().lines().collect::<Vec<_>>().join("\n"),
+        src.trim().lines().collect::<Vec<_>>().join("\n")
+    );
 }
