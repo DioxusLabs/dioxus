@@ -18,9 +18,6 @@ dioxus-hooks = { workspace = true }
 generational-box = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen-futures = { workspace = true, optional = true }
-js-sys = { version = "0.3.56", optional = true }
 euclid = "0.22.7"
 enumset = "1.1.2"
 keyboard-types = { version = "0.7", default-features = false }
@@ -30,6 +27,12 @@ futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
 rustversion = "1.0.17"
+
+# todo: we shouldn't have any wasm-bindgen dependencies in the html cratea
+# [target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { workspace = true, optional = true }
+js-sys = { version = "0.3.56", optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 
 [dependencies.web-sys]
 optional = true

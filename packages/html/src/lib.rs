@@ -31,8 +31,10 @@ pub mod input_data;
 pub mod native_bind;
 pub mod point_interaction;
 mod render_template;
+
 #[cfg(feature = "wasm-bind")]
 mod web_sys_bind;
+
 #[cfg(feature = "wasm-bind")]
 pub use web_sys_bind::*;
 

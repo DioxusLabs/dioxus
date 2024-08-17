@@ -21,14 +21,11 @@ dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
-# hotreload only works on desktop platforms.... mobile is still wip
 dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"]}
-
-serde = "1.0.136"
-serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { version = "0.41.0", default-features = false, features = [
+tao = { workspace = true, features = ["rwh_05"] }
+wry = { workspace = true, default-features = false, features = [
     "os-webview",
     "protocol",
     "drag-drop",
@@ -42,27 +39,26 @@ tokio = { workspace = true, features = [
     "macros",
     "fs",
 ], optional = true }
-webbrowser = "0.8.0"
-infer = "0.11.0"
-dunce = "1.0.2"
 slab = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
-urlencoding = "2.1.2"
-async-trait = "0.1.68"
-tao = { version = "0.28.1", features = ["rwh_05"] }
 
+webbrowser = { workspace = true }
+infer = { workspace = true }
+dunce = { workspace = true }
+urlencoding = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-global-hotkey = "0.5.0"
-rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
-muda = "0.11.3"
-
-
+global-hotkey = { workspace = true }
+rfd = { workspace = true, default-features = false, features = ["xdg-portal", "tokio"] }
+muda = { workspace = true }
 
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
@@ -73,10 +69,10 @@ tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
 tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"]}
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-cocoa = "0.25"
-core-foundation = "0.9.3"
-objc = "0.2.7"
-objc_id = "0.1.1"
+cocoa = { workspace = true }
+core-foundation = { workspace = true }
+objc = { workspace = true }
+objc_id = { workspace = true }
 
 [features]
 default = ["tokio_runtime", "wry/objc-exception", "hot-reload", "devtools"]
@@ -104,10 +100,10 @@ rustdoc-args = [ "--cfg", "docsrs" ]
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
-exitcode = "1.1.2"
 reqwest = { workspace = true, features = ["json"] }
-http-range = { version = "0.1.5" }
 dioxus-ssr = { workspace = true, default-features = false }
+exitcode = "1.1.2"
+http-range = { version = "0.1.5" }
 separator = "0.4.1"
 rand = { version = "0.8.4", features = ["small_rng"] }
 

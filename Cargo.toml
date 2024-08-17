@@ -150,6 +150,22 @@ once_cell = "1.17.1"
 uuid = "1.9.1"
 convert_case = "0.6.0"
 tokio-tungstenite = { version = "0.23.1" }
+gloo-timers = "0.3.0"
+
+# desktop
+wry = { version = "0.42.0", default-features = false }
+tao = { version = "0.29.0", features = ["rwh_05"] }
+webbrowser = "1.0.1"
+infer = "0.16.0"
+dunce = "1.0.2"
+urlencoding = "2.1.2"
+global-hotkey = "0.6.0"
+rfd = { version = "0.14", default-features = false }
+muda = "0.14.0"
+cocoa = "0.26"
+core-foundation = "0.10.0"
+objc = { version = "0.2.7", features = ["exception"] }
+objc_id = "0.1.1"
 
 # cli, cli-config
 dirs = "5.0.1"

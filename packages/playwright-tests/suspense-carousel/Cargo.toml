@@ -5,9 +5,14 @@ version.workspace = true
 publish = false
 
 [dependencies]
-async-std = "1.12.0"
 dioxus = { workspace = true, features = ["fullstack"] }
 serde = "1.0.159"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { workspace = true }
 
 [features]
 default = []

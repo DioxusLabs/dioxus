@@ -94,7 +94,10 @@ impl BuildRequest {
                 .generate(&bindgen_outdir)
                 .unwrap();
         };
+        let start = std::time::Instant::now();
         let bindgen_result = tokio::task::spawn_blocking(run_wasm_bindgen.clone()).await;
+
+        tracing::info!("wasm-bindgen complete in {:?}", start.elapsed());
 
         // WASM bindgen requires the exact version of the bindgen schema to match the version the CLI was built with
         // If we get an error, we can try to recover by pinning the user's wasm-bindgen version to the version we used
