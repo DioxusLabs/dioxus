@@ -556,13 +556,13 @@ impl ScopeId {
     /// fn Component() -> Element {
     ///     let request = spawn(async move {
     ///         match reqwest::get("https://api.example.com").await {
-    ///             Ok(_) => unimplemented!(),
+    ///             Ok(_) => todo!(),
     ///             // You can explicitly throw an error into a scope with throw_error
     ///             Err(err) => ScopeId::APP.throw_error(err)
     ///         }
     ///     });
     ///
-    ///     unimplemented!()
+    ///     todo!()
     /// }
     /// ```
     pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {

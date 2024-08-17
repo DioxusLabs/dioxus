@@ -18,7 +18,7 @@ fn App() -> Element {
         let string = use_signal(|| "hello world".to_string());
     }
 
-    unimplemented!()
+    todo!()
 }
 
 fn use_my_hook() -> Signal<i32> {
@@ -56,7 +56,7 @@ fn App() -> Element {
         _ => (),
     }
 
-    unimplemented!()
+    todo!()
 }
 ```
 
@@ -71,7 +71,7 @@ fn App() -> Element {
         let string = use_signal(|| "hello world".to_string());
     }
 
-    unimplemented!()
+    todo!()
 }
 ```
 
@@ -103,7 +103,7 @@ fn App() -> Element {
         string()
     });
 
-    unimplemented!()
+    todo!()
 }
 ```
 
@@ -121,7 +121,7 @@ fn App() -> Element {
     let string = use_signal(|| "hello world".to_string()); // Hook 2
     let doubled = use_memo(move || number() * 2); // Hook 3
 
-    unimplemented!()
+    todo!()
 }
 ```
 

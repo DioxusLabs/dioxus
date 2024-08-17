@@ -17,7 +17,7 @@ use dioxus::prelude::*;
 ///
 /// When used with web apps, manganis will detect the import of the image, optimize it, and put it
 /// in the output dist folder in the right location, ensuring no two images have the same name.
-static ASSET_PATH: &str = asset!("examples/assets/logo.png".format(ImageType::Avif));
+static ASSET_PATH: ImageAsset = asset!("/examples/assets/logo.png".image().format(ImageType::Avif));
 
 fn main() {
     launch(app);

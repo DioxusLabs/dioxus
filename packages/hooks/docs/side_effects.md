@@ -52,7 +52,7 @@ fn Comp(count: u32) -> Element {
     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
     use_effect(use_reactive((&count,), |(count,)| println!("Manually manipulate the dom") ));
 
-    unimplemented!()
+    todo!()
 }
 ```
 
