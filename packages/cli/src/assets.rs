@@ -21,9 +21,9 @@ pub const MG_JSON_OUT: &str = "mg-out";
 
 pub fn asset_manifest(build: &BuildRequest) -> AssetManifest {
     let file_path = build.target_out_dir().join(MG_JSON_OUT);
-    let read = fs::read_to_string(&file_path).unwrap();
+    let read = fs::read_to_string(&file_path).unwrap_or_default();
     _ = fs::remove_file(file_path);
-    let json: Vec<String> = serde_json::from_str(&read).unwrap();
+    let json: Vec<String> = serde_json::from_str(&read).unwrap_or_default();
 
     AssetManifest::load(json)
 }
