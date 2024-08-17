@@ -1,0 +1,8 @@
+.foo {
+  color: red;
+}
+
+.bar {
+  color: red;
+  width: calc(1px + 1px);
+}

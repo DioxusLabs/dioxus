@@ -1,0 +1,12 @@
+[package]
+name = "test-package"
+version = "0.2.1"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+manganis = { workspace = true }
+test-package-dependency = { path = "./test-package-dependency", version = "0.2.1" }
+tracing-subscriber = "0.3.17"

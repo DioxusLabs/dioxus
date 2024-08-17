@@ -6340,7 +6340,7 @@ dependencies = [
 
 [[package]]
 name = "manganis"
-version = "0.3.0-alpha.0"
+version = "0.6.0-alpha.2"
 dependencies = [
  "core-foundation 0.9.4",
  "dirs",
@@ -6353,7 +6353,7 @@ dependencies = [
 
 [[package]]
 name = "manganis-cli-support"
-version = "0.3.0-alpha.0"
+version = "0.6.0-alpha.2"
 dependencies = [
  "anyhow",
  "image 0.25.2",
@@ -6373,12 +6373,13 @@ dependencies = [
  "swc",
  "swc_common",
  "tracing",
+ "tracing-subscriber",
  "url",
 ]
 
 [[package]]
 name = "manganis-common"
-version = "0.3.0-alpha.0"
+version = "0.6.0-alpha.2"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -6391,7 +6392,7 @@ dependencies = [
 
 [[package]]
 name = "manganis-macro"
-version = "0.3.0-alpha.0"
+version = "0.6.0-alpha.2"
 dependencies = [
  "base64 0.22.1",
  "manganis-common",
@@ -6400,6 +6401,17 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 2.0.74",
+]
+
+[[package]]
+name = "manganis-resolver"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "core-foundation 0.9.4",
+ "dunce",
+ "infer 0.16.0",
+ "manganis",
+ "manganis-common",
 ]
 
 [[package]]
@@ -6605,7 +6617,7 @@ dependencies = [
  "cc",
  "dunce",
  "libc",
- "nasm-rs",
+ "nasm-rs 0.3.0",
 ]
 
 [[package]]
@@ -6651,6 +6663,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bddcd3bf5144b6392de80e04c347cd7fab2508f6df16a85fc496ecd5cec39bc"
 dependencies = [
  "rand 0.8.5",
+]
+
+[[package]]
+name = "nasm-rs"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe4d98d0065f4b1daf164b3eafb11974c94662e5e2396cf03f32d0bb5c17da51"
+dependencies = [
+ "rayon",
 ]
 
 [[package]]
@@ -8279,6 +8300,7 @@ dependencies = [
  "av1-grain",
  "bitstream-io",
  "built",
+ "cc",
  "cfg-if",
  "interpolate_name",
  "itertools 0.12.1",
@@ -8286,6 +8308,7 @@ dependencies = [
  "libfuzzer-sys",
  "log",
  "maybe-rayon",
+ "nasm-rs 0.2.5",
  "new_debug_unreachable",
  "noop_proc_macro",
  "num-derive",
@@ -11261,6 +11284,30 @@ checksum = "572818b3472910acbd5dff46a3413715c18e934b071ab2ba464a7b2c2af16376"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "test-package"
+version = "0.2.1"
+dependencies = [
+ "manganis",
+ "test-package-dependency",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "test-package-dependency"
+version = "0.2.1"
+dependencies = [
+ "manganis",
+ "test-package-nested-dependency",
+]
+
+[[package]]
+name = "test-package-nested-dependency"
+version = "0.2.1"
+dependencies = [
+ "manganis",
 ]
 
 [[package]]
