@@ -4,7 +4,7 @@ use super::BuildResult;
 use super::TargetPlatform;
 use crate::assets::copy_dir_to;
 use crate::assets::create_assets_head;
-use crate::assets::{asset_manifest, process_assets, AssetConfigDropGuard};
+use crate::assets::{asset_manifest, process_assets};
 use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
@@ -108,13 +108,10 @@ impl BuildRequest {
             let hash = &hash.trim_start_matches('g')[..4];
             dioxus_version.push_str(&format!("-{hash}"));
         }
-        // let _guard = dioxus_cli_config::__private::save_config(
-        //     &self.dioxus_crate.dioxus_config,
-        //     &dioxus_version,
-        // );
-        // let _manganis_support = ManganisSupportGuard::default();
-        let _asset_guard =
-            AssetConfigDropGuard::new(self.dioxus_crate.dioxus_config.web.app.base_path.as_deref());
+
+        // todo: put the base path here?
+        // let _asset_guard =
+        //     AssetConfigDropGuard::new(self.dioxus_crate.dioxus_config.web.app.base_path.as_deref());
 
         // If this is a web, build make sure we have the web build tooling set up
         if self.targeting_web() {

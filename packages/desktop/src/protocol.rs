@@ -126,30 +126,30 @@ fn running_in_dev_mode() -> bool {
 fn resolve_resource(path: &Path) -> PathBuf {
     let mut base_path = get_asset_root_or_default();
 
-    // Even in dev mode, mobile needs to resolve the asset path from the bundle
-    if running_in_dev_mode() || cfg!(any(target_os = "ios", target_os = "android")) {
-        base_path.push(path);
-        // Special handler for Manganis filesystem fallback.
-        // We need this since Manganis provides assets from workspace root.
-        if !base_path.exists() {
-            let workspace_root = get_workspace_root_from_cargo();
-            let asset_path = workspace_root.join(path);
-            return asset_path;
-        }
-    } else {
-        let mut resource_path = PathBuf::new();
-        for component in path.components() {
-            // Tauri-bundle inserts special path segments for abnormal component paths
-            match component {
-                Component::Prefix(_) => {}
-                Component::RootDir => resource_path.push("_root_"),
-                Component::CurDir => {}
-                Component::ParentDir => resource_path.push("_up_"),
-                Component::Normal(p) => resource_path.push(p),
-            }
-        }
-        base_path.push(resource_path);
-    }
+    // // Even in dev mode, mobile needs to resolve the asset path from the bundle
+    // if running_in_dev_mode() || cfg!(any(target_os = "ios", target_os = "android")) {
+    //     base_path.push(path);
+    //     // Special handler for Manganis filesystem fallback.
+    //     // We need this since Manganis provides assets from workspace root.
+    //     if !base_path.exists() {
+    //         let workspace_root = get_workspace_root_from_cargo();
+    //         let asset_path = workspace_root.join(path);
+    //         return asset_path;
+    //     }
+    // } else {
+    //     let mut resource_path = PathBuf::new();
+    //     for component in path.components() {
+    //         // Tauri-bundle inserts special path segments for abnormal component paths
+    //         match component {
+    //             Component::Prefix(_) => {}
+    //             Component::RootDir => resource_path.push("_root_"),
+    //             Component::CurDir => {}
+    //             Component::ParentDir => resource_path.push("_up_"),
+    //             Component::Normal(p) => resource_path.push(p),
+    //         }
+    //     }
+    //     base_path.push(resource_path);
+    // }
 
     base_path
 }

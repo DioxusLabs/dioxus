@@ -164,10 +164,10 @@ impl BuildResult {
         let mut cmd = Command::new(executable);
         cmd
             // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
-            .env(
-                dioxus_cli_config::__private::SERVE_ENV,
-                serde_json::to_string(&arguments).unwrap(),
-            )
+            // .env(
+            //     dioxus_cli_config::__private::SERVE_ENV,
+            //     serde_json::to_string(&arguments).unwrap(),
+            // )
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)

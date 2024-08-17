@@ -54,65 +54,41 @@ pub(crate) fn process_assets(
     assets.par_iter().try_for_each_init(
         || progress.clone(),
         move |progress, asset| {
-            if let AssetType::File(file_asset) = asset {
-                match process_file(file_asset, &static_asset_output_dir) {
-                    Ok(_) => {
-                        // Update the progress
-                        _ = progress.start_send(UpdateBuildProgress {
-                            stage: Stage::OptimizingAssets,
-                            update: UpdateStage::AddMessage(BuildMessage {
-                                level: Level::INFO,
-                                message: MessageType::Text(format!(
-                                    "Optimized static asset {}",
-                                    file_asset
-                                )),
-                                source: MessageSource::Build,
-                            }),
-                        });
-                        let assets_finished =
-                            assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        _ = progress.start_send(UpdateBuildProgress {
-                            stage: Stage::OptimizingAssets,
-                            update: UpdateStage::SetProgress(
-                                assets_finished as f64 / asset_count as f64,
-                            ),
-                        });
-                    }
-                    Err(err) => {
-                        tracing::error!("Failed to copy static asset: {}", err);
-                        return Err(err);
-                    }
-                }
-            }
+            // if let AssetType::File(file_asset) = asset {
+            //     match process_file(file_asset, &static_asset_output_dir) {
+            //         Ok(_) => {
+            //             // Update the progress
+            //             _ = progress.start_send(UpdateBuildProgress {
+            //                 stage: Stage::OptimizingAssets,
+            //                 update: UpdateStage::AddMessage(BuildMessage {
+            //                     level: Level::INFO,
+            //                     message: MessageType::Text(format!(
+            //                         "Optimized static asset {}",
+            //                         file_asset
+            //                     )),
+            //                     source: MessageSource::Build,
+            //                 }),
+            //             });
+            //             let assets_finished =
+            //                 assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            //             _ = progress.start_send(UpdateBuildProgress {
+            //                 stage: Stage::OptimizingAssets,
+            //                 update: UpdateStage::SetProgress(
+            //                     assets_finished as f64 / asset_count as f64,
+            //                 ),
+            //             });
+            //         }
+            //         Err(err) => {
+            //             tracing::error!("Failed to copy static asset: {}", err);
+            //             return Err(err);
+            //         }
+            //     }
+            // }
             Ok::<(), anyhow::Error>(())
         },
     )?;
 
     Ok(())
-}
-
-/// A guard that sets up the environment for the web renderer to compile in. This guard sets the location that assets will be served from
-pub(crate) struct AssetConfigDropGuard;
-
-impl AssetConfigDropGuard {
-    pub fn new(base_path: Option<&str>) -> Self {
-        // Set up the collect asset config
-        let base = match base_path {
-            Some(base) => format!("/{}/", base.trim_matches('/')),
-            None => "/".to_string(),
-        };
-        manganis_cli_support::Config::default()
-            .with_assets_serve_location(base)
-            .save();
-        Self {}
-    }
-}
-
-impl Drop for AssetConfigDropGuard {
-    fn drop(&mut self) {
-        // Reset the config
-        manganis_cli_support::Config::default().save();
-    }
 }
 
 pub(crate) fn copy_dir_to(

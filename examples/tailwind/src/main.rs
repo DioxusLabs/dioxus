@@ -2,8 +2,6 @@
 
 use dioxus::prelude::*;
 
-const _STYLE: &str = asset!("public/tailwind.css");
-
 fn main() {
     launch(app);
 }
@@ -11,6 +9,7 @@ fn main() {
 pub fn app() -> Element {
     let grey_background = true;
     rsx!(
+        Stylesheet { href: asset!("/public/tailwind.css") }
         div {
             header {
                 class: "text-gray-400 body-font",

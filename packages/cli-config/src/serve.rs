@@ -58,9 +58,10 @@ impl RuntimeCLIArguments {
 
     /// Attempt to read the current serve settings from the CLI. This will only be set for the fullstack platform on recent versions of the CLI.
     pub fn from_cli() -> Option<Self> {
-        std::env::var(crate::__private::SERVE_ENV)
-            .ok()
-            .and_then(|json| serde_json::from_str(&json).ok())
+        None
+        // std::env::var(crate::__private::SERVE_ENV)
+        //     .ok()
+        //     .and_then(|json| serde_json::from_str(&json).ok())
     }
 
     /// Get the address the server should run on

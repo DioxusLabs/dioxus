@@ -94,11 +94,12 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.1" }
 
 manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"], path = "../ecosystem-dioxus/manganis/packages/cli-support" }
 manganis = { version = "0.3.0-alpha.0", default-features = false, features = ["macro"], path = "../ecosystem-dioxus/manganis/packages/manganis" }
+warnings = { version = "0.2.0" }
+
 # manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"] }
 # manganis = { version = "0.3.0-alpha.0", default-features = false }
 # manganis-cli-support = { version = "0.3.0-alpha.1", features = ["html"] }
 # manganis = { version = "0.3.0-alpha.1", default-features = false, features = ["html", "macro"]}
-warnings = { version = "0.2.0" }
 
 
 # a fork of pretty please for tests

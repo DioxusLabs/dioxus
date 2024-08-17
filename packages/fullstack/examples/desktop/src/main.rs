@@ -12,7 +12,7 @@ fn main() {
 }
 
 /// Run with `cargo run --features server`
-#[cfg(not(feature = "desktop"))]
+#[cfg(all(not(feature = "desktop"), feature = "server"))]
 #[tokio::main]
 async fn main() {
     use server_fn::axum::register_explicit;
