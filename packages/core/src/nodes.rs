@@ -1081,16 +1081,14 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
 #[cfg(feature = "manganis")]
 impl IntoAttributeValue for manganis::ImageAsset {
     fn into_value(self) -> AttributeValue {
-        todo!()
-        // AttributeValue::Text(self.path().to_string())
+        AttributeValue::Text(self.to_string())
     }
 }
 
 #[cfg(feature = "manganis")]
 impl IntoAttributeValue for manganis::Asset {
     fn into_value(self) -> AttributeValue {
-        todo!()
-        // AttributeValue::Text(self.path().to_string())
+        AttributeValue::Text(self.to_string())
     }
 }
 
