@@ -6,11 +6,12 @@ use crate::assets::copy_dir_to;
 use crate::assets::create_assets_head;
 use crate::assets::{asset_manifest, process_assets, AssetConfigDropGuard};
 use crate::builder::progress::build_cargo;
+use crate::builder::progress::BuildProgressUpdate;
 use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
-use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
+use crate::serve::output::MessageSource;
 use crate::Result;
 use anyhow::Context;
 use dioxus_cli_config::Platform;
@@ -100,9 +101,12 @@ impl BuildRequest {
 
     pub(crate) async fn build(
         &self,
-        mut progress: UnboundedSender<UpdateBuildProgress>,
+        mut progress: UnboundedSender<BuildProgressUpdate>,
     ) -> Result<BuildResult> {
-        tracing::info!("🚅 Running build [Desktop] command...");
+        tracing::info!(
+            dx_src = ?MessageSource::Build,
+            "🚅 Running build [Desktop] command..."
+        );
 
         // Set up runtime guards
         let mut dioxus_version = crate::dx_build_info::PKG_VERSION.to_string();
@@ -137,11 +141,12 @@ impl BuildRequest {
             .context("Failed to post process build")?;
 
         tracing::info!(
+            dx_src = ?MessageSource::Build,
             "🚩 Build completed: [{}]",
-            self.dioxus_crate.out_dir().display()
+            self.dioxus_crate.out_dir().display(),
         );
 
-        _ = progress.start_send(UpdateBuildProgress {
+        _ = progress.start_send(BuildProgressUpdate {
             stage: Stage::Finished,
             update: UpdateStage::Start,
         });
@@ -153,9 +158,9 @@ impl BuildRequest {
         &self,
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
+        progress: &mut UnboundedSender<BuildProgressUpdate>,
     ) -> Result<BuildResult> {
-        _ = progress.start_send(UpdateBuildProgress {
+        _ = progress.start_send(BuildProgressUpdate {
             stage: Stage::OptimizingAssets,
             update: UpdateStage::Start,
         });
@@ -199,7 +204,7 @@ impl BuildRequest {
     async fn collect_assets(
         &self,
         cargo_args: Vec<String>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
+        progress: &mut UnboundedSender<BuildProgressUpdate>,
     ) -> anyhow::Result<Option<AssetManifest>> {
         // If this is the server build, the client build already copied any assets we need
         if self.target_platform == TargetPlatform::Server {
@@ -238,7 +243,7 @@ impl BuildRequest {
     }
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
-        tracing::info!("Copying public assets to the output directory...");
+        tracing::info!(dx_src = ?MessageSource::Build, "Copying public assets to the output directory...");
         let out_dir = self.target_out_dir();
         let asset_dir = self.dioxus_crate.asset_dir();
 

@@ -1,10 +1,11 @@
 use super::BuildRequest;
 use super::BuildResult;
 use crate::assets::pre_compress_folder;
+use crate::builder::progress::BuildProgressUpdate;
 use crate::builder::progress::Stage;
-use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
+use crate::serve::output::MessageSource;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use std::path::Path;
@@ -14,7 +15,7 @@ use wasm_bindgen_cli_support::Bindgen;
 // Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
 async fn update_wasm_bindgen_version() -> Result<()> {
     let cli_bindgen_version = wasm_bindgen_shared::version();
-    tracing::info!("Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
+    tracing::info!(dx_src = ?MessageSource::Build, "Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
 
     let output = Command::new("cargo")
         .args([
@@ -29,7 +30,7 @@ async fn update_wasm_bindgen_version() -> Result<()> {
     let mut error_message = None;
     if let Ok(output) = output {
         if output.status.success() {
-            tracing::info!("Successfully updated wasm-bindgen to {cli_bindgen_version}");
+            tracing::info!(dx_src = ?MessageSource::Build, "Successfully updated wasm-bindgen to {cli_bindgen_version}");
             return Ok(());
         } else {
             error_message = Some(output);
@@ -45,7 +46,7 @@ async fn update_wasm_bindgen_version() -> Result<()> {
 
 /// Check if the wasm32-unknown-unknown target is installed and try to install it if not
 pub(crate) async fn install_web_build_tooling(
-    progress: &mut UnboundedSender<UpdateBuildProgress>,
+    progress: &mut UnboundedSender<BuildProgressUpdate>,
 ) -> Result<()> {
     // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
     // Otherwise we can just assume it is installed - which is not great...
@@ -53,11 +54,11 @@ pub(crate) async fn install_web_build_tooling(
     if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output().await {
         let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
         if !wasm_check_output.contains("wasm32-unknown-unknown") {
-            _ = progress.start_send(UpdateBuildProgress {
+            _ = progress.start_send(BuildProgressUpdate {
                 stage: Stage::InstallingWasmTooling,
                 update: UpdateStage::Start,
             });
-            tracing::info!("wasm32-unknown-unknown target not detected, installing..");
+            tracing::info!(dx_src = ?MessageSource::Build, "wasm32-unknown-unknown target not detected, installing..");
             let _ = Command::new("rustup")
                 .args(["target", "add", "wasm32-unknown-unknown"])
                 .output()
@@ -70,7 +71,7 @@ pub(crate) async fn install_web_build_tooling(
 
 impl BuildRequest {
     async fn run_wasm_bindgen(&self, input_path: &Path, bindgen_outdir: &Path) -> Result<()> {
-        tracing::info!("Running wasm-bindgen");
+        tracing::info!(dx_src = ?MessageSource::Build, "Running wasm-bindgen");
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
         let keep_debug =
@@ -112,9 +113,9 @@ impl BuildRequest {
         &self,
         build_result: &BuildResult,
         assets: Option<&AssetManifest>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
+        progress: &mut UnboundedSender<BuildProgressUpdate>,
     ) -> Result<()> {
-        _ = progress.start_send(UpdateBuildProgress {
+        _ = progress.start_send(BuildProgressUpdate {
             stage: Stage::OptimizingWasm,
             update: UpdateStage::Start,
         });
@@ -137,7 +138,7 @@ impl BuildRequest {
             if self.build_arguments.release {
                 use dioxus_cli_config::WasmOptLevel;
 
-                tracing::info!("Running optimization with wasm-opt...");
+                tracing::info!(dx_src = ?MessageSource::Build, "Running optimization with wasm-opt...");
                 let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {
                     WasmOptLevel::Z => {
                         wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
@@ -162,6 +163,7 @@ impl BuildRequest {
                     .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
                 let new_size = wasm_file.metadata()?.len();
                 tracing::info!(
+                    dx_src = ?MessageSource::Build,
                     "wasm-opt reduced WASM size from {} to {} ({:2}%)",
                     old_size,
                     new_size,

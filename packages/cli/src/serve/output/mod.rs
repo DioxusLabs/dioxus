@@ -1,8 +1,6 @@
 use super::{Builder, Server, Watcher};
 use crate::{
-    builder::{
-        BuildMessage, MessageSource, MessageType, Stage, TargetPlatform, UpdateBuildProgress,
-    },
+    builder::{BuildProgressUpdate, Stage, TargetPlatform},
     dioxus_crate::DioxusCrate,
     serve::next_or_pending,
     tracer::CLILogControl,
@@ -27,7 +25,7 @@ use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     fmt::Display,
     io::{self, stdout},
     ops::{Deref, DerefMut},
@@ -39,7 +37,7 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::{ChildStderr, ChildStdout},
 };
-use tracing::Level;
+use tracing::{field::DebugValue, Level, Value};
 
 mod render;
 
@@ -73,13 +71,12 @@ impl From<TargetPlatform> for LogSource {
 
 #[derive(Default)]
 pub struct BuildProgress {
-    internal_logs: Vec<BuildMessage>,
-    build_logs: HashMap<TargetPlatform, ActiveBuild>,
+    current_builds: HashMap<TargetPlatform, ActiveBuild>,
 }
 
 impl BuildProgress {
     pub fn progress(&self) -> f64 {
-        self.build_logs
+        self.current_builds
             .values()
             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .map(|build| match build.stage {
@@ -189,29 +186,32 @@ pub struct Output {
     // optional since when there's no tty there's no eventstream to read from - just stdin
     events: Option<EventStream>,
 
-    _rustc_version: String,
-    _rustc_nightly: bool,
-    _dx_version: String,
-    interactive: bool,
     pub(crate) build_progress: BuildProgress,
     running_apps: HashMap<TargetPlatform, RunningApp>,
-    is_cli_release: bool,
-    platform: Platform,
+
+    // A list of all messages from build, dev, app, and more.
+    messages: VecDeque<Message>,
 
     num_lines_wrapping: NumLinesWrapping,
     console_height: ConsoleHeight,
     scroll_position: ScrollPosition,
 
+    current_tab: OutputTab,
     more_modal_open: bool,
     anim_start: Instant,
 
-    tab: Tab,
-
+    interactive: bool,
+    is_cli_release: bool,
+    platform: Platform,
     addr: AddressArguments,
+
+    _rustc_version: String,
+    _rustc_nightly: bool,
+    _dx_version: String,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-enum Tab {
+enum OutputTab {
     Console,
     BuildLog,
 }
@@ -225,7 +225,7 @@ impl Output {
         let mut events = None;
 
         if interactive {
-            log_control.tui_enabled.store(true, Ordering::SeqCst);
+            log_control.output_enabled.store(true, Ordering::SeqCst);
             enable_raw_mode()?;
             stdout()
                 .execute(EnableMouseCapture)?
@@ -280,6 +280,7 @@ impl Output {
             interactive,
             is_cli_release,
             platform,
+            messages: VecDeque::new(),
             more_modal_open: false,
             build_progress: Default::default(),
             running_apps: HashMap::new(),
@@ -287,14 +288,14 @@ impl Output {
             console_height: ConsoleHeight::zero(),
             num_lines_wrapping: NumLinesWrapping::zero(),
             anim_start: Instant::now(),
-            tab: Tab::BuildLog,
+            current_tab: OutputTab::BuildLog,
             addr: cfg.server_arguments.address.clone(),
         })
     }
 
     /// Add a message from stderr to the logs
     fn push_stderr(&mut self, platform: TargetPlatform, stderr: String) {
-        self.set_tab(Tab::BuildLog);
+        self.set_tab(OutputTab::Console);
 
         self.running_apps
             .get_mut(&platform)
@@ -304,16 +305,13 @@ impl Output {
             .unwrap()
             .stderr_line
             .push_str(&stderr);
-        self.build_progress
-            .build_logs
-            .get_mut(&platform)
-            .unwrap()
-            .messages
-            .push(BuildMessage {
-                level: Level::ERROR,
-                message: MessageType::Text(stderr),
-                source: MessageSource::App,
-            });
+
+        self.messages.push_front(Message {
+            source: MessageSource::App(platform),
+            level: Level::ERROR,
+            content: stderr,
+            output_tab: OutputTab::Console,
+        });
     }
 
     /// Add a message from stdout to the logs
@@ -326,16 +324,13 @@ impl Output {
             .unwrap()
             .stdout_line
             .push_str(&stdout);
-        self.build_progress
-            .build_logs
-            .get_mut(&platform)
-            .unwrap()
-            .messages
-            .push(BuildMessage {
-                level: Level::INFO,
-                message: MessageType::Text(stdout),
-                source: MessageSource::App,
-            });
+
+        self.messages.push_front(Message {
+            source: MessageSource::App(platform),
+            level: Level::INFO,
+            content: stdout,
+            output_tab: OutputTab::Console,
+        });
     }
 
     /// Wait for either the ctrl_c handler or the next event
@@ -383,7 +378,7 @@ impl Output {
             }
         };
 
-        let tui_log_rx = &mut self.log_control.tui_rx;
+        let tui_log_rx = &mut self.log_control.output_rx;
         let next_tui_log = next_or_pending(tui_log_rx.next());
 
         tokio::select! {
@@ -398,11 +393,7 @@ impl Output {
 
             // Handle internal CLI tracing logs.
             log = next_tui_log => {
-                self.push_log(LogSource::Internal, BuildMessage {
-                    level: Level::INFO,
-                    message: MessageType::Text(log),
-                    source: MessageSource::Dev,
-                });
+                self.push_log(log);
             }
 
             event = user_input => {
@@ -418,7 +409,9 @@ impl Output {
     pub fn shutdown(&mut self) -> io::Result<()> {
         // if we're a tty then we need to disable the raw mode
         if self.interactive {
-            self.log_control.tui_enabled.store(false, Ordering::SeqCst);
+            self.log_control
+                .output_enabled
+                .store(false, Ordering::SeqCst);
             disable_raw_mode()?;
             stdout()
                 .execute(DisableMouseCapture)?
@@ -435,36 +428,11 @@ impl Output {
     /// versions of the cli would just eat build logs making debugging issues harder than they needed
     /// to be.
     fn drain_print_logs(&mut self) {
-        fn log_build_message(platform: &LogSource, message: &BuildMessage) {
-            match &message.message {
-                MessageType::Text(text) => {
-                    for line in text.lines() {
-                        println!("{platform}: {line}");
-                    }
-                }
-                MessageType::Cargo(diagnostic) => {
-                    println!("{platform}: {diagnostic}");
-                }
-            }
-        }
+        let messages = self.messages.drain(..);
 
-        // todo: print the build info here for the most recent build, and then the logs of the most recent build
-        for (platform, build) in self.build_progress.build_logs.iter_mut() {
-            if build.messages.is_empty() {
-                continue;
-            }
-
-            let messages = build.messages.drain(0..);
-
-            for message in messages {
-                log_build_message(&LogSource::Target(*platform), &message);
-            }
-        }
-
-        // Log the internal logs
-        let messaegs = self.build_progress.internal_logs.drain(..);
-        for message in messaegs {
-            log_build_message(&LogSource::Internal, &message);
+        for msg in messages {
+            // TODO: Better formatting for different content lengths.
+            println!("[{}] {}: {}", msg.source, msg.level, msg.content);
         }
     }
 
@@ -524,16 +492,10 @@ impl Output {
             }
             Event::Key(key) if key.code == KeyCode::Char('c') => {
                 // Clear the currently selected build logs.
-                for build in self.build_progress.build_logs.values_mut() {
-                    let msgs = match self.tab {
-                        Tab::Console => &mut build.stdout_logs,
-                        Tab::BuildLog => &mut build.messages,
-                    };
-                    msgs.clear();
-                }
+                self.messages.retain(|m| m.output_tab != self.current_tab);
             }
-            Event::Key(key) if key.code == KeyCode::Char('1') => self.set_tab(Tab::Console),
-            Event::Key(key) if key.code == KeyCode::Char('2') => self.set_tab(Tab::BuildLog),
+            Event::Key(key) if key.code == KeyCode::Char('1') => self.set_tab(OutputTab::Console),
+            Event::Key(key) if key.code == KeyCode::Char('2') => self.set_tab(OutputTab::BuildLog),
             Event::Resize(_width, _height) => {
                 // nothing, it should take care of itself
             }
@@ -559,38 +521,34 @@ impl Output {
         platform: TargetPlatform,
         message: axum::extract::ws::Message,
     ) {
+        // Deccode the message and push it to our logs.
         if let axum::extract::ws::Message::Text(text) = message {
             let msg = serde_json::from_str::<ClientMsg>(text.as_str());
             match msg {
                 Ok(ClientMsg::Log { level, messages }) => {
-                    self.push_log(
-                        platform,
-                        BuildMessage {
-                            level: match level.as_str() {
-                                "info" => Level::INFO,
-                                "warn" => Level::WARN,
-                                "error" => Level::ERROR,
-                                "debug" => Level::DEBUG,
-                                _ => Level::INFO,
-                            },
-                            message: MessageType::Text(
-                                // todo: the js console is giving us a list of params, not formatted text
-                                // we need to translate its styling into our own
-                                messages.first().unwrap_or(&String::new()).clone(),
-                            ),
-                            source: MessageSource::App,
-                        },
-                    );
+                    let level = match level.as_str() {
+                        "trace" => Level::TRACE,
+                        "debug" => Level::DEBUG,
+                        "info" => Level::INFO,
+                        "warn" => Level::WARN,
+                        "error" => Level::ERROR,
+                        _ => Level::INFO,
+                    };
+
+                    let content = messages.first().unwrap_or(&String::new()).clone();
+
+                    self.push_log(Message::new(MessageSource::App(platform), level, content));
                 }
                 Err(err) => {
-                    self.push_log(
-                        platform,
-                        BuildMessage {
-                            level: Level::ERROR,
-                            source: MessageSource::Dev,
-                            message: MessageType::Text(format!("Error parsing app message: {err}")),
-                        },
-                    );
+                    self.push_log(Message::new(
+                        MessageSource::Dev,
+                        Level::ERROR,
+                        format!(
+                            "Error parsing message from {}: {}",
+                            platform.to_string(),
+                            err
+                        ),
+                    ));
                 }
             }
         }
@@ -598,7 +556,7 @@ impl Output {
 
     // todo: re-enable
     #[allow(unused)]
-    fn is_snapped(&self, _platform: LogSource) -> bool {
+    fn is_snapped(&self) -> bool {
         true
         // let prev_scrol = self
         //     .num_lines_with_wrapping
@@ -613,40 +571,29 @@ impl Output {
             .into();
     }
 
-    pub fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
-        let source = platform.into();
-        let snapped = self.is_snapped(source);
+    pub fn push_log(&mut self, message: Message) {
+        self.messages.push_front(message);
 
-        match source {
-            LogSource::Internal => self.build_progress.internal_logs.push(message),
-            LogSource::Target(platform) => self
-                .build_progress
-                .build_logs
-                .entry(platform)
-                .or_default()
-                .stdout_logs
-                .push(message),
-        }
-
-        if snapped {
-            self.scroll_to_bottom();
-        }
+        // TODO: Snapping
+        //let snapped = self.is_snapped(source);
+        // if snapped {
+        //     self.scroll_to_bottom();
+        // }
     }
 
-    pub fn new_build_logs(&mut self, platform: TargetPlatform, update: UpdateBuildProgress) {
-        let snapped = self.is_snapped(LogSource::Target(platform));
-
+    pub fn new_build_progress(&mut self, platform: TargetPlatform, update: BuildProgressUpdate) {
         // when the build is finished, switch to the console
         if update.stage == Stage::Finished {
-            self.tab = Tab::Console;
+            self.current_tab = OutputTab::Console;
         }
 
         self.build_progress
-            .build_logs
+            .current_builds
             .entry(platform)
             .or_default()
             .update(update);
 
+        let snapped = self.is_snapped();
         if snapped {
             self.scroll_to_bottom();
         }
@@ -684,7 +631,7 @@ impl Output {
             self.running_apps.insert(platform, app);
 
             // Finish the build progress for the platform that just finished building
-            if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
+            if let Some(build) = self.build_progress.current_builds.get_mut(&platform) {
                 build.stage = Stage::Finished;
             }
         }
@@ -724,12 +671,12 @@ impl Output {
                 self.num_lines_wrapping = layout.render_console(
                     frame,
                     self.scroll_position,
-                    self.tab,
-                    &self.build_progress,
+                    self.current_tab,
+                    &self.messages,
                 );
 
                 // Render info bar, status bar, and borders.
-                layout.render_info_bar(frame, self.tab);
+                layout.render_info_bar(frame, self.current_tab);
                 layout.render_status_bar(
                     frame,
                     self.is_cli_release,
@@ -776,8 +723,8 @@ impl Output {
         Ok(false)
     }
 
-    fn set_tab(&mut self, tab: Tab) {
-        self.tab = tab;
+    fn set_tab(&mut self, new_tab: OutputTab) {
+        self.current_tab = new_tab;
         self.scroll_position = ScrollPosition::zero();
     }
 }
@@ -785,14 +732,12 @@ impl Output {
 #[derive(Default, Debug, PartialEq)]
 pub struct ActiveBuild {
     stage: Stage,
-    messages: Vec<BuildMessage>,
-    stdout_logs: Vec<BuildMessage>,
     progress: f64,
     failed: Option<String>,
 }
 
 impl ActiveBuild {
-    fn update(&mut self, update: UpdateBuildProgress) {
+    fn update(&mut self, update: BuildProgressUpdate) {
         match update.update {
             UpdateStage::Start => {
                 // If we are already past the stage, don't roll back
@@ -802,9 +747,6 @@ impl ActiveBuild {
                 self.stage = update.stage;
                 self.progress = 0.0;
                 self.failed = None;
-            }
-            UpdateStage::AddMessage(message) => {
-                self.messages.push(message);
             }
             UpdateStage::SetProgress(progress) => {
                 self.progress = progress;
@@ -898,22 +840,73 @@ struct RunningAppOutput {
     stderr_line: String,
 }
 
+#[derive(Clone, PartialEq)]
 pub struct Message {
-    source: MessageSource,
-    level: MessageLevel,
-    content: String,
+    pub source: MessageSource,
+    pub level: Level,
+    pub content: String,
+    output_tab: OutputTab,
 }
 
+impl Message {
+    pub fn new(source: MessageSource, level: Level, content: String) -> Self {
+        let output_tab = if source == MessageSource::Build {
+            OutputTab::BuildLog
+        } else {
+            OutputTab::Console
+        };
+
+        Self {
+            source,
+            level,
+            content,
+            output_tab,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub enum MessageSource {
     App(TargetPlatform),
     Dev,
     Build,
+    /// Avoid using this
+    Unknown,
 }
 
-pub enum MessageLevel {
-    Trace,
-    Debug,
-    Info,
-    Warn,
-    Error,
+impl std::fmt::Debug for MessageSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let as_string = self.to_string();
+        write!(f, "{as_string}")
+    }
+}
+
+impl From<String> for MessageSource {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "dev" => Self::Dev,
+            "build" => Self::Build,
+            "web" => Self::App(TargetPlatform::Web),
+            "desktop" => Self::App(TargetPlatform::Desktop),
+            "server" => Self::App(TargetPlatform::Server),
+            "liveview" => Self::App(TargetPlatform::Liveview),
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl Display for MessageSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::App(platform) => match platform {
+                TargetPlatform::Web => write!(f, "web"),
+                TargetPlatform::Desktop => write!(f, "desktop"),
+                TargetPlatform::Server => write!(f, "server"),
+                TargetPlatform::Liveview => write!(f, "server"),
+            },
+            Self::Dev => write!(f, "dev"),
+            Self::Build => write!(f, "build"),
+            Self::Unknown => write!(f, "n/a"),
+        }
+    }
 }

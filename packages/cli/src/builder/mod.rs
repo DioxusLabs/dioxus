@@ -14,9 +14,7 @@ mod fullstack;
 mod prepare_html;
 mod progress;
 mod web;
-pub use progress::{
-    BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
-};
+pub use progress::{BuildProgressUpdate, Stage, UpdateStage};
 
 /// The target platform for the build
 /// This is very similar to the Platform enum, but we need to be able to differentiate between the

@@ -2,6 +2,7 @@ use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath};
 use cargo_metadata::Metadata;
 use std::path::Path;
+use crate::serve::output::MessageSource;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
@@ -166,7 +167,7 @@ pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
-    tracing::info!("Generated project at {}", path.display());
+    tracing::info!(dx_src = ?MessageSource::Build, "Generated project at {}", path.display());
 
     Ok(())
 }

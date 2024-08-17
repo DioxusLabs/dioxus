@@ -1,7 +1,6 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
-use super::{BuildRequest, UpdateBuildProgress};
-use crate::builder::progress::MessageSource;
+use super::{BuildProgressUpdate, BuildRequest};
 use crate::builder::Stage;
 use crate::Result;
 use futures_channel::mpsc::UnboundedSender;
@@ -17,7 +16,7 @@ impl BuildRequest {
     pub(crate) fn prepare_html(
         &self,
         assets: Option<&AssetManifest>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
+        progress: &mut UnboundedSender<BuildProgressUpdate>,
     ) -> Result<String> {
         let mut html = html_or_default(&self.dioxus_crate.crate_dir());
 
@@ -42,7 +41,7 @@ impl BuildRequest {
         &self,
         html: &mut String,
         assets: Option<&AssetManifest>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
+        progress: &mut UnboundedSender<BuildProgressUpdate>,
     ) -> Result<()> {
         // Collect all resources into a list of styles and scripts
         let resources = &self.dioxus_crate.dioxus_config.web.resource;
@@ -141,7 +140,7 @@ impl BuildRequest {
 
     fn send_resource_deprecation_warning(
         &self,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
+        progress: &mut UnboundedSender<BuildProgressUpdate>,
         paths: Vec<PathBuf>,
         variant: ResourceType,
     ) {
@@ -187,14 +186,15 @@ impl BuildRequest {
         "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
     );
 
-        _ = progress.unbounded_send(UpdateBuildProgress {
-            stage: Stage::OptimizingWasm,
-            update: super::UpdateStage::AddMessage(super::BuildMessage {
-                level: Level::WARN,
-                message: super::MessageType::Text(message),
-                source: MessageSource::Build,
-            }),
-        });
+        // TODO: this
+        // _ = progress.unbounded_send(BuildProgressUpdate {
+        //     stage: Stage::OptimizingWasm,
+        //     update: super::UpdateStage::AddMessage(super::BuildMessage {
+        //         level: Level::WARN,
+        //         message: super::MessageType::Text(message),
+        //         source: MessageSource::Build,
+        //     }),
+        // });
     }
 }
 

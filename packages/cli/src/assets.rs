@@ -1,6 +1,4 @@
-use crate::builder::{
-    BuildMessage, BuildRequest, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
-};
+use crate::builder::{BuildProgressUpdate, BuildRequest, Stage, UpdateStage};
 use crate::Result;
 use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
@@ -15,6 +13,7 @@ use std::{ffi::OsString, path::PathBuf};
 use std::{fs::File, io::Write};
 use tracing::Level;
 use walkdir::WalkDir;
+use crate::serve::output::MessageSource;
 
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";
@@ -41,7 +40,7 @@ pub fn create_assets_head(build: &BuildRequest, manifest: &AssetManifest) -> Res
 pub(crate) fn process_assets(
     build: &BuildRequest,
     manifest: &AssetManifest,
-    progress: &mut UnboundedSender<UpdateBuildProgress>,
+    progress: &mut UnboundedSender<BuildProgressUpdate>,
 ) -> anyhow::Result<()> {
     let static_asset_output_dir = build.target_out_dir();
 
@@ -58,20 +57,22 @@ pub(crate) fn process_assets(
                 match process_file(file_asset, &static_asset_output_dir) {
                     Ok(_) => {
                         // Update the progress
-                        _ = progress.start_send(UpdateBuildProgress {
-                            stage: Stage::OptimizingAssets,
-                            update: UpdateStage::AddMessage(BuildMessage {
-                                level: Level::INFO,
-                                message: MessageType::Text(format!(
-                                    "Optimized static asset {}",
-                                    file_asset
-                                )),
-                                source: MessageSource::Build,
-                            }),
-                        });
+                        // TODO: this
+                        // _ = progress.start_send(BuildProgressUpdate {
+                        //     stage: Stage::OptimizingAssets,
+                        //     update: UpdateStage::SetMessage(BuildMessage {
+                        //         level: Level::INFO,
+                        //         message: MessageType::Text(format!(
+                        //             "Optimized static asset {}",
+                        //             file_asset
+                        //         )),
+                        //         source: MessageSource::Build,
+                        //     }),
+                        // });
+                        tracing::info!(dx_src = ?MessageSource::Build, "Optimized static asset {file_asset}");
                         let assets_finished =
                             assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        _ = progress.start_send(UpdateBuildProgress {
+                        _ = progress.start_send(BuildProgressUpdate {
                             stage: Stage::OptimizingAssets,
                             update: UpdateStage::SetProgress(
                                 assets_finished as f64 / asset_count as f64,
@@ -79,7 +80,7 @@ pub(crate) fn process_assets(
                         });
                     }
                     Err(err) => {
-                        tracing::error!("Failed to copy static asset: {}", err);
+                        tracing::error!(dx_src = ?MessageSource::Build, "Failed to copy static asset: {}", err);
                         return Err(err);
                     }
                 }

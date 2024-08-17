@@ -1,7 +1,7 @@
 use std::future::{poll_fn, Future, IntoFuture};
 use std::task::Poll;
 
-use crate::builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage};
+use crate::builder::{BuildProgressUpdate, Stage, TargetPlatform, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
 use crate::tracer::CLILogControl;
@@ -12,7 +12,7 @@ use tokio::task::yield_now;
 mod builder;
 mod hot_reloading_file_map;
 mod logs_tab;
-mod output;
+pub mod output;
 mod proxy;
 mod server;
 mod watcher;
@@ -54,6 +54,8 @@ pub async fn serve_all(
     dioxus_crate: DioxusCrate,
     log_control: CLILogControl,
 ) -> Result<()> {
+    // Start the screen first so we collect build logs.
+    let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
     let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
@@ -61,7 +63,6 @@ pub async fn serve_all(
 
     let mut server = Server::start(&serve, &dioxus_crate);
     let mut watcher = Watcher::start(&serve, &dioxus_crate);
-    let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
 
     let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
 
@@ -129,14 +130,14 @@ pub async fn serve_all(
                 match application {
                     Ok(BuilderUpdate::Progress { platform, update }) => {
                         let update_clone = update.clone();
-                        screen.new_build_logs(platform, update_clone);
+                        screen.new_build_progress(platform, update_clone);
                         server.update_build_status(screen.build_progress.progress(), update.stage.to_string()).await;
 
                         match update {
                             // Send rebuild start message.
-                            UpdateBuildProgress { stage: Stage::Compiling, update: UpdateStage::Start } => server.send_reload_start().await,
+                            BuildProgressUpdate { stage: Stage::Compiling, update: UpdateStage::Start } => server.send_reload_start().await,
                             // Send rebuild failed message.
-                            UpdateBuildProgress { stage: Stage::Finished, update: UpdateStage::Failed(_) } => server.send_reload_failed().await,
+                            BuildProgressUpdate { stage: Stage::Finished, update: UpdateStage::Failed(_) } => server.send_reload_failed().await,
                             _ => {},
                         }
                     }

@@ -9,8 +9,11 @@
 //! ---BORDER---
 //! -STATUS BAR-
 
-use super::{BuildProgress, ConsoleHeight, NumLinesWrapping, ScrollPosition, Tab};
-use crate::builder::{BuildMessage, MessageSource, MessageType};
+use super::{
+    BuildProgress, ConsoleHeight, Message, MessageSource, NumLinesWrapping, OutputTab,
+    ScrollPosition,
+};
+use ansi_to_tui::IntoText;
 use dioxus_cli_config::Platform;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -22,7 +25,8 @@ use ratatui::{
     },
     Frame,
 };
-use std::rc::Rc;
+use std::{collections::VecDeque, rc::Rc};
+use tracing::Level;
 
 pub struct TuiLayout {
     /// The console where build logs are displayed.
@@ -105,80 +109,59 @@ impl TuiLayout {
         &self,
         frame: &mut Frame,
         scroll: ScrollPosition,
-        current_tab: Tab,
-        build_progress: &BuildProgress,
-        messages: Vec<Message>,
+        current_tab: OutputTab,
+        messages: &VecDeque<Message>,
     ) -> NumLinesWrapping {
-        // TODO: This doesn't render logs in the order they were created.
-        // TODO: Clean and fix this.
-        // TODO: We need a single buffer of logs.
+        // TODO: Fancy filtering support "show me only app logs from web"
+        // TODO: This is showing messages in reverse.
 
         let console = self.console[0];
+        let mut out_text = Text::default();
 
-        // We're going to assemble a text buffer directly and then let the paragraph widgets
-        // handle the wrapping and scrolling
-        let mut paragraph_text: Text<'_> = Text::default();
+        // Filter logs for current tab.
+        // Display in order they were created.
+        let msgs = messages.iter().filter(|m| m.output_tab == current_tab);
 
-        let mut add_build_message = |message: &BuildMessage| {
-            use ansi_to_tui::IntoText;
-            match &message.message {
-                MessageType::Text(line) => {
-                    for line in line.lines() {
-                        let text = line.into_text().unwrap_or_default();
-                        for line in text.lines {
-                            let source = format!("[{}] ", message.source);
+        for msg in msgs {
+            for line in msg.content.lines() {
+                let text = line.into_text().unwrap_or_default();
+                for line in text.lines {
+                    let source = format!("[{}]", msg.source);
+                    let source_span = Span::from(source);
+                    let source_span = match msg.source {
+                        MessageSource::App(_) => source_span.light_blue(),
+                        MessageSource::Dev => source_span.dark_gray(),
+                        MessageSource::Build => source_span.light_yellow(),
+                        MessageSource::Unknown => source_span.black(),
+                    };
 
-                            let msg_span = Span::from(source);
-                            let msg_span = match message.source {
-                                MessageSource::App => msg_span.light_blue(),
-                                MessageSource::Dev => msg_span.dark_gray(),
-                                MessageSource::Build => msg_span.light_yellow(),
-                            };
+                    let level = format!(" {}: ", msg.level);
+                    let level_span = Span::from(level);
+                    let level_span = match msg.level {
+                        Level::TRACE => level_span.black(),
+                        Level::DEBUG => level_span.light_magenta(),
+                        Level::INFO => level_span.light_blue(),
+                        Level::WARN => level_span.light_yellow(),
+                        Level::ERROR => level_span.light_red(),
+                    };
 
-                            let mut out_line = vec![msg_span];
-                            for span in line.spans {
-                                out_line.push(span);
-                            }
-                            let newline = Line::from(out_line);
-                            paragraph_text.push_line(newline);
-                        }
+                    let mut out_line = vec![source_span, level_span];
+                    for span in line.spans {
+                        out_line.push(span);
                     }
+                    out_text.push_line(Line::from(out_line));
                 }
-                MessageType::Cargo(diagnostic) => {
-                    let diagnostic = diagnostic.rendered.as_deref().unwrap_or_default();
-
-                    for line in diagnostic.lines() {
-                        paragraph_text.extend(line.into_text().unwrap_or_default());
-                    }
-                }
-            };
-        };
-
-        // First log each platform's build logs
-        for platform in build_progress.build_logs.keys() {
-            let build = build_progress.build_logs.get(platform).unwrap();
-
-            let msgs = match current_tab {
-                Tab::Console => &build.stdout_logs,
-                Tab::BuildLog => &build.messages,
-            };
-
-            for span in msgs.iter() {
-                add_build_message(span);
             }
         }
-        // Then log the internal logs
-        for message in build_progress.internal_logs.iter() {
-            add_build_message(message);
-        }
 
-        let paragraph = Paragraph::new(paragraph_text)
+        let paragraph = Paragraph::new(out_text)
             .left_aligned()
             .wrap(Wrap { trim: false });
 
         let console_height = self.get_console_height();
         let num_lines_wrapping = NumLinesWrapping(paragraph.line_count(console.width) as u16);
 
+        // Render scrollbar
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None)
@@ -210,18 +193,18 @@ impl TuiLayout {
     }
 
     /// Render the info bar.
-    pub fn render_info_bar(&self, frame: &mut Frame, current_tab: Tab) {
+    pub fn render_info_bar(&self, frame: &mut Frame, current_tab: OutputTab) {
         let mut console_line = Span::from("[1] console");
         let mut build_line = Span::from("[2] build");
         let divider = Span::from("  | ").gray();
 
         // Display the current tab
         match current_tab {
-            Tab::Console => {
+            OutputTab::Console => {
                 console_line = console_line.fg(Color::LightYellow);
                 build_line = build_line.fg(Color::DarkGray);
             }
-            Tab::BuildLog => {
+            OutputTab::BuildLog => {
                 build_line = build_line.fg(Color::LightYellow);
                 console_line = console_line.fg(Color::DarkGray);
             }
@@ -266,12 +249,12 @@ impl TuiLayout {
         ];
 
         // If there is build progress, render the current status.
-        let is_build_progress = !build_progress.build_logs.is_empty();
+        let is_build_progress = !build_progress.current_builds.is_empty();
         if is_build_progress {
             // If the build failed, show a failed status.
             // Otherwise, render current status.
             let build_failed = build_progress
-                .build_logs
+                .current_builds
                 .values()
                 .any(|b| b.failed.is_some());
 
@@ -280,7 +263,7 @@ impl TuiLayout {
             } else {
                 spans.push(Span::from("status: ").green());
                 let build = build_progress
-                    .build_logs
+                    .current_builds
                     .values()
                     .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                     .unwrap();
