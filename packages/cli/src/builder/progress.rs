@@ -173,12 +173,8 @@ pub(crate) async fn build_cargo(
         match message {
             Message::CompilerMessage(msg) => {
                 let message = msg.message;
-                // TODO: this
-                // _ = progress.start_send(BuildProgressUpdate {
-                //     stage: Stage::Compiling,
-                //     update: UpdateStage::AddMessage(message.clone().into()),
-                // });
-                tracing::info!(dx_src = ?MessageSource::Cargo, "{}", message.to_string());
+                tracing::info!(dx_src = ?MessageSource::Cargo, dx_no_fmt = true, "{}", message.to_string());
+                tracing::info!(dx_src = ?MessageSource::Dev, cool_value = true, other_value = 32, "hi there");
                 
                 const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
                     cargo_metadata::diagnostic::DiagnosticLevel::Help,
@@ -223,16 +219,7 @@ pub(crate) async fn build_cargo(
                 }
             }
             Message::TextLine(line) => {
-                tracing::debug!(dx_src = ?MessageSource::Cargo, "{}", line);
-                // TODO: this
-                // _ = progress.start_send(BuildProgressUpdate {
-                //     stage: Stage::Compiling,
-                //     update: UpdateStage::AddMessage(BuildMessage {
-                //         level: Level::DEBUG,
-                //         message: MessageType::Text(line),
-                //         source: MessageSource::Build,
-                //     }),
-                // });
+                tracing::info!(dx_src = ?MessageSource::Cargo, dx_no_fmt = true, "{}", line);
             }
             _ => {
                 // Unknown message

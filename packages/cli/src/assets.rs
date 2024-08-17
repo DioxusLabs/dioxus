@@ -1,4 +1,5 @@
 use crate::builder::{BuildProgressUpdate, BuildRequest, Stage, UpdateStage};
+use crate::serve::output::MessageSource;
 use crate::Result;
 use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
@@ -12,7 +13,6 @@ use std::sync::Arc;
 use std::{ffi::OsString, path::PathBuf};
 use std::{fs::File, io::Write};
 use walkdir::WalkDir;
-use crate::serve::output::MessageSource;
 
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";

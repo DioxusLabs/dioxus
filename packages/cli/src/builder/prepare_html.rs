@@ -36,11 +36,7 @@ impl BuildRequest {
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(
-        &self,
-        html: &mut String,
-        assets: Option<&AssetManifest>,
-    ) -> Result<()> {
+    fn inject_resources(&self, html: &mut String, assets: Option<&AssetManifest>) -> Result<()> {
         // Collect all resources into a list of styles and scripts
         let resources = &self.dioxus_crate.dioxus_config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();

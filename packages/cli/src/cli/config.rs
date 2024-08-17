@@ -1,6 +1,6 @@
 use crate::build::TargetArgs;
-use crate::{metadata::crate_root, CliSettings};
 use crate::serve::output::MessageSource;
+use crate::{metadata::crate_root, CliSettings};
 
 use super::*;
 

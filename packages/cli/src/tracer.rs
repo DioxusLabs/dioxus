@@ -3,7 +3,7 @@ use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::{
     collections::HashMap,
     env,
-    fmt::Write,
+    fmt::{Debug, Write},
     io,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -11,9 +11,13 @@ use std::{
     },
 };
 use tracing::{field::Visit, Subscriber};
-use tracing_subscriber::{fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer};
+use tracing_subscriber::{
+    filter::filter_fn, fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer,
+};
 
 const LOG_ENV: &str = "DIOXUS_LOG";
+const DX_SRC_FLAG: &str = "dx_src";
+const DX_NO_FMT_FLAG: &str = "dx_no_fmt";
 
 /// Build tracing infrastructure.
 pub fn build_tracing() -> CLILogControl {
@@ -54,10 +58,8 @@ pub fn build_tracing() -> CLILogControl {
     let cli_layer = CLILayer::new(output_enabled.clone(), output_tx);
 
     // Build fmt layer
-    let formatter = format::debug_fn(|writer, field, value| match field.name() {
-        "dx_src" => write!(writer, ""),
-        "message" => write!(writer, "{:?}", value),
-        _ => write!(writer, "{}={:?}", field, value),
+    let formatter = format::debug_fn(|writer, field, value| {
+        write!(writer, "{}", format_field(field.name(), value))
     })
     .delimited(" ");
 
@@ -66,7 +68,11 @@ pub fn build_tracing() -> CLILogControl {
     let fmt_layer = tracing_subscriber::fmt::layer()
         .fmt_fields(formatter)
         .with_writer(fmt_writer)
-        .without_time();
+        .without_time()
+        .with_filter(filter_fn(|meta| {
+            // Filter any logs with "dx_no_fmt" as we will handle printing the raw message
+            !meta.fields().iter().any(|f| f.name() == DX_NO_FMT_FLAG)
+        }));
 
     let sub = tracing_subscriber::registry()
         .with(relaxed_filter)
@@ -111,21 +117,29 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        if !self.internal_output_enabled.load(Ordering::SeqCst) {
-            return;
-        }
-
         let meta = event.metadata();
-        let level = meta.level();
 
         let mut visitor = CollectVisitor::new();
         event.record(&mut visitor);
 
+        // If the TUI output is disabled we let fmt subscriber handle the logs
+        // EXCEPT for cargo logs which we just print.
+        if !self.internal_output_enabled.load(Ordering::SeqCst) {
+            if visitor.source == MessageSource::Cargo
+                || event.fields().any(|f| f.name() == DX_NO_FMT_FLAG)
+            {
+                println!("{}", visitor.message);
+            }
+            return;
+        }
+
+        let level = meta.level();
+
         let mut final_msg = String::new();
-        write!(final_msg, "{}", visitor.message).unwrap();
+        write!(final_msg, "{} ", visitor.message).unwrap();
 
         for (field, value) in visitor.fields.iter() {
-            write!(final_msg, "{} = {}", field, value).unwrap();
+            write!(final_msg, "{} ", format_field(field, value)).unwrap();
         }
 
         if visitor.source == MessageSource::Unknown {
@@ -187,7 +201,7 @@ impl Visit for CollectVisitor {
             return;
         }
 
-        if name == "dx_src" {
+        if name == DX_SRC_FLAG {
             self.source = MessageSource::from(value_string);
             self.dx_user_msg = true;
             return;
@@ -233,4 +247,18 @@ impl io::Write for FmtLogWriter {
             Ok(())
         }
     }
+}
+
+/// Formats a tracing field and value, removing any internal fields from the final output.
+fn format_field(field_name: &str, value: &dyn Debug) -> String {
+    let mut out = String::new();
+    match field_name {
+        DX_SRC_FLAG => write!(out, ""),
+        DX_NO_FMT_FLAG => write!(out, ""),
+        "message" => write!(out, "{:?}", value),
+        _ => write!(out, "{}={:?}", field_name, value),
+    }
+    .unwrap();
+
+    out
 }

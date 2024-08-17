@@ -1,8 +1,8 @@
 use super::*;
+use crate::serve::output::MessageSource;
 use cargo_generate::{GenerateArgs, TemplatePath};
 use cargo_metadata::Metadata;
 use std::path::Path;
-use crate::serve::output::MessageSource;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
