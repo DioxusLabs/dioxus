@@ -12,7 +12,7 @@ use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!("./examples/assets/calculator.css");
+const STYLE: Asset = asset!("/examples/assets/calculator.css");
 
 fn main() {
     LaunchBuilder::desktop()

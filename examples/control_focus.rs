@@ -6,7 +6,7 @@
 use dioxus::prelude::*;
 use std::rc::Rc;
 
-const STYLE: &str = asset!("./examples/assets/roulette.css");
+const STYLE: Asset = asset!("/examples/assets/roulette.css");
 
 fn main() {
     launch_desktop(app);

@@ -245,7 +245,7 @@ impl ScriptProps {
 ///     rsx! {
 ///         // You can use the Script component to render a script tag into the head of the page
 ///         Script {
-///             src: asset!("./assets/script.js"),
+///             src: asset!("/assets/script.js"),
 ///         }
 ///     }
 /// }
@@ -435,7 +435,7 @@ impl LinkProps {
 ///         // You can use the meta component to render a meta tag into the head of the page
 ///         // This meta tag will redirect the user to the dioxuslabs homepage in 10 seconds
 ///         head::Link {
-///             href: asset!("./assets/style.css"),
+///             href: asset!("/assets/style.css"),
 ///             rel: "stylesheet",
 ///         }
 ///     }

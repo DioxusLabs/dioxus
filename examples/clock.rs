@@ -5,7 +5,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!("./examples/assets/clock.css");
+const STYLE: Asset = asset!("/examples/assets/clock.css");
 
 fn main() {
     launch_desktop(app);
