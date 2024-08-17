@@ -607,7 +607,11 @@ impl<'a> Writer<'a> {
 
         let mut comments = VecDeque::new();
 
-        for (id, line) in self.src[..line_start].iter().enumerate().rev() {
+        let Some(lines) = self.src.get(..line_start) else {
+            return comments;
+        };
+
+        for (id, line) in lines.iter().enumerate().rev() {
             if line.trim().starts_with("//") || line.is_empty() && id != 0 {
                 if id != 0 {
                     comments.push_front(id);
@@ -621,7 +625,11 @@ impl<'a> Writer<'a> {
     }
     fn apply_comments(&mut self, mut comments: VecDeque<usize>) -> Result {
         while let Some(comment_line) = comments.pop_front() {
-            let line = &self.src[comment_line].trim();
+            let Some(line) = self.src.get(comment_line) else {
+                continue;
+            };
+
+            let line = &line.trim();
 
             if line.is_empty() {
                 self.out.new_line()?;
@@ -690,13 +698,15 @@ impl<'a> Writer<'a> {
 
         for attr in attributes {
             if self.current_span_is_primary(attr.span().start()) {
-                'line: for line in self.src[..attr.span().start().line - 1].iter().rev() {
-                    match (line.trim().starts_with("//"), line.is_empty()) {
-                        (true, _) => return 100000,
-                        (_, true) => continue 'line,
-                        _ => break 'line,
+                if let Some(lines) = self.src.get(..attr.span().start().line - 1) {
+                    'line: for line in lines.iter().rev() {
+                        match (line.trim().starts_with("//"), line.is_empty()) {
+                            (true, _) => return 100000,
+                            (_, true) => continue 'line,
+                            _ => break 'line,
+                        }
                     }
-                }
+                };
             }
 
             let name_len = match &attr.name {
@@ -738,7 +748,9 @@ impl<'a> Writer<'a> {
         writeln!(self.out)?;
 
         for idx in start.line..end.line {
-            let line = &self.src[idx];
+            let Some(line) = self.src.get(idx) else {
+                continue;
+            };
             if line.trim().starts_with("//") {
                 for _ in 0..self.out.indent_level + 1 {
                     write!(self.out, "    ")?

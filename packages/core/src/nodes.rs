@@ -288,6 +288,11 @@ impl VNode {
     }
 }
 
+type StaticStr = &'static str;
+type StaticPathArray = &'static [&'static [u8]];
+type StaticTemplateArray = &'static [TemplateNode];
+type StaticTemplateAttributeArray = &'static [TemplateAttribute];
+
 /// A static layout of a UI tree that describes a set of dynamic and static nodes.
 ///
 /// This is the core innovation in Dioxus. Most UIs are made of static nodes, yet participate in diffing like any
@@ -297,14 +302,13 @@ impl VNode {
 /// For this to work properly, the [`Template::name`] *must* be unique across your entire project. This can be done via variety of
 /// ways, with the suggested approach being the unique code location (file, line, col, etc).
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub struct Template {
     /// The list of template nodes that make up the template
     ///
     /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    pub roots: &'static [TemplateNode],
+    pub roots: StaticTemplateArray,
 
     /// The paths of each node relative to the root of the template.
     ///
@@ -314,7 +318,7 @@ pub struct Template {
         feature = "serialize",
         serde(deserialize_with = "deserialize_bytes_leaky")
     )]
-    pub node_paths: &'static [&'static [u8]],
+    pub node_paths: StaticPathArray,
 
     /// The paths of each dynamic attribute relative to the root of the template
     ///
@@ -322,9 +326,9 @@ pub struct Template {
     /// topmost element, not the `roots` field.
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky")
+        serde(deserialize_with = "deserialize_bytes_leaky", bound = "")
     )]
-    pub attr_paths: &'static [&'static [u8]],
+    pub attr_paths: StaticPathArray,
 }
 
 impl std::hash::Hash for Template {
@@ -344,7 +348,9 @@ impl PartialEq for Template {
 }
 
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
+pub(crate) fn deserialize_string_leaky<'a, 'de, D>(
+    deserializer: D,
+) -> Result<&'static str, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -355,7 +361,9 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_bytes_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a [&'a [u8]], D::Error>
+fn deserialize_bytes_leaky<'a, 'de, D>(
+    deserializer: D,
+) -> Result<&'static [&'static [u8]], D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -370,7 +378,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
+pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'static [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
@@ -421,7 +429,11 @@ pub enum TemplateNode {
         /// The name of the element
         ///
         /// IE for a div, it would be the string "div"
-        tag: &'static str,
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky")
+        )]
+        tag: StaticStr,
 
         /// The namespace of the element
         ///
@@ -431,17 +443,20 @@ pub enum TemplateNode {
             feature = "serialize",
             serde(deserialize_with = "deserialize_option_leaky")
         )]
-        namespace: Option<&'static str>,
+        namespace: Option<StaticStr>,
 
         /// A list of possibly dynamic attributes for this element
         ///
         /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`.
-        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-        attrs: &'static [TemplateAttribute],
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_leaky", bound = "")
+        )]
+        attrs: StaticTemplateAttributeArray,
 
         /// A list of template nodes that define another set of template nodes
         #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-        children: &'static [TemplateNode],
+        children: StaticTemplateArray,
     },
 
     /// This template node is just a piece of static text
@@ -449,9 +464,9 @@ pub enum TemplateNode {
         /// The actual text
         #[cfg_attr(
             feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky")
+            serde(deserialize_with = "deserialize_string_leaky", bound = "")
         )]
-        text: &'static str,
+        text: StaticStr,
     },
 
     /// This template node is unknown, and needs to be created at runtime.
@@ -652,15 +667,27 @@ pub enum TemplateAttribute {
         /// The name of this attribute.
         ///
         /// For example, the `href` attribute in `href="https://example.com"`, would have the name "href"
-        name: &'static str,
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky", bound = "")
+        )]
+        name: StaticStr,
 
         /// The value of this attribute, known at compile time
         ///
         /// Currently this only accepts &str, so values, even if they're known at compile time, are not known
-        value: &'static str,
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky", bound = "")
+        )]
+        value: StaticStr,
 
         /// The namespace of this attribute. Does not exist in the HTML spec
-        namespace: Option<&'static str>,
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_option_leaky", bound = "")
+        )]
+        namespace: Option<StaticStr>,
     },
 
     /// The attribute in this position is actually determined dynamically at runtime
