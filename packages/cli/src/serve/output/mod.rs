@@ -25,7 +25,7 @@ use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     fmt::Display,
     io::{self, stdout},
     ops::{Deref, DerefMut},
@@ -37,7 +37,7 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::{ChildStderr, ChildStdout},
 };
-use tracing::{field::DebugValue, Level, Value};
+use tracing::Level;
 
 mod render;
 
@@ -190,7 +190,7 @@ pub struct Output {
     running_apps: HashMap<TargetPlatform, RunningApp>,
 
     // A list of all messages from build, dev, app, and more.
-    messages: VecDeque<Message>,
+    messages: Vec<Message>,
 
     num_lines_wrapping: NumLinesWrapping,
     console_height: ConsoleHeight,
@@ -280,7 +280,7 @@ impl Output {
             interactive,
             is_cli_release,
             platform,
-            messages: VecDeque::new(),
+            messages: Vec::new(),
             more_modal_open: false,
             build_progress: Default::default(),
             running_apps: HashMap::new(),
@@ -306,7 +306,7 @@ impl Output {
             .stderr_line
             .push_str(&stderr);
 
-        self.messages.push_front(Message {
+        self.messages.push(Message {
             source: MessageSource::App(platform),
             level: Level::ERROR,
             content: stderr,
@@ -325,7 +325,7 @@ impl Output {
             .stdout_line
             .push_str(&stdout);
 
-        self.messages.push_front(Message {
+        self.messages.push(Message {
             source: MessageSource::App(platform),
             level: Level::INFO,
             content: stdout,
@@ -432,7 +432,11 @@ impl Output {
 
         for msg in messages {
             // TODO: Better formatting for different content lengths.
-            println!("[{}] {}: {}", msg.source, msg.level, msg.content);
+            if msg.source != MessageSource::Cargo {
+                println!("[{}] {}: {}", msg.source, msg.level, msg.content);
+            } else {
+                println!("{}", msg.content);
+            }
         }
     }
 
@@ -572,7 +576,7 @@ impl Output {
     }
 
     pub fn push_log(&mut self, message: Message) {
-        self.messages.push_front(message);
+        self.messages.push(message);
 
         // TODO: Snapping
         //let snapped = self.is_snapped(source);
@@ -850,10 +854,9 @@ pub struct Message {
 
 impl Message {
     pub fn new(source: MessageSource, level: Level, content: String) -> Self {
-        let output_tab = if source == MessageSource::Build {
-            OutputTab::BuildLog
-        } else {
-            OutputTab::Console
+        let output_tab = match source {
+            MessageSource::Build | MessageSource::Cargo => OutputTab::BuildLog,
+            _ => OutputTab::Console,
         };
 
         Self {
@@ -870,6 +873,8 @@ pub enum MessageSource {
     App(TargetPlatform),
     Dev,
     Build,
+    /// Provides no formatting.
+    Cargo,
     /// Avoid using this
     Unknown,
 }
@@ -886,6 +891,7 @@ impl From<String> for MessageSource {
         match value.as_str() {
             "dev" => Self::Dev,
             "build" => Self::Build,
+            "cargo" => Self::Cargo,
             "web" => Self::App(TargetPlatform::Web),
             "desktop" => Self::App(TargetPlatform::Desktop),
             "server" => Self::App(TargetPlatform::Server),
@@ -906,6 +912,7 @@ impl Display for MessageSource {
             },
             Self::Dev => write!(f, "dev"),
             Self::Build => write!(f, "build"),
+            Self::Cargo => write!(f, "cargo"),
             Self::Unknown => write!(f, "n/a"),
         }
     }

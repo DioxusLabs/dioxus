@@ -11,7 +11,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::{ffi::OsString, path::PathBuf};
 use std::{fs::File, io::Write};
-use tracing::Level;
 use walkdir::WalkDir;
 use crate::serve::output::MessageSource;
 
@@ -50,6 +49,7 @@ pub(crate) fn process_assets(
     let assets_finished = Arc::new(AtomicUsize::new(0));
     let assets = manifest.assets();
     let asset_count = assets.len();
+
     assets.par_iter().try_for_each_init(
         || progress.clone(),
         move |progress, asset| {
@@ -57,18 +57,6 @@ pub(crate) fn process_assets(
                 match process_file(file_asset, &static_asset_output_dir) {
                     Ok(_) => {
                         // Update the progress
-                        // TODO: this
-                        // _ = progress.start_send(BuildProgressUpdate {
-                        //     stage: Stage::OptimizingAssets,
-                        //     update: UpdateStage::SetMessage(BuildMessage {
-                        //         level: Level::INFO,
-                        //         message: MessageType::Text(format!(
-                        //             "Optimized static asset {}",
-                        //             file_asset
-                        //         )),
-                        //         source: MessageSource::Build,
-                        //     }),
-                        // });
                         tracing::info!(dx_src = ?MessageSource::Build, "Optimized static asset {file_asset}");
                         let assets_finished =
                             assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);

@@ -12,7 +12,7 @@ use tokio::task::yield_now;
 mod builder;
 mod hot_reloading_file_map;
 mod logs_tab;
-pub mod output;
+pub(crate) mod output;
 mod proxy;
 mod server;
 mod watcher;

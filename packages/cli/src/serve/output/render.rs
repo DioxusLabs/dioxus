@@ -25,7 +25,7 @@ use ratatui::{
     },
     Frame,
 };
-use std::{collections::VecDeque, rc::Rc};
+use std::rc::Rc;
 use tracing::Level;
 
 pub struct TuiLayout {
@@ -110,7 +110,7 @@ impl TuiLayout {
         frame: &mut Frame,
         scroll: ScrollPosition,
         current_tab: OutputTab,
-        messages: &VecDeque<Message>,
+        messages: &Vec<Message>,
     ) -> NumLinesWrapping {
         // TODO: Fancy filtering support "show me only app logs from web"
         // TODO: This is showing messages in reverse.
@@ -126,29 +126,39 @@ impl TuiLayout {
             for line in msg.content.lines() {
                 let text = line.into_text().unwrap_or_default();
                 for line in text.lines {
-                    let source = format!("[{}]", msg.source);
-                    let source_span = Span::from(source);
-                    let source_span = match msg.source {
-                        MessageSource::App(_) => source_span.light_blue(),
-                        MessageSource::Dev => source_span.dark_gray(),
-                        MessageSource::Build => source_span.light_yellow(),
-                        MessageSource::Unknown => source_span.black(),
+                    // Don't add any formatting for cargo messages.
+                    let out_line = if msg.source != MessageSource::Cargo {
+                        let source = format!("[{}]", msg.source);
+                        let source_span = Span::from(source);
+                        let source_span = match msg.source {
+                            MessageSource::App(_) => source_span.light_cyan(),
+                            MessageSource::Dev => source_span.dark_gray(),
+                            MessageSource::Build => source_span.light_yellow(),
+                            MessageSource::Unknown => source_span.black(),
+                            MessageSource::Cargo => {
+                                unimplemented!("this shouldn't be reached")
+                            }
+                        };
+
+                        let level = format!(" {}: ", msg.level);
+                        let level_span = Span::from(level);
+                        let level_span = match msg.level {
+                            Level::TRACE => level_span.black(),
+                            Level::DEBUG => level_span.light_magenta(),
+                            Level::INFO => level_span.light_blue(),
+                            Level::WARN => level_span.light_yellow(),
+                            Level::ERROR => level_span.light_red(),
+                        };
+
+                        let mut out_line = vec![source_span, level_span];
+                        for span in line.spans {
+                            out_line.push(span);
+                        }
+                        out_line
+                    } else {
+                        line.spans
                     };
 
-                    let level = format!(" {}: ", msg.level);
-                    let level_span = Span::from(level);
-                    let level_span = match msg.level {
-                        Level::TRACE => level_span.black(),
-                        Level::DEBUG => level_span.light_magenta(),
-                        Level::INFO => level_span.light_blue(),
-                        Level::WARN => level_span.light_yellow(),
-                        Level::ERROR => level_span.light_red(),
-                    };
-
-                    let mut out_line = vec![source_span, level_span];
-                    for span in line.spans {
-                        out_line.push(span);
-                    }
                     out_text.push_line(Line::from(out_line));
                 }
             }

@@ -17,6 +17,7 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 
 /// Build tracing infrastructure.
 pub fn build_tracing() -> CLILogControl {
+    // TODO: clean these comments
     // 1. Set EnvFilter Layer
     // 2. Rolling log file layer
     // 3. Custom subscriber that filters any internal logs from continuing and sends user-facing logs to output.

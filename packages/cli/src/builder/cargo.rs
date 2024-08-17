@@ -105,7 +105,8 @@ impl BuildRequest {
     ) -> Result<BuildResult> {
         tracing::info!(
             dx_src = ?MessageSource::Build,
-            "🚅 Running build [Desktop] command..."
+            "🚅 Running build [{}] command...",
+            self.target_platform,
         );
 
         // Set up runtime guards

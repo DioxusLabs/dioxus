@@ -1,16 +1,15 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use super::BuildRequest;
 use crate::serve::output::MessageSource;
+
+use super::BuildRequest;
 use anyhow::Context;
-use cargo_metadata::{diagnostic::Diagnostic, Message};
+use cargo_metadata::Message;
 use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
-use std::fmt::Display;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::AsyncBufReadExt;
-use tracing::Level;
 
 #[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
 pub enum Stage {
@@ -179,6 +178,8 @@ pub(crate) async fn build_cargo(
                 //     stage: Stage::Compiling,
                 //     update: UpdateStage::AddMessage(message.clone().into()),
                 // });
+                tracing::info!(dx_src = ?MessageSource::Cargo, "{}", message.to_string());
+                
                 const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
                     cargo_metadata::diagnostic::DiagnosticLevel::Help,
                     cargo_metadata::diagnostic::DiagnosticLevel::Note,
@@ -222,6 +223,7 @@ pub(crate) async fn build_cargo(
                 }
             }
             Message::TextLine(line) => {
+                tracing::debug!(dx_src = ?MessageSource::Cargo, "{}", line);
                 // TODO: this
                 // _ = progress.start_send(BuildProgressUpdate {
                 //     stage: Stage::Compiling,
