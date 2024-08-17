@@ -63,12 +63,14 @@ impl WebsysDom {
         for id in self.queued_mounted_events.drain(..) {
             let node = self.interpreter.base().get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<web_sys::Element>() {
-                let _ = self.event_channel.unbounded_send(crate::dom::UiEvent {
-                    name: "mounted".to_string(),
-                    bubbles: false,
-                    element: id,
-                    data: dioxus_html::PlatformEventData::new(Box::new(element.clone())),
-                });
+                let event = dioxus_core::Event::new(
+                    std::rc::Rc::new(dioxus_html::PlatformEventData::new(Box::new(
+                        element.clone(),
+                    ))) as std::rc::Rc<dyn std::any::Any>,
+                    false,
+                );
+                let name = "mounted";
+                self.runtime.handle_event(name, event, id)
             }
         }
     }
@@ -79,10 +81,10 @@ impl WebsysDom {
     }
 
     #[inline]
-    fn only_write_templates(&self) -> bool {
+    fn skip_mutations(&self) -> bool {
         #[cfg(feature = "hydrate")]
         {
-            self.only_write_templates
+            self.skip_mutations
         }
         #[cfg(not(feature = "hydrate"))]
         {
@@ -92,28 +94,15 @@ impl WebsysDom {
 }
 
 impl WriteMutations for WebsysDom {
-    fn register_template(&mut self, template: Template) {
-        let mut roots = vec![];
-        for root in template.roots {
-            roots.push(self.create_template_node(root))
-        }
-        self.templates
-            .insert(template.name.to_owned(), self.max_template_id);
-        self.interpreter
-            .base()
-            .save_template(roots, self.max_template_id);
-        self.max_template_id += 1
-    }
-
     fn append_children(&mut self, id: ElementId, m: usize) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.append_children(id.0 as u32, m as u16)
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter
@@ -121,46 +110,47 @@ impl WriteMutations for WebsysDom {
     }
 
     fn create_placeholder(&mut self, id: ElementId) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.create_placeholder(id.0 as u32)
     }
 
     fn create_text_node(&mut self, value: &str, id: ElementId) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.create_text_node(value, id.0 as u32)
     }
 
-    fn hydrate_text_node(&mut self, path: &'static [u8], value: &str, id: ElementId) {
-        if self.only_write_templates() {
+    fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
+        if self.skip_mutations() {
             return;
         }
-        self.interpreter
-            .hydrate_text(path.as_ptr() as u32, path.len() as u8, value, id.0 as u32)
-    }
+        let tmpl_id = self.templates.get(&template).cloned().unwrap_or_else(|| {
+            let mut roots = vec![];
+            for root in template.roots {
+                roots.push(self.create_template_node(root))
+            }
+            let id = self.templates.len() as u16;
+            self.templates.insert(template, id);
+            self.interpreter.base().save_template(roots, id);
+            id
+        });
 
-    fn load_template(&mut self, name: &'static str, index: usize, id: ElementId) {
-        if self.only_write_templates() {
-            return;
-        }
-        if let Some(tmpl_id) = self.templates.get(name) {
-            self.interpreter
-                .load_template(*tmpl_id, index as u16, id.0 as u32)
-        }
+        self.interpreter
+            .load_template(tmpl_id, index as u16, id.0 as u32)
     }
 
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.replace_with(id.0 as u32, m as u16)
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter
@@ -168,14 +158,14 @@ impl WriteMutations for WebsysDom {
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.insert_after(id.0 as u32, m as u16)
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.insert_before(id.0 as u32, m as u16)
@@ -188,7 +178,7 @@ impl WriteMutations for WebsysDom {
         value: &AttributeValue,
         id: ElementId,
     ) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         match value {
@@ -223,14 +213,14 @@ impl WriteMutations for WebsysDom {
     }
 
     fn set_node_text(&mut self, value: &str, id: ElementId) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.set_text(id.0 as u32, value)
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         // mounted events are fired immediately after the element is mounted.
@@ -245,7 +235,7 @@ impl WriteMutations for WebsysDom {
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         if name == "mounted" {
@@ -257,14 +247,14 @@ impl WriteMutations for WebsysDom {
     }
 
     fn remove_node(&mut self, id: ElementId) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.remove(id.0 as u32)
     }
 
     fn push_root(&mut self, id: ElementId) {
-        if self.only_write_templates() {
+        if self.skip_mutations() {
             return;
         }
         self.interpreter.push_root(id.0 as u32)

@@ -1069,8 +1069,20 @@ fn component_with_handlers() {
         }
     };
 
-    let valid = can_hotreload(a, b);
-    assert!(valid);
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = hot_reload.get(&0).unwrap();
+    assert_eq!(
+        template.component_values,
+        &[
+            HotReloadLiteral::Int(456),
+            HotReloadLiteral::Float(789.456),
+            HotReloadLiteral::Bool(false),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "goodbye " },
+                FmtSegment::Dynamic { id: 0 }
+            ])),
+        ]
+    );
 }
 
 #[test]

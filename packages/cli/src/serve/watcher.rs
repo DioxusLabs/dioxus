@@ -1,5 +1,7 @@
+use std::collections::{HashMap, HashSet};
 use std::{fs, path::PathBuf, time::Duration};
 
+use super::hot_reloading_file_map::HotreloadError;
 use crate::serve::hot_reloading_file_map::FileMap;
 use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
 use dioxus_hot_reload::HotReloadMsg;
@@ -24,6 +26,7 @@ pub struct Watcher {
     queued_events: Vec<notify::Event>,
     file_map: FileMap,
     ignore: Gitignore,
+    applied_hot_reload_message: Option<HotReloadMsg>,
 }
 
 impl Watcher {
@@ -132,6 +135,7 @@ impl Watcher {
             ignore,
             queued_events: Vec::new(),
             _last_update_time: chrono::Local::now().timestamp(),
+            applied_hot_reload_message: None,
         }
     }
 
@@ -243,19 +247,73 @@ impl Watcher {
         }
 
         for rust_file in edited_rust_files {
-            let hotreloaded_templates = self
-                .file_map
-                .update_rsx::<HtmlCtx>(&rust_file, &crate_dir)
-                .ok()?;
-
-            templates.extend(hotreloaded_templates);
+            match self.file_map.update_rsx::<HtmlCtx>(&rust_file, &crate_dir) {
+                Ok(hotreloaded_templates) => {
+                    templates.extend(hotreloaded_templates);
+                }
+                // If the file is not reloadable, we need to rebuild
+                Err(HotreloadError::Notreloadable) => return None,
+                // The rust file may have failed to parse, but that is most likely
+                // because the user is in the middle of adding new code
+                // We just ignore the error and let Rust analyzer warn about the problem
+                Err(HotreloadError::Parse) => {}
+                // Otherwise just log the error
+                Err(err) => {
+                    tracing::error!("Error hotreloading file {rust_file:?}: {err}")
+                }
+            }
         }
 
-        Some(HotReloadMsg {
+        let msg = HotReloadMsg {
             templates,
             assets,
             unknown_files,
-        })
+        };
+
+        self.add_hot_reload_message(&msg);
+
+        Some(msg)
+    }
+
+    /// Get any hot reload changes that have been applied since the last full rebuild
+    pub fn applied_hot_reload_changes(&mut self) -> Option<HotReloadMsg> {
+        self.applied_hot_reload_message.clone()
+    }
+
+    /// Clear the hot reload changes. This should be called any time a new build is starting
+    pub fn clear_hot_reload_changes(&mut self) {
+        self.applied_hot_reload_message.take();
+    }
+
+    /// Store the hot reload changes for any future clients that connect
+    fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
+        match &mut self.applied_hot_reload_message {
+            Some(applied) => {
+                // Merge the assets, unknown files, and templates
+                // We keep the newer change if there is both a old and new change
+                let mut templates: HashMap<String, _> = std::mem::take(&mut applied.templates)
+                    .into_iter()
+                    .map(|template| (template.location.clone(), template))
+                    .collect();
+                let mut assets: HashSet<PathBuf> =
+                    std::mem::take(&mut applied.assets).into_iter().collect();
+                let mut unknown_files: HashSet<PathBuf> =
+                    std::mem::take(&mut applied.unknown_files)
+                        .into_iter()
+                        .collect();
+                for template in &msg.templates {
+                    templates.insert(template.location.clone(), template.clone());
+                }
+                assets.extend(msg.assets.iter().cloned());
+                unknown_files.extend(msg.unknown_files.iter().cloned());
+                applied.templates = templates.into_values().collect();
+                applied.assets = assets.into_iter().collect();
+                applied.unknown_files = unknown_files.into_iter().collect();
+            }
+            None => {
+                self.applied_hot_reload_message = Some(msg.clone());
+            }
+        }
     }
 
     /// Ensure the changes we've received from the queue are actually legit changes to either assets or

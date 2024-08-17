@@ -1,7 +1,6 @@
 use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
-    edits::EditQueue,
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
     query::QueryEngine,
@@ -13,11 +12,7 @@ use dioxus_core::{
     prelude::{current_scope_id, ScopeId},
     VirtualDom,
 };
-use dioxus_interpreter_js::MutationState;
-use std::{
-    cell::RefCell,
-    rc::{Rc, Weak},
-};
+use std::rc::{Rc, Weak};
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,
@@ -63,13 +58,11 @@ pub struct DesktopService {
 
     /// The receiver for queries about the current window
     pub(super) query: QueryEngine,
-    pub(crate) edit_queue: EditQueue,
-    pub(crate) mutation_state: RefCell<MutationState>,
     pub(crate) asset_handlers: AssetHandlerRegistry,
     pub(crate) file_hover: NativeFileHover,
 
     #[cfg(target_os = "ios")]
-    pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
+    pub(crate) views: Rc<std::cell::RefCell<Vec<*mut objc::runtime::Object>>>,
 }
 
 /// A smart pointer to the current window.
@@ -86,7 +79,6 @@ impl DesktopService {
         webview: WebView,
         window: Window,
         shared: Rc<SharedContext>,
-        edit_queue: EditQueue,
         asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,
     ) -> Self {
@@ -94,21 +86,12 @@ impl DesktopService {
             window,
             webview,
             shared,
-            edit_queue,
             asset_handlers,
             file_hover,
-            mutation_state: Default::default(),
             query: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
-    }
-
-    /// Send a list of mutations to the webview
-    pub(crate) fn send_edits(&self) {
-        let mut mutations = self.mutation_state.borrow_mut();
-        let serialized_edits = mutations.export_memory();
-        self.edit_queue.add_edits(serialized_edits);
     }
 
     /// Create a new window using the props and window builder

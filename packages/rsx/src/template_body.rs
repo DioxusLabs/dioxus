@@ -139,28 +139,42 @@ impl ToTokens for TemplateBody {
 
         let dynamic_text = self.dynamic_text_segments.iter();
 
-        let index = self.template_idx.get();
-
         let diagnostics = &self.diagnostics;
-        let hot_reload_mapping = self.hot_reload_mapping(quote! { ___TEMPLATE_NAME });
+        let index = self.template_idx.get();
+        let hot_reload_mapping = self.hot_reload_mapping();
 
-        let vnode = quote! {
-            #[doc(hidden)] // vscode please stop showing these in symbol search
-            const ___TEMPLATE_NAME: &str = {
-                const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
-                dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
-            };
-            #[cfg(debug_assertions)]
-            {
-                // The key is important here - we're creating a new GlobalSignal each call to this
-                // But the key is what's keeping it stable
-                let __template = GlobalSignal::with_key(
-                    || #hot_reload_mapping,
-                    ___TEMPLATE_NAME
-                );
+        tokens.append_all(quote! {
+            dioxus_core::Element::Ok({
+                #diagnostics
 
-                __template.maybe_with_rt(|__template_read| {
+                #[cfg(debug_assertions)]
+                {
+                    static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
+                    fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
+                        if __ORIGINAL_TEMPLATE.get().is_none() {
+                            _ = __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
+                        }
+                        __ORIGINAL_TEMPLATE.get().unwrap()
+                    }
+                    // The key is important here - we're creating a new GlobalSignal each call to this
+                    // But the key is what's keeping it stable
+                    let __template = GlobalSignal::with_key(
+                        || None::<dioxus_core::internal::HotReloadedTemplate>,
+                        {
+                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                            const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                            dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
+                        }
+                    );
+
+                    // If the template has not been hot reloaded, we always use the original template
+                    // Templates nested within macros may be merged because they have the same file-line-column-index
+                    // They cannot be hot reloaded, so this prevents incorrect rendering
+                    let __template_read = dioxus_core::Runtime::current().ok().map(|_| __template.read());
+                    let __template_read = match __template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
+                        Some(Some(__template_read)) => &__template_read,
+                        _ => __original_template(),
+                    };
                     let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
                         vec![ #( #dynamic_text.to_string() ),* ],
                     );
@@ -170,34 +184,26 @@ impl ToTokens for TemplateBody {
                         __dynamic_literal_pool
                     );
                     __dynamic_value_pool.render_with(__template_read)
-                })
-            }
-            #[cfg(not(debug_assertions))]
-            {
-                #[doc(hidden)] // vscode please stop showing these in symbol search
-                static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                    name: ___TEMPLATE_NAME,
-                    roots: &[ #( #roots ),* ],
-                    node_paths: &[ #( #node_paths ),* ],
-                    attr_paths: &[ #( #attr_paths ),* ],
-                };
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    #[doc(hidden)] // vscode please stop showing these in symbol search
+                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
+                        roots: &[ #( #roots ),* ],
+                        node_paths: &[ #( #node_paths ),* ],
+                        attr_paths: &[ #( #attr_paths ),* ],
+                    };
 
-                // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
-                #[allow(clippy::let_and_return)]
-                let __vnodes = dioxus_core::VNode::new(
-                    #key_tokens,
-                    ___TEMPLATE,
-                    Box::new([ #( #dynamic_nodes ),* ]),
-                    Box::new([ #( #dyn_attr_printer ),* ]),
-                );
-                __vnodes
-            }
-        };
-        tokens.append_all(quote! {
-            dioxus_core::Element::Ok({
-                #diagnostics
-
-                #vnode
+                    // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                    #[allow(clippy::let_and_return)]
+                    let __vnodes = dioxus_core::VNode::new(
+                        #key_tokens,
+                        ___TEMPLATE,
+                        Box::new([ #( #dynamic_nodes ),* ]),
+                        Box::new([ #( #dyn_attr_printer ),* ]),
+                    );
+                    __vnodes
+                }
             })
         });
     }
@@ -324,7 +330,7 @@ impl TemplateBody {
             })
     }
 
-    fn hot_reload_mapping(&self, name: impl ToTokens) -> TokenStream2 {
+    fn hot_reload_mapping(&self) -> TokenStream2 {
         let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
             self.implicit_key()
         {
@@ -346,7 +352,6 @@ impl TemplateBody {
             .map(|literal| literal.quote_as_hot_reload_literal());
         quote! {
             dioxus_core::internal::HotReloadedTemplate::new(
-                #name,
                 #key,
                 vec![ #( #dynamic_nodes ),* ],
                 vec![ #( #dyn_attr_printer ),* ],

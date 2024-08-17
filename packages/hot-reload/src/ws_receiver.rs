@@ -54,8 +54,8 @@ impl NativeReceiver {
             match res {
                 Ok(res) => match res {
                     Message::Text(text) => {
-                        let leaked: &'static str = Box::leak(text.into_boxed_str());
-                        let msg = serde_json::from_str::<DevserverMsg>(leaked);
+                        // let leaked: &'static str = Box::leak(text.into_boxed_str());
+                        let msg = serde_json::from_str::<DevserverMsg>(&text);
                         if let Ok(msg) = msg {
                             return Some(Ok(msg));
                         }

@@ -6,8 +6,8 @@ macro_rules! twoway {
 
             // doc attrs
             $( #[doc = $doc:expr] )*
-            $name:ident
-        ),*
+            $name:ident,
+        )*
     ) => {
         $(
             $( #[doc = $doc] )*
@@ -57,5 +57,8 @@ twoway![
     tiny,
     tinynoopt,
     trailing_expr,
-    oneline
+    oneline,
+    prop_rsx,
+    asset,
+    collapse,
 ];

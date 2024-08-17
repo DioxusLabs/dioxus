@@ -51,6 +51,23 @@ fn app() -> Element {
             "Eval"
         }
         div { class: "eval-result", "{eval_result}" }
+        PreventDefault {}
+    }
+}
+
+#[component]
+fn PreventDefault() -> Element {
+    let mut text = use_signal(|| "View source".to_string());
+    rsx! {
+        a {
+            class: "prevent-default",
+            href: "https://github.com/DioxusLabs/dioxus/tree/main/packages/playwright-tests/web",
+            onclick: move |evt| {
+                evt.prevent_default();
+                text.set("Psych!".to_string());
+            },
+            "{text}"
+        }
     }
 }
 
