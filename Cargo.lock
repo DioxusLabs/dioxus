@@ -6342,11 +6342,6 @@ dependencies = [
 name = "manganis"
 version = "0.6.0-alpha.2"
 dependencies = [
- "core-foundation 0.9.4",
- "dirs",
- "dunce",
- "infer 0.16.0",
- "manganis-common",
  "manganis-macro",
  "once_cell",
 ]
@@ -6395,7 +6390,6 @@ name = "manganis-macro"
 version = "0.6.0-alpha.2"
 dependencies = [
  "base64 0.22.1",
- "manganis-common",
  "proc-macro2",
  "quote",
  "serde",

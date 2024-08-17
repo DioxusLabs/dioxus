@@ -23,7 +23,7 @@ tracing = { workspace = true }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
 
 [features]
-default = ["hot_reload"]
+default = []
 hot_reload_traits = []
 hot_reload = ["dep:internment", "dep:dioxus-core", "hot_reload_traits", "serde"]
 serde = ["dep:serde", "dioxus-core/serialize"]

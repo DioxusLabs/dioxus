@@ -1,13 +1,13 @@
 use core::panic;
-use manganis_common::{
-    CssOptions, FileOptions, FontOptions, ImageOptions, JsOptions, JsonOptions, MetadataAsset,
-    ResourceAsset, TailwindAsset, UnknownFileOptions, VideoOptions,
-};
+// use manganis_common::{
+//     CssOptions, FileOptions, FontOptions, ImageOptions, JsOptions, JsonOptions, MetadataAsset,
+//     ResourceAsset, TailwindAsset, UnknownFileOptions, VideoOptions,
+// };
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File, sync::atomic::AtomicBool};
 use std::{path::PathBuf, sync::atomic::Ordering};
 use syn::{
@@ -19,7 +19,36 @@ pub struct AssetParser {
     option_source: TokenStream2,
     resource: ResourceAsset,
     name: Option<syn::Ident>,
-    parsed_options: Option<FileOptions>,
+    // parsed_options: Option<FileOptions>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ResourceAsset {
+    pub input: PathBuf,
+    pub local: Option<PathBuf>,
+    pub bundled: PathBuf,
+}
+#[derive(Debug)]
+struct AssetError {}
+impl ResourceAsset {
+    fn parse_any(input: &str) -> Result<Self, AssetError> {
+        let input = PathBuf::from(input);
+        let local = Some(input.clone());
+        let bundled = input.clone();
+        // let local = match input.canonicalized().is_file() {
+        //     true => Some(input.canonicalized()),
+        //     false => None,
+        // };
+        // let bundled = match input.canonicalized().is_file() {
+        //     true => input.canonicalized(),
+        //     false => input,
+        // };
+        Ok(Self {
+            input,
+            local,
+            bundled,
+        })
+    }
 }
 
 impl Parse for AssetParser {
@@ -80,13 +109,13 @@ impl Parse for AssetParser {
             }
         }
 
-        let parsed_options = MethodCalls::new(options);
+        // let parsed_options = MethodCalls::new(options);
 
         Ok(Self {
             option_source,
             resource,
             name,
-            parsed_options,
+            // parsed_options,a
         })
     }
 }
@@ -96,12 +125,12 @@ impl ToTokens for AssetParser {
         let option_source = &self.option_source;
         let asset = &self.resource;
         let link_section = crate::generate_link_section(&asset);
-        let input = asset.input.to_string();
-        let bundled = asset.bundled.to_string();
+        let input = asset.input.display().to_string();
+        let bundled = asset.bundled.display().to_string();
 
         let local = match asset.local.as_ref() {
             Some(local) => {
-                let local = local.to_string();
+                let local = local.display().to_string();
                 quote! { #local }
             }
             None => {
@@ -148,32 +177,33 @@ struct MethodCallOption {
 }
 
 impl MethodCalls {
-    fn new(args: Vec<MethodCallOption>) -> Option<FileOptions> {
-        let asset_type = args.first()?.method.to_string();
+    // fn new(args: Vec<MethodCallOption>) -> Option<FileOptions> {
+    //     let asset_type = args.first()?.method.to_string();
 
-        let stack = args
-            .into_iter()
-            .skip(1)
-            .map(|x| (x.method.to_string(), x.args.into_iter().collect::<Vec<_>>()))
-            .collect::<HashMap<String, Vec<syn::Lit>>>();
+    //     let stack = args
+    //         .into_iter()
+    //         .skip(1)
+    //         .map(|x| (x.method.to_string(), x.args.into_iter().collect::<Vec<_>>()))
+    //         .collect::<HashMap<String, Vec<syn::Lit>>>();
 
-        let opts = match asset_type.as_str() {
-            "image" => {
-                let mut opts = ImageOptions::new(manganis_common::ImageType::Avif, Some((32, 32)));
-                // opts.set_preload(preload);
-                // opts.set_url_encoded(url_encoded);
-                // opts.set_low_quality_preview(low_quality_preview);
-                FileOptions::Image(opts)
-            }
+    // let opts = match asset_type.as_str() {
+    //     "image" => {
+    //         let mut opts = ImageOptions::new(manganis_common::ImageType::Avif, Some((32, 32)));
+    //         // opts.set_preload(preload);
+    //         // opts.set_url_encoded(url_encoded);
+    //         // opts.set_low_quality_preview(low_quality_preview);
+    //         FileOptions::Image(opts)
+    //     }
 
-            "video" => FileOptions::Video(VideoOptions::new(todo!())),
-            "font" => FileOptions::Font(FontOptions::new(todo!())),
-            "css" => FileOptions::Css(CssOptions::new()),
-            "js" => FileOptions::Js(JsOptions::new(todo!())),
-            "json" => FileOptions::Json(JsonOptions::new()),
-            other => FileOptions::Other(UnknownFileOptions::new(todo!())),
-        };
+    //     "video" => FileOptions::Video(VideoOptions::new(todo!())),
+    //     "font" => FileOptions::Font(FontOptions::new(todo!())),
+    //     "css" => FileOptions::Css(CssOptions::new()),
+    //     "js" => FileOptions::Js(JsOptions::new(todo!())),
+    //     "json" => FileOptions::Json(JsonOptions::new()),
+    //     other => FileOptions::Other(UnknownFileOptions::new(todo!())),
+    // };
 
-        Some(opts)
-    }
+    // Some(opts)
+    //     None
+    // }
 }

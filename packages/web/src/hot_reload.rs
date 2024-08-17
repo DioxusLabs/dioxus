@@ -75,7 +75,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                     "Your app is being rebuilt.",
                     "A non-hot-reloadable change occurred and we must rebuild.",
                     ToastLevel::Info,
-                    TOAST_TIMEOUT,
+                    Duration::from_secs(600),
                     false,
                 ),
                 // The devserver is telling us that the full rebuild failed.
