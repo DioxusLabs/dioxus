@@ -75,5 +75,6 @@ pub static CURRENT_CONFIG: once_cell::sync::Lazy<
 ///
 /// This is typically the offset of the asset from its domain
 pub fn base_path() -> Option<&'static str> {
-    todo!()
+    // todo!()
+    None
 }
