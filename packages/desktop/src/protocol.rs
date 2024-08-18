@@ -289,10 +289,12 @@ fn get_asset_root() -> Option<PathBuf> {
         }
     }
 
-    dioxus_cli_config::CURRENT_CONFIG
-        .as_ref()
-        .map(|c| c.application.out_dir.clone())
-        .ok()
+    None
+
+    // dioxus_cli_config::CURRENT_CONFIG
+    //     .as_ref()
+    //     .map(|c| c.application.out_dir.clone())
+    //     .ok()
 }
 
 /// Get the mime type from a path-like string

@@ -13,13 +13,13 @@ keywords = ["dom", "ui", "gui", "react"]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = [
     "serialize",
-    "native-bind",
     "mounted",
     "document",
+    "file-engine",
 ] }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
-dioxus-cli-config = { workspace = true, features = ["read-config"] }
+# dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"]}
 thiserror = { workspace = true }
@@ -38,6 +38,7 @@ tokio = { workspace = true, features = [
     "time",
     "macros",
     "fs",
+    "io-util",
 ], optional = true }
 slab = { workspace = true }
 rustc-hash = { workspace = true }
@@ -60,13 +61,13 @@ global-hotkey = { workspace = true }
 rfd = { workspace = true, default-features = false, features = ["xdg-portal", "tokio"] }
 muda = { workspace = true }
 
-# use rustls on android
-[target.'cfg(target_os = "android")'.dependencies]
-tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
+# # use rustls on android
+# [target.'cfg(target_os = "android")'.dependencies]
+# tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
 
-# use native tls on other platforms
-[target.'cfg(not(target_os = "android"))'.dependencies]
-tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"]}
+# # use native tls on other platforms
+# [target.'cfg(not(target_os = "android"))'.dependencies]
+# tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"]}
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cocoa = { workspace = true }

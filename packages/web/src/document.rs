@@ -1,7 +1,7 @@
+use crate::bindings::JSOwner;
 use dioxus_core::ScopeId;
-use dioxus_html::document::{
-    Document, EvalError, Evaluator, JSOwner, WeakDioxusChannel, WebDioxusChannel,
-};
+use dioxus_html::document::{Document, EvalError, Evaluator};
+// use dioxus_html::document::{Document, EvalError, Evaluator, WeakDioxusChannel, WebDioxusChannel};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde::Serialize;

@@ -24,12 +24,18 @@ tauri-utils = { workspace = true, optional = true }
 
 dirs = { workspace = true, optional = true }
 
-[build-dependencies]
-built = { version = "=0.7.3", features = ["git2"] }
 
 [features]
 default = ["read-config"]
-cli = ["dep:tauri-bundler", "dep:tauri-utils", "read-from-args", "dep:toml", "dep:cargo_toml", "dep:dirs", "dep:cargo-config2"]
+cli = [
+    "dep:tauri-bundler",
+    "dep:tauri-utils",
+    "read-from-args",
+    "dep:toml",
+    "dep:cargo_toml",
+    "dep:dirs",
+    "dep:cargo-config2",
+]
 read-config = []
 read-from-args = ["dep:clap"]
 

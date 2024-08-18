@@ -6,6 +6,7 @@ members = [
     "packages/core",
     "packages/cli",
     "packages/cli-config",
+    "packages/core-types",
     "packages/core-macro",
     "packages/config-macro",
     "packages/router-macro",
@@ -169,6 +170,8 @@ convert_case = "0.6.0"
 tokio-tungstenite = { version = "0.23.1" }
 gloo-timers = "0.3.0"
 fluent-uri = { version = "0.2.0", features = ["serde"] }
+internment = { version = "0.7.0" }
+proc-macro2-diagnostics = { version = "0.10", default-features = false }
 
 # desktop
 wry = { version = "0.42.0", default-features = false }

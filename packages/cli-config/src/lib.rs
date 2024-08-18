@@ -10,9 +10,6 @@ pub use bundle::*;
 
 mod serve;
 pub use serve::*;
-
-mod build_info;
-
 /// An error that occurs when the dioxus CLI was not used to build the application.
 #[derive(Debug)]
 pub struct DioxusCLINotUsed;

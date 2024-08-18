@@ -6,6 +6,7 @@
 
 mod app;
 mod assets;
+mod bindings;
 mod config;
 mod desktop_context;
 mod document;

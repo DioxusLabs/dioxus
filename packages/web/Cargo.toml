@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-html = { workspace = true, features = ["wasm-bind"] }
+dioxus-html = { workspace = true }
 dioxus-hot-reload = { workspace = true, features = ["client"] }
 dioxus-signals = { workspace = true }
 dioxus-interpreter-js = { workspace = true, features = [
@@ -41,21 +41,43 @@ ciborium = { workspace = true, optional = true }
 [dependencies.web-sys]
 version = "0.3.56"
 features = [
+    "AnimationEvent",
+    "ClipboardEvent",
+    "CloseEvent",
+    "Comment",
+    "CompositionEvent",
+    "console",
+    "CustomEvent",
+    "CustomEvent",
+    "DataTransfer",
     "Document",
+    "DragEvent",
+    "FocusEvent",
     "HtmlElement",
+    "HtmlFormElement",
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",
-    "HtmlFormElement",
-    "Text",
-    "Comment",
-    "Window",
-    "DataTransfer",
-    "console",
+    "InputEvent",
+    "KeyboardEvent",
+    "MouseEvent",
     "NodeList",
-    "CloseEvent",
-    "CustomEvent",
+    "PointerEvent",
+    "ResizeObserverEntry",
+    "ResizeObserverSize",
+    "Text",
+    "Touch",
+    "TouchEvent",
+    "TouchList",
+    "TransitionEvent",
+    "WheelEvent",
+    "Window",
 ]
+
+
+[build-dependencies]
+lazy-js-bundle = { workspace = true }
+
 
 [features]
 default = ["panic_hook", "mounted", "file_engine", "hot_reload", "document"]

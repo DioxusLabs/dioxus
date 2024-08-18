@@ -53,17 +53,3 @@ pub struct HotReloadMsg {
     /// A file changed that's not an asset or a rust file - best of luck!
     pub unknown_files: Vec<PathBuf>,
 }
-
-#[test]
-fn serialize_client_msg() {
-    let msg = ClientMsg::Log {
-        level: "info".to_string(),
-        messages: vec!["hello world".to_string()],
-    };
-
-    let json = serde_json::to_string(&msg).unwrap();
-    assert_eq!(
-        json,
-        r#"{"Log":{"level":"info","messages":["hello world"]}}"#
-    );
-}

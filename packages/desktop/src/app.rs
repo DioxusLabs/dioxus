@@ -1,14 +1,14 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
 use dioxus_core::{ElementId, VirtualDom};
-use dioxus_html::{native_bind::NativeFileEngine, PlatformEventData};
+use dioxus_html::PlatformEventData;
 use std::{
     any::Any,
     cell::{Cell, RefCell},
@@ -140,14 +140,14 @@ impl App {
         let proxy = self.shared.proxy.clone();
 
         tokio::task::spawn(async move {
-            let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
-            else {
-                return;
-            };
+            // let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
+            // else {
+            //     return;
+            // };
 
-            while let Some(Ok(msg)) = receiver.next().await {
-                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            }
+            // while let Some(Ok(msg)) = receiver.next().await {
+            //     _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+            // }
         });
     }
 

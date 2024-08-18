@@ -33,6 +33,7 @@ mod event;
 pub mod launch;
 mod mutations;
 pub use event::*;
+pub mod bindings;
 
 #[cfg(feature = "document")]
 mod document;

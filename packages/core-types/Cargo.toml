@@ -1,0 +1,6 @@
+[package]
+name = "dioxus-core-types"
+edition = "2021"
+version.workspace = true
+
+[dependencies]

@@ -694,7 +694,7 @@ dependencies = [
  "sha1",
  "sync_wrapper 1.0.1",
  "tokio",
- "tokio-tungstenite 0.21.0",
+ "tokio-tungstenite",
  "tower",
  "tower-layer",
  "tower-service",
@@ -2623,7 +2623,6 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.6.0-alpha.2"
 dependencies = [
- "built",
  "cargo-config2",
  "cargo_toml",
  "clap",
@@ -2682,7 +2681,6 @@ dependencies = [
  "dioxus",
  "dioxus-html",
  "dioxus-rsx",
- "prettyplease",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -2692,6 +2690,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-core-types"
+version = "0.6.0-alpha.2"
+
+[[package]]
 name = "dioxus-desktop"
 version = "0.6.0-alpha.2"
 dependencies = [
@@ -2699,7 +2701,6 @@ dependencies = [
  "cocoa",
  "core-foundation 0.10.0",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-core",
  "dioxus-hooks",
  "dioxus-hot-reload",
@@ -2730,7 +2731,6 @@ dependencies = [
  "tao",
  "thiserror",
  "tokio",
- "tokio-tungstenite 0.23.1",
  "tracing",
  "urlencoding",
  "webbrowser",
@@ -2838,22 +2838,15 @@ dependencies = [
 name = "dioxus-hot-reload"
 version = "0.6.0-alpha.2"
 dependencies = [
- "chrono",
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-signals",
- "execute",
  "futures-util",
- "ignore",
- "notify",
- "once_cell",
  "serde",
  "serde_json",
  "tokio",
- "tokio-stream",
- "tokio-tungstenite 0.23.1",
  "tracing",
  "warnings",
 ]
@@ -2878,7 +2871,6 @@ dependencies = [
  "keyboard-types",
  "lazy-js-bundle",
  "manganis",
- "rustversion",
  "serde",
  "serde_json",
  "serde_repr",
@@ -2886,7 +2878,6 @@ dependencies = [
  "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
@@ -3171,6 +3162,7 @@ dependencies = [
  "gloo-dialogs",
  "gloo-timers 0.3.0",
  "js-sys",
+ "lazy-js-bundle",
  "rustc-hash 1.1.0",
  "serde",
  "serde-wasm-bindgen",
@@ -3187,7 +3179,6 @@ dependencies = [
 name = "dioxus_server_macro"
 version = "0.6.0-alpha.2"
 dependencies = [
- "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "server_fn_macro",
@@ -11517,22 +11508,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite 0.21.0",
-]
-
-[[package]]
-name = "tokio-tungstenite"
-version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6989540ced10490aaf14e6bad2e3d33728a2813310a0c71d1574304c49631cd"
-dependencies = [
- "futures-util",
- "log",
- "native-tls",
- "rustls 0.23.12",
- "tokio",
- "tokio-native-tls",
- "tungstenite 0.23.0",
+ "tungstenite",
 ]
 
 [[package]]
@@ -11849,25 +11825,6 @@ dependencies = [
  "sha1",
  "thiserror",
  "url",
- "utf-8",
-]
-
-[[package]]
-name = "tungstenite"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e2e2ce1e47ed2994fd43b04c8f618008d4cabdd5ee34027cf14f9d918edd9c8"
-dependencies = [
- "byteorder",
- "bytes",
- "data-encoding",
- "http 1.1.0",
- "httparse",
- "log",
- "native-tls",
- "rand 0.8.5",
- "sha1",
- "thiserror",
  "utf-8",
 ]
 

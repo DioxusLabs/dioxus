@@ -1,5 +1,6 @@
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
+use crate::file_upload::NativeFileEngine;
 use crate::menubar::DioxusMenu;
 use crate::{
     app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::WryQueue,
@@ -9,7 +10,6 @@ use crate::{
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::document::Document;
-use dioxus_html::native_bind::NativeFileEngine;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::SynchronousEventResponse;
 use futures_util::{pin_mut, FutureExt};
