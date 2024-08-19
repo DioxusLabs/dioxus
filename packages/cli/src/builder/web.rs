@@ -58,7 +58,7 @@ pub(crate) async fn install_web_build_tooling(
                 stage: Stage::InstallingWasmTooling,
                 update: UpdateStage::Start,
             });
-            tracing::info!(dx_src = ?MessageSource::Build, "wasm32-unknown-unknown target not detected, installing..");
+            tracing::info!(dx_src = ?MessageSource::Build, "`wasm32-unknown-unknown` target not detected, installing..");
             let _ = Command::new("rustup")
                 .args(["target", "add", "wasm32-unknown-unknown"])
                 .output()

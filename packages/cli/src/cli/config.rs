@@ -93,7 +93,7 @@ impl Config {
                     .replace("{{project-name}}", &name)
                     .replace("{{default-platform}}", &platform);
                 file.write_all(content.as_bytes())?;
-                tracing::info!(dx_src = ?MessageSource::Build, "🚩 Init config file completed.");
+                tracing::info!(dx_src = ?MessageSource::Dev, "🚩 Init config file completed.");
             }
             Config::FormatPrint {} => {
                 println!(
@@ -106,7 +106,7 @@ impl Config {
                 let mut file = File::create(html_path)?;
                 let content = include_str!("../../assets/index.html");
                 file.write_all(content.as_bytes())?;
-                tracing::info!(dx_src = ?MessageSource::Build, "🚩 Create custom html file done.");
+                tracing::info!(dx_src = ?MessageSource::Dev, "🚩 Create custom html file done.");
             }
             // Handle CLI settings.
             Config::Set(setting) => {
@@ -122,7 +122,7 @@ impl Config {
                         settings.wsl_file_poll_interval = Some(value)
                     }
                 })?;
-                tracing::info!(dx_src = ?MessageSource::Build, "🚩 CLI setting `{setting}` has been set.");
+                tracing::info!(dx_src = ?MessageSource::Dev, "🚩 CLI setting `{setting}` has been set.");
             }
         }
         Ok(())

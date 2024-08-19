@@ -48,27 +48,6 @@ const SCROLL_MODIFIER: u16 = 4;
 // Scroll modifier key.
 const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LogSource {
-    Internal,
-    Target(TargetPlatform),
-}
-
-impl Display for LogSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LogSource::Internal => write!(f, "CLI"),
-            LogSource::Target(platform) => write!(f, "{platform}"),
-        }
-    }
-}
-
-impl From<TargetPlatform> for LogSource {
-    fn from(platform: TargetPlatform) -> Self {
-        LogSource::Target(platform)
-    }
-}
-
 #[derive(Default)]
 pub struct BuildProgress {
     current_builds: HashMap<TargetPlatform, ActiveBuild>,
@@ -541,18 +520,11 @@ impl Output {
 
                     let content = messages.first().unwrap_or(&String::new()).clone();
 
+                    // We don't care about logging the app's message so we directly push it isntead of using tracing.
                     self.push_log(Message::new(MessageSource::App(platform), level, content));
                 }
                 Err(err) => {
-                    self.push_log(Message::new(
-                        MessageSource::Dev,
-                        Level::ERROR,
-                        format!(
-                            "Error parsing message from {}: {}",
-                            platform.to_string(),
-                            err
-                        ),
-                    ));
+                    tracing::error!(dx_src = ?MessageSource::Dev, "Error parsing message from {}: {}", platform, err);
                 }
             }
         }
@@ -578,11 +550,10 @@ impl Output {
     pub fn push_log(&mut self, message: Message) {
         self.messages.push(message);
 
-        // TODO: Snapping
-        //let snapped = self.is_snapped(source);
-        // if snapped {
-        //     self.scroll_to_bottom();
-        // }
+        let snapped = self.is_snapped();
+        if snapped {
+            self.scroll_to_bottom();
+        }
     }
 
     pub fn new_build_progress(&mut self, platform: TargetPlatform, update: BuildProgressUpdate) {

@@ -1,10 +1,13 @@
 use crate::serve::output::{Message, MessageSource};
+use console::strip_ansi_codes;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::{
     collections::HashMap,
     env,
-    fmt::{Debug, Write},
-    io,
+    fmt::{Debug, Write as _},
+    fs,
+    io::{self, Write},
+    path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -16,6 +19,7 @@ use tracing_subscriber::{
 };
 
 const LOG_ENV: &str = "DIOXUS_LOG";
+const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
 const DX_NO_FMT_FLAG: &str = "dx_no_fmt";
 
@@ -34,10 +38,6 @@ pub fn build_tracing() -> CLILogControl {
     // A subscriber that provides structured logs to the output if enabled
     // A writer that disables fmt subscriber from outputting if tui is enabled
 
-    // A relaxed filter for consuming logs with the TUI.
-    // The TUI will have it's own filtering mechanism built-in.
-    let relaxed_filter = EnvFilter::new("info");
-
     // A hardened filter for non-interactive user-facing logs.
     // If {LOG_ENV} is set, default to env, otherwise filter to cli
     // and manganis warnings and errors from other crates
@@ -45,6 +45,17 @@ pub fn build_tracing() -> CLILogControl {
     if env::var(LOG_ENV).is_ok() {
         filter = EnvFilter::from_env(LOG_ENV);
     }
+
+    // Log file
+    let log_path = std::env::temp_dir().join(LOG_FILE_NAME);
+    _ = std::fs::write(&log_path, "");
+    let file_append_layer = match FileAppendLayer::new(log_path) {
+        Ok(f) => Some(f),
+        Err(e) => {
+            tracing::error!(dx_src = ?MessageSource::Dev, err = ?e, "failed to init log file");
+            None
+        }
+    };
 
     // Create writer controller and custom writer.
     let (output_tx, output_rx) = unbounded();
@@ -63,22 +74,33 @@ pub fn build_tracing() -> CLILogControl {
     })
     .delimited(" ");
 
+    // Format subscriber
     let fmt_writer = Mutex::new(FmtLogWriter::new(output_enabled));
-
     let fmt_layer = tracing_subscriber::fmt::layer()
         .fmt_fields(formatter)
         .with_writer(fmt_writer)
         .without_time()
         .with_filter(filter_fn(|meta| {
-            // Filter any logs with "dx_no_fmt" as we will handle printing the raw message
-            !meta.fields().iter().any(|f| f.name() == DX_NO_FMT_FLAG)
+            // Filter any logs with "dx_no_fmt" or is not user facing (no dx_src)
+            let mut fields = meta.fields().iter();
+            let has_src_flag = fields.any(|f| f.name() == DX_SRC_FLAG);
+
+            if !has_src_flag {
+                return false;
+            }
+
+            let has_fmt_flag = fields.any(|f| f.name() == DX_NO_FMT_FLAG);
+            if has_fmt_flag {
+                return false;
+            }
+
+            true
         }));
 
     let sub = tracing_subscriber::registry()
-        .with(relaxed_filter)
-        //.with(rolling_log_file)
-        .with(cli_layer)
         .with(filter)
+        .with(file_append_layer)
+        .with(cli_layer)
         .with(fmt_layer);
 
     #[cfg(feature = "tokio-console")]
@@ -87,6 +109,70 @@ pub fn build_tracing() -> CLILogControl {
     sub.init();
 
     writer_control
+}
+
+/// A logging layer that appends to a file.
+///
+/// This layer returns on any error allowing the cli to continue work
+/// despite failing to log to a file. This helps in case of permission errors and similar.
+struct FileAppendLayer {
+    file_path: PathBuf,
+    buffer: Mutex<String>,
+}
+
+impl FileAppendLayer {
+    pub fn new(file_path: PathBuf) -> io::Result<Self> {
+        Ok(Self {
+            file_path,
+            buffer: Mutex::new(String::new()),
+        })
+    }
+}
+
+impl<S> Layer<S> for FileAppendLayer
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let mut visitor = CollectVisitor::new();
+        event.record(&mut visitor);
+
+        let new_line = if visitor.source == MessageSource::Cargo
+            || event.fields().any(|f| f.name() == DX_NO_FMT_FLAG)
+        {
+            visitor.message
+        } else {
+            let meta = event.metadata();
+            let level = meta.level();
+
+            let mut final_msg = String::new();
+            _ = write!(
+                final_msg,
+                "[{level}] {}: {} ",
+                meta.module_path().unwrap_or("dx"),
+                visitor.message
+            );
+
+            for (field, value) in visitor.fields.iter() {
+                _ = write!(final_msg, "{} ", format_field(field, value));
+            }
+            _ = write!(final_msg, "\n");
+            final_msg
+        };
+
+        // Append logs
+        let new_data = strip_ansi_codes(&new_line).to_string();
+
+        if let Ok(mut buf) = self.buffer.lock() {
+            *buf += &new_data;
+            // TODO: Make this efficient.
+            _ = fs::write(&self.file_path, buf.as_bytes());
+        }
+    }
 }
 
 /// This is our "subscriber" (layer) that records structured data for the tui output.
@@ -117,7 +203,11 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        let meta = event.metadata();
+        // We only care about user-facing logs.
+        let has_src_flag = event.fields().any(|f| f.name() == DX_SRC_FLAG);
+        if !has_src_flag {
+            return;
+        }
 
         let mut visitor = CollectVisitor::new();
         event.record(&mut visitor);
@@ -133,6 +223,7 @@ where
             return;
         }
 
+        let meta = event.metadata();
         let level = meta.level();
 
         let mut final_msg = String::new();
@@ -156,16 +247,16 @@ where
     //
     // We could convert this to per-layer filtering instead of global if we wanted to
     // create a tab on the TUI for non-user-facing logs.
-    fn event_enabled(
-        &self,
-        event: &tracing::Event<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) -> bool {
-        let mut visitor = CollectVisitor::new();
-        event.record(&mut visitor);
+    // fn event_enabled(
+    //     &self,
+    //     event: &tracing::Event<'_>,
+    //     _ctx: tracing_subscriber::layer::Context<'_, S>,
+    // ) -> bool {
+    //     let mut visitor = CollectVisitor::new();
+    //     event.record(&mut visitor);
 
-        visitor.dx_user_msg
-    }
+    //     visitor.dx_user_msg
+    // }
 
     // TODO: support spans? structured tui log display?
 }
@@ -231,8 +322,9 @@ impl FmtLogWriter {
     }
 }
 
-impl io::Write for FmtLogWriter {
+impl Write for FmtLogWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        // Handle selection between TUI or Terminal output.
         if !self.output_enabled.load(Ordering::SeqCst) {
             self.stdout.write(buf)
         } else {

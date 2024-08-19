@@ -70,65 +70,6 @@ pub enum UpdateStage {
     Failed(String),
 }
 
-// #[derive(Debug, Clone, PartialEq)]
-// pub struct BuildMessage {
-//     pub level: Level,
-//     pub message: MessageType,
-//     pub source: MessageSource,
-// }
-
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum MessageType {
-//     Cargo(Diagnostic),
-//     Text(String),
-// }
-
-/// Represents the source of where a message came from.
-///
-/// The CLI will render a prefix according to the message type
-/// but this prefix, [`MessageSource::to_string()`] shouldn't be used if a strict message source is required.
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum MessageSource {
-//     /// Represents any message from the running application. Renders `[app]`
-//     App,
-//     /// Represents any generic message from the CLI. Renders `[dev]`
-//     ///
-//     /// Usage of Tracing inside of the CLI will be routed to this type.
-//     Dev,
-//     /// Represents a message from the build process. Renders `[bld]`
-//     ///
-//     /// This is anything emitted from a build process such as cargo and optimizations.
-//     Build,
-// }
-
-// impl Display for MessageSource {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::App => write!(f, "app"),
-//             Self::Dev => write!(f, "dev"),
-//             Self::Build => write!(f, "bld"),
-//         }
-//     }
-// }
-
-// impl From<Diagnostic> for BuildMessage {
-//     fn from(message: Diagnostic) -> Self {
-//         Self {
-//             level: match message.level {
-//                 cargo_metadata::diagnostic::DiagnosticLevel::Ice
-//                 | cargo_metadata::diagnostic::DiagnosticLevel::FailureNote
-//                 | cargo_metadata::diagnostic::DiagnosticLevel::Error => Level::ERROR,
-//                 cargo_metadata::diagnostic::DiagnosticLevel::Warning => Level::WARN,
-//                 cargo_metadata::diagnostic::DiagnosticLevel::Note => Level::INFO,
-//                 cargo_metadata::diagnostic::DiagnosticLevel::Help => Level::DEBUG,
-//                 _ => Level::DEBUG,
-//             },
-//             source: MessageSource::Build,
-//             message: MessageType::Cargo(message),
-//         }
-//     }
-// }
-
 pub(crate) async fn build_cargo(
     crate_count: usize,
     mut cmd: tokio::process::Command,
@@ -174,8 +115,7 @@ pub(crate) async fn build_cargo(
             Message::CompilerMessage(msg) => {
                 let message = msg.message;
                 tracing::info!(dx_src = ?MessageSource::Cargo, dx_no_fmt = true, "{}", message.to_string());
-                tracing::info!(dx_src = ?MessageSource::Dev, cool_value = true, other_value = 32, "hi there");
-                
+
                 const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
                     cargo_metadata::diagnostic::DiagnosticLevel::Help,
                     cargo_metadata::diagnostic::DiagnosticLevel::Note,

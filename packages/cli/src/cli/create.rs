@@ -167,7 +167,7 @@ pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
-    tracing::info!(dx_src = ?MessageSource::Build, "Generated project at {}", path.display());
+    tracing::info!(dx_src = ?MessageSource::Dev, "Generated project at {}", path.display());
 
     Ok(())
 }
