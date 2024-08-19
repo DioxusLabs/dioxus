@@ -1,14 +1,14 @@
 //! CLI Tracing
-//! 
+//!
 //! Tracing has internal and user-facing logs. User-facing logs are directly router to the user in some form.
 //! Internal logs are stored in a log file for consumption in bug reports and debugging.
 //! We use tracing fields to determine whether a log is interal or external and additionally if the log should be
 //! formatted or not.
-//! 
-//! These two fields are 
+//!
+//! These two fields are
 //! `dx_src` which tells the logger that this is a user-facing message and should be routed as so.
 //! `dx_no_fmt`which tells the logger to avoid formatting the log and to print it as-is.
-//! 
+//!
 //! 1. Build general filter
 //! 2. Build file append layer for logging to a file. This file is reset on every CLI-run.
 //! 3. Build CLI layer for routing tracing logs to the TUI.
@@ -39,6 +39,11 @@ const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
 const DX_NO_FMT_FLAG: &str = "dx_no_fmt";
 
+pub fn log_path() -> PathBuf {
+    let tmp_dir = std::env::temp_dir();
+    tmp_dir.join(LOG_FILE_NAME)
+}
+
 /// Build tracing infrastructure.
 pub fn build_tracing() -> CLILogControl {
     let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
@@ -47,7 +52,7 @@ pub fn build_tracing() -> CLILogControl {
     }
 
     // Log file
-    let log_path = std::env::temp_dir().join(LOG_FILE_NAME);
+    let log_path = log_path();
     _ = std::fs::write(&log_path, "");
     let file_append_layer = match FileAppendLayer::new(log_path) {
         Ok(f) => Some(f),

@@ -27,6 +27,9 @@ pub enum Config {
     /// Create a custom html file.
     CustomHtml {},
 
+    /// Print the location of the CLI log file.
+    LogFile {},
+
     /// Set CLI settings.
     #[command(subcommand)]
     Set(Setting),
@@ -107,6 +110,10 @@ impl Config {
                 let content = include_str!("../../assets/index.html");
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?MessageSource::Dev, "🚩 Create custom html file done.");
+            }
+            Config::LogFile {} => {
+                let log_path = crate::tracer::log_path();
+                tracing::info!(dx_src = ?MessageSource::Dev, "Log file is located at {}", log_path.display());
             }
             // Handle CLI settings.
             Config::Set(setting) => {
