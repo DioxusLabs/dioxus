@@ -520,7 +520,7 @@ impl Output {
 
                     let content = messages.first().unwrap_or(&String::new()).clone();
 
-                    // We don't care about logging the app's message so we directly push it isntead of using tracing.
+                    // We don't care about logging the app's message so we directly push it instead of using tracing.
                     self.push_log(Message::new(MessageSource::App(platform), level, content));
                 }
                 Err(err) => {

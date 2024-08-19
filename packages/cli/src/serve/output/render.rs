@@ -49,11 +49,11 @@ impl TuiLayout {
             .constraints([
                 // Body
                 Constraint::Min(0),
-                // Border Seperator
+                // Border Separator
                 Constraint::Length(1),
                 // Footer Keybinds
                 Constraint::Length(1),
-                // Border Seperator
+                // Border Separator
                 Constraint::Length(1),
                 // Footer Status
                 Constraint::Length(1),
