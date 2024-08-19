@@ -8,7 +8,7 @@ use proc_macro2::Ident;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::File, sync::atomic::AtomicBool};
+use std::{collections::HashMap, fs::File, path::Path, sync::atomic::AtomicBool};
 use std::{path::PathBuf, sync::atomic::Ordering};
 use syn::{
     parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated, token::Token, Expr,
@@ -32,8 +32,13 @@ struct ResourceAsset {
 struct AssetError {}
 impl ResourceAsset {
     fn parse_any(input: &str) -> Result<Self, AssetError> {
+        let absolute = std::env::var("CARGO_MANIFEST_DIR")
+            .map(|s| s.into())
+            .unwrap_or_else(|_| std::env::current_dir().unwrap());
+        let absolute = absolute.join(input.trim_start_matches('/'));
+
         let input = PathBuf::from(input);
-        let local = Some(input.clone());
+        let local = Some(absolute.clone());
         let bundled = input.clone();
         // let local = match input.canonicalized().is_file() {
         //     true => Some(input.canonicalized()),

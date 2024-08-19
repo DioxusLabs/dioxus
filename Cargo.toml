@@ -62,7 +62,6 @@ members = [
     "packages/manganis-macro",
     "packages/manganis-common",
     "packages/manganis-cli-support",
-    "packages/manganis-resolver",
     "packages/manganis-test-package",
     "packages/manganis-test-package/test-package-dependency",
     "packages/manganis-test-package/test-package-nested-dependency",
@@ -107,8 +106,6 @@ manganis  = { path = "packages/manganis", version = "0.6.0-alpha.2" }
 manganis-common  = { path = "packages/manganis-common", version = "0.6.0-alpha.2" }
 manganis-cli-support  = { path = "packages/manganis-cli-support", version = "0.6.0-alpha.2" }
 manganis-macro  = { path = "packages/manganis-macro", version = "0.6.0-alpha.2" }
-manganis-resolver  = { path = "packages/manganis-resolver", version = "0.6.0-alpha.2" }
-
 
 warnings = { version = "0.2.0" }
 

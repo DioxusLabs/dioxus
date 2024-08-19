@@ -71,7 +71,7 @@ impl Asset {
 
 impl std::fmt::Display for Asset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.src.input)
+        write!(f, "{}", self.src.resolve().display())
     }
 }
 
@@ -84,11 +84,60 @@ pub struct AssetSource {
     /// The sourcefile of the asset
     pub source_file: &'static str,
 
-    ///
+    /// The absolute path to the asset on the filesystem
     pub local: &'static str,
 
     ///
     pub bundled: &'static str,
+}
+
+impl AssetSource {
+    /// Return a canonicalized path to the asset
+    pub fn resolve(&self) -> PathBuf {
+        // if we're running with cargo in the loop, we can use the absolute path.
+        // this is non-bundled situations
+        if let Ok(_manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+            return PathBuf::from(self.local);
+        }
+
+        // Otherwise, we need to resolve the bundled path against the basepath.
+        // on native this will be the bundled path
+        base_path()
+            .unwrap_or_else(|| std::env::current_dir().unwrap())
+            .join(self.input.trim_start_matches('/'))
+    }
+}
+
+fn base_path() -> Option<PathBuf> {
+    // Use the prescence of the bundle to determine if we're in dev mode
+    // todo: for other platforms, we should check their bundles too. This currently only works for macOS and iOS
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        // Note that this will return `target/debug` if you're in debug mode - not reliable check if we're in dev mode
+        if let Some(resources) = core_foundation::bundle::CFBundle::main_bundle().resources_path() {
+            return dunce::canonicalize(resources).ok();
+        }
+    }
+
+    // todo: this needs to be real canonicalizations
+    // let root;
+
+    // #[cfg(target_os = "wasm32-unknown-unknown")]
+    // {
+    //     root = "/".to_string();
+    // }
+
+    // #[cfg(not(target_os = "wasm32-unknown-unknown"))]
+    // {
+    //     root = std::env::current_dir().unwrap();
+    // }
+
+    // let var_base_path = std::env::var("MANGANIS_BASE_PATH")
+    //     .unwrap_or_else(|| "/".to_string())
+    //     .map(|p| PathBuf::from(p));
+
+    // var_base_path.unwrap_or(root)
+    None
 }
 
 ///
@@ -210,7 +259,7 @@ pub struct ImageAsset {
 
 impl std::fmt::Display for ImageAsset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        write!(f, "{}", self.src.resolve().display())
     }
 }
 

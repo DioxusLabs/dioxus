@@ -196,19 +196,16 @@ impl WebviewInstance {
                 edits
             ];
             move |request, responder: RequestAsyncResponder| {
-                // Try to serve the index file first
-                if let Some(index_bytes) = protocol::index_request(
-                    &request,
+                protocol::desktop_handler(
+                    request,
+                    asset_handlers.clone(),
+                    responder,
+                    &edits,
                     custom_head.clone(),
                     custom_index.clone(),
                     &root_name,
                     headless,
-                ) {
-                    return responder.respond(index_bytes);
-                }
-
-                // Otherwise, try to serve an asset, either from the user or the filesystem
-                protocol::desktop_handler(request, asset_handlers.clone(), responder, &edits);
+                )
             }
         };
 

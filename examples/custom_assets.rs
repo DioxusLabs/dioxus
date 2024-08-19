@@ -28,6 +28,17 @@ fn app() -> Element {
         div {
             h1 { "This should show an image:" }
             img { src: ASSET_PATH }
+
+            // keep support for these too
+            // img {
+            //     src: "/Users/jonkelley/Development/dioxus/examples/assets/logo.png"
+            // }
+            // img {
+            //     src: "/examples/assets/logo.png"
+            // }
+            // img {
+            //     src: "examples/assets/logo.png"
+            // }
         }
     }
 }

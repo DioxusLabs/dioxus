@@ -24,6 +24,12 @@ once_cell = "1.19.0"
 # core-foundation = "0.9.3"
 
 # [target.'cfg(target_os ="macos")'.dependencies]
+infer = { workspace = true }
+manganis-common = { workspace = true }
+dunce = "1.0.2"
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+core-foundation = "0.10.0"
 
 
 [features]

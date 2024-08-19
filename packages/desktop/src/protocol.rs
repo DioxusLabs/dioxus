@@ -27,6 +27,91 @@ const EVENTS_PATH: &str = "dioxus://index.html/__events";
 
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
+/// Handle a request from the webview
+///
+/// - Tries to stream edits if they're requested.
+/// - If that doesn't match, tries a user provided asset handler
+/// - If that doesn't match, tries to serve a file from the filesystem
+pub(super) fn desktop_handler(
+    request: Request<Vec<u8>>,
+    asset_handlers: AssetHandlerRegistry,
+    responder: RequestAsyncResponder,
+    edit_state: &WebviewEdits,
+    custom_head: Option<String>,
+    custom_index: Option<String>,
+    root_name: &str,
+    headless: bool,
+) {
+    // Try to serve the index file first
+    if let Some(index_bytes) =
+        index_request(&request, custom_head, custom_index, &root_name, headless)
+    {
+        return responder.respond(index_bytes);
+    }
+
+    // If the request is asking for edits (ie binary protocol streaming), do that
+    let trimmed_uri = request.uri().path().trim_matches('/');
+    if trimmed_uri == "__edits" {
+        return edit_state.wry_queue.handle_request(responder);
+    }
+
+    // If the request is asking for an event response, do that
+    if trimmed_uri == "__events" {
+        return edit_state.handle_event(request, responder);
+    }
+
+    match serve_asset(request) {
+        Ok(res) => responder.respond(res),
+        Err(_e) => responder.respond(
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(String::from("Failed to serve asset").into_bytes())
+                .unwrap(),
+        ),
+    }
+}
+
+fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
+    // If the user provided a custom asset handler, then call it and return the response if the request was handled.
+    // The path is the first part of the URI, so we need to trim the leading slash.
+    let mut asset = PathBuf::from(
+        urlencoding::decode(request.uri().path())
+            .expect("expected URL to be UTF-8 encoded")
+            .as_ref(),
+    );
+
+    // If the asset doesn't exist, then we might need to try resolving it from the bundle root manually.
+    // We can mostly guarantee that manganis will give us absolute paths, so the only way we're getting these
+    // is if someone is passing in a relative path to their project, manually
+    //
+    // Do I *think* you should be doing this? No.
+    // Eventually we want to remove this, so consider it deprecated
+    if !asset.exists() {
+        let relative_path = request.uri().path().trim_start_matches('/');
+        let bundle_root = get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap());
+        asset = bundle_root.join(relative_path);
+    }
+
+    // If the asset exists, then we can serve it!
+    if asset.exists() {
+        return Ok(Response::builder()
+            .header("Content-Type", get_mime_from_path(&asset)?)
+            .header("Access-Control-Allow-Origin", "*")
+            .body(std::fs::read(asset)?)?);
+    }
+
+    // todo: we want to move the custom assets onto a different protocol or something
+    // if let Some(name) = path.iter().next().unwrap().to_str() {
+    //     if asset_handlers.has_handler(name) {
+    //         return asset_handlers.handle_request(name, request, responder);
+    //     }
+    // }
+
+    return Ok(Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body(String::from("Not Found").into_bytes())?);
+}
+
 /// Build the index.html file we use for bootstrapping a new app
 ///
 /// We use wry/webview by building a special index.html that forms a bridge between the webview and your rust code
@@ -36,7 +121,7 @@ static DEFAULT_INDEX: &str = include_str!("./index.html");
 /// mess with UI elements. We make this decision since other renderers like LiveView are very separate and can
 /// never properly bridge the gap. Eventually of course, the idea is to build a custom CSS/HTML renderer where you
 /// *do* have native control over elements, but that still won't work with liveview.
-pub(super) fn index_request(
+fn index_request(
     request: &Request<Vec<u8>>,
     custom_head: Option<String>,
     custom_index: Option<String>,
@@ -53,17 +138,8 @@ pub(super) fn index_request(
 
     // Insert a custom head if provided
     // We look just for the closing head tag. If a user provided a custom index with weird syntax, this might fail
-    let head = match custom_head {
-        Some(mut head) => {
-            if let Some(assets_head) = assets_head() {
-                head.push_str(&assets_head);
-            }
-            Some(head)
-        }
-        None => assets_head(),
-    };
 
-    if let Some(head) = head {
+    if let Some(head) = custom_head {
         index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
     }
 
@@ -82,47 +158,12 @@ pub(super) fn index_request(
         .ok()
 }
 
-fn assets_head() -> Option<String> {
-    #[cfg(any(
-        target_os = "windows",
-        target_os = "macos",
-        target_os = "linux",
-        target_os = "dragonfly",
-        target_os = "freebsd",
-        target_os = "netbsd",
-        target_os = "openbsd"
-    ))]
-    {
-        let assets_head_path = PathBuf::from("__assets_head.html");
-        let head = resolve_resource(&assets_head_path);
-        match std::fs::read_to_string(&head) {
-            Ok(s) => Some(s),
-            Err(err) => {
-                tracing::warn!("Assets built with manganis cannot be preloaded (failed to read {head:?}). This warning may occur when you build a desktop application without the dioxus CLI. If you do not use manganis, you can ignore this warning: {err}.");
-                None
-            }
-        }
-    }
-    #[cfg(not(any(
-        target_os = "windows",
-        target_os = "macos",
-        target_os = "linux",
-        target_os = "dragonfly",
-        target_os = "freebsd",
-        target_os = "netbsd",
-        target_os = "openbsd"
-    )))]
-    {
-        None
-    }
-}
-
 fn resolve_resource(path: &Path) -> PathBuf {
     let mut base_path = get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap());
 
-    println!("asset path: {:?}, {path:?}", base_path);
+    // println!("asset path: {:?}, {path:?}", base_path);
     base_path.push(path);
-    println!("asset path resolved: {:?}", base_path);
+    // println!("asset path resolved: {:?}", base_path);
 
     // // Even in dev mode, mobile needs to resolve the asset path from the bundle
     // if running_in_dev_mode() || cfg!(any(target_os = "ios", target_os = "android")) {
@@ -150,76 +191,6 @@ fn resolve_resource(path: &Path) -> PathBuf {
     // }
 
     base_path
-}
-
-/// Handle a request from the webview
-///
-/// - Tries to stream edits if they're requested.
-/// - If that doesn't match, tries a user provided asset handler
-/// - If that doesn't match, tries to serve a file from the filesystem
-pub(super) fn desktop_handler(
-    request: Request<Vec<u8>>,
-    asset_handlers: AssetHandlerRegistry,
-    responder: RequestAsyncResponder,
-    edit_state: &WebviewEdits,
-) {
-    // If the request is asking for edits (ie binary protocol streaming), do that
-    let trimmed_uri = request.uri().path().trim_matches('/');
-    if trimmed_uri == "__edits" {
-        return edit_state.wry_queue.handle_request(responder);
-    }
-
-    // If the request is asking for an event response, do that
-    if trimmed_uri == "__events" {
-        return edit_state.handle_event(request, responder);
-    }
-
-    // If the user provided a custom asset handler, then call it and return the response if the request was handled.
-    // The path is the first part of the URI, so we need to trim the leading slash.
-    let path = PathBuf::from(
-        urlencoding::decode(request.uri().path().trim_start_matches('/'))
-            .expect("expected URL to be UTF-8 encoded")
-            .as_ref(),
-    );
-
-    if path.parent().is_none() {
-        return tracing::error!("Asset request has no parent {path:?}");
-    }
-
-    if let Some(name) = path.iter().next().unwrap().to_str() {
-        if asset_handlers.has_handler(name) {
-            return asset_handlers.handle_request(name, request, responder);
-        }
-    }
-
-    // Else, try to serve a file from the filesystem.
-    match serve_from_fs(path) {
-        Ok(res) => responder.respond(res),
-        Err(e) => {
-            tracing::error!("Error serving request from filesystem {}", e);
-        }
-    }
-}
-
-fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
-    // If the path is relative, we'll try to serve it from the assets directory.
-    let mut asset = resolve_resource(&path);
-
-    // If we can't find it, make it absolute and try again
-    if !asset.exists() {
-        asset = PathBuf::from("/").join(&path);
-    }
-
-    if !asset.exists() {
-        return Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(String::from("Not Found").into_bytes())?);
-    }
-
-    Ok(Response::builder()
-        .header("Content-Type", get_mime_from_path(&asset)?)
-        .header("Access-Control-Allow-Origin", "*")
-        .body(std::fs::read(asset)?)?)
 }
 
 /// Construct the inline script that boots up the page and bridges the webview with rust code.

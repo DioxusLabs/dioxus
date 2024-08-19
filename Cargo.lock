@@ -6331,6 +6331,10 @@ dependencies = [
 name = "manganis"
 version = "0.6.0-alpha.2"
 dependencies = [
+ "core-foundation 0.10.0",
+ "dunce",
+ "infer 0.16.0",
+ "manganis-common",
  "manganis-macro",
  "once_cell",
 ]
@@ -6384,17 +6388,6 @@ dependencies = [
  "serde",
  "serde_json",
  "syn 2.0.74",
-]
-
-[[package]]
-name = "manganis-resolver"
-version = "0.6.0-alpha.2"
-dependencies = [
- "core-foundation 0.9.4",
- "dunce",
- "infer 0.16.0",
- "manganis",
- "manganis-common",
 ]
 
 [[package]]
