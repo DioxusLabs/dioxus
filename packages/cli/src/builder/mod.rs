@@ -1,7 +1,7 @@
-use crate::build::Build;
 use crate::cli::serve::ServeArguments;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
+use crate::{build::Build, config};
 use dioxus_cli_config::{Platform, RuntimeCLIArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
@@ -148,6 +148,7 @@ impl BuildResult {
     /// Open the executable if this is a native build
     pub fn open(
         &self,
+        config: &DioxusCrate,
         serve: &ServeArguments,
         fullstack_address: Option<SocketAddr>,
         workspace: &std::path::Path,
@@ -168,6 +169,7 @@ impl BuildResult {
             //     dioxus_cli_config::__private::SERVE_ENV,
             //     serde_json::to_string(&arguments).unwrap(),
             // )
+            .env("CARGO_MANIFEST_DIR", config.crate_dir())
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)

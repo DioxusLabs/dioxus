@@ -117,14 +117,12 @@ fn assets_head() -> Option<String> {
     }
 }
 
-fn running_in_dev_mode() -> bool {
-    // If running under cargo, there's no bundle!
-    // There might be a smarter/more resilient way of doing this
-    std::env::var_os("CARGO").is_some()
-}
-
 fn resolve_resource(path: &Path) -> PathBuf {
-    let mut base_path = get_asset_root_or_default();
+    let mut base_path = get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    println!("asset path: {:?}, {path:?}", base_path);
+    base_path.push(path);
+    println!("asset path resolved: {:?}", base_path);
 
     // // Even in dev mode, mobile needs to resolve the asset path from the bundle
     // if running_in_dev_mode() || cfg!(any(target_os = "ios", target_os = "android")) {
@@ -263,14 +261,6 @@ fn module_loader(root_id: &str, headless: bool) -> String {
 
 /// Get the asset directory, following tauri/cargo-bundles directory discovery approach
 ///
-/// Defaults to the current directory if no asset directory is found, which is useful for development when the app
-/// isn't bundled.
-fn get_asset_root_or_default() -> PathBuf {
-    get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap())
-}
-
-/// Get the asset directory, following tauri/cargo-bundles directory discovery approach
-///
 /// Currently supports:
 /// - [x] macOS
 /// - [x] iOS
@@ -280,21 +270,23 @@ fn get_asset_root_or_default() -> PathBuf {
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
+    // If the manifest_dir is set, we're in a cargo project and we can use that as the asset root
+    // This works with asset!() since asset!() is always relatif to the manifest dir, both in dev and bundled
+    if let Some(cargo_dir) = std::env::var("CARGO_MANIFEST_DIR").map(PathBuf::from).ok() {
+        return Some(cargo_dir);
+    }
+
     // Use the prescence of the bundle to determine if we're in dev mode
     // todo: for other platforms, we should check their bundles too. This currently only works for macOS and iOS
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
+        // Note that this will return `target/debug` if you're in debug mode - not reliable check if we're in dev mode
         if let Some(resources) = core_foundation::bundle::CFBundle::main_bundle().resources_path() {
             return dunce::canonicalize(resources).ok();
         }
     }
 
     None
-
-    // dioxus_cli_config::CURRENT_CONFIG
-    //     .as_ref()
-    //     .map(|c| c.application.out_dir.clone())
-    //     .ok()
 }
 
 /// Get the mime type from a path-like string

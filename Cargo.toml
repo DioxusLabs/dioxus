@@ -194,17 +194,19 @@ cargo-config2 = "0.1.26"
 
 criterion = { version = "0.5" }
 
-[profile.dev.package.dioxus-core-macro]
-opt-level = 3
-
 # Enable a small amount of optimization in debug mode
 [profile.cli-dev]
-inherits = "dev"
+inherits = "release"
 opt-level = 1
+debug = true
 
-# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
-[profile.cli-dev.package."*"]
-opt-level = 3
+# [profile.cli-dev]
+# inherits = "dev"
+# opt-level = 1
+
+# # Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+# [profile.cli-dev.package."*"]
+# opt-level = 3
 
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
 [profile.release-unoptimized]
@@ -228,12 +230,10 @@ publish = false
 version = "0.6.0-alpha.2"
 
 [dependencies]
-manganis = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["json"], optional = true }
+ciborium = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5", optional = true }
-ciborium = { version = "0.2.1", optional = true }
-base64 = { version = "0.21.0", optional = true }
-tracing-subscriber = "0.3.17"
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }

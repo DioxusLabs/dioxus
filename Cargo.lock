@@ -2741,7 +2741,7 @@ dependencies = [
 name = "dioxus-examples"
 version = "0.6.0-alpha.2"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "ciborium",
  "dioxus",
  "dioxus-ssr",
@@ -2749,14 +2749,12 @@ dependencies = [
  "futures-util",
  "getrandom 0.2.15",
  "http-range",
- "manganis",
  "rand 0.8.5",
  "reqwest",
  "separator",
  "serde",
  "serde_json",
  "tokio",
- "tracing-subscriber",
 ]
 
 [[package]]

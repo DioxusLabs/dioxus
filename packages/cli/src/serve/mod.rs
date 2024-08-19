@@ -147,7 +147,7 @@ pub async fn serve_all(
 
                         // If we have a build result, open it
                         for build_result in results.iter() {
-                            let child = build_result.open(&serve.server_arguments, server.fullstack_address(), &dioxus_crate.workspace_dir());
+                            let child = build_result.open(&dioxus_crate, &serve.server_arguments, server.fullstack_address(), &dioxus_crate.workspace_dir());
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
                                 Err(e) => {

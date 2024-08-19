@@ -203,14 +203,16 @@ impl Watcher {
 
             // If the extension is a backup file, or a hidden file, ignore it completely (no rebuilds)
             if is_backup_file(path.to_path_buf()) {
-                tracing::trace!("Ignoring backup file: {:?}", path);
                 continue;
             }
 
             // If the path is ignored, don't watch it
             if self.ignore.matched(path, path.is_dir()).is_ignore() {
+                tracing::trace!("Ignoring update to file: {:?}", path);
                 continue;
             }
+
+            tracing::trace!("Enqueuing hotreload update to file: {:?}", path);
 
             modified_files.push(path.clone());
         }

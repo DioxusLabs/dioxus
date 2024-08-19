@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 /// Asset
 #[derive(Debug, PartialEq, Clone, Copy, Hash)]
 pub struct Asset {
@@ -54,6 +56,16 @@ impl Asset {
     ///
     pub const fn typescript(self) -> TypeScriptAsset {
         TypeScriptAsset::new(self.src)
+    }
+
+    /// Get the path to the asset
+    pub fn path(&self) -> PathBuf {
+        PathBuf::from(self.src.input.to_string())
+    }
+
+    /// Get the path to the asset
+    pub fn relative_path(&self) -> PathBuf {
+        PathBuf::from(self.src.input.trim_start_matches("/").to_string())
     }
 }
 
