@@ -651,7 +651,7 @@ impl Output {
                 );
 
                 // Render info bar, status bar, and borders.
-                layout.render_info_bar(frame, self.current_tab);
+                layout.render_info_bar(frame, self.current_tab, self.more_modal_open);
                 layout.render_status_bar(
                     frame,
                     self.is_cli_release,

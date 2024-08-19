@@ -203,7 +203,12 @@ impl TuiLayout {
     }
 
     /// Render the info bar.
-    pub fn render_info_bar(&self, frame: &mut Frame, current_tab: OutputTab) {
+    pub fn render_info_bar(
+        &self,
+        frame: &mut Frame,
+        current_tab: OutputTab,
+        more_modal_open: bool,
+    ) {
         let mut console_line = Span::from("[1] console");
         let mut build_line = Span::from("[2] build");
         let divider = Span::from("  | ").gray();
@@ -220,20 +225,24 @@ impl TuiLayout {
             }
         }
 
+        let more_span = Span::from("[/] more");
+        let more_span = match more_modal_open {
+            true => more_span.light_yellow(),
+            false => more_span.dark_gray(),
+        };
+
         // Left-aligned text
         let left_line = Line::from(vec![console_line, divider, build_line]);
 
         // Right-aligned text
         let right_line = Line::from(vec![
-            Span::from("[/] more").dark_gray(),
+            more_span,
             Span::from(" | ").gray(),
             Span::from("[r] reload").dark_gray(),
             Span::from(" | ").gray(),
             Span::from("[c] clear").dark_gray(),
             Span::from(" | ").gray(),
             Span::from("[o] open").dark_gray(),
-            Span::from(" | ").gray(),
-            Span::from("[h] hide").dark_gray(),
         ]);
 
         // Render the info
