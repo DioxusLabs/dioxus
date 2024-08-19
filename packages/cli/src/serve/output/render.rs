@@ -14,7 +14,7 @@ use ansi_to_tui::IntoText;
 use dioxus_cli_config::Platform;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
-    style::{Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
         Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget,
@@ -26,6 +26,8 @@ use std::rc::Rc;
 use tracing::Level;
 
 pub struct TuiLayout {
+    /// The entire TUI body.
+    body: Rc<[Rect]>,
     /// The console where build logs are displayed.
     console: Rc<[Rect]>,
     // The border that separates the two bars (info and status).
@@ -67,20 +69,25 @@ impl TuiLayout {
         let border_sep = body[1];
 
         Self {
+            body,
             console,
             border_sep,
             status_bar,
         }
     }
 
-    /// Render all  borders.
-    pub fn render_borders(&self, frame: &mut Frame) {
+    /// Render all decorations.
+    pub fn render_decor(&self, frame: &mut Frame) {
+        // Borders
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
                 .border_style(Style::new().gray()),
             self.border_sep,
         );
+
+        // Backgrounds
+        frame.render_widget(Block::new().bg(Color::Gray), self.body[2]);
     }
 
     /// Render the console and it's logs.

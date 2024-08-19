@@ -635,7 +635,7 @@ impl Output {
                     &self.build_progress,
                     self.more_modal_open,
                 );
-                layout.render_borders(frame);
+                layout.render_decor(frame);
 
                 if self.more_modal_open {
                     layout.render_more_modal(frame);
