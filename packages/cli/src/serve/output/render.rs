@@ -46,7 +46,7 @@ impl TuiLayout {
         // The full layout
         let body = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(&[
+            .constraints([
                 // Body
                 Constraint::Min(0),
                 // Border Seperator
@@ -65,19 +65,19 @@ impl TuiLayout {
         // Build the console, where logs go.
         let console = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(&[Constraint::Fill(1)])
+            .constraints([Constraint::Fill(1)])
             .split(body[0]);
 
         // Build the info bar for display keybinds.
         let info_bar = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints(&[Constraint::Fill(1), Constraint::Fill(1)])
+            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
             .split(body[2]);
 
         // Build the status bar.
         let status_bar = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints(&[Constraint::Fill(1)])
+            .constraints([Constraint::Fill(1)])
             .split(body[4]);
 
         // Specify borders
@@ -110,7 +110,7 @@ impl TuiLayout {
         frame: &mut Frame,
         scroll: ScrollPosition,
         current_tab: OutputTab,
-        messages: &Vec<Message>,
+        messages: &[Message],
     ) -> NumLinesWrapping {
         // TODO: Fancy filtering support "show me only app logs from web"
         // TODO: This is showing messages in reverse.
@@ -292,7 +292,7 @@ impl TuiLayout {
         let area = self.console[0];
         let modal = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(&[Constraint::Fill(1)])
+            .constraints([Constraint::Fill(1)])
             .split(area)[0];
 
         frame.render_widget(Clear, modal);

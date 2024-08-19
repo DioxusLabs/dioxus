@@ -160,7 +160,7 @@ where
             for (field, value) in visitor.fields.iter() {
                 _ = write!(final_msg, "{} ", format_field(field, value));
             }
-            _ = write!(final_msg, "\n");
+            _ = writeln!(final_msg);
             final_msg
         };
 
@@ -238,7 +238,7 @@ where
         }
 
         self.output_tx
-            .unbounded_send(Message::new(visitor.source, level.clone(), final_msg))
+            .unbounded_send(Message::new(visitor.source, *level, final_msg))
             .unwrap();
     }
 
