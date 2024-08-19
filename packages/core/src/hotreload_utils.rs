@@ -10,7 +10,6 @@ use crate::{
 };
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 pub struct HotreloadedLiteral {
@@ -19,7 +18,6 @@ pub struct HotreloadedLiteral {
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum HotReloadLiteral {
@@ -71,7 +69,6 @@ impl Hash for HotReloadLiteral {
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FmtedSegments {
@@ -98,6 +95,8 @@ impl FmtedSegments {
     }
 }
 
+type StaticStr = &'static str;
+
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -107,7 +106,7 @@ pub enum FmtSegment {
             feature = "serialize",
             serde(deserialize_with = "deserialize_string_leaky")
         )]
-        value: &'static str,
+        value: StaticStr,
     },
     Dynamic {
         id: usize,
@@ -313,16 +312,16 @@ impl DynamicValuePool {
 #[doc(hidden)]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub struct HotReloadTemplateWithLocation {
     pub location: String,
     pub template: HotReloadedTemplate,
 }
 
+type StaticTemplateArray = &'static [TemplateNode];
+
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub struct HotReloadedTemplate {
     pub key: Option<FmtedSegments>,
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
@@ -332,7 +331,7 @@ pub struct HotReloadedTemplate {
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_leaky")
     )]
-    pub roots: &'static [TemplateNode],
+    pub roots: StaticTemplateArray,
     /// The template that is computed from the hot reload roots
     template: Template,
 }
@@ -425,7 +424,6 @@ impl HotReloadedTemplate {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadDynamicNode {
     Dynamic(usize),
     Formatted(FmtedSegments),
@@ -434,7 +432,6 @@ pub enum HotReloadDynamicNode {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadDynamicAttribute {
     Dynamic(usize),
     Named(NamedAttribute),
@@ -449,13 +446,13 @@ pub struct NamedAttribute {
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_string_leaky")
     )]
-    name: &'static str,
+    name: StaticStr,
     /// The namespace of this attribute. Does not exist in the HTML spec
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_option_leaky")
     )]
-    namespace: Option<&'static str>,
+    namespace: Option<StaticStr>,
 
     value: HotReloadAttributeValue,
 }
@@ -477,7 +474,6 @@ impl NamedAttribute {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadAttributeValue {
     Literal(HotReloadLiteral),
     Dynamic(usize),

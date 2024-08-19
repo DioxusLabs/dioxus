@@ -231,7 +231,7 @@ impl TuiLayout {
         let right_line = Line::from(vec![
             more_span,
             Span::from(" | ").gray(),
-            Span::from("[r] reload").gray(),
+            Span::from("[r] rebuild").gray(),
             Span::from(" | ").gray(),
             Span::from("[c] clear").gray(),
             Span::from(" | ").gray(),

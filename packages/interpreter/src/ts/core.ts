@@ -19,6 +19,8 @@ export class BaseInterpreter {
 
   root: HTMLElement;
   handler: EventListener;
+  resizeObserver: ResizeObserver;
+
   nodes: Node[];
   stack: Node[];
   templates: {
@@ -39,8 +41,35 @@ export class BaseInterpreter {
     this.stack = [root];
     this.templates = {};
 
-    if (handler) {
-      this.handler = handler;
+    this.handler = handler;
+  }
+
+  handleResizeEvent(entry: ResizeObserverEntry) {
+    const target = entry.target;
+
+    let event = new CustomEvent<ResizeObserverEntry>("resize", {
+      bubbles: false,
+      detail: entry,
+    });
+
+    target.dispatchEvent(event);
+  }
+
+  createObserver(element: HTMLElement) {
+    // Lazily create the resize observer
+    if (!this.resizeObserver) {
+      this.resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          this.handleResizeEvent(entry);
+        }
+      });
+    }
+    this.resizeObserver.observe(element);
+  }
+
+  removeObserver(element: HTMLElement) {
+    if (this.resizeObserver) {
+      this.resizeObserver.unobserve(element);
     }
   }
 
@@ -58,6 +87,10 @@ export class BaseInterpreter {
         this.local[id] = {};
       }
       element.addEventListener(event_name, this.handler);
+    }
+
+    if (event_name == "resize") {
+      this.createObserver(element);
     }
   }
 

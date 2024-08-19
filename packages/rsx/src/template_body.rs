@@ -167,24 +167,23 @@ impl ToTokens for TemplateBody {
                         }
                     );
 
-                    __template.maybe_with_rt(|__template_read| {
-                        // If the template has not been hot reloaded, we always use the original template
-                        // Templates nested within macros may be merged because they have the same file-line-column-index
-                        // They cannot be hot reloaded, so this prevents incorrect rendering
-                        let __template_read = match __template_read.as_ref() {
-                            Some(__template_read) => __template_read,
-                            None => __original_template(),
-                        };
-                        let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                            vec![ #( #dynamic_text.to_string() ),* ],
-                        );
-                        let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
-                            vec![ #( #dynamic_nodes ),* ],
-                            vec![ #( #dyn_attr_printer ),* ],
-                            __dynamic_literal_pool
-                        );
-                        __dynamic_value_pool.render_with(__template_read)
-                    })
+                    // If the template has not been hot reloaded, we always use the original template
+                    // Templates nested within macros may be merged because they have the same file-line-column-index
+                    // They cannot be hot reloaded, so this prevents incorrect rendering
+                    let __template_read = dioxus_core::Runtime::current().ok().map(|_| __template.read());
+                    let __template_read = match __template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
+                        Some(Some(__template_read)) => &__template_read,
+                        _ => __original_template(),
+                    };
+                    let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                        vec![ #( #dynamic_text.to_string() ),* ],
+                    );
+                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
+                        vec![ #( #dynamic_nodes ),* ],
+                        vec![ #( #dyn_attr_printer ),* ],
+                        __dynamic_literal_pool
+                    );
+                    __dynamic_value_pool.render_with(__template_read)
                 }
                 #[cfg(not(debug_assertions))]
                 {

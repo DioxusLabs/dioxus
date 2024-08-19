@@ -687,8 +687,8 @@ impl ActiveBuild {
     fn update(&mut self, update: BuildProgressUpdate) {
         match update.update {
             UpdateStage::Start => {
-                // If we are already past the stage, don't roll back
-                if self.stage > update.stage {
+                // If we are already past the stage, don't roll back, but allow a fresh build to update.
+                if self.stage > update.stage && self.stage < Stage::Finished {
                     return;
                 }
                 self.stage = update.stage;

@@ -2599,7 +2599,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-examples"
-version = "0.0.0"
+version = "0.6.0-alpha.2"
 dependencies = [
  "base64 0.21.7",
  "ciborium",

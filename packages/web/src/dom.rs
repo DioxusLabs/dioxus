@@ -13,7 +13,7 @@ use dioxus_core::{ElementId, Template};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Element, Event};
+use web_sys::{Document, Element, Event, Node};
 
 use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
 
@@ -146,6 +146,11 @@ fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Elem
         .expect("missing target")
         .dyn_into::<web_sys::Node>()
         .expect("not a valid node");
+
+    walk_element_for_id(&target)
+}
+
+fn walk_element_for_id(target: &Node) -> Option<(ElementId, web_sys::Element)> {
     let mut current_target_element = target.dyn_ref::<web_sys::Element>().cloned();
 
     loop {

@@ -98,6 +98,7 @@ export class NativeInterpreter extends JSChannel_ {
     // make sure we pass the handler to the base interpreter
     const handler: EventListener = (event) =>
       this.handleEvent(event, event.type, true);
+
     super.initialize(root, handler);
   }
 
@@ -209,7 +210,7 @@ export class NativeInterpreter extends JSChannel_ {
     // This is to support the prevent_default: "onclick" attribute that dioxus has had for a while, but is not necessary
     // now that we expose preventDefault to the virtualdom on desktop
     // Liveview will still need to use this
-    this.preventDefaults(event, target);
+    this.preventDefaults(event);
 
     // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
@@ -262,7 +263,7 @@ export class NativeInterpreter extends JSChannel_ {
   // - prevent anchor tags from navigating
   // - prevent buttons from submitting forms
   // - let the virtualdom attempt to prevent the event
-  preventDefaults(event: Event, target: EventTarget) {
+  preventDefaults(event: Event) {
     if (event.type === "submit") {
       event.preventDefault();
     }

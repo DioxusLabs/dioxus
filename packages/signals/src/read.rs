@@ -221,8 +221,11 @@ pub trait Readable {
         <Self::Storage as AnyStorage>::map(self.read(), |v| v.index(index))
     }
 
+    /// SAFETY: You must call this function directly with `self` as the argument.
+    /// This function relies on the size of the object you return from the deref
+    /// being the same as the object you pass in
     #[doc(hidden)]
-    fn deref_impl<'a>(&self) -> &'a dyn Fn() -> Self::Target
+    unsafe fn deref_impl<'a>(&self) -> &'a dyn Fn() -> Self::Target
     where
         Self: Sized + 'a,
         Self::Target: Clone,
