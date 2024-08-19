@@ -95,7 +95,7 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.0" }
 manganis-cli-support = { version = "0.3.0-alpha.1", features = ["html"] }
 manganis = { version = "0.3.0-alpha.1", default-features = false, features = ["html", "macro"]}
 warnings = { version = "0.2.0" }
-
+swc_ecma_transforms_proposal = { version = "=0.178.0" }
 
 # a fork of pretty please for tests
 prettier-please = { version = "0.3.0", features = ["verbatim"]}
