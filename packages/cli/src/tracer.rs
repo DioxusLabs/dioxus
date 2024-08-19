@@ -1,3 +1,19 @@
+//! CLI Tracing
+//! 
+//! Tracing has internal and user-facing logs. User-facing logs are directly router to the user in some form.
+//! Internal logs are stored in a log file for consumption in bug reports and debugging.
+//! We use tracing fields to determine whether a log is interal or external and additionally if the log should be
+//! formatted or not.
+//! 
+//! These two fields are 
+//! `dx_src` which tells the logger that this is a user-facing message and should be routed as so.
+//! `dx_no_fmt`which tells the logger to avoid formatting the log and to print it as-is.
+//! 
+//! 1. Build general filter
+//! 2. Build file append layer for logging to a file. This file is reset on every CLI-run.
+//! 3. Build CLI layer for routing tracing logs to the TUI.
+//! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
+
 use crate::serve::output::{Message, MessageSource};
 use console::strip_ansi_codes;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
@@ -25,22 +41,6 @@ const DX_NO_FMT_FLAG: &str = "dx_no_fmt";
 
 /// Build tracing infrastructure.
 pub fn build_tracing() -> CLILogControl {
-    // TODO: clean these comments
-    // 1. Set EnvFilter Layer
-    // 2. Rolling log file layer
-    // 3. Custom subscriber that filters any internal logs from continuing and sends user-facing logs to output.
-    // 4. Tracing subscriber fmt layer for any user-facing messages
-
-    // If the tui output is enabled we must send all logs to the TUI for handling
-    // If the tui output is disabled we need to rely on the EnvFilter for filtering
-    // and format the output and print it.
-
-    // A subscriber that provides structured logs to the output if enabled
-    // A writer that disables fmt subscriber from outputting if tui is enabled
-
-    // A hardened filter for non-interactive user-facing logs.
-    // If {LOG_ENV} is set, default to env, otherwise filter to cli
-    // and manganis warnings and errors from other crates
     let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
     if env::var(LOG_ENV).is_ok() {
         filter = EnvFilter::from_env(LOG_ENV);
@@ -241,22 +241,6 @@ where
             .unbounded_send(Message::new(visitor.source, *level, final_msg))
             .unwrap();
     }
-
-    // We don't want internal events to be user-facing so we disable the rest
-    // of the stack if the user-facing opt-in isn't set.
-    //
-    // We could convert this to per-layer filtering instead of global if we wanted to
-    // create a tab on the TUI for non-user-facing logs.
-    // fn event_enabled(
-    //     &self,
-    //     event: &tracing::Event<'_>,
-    //     _ctx: tracing_subscriber::layer::Context<'_, S>,
-    // ) -> bool {
-    //     let mut visitor = CollectVisitor::new();
-    //     event.record(&mut visitor);
-
-    //     visitor.dx_user_msg
-    // }
 
     // TODO: support spans? structured tui log display?
 }
