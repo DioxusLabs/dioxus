@@ -5,19 +5,16 @@
 //! -- CONSOLE--
 //! ------------
 //! ---BORDER---
-//! --INFO BAR--
-//! ---BORDER---
 //! -STATUS BAR-
 
 use super::{
-    BuildProgress, ConsoleHeight, Message, MessageSource, NumLinesWrapping, OutputTab,
-    ScrollPosition,
+    BuildProgress, ConsoleHeight, Message, MessageSource, NumLinesWrapping, ScrollPosition,
 };
 use ansi_to_tui::IntoText;
 use dioxus_cli_config::Platform;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
-    style::{Color, Style, Stylize},
+    style::{Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
         Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget,
@@ -31,12 +28,8 @@ use tracing::Level;
 pub struct TuiLayout {
     /// The console where build logs are displayed.
     console: Rc<[Rect]>,
-    // The border that separates the console and info bar.
-    border_sep_one: Rect,
-    /// The info bar of keybinds, current tab, etc.
-    info_bar: Rc<[Rect]>,
     // The border that separates the two bars (info and status).
-    border_sep_two: Rect,
+    border_sep: Rect,
     //. The status bar that displays build status, platform, versions, etc.
     status_bar: Rc<[Rect]>,
 }
@@ -49,10 +42,6 @@ impl TuiLayout {
             .constraints([
                 // Body
                 Constraint::Min(0),
-                // Border Seperator
-                Constraint::Length(1),
-                // Footer Keybinds
-                Constraint::Length(1),
                 // Border Seperator
                 Constraint::Length(1),
                 // Footer Status
@@ -68,39 +57,29 @@ impl TuiLayout {
             .constraints([Constraint::Fill(1)])
             .split(body[0]);
 
-        // Build the info bar for display keybinds.
-        let info_bar = Layout::default()
+        // Build the status bar.
+        let status_bar = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Fill(1), Constraint::Fill(1)])
             .split(body[2]);
 
-        // Build the status bar.
-        let status_bar = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Fill(1)])
-            .split(body[4]);
-
         // Specify borders
-        let border_sep_one = body[1];
-        let border_sep_two = body[3];
+        let border_sep = body[1];
 
         Self {
             console,
-            border_sep_one,
-            info_bar,
-            border_sep_two,
+            border_sep,
             status_bar,
         }
     }
 
     /// Render all  borders.
     pub fn render_borders(&self, frame: &mut Frame) {
-        frame.render_widget(Block::new().borders(Borders::TOP), self.border_sep_one);
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
-                .border_style(Style::new().dark_gray()),
-            self.border_sep_two,
+                .border_style(Style::new().gray()),
+            self.border_sep,
         );
     }
 
@@ -109,18 +88,15 @@ impl TuiLayout {
         &self,
         frame: &mut Frame,
         scroll: ScrollPosition,
-        current_tab: OutputTab,
         messages: &[Message],
     ) -> NumLinesWrapping {
         // TODO: Fancy filtering support "show me only app logs from web"
-        // TODO: This is showing messages in reverse.
-
         let console = self.console[0];
         let mut out_text = Text::default();
 
         // Filter logs for current tab.
         // Display in order they were created.
-        let msgs = messages.iter().filter(|m| m.output_tab == current_tab);
+        let msgs = messages.iter();
 
         for msg in msgs {
             for line in msg.content.lines() {
@@ -202,54 +178,6 @@ impl TuiLayout {
         num_lines_wrapping
     }
 
-    /// Render the info bar.
-    pub fn render_info_bar(
-        &self,
-        frame: &mut Frame,
-        current_tab: OutputTab,
-        more_modal_open: bool,
-    ) {
-        let mut console_line = Span::from("[1] console");
-        let mut build_line = Span::from("[2] build");
-        let divider = Span::from("  | ").gray();
-
-        // Display the current tab
-        match current_tab {
-            OutputTab::Console => {
-                console_line = console_line.fg(Color::LightYellow);
-                build_line = build_line.fg(Color::DarkGray);
-            }
-            OutputTab::BuildLog => {
-                build_line = build_line.fg(Color::LightYellow);
-                console_line = console_line.fg(Color::DarkGray);
-            }
-        }
-
-        let more_span = Span::from("[/] more");
-        let more_span = match more_modal_open {
-            true => more_span.light_yellow(),
-            false => more_span.dark_gray(),
-        };
-
-        // Left-aligned text
-        let left_line = Line::from(vec![console_line, divider, build_line]);
-
-        // Right-aligned text
-        let right_line = Line::from(vec![
-            more_span,
-            Span::from(" | ").gray(),
-            Span::from("[r] reload").dark_gray(),
-            Span::from(" | ").gray(),
-            Span::from("[c] clear").dark_gray(),
-            Span::from(" | ").gray(),
-            Span::from("[o] open").dark_gray(),
-        ]);
-
-        // Render the info
-        frame.render_widget(Paragraph::new(left_line).left_aligned(), self.info_bar[0]);
-        frame.render_widget(Paragraph::new(right_line).right_aligned(), self.info_bar[1]);
-    }
-
     /// Render the status bar.
     pub fn render_status_bar(
         &self,
@@ -257,7 +185,9 @@ impl TuiLayout {
         is_cli_release: bool,
         platform: Platform,
         build_progress: &BuildProgress,
+        more_modal_open: bool,
     ) {
+        // left aligned text
         let mut spans = vec![
             Span::from(if is_cli_release { "dx" } else { "dx-dev" }).green(),
             Span::from(" ").green(),
@@ -290,9 +220,33 @@ impl TuiLayout {
             }
         }
 
+        // right aligned text
+        let more_span = Span::from("[/] more");
+        let more_span = match more_modal_open {
+            true => more_span.light_yellow(),
+            false => more_span.gray(),
+        };
+
+        // Right-aligned text
+        let right_line = Line::from(vec![
+            more_span,
+            Span::from(" | ").gray(),
+            Span::from("[r] reload").gray(),
+            Span::from(" | ").gray(),
+            Span::from("[c] clear").gray(),
+            Span::from(" | ").gray(),
+            Span::from("[o] open").gray(),
+        ]);
+
         frame.render_widget(
             Paragraph::new(Line::from(spans)).left_aligned(),
             self.status_bar[0],
+        );
+
+        // Render the info
+        frame.render_widget(
+            Paragraph::new(right_line).right_aligned(),
+            self.status_bar[1],
         );
     }
 

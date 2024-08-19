@@ -175,7 +175,6 @@ pub struct Output {
     console_height: ConsoleHeight,
     scroll_position: ScrollPosition,
 
-    current_tab: OutputTab,
     more_modal_open: bool,
     anim_start: Instant,
 
@@ -187,12 +186,6 @@ pub struct Output {
     _rustc_version: String,
     _rustc_nightly: bool,
     _dx_version: String,
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-enum OutputTab {
-    Console,
-    BuildLog,
 }
 
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
@@ -267,15 +260,12 @@ impl Output {
             console_height: ConsoleHeight::zero(),
             num_lines_wrapping: NumLinesWrapping::zero(),
             anim_start: Instant::now(),
-            current_tab: OutputTab::BuildLog,
             addr: cfg.server_arguments.address.clone(),
         })
     }
 
     /// Add a message from stderr to the logs
     fn push_stderr(&mut self, platform: TargetPlatform, stderr: String) {
-        self.set_tab(OutputTab::Console);
-
         self.running_apps
             .get_mut(&platform)
             .unwrap()
@@ -289,7 +279,6 @@ impl Output {
             source: MessageSource::App(platform),
             level: Level::ERROR,
             content: stderr,
-            output_tab: OutputTab::Console,
         });
     }
 
@@ -308,7 +297,6 @@ impl Output {
             source: MessageSource::App(platform),
             level: Level::INFO,
             content: stdout,
-            output_tab: OutputTab::Console,
         });
     }
 
@@ -475,10 +463,8 @@ impl Output {
             }
             Event::Key(key) if key.code == KeyCode::Char('c') => {
                 // Clear the currently selected build logs.
-                self.messages.retain(|m| m.output_tab != self.current_tab);
+                self.messages.drain(..);
             }
-            Event::Key(key) if key.code == KeyCode::Char('1') => self.set_tab(OutputTab::Console),
-            Event::Key(key) if key.code == KeyCode::Char('2') => self.set_tab(OutputTab::BuildLog),
             Event::Resize(_width, _height) => {
                 // nothing, it should take care of itself
             }
@@ -557,11 +543,6 @@ impl Output {
     }
 
     pub fn new_build_progress(&mut self, platform: TargetPlatform, update: BuildProgressUpdate) {
-        // when the build is finished, switch to the console
-        if update.stage == Stage::Finished {
-            self.current_tab = OutputTab::Console;
-        }
-
         self.build_progress
             .current_builds
             .entry(platform)
@@ -643,20 +624,16 @@ impl Output {
                 self.console_height = layout.get_console_height();
 
                 // Render console
-                self.num_lines_wrapping = layout.render_console(
-                    frame,
-                    self.scroll_position,
-                    self.current_tab,
-                    &self.messages,
-                );
+                self.num_lines_wrapping =
+                    layout.render_console(frame, self.scroll_position, &self.messages);
 
                 // Render info bar, status bar, and borders.
-                layout.render_info_bar(frame, self.current_tab, self.more_modal_open);
                 layout.render_status_bar(
                     frame,
                     self.is_cli_release,
                     self.platform,
                     &self.build_progress,
+                    self.more_modal_open,
                 );
                 layout.render_borders(frame);
 
@@ -696,11 +673,6 @@ impl Output {
         }
 
         Ok(false)
-    }
-
-    fn set_tab(&mut self, new_tab: OutputTab) {
-        self.current_tab = new_tab;
-        self.scroll_position = ScrollPosition::zero();
     }
 }
 
@@ -820,21 +792,14 @@ pub struct Message {
     pub source: MessageSource,
     pub level: Level,
     pub content: String,
-    output_tab: OutputTab,
 }
 
 impl Message {
     pub fn new(source: MessageSource, level: Level, content: String) -> Self {
-        let output_tab = match source {
-            MessageSource::Build | MessageSource::Cargo => OutputTab::BuildLog,
-            _ => OutputTab::Console,
-        };
-
         Self {
             source,
             level,
             content,
-            output_tab,
         }
     }
 }
