@@ -55,8 +55,8 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     /// Create a new generational box by leaking a value into the storage. This is useful for creating
     /// a box that needs to be manually dropped with no owners.
     #[track_caller]
-    pub fn leak(value: T) -> Self {
-        let location = S::new(value, std::panic::Location::caller());
+    pub fn leak(value: T, location: &'static std::panic::Location<'static>) -> Self {
+        let location = S::new_rc(value, location);
         Self {
             raw: location,
             _marker: PhantomData,

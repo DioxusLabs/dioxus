@@ -337,6 +337,10 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         location: GenerationalPointer<Self>,
         other: GenerationalPointer<Self>,
     ) -> Result<(), BorrowMutError> {
+        if location == other {
+            return Ok(());
+        }
+
         let (other_final, mut other_write) = Self::get_split_mut(other)?;
 
         let mut write = location.storage.data.write();

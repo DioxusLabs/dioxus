@@ -42,23 +42,17 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
         self.inner.id()
     }
 
-    #[doc(hidden)]
-    /// This should only be used by the `rsx!` macro.
-    pub fn __set(&mut self, value: T) {
-        use crate::write::Writable;
-        use warnings::Warning;
-        // This is only called when converting T -> ReadOnlySignal<T> which will not cause loops
-        crate::warnings::signal_write_in_component_body::allow(|| {
-            crate::warnings::signal_read_and_write_in_reactive_scope::allow(|| {
-                self.inner.set(value);
-            });
-        });
+    /// Point to another signal
+    pub fn point_to(&mut self, other: Self) {
+        self.inner.point_to(other.inner);
     }
 
     #[doc(hidden)]
-    /// This should only be used by the `rsx!` macro.
-    pub fn manually_drop(&self) {
-        self.inner.manually_drop();
+    /// This is only used by the `props` macro.
+    /// Mark any readers of the signal as dirty
+    pub fn mark_dirty(&mut self) {
+        use crate::write::Writable;
+        _ = self.inner.try_write();
     }
 }
 

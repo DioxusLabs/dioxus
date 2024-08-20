@@ -218,6 +218,11 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
+    /// Point to another signal
+    pub fn point_to(&mut self, other: Self) {
+        self.inner.point_to(other.inner);
+    }
+
     /// Drop the value out of the signal, invalidating the signal in the process.
     pub fn manually_drop(&self) {
         self.inner.manually_drop()

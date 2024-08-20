@@ -8,6 +8,7 @@ use crate::{
 use std::{
     any::Any,
     cell::{Ref, RefCell, RefMut},
+    fmt::Debug,
     num::NonZeroU64,
 };
 
@@ -24,6 +25,17 @@ pub(crate) enum RefCellStorageEntryData {
     Rc(RcStorageEntry<Box<dyn Any>>),
     Data(Box<dyn Any>),
     Empty,
+}
+
+impl Debug for RefCellStorageEntryData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Reference(pointer) => write!(f, "Reference({:?})", pointer.location),
+            Self::Rc(_) => write!(f, "Rc"),
+            Self::Data(_) => write!(f, "Data"),
+            Self::Empty => write!(f, "Empty"),
+        }
+    }
 }
 
 impl Default for RefCellStorageEntryData {
@@ -332,6 +344,10 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         location: GenerationalPointer<Self>,
         other: GenerationalPointer<Self>,
     ) -> Result<(), BorrowMutError> {
+        if location == other {
+            return Ok(());
+        }
+
         let (other_final, mut other_write) = Self::get_split_mut(other)?;
 
         let mut write = location.storage.data.borrow_mut();
@@ -349,7 +365,10 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         if let RefCellStorageEntryData::Rc(data) = &mut other_write.data {
             data.add_ref();
         } else {
-            unreachable!()
+            unreachable!(
+                "References should always point to a data entry directly found {:?} instead",
+                other_write.data
+            );
         }
 
         Ok(())

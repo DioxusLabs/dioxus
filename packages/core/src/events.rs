@@ -404,9 +404,11 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     /// Leak a new [`Callback`] that will not be dropped unless it is manually dropped.
     #[track_caller]
     pub fn leak(mut f: impl FnMut(Args) -> Ret + 'static) -> Self {
-        let callback =
-            GenerationalBox::leak(Some(Rc::new(RefCell::new(move |event: Args| f(event)))
-                as Rc<RefCell<dyn FnMut(Args) -> Ret>>));
+        let callback = GenerationalBox::leak(
+            Some(Rc::new(RefCell::new(move |event: Args| f(event)))
+                as Rc<RefCell<dyn FnMut(Args) -> Ret>>),
+            std::panic::Location::caller(),
+        );
         Self {
             callback,
             origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
