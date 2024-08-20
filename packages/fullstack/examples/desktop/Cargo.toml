@@ -10,5 +10,5 @@ serde = "1.0.159"
 
 [features]
 default = []
-server = ["axum", "dioxus/server"]
+server = ["dioxus/server"]
 desktop = ["dioxus/desktop"]

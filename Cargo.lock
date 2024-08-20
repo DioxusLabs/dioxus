@@ -3638,7 +3638,6 @@ dependencies = [
 name = "fullstack-desktop-example"
 version = "0.1.0"
 dependencies = [
- "axum 0.7.5",
  "dioxus",
  "serde",
 ]
