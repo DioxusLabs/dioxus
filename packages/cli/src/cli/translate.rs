@@ -2,6 +2,8 @@ use std::process::exit;
 
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
 
+use crate::serve::output::MessageSource;
+
 use super::*;
 
 /// Translate some source file into Dioxus code
@@ -106,7 +108,7 @@ fn indent_and_write(raw: &str, idx: usize, out: &mut String) {
 fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> {
     // Make sure not both are specified
     if file.is_some() && raw.is_some() {
-        tracing::error!("Only one of --file or --raw should be specified.");
+        tracing::error!(dx_src = ?MessageSource::Dev, "Only one of --file or --raw should be specified.");
         exit(0);
     }
 

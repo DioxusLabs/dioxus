@@ -30,7 +30,7 @@ async fn update_wasm_bindgen_version() -> Result<()> {
     let mut error_message = None;
     if let Ok(output) = output {
         if output.status.success() {
-            tracing::info!(dx_src = ?MessageSource::Build, "Successfully updated wasm-bindgen to {cli_bindgen_version}");
+            tracing::info!(dx_src = ?MessageSource::Dev, "Successfully updated wasm-bindgen to {cli_bindgen_version}");
             return Ok(());
         } else {
             error_message = Some(output);
@@ -38,7 +38,7 @@ async fn update_wasm_bindgen_version() -> Result<()> {
     }
 
     if let Some(output) = error_message {
-        tracing::error!("Failed to update wasm-bindgen: {:#?}", output);
+        tracing::error!(dx_src = ?MessageSource::Dev, "Failed to update wasm-bindgen: {:#?}", output);
     }
 
     Err(Error::BuildFailed(format!("WASM bindgen build failed!\nThis is probably due to the Bindgen version, dioxus-cli is using `{cli_bindgen_version}` which is not compatible with your crate.\nPlease reinstall the dioxus cli to fix this issue.\nYou can reinstall the dioxus cli by running `cargo install dioxus-cli --force` and then rebuild your project")))
@@ -100,7 +100,7 @@ impl BuildRequest {
         // WASM bindgen requires the exact version of the bindgen schema to match the version the CLI was built with
         // If we get an error, we can try to recover by pinning the user's wasm-bindgen version to the version we used
         if let Err(err) = bindgen_result {
-            tracing::error!("Bindgen build failed: {:?}", err);
+            tracing::error!(dx_src = ?MessageSource::Build, "Bindgen build failed: {:?}", err);
             update_wasm_bindgen_version().await?;
             run_wasm_bindgen();
         }

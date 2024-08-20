@@ -152,7 +152,7 @@ pub async fn serve_all(
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
                                 Err(e) => {
-                                    tracing::error!("Failed to open build result: {e}");
+                                    tracing::error!(dx_src = ?MessageSource::Build, "Failed to open build result: {e}");
                                     break;
                                 },
                                 _ => {}
@@ -177,11 +177,11 @@ pub async fn serve_all(
                                     break;
                                 }
                                 else {
-                                    tracing::error!("Application exited with status: {status}");
+                                    tracing::error!(dx_src = ?MessageSource::Dev, "Application exited with status: {status}");
                                 }
                             },
                             Err(e) => {
-                                tracing::error!("Application exited with error: {e}");
+                                tracing::error!(dx_src = ?MessageSource::Dev, "Application exited with error: {e}");
                             }
                         }
                     }

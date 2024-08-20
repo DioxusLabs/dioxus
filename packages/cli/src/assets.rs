@@ -123,6 +123,7 @@ pub(crate) fn copy_dir_to(
                     copy_dir_to(entry_path.clone(), output_file_location, pre_compress)
                 {
                     tracing::error!(
+                        dx_src = ?MessageSource::Build,
                         "Failed to pre-compress directory {}: {}",
                         entry_path.display(),
                         err
@@ -138,6 +139,7 @@ pub(crate) fn copy_dir_to(
                 if pre_compress {
                     if let Err(err) = pre_compress_file(&output_file_location) {
                         tracing::error!(
+                            dx_src = ?MessageSource::Build,
                             "Failed to pre-compress static assets {}: {}",
                             output_file_location.display(),
                             err
@@ -195,7 +197,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
         if entry_path.is_file() {
             if pre_compress {
                 if let Err(err) = pre_compress_file(entry_path) {
-                    tracing::error!("Failed to pre-compress file {entry_path:?}: {err}");
+                    tracing::error!(dx_src = ?MessageSource::Build, "Failed to pre-compress file {entry_path:?}: {err}");
                 }
             }
             // If pre-compression isn't enabled, we should remove the old compressed file if it exists

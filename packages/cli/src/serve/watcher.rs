@@ -3,6 +3,7 @@ use std::{fs, path::PathBuf, time::Duration};
 
 use super::hot_reloading_file_map::HotreloadError;
 use crate::serve::hot_reloading_file_map::FileMap;
+use crate::serve::MessageSource;
 use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
@@ -259,7 +260,7 @@ impl Watcher {
                 Err(HotreloadError::Parse) => {}
                 // Otherwise just log the error
                 Err(err) => {
-                    tracing::error!("Error hotreloading file {rust_file:?}: {err}")
+                    tracing::error!(dx_src = ?MessageSource::Dev, "Error hotreloading file {rust_file:?}: {err}")
                 }
             }
         }

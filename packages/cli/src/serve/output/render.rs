@@ -10,7 +10,6 @@
 use super::{
     BuildProgress, ConsoleHeight, Message, MessageSource, NumLinesWrapping, ScrollPosition,
 };
-use ansi_to_tui::IntoText;
 use dioxus_cli_config::Platform;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
@@ -167,16 +166,16 @@ impl TuiLayout {
             .render(console, frame.buffer_mut());
 
         // and the scrollbar, those are separate widgets
-        frame.render_stateful_widget(
-            scrollbar,
-            console.inner(Margin {
-                // todo: dont use margin - just push down the body based on its top border
-                // using an inner vertical margin of 1 unit makes the scrollbar inside the block
-                vertical: 1,
-                horizontal: 0,
-            }),
-            &mut scrollbar_state,
-        );
+        // frame.render_stateful_widget(
+        //     scrollbar,
+        //     console.inner(Margin {
+        //         // todo: dont use margin - just push down the body based on its top border
+        //         // using an inner vertical margin of 1 unit makes the scrollbar inside the block
+        //         vertical: 1,
+        //         horizontal: 0,
+        //     }),
+        //     &mut scrollbar_state,
+        // );
 
         num_lines_wrapping
     }

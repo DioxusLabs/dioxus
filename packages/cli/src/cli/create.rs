@@ -135,9 +135,9 @@ pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     let cmd = cmd.arg("fmt").current_dir(path);
     let output = cmd.output().expect("failed to execute process");
     if !output.status.success() {
-        tracing::error!("cargo fmt failed");
-        tracing::error!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-        tracing::error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        tracing::error!(dx_src = ?MessageSource::Dev, "cargo fmt failed");
+        tracing::error!(dx_src = ?MessageSource::Build, "stdout: {}", String::from_utf8_lossy(&output.stdout));
+        tracing::error!(dx_src = ?MessageSource::Build, "stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     // 3. Format the `Cargo.toml` and `Dioxus.toml` files.

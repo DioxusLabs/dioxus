@@ -1,5 +1,5 @@
 use crate::dioxus_crate::DioxusCrate;
-use crate::serve::{next_or_pending, Serve};
+use crate::serve::{next_or_pending, MessageSource, Serve};
 use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
@@ -569,8 +569,8 @@ pub fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, St
     match cmd {
         Err(e) => {
             match e.kind() {
-                io::ErrorKind::NotFound => tracing::error!("mkcert is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
-                e => tracing::error!("an error occurred while generating mkcert certificates: {}", e.to_string()),
+                io::ErrorKind::NotFound => tracing::error!(dx_src = ?MessageSource::Dev, "`mkcert` is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
+                e => tracing::error!(dx_src = ?MessageSource::Dev, "An error occurred while generating mkcert certificates: {}", e.to_string()),
             };
             return Err("failed to generate mkcert certificates".into());
         }

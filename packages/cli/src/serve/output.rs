@@ -13,7 +13,7 @@ use core::panic;
 use crossterm::{
     event::{
         DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyModifiers,
-        MouseEventKind,
+        MouseButton, MouseEventKind,
     },
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
@@ -215,7 +215,7 @@ impl Output {
         let term: Option<TerminalBackend> = Terminal::with_options(
             CrosstermBackend::new(stdout()),
             TerminalOptions {
-                viewport: Viewport::Fullscreen,
+                viewport: Viewport::Inline(3),
             },
         )
         .ok();

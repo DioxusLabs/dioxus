@@ -230,7 +230,7 @@ impl BuildRequest {
                 Some(linker_args),
             )?;
             let Some(assets) = asset_manifest(&build) else {
-                error!("the asset manifest was not provided by manganis and we were not able to collect assets");
+                error!(dx_src = ?MessageSource::Build, "the asset manifest was not provided by manganis and we were not able to collect assets");
                 return Err(anyhow::anyhow!("asset manifest was not provided by manganis"));
             };
             // Collect assets from the asset manifest the linker intercept created
