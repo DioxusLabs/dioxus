@@ -174,7 +174,7 @@ impl Attribute {
         let element_name = self.el_name.as_ref().unwrap();
         let rust_name = match element_name {
             ElementName::Ident(i) => i.to_string(),
-            ElementName::Custom(s) => return (intern(s.value()), None),
+            ElementName::Custom(s) => return (intern(attribute_name_rust.as_str()), None),
         };
 
         Ctx::map_attribute(&rust_name, &attribute_name_rust)
