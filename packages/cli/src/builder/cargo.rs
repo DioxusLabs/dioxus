@@ -217,6 +217,10 @@ impl BuildRequest {
         let build = self.clone();
         let mut progress = progress.clone();
         tokio::task::spawn_blocking(move || {
+            println!(
+                "Starting Manganis linker intercept with args: {:?}",
+                cargo_args
+            );
             manganis_cli_support::start_linker_intercept(
                 &LinkCommand::command_name(),
                 cargo_args,
@@ -231,7 +235,7 @@ impl BuildRequest {
             Ok(Some(assets))
         })
         .await
-        .unwrap()
+        .map_err(|e| anyhow::anyhow!(e))?
     }
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
@@ -257,6 +261,7 @@ impl BuildRequest {
         match self.build_arguments.platform {
             Some(Platform::Fullstack | Platform::StaticGeneration) => match self.target_platform {
                 TargetPlatform::Web => out_dir.join("public"),
+                TargetPlatform::Desktop => out_dir.join("desktop"),
                 _ => out_dir,
             },
             _ => out_dir,

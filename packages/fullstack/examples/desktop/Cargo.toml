@@ -4,25 +4,12 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
-[lib]
-
 [dependencies]
 dioxus = { workspace = true, features = ["launch", "fullstack"] }
 axum = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 
 [features]
 default = []
-server = ["axum", "tokio", "dioxus/axum"]
+server = ["axum", "dioxus/axum"]
 desktop = ["dioxus/desktop"]
-
-[[bin]]
-name = "client"
-path = "src/client.rs"
-required-features = ["desktop"]
-
-[[bin]]
-name = "server"
-path = "src/server.rs"
-required-features = ["server"]

@@ -252,11 +252,8 @@ where
         let server = self.serve_static_assets().register_server_functions();
 
         server.fallback(
-            get(render_handler).with_state(
-                RenderHandleState::new(app)
-                    .with_config(cfg)
-                    .with_ssr_state(ssr_state),
-            ),
+            get(render_handler)
+                .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
         )
     }
 }
@@ -281,9 +278,9 @@ pub struct RenderHandleState {
 
 impl RenderHandleState {
     /// Create a new [`RenderHandleState`]
-    pub fn new(root: fn() -> Element) -> Self {
+    pub fn new(config: ServeConfig, root: fn() -> Element) -> Self {
         Self {
-            config: ServeConfig::default(),
+            config,
             build_virtual_dom: Arc::new(move || VirtualDom::new(root)),
             ssr_state: Default::default(),
         }
@@ -291,10 +288,11 @@ impl RenderHandleState {
 
     /// Create a new [`RenderHandleState`] with a custom [`VirtualDom`] factory. This method can be used to pass context into the root component of your application.
     pub fn new_with_virtual_dom_factory(
+        config: ServeConfig,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self {
         Self {
-            config: ServeConfig::default(),
+            config,
             build_virtual_dom: Arc::new(build_virtual_dom),
             ssr_state: Default::default(),
         }
