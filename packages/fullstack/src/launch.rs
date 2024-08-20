@@ -166,7 +166,7 @@ async fn launch_server(
                     );
                 }
                 Err(err) => {
-                    tracing::warn!("Failed to create render handler: {}", err);
+                    tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
                 }
             }
         }

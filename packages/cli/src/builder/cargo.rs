@@ -217,10 +217,6 @@ impl BuildRequest {
         let build = self.clone();
         let mut progress = progress.clone();
         tokio::task::spawn_blocking(move || {
-            println!(
-                "Starting Manganis linker intercept with args: {:?}",
-                cargo_args
-            );
             manganis_cli_support::start_linker_intercept(
                 &LinkCommand::command_name(),
                 cargo_args,
