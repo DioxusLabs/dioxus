@@ -1,20 +1,10 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
-fn register_server_functions() {
-    #[cfg(feature = "server")]
-    {
-        use server_fn::axum::register_explicit;
-        register_explicit::<PostServerData>();
-        register_explicit::<GetServerData>();
-    }
-}
-
 fn main() {
     // Set the url of the server where server functions are hosted.
     #[cfg(not(feature = "server"))]
     dioxus::fullstack::prelude::server_fn::client::set_server_url("http://127.0.0.1:8080");
-    register_server_functions();
     launch(app);
 }
 
