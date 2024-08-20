@@ -56,8 +56,7 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     /// a box that needs to be manually dropped with no owners.
     #[track_caller]
     pub fn leak(value: T) -> Self {
-        let location = S::claim(std::panic::Location::caller());
-        location.set(value);
+        let location = S::new(value, std::panic::Location::caller());
         Self {
             raw: location,
             _marker: PhantomData,
@@ -99,8 +98,12 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     }
 
     /// Set the value. Panics if the value is no longer valid.
-    pub fn set(&self, value: T) {
-        S::set(self.raw, value);
+    #[track_caller]
+    pub fn set(&self, value: T)
+    where
+        T: 'static,
+    {
+        *self.write() = value;
     }
 
     /// Returns true if the pointer is equal to the other pointer.
@@ -130,13 +133,16 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Get a reference to the value
     #[track_caller]
-    pub fn reference(&self) -> GenerationalBox<T, S> {
-        let ptr = S::claim(std::panic::Location::caller());
-        S::reference(ptr, self.raw).unwrap();
+    pub fn leak_reference(&self) -> GenerationalBox<T, S> {
         Self {
-            raw: ptr,
+            raw: S::new_reference(self.raw),
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// Change this box to point to another generational box
+    pub fn point_to(&mut self, other: GenerationalBox<T, S>) {
+        S::change_reference(self.raw, other.raw).unwrap();
     }
 }
 
@@ -160,11 +166,23 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
         location: GenerationalPointer<Self>,
     ) -> Result<Self::Mut<'static, Data>, BorrowMutError>;
 
-    /// Set the value if the location is valid
-    fn set(location: GenerationalPointer<Self>, value: Data);
+    /// Create a new memory location. This will either create a new memory location or recycle an old one.
+    fn new(
+        value: Data,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalPointer<Self>;
+
+    /// Create a new reference counted memory location. This will either create a new memory location or recycle an old one.
+    fn new_rc(
+        value: Data,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalPointer<Self>;
 
     /// Reference another location if the location is valid
-    fn reference(
+    fn new_reference(location: GenerationalPointer<Self>) -> GenerationalPointer<Self>;
+
+    /// Change the reference a signal is pointing to
+    fn change_reference(
         location: GenerationalPointer<Self>,
         other: GenerationalPointer<Self>,
     ) -> Result<(), BorrowMutError>;
@@ -225,9 +243,6 @@ pub trait AnyStorage: Default + 'static {
     /// Recycle a memory location. This will drop the memory location and return it to the runtime.
     fn recycle(location: GenerationalPointer<Self>);
 
-    /// Claim a new memory location. This will either create a new memory location or recycle an old one.
-    fn claim(caller: &'static std::panic::Location<'static>) -> GenerationalPointer<Self>;
-
     /// Create a new owner. The owner will be responsible for dropping all of the generational boxes that it creates.
     fn owner() -> Owner<Self> {
         Owner(Arc::new(Mutex::new(OwnerInner {
@@ -278,13 +293,6 @@ impl<S: 'static> Clone for GenerationalPointer<S> {
 impl<S: 'static> Copy for GenerationalPointer<S> {}
 
 impl<S> GenerationalPointer<S> {
-    fn set<T>(self, value: T)
-    where
-        S: Storage<T>,
-    {
-        S::set(self, value)
-    }
-
     #[track_caller]
     fn try_read<T>(self) -> Result<S::Ref<'static, T>, BorrowError>
     where
@@ -356,6 +364,31 @@ impl<S: AnyStorage> Owner<S> {
         self.insert_with_caller(value, std::panic::Location::caller())
     }
 
+    /// Create a new reference counted box. The box will be dropped when all references are dropped.
+    #[track_caller]
+    pub fn insert_rc<T: 'static>(&self, value: T) -> GenerationalBox<T, S>
+    where
+        S: Storage<T>,
+    {
+        self.insert_rc_with_caller(value, std::panic::Location::caller())
+    }
+
+    /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
+    pub fn insert_rc_with_caller<T: 'static>(
+        &self,
+        value: T,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalBox<T, S>
+    where
+        S: Storage<T>,
+    {
+        let location = S::new_rc(value, caller);
+        GenerationalBox {
+            raw: location,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
     /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
     pub fn insert_with_caller<T: 'static>(
         &self,
@@ -365,8 +398,7 @@ impl<S: AnyStorage> Owner<S> {
     where
         S: Storage<T>,
     {
-        let location = S::claim(caller);
-        location.set(value);
+        let location = S::new(value, caller);
         self.0.lock().owned.push(location);
         GenerationalBox {
             raw: location,
@@ -374,14 +406,14 @@ impl<S: AnyStorage> Owner<S> {
         }
     }
 
-    /// Creates an invalid handle. This is useful for creating a handle that will be filled in later. If you use this before the value is filled in, you will get may get a panic or an out of date value.
+    /// Create a new reference to an existing box. The reference will be dropped when the owner is dropped.
     #[track_caller]
-    pub fn invalid<T: 'static>(&self) -> GenerationalBox<T, S> {
-        let location = S::claim(std::panic::Location::caller());
-        self.0.lock().owned.push(location);
-        GenerationalBox {
-            raw: location,
-            _marker: PhantomData,
-        }
+    pub fn reference<T: 'static>(&self, other: GenerationalBox<T, S>) -> GenerationalBox<T, S>
+    where
+        S: Storage<T>,
+    {
+        let location = other.leak_reference();
+        self.0.lock().owned.push(location.raw);
+        location
     }
 }

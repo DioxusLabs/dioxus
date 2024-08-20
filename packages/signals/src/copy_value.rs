@@ -71,6 +71,14 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         Self::new_with_caller(value, std::panic::Location::caller())
     }
 
+    /// Create a new CopyValue without an owner. This will leak memory if you don't manually drop it.
+    pub fn leak_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
+        Self {
+            value: GenerationalBox::leak(value),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
+        }
+    }
+
     pub(crate) fn new_with_caller(
         value: T,
         caller: &'static std::panic::Location<'static>,

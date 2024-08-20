@@ -22,12 +22,13 @@ impl<T> FullStorageEntry<T> {
     }
 
     pub fn drop_ref(&mut self) -> bool {
-        match self.ref_count.get() {
-            0..1 => true,
-            ref_count => {
-                self.ref_count = NonZeroU64::new(ref_count - 1).unwrap();
+        let ref_count = self.ref_count.get();
+        match NonZeroU64::new(ref_count - 1) {
+            Some(ref_count) => {
+                self.ref_count = ref_count;
                 false
             }
+            None => true,
         }
     }
 }

@@ -97,7 +97,8 @@ impl Document for NoOpDocument {
     }
 }
 
-struct NoOpEvaluator;
+/// The default No-Op evaluator
+pub struct NoOpEvaluator;
 impl Evaluator for NoOpEvaluator {
     fn send(&self, _data: serde_json::Value) -> Result<(), EvalError> {
         Err(EvalError::Unsupported)

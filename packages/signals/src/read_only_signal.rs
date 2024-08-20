@@ -54,6 +54,12 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
             });
         });
     }
+
+    #[doc(hidden)]
+    /// This should only be used by the `rsx!` macro.
+    pub fn manually_drop(&self) {
+        self.inner.manually_drop();
+    }
 }
 
 impl<T, S: Storage<SignalData<T>>> Readable for ReadOnlySignal<T, S> {

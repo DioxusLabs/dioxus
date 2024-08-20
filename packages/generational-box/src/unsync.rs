@@ -11,29 +11,24 @@ use std::{
     num::NonZeroU64,
 };
 
-type RefCellStorageEntryRef = Ref<'static, FullStorageEntry<Box<dyn Any>>>;
+type RefCellStorageEntryRef = Ref<'static, StorageEntry<RefCellStorageEntryData>>;
 
-type RefCellStorageEntryMut = RefMut<'static, FullStorageEntry<Box<dyn Any>>>;
+type RefCellStorageEntryMut = RefMut<'static, StorageEntry<RefCellStorageEntryData>>;
 
 thread_local! {
     static UNSYNC_RUNTIME: RefCell<Vec<&'static UnsyncStorage>> = const { RefCell::new(Vec::new()) };
 }
 
-pub(crate) enum RefCellStorageEntryData<T: 'static> {
+pub(crate) enum RefCellStorageEntryData {
     Reference(GenerationalPointer<UnsyncStorage>),
-    Data(FullStorageEntry<T>),
+    Rc(FullStorageEntry<Box<dyn Any>>),
+    Data(Box<dyn Any>),
     Empty,
 }
 
-impl<T: 'static> Default for RefCellStorageEntryData<T> {
+impl Default for RefCellStorageEntryData {
     fn default() -> Self {
         Self::Empty
-    }
-}
-
-impl<T> RefCellStorageEntryData<T> {
-    pub const fn new_full(data: T) -> Self {
-        Self::Data(FullStorageEntry::new(data))
     }
 }
 
@@ -41,12 +36,20 @@ impl<T> RefCellStorageEntryData<T> {
 #[derive(Default)]
 pub struct UnsyncStorage {
     borrow_info: MemoryLocationBorrowInfo,
-    data: RefCell<StorageEntry<RefCellStorageEntryData<Box<dyn Any>>>>,
+    data: RefCell<StorageEntry<RefCellStorageEntryData>>,
 }
 
 impl UnsyncStorage {
-    pub(crate) fn read(pointer: GenerationalPointer<Self>) -> BorrowResult<RefCellStorageEntryRef> {
-        Self::get_split_ref(pointer).map(|(_, guard)| guard)
+    pub(crate) fn read(
+        pointer: GenerationalPointer<Self>,
+    ) -> BorrowResult<Ref<'static, Box<dyn Any>>> {
+        Self::get_split_ref(pointer).map(|(_, guard)| {
+            Ref::map(guard, |data| match &data.data {
+                RefCellStorageEntryData::Data(data) => data,
+                RefCellStorageEntryData::Rc(data) => &data.data,
+                _ => unreachable!(),
+            })
+        })
     }
 
     pub(crate) fn get_split_ref(
@@ -69,17 +72,8 @@ impl UnsyncStorage {
                     pointer = *data;
                 }
                 // Otherwise return the value
-                RefCellStorageEntryData::Data(_) => {
-                    return Ok((
-                        pointer,
-                        Ref::map(borrow, |data| {
-                            if let RefCellStorageEntryData::Data(data) = &data.data {
-                                data
-                            } else {
-                                unreachable!()
-                            }
-                        }),
-                    ));
+                RefCellStorageEntryData::Rc(_) | RefCellStorageEntryData::Data(_) => {
+                    return Ok((pointer, borrow));
                 }
                 RefCellStorageEntryData::Empty => {
                     return Err(BorrowError::Dropped(ValueDroppedError::new_for_location(
@@ -92,8 +86,14 @@ impl UnsyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<RefCellStorageEntryMut> {
-        Self::get_split_mut(pointer).map(|(_, guard)| guard)
+    ) -> BorrowMutResult<RefMut<'static, Box<dyn Any>>> {
+        Self::get_split_mut(pointer).map(|(_, guard)| {
+            RefMut::map(guard, |data| match &mut data.data {
+                RefCellStorageEntryData::Data(data) => data,
+                RefCellStorageEntryData::Rc(data) => &mut data.data,
+                _ => unreachable!(),
+            })
+        })
     }
 
     pub(crate) fn get_split_mut(
@@ -116,17 +116,8 @@ impl UnsyncStorage {
                     pointer = *data;
                 }
                 // Otherwise return the value
-                RefCellStorageEntryData::Data(_) => {
-                    return Ok((
-                        pointer,
-                        RefMut::map(borrow, |data| {
-                            if let RefCellStorageEntryData::Data(data) = &mut data.data {
-                                data
-                            } else {
-                                unreachable!()
-                            }
-                        }),
-                    ));
+                RefCellStorageEntryData::Data(_) | RefCellStorageEntryData::Rc(_) => {
+                    return Ok((pointer, borrow));
                 }
                 RefCellStorageEntryData::Empty => {
                     return Err(BorrowMutError::Dropped(
@@ -135,6 +126,38 @@ impl UnsyncStorage {
                 }
             }
         }
+    }
+
+    fn create_new(
+        value: RefCellStorageEntryData,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalPointer<Self> {
+        UNSYNC_RUNTIME.with(|runtime| match runtime.borrow_mut().pop() {
+            Some(storage) => {
+                let mut write = storage.data.borrow_mut();
+                let location = GenerationalLocation {
+                    generation: write.generation(),
+                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    created_at: caller,
+                };
+                write.data = value;
+                GenerationalPointer { storage, location }
+            }
+            None => {
+                let storage: &'static Self = &*Box::leak(Box::new(Self {
+                    borrow_info: Default::default(),
+                    data: RefCell::new(StorageEntry::new(value)),
+                }));
+
+                let location = GenerationalLocation {
+                    generation: NonZeroU64::MIN,
+                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    created_at: caller,
+                };
+
+                GenerationalPointer { storage, location }
+            }
+        })
     }
 }
 
@@ -186,32 +209,6 @@ impl AnyStorage for UnsyncStorage {
         self.data.as_ptr() as *const ()
     }
 
-    #[allow(unused)]
-    fn claim(caller: &'static std::panic::Location<'static>) -> GenerationalPointer<Self> {
-        UNSYNC_RUNTIME.with(|runtime| {
-            if let Some(storage) = runtime.borrow_mut().pop() {
-                let generation = storage.data.borrow().generation();
-                let location = GenerationalLocation {
-                    generation,
-                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                    created_at: caller,
-                };
-                GenerationalPointer { storage, location }
-            } else {
-                let data: &'static Self = &*Box::leak(Box::default());
-                let location = GenerationalLocation {
-                    generation: NonZeroU64::MIN,
-                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                    created_at: caller,
-                };
-                GenerationalPointer {
-                    storage: data,
-                    location,
-                }
-            }
-        })
-    }
-
     fn recycle(pointer: GenerationalPointer<Self>) {
         let mut borrow_mut = pointer.storage.data.borrow_mut();
 
@@ -225,6 +222,8 @@ impl AnyStorage for UnsyncStorage {
         match &mut borrow_mut.data {
             // If this is the original reference, drop the value
             RefCellStorageEntryData::Data(_) => borrow_mut.data = RefCellStorageEntryData::Empty,
+            // If this is a rc, just ignore the drop
+            RefCellStorageEntryData::Rc(_) => {}
             // If this is a reference, decrement the reference count
             RefCellStorageEntryData::Reference(reference) => {
                 drop_ref(*reference);
@@ -244,7 +243,7 @@ fn drop_ref(pointer: GenerationalPointer<UnsyncStorage>) {
         return;
     }
 
-    if let RefCellStorageEntryData::Data(entry) = &mut borrow_mut.data {
+    if let RefCellStorageEntryData::Rc(entry) = &mut borrow_mut.data {
         // Decrement the reference count
         if entry.drop_ref() {
             // If the reference count is now zero, drop the value
@@ -252,7 +251,7 @@ fn drop_ref(pointer: GenerationalPointer<UnsyncStorage>) {
             UNSYNC_RUNTIME.with(|runtime| runtime.borrow_mut().push(pointer.storage));
         }
     } else {
-        unreachable!("References should always point to a data entry directly");
+        unreachable!("References should always point to a data entry directly",);
     }
 }
 
@@ -265,7 +264,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
 
         let ref_ = Ref::filter_map(read, |any| {
             // Then try to downcast
-            any.data.downcast_ref()
+            any.downcast_ref()
         });
         match ref_ {
             Ok(guard) => Ok(GenerationalRef::new(
@@ -286,7 +285,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
 
         let ref_mut = RefMut::filter_map(write, |any| {
             // Then try to downcast
-            any.data.downcast_mut()
+            any.downcast_mut()
         });
         match ref_mut {
             Ok(guard) => Ok(GenerationalRefMut::new(
@@ -299,16 +298,32 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         }
     }
 
-    fn set(pointer: GenerationalPointer<Self>, value: T) {
-        let mut borrow_mut = pointer.storage.data.borrow_mut();
-        // First check if the generation is still valid
-        if !borrow_mut.valid(&pointer.location) {
-            return;
-        }
-        borrow_mut.data = RefCellStorageEntryData::new_full(Box::new(value) as Box<dyn Any>);
+    fn new(value: T, caller: &'static std::panic::Location<'static>) -> GenerationalPointer<Self> {
+        Self::create_new(RefCellStorageEntryData::Data(Box::new(value)), caller)
     }
 
-    fn reference(
+    fn new_rc(
+        value: T,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalPointer<Self> {
+        // Create the data that the rc points to
+        let data = Self::create_new(
+            RefCellStorageEntryData::Rc(FullStorageEntry::new(Box::new(value))),
+            caller,
+        );
+        Self::create_new(RefCellStorageEntryData::Reference(data), caller)
+    }
+
+    fn new_reference(location: GenerationalPointer<Self>) -> GenerationalPointer<Self> {
+        // Chase the reference to get the final location
+        let (location, _) = Self::get_split_ref(location).unwrap();
+        Self::create_new(
+            RefCellStorageEntryData::Reference(location),
+            location.location.created_at,
+        )
+    }
+
+    fn change_reference(
         location: GenerationalPointer<Self>,
         other: GenerationalPointer<Self>,
     ) -> Result<(), BorrowMutError> {
@@ -322,17 +337,15 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
             ));
         }
 
-        match &mut write.data {
-            RefCellStorageEntryData::Reference(reference) => {
-                drop_ref(*reference);
-                *reference = other_final;
-            }
-            RefCellStorageEntryData::Data(_) | RefCellStorageEntryData::Empty => {
-                // Just point to the other location
-                write.data = RefCellStorageEntryData::Reference(other_final);
-            }
+        if let RefCellStorageEntryData::Reference(reference) = &mut write.data {
+            drop_ref(*reference);
+            *reference = other_final;
         }
-        other_write.add_ref();
+        if let RefCellStorageEntryData::Rc(data) = &mut other_write.data {
+            data.add_ref();
+        } else {
+            unreachable!()
+        }
 
         Ok(())
     }
