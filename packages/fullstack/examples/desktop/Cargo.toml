@@ -6,10 +6,9 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["launch", "fullstack"] }
-axum = { workspace = true, optional = true }
 serde = "1.0.159"
 
 [features]
 default = []
-server = ["axum", "dioxus/axum"]
+server = ["axum", "dioxus/server"]
 desktop = ["dioxus/desktop"]
