@@ -367,10 +367,11 @@ Dioxus and Electron are two entirely different projects with similar goals. Elec
 
 ## License
 
-This project is licensed under the [MIT license].
+This project is licensed under either the [MIT license] or the [Apache-2 License].
 
+[apache-2 license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-APACHE
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you, shall be licensed as MIT or Apache-2, without any additional
 terms or conditions.
