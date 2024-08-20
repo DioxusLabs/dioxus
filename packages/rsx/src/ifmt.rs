@@ -391,10 +391,11 @@ mod tests {
         let input = syn::parse2::<IfmtInput>(quote! { "hello {world} {world} {world()}" }).unwrap();
         println!("{}", input.to_string_with_quotes());
 
+        // raw expressions are always static!
         let input =
             syn::parse2::<IfmtInput>(quote! { r#"hello {world} {world} {world()}"# }).unwrap();
         println!("{}", input.to_string_with_quotes());
-        assert!(!input.is_static());
+        assert!(input.is_static());
 
         let input = syn::parse2::<IfmtInput>(quote! { r#"hello"# }).unwrap();
         println!("{}", input.to_string_with_quotes());
