@@ -18,7 +18,7 @@ static SERVER_PROFILE: &str = "dioxus-server";
 // on setup (hardware, OS, browser, idle load).
 // Find or create the client and server profiles in the .cargo/config.toml file
 fn initialize_profiles(config: &DioxusCrate) -> crate::Result<()> {
-    let config_path = config.crate_dir().join(".cargo/config.toml");
+    let config_path = config.workspace_dir().join(".cargo/config.toml");
     let mut config = match std::fs::read_to_string(&config_path) {
         Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {
             crate::Error::Other(anyhow::anyhow!("Failed to parse .cargo/config.toml: {}", e))
