@@ -26,11 +26,7 @@ impl IfmtInput {
     }
 
     pub fn new_litstr(source: LitStr) -> Result<Self> {
-        let segments = match source.to_token_stream().to_string().starts_with("r#") {
-            true => vec![Segment::Literal(source.value())],
-            false => IfmtInput::from_raw_escaped(&source.value())?,
-        };
-
+        let segments = IfmtInput::from_raw(&source.value())?;
         Ok(Self { segments, source })
     }
 
@@ -139,11 +135,10 @@ impl IfmtInput {
     }
 
     /// Parse the source into segments
-    fn from_raw_escaped(input: &str) -> Result<Vec<Segment>> {
+    fn from_raw(input: &str) -> Result<Vec<Segment>> {
         let mut chars = input.chars().peekable();
         let mut segments = Vec::new();
         let mut current_literal = String::new();
-
         while let Some(c) = chars.next() {
             if c == '{' {
                 if let Some(c) = chars.next_if(|c| *c == '{') {
@@ -391,11 +386,10 @@ mod tests {
         let input = syn::parse2::<IfmtInput>(quote! { "hello {world} {world} {world()}" }).unwrap();
         println!("{}", input.to_string_with_quotes());
 
-        // raw expressions are always static!
         let input =
             syn::parse2::<IfmtInput>(quote! { r#"hello {world} {world} {world()}"# }).unwrap();
         println!("{}", input.to_string_with_quotes());
-        assert!(input.is_static());
+        assert!(!input.is_static());
 
         let input = syn::parse2::<IfmtInput>(quote! { r#"hello"# }).unwrap();
         println!("{}", input.to_string_with_quotes());
@@ -409,12 +403,5 @@ mod tests {
             input.to_static(),
             Some("body { background: red; }".to_string())
         );
-    }
-
-    #[test]
-    fn raw_blocks_not_formatted() {
-        let input = syn::parse2::<IfmtInput>(quote! { r#"hello {}"# }).unwrap();
-        println!("{}", input.to_string_with_quotes());
-        assert_eq!(input.to_string_with_quotes(), "r#\"hello {}\"#".to_string());
     }
 }
