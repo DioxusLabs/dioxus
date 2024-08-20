@@ -94,6 +94,19 @@ impl Runtime {
             .ok_or(RuntimeError::new())
     }
 
+    /// Wrap a closure so that it always runs in the runtime that is currently active
+    pub fn wrap_closure<'a, I, O>(f: impl Fn(I) -> O + 'a) -> impl Fn(I) -> O + 'a {
+        let current_runtime = Self::current().unwrap();
+        let current_scope = current_runtime.current_scope_id().ok();
+        move |input| match current_scope {
+            Some(scope) => current_runtime.on_scope(scope, || f(input)),
+            None => {
+                let _runtime_guard = RuntimeGuard::new(current_runtime.clone());
+                f(input)
+            }
+        }
+    }
+
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id;

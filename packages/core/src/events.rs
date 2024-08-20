@@ -1,4 +1,4 @@
-use crate::{global_context::current_scope_id, properties::SuperFrom, Runtime, ScopeId};
+use crate::{properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
 use generational_box::GenerationalBox;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
@@ -430,7 +430,19 @@ impl<Args: 'static, Ret: 'static> PartialEq for Callback<Args, Ret> {
     }
 }
 
-type ExternalListenerCallback<Args, Ret> = Rc<RefCell<dyn FnMut(Args) -> Ret>>;
+pub(super) struct ExternalListenerCallback<Args, Ret> {
+    callback: Rc<RefCell<dyn FnMut(Args) -> Ret>>,
+    runtime: std::rc::Weak<Runtime>,
+}
+
+impl<Args, Ret> Clone for ExternalListenerCallback<Args, Ret> {
+    fn clone(&self) -> Self {
+        Self {
+            callback: self.callback.clone(),
+            runtime: self.runtime.clone(),
+        }
+    }
+}
 
 impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     /// Create a new [`Callback`] from an [`FnMut`]. The callback is owned by the current scope and will be dropped when the scope is dropped.
@@ -439,27 +451,32 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     pub fn new<MaybeAsync: SpawnIfAsync<Marker, Ret>, Marker>(
         mut f: impl FnMut(Args) -> MaybeAsync + 'static,
     ) -> Self {
+        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        let origin = runtime
+            .current_scope_id()
+            .unwrap_or_else(|e| panic!("{}", e));
         let owner = crate::innerlude::current_owner::<generational_box::UnsyncStorage>();
-        let callback = owner.insert(Some(
-            Rc::new(RefCell::new(move |event: Args| f(event).spawn()))
+        let callback = owner.insert(Some(ExternalListenerCallback {
+            callback: Rc::new(RefCell::new(move |event: Args| f(event).spawn()))
                 as Rc<RefCell<dyn FnMut(Args) -> Ret>>,
-        ));
-        Self {
-            callback,
-            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-        }
+            runtime: Rc::downgrade(&runtime),
+        }));
+        Self { callback, origin }
     }
 
     /// Leak a new [`Callback`] that will not be dropped unless it is manually dropped.
     #[track_caller]
     pub fn leak(mut f: impl FnMut(Args) -> Ret + 'static) -> Self {
-        let callback =
-            GenerationalBox::leak(Some(Rc::new(RefCell::new(move |event: Args| f(event)))
-                as Rc<RefCell<dyn FnMut(Args) -> Ret>>));
-        Self {
-            callback,
-            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-        }
+        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        let origin = runtime
+            .current_scope_id()
+            .unwrap_or_else(|e| panic!("{}", e));
+        let callback = GenerationalBox::leak(Some(ExternalListenerCallback {
+            callback: Rc::new(RefCell::new(move |event: Args| f(event).spawn()))
+                as Rc<RefCell<dyn FnMut(Args) -> Ret>>,
+            runtime: Rc::downgrade(&runtime),
+        }));
+        Self { callback, origin }
     }
 
     /// Call this callback with the appropriate argument type
@@ -468,16 +485,15 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     #[track_caller]
     pub fn call(&self, arguments: Args) -> Ret {
         if let Some(callback) = self.callback.read().as_ref() {
-            Runtime::with(|rt| {
-                rt.with_scope_on_stack(self.origin, || {
-                    let value = {
-                        let mut callback = callback.borrow_mut();
-                        callback(arguments)
-                    };
-                    value
-                })
+            let runtime = callback
+                .runtime
+                .upgrade()
+                .expect("Callback was called after the runtime was dropped");
+            let _guard = RuntimeGuard::new(runtime.clone());
+            runtime.with_scope_on_stack(self.origin, || {
+                let mut callback = callback.callback.borrow_mut();
+                callback(arguments)
             })
-            .unwrap_or_else(|e| panic!("{}", e))
         } else {
             panic!("Callback was manually dropped")
         }
@@ -497,17 +513,22 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
 
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
-    pub fn __set(&mut self, value: ExternalListenerCallback<Args, Ret>) {
-        self.callback.set(Some(value));
+    pub fn __set(&mut self, value: Rc<RefCell<dyn FnMut(Args) -> Ret>>) {
+        self.callback.set(Some(ExternalListenerCallback {
+            callback: value,
+            runtime: Rc::downgrade(&Runtime::current().unwrap()),
+        }));
     }
 
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
-    pub fn __take(&self) -> ExternalListenerCallback<Args, Ret> {
+    pub fn __take(&self) -> Rc<RefCell<dyn FnMut(Args) -> Ret>> {
         self.callback
             .read()
-            .clone()
+            .as_ref()
             .expect("Callback was manually dropped")
+            .callback
+            .clone()
     }
 }
 
