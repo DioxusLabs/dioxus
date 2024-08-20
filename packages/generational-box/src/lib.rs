@@ -383,6 +383,7 @@ impl<S: AnyStorage> Owner<S> {
         S: Storage<T>,
     {
         let location = S::new_rc(value, caller);
+        self.0.lock().owned.push(location);
         GenerationalBox {
             raw: location,
             _marker: std::marker::PhantomData,

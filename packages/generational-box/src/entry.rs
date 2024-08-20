@@ -4,12 +4,12 @@ use crate::{
 };
 use std::num::NonZeroU64;
 
-pub(crate) struct FullStorageEntry<T> {
+pub(crate) struct RcStorageEntry<T> {
     ref_count: NonZeroU64,
     pub data: T,
 }
 
-impl<T> FullStorageEntry<T> {
+impl<T> RcStorageEntry<T> {
     pub const fn new(data: T) -> Self {
         Self {
             ref_count: NonZeroU64::MIN,

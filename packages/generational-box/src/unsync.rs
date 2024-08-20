@@ -1,5 +1,5 @@
 use crate::{
-    entry::{FullStorageEntry, MemoryLocationBorrowInfo, StorageEntry},
+    entry::{MemoryLocationBorrowInfo, RcStorageEntry, StorageEntry},
     error,
     references::{GenerationalRef, GenerationalRefMut},
     AnyStorage, BorrowError, BorrowMutError, BorrowMutResult, BorrowResult, GenerationalLocation,
@@ -21,7 +21,7 @@ thread_local! {
 
 pub(crate) enum RefCellStorageEntryData {
     Reference(GenerationalPointer<UnsyncStorage>),
-    Rc(FullStorageEntry<Box<dyn Any>>),
+    Rc(RcStorageEntry<Box<dyn Any>>),
     Data(Box<dyn Any>),
     Empty,
 }
@@ -308,7 +308,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
     ) -> GenerationalPointer<Self> {
         // Create the data that the rc points to
         let data = Self::create_new(
-            RefCellStorageEntryData::Rc(FullStorageEntry::new(Box::new(value))),
+            RefCellStorageEntryData::Rc(RcStorageEntry::new(Box::new(value))),
             caller,
         );
         Self::create_new(RefCellStorageEntryData::Reference(data), caller)
@@ -316,7 +316,12 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
 
     fn new_reference(location: GenerationalPointer<Self>) -> GenerationalPointer<Self> {
         // Chase the reference to get the final location
-        let (location, _) = Self::get_split_ref(location).unwrap();
+        let (location, mut value) = Self::get_split_mut(location).unwrap();
+        if let RefCellStorageEntryData::Rc(data) = &mut value.data {
+            data.add_ref();
+        } else {
+            unreachable!()
+        }
         Self::create_new(
             RefCellStorageEntryData::Reference(location),
             location.location.created_at,

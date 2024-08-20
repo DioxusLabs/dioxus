@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    entry::{FullStorageEntry, MemoryLocationBorrowInfo, StorageEntry},
+    entry::{MemoryLocationBorrowInfo, RcStorageEntry, StorageEntry},
     error::{self, ValueDroppedError},
     references::{GenerationalRef, GenerationalRefMut},
     AnyStorage, BorrowError, BorrowMutError, BorrowMutResult, BorrowResult, GenerationalLocation,
@@ -20,7 +20,7 @@ type RwLockStorageEntryMut = RwLockWriteGuard<'static, StorageEntry<RwLockStorag
 
 pub(crate) enum RwLockStorageEntryData {
     Reference(GenerationalPointer<SyncStorage>),
-    Rc(FullStorageEntry<Box<dyn Any + Send + Sync>>),
+    Rc(RcStorageEntry<Box<dyn Any + Send + Sync>>),
     Data(Box<dyn Any + Send + Sync>),
     Empty,
 }
@@ -313,7 +313,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
     ) -> GenerationalPointer<Self> {
         // Create the data that the rc points to
         let data = Self::create_new(
-            RwLockStorageEntryData::Rc(FullStorageEntry::new(Box::new(value))),
+            RwLockStorageEntryData::Rc(RcStorageEntry::new(Box::new(value))),
             caller,
         );
         Self::create_new(RwLockStorageEntryData::Reference(data), caller)
@@ -321,7 +321,12 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
 
     fn new_reference(location: GenerationalPointer<Self>) -> GenerationalPointer<Self> {
         // Chase the reference to get the final location
-        let (location, _) = Self::get_split_ref(location).unwrap();
+        let (location, mut value) = Self::get_split_mut(location).unwrap();
+        if let RwLockStorageEntryData::Rc(data) = &mut value.data {
+            data.add_ref();
+        } else {
+            unreachable!()
+        }
         Self::create_new(
             RwLockStorageEntryData::Reference(location),
             location.location.created_at,
