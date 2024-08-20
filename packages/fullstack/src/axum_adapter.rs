@@ -21,7 +21,7 @@
 //!                         listener,
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
-//!                             .serve_dioxus_application(ServeConfig::default(), app)
+//!                             .serve_dioxus_application(ServeConfig::new().unwrap(), app)
 //!                             .into_make_service(),
 //!                     )
 //!                     .await
@@ -150,7 +150,7 @@ pub trait DioxusRouterExt<S> {
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
     ///     let router = axum::Router::new()
     ///         // Server side render the application, serve static assets, and register server functions
-    ///         .serve_dioxus_application(ServeConfig::default(), app)
+    ///         .serve_dioxus_application(ServeConfig::new().unwrap(), app)
     ///         .into_make_service();
     ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     ///     axum::serve(listener, router).await.unwrap();
