@@ -643,7 +643,11 @@ impl RouteEnum {
                     let error_name = route.error_ident();
                     let route_str = &route.route;
 
-                    error_variants.push(quote! { #route_name(#error_name) });
+                    error_variants.push(quote! {
+                        // Placeholder doc to silence -W missing-docs warning in consuming code.
+                        #[doc = " TODO: Add documentation here"]
+                        #route_name(#error_name)
+                    });
                     display_match.push(quote! { Self::#route_name(err) => write!(f, "Route '{}' ('{}') did not match:\n{}", stringify!(#route_name), #route_str, err)? });
                     type_defs.push(route.error_type());
                 }
@@ -652,7 +656,11 @@ impl RouteEnum {
                     let error_name = redirect.error_ident();
                     let route_str = &redirect.route;
 
-                    error_variants.push(quote! { #error_variant(#error_name) });
+                    error_variants.push(quote! {
+                        // Placeholder doc to silence -W missing-docs warning in consuming code.
+                        #[doc = " TODO: Add documentation here"]
+                        #error_variant(#error_name)
+                    });
                     display_match.push(quote! { Self::#error_variant(err) => write!(f, "Redirect '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
                     type_defs.push(redirect.error_type());
                 }
@@ -664,7 +672,11 @@ impl RouteEnum {
             let error_name = nest.error_ident();
             let route_str = &nest.route;
 
-            error_variants.push(quote! { #error_variant(#error_name) });
+            error_variants.push(quote! {
+                // Placeholder doc to silence -W missing-docs warning in consuming code.
+                #[doc = " TODO: Add documentation here"]
+                #error_variant(#error_name)
+            });
             display_match.push(quote! { Self::#error_variant(err) => write!(f, "Nest '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
             type_defs.push(nest.error_type());
         }
@@ -672,6 +684,8 @@ impl RouteEnum {
         quote! {
             #(#type_defs)*
 
+            // Placeholder doc to silence -W missing-docs warning in consuming code.
+            #[doc = " TODO: Add documentation here"]
             #[allow(non_camel_case_types)]
             #[allow(clippy::derive_partial_eq_without_eq)]
             pub enum #match_error_name {

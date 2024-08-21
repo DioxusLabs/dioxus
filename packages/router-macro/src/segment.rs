@@ -241,20 +241,34 @@ pub(crate) fn create_error_type(
         let error_name = segment.error_name(i);
         match segment {
             RouteSegment::Static(index) => {
-                error_variants.push(quote! { #error_name(String) });
+                error_variants.push(quote! {
+                    // Placeholder doc to silence -W missing-docs warning in consuming code.
+                    #[doc = " TODO: Add documentation here"]
+                    #error_name(String)
+                });
                 display_match.push(quote! { Self::#error_name(found) => write!(f, "Static segment '{}' did not match instead found '{}'", #index, found)? });
             }
             RouteSegment::Dynamic(ident, ty) => {
                 let missing_error = segment.missing_error_name().unwrap();
-                error_variants.push(
-                    quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err) },
-                );
+                error_variants.push(quote! {
+                    // Placeholder doc to silence -W missing-docs warning in consuming code.
+                    #[doc = " TODO: Add documentation here"]
+                    #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err)
+                });
                 display_match.push(quote! { Self::#error_name(err) => write!(f, "Dynamic segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
-                error_variants.push(quote! { #missing_error });
+                error_variants.push(quote! {
+                    // Placeholder doc to silence -W missing-docs warning in consuming code.
+                    #[doc = " TODO: Add documentation here"]
+                    #missing_error
+                });
                 display_match.push(quote! { Self::#missing_error => write!(f, "Dynamic segment '({}:{})' was missing", stringify!(#ident), stringify!(#ty))? });
             }
             RouteSegment::CatchAll(ident, ty) => {
-                error_variants.push(quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegments>::Err) });
+                error_variants.push(quote! {
+                    // Placeholder doc to silence -W missing-docs warning in consuming code.
+                    #[doc = " TODO: Add documentation here"]
+                    #error_name(<#ty as dioxus_router::routable::FromRouteSegments>::Err)
+                });
                 display_match.push(quote! { Self::#error_name(err) => write!(f, "Catch-all segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
             }
         }
@@ -262,7 +276,11 @@ pub(crate) fn create_error_type(
 
     let child_type_variant = child_type
         .map(|child_type| {
-            quote! { ChildRoute(<#child_type as std::str::FromStr>::Err) }
+            quote! {
+                // Placeholder doc to silence -W missing-docs warning in consuming code.
+                #[doc = " TODO: Add documentation here"]
+                ChildRoute(<#child_type as std::str::FromStr>::Err)
+            }
         })
         .into_iter();
 
@@ -277,9 +295,13 @@ pub(crate) fn create_error_type(
         .into_iter();
 
     quote! {
+        // Placeholder doc to silence -W missing-docs warning in consuming code.
+        #[doc = " TODO: Add documentation here"]
         #[allow(non_camel_case_types)]
         #[allow(clippy::derive_partial_eq_without_eq)]
         pub enum #error_name {
+            // Placeholder doc to silence -W missing-docs warning in consuming code.
+            #[doc = " TODO: Add documentation here"]
             ExtraSegments(String),
             #(#child_type_variant,)*
             #(#error_variants,)*
