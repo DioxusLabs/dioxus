@@ -441,10 +441,7 @@ impl Output {
                     scroll_speed += SCROLL_MODIFIER;
                 }
                 self.scroll_position = self.scroll_position.saturating_sub(scroll_speed).into();
-
-                self.drag_start = None;
-                self.drag_end = None;
-                self.selected_text = None;
+                self.reset_drag();
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollDown => {
                 let mut scroll_speed = SCROLL_SPEED;
@@ -452,10 +449,7 @@ impl Output {
                     scroll_speed += SCROLL_MODIFIER;
                 }
                 *self.scroll_position += scroll_speed;
-
-                self.drag_start = None;
-                self.drag_end = None;
-                self.selected_text = None;
+                self.reset_drag()
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Drag(MouseButton::Left) => {
                 let x = mouse.column;
@@ -469,9 +463,7 @@ impl Output {
                 }
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
-                self.drag_start = None;
-                self.drag_end = None;
-                self.selected_text = None;
+                self.reset_drag();
             }
             Event::Key(key) if key.code == KeyCode::Up => {
                 let mut scroll_speed = SCROLL_SPEED;
@@ -488,7 +480,7 @@ impl Output {
                 *self.scroll_position += scroll_speed;
             }
             Event::Key(key) if key.code == KeyCode::Char('r') => {
-                // todo: reload the app
+                // Reload the app
                 return Ok(true);
             }
             Event::Key(key) if key.code == KeyCode::Char('o') => {
@@ -524,6 +516,12 @@ impl Output {
         }
 
         Ok(false)
+    }
+
+    fn reset_drag(&mut self) {
+        self.drag_start = None;
+        self.drag_end = None;
+        self.selected_text = None;
     }
 
     pub fn new_ws_message(

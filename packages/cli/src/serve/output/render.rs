@@ -22,6 +22,7 @@ use ratatui::{
     },
     Frame,
 };
+use std::fmt::Write as _;
 use std::rc::Rc;
 use tracing::Level;
 
@@ -93,41 +94,88 @@ impl TuiLayout {
         drag_start: Option<(u16, u16)>,
         drag_end: Option<(u16, u16)>,
     ) -> Option<String> {
+        let console = self.console[0];
+
         let start = drag_start?;
         let end = drag_end?;
         let buffer = frame.buffer_mut();
 
         let start_index = buffer.index_of(start.0, start.1);
         let end_index = buffer.index_of(end.0, end.1);
+        let console_y_end = console.as_size().height - 1;
 
-        let mut selection_text = String::new();
+        let mut selected_lines = Vec::new();
         let direction_forward = start_index < end_index;
+
+        // The drag was started out of console area.
+        if start.1 > console_y_end {
+            return None;
+        }
+
         let mut i = start_index;
         loop {
             let (x, y) = buffer.pos_of(i);
+
+            // Skip any cells outside of console area.
+            if y > console_y_end {
+                match direction_forward {
+                    true => i += 1,
+                    false => i -= 1,
+                }
+                if i == end_index {
+                    break;
+                }
+                continue;
+            }
+
             let cell = buffer.get_mut(x, y);
             cell.set_bg(Color::DarkGray);
 
+            // Add each symbol to it's correct line.
             let symbol = cell.symbol();
-            selection_text += symbol;
+            let line_index = match direction_forward {
+                true => y - start.1,
+                false => start.1 - y,
+            } as usize;
+
+            if let Some(line) = selected_lines.get_mut(line_index) {
+                *line += symbol;
+            } else {
+                let line = String::from(symbol);
+                selected_lines.push(line);
+            }
 
             if i == end_index {
                 break;
             }
 
             // Determine which direction we need to iterate through in the buffer.
-            if direction_forward {
-                i += 1;
-            } else {
-                i -= 1;
+            match direction_forward {
+                true => i += 1,
+                false => i -= 1,
             }
         }
 
-        if !direction_forward {
-            selection_text = selection_text.chars().rev().collect::<String>();
+        let mut final_text = String::new();
+
+        // Go through each line, parse it, and append it to the final text.
+        for line in selected_lines {
+            let mut line = line;
+            if !direction_forward {
+                line = line.chars().rev().collect::<String>();
+            }
+
+            // Trim scroll bar and whitespace. 
+            line = line.replace("▐", "").trim_end().to_string();
+            if !line.is_empty() {
+                writeln!(final_text, "{line}").unwrap();
+            }
         }
 
-        Some(selection_text)
+        // Remove the last unescessary newline.
+        final_text = final_text.trim_end_matches('\n').to_string();
+
+        Some(final_text)
     }
 
     /// Render the console and it's logs.
