@@ -18,9 +18,20 @@ pub struct Create {
     #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
     template: String,
 
-    /// Branch to select when using `template` from a git repository
-    #[clap(long)]
+    /// Branch to select when using `template` from a git repository.
+    /// Mutually exclusive with: `--revision`, `--tag`.
+    #[clap(long, conflicts_with_all(["revision", "tag"]))]
     branch: Option<String>,
+
+    /// A commit hash to select when using `template` from a git repository.
+    /// Mutually exclusive with: `--branch`, `--tag`.
+    #[clap(long, conflicts_with_all(["branch", "tag"]))]
+    revision: Option<String>,
+
+    /// Tag to select when using `template` from a git repository.
+    /// Mutually exclusive with: `--branch`, `--revision`.
+    #[clap(long, conflicts_with_all(["branch", "revision"]))]
+    tag: Option<String>,
 
     /// Specify a sub-template within the template repository to be used as the actual template
     #[clap(long)]
@@ -57,7 +68,9 @@ impl Create {
             template_path: TemplatePath {
                 auto_path: Some(self.template),
                 branch: self.branch,
+                revision: self.revision,
                 subfolder: self.subtemplate,
+                tag: self.tag,
                 ..Default::default()
             },
             ..Default::default()
