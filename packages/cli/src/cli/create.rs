@@ -57,9 +57,24 @@ impl Create {
             },
             ..Default::default()
         };
+        restore_cursor_on_sigint();
         let path = cargo_generate::generate(args)?;
         post_create(&path)
     }
+}
+
+/// Prevent hidden cursor if Ctrl+C is pressed when interacting
+/// with cargo-generate's prompts.
+///
+/// See https://github.com/DioxusLabs/dioxus/pull/2603.
+pub(crate) fn restore_cursor_on_sigint() {
+    ctrlc::set_handler(move || {
+        if let Err(err) = console::Term::stdout().show_cursor() {
+            eprintln!("Error showing the cursor again: {err}");
+        }
+        std::process::exit(1); // Ideally should mimic the INT signal.
+    })
+    .expect("ctrlc::set_handler");
 }
 
 /// Extracts the last directory name from the `path`.

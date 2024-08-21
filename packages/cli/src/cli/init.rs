@@ -51,6 +51,7 @@ impl Init {
             },
             ..Default::default()
         };
+        create::restore_cursor_on_sigint();
         let path = cargo_generate::generate(args)?;
         create::post_create(&path)
     }
