@@ -214,17 +214,27 @@ impl TuiLayout {
             }
         }
 
+        let console_size = self.get_console_size();
         let msgs = messages.iter();
 
         // Assemble the messages
         for msg in msgs {
-            for line in msg.content.lines() {
-                let text = line.into_text().unwrap_or_default();
-                for line in text.lines {
-                    // Don't add any formatting for cargo messages.
-                    let out_line = if msg.source != MessageSource::Cargo {
+            let mut sub_line_padding = 0;
+            let mut first_line = true;
+
+            let text = msg.content.into_text().unwrap_or_default();
+
+            for line in text.lines {
+                // Don't add any formatting for cargo messages.
+                let out_line = if msg.source != MessageSource::Cargo {
+                    if first_line {
+                        first_line = false;
+
+                        // Build source tag: `[dev]`
                         let padding = build_msg_padding(source_len - msg.source.to_string().len());
                         let source = format!("{}[{}]", padding, msg.source);
+                        sub_line_padding += source.len();
+
                         let source_span = Span::from(source);
                         let source_span = match msg.source {
                             MessageSource::App(_) => source_span.light_cyan(),
@@ -236,8 +246,11 @@ impl TuiLayout {
                             }
                         };
 
+                        // Build level tag: `INFO:``
                         let padding = build_msg_padding(level_len - msg.level.to_string().len());
                         let level = format!("{}{}: ", padding, msg.level);
+                        sub_line_padding += level.len();
+
                         let level_span = Span::from(level);
                         let level_span = match msg.level {
                             Level::TRACE => level_span.black(),
@@ -253,11 +266,20 @@ impl TuiLayout {
                         }
                         out_line
                     } else {
-                        line.spans
-                    };
+                        // Not the first line. Append the padding and merge into list.
+                        let padding = build_msg_padding(sub_line_padding);
 
-                    out_text.push_line(Line::from(out_line));
-                }
+                        let mut out_line = vec![Span::from(padding)];
+                        for span in line.spans {
+                            out_line.push(span);
+                        }
+                        out_line
+                    }
+                } else {
+                    line.spans
+                };
+
+                out_text.push_line(Line::from(out_line));
             }
         }
 
@@ -268,7 +290,6 @@ impl TuiLayout {
             .left_aligned()
             .wrap(Wrap { trim: false });
 
-        let console_size = self.get_console_size();
         let num_lines_wrapping = NumLinesWrapping(paragraph.line_count(console_size.width) as u16);
 
         // Render scrollbar
