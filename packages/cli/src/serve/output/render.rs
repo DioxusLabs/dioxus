@@ -20,6 +20,7 @@ use ratatui::{
     },
     Frame,
 };
+use std::fmt::Write as _;
 use std::rc::Rc;
 use tracing::Level;
 
@@ -196,13 +197,34 @@ impl TuiLayout {
         // Display in order they were created.
         let msgs = messages.iter();
 
+        // Find the largest prefix sizes before assembly the messages.
+        let mut source_len = 0;
+        let mut level_len = 0;
+        for msg in msgs {
+            let source = format!("[{}]", msg.source);
+            let len = source.len();
+            if len > source_len {
+                source_len = len;
+            }
+
+            let level = format!("{}:", msg.level);
+            let len = level.len();
+            if len > level_len {
+                level_len = len;
+            }
+        }
+
+        let msgs = messages.iter();
+
+        // Assemble the messages
         for msg in msgs {
             for line in msg.content.lines() {
                 let text = line.into_text().unwrap_or_default();
                 for line in text.lines {
                     // Don't add any formatting for cargo messages.
                     let out_line = if msg.source != MessageSource::Cargo {
-                        let source = format!("[{}]", msg.source);
+                        let padding = build_msg_padding(source_len - msg.source.to_string().len());
+                        let source = format!("{}[{}]", padding, msg.source);
                         let source_span = Span::from(source);
                         let source_span = match msg.source {
                             MessageSource::App(_) => source_span.light_cyan(),
@@ -214,7 +236,8 @@ impl TuiLayout {
                             }
                         };
 
-                        let level = format!(" {}: ", msg.level);
+                        let padding = build_msg_padding(level_len - msg.level.to_string().len());
+                        let level = format!("{}{}: ", padding, msg.level);
                         let level_span = Span::from(level);
                         let level_span = match msg.level {
                             Level::TRACE => level_span.black(),
@@ -375,4 +398,12 @@ impl TuiLayout {
             height: self.console[0].height,
         }
     }
+}
+
+fn build_msg_padding(padding_len: usize) -> String {
+    let mut padding = String::new();
+    for _ in 0..padding_len {
+        _ = write!(padding, " ");
+    }
+    padding
 }
