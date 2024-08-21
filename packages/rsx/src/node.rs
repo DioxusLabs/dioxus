@@ -130,7 +130,9 @@ impl BodyNode {
     ///
     /// dioxus-core uses this to understand templates at compiletime
     #[cfg(feature = "hot_reload")]
-    pub fn to_template_node<Ctx: crate::HotReloadingContext>(&self) -> dioxus_core::TemplateNode {
+    pub fn to_template_node<Ctx: dioxus_core_types::HotReloadingContext>(
+        &self,
+    ) -> dioxus_core::TemplateNode {
         use dioxus_core::TemplateNode;
         match self {
             BodyNode::Element(el) => {

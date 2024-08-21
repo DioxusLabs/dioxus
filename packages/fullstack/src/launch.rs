@@ -63,7 +63,7 @@ pub fn launch(
     let factory = move || {
         let mut vdom = factory();
         let document = std::rc::Rc::new(crate::document::web::FullstackWebDocument)
-            as std::rc::Rc<dyn dioxus_lib::prelude::document::Document>;
+            as std::rc::Rc<dyn dioxus_document::Document>;
         vdom.provide_root_context(document);
         vdom
     };

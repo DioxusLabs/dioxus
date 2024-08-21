@@ -15,8 +15,8 @@ keywords = ["assets"]
 serde = { version = "1.0.183", features = ["derive"] }
 anyhow = "1"
 base64 = { workspace = true }
-infer = { workspace = true }
-fluent-uri = { version = "0.2.0", features = ["serde"] }
+# infer = { workspace = true }
+# fluent-uri = { version = "0.2.0", features = ["serde"] }
 
 # tracing = "0.1.40"
 
@@ -28,7 +28,3 @@ fluent-uri = { version = "0.2.0", features = ["serde"] }
 [features]
 default = ["html"]
 html = []
-
-[build-dependencies]
-built = { version = "0.7", features = ["git2"] }
-scratch = "1.0.7"

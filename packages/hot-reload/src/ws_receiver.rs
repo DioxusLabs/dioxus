@@ -1,21 +1,29 @@
 use crate::DevserverMsg;
-// use futures_util::{SinkExt, StreamExt};
-// use tokio::net::TcpStream;
-// use tokio_tungstenite::{
-//     tungstenite::{Message, Result as TtResult},
-//     MaybeTlsStream, WebSocketStream,
-// };
+use std::io::Read;
 
 pub fn connect(mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
-    tokio::spawn(async move {
-        // let Some(Ok(mut recv)) = NativeReceiver::create_from_cli().await else {
-        //     return;
-        // };
-        // while let Some(msg) = recv.next().await {
-        //     match msg {
-        //         Ok(msg) => callback(msg),
-        //         Err(_e) => {}
+    // Hi!
+    //
+    // yes, we read-raw from a tcp socket
+    // don't think about it too much :)
+    //
+    // we just don't want to bring in tls + tokio for just hotreloading
+    std::thread::spawn(move || {
+        let connect = std::net::TcpStream::connect("127.0.0.1:8080");
+        let Ok(mut stream) = connect else {
+            return;
+        };
+
+        loop {}
+
+        // let mut buf = [0; 1024];
+        // loop {
+        //     let len = stream.read(&mut buf).unwrap();
+        //     if len == 0 {
+        //         break;
         //     }
+        //     let msg = String::from_utf8_lossy(&buf[..len]);
+        //     callback(serde_json::from_str(&msg).unwrap());
         // }
     });
 }

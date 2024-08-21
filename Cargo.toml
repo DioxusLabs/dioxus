@@ -65,6 +65,7 @@ members = [
     "packages/manganis-test-package",
     "packages/manganis-test-package/test-package-dependency",
     "packages/manganis-test-package/test-package-nested-dependency",
+    "packages/document",
 ]
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
@@ -76,8 +77,10 @@ version = "0.6.0-alpha.2"
 dioxus = { path = "packages/dioxus", version = "0.6.0-alpha.2" }
 dioxus-lib = { path = "packages/dioxus-lib", version = "0.6.0-alpha.2" }
 dioxus-core = { path = "packages/core", version = "0.6.0-alpha.2" }
+dioxus-core-types = { path = "packages/core-types", version = "0.6.0-alpha.2" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.6.0-alpha.2" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.6.0-alpha.2" }
+dioxus-document = { path = "packages/document", version = "0.6.0-alpha.2" }
 dioxus-router = { path = "packages/router", version = "0.6.0-alpha.2" }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.6.0-alpha.2" }
 dioxus-html = { path = "packages/html", version = "0.6.0-alpha.2", default-features = false }

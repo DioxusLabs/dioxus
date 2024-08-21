@@ -1,7 +1,8 @@
 use dioxus_core::internal::{HotReloadTemplateWithLocation, HotReloadedTemplate};
+use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, ChangedRsx},
-    CallBody, HotReloadingContext,
+    CallBody,
 };
 use krates::cm::MetadataCommand;
 use krates::Cmd;

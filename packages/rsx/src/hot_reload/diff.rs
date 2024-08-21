@@ -64,11 +64,11 @@
 //! more difficult to match future templates.
 
 use crate::innerlude::*;
-use crate::HotReloadingContext;
 use dioxus_core::internal::{
     FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute, HotReloadDynamicNode,
     HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
 };
+use dioxus_core_types::HotReloadingContext;
 use std::collections::HashMap;
 
 use super::last_build_state::LastBuildState;

@@ -364,9 +364,7 @@ impl Runtime {
                     self.rendering.set(false);
                     listener.call(uievent.clone());
                     self.rendering.set(true);
-                    let metadata = uievent.metadata.borrow();
-
-                    if !metadata.propagates {
+                    if !uievent.propagates() {
                         return;
                     }
                 }

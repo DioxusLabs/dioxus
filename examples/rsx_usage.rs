@@ -228,6 +228,9 @@ fn app() -> Element {
 
             // Or we can shell out to a helper function
             {format_dollars(10, 50)}
+
+            // some text?
+            {Some("hello world!")}
         }
     }
 }

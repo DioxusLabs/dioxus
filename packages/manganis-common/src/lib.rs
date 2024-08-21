@@ -2,7 +2,7 @@
 //! Common types and methods for the manganis asset system
 
 mod asset;
-mod built;
+// mod built;
 mod config;
 mod file;
 

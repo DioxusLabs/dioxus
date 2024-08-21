@@ -1,0 +1,10 @@
+[package]
+name = "dioxus-document"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+dioxus-core = { workspace = true }
+dioxus-core-types = { workspace = true }
+dioxus-core-macro = { workspace = true }
+tracing = { workspace = true }

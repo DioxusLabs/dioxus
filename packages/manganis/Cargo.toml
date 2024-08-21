@@ -18,22 +18,22 @@ once_cell = "1.19.0"
 # dirs = "5.0.1"
 # infer = { workspace = true }
 # manganis-common = { workspace = true }
-# dunce = "1.0.2"
+dunce = "1.0.2"
 
 # [target.'cfg(target_os = "macos")'.dependencies]
 # core-foundation = "0.9.3"
 
 # [target.'cfg(target_os ="macos")'.dependencies]
-infer = { workspace = true }
+# infer = { workspace = true }
 manganis-common = { workspace = true }
-dunce = "1.0.2"
+# dunce = "1.0.2"
 
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-core-foundation = "0.10.0"
+# [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+# core-foundation = "0.10.0"
 
 
 [features]
 default = ["macro"]
 html = []
-url-encoding = ["manganis-macro/url-encoding"]
+# url-encoding = ["manganis-macro/url-encoding"]
 macro = ["dep:manganis-macro"]

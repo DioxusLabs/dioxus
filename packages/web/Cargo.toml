@@ -10,8 +10,11 @@ homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
+
+dioxus-core-types = { workspace = true }
 dioxus-core = { workspace = true }
 dioxus-html = { workspace = true }
+dioxus-document = { workspace = true }
 dioxus-hot-reload = { workspace = true, features = ["client"] }
 dioxus-signals = { workspace = true }
 dioxus-interpreter-js = { workspace = true, features = [
@@ -31,6 +34,7 @@ futures-util = { workspace = true, features = [
     "async-await",
     "async-await-macro",
 ] }
+async-trait = { workspace = true }
 futures-channel = { workspace = true }
 serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", optional = true }
@@ -80,7 +84,8 @@ lazy-js-bundle = { workspace = true }
 
 
 [features]
-default = ["panic_hook", "mounted", "file_engine", "hot_reload", "document"]
+default = ["panic_hook", "mounted","hot_reload", "document"]
+# default = ["panic_hook", "mounted", "file_engine", "hot_reload", "document"]
 panic_hook = ["dep:console_error_panic_hook"]
 hydrate = ["web-sys/Comment", "ciborium", "dep:serde"]
 mounted = ["web-sys/Element", "dioxus-html/mounted"]

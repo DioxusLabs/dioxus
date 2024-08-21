@@ -15,19 +15,17 @@ proc-macro = true
 [dependencies]
 proc-macro2 = { version = "1.0" }
 quote = "1.0"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
 serde_json = "1.0"
-base64 = { workspace = true, optional = true }
+syn = { version = "2.0", features = ["full", "extra-traits"] }
 serde = { workspace = true, features = ["derive"] }
+# base64 = { workspace = true, optional = true }
 
 # manganis-common = { workspace = true }
 # manganis-cli-support = { workspace = true, optional = true }
 # manganis-common = { path = "../common", version = "0.3.0-alpha.1" }
 # manganis-cli-support = { path = "../cli-support", version = "0.3.0-alpha.1", optional = true }
 # base64 = { version = "0.21.5", optional = true }
-# [build-dependencies]
-# manganis-common = { workspace = true }
 
 [features]
-default = ["url-encoding"]
-url-encoding = ["base64"]
+default = []
+# url-encoding = ["base64"]

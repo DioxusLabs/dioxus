@@ -32,8 +32,6 @@ pub mod geometry;
 pub mod input_data;
 
 pub mod point_interaction;
-mod render_template;
-
 
 #[cfg(feature = "serialize")]
 mod transit;
@@ -44,7 +42,6 @@ pub use transit::*;
 pub use attribute_groups::*;
 pub use elements::*;
 pub use events::*;
-pub use render_template::*;
 
 #[cfg(feature = "document")]
 pub mod document;
@@ -56,11 +53,11 @@ pub mod extensions {
 
 pub mod prelude {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
-    #[cfg(feature = "document")]
-    pub use crate::document::{
-        self, document, eval, head, Document, Meta, MetaProps, Script, ScriptProps, Style,
-        StyleProps, Stylesheet, Title, TitleProps, UseEval,
-    };
+    // #[cfg(feature = "document")]
+    // pub use crate::document::{
+    //     self, document, eval, head, Document, Meta, MetaProps, Script, ScriptProps, Style,
+    //     StyleProps, Stylesheet, Title, TitleProps, UseEval,
+    // };
     pub use crate::elements::extensions::*;
     pub use crate::events::*;
     pub use crate::point_interaction::*;

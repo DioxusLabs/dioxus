@@ -26,7 +26,8 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::AnimationData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -34,7 +35,8 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::ClipboardData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -42,7 +44,8 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::CompositionData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -53,7 +56,8 @@ impl HtmlEventConverter for WebEventConverter {
 
     #[inline(always)]
     fn convert_focus_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::FocusData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -74,12 +78,14 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::KeyboardData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
     fn convert_media_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MediaData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[allow(unused_variables)]
@@ -87,11 +93,12 @@ impl HtmlEventConverter for WebEventConverter {
     fn convert_mounted_data(&self, event: &dioxus_html::PlatformEventData) -> MountedData {
         #[cfg(feature = "mounted")]
         {
-            MountedData::from(
-                event
-                    .downcast::<web_sys::Element>()
-                    .expect("event should be a web_sys::Element"),
-            )
+            // MountedData::from(
+            //     event
+            //         .downcast::<web_sys::Element>()
+            //         .expect("event should be a web_sys::Element"),
+            // )
+            todo!()
         }
         #[cfg(not(feature = "mounted"))]
         {
@@ -101,7 +108,8 @@ impl HtmlEventConverter for WebEventConverter {
 
     #[inline(always)]
     fn convert_mouse_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MouseData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -109,7 +117,8 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::PointerData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -117,7 +126,8 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::ResizeData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -125,7 +135,8 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::ScrollData {
-        ScrollData::from(downcast_event(event).raw.clone())
+        // ScrollData::from(downcast_event(event).raw.clone())
+        todo!()
     }
 
     #[inline(always)]
@@ -133,7 +144,8 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::SelectionData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -141,12 +153,14 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::ToggleData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
     fn convert_touch_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::TouchData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
@@ -154,12 +168,14 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::TransitionData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 
     #[inline(always)]
     fn convert_wheel_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::WheelData {
-        downcast_event(event).raw.clone().into()
+        // downcast_event(event).raw.clone().into()
+        todo!()
     }
 }
 
@@ -456,13 +472,15 @@ impl HasFormData for WebFormData {
 impl HasFileData for WebFormData {
     #[cfg(feature = "file_engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
+        use crate::bindings::WebFileEngine;
+
         let files = self
             .element
             .dyn_ref()
             .and_then(|input: &web_sys::HtmlInputElement| {
                 input.files().and_then(|files| {
                     #[allow(clippy::arc_with_non_send_sync)]
-                    dioxus_html::WebFileEngine::new(files).map(|f| {
+                    WebFileEngine::new(files).map(|f| {
                         std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
                     })
                 })
@@ -496,47 +514,57 @@ impl HasMouseData for WebDragData {
 
 impl PointerInteraction for WebDragData {
     fn trigger_button(&self) -> Option<dioxus_html::input_data::MouseButton> {
-        self.raw.trigger_button()
+        // self.raw.trigger_button()
+        todo!()
     }
 
     fn held_buttons(&self) -> dioxus_html::input_data::MouseButtonSet {
-        self.raw.held_buttons()
+        // self.raw.held_buttons()
+        todo!()
     }
 }
 
 impl ModifiersInteraction for WebDragData {
     fn modifiers(&self) -> dioxus_html::prelude::Modifiers {
-        self.raw.modifiers()
+        // self.raw.modifiers()
+        todo!()
     }
 }
 
 impl InteractionElementOffset for WebDragData {
     fn coordinates(&self) -> dioxus_html::geometry::Coordinates {
-        self.raw.coordinates()
+        // self.raw.coordinates()
+        todo!()
     }
 
     fn element_coordinates(&self) -> dioxus_html::geometry::ElementPoint {
-        self.raw.element_coordinates()
+        // self.raw.element_coordinates()
+        todo!()
     }
 }
 
 impl InteractionLocation for WebDragData {
     fn client_coordinates(&self) -> dioxus_html::geometry::ClientPoint {
-        self.raw.client_coordinates()
+        // self.raw.client_coordinates()
+        todo!()
     }
 
     fn screen_coordinates(&self) -> dioxus_html::geometry::ScreenPoint {
-        self.raw.screen_coordinates()
+        // self.raw.screen_coordinates()
+        todo!()
     }
 
     fn page_coordinates(&self) -> dioxus_html::geometry::PagePoint {
-        self.raw.page_coordinates()
+        // self.raw.page_coordinates()
+        todo!()
     }
 }
 
 impl HasFileData for WebDragData {
     #[cfg(feature = "file_engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
+        use crate::bindings::WebFileEngine;
+
         let files = self
             .raw
             .dyn_ref::<web_sys::DragEvent>()
@@ -544,7 +572,7 @@ impl HasFileData for WebDragData {
                 drag_event.data_transfer().and_then(|dt| {
                     dt.files().and_then(|files| {
                         #[allow(clippy::arc_with_non_send_sync)]
-                        dioxus_html::WebFileEngine::new(files).map(|f| {
+                        WebFileEngine::new(files).map(|f| {
                             std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
                         })
                     })

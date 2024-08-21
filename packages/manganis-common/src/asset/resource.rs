@@ -7,11 +7,11 @@ use std::{
 
 use anyhow::Context;
 use base64::Engine;
-use fluent_uri::{
-    component::{Authority, Scheme},
-    encoding::EStr,
-    UriRef,
-};
+// use fluent_uri::{
+//     component::{Authority, Scheme},
+//     encoding::EStr,
+//     UriRef,
+// };
 use serde::{Deserialize, Serialize};
 
 use crate::{config, AssetError, FileOptions};
@@ -27,7 +27,7 @@ pub struct ResourceAsset {
     /// The input URI
     ///
     /// This is basically whatever the user passed in to the macro
-    pub input: UriRef<String>,
+    pub input: PathBuf,
 
     /// The local URI for fallbacks
     ///
@@ -35,7 +35,7 @@ pub struct ResourceAsset {
     /// it's resolved to an absolute path since we transform all schema-less URIs to file:// URIs.
     ///
     /// If the aset is relative, this will be None since we can't figure it out at compile time.
-    pub local: Option<UriRef<String>>,
+    pub local: Option<PathBuf>,
 
     /// The output URI that makes it into the final bundle.
     /// This explicitly has the `bundle://` scheme to make it clear that it is a bundle URI.
@@ -44,7 +44,7 @@ pub struct ResourceAsset {
     /// final "flat" architecture.
     ///
     /// bundle://asset/path/to/file.txt
-    pub bundled: UriRef<String>,
+    pub bundled: PathBuf,
 
     /// The options for the resource
     pub options: Option<FileOptions>,
@@ -58,11 +58,6 @@ impl ResourceAsset {
 
     ///
     pub fn unique_name(&self) -> &str {
-        todo!()
-    }
-
-    ///
-    pub fn original(&self) -> &UriRef<String> {
         todo!()
     }
 
@@ -128,59 +123,61 @@ impl ResourceAsset {
 
     /// Parse a string as a file or folder source
     pub fn parse_any(src: &str) -> Result<Self, AssetError> {
-        // Process the input as a URI
-        let input: UriRef<String> = src.parse().unwrap();
-
-        let local = match input.scheme().map(|x| x.as_str()) {
-            // For http and https, we just use the input as is
-            // In fallback mode we end up just passing the URI through
-            Some("http") | Some("https") => Some(input.clone()),
-
-            // For file, we use the local path
-            // This will be `file://` in dev
-            // In release this will be `bundle://`
-            // Join the URI against the filesystem
-            None if input.path().is_absolute() => {
-                let manifest_dir: PathBuf = std::env::var("CARGO_MANIFEST_DIR").unwrap().into();
-                let manifest_dir = manifest_dir.canonicalize().unwrap();
-                let _local = manifest_dir.join(input.path().as_str());
-                Some(UriRef::<String>::parse(format!("file://{}", _local.display())).unwrap())
-            }
-            None => None,
-
-            Some(scheme) => {
-                panic!("Unsupported scheme: {}", scheme);
-            }
-        };
-
-        // Generate the bundled URI
-        //
-        // We:
-        // - flatten the URI with a hash
-        // - change the scheme to `bundle`
-        // - add the authority of pkg-name.bundle
-        //
-        // This results in a bundle-per dependency
-        let pkg_name = std::env::var("CARGO_PKG_NAME").unwrap();
-        let bundled = UriRef::builder()
-            .scheme(Scheme::new_or_panic("bundle"))
-            .authority_with(|b| b.host(EStr::new_or_panic(&format!("{}.bundle", pkg_name))))
-            .path(local.as_ref().map(|x| x.path()).unwrap_or_default())
-            .build()
-            .unwrap();
-
-        Ok(Self {
-            input,
-            local,
-            bundled,
-            options: None,
-        })
-    }
-
-    ///
-    pub fn make_unique_id(uri: &UriRef<String>) -> String {
         todo!()
+        // // Process the input as a URI
+        // let input: UriRef<String> = src.parse().unwrap();
+
+        // let local = match input.scheme().map(|x| x.as_str()) {
+        //     // For http and https, we just use the input as is
+        //     // In fallback mode we end up just passing the URI through
+        //     Some("http") | Some("https") => Some(input.clone()),
+
+        //     // For file, we use the local path
+        //     // This will be `file://` in dev
+        //     // In release this will be `bundle://`
+        //     // Join the URI against the filesystem
+        //     None if input.path().is_absolute() => {
+        //         tood!()
+        //         // let manifest_dir: PathBuf = std::env::var("CARGO_MANIFEST_DIR").unwrap().into();
+        //         // let manifest_dir = manifest_dir.canonicalize().unwrap();
+        //         // let _local = manifest_dir.join(input.path().as_str());
+        //         // // Some(UriRef::<String>::parse(format!("file://{}", _local.display())).unwrap())
+        //     }
+        //     None => None,
+
+        //     Some(scheme) => {
+        //         panic!("Unsupported scheme: {}", scheme);
+        //     }
+        // };
+
+        // // Generate the bundled URI
+        // //
+        // // We:
+        // // - flatten the URI with a hash
+        // // - change the scheme to `bundle`
+        // // - add the authority of pkg-name.bundle
+        // //
+        // // This results in a bundle-per dependency
+        // let pkg_name = std::env::var("CARGO_PKG_NAME").unwrap();
+        // let bundled = UriRef::builder()
+        //     .scheme(Scheme::new_or_panic("bundle"))
+        //     .authority_with(|b| b.host(EStr::new_or_panic(&format!("{}.bundle", pkg_name))))
+        //     .path(local.as_ref().map(|x| x.path()).unwrap_or_default())
+        //     .build()
+        //     .unwrap();
+
+        // Ok(Self {
+        //     input,
+        //     local,
+        //     bundled,
+        //     options: None,
+        // })
     }
+
+    // ///
+    // pub fn make_unique_id(uri: &UriRef<String>) -> String {
+    //     todo!()
+    // }
 
     ///
     pub fn is_dir(&self) -> bool {
@@ -478,22 +475,23 @@ fn ext_of_mime(mime: &str) -> &str {
 
 /// Get the mime type from a path-like string
 fn get_mime_from_path(trimmed: &Path) -> std::io::Result<&'static str> {
-    if trimmed.extension().is_some_and(|ext| ext == "svg") {
-        return Ok("image/svg+xml");
-    }
+    todo!()
+    // if trimmed.extension().is_some_and(|ext| ext == "svg") {
+    //     return Ok("image/svg+xml");
+    // }
 
-    let res = match infer::get_from_path(trimmed)?.map(|f| f.mime_type()) {
-        Some(f) => {
-            if f == "text/plain" {
-                get_mime_by_ext(trimmed)
-            } else {
-                f
-            }
-        }
-        None => get_mime_by_ext(trimmed),
-    };
+    // let res = match infer::get_from_path(trimmed)?.map(|f| f.mime_type()) {
+    //     Some(f) => {
+    //         if f == "text/plain" {
+    //             get_mime_by_ext(trimmed)
+    //         } else {
+    //             f
+    //         }
+    //     }
+    //     None => get_mime_by_ext(trimmed),
+    // };
 
-    Ok(res)
+    // Ok(res)
 }
 
 /// Get the mime type from a URI using its extension
@@ -531,7 +529,7 @@ pub fn get_mime_from_ext(extension: Option<&str>) -> &'static str {
 }
 
 fn hash_version(hash: &mut DefaultHasher) {
-    // Hash the current version of manganis. If this changes, we need to regenerate the unique name
-    crate::built::PKG_VERSION.hash(hash);
-    crate::built::GIT_COMMIT_HASH.hash(hash);
+    // // Hash the current version of manganis. If this changes, we need to regenerate the unique name
+    // crate::built::PKG_VERSION.hash(hash);
+    // crate::built::GIT_COMMIT_HASH.hash(hash);
 }

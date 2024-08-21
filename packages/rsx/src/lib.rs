@@ -80,9 +80,6 @@ pub use template_body::TemplateBody;
 
 pub mod hot_reload;
 
-#[cfg(feature = "hot_reload_traits")]
-pub use hot_reload::HotReloadingContext;
-
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},

@@ -90,9 +90,10 @@ brotli = "6.0.0"
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
 rsx-rosetta = { workspace = true }
-dioxus-rsx = { workspace = true, features = ["serde", "hot_reload"] }
+dioxus-rsx = { workspace = true, features = ["hot_reload"] }
 dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-core-types = { workspace = true }
 dioxus-hot-reload = { workspace = true, features = ["serve"] }
 ignore = "0.4.22"
 env_logger = "0.11.3"

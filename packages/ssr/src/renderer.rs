@@ -1,7 +1,7 @@
 use super::cache::Segment;
 use crate::cache::StringCache;
-
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
+use dioxus_core_types::event_bubbles;
 use rustc_hash::FxHashMap;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -243,7 +243,7 @@ impl Renderer {
                     // then write any listeners
                     for name in accumulated_listeners.drain(..) {
                         write!(buf, ",{}:", &name[2..])?;
-                        write!(buf, "{}", dioxus_html::event_bubbles(&name[2..]) as u8)?;
+                        write!(buf, "{}", event_bubbles(&name[2..]) as u8)?;
                     }
                 }
 

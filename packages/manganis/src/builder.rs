@@ -113,10 +113,29 @@ fn base_path() -> Option<PathBuf> {
     // todo: for other platforms, we should check their bundles too. This currently only works for macOS and iOS
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
-        // Note that this will return `target/debug` if you're in debug mode - not reliable check if we're in dev mode
-        if let Some(resources) = core_foundation::bundle::CFBundle::main_bundle().resources_path() {
-            return dunce::canonicalize(resources).ok();
+        // usually the bundle is
+        // .app
+        //   Contents
+        //     Resources
+        //       some_asset
+        //     macOS
+        //       somebinary
+        //
+        // but not always!
+        //
+        // we fallback to using the .app's directory itself if it doesn't exist - which is inline
+        // with how tauri-bundle works
+        //
+        // we would normally just want to use core-foundation, but it's much faster for compile times
+        // to not pull in CF in a build/proc-macro, so it's a teeny bit hand-rolled
+        let cur_exe = std::env::current_exe().ok()?;
+        let mut resources_dir = cur_exe.parent()?.parent()?.join("Resources");
+        if !resources_dir.exists() {
+            resources_dir = cur_exe.parent()?.to_path_buf();
         }
+
+        // Note that this will return `target/debug` if you're in debug mode - not reliable check if we're in dev mode
+        return dunce::canonicalize(resources_dir).ok();
     }
 
     // todo: this needs to be real canonicalizations

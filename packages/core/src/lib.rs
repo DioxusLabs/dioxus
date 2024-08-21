@@ -62,6 +62,7 @@ pub(crate) mod innerlude {
     pub use crate::suspense::*;
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
+    pub use dioxus_core_types::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///

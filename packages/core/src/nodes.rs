@@ -7,7 +7,6 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
-use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
 use std::{
@@ -15,6 +14,7 @@ use std::{
     cell::Cell,
     fmt::{Arguments, Debug},
 };
+use std::{fmt::Display, ops::Deref};
 
 /// The information about the
 #[derive(Debug)]
@@ -773,11 +773,7 @@ impl AttributeValue {
         // TODO: maybe don't use the copy-variant of EventHandler here?
         // Maybe, create an Owned variant so we are less likely to run into leaks
         AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
-            let data = event.data.downcast::<T>().unwrap();
-            callback(Event {
-                metadata: event.metadata.clone(),
-                data,
-            });
+            callback(event.downcast::<T>().unwrap());
         }))
     }
 
@@ -862,14 +858,7 @@ impl IntoDynNode for DynamicNode {
         self
     }
 }
-impl<T: IntoDynNode> IntoDynNode for Option<T> {
-    fn into_dyn_node(self) -> DynamicNode {
-        match self {
-            Some(val) => val.into_dyn_node(),
-            None => DynamicNode::default(),
-        }
-    }
-}
+
 impl IntoDynNode for &Element {
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
@@ -894,25 +883,84 @@ impl IntoDynNode for &Option<VNode> {
         }
     }
 }
-impl IntoDynNode for &str {
+pub struct DisplayMarker;
+impl<T> IntoDynNode<DisplayMarker> for T
+where
+    T: Display,
+{
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
         })
     }
 }
-impl IntoDynNode for String {
+pub struct OptionDisplayMarker;
+impl<T> IntoDynNode<OptionDisplayMarker> for Option<T>
+where
+    T: Display,
+{
     fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText { value: self })
+        todo!()
+        // DynamicNode::Text(VText {
+        //     value: self.to_string(),
+        // })
     }
 }
-impl IntoDynNode for Arguments<'_> {
+
+impl<T: IntoDynNode> IntoDynNode for Option<T> {
     fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText {
-            value: self.to_string(),
-        })
+        match self {
+            Some(val) => val.into_dyn_node(),
+            None => DynamicNode::default(),
+        }
     }
 }
+
+// // struct DisplayMarker;
+// // impl<T: Display> IntoDynNode<DisplayMarker> for Option<T> {
+// //     fn into_dyn_node(self) -> DynamicNode {
+// //         todo!()
+// //     }
+// // }
+
+// impl IntoDynNode for &str {
+//     fn into_dyn_node(self) -> DynamicNode {
+//         DynamicNode::Text(VText {
+//             value: self.to_string(),
+//         })
+//     }
+// }
+// impl IntoDynNode for String {
+//     fn into_dyn_node(self) -> DynamicNode {
+//         DynamicNode::Text(VText { value: self })
+//     }
+// }
+// impl IntoDynNode for Arguments<'_> {
+//     fn into_dyn_node(self) -> DynamicNode {
+//         DynamicNode::Text(VText {
+//             value: self.to_string(),
+//         })
+//     }
+// }
+
+// Note that we're using the E as a generic but this is never crafted anyways.
+pub struct FromNodeIterator;
+impl<T, I> IntoDynNode<FromNodeIterator> for T
+where
+    T: Iterator<Item = I>,
+    I: IntoVNode,
+{
+    fn into_dyn_node(self) -> DynamicNode {
+        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
+
+        if children.is_empty() {
+            DynamicNode::default()
+        } else {
+            DynamicNode::Fragment(children)
+        }
+    }
+}
+
 impl IntoDynNode for &VNode {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(vec![self.clone()])
@@ -977,24 +1025,6 @@ impl IntoVNode for &Option<Element> {
         match self.as_ref() {
             Some(val) => val.clone().into_vnode(),
             _ => VNode::empty().unwrap(),
-        }
-    }
-}
-
-// Note that we're using the E as a generic but this is never crafted anyways.
-pub struct FromNodeIterator;
-impl<T, I> IntoDynNode<FromNodeIterator> for T
-where
-    T: Iterator<Item = I>,
-    I: IntoVNode,
-{
-    fn into_dyn_node(self) -> DynamicNode {
-        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
-
-        if children.is_empty() {
-            DynamicNode::default()
-        } else {
-            DynamicNode::Fragment(children)
         }
     }
 }
@@ -1078,19 +1108,19 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
-#[cfg(feature = "manganis")]
-impl IntoAttributeValue for manganis::ImageAsset {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.to_string())
-    }
-}
+// #[cfg(feature = "manganis")]
+// impl IntoAttributeValue for manganis::ImageAsset {
+//     fn into_value(self) -> AttributeValue {
+//         AttributeValue::Text(self.to_string())
+//     }
+// }
 
-#[cfg(feature = "manganis")]
-impl IntoAttributeValue for manganis::Asset {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.to_string())
-    }
-}
+// #[cfg(feature = "manganis")]
+// impl IntoAttributeValue for manganis::Asset {
+//     fn into_value(self) -> AttributeValue {
+//         AttributeValue::Text(self.to_string())
+//     }
+// }
 
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {

@@ -167,7 +167,7 @@ impl Attribute {
     }
 
     #[cfg(feature = "hot_reload")]
-    pub(crate) fn html_tag_and_namespace<Ctx: crate::HotReloadingContext>(
+    pub(crate) fn html_tag_and_namespace<Ctx: dioxus_core_types::HotReloadingContext>(
         &self,
     ) -> (&'static str, Option<&'static str>) {
         let attribute_name_rust = self.name.to_string();
@@ -182,7 +182,7 @@ impl Attribute {
     }
 
     #[cfg(feature = "hot_reload")]
-    pub fn to_template_attribute<Ctx: crate::HotReloadingContext>(
+    pub fn to_template_attribute<Ctx: dioxus_core_types::HotReloadingContext>(
         &self,
     ) -> dioxus_core::TemplateAttribute {
         use dioxus_core::TemplateAttribute;

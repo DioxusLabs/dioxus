@@ -1,5 +1,5 @@
 use crate::{assets::*, webview::WebviewEdits};
-use dioxus_html::document::NATIVE_EVAL_JS;
+use dioxus_document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
 use serde::Deserialize;

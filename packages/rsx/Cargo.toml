@@ -17,17 +17,15 @@ internment = { workspace = true, optional = true }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 proc-macro2-diagnostics = { workspace = true }
 quote = { workspace = true }
-serde = { workspace = true, features = ["derive"], optional = true }
 syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
 tracing = { workspace = true }
 dioxus-core = { workspace = true, optional = true } # todo: this is being compiled in a proc macro
-
+dioxus-core-types = { workspace = true, optional = true }
 
 [features]
 default = []
 hot_reload_traits = []
-hot_reload = ["dep:internment", "dep:dioxus-core", "hot_reload_traits", "serde"]
-serde = ["dep:serde", "dioxus-core/serialize"]
+hot_reload = ["dep:internment", "dep:dioxus-core", "dep:dioxus-core-types", "hot_reload_traits"]
 
 [dev-dependencies]
 prettyplease = { workspace = true }

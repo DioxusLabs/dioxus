@@ -8,8 +8,8 @@ use crate::{
     DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
+use dioxus_document::Document;
 use dioxus_hooks::to_owned;
-use dioxus_html::document::Document;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::SynchronousEventResponse;
 use futures_util::{pin_mut, FutureExt};

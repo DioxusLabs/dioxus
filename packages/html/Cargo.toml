@@ -11,11 +11,11 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-core-macro = { workspace = true }
+dioxus-core-types = { workspace = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
-dioxus-hooks = { workspace = true }
-generational-box = { workspace = true }
+
+# generational-box = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 euclid = "0.22.7"
@@ -25,7 +25,6 @@ async-trait = { version = "0.1.58", optional = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
 
-tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 futures-channel = { workspace = true }
 
 # todo: we shouldn't have any wasm-bindgen dependencies in the html cratea

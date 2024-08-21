@@ -11,6 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["document"]}
+dioxus-core-types = { workspace = true }
 dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
 dioxus-interpreter-js = { workspace = true }
 generational-box = { workspace = true }
