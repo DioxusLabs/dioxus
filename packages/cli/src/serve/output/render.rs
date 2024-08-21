@@ -236,6 +236,9 @@ impl TuiLayout {
             }
         }
 
+        // Add an extra line since scroll can't hit last line for some reason.
+        out_text.push_line(Line::from(""));
+
         let paragraph = Paragraph::new(out_text)
             .left_aligned()
             .wrap(Wrap { trim: false });
