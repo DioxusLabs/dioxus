@@ -17,13 +17,17 @@ pub struct Init {
     #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
     template: String,
 
-    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
-    #[clap(short, long)]
-    option: Vec<String>,
+    /// Branch to select when using `template` from a git repository
+    #[clap(long)]
+    branch: Option<String>,
 
     /// Specify a sub-template within the template repository to be used as the actual template
     #[clap(long)]
     subtemplate: Option<String>,
+
+    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
+    #[clap(short, long)]
+    option: Vec<String>,
 
     /// Skip user interaction by using the default values for the used template.
     /// Default values can be overridden with `--option`
@@ -46,6 +50,7 @@ impl Init {
             silent: self.yes,
             template_path: TemplatePath {
                 auto_path: Some(self.template),
+                branch: self.branch,
                 subfolder: self.subtemplate,
                 ..Default::default()
             },
