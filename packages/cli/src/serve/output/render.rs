@@ -22,7 +22,6 @@ use ratatui::{
     },
     Frame,
 };
-use std::fmt::Write as _;
 use std::rc::Rc;
 use tracing::Level;
 
@@ -87,29 +86,35 @@ impl TuiLayout {
         );
     }
 
-    /// Render the user's text selection
+    /// Render the user's text selection and compile it into a list of lines.
     pub fn render_selection(
         &self,
         frame: &mut Frame,
         drag_start: Option<(u16, u16)>,
         drag_end: Option<(u16, u16)>,
-    ) -> Option<String> {
+        selected_lines: &mut Vec<String>,
+    ) {
         let console = self.console[0];
 
-        let start = drag_start?;
-        let end = drag_end?;
+        let Some(start) = drag_start else {
+            return;
+        };
+        let Some(end) = drag_end else {
+            return;
+        };
+
         let buffer = frame.buffer_mut();
 
         let start_index = buffer.index_of(start.0, start.1);
         let end_index = buffer.index_of(end.0, end.1);
         let console_y_end = console.as_size().height - 1;
 
-        let mut selected_lines = Vec::new();
+        let mut new_selected_lines = Vec::new();
         let direction_forward = start_index < end_index;
 
         // The drag was started out of console area.
         if start.1 > console_y_end {
-            return None;
+            return;
         }
 
         let mut i = start_index;
@@ -117,6 +122,7 @@ impl TuiLayout {
             let (x, y) = buffer.pos_of(i);
 
             // Skip any cells outside of console area.
+            // This looping logic is a bit duplicated.
             if y > console_y_end {
                 match direction_forward {
                     true => i += 1,
@@ -138,11 +144,12 @@ impl TuiLayout {
                 false => start.1 - y,
             } as usize;
 
-            if let Some(line) = selected_lines.get_mut(line_index) {
+            // Add the symbol to it's correct line, creating it if null.
+            if let Some(line) = new_selected_lines.get_mut(line_index) {
                 *line += symbol;
             } else {
                 let line = String::from(symbol);
-                selected_lines.push(line);
+                new_selected_lines.push(line);
             }
 
             if i == end_index {
@@ -156,26 +163,20 @@ impl TuiLayout {
             }
         }
 
-        let mut final_text = String::new();
-
-        // Go through each line, parse it, and append it to the final text.
-        for line in selected_lines {
-            let mut line = line;
-            if !direction_forward {
-                line = line.chars().rev().collect::<String>();
-            }
-
-            // Trim scroll bar and whitespace. 
-            line = line.replace("▐", "").trim_end().to_string();
-            if !line.is_empty() {
-                writeln!(final_text, "{line}").unwrap();
-            }
+        if !direction_forward {
+            new_selected_lines.reverse();
         }
 
-        // Remove the last unescessary newline.
-        final_text = final_text.trim_end_matches('\n').to_string();
+        // Replace current selected lines with new ones.
+        selected_lines.clear();
+        for line in new_selected_lines.iter_mut() {
+            // Reverse lines if needed.
+            if !direction_forward {
+                *line = line.chars().rev().collect::<String>();
+            }
 
-        Some(final_text)
+            selected_lines.push(line.clone());
+        }
     }
 
     /// Render the console and it's logs.

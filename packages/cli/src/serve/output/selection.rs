@@ -1,5 +1,6 @@
 use crate::serve::MessageSource;
 use clipboard_rs::{Clipboard, ClipboardContext};
+use std::fmt::Write as _;
 use std::sync::OnceLock;
 
 const WAYLAND_ENV: &str = "WAYLAND_DISPLAY";
@@ -8,11 +9,28 @@ const USER_ERR_MSG: &str = "Failed to copy selection to clipboard.";
 static IS_WAYLAND: OnceLock<bool> = OnceLock::new();
 static CLIPBOARD_CTX: OnceLock<ClipboardContext> = OnceLock::new();
 
+/// Perform minor text processing on user selection, compiling it into a single [`String`].
+pub fn process_selection(selected_lines: &mut [String]) -> String {
+    let mut final_text = String::new();
+
+    // Go through each line, parse it, and append it to the final text.
+    for line in selected_lines.iter_mut() {
+        // Trim scroll bar and whitespace.
+        *line = line.replace("▐", "").trim_end().to_string();
+        if !line.is_empty() {
+            writeln!(final_text, "{line}").unwrap();
+        }
+    }
+
+    // Remove the last unescessary newline.
+    final_text.trim_end_matches('\n').to_string()
+}
+
 /// Set the clipboard content.
 ///
 /// This automatically routes to the correct clipboard provider
 /// depending on the desktop environment.
-pub fn set_content(content: String) {
+pub fn set_clipboard(content: String) {
     let is_wayland = is_wayland();
 
     if is_wayland {
@@ -39,13 +57,11 @@ pub fn set_content(content: String) {
 /// # Panics
 /// This function will panic if the clipboard context fails to initialize.
 fn get_generic_clipboard() -> &'static ClipboardContext {
-    CLIPBOARD_CTX.get_or_init(|| {
-        match ClipboardContext::new() {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::error!(err = e, "Failed to init clipboard context.");
-                panic!("Failed to initialize clipboard: {e}");
-            }
+    CLIPBOARD_CTX.get_or_init(|| match ClipboardContext::new() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!(err = e, "Failed to init clipboard context.");
+            panic!("Failed to initialize clipboard: {e}");
         }
     })
 }

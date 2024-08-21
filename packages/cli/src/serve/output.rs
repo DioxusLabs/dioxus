@@ -39,8 +39,8 @@ use tokio::{
 };
 use tracing::Level;
 
-mod clipboard;
 mod render;
+mod selection;
 
 // How many lines should be scroll on each mouse scroll or arrow key input.
 const SCROLL_SPEED: u16 = 1;
@@ -186,7 +186,7 @@ pub struct Output {
 
     drag_start: Option<(u16, u16)>,
     drag_end: Option<(u16, u16)>,
-    selected_text: Option<String>,
+    selected_lines: Vec<String>,
 
     _rustc_version: String,
     _rustc_nightly: bool,
@@ -270,7 +270,7 @@ impl Output {
             // Text selection
             drag_start: None,
             drag_end: None,
-            selected_text: None,
+            selected_lines: Vec::new(),
         })
     }
 
@@ -489,13 +489,14 @@ impl Output {
             }
             Event::Key(key) if key.code == KeyCode::Char('c') => {
                 // Clear the currently selected build logs.
-                self.messages.drain(..);
+                self.messages.clear();
             }
             Event::Key(key) if key.code == KeyCode::Char('C') => {
                 let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
-                if is_shift && self.selected_text.is_some() {
-                    clipboard::set_content(self.selected_text.clone().unwrap());
+                if is_shift && !self.selected_lines.is_empty() {
+                    let text = selection::process_selection(&mut self.selected_lines);
+                    selection::set_clipboard(text);
                 }
             }
             Event::Resize(_width, _height) => {
@@ -521,7 +522,7 @@ impl Output {
     fn reset_drag(&mut self) {
         self.drag_start = None;
         self.drag_end = None;
-        self.selected_text = None;
+        self.selected_lines.clear();
     }
 
     pub fn new_ws_message(
@@ -668,7 +669,12 @@ impl Output {
                 self.num_lines_wrapping =
                     layout.render_console(frame, self.scroll_position, &self.messages);
 
-                self.selected_text = layout.render_selection(frame, self.drag_start, self.drag_end);
+                layout.render_selection(
+                    frame,
+                    self.drag_start,
+                    self.drag_end,
+                    &mut self.selected_lines,
+                );
 
                 // Render info bar, status bar, and borders.
                 layout.render_status_bar(
