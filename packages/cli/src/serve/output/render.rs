@@ -10,10 +10,11 @@
 use super::{
     BuildProgress, ConsoleHeight, Message, MessageSource, NumLinesWrapping, ScrollPosition,
 };
+use ansi_to_tui::IntoText as _;
 use dioxus_cli_config::Platform;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
-    style::{Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
         Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget,
@@ -41,8 +42,8 @@ impl TuiLayout {
         let body = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                // Body
-                Constraint::Min(0),
+                // Console
+                Constraint::Fill(1),
                 // Border Separator
                 Constraint::Length(1),
                 // Footer Status
@@ -83,6 +84,50 @@ impl TuiLayout {
                 .border_style(Style::new().gray()),
             self.border_sep,
         );
+    }
+
+    /// Render the user's text selection
+    pub fn render_selection(
+        &self,
+        frame: &mut Frame,
+        drag_start: Option<(u16, u16)>,
+        drag_end: Option<(u16, u16)>,
+    ) -> Option<String> {
+        let start = drag_start?;
+        let end = drag_end?;
+        let buffer = frame.buffer_mut();
+
+        let start_index = buffer.index_of(start.0, start.1);
+        let end_index = buffer.index_of(end.0, end.1);
+
+        let mut selection_text = String::new();
+        let direction_forward = start_index < end_index;
+        let mut i = start_index;
+        loop {
+            let (x, y) = buffer.pos_of(i);
+            let cell = buffer.get_mut(x, y);
+            cell.set_bg(Color::DarkGray);
+
+            let symbol = cell.symbol();
+            selection_text += symbol;
+
+            if i == end_index {
+                break;
+            }
+
+            // Determine which direction we need to iterate through in the buffer.
+            if direction_forward {
+                i += 1;
+            } else {
+                i -= 1;
+            }
+        }
+
+        if !direction_forward {
+            selection_text = selection_text.chars().rev().collect::<String>();
+        }
+
+        Some(selection_text)
     }
 
     /// Render the console and it's logs.
@@ -166,16 +211,16 @@ impl TuiLayout {
             .render(console, frame.buffer_mut());
 
         // and the scrollbar, those are separate widgets
-        // frame.render_stateful_widget(
-        //     scrollbar,
-        //     console.inner(Margin {
-        //         // todo: dont use margin - just push down the body based on its top border
-        //         // using an inner vertical margin of 1 unit makes the scrollbar inside the block
-        //         vertical: 1,
-        //         horizontal: 0,
-        //     }),
-        //     &mut scrollbar_state,
-        // );
+        frame.render_stateful_widget(
+            scrollbar,
+            console.inner(Margin {
+                // todo: dont use margin - just push down the body based on its top border
+                // using an inner vertical margin of 1 unit makes the scrollbar inside the block
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
 
         num_lines_wrapping
     }

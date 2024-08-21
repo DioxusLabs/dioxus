@@ -39,6 +39,7 @@ use tokio::{
 };
 use tracing::Level;
 
+mod clipboard;
 mod render;
 
 // How many lines should be scroll on each mouse scroll or arrow key input.
@@ -183,6 +184,10 @@ pub struct Output {
     platform: Platform,
     addr: AddressArguments,
 
+    drag_start: Option<(u16, u16)>,
+    drag_end: Option<(u16, u16)>,
+    selected_text: Option<String>,
+
     _rustc_version: String,
     _rustc_nightly: bool,
     _dx_version: String,
@@ -215,7 +220,7 @@ impl Output {
         let term: Option<TerminalBackend> = Terminal::with_options(
             CrosstermBackend::new(stdout()),
             TerminalOptions {
-                viewport: Viewport::Inline(3),
+                viewport: Viewport::Fullscreen,
             },
         )
         .ok();
@@ -261,6 +266,11 @@ impl Output {
             num_lines_wrapping: NumLinesWrapping::zero(),
             anim_start: Instant::now(),
             addr: cfg.server_arguments.address.clone(),
+
+            // Text selection
+            drag_start: None,
+            drag_end: None,
+            selected_text: None,
         })
     }
 
@@ -431,6 +441,10 @@ impl Output {
                     scroll_speed += SCROLL_MODIFIER;
                 }
                 self.scroll_position = self.scroll_position.saturating_sub(scroll_speed).into();
+
+                self.drag_start = None;
+                self.drag_end = None;
+                self.selected_text = None;
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollDown => {
                 let mut scroll_speed = SCROLL_SPEED;
@@ -438,6 +452,26 @@ impl Output {
                     scroll_speed += SCROLL_MODIFIER;
                 }
                 *self.scroll_position += scroll_speed;
+
+                self.drag_start = None;
+                self.drag_end = None;
+                self.selected_text = None;
+            }
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Drag(MouseButton::Left) => {
+                let x = mouse.column;
+                let y = mouse.row;
+
+                if self.drag_start.is_some() {
+                    self.drag_end = Some((x, y));
+                } else {
+                    self.drag_start = Some((x, y));
+                    self.drag_end = self.drag_start;
+                }
+            }
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+                self.drag_start = None;
+                self.drag_end = None;
+                self.selected_text = None;
             }
             Event::Key(key) if key.code == KeyCode::Up => {
                 let mut scroll_speed = SCROLL_SPEED;
@@ -464,6 +498,13 @@ impl Output {
             Event::Key(key) if key.code == KeyCode::Char('c') => {
                 // Clear the currently selected build logs.
                 self.messages.drain(..);
+            }
+            Event::Key(key) if key.code == KeyCode::Char('C') => {
+                let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
+
+                if is_shift && self.selected_text.is_some() {
+                    clipboard::set_content(self.selected_text.clone().unwrap());
+                }
             }
             Event::Resize(_width, _height) => {
                 // nothing, it should take care of itself
@@ -623,9 +664,13 @@ impl Output {
                 let layout = render::TuiLayout::new(frame.size());
                 self.console_height = layout.get_console_height();
 
+                layout.render_decor(frame);
+
                 // Render console
                 self.num_lines_wrapping =
                     layout.render_console(frame, self.scroll_position, &self.messages);
+
+                self.selected_text = layout.render_selection(frame, self.drag_start, self.drag_end);
 
                 // Render info bar, status bar, and borders.
                 layout.render_status_bar(
@@ -635,7 +680,6 @@ impl Output {
                     &self.build_progress,
                     self.more_modal_open,
                 );
-                layout.render_decor(frame);
 
                 if self.more_modal_open {
                     layout.render_more_modal(frame);

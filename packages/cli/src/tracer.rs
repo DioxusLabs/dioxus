@@ -1,6 +1,6 @@
 //! CLI Tracing
 //!
-//! Tracing has internal and user-facing logs. User-facing logs are directly router to the user in some form.
+//! The CLI's tracing has internal and user-facing logs. User-facing logs are directly routed to the user in some form.
 //! Internal logs are stored in a log file for consumption in bug reports and debugging.
 //! We use tracing fields to determine whether a log is internal or external and additionally if the log should be
 //! formatted or not.
