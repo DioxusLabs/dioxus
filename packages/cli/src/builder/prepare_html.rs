@@ -133,7 +133,7 @@ impl BuildRequest {
     }
 
     fn send_resource_deprecation_warning(&self, paths: Vec<PathBuf>, variant: ResourceType) {
-        const RESOURCE_DEPRECATION_MESSAGE: &str = r#"The `web.resource` config has been deprecated in favor of head components and will be removed in a future release. Instead of including assets in the config, you can include assets with the `asset!` macro and add them to the head with `head::Link` and `Script` components."#;
+        const RESOURCE_DEPRECATION_MESSAGE: &str = r#"The `web.resource` config has been deprecated in favor of head components and will be removed in a future release."#;
 
         let replacement_components = paths
             .iter()

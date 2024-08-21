@@ -231,7 +231,9 @@ impl TuiLayout {
                         first_line = false;
 
                         // Build source tag: `[dev]`
-                        let padding = build_msg_padding(source_len - msg.source.to_string().len());
+                        // We subtract 2 here to account for the `[]`
+                        let padding =
+                            build_msg_padding(source_len - msg.source.to_string().len() - 2);
                         let source = format!("{}[{}]", padding, msg.source);
                         sub_line_padding += source.len();
 
@@ -247,6 +249,7 @@ impl TuiLayout {
                         };
 
                         // Build level tag: `INFO:``
+                        // We don't subtract 1 here for `:` because we still want at least 1 padding.
                         let padding = build_msg_padding(level_len - msg.level.to_string().len());
                         let level = format!("{}{}: ", padding, msg.level);
                         sub_line_padding += level.len();
