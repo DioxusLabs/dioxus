@@ -126,7 +126,7 @@ path = "src/main.rs"
 name = "dx"
 
 [dev-dependencies]
-assert_cmd = "2.0.16"
+assert_cmd = "2.0"
 tempfile = "3.3"
 
 [package.metadata.binstall]

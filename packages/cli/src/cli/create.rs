@@ -7,8 +7,8 @@ pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
 pub struct Create {
-    /// Create a new Dioxus project at specified path (required when `--yes` is used)
-    path: Option<PathBuf>,
+    /// Create a new Dioxus project at PATH
+    path: PathBuf,
 
     /// Project name. Defaults to directory name
     #[arg(short, long)]
@@ -33,70 +33,19 @@ pub struct Create {
 }
 
 impl Create {
-    pub fn create(self) -> Result<()> {
-        // TODO: try to get all paths of `yes` `name` `path` options fixed.
-
-        // NOTE: destination \wo init means base_dir + name, \w means dest_dir
-        // so use init: true and always handle the dest_dir manually and carefully.
-        // Cargo never adds name to the path. Name is solely for project name.
-
-        if self.yes && self.path.is_none() {
-            return Err("You have to provide the project's path when using `--yes` option.".into());
+    pub fn create(mut self) -> Result<()> {
+        // Project name defaults to directory name.
+        if self.name.is_none() {
+            self.name = Some(create::name_from_path(&self.path)?);
         }
-
-        todo!();
-
-        // Split the name into path components
-        // such that dx new packages/app will create a directory called packages/app
-        // let project_dir = self.path.unwrap_or_else(|| {
-        //     let mut path = PathBuf::from(self.name.as_deref().unwrap());
-        //
-        //     // if path.is_relative() {
-        //     //     path = std::env::current_dir().unwrap().join(path);
-        //     // }
-        //
-        //     path = std::env::current_dir().unwrap().join(path);
-        //
-        //     // split the path into the parent and the name
-        //     let parent = path.parent().unwrap();
-        //     let name = path.file_name().unwrap();
-        //     self.name = Some(name.to_str().unwrap().to_string());
-        //
-        //     // let get_parent_and_name = || -> Option<(&Path, String)> {
-        //     //     let parent = path.parent()?;
-        //     //     let name = path.file_name()?.to_str()?.to_string();
-        //     //     Some((parent, name))
-        //     // };
-        //     // let (parent, name) = get_parent_and_name().unwrap();
-        //     // self.name = Some(name);
-        //
-        //     // create the parent directory if it doesn't exist
-        //     std::fs::create_dir_all(parent).unwrap();
-        //
-        //     // And then the "destination" is the parent directory
-        //     parent.to_path_buf()
-        // });
-
-        // if self.name.is_none() {
-        //     let dir_name = self
-        //         .path
-        //         .absolutize()?
-        //         .to_path_buf()
-        //         .file_name()
-        //         .ok_or(Error::RuntimeError(
-        //             "Current path does not include directory name".into(),
-        //         ))?
-        //         .to_str()
-        //         .ok_or(Error::RuntimeError(
-        //             "Current directory name is not a valid UTF-8 string".into(),
-        //         ))?
-        //         .to_string();
-        //     self.name = Some(dir_name);
-        // }
 
         let args = GenerateArgs {
             define: self.option,
-            destination: self.path,
+            destination: Some(self.path),
+            // NOTE: destination without init means base_dir + name, with —
+            // means dest_dir. So use `init: true` and always handle
+            // the dest_dir manually and carefully.
+            // Cargo never adds name to the path. Name is solely for project name.
             // https://github.com/cargo-generate/cargo-generate/issues/1250
             init: true,
             name: self.name,
@@ -108,32 +57,26 @@ impl Create {
             },
             ..Default::default()
         };
-
         let path = cargo_generate::generate(args)?;
-        // let m = cargo_metadata::MetadataCommand::new()
-        //     .current_dir(project_dir)
-        //     .exec()
-        //     .unwrap();
-        // let root = m.workspace_root;
-        // let name = m
-        //     .packages
-        //     .iter()
-        //     .filter_map(|p| {
-        //         if p.manifest_path.parent().unwrap() == root {
-        //             Some(p.name.clone())
-        //         } else {
-        //             None
-        //         }
-        //     })
-        //     .next()
-        //     .expect("should be only 1 package");
-
         post_create(&path)
     }
 }
 
+/// Extracts the last directory name from the `path`.
+pub(crate) fn name_from_path(path: &Path) -> Result<String> {
+    use path_absolutize::Absolutize;
+
+    Ok(path
+        .absolutize()?
+        .to_path_buf()
+        .file_name()
+        .ok_or("Current path does not include directory name".to_string())?
+        .to_str()
+        .ok_or("Current directory name is not a valid UTF-8 string".to_string())?
+        .to_string())
+}
+
 /// Post-creation actions for newly setup crates.
-// Also used by `init`.
 pub(crate) fn post_create(path: &Path) -> Result<()> {
     let parent_dir = path.parent();
     let metadata = if parent_dir.is_none() {
@@ -218,4 +161,190 @@ fn remove_triple_newlines(string: &str) -> String {
         new_string.push(char);
     }
     new_string
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use assert_cmd::Command;
+    use std::fs::{create_dir_all, read_to_string};
+    use std::path::{Path, PathBuf};
+    use tempfile::tempdir;
+    use toml::Value;
+
+    // Note: tests below (at least 6 of them) were written to mainly test
+    // correctness of project's directory and its name, because previously it
+    // was broken and tests bring a peace of mind. And also so that I don't have
+    // to run my local hand-made tests every time.
+
+    pub(crate) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    pub(crate) fn subcommand(name: &str) -> Result<Command> {
+        let mut command = Command::cargo_bin(env!("CARGO_BIN_NAME"))?;
+        command
+            .arg(name)
+            .arg("--yes") // Skip any questions by choosing default answers.
+            .arg("--subtemplate")
+            // Probably should use some template that doesn't require specifying
+            // either `--subtemplate` or `--option`.
+            // Maybe a simple template in tests/ dir?
+            .arg("Fullstack");
+        Ok(command)
+    }
+
+    pub(crate) fn get_cargo_toml_path(project_path: &Path) -> PathBuf {
+        project_path.join("Cargo.toml")
+    }
+
+    pub(crate) fn get_project_name(cargo_toml_path: &Path) -> Result<String> {
+        Ok(toml::from_str::<Value>(&read_to_string(cargo_toml_path)?)?
+            .get("package")
+            .unwrap()
+            .get("name")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string())
+    }
+
+    fn subcommand_new() -> Result<Command> {
+        subcommand("new")
+    }
+
+    #[test]
+    fn test_subcommand_new_with_dot_path() -> Result<()> {
+        let project_dir = "dir";
+        let project_name = project_dir;
+
+        let temp_dir = tempdir()?;
+        // Make current dir's name deterministic.
+        let current_dir = temp_dir.path().join(project_dir);
+        create_dir_all(&current_dir)?;
+        let project_path = &current_dir;
+        assert!(project_path.exists());
+
+        subcommand_new()?
+            .arg(".")
+            .current_dir(&current_dir)
+            .assert()
+            .success();
+
+        let cargo_toml_path = get_cargo_toml_path(project_path);
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_1_dir_path() -> Result<()> {
+        let project_dir = "dir";
+        let project_name = project_dir;
+
+        let current_dir = tempdir()?;
+
+        subcommand_new()?
+            .arg(project_dir)
+            .current_dir(&current_dir)
+            .assert()
+            .success();
+
+        let project_path = current_dir.path().join(project_dir);
+        let cargo_toml_path = get_cargo_toml_path(&project_path);
+        assert!(project_path.exists());
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_2_dir_path() -> Result<()> {
+        let project_dir = "a/b";
+        let project_name = "b";
+
+        let current_dir = tempdir()?;
+
+        subcommand_new()?
+            .arg(project_dir)
+            .current_dir(&current_dir)
+            .assert()
+            .success();
+
+        let project_path = current_dir.path().join(project_dir);
+        let cargo_toml_path = get_cargo_toml_path(&project_path);
+        assert!(project_path.exists());
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_dot_path_and_custom_name() -> Result<()> {
+        let project_dir = "dir";
+        let project_name = "project";
+
+        let temp_dir = tempdir()?;
+        // Make current dir's name deterministic.
+        let current_dir = temp_dir.path().join(project_dir);
+        create_dir_all(&current_dir)?;
+        let project_path = &current_dir;
+        assert!(project_path.exists());
+
+        subcommand_new()?
+            .arg("--name")
+            .arg(project_name)
+            .arg(".")
+            .current_dir(&current_dir)
+            .assert()
+            .success();
+
+        let cargo_toml_path = get_cargo_toml_path(project_path);
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_1_dir_path_and_custom_name() -> Result<()> {
+        let project_dir = "dir";
+        let project_name = "project";
+
+        let current_dir = tempdir()?;
+
+        subcommand_new()?
+            .arg(project_dir)
+            .arg("--name")
+            .arg(project_name)
+            .current_dir(&current_dir)
+            .assert()
+            .success();
+
+        let project_path = current_dir.path().join(project_dir);
+        let cargo_toml_path = get_cargo_toml_path(&project_path);
+        assert!(project_path.exists());
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_2_dir_path_and_custom_name() -> Result<()> {
+        let project_dir = "a/b";
+        let project_name = "project";
+
+        let current_dir = tempdir()?;
+
+        subcommand_new()?
+            .arg(project_dir)
+            .arg("--name")
+            .arg(project_name)
+            .current_dir(&current_dir)
+            .assert()
+            .success();
+
+        let project_path = current_dir.path().join(project_dir);
+        let cargo_toml_path = get_cargo_toml_path(&project_path);
+        assert!(project_path.exists());
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
 }
