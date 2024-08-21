@@ -71,31 +71,17 @@ impl BuildProgress {
 
 /// Represents the terminal height in lines.
 #[derive(Default, Clone, Copy)]
-pub struct ConsoleHeight(pub u16);
+pub struct ConsoleSize {
+    pub width: u16,
+    pub height: u16,
+}
 
-impl ConsoleHeight {
+impl ConsoleSize {
     pub fn zero() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u16> for ConsoleHeight {
-    fn from(value: u16) -> Self {
-        Self(value)
-    }
-}
-
-impl Deref for ConsoleHeight {
-    type Target = u16;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ConsoleHeight {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        Self {
+            width: 0,
+            height: 0,
+        }
     }
 }
 
@@ -173,7 +159,7 @@ pub struct Output {
     messages: Vec<Message>,
 
     num_lines_wrapping: NumLinesWrapping,
-    console_height: ConsoleHeight,
+    console_size: ConsoleSize,
     scroll_position: ScrollPosition,
 
     more_modal_open: bool,
@@ -262,7 +248,7 @@ impl Output {
             build_progress: Default::default(),
             running_apps: HashMap::new(),
             scroll_position: ScrollPosition::zero(),
-            console_height: ConsoleHeight::zero(),
+            console_size: ConsoleSize::zero(),
             num_lines_wrapping: NumLinesWrapping::zero(),
             anim_start: Instant::now(),
             addr: cfg.server_arguments.address.clone(),
@@ -436,6 +422,7 @@ impl Output {
 
         match input {
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollUp => {
+                // Scroll up
                 let mut scroll_speed = SCROLL_SPEED;
                 if mouse.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
@@ -444,6 +431,7 @@ impl Output {
                 self.reset_drag();
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollDown => {
+                // Scroll down
                 let mut scroll_speed = SCROLL_SPEED;
                 if mouse.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
@@ -451,7 +439,29 @@ impl Output {
                 *self.scroll_position += scroll_speed;
                 self.reset_drag()
             }
+            Event::Key(key) if key.code == KeyCode::Up => {
+                // Scroll up
+                let mut scroll_speed = SCROLL_SPEED;
+                if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
+                    scroll_speed += SCROLL_MODIFIER;
+                }
+                *self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
+                self.reset_drag();
+            }
+            Event::Key(key) if key.code == KeyCode::Down => {
+                // Scroll down
+                let mut scroll_speed = SCROLL_SPEED;
+                if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
+                    scroll_speed += SCROLL_MODIFIER;
+                }
+                *self.scroll_position += scroll_speed;
+                self.reset_drag();
+            }
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
+                self.reset_drag();
+            }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Drag(MouseButton::Left) => {
+                // Start mouse drag
                 let x = mouse.column;
                 let y = mouse.row;
 
@@ -461,23 +471,6 @@ impl Output {
                     self.drag_start = Some((x, y));
                     self.drag_end = self.drag_start;
                 }
-            }
-            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
-                self.reset_drag();
-            }
-            Event::Key(key) if key.code == KeyCode::Up => {
-                let mut scroll_speed = SCROLL_SPEED;
-                if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
-                    scroll_speed += SCROLL_MODIFIER;
-                }
-                *self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
-            }
-            Event::Key(key) if key.code == KeyCode::Down => {
-                let mut scroll_speed = SCROLL_SPEED;
-                if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
-                    scroll_speed += SCROLL_MODIFIER;
-                }
-                *self.scroll_position += scroll_speed;
             }
             Event::Key(key) if key.code == KeyCode::Char('r') => {
                 // Reload the app
@@ -492,11 +485,21 @@ impl Output {
                 self.messages.clear();
             }
             Event::Key(key) if key.code == KeyCode::Char('C') => {
+                // Copy any selected lines to the clipboard.
                 let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
                 if is_shift && !self.selected_lines.is_empty() {
                     let text = selection::process_selection(&mut self.selected_lines);
                     selection::set_clipboard(text);
+                }
+            }
+            Event::Key(key) if key.code == KeyCode::Char('a') => {
+                // Select all visible lines in the console.
+                let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+                if is_ctrl {
+                    self.drag_start = Some((0, 0));
+                    self.drag_end =
+                        Some((self.console_size.width - 1, self.console_size.height - 1));
                 }
             }
             Event::Resize(_width, _height) => {
@@ -508,11 +511,11 @@ impl Output {
         if *self.scroll_position
             > self
                 .num_lines_wrapping
-                .saturating_sub(*self.console_height + 1)
+                .saturating_sub(self.console_size.height + 1)
         {
             self.scroll_position = self
                 .num_lines_wrapping
-                .saturating_sub(*self.console_height + 1)
+                .saturating_sub(self.console_size.height + 1)
                 .into();
         }
 
@@ -569,7 +572,7 @@ impl Output {
     pub fn scroll_to_bottom(&mut self) {
         self.scroll_position = self
             .num_lines_wrapping
-            .saturating_sub(*self.console_height)
+            .saturating_sub(self.console_size.height)
             .into();
     }
 
@@ -661,7 +664,7 @@ impl Output {
             .unwrap()
             .draw(|frame| {
                 let layout = render::TuiLayout::new(frame.size());
-                self.console_height = layout.get_console_height();
+                self.console_size = layout.get_console_size();
 
                 layout.render_decor(frame);
 

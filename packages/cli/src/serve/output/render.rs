@@ -7,9 +7,7 @@
 //! ---BORDER---
 //! -STATUS BAR-
 
-use super::{
-    BuildProgress, ConsoleHeight, Message, MessageSource, NumLinesWrapping, ScrollPosition,
-};
+use super::{BuildProgress, ConsoleSize, Message, MessageSource, NumLinesWrapping, ScrollPosition};
 use ansi_to_tui::IntoText as _;
 use dioxus_cli_config::Platform;
 use ratatui::{
@@ -81,9 +79,13 @@ impl TuiLayout {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
-                .border_style(Style::new().gray()),
+                .border_style(Style::new().white()),
             self.border_sep,
         );
+
+        // frame.render_widget(Block::new().bg(Color::DarkGray), self.body[1]);
+        // frame.render_widget(Block::new().bg(Color::DarkGray), self.body[2]);
+        // frame.render_widget(Block::new().bg(Color::DarkGray), self.body[3]);
     }
 
     /// Render the user's text selection and compile it into a list of lines.
@@ -243,8 +245,8 @@ impl TuiLayout {
             .left_aligned()
             .wrap(Wrap { trim: false });
 
-        let console_height = self.get_console_height();
-        let num_lines_wrapping = NumLinesWrapping(paragraph.line_count(console.width) as u16);
+        let console_size = self.get_console_size();
+        let num_lines_wrapping = NumLinesWrapping(paragraph.line_count(console_size.width) as u16);
 
         // Render scrollbar
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -254,7 +256,7 @@ impl TuiLayout {
             .thumb_symbol("▐");
 
         let mut scrollbar_state =
-            ScrollbarState::new(num_lines_wrapping.0.saturating_sub(console_height.0) as usize)
+            ScrollbarState::new(num_lines_wrapping.0.saturating_sub(console_size.height) as usize)
                 .position(scroll.0 as usize);
 
         let paragraph = paragraph.scroll((scroll.0, 0));
@@ -367,7 +369,10 @@ impl TuiLayout {
     }
 
     /// Returns the height of the console TUI area in number of lines.
-    pub fn get_console_height(&self) -> ConsoleHeight {
-        ConsoleHeight(self.console[0].height)
+    pub fn get_console_size(&self) -> ConsoleSize {
+        ConsoleSize {
+            width: self.console[0].width,
+            height: self.console[0].height,
+        }
     }
 }
