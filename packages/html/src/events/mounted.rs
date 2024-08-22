@@ -1,47 +1,40 @@
 //! Handles querying data from the renderer
-
-use std::{
-    fmt::{Display, Formatter},
-    future::Future,
-    pin::Pin,
-};
+use std::fmt::{Display, Formatter};
 
 /// An Element that has been rendered and allows reading and modifying information about it.
 ///
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 // we can not use async_trait here because it does not create a trait that is object safe
+#[async_trait::async_trait(?Send)]
 pub trait RenderedElementBacking: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 
     /// Get the number of pixels that an element's content is scrolled
-    fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector2D>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
+    async fn get_scroll_offset(&self) -> MountedResult<PixelsVector2D> {
+        Err(MountedError::NotSupported)
     }
 
     /// Get the size of an element's content, including content not visible on the screen due to overflow
-    #[allow(clippy::type_complexity)]
-    fn get_scroll_size(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsSize>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
+
+    async fn get_scroll_size(&self) -> MountedResult<PixelsSize> {
+        Err(MountedError::NotSupported)
     }
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
     #[allow(clippy::type_complexity)]
-    fn get_client_rect(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsRect>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
+    async fn get_client_rect(&self) -> MountedResult<PixelsRect> {
+        Err(MountedError::NotSupported)
     }
 
     /// Scroll to make the element visible
-    fn scroll_to(
-        &self,
-        _behavior: ScrollBehavior,
-    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
+    async fn scroll_to(&self, _behavior: ScrollBehavior) -> MountedResult<()> {
+        Err(MountedError::NotSupported)
     }
 
     /// Set the focus on the element
-    fn set_focus(&self, _focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
+    async fn set_focus(&self, _focus: bool) -> MountedResult<()> {
+        Err(MountedError::NotSupported)
     }
 }
 
@@ -106,18 +99,15 @@ impl MountedData {
 
     /// Scroll to make the element visible
     #[doc(alias = "scrollIntoView")]
-    pub fn scroll_to(
-        &self,
-        behavior: ScrollBehavior,
-    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        self.inner.scroll_to(behavior)
+    pub async fn scroll_to(&self, behavior: ScrollBehavior) -> MountedResult<()> {
+        self.inner.scroll_to(behavior).await
     }
 
     /// Set the focus on the element
     #[doc(alias = "focus")]
     #[doc(alias = "blur")]
-    pub fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        self.inner.set_focus(focus)
+    pub async fn set_focus(&self, focus: bool) -> MountedResult<()> {
+        self.inner.set_focus(focus).await
     }
 
     /// Downcast this event to a concrete event type

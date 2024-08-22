@@ -19,14 +19,13 @@ impl DesktopElement {
     }
 }
 
-pub type EvalFuture<T> = std::pin::Pin<Box<dyn std::future::Future<Output = MountedResult<T>>>>;
-
+#[async_trait::async_trait(?Send)]
 impl RenderedElementBacking for DesktopElement {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn get_scroll_offset(&self) -> EvalFuture<PixelsVector2D> {
+    async fn get_scroll_offset(&self) -> MountedResult<PixelsVector2D> {
         let id = self.id.0;
         let res = self.webview.eval(format!(
             "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]"
@@ -36,22 +35,22 @@ impl RenderedElementBacking for DesktopElement {
         // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
     }
 
-    fn get_scroll_size(&self) -> EvalFuture<PixelsSize> {
+    async fn get_scroll_size(&self) -> MountedResult<PixelsSize> {
         todo!()
         // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
     }
 
-    fn get_client_rect(&self) -> EvalFuture<PixelsRect> {
+    async fn get_client_rect(&self) -> MountedResult<PixelsRect> {
         todo!()
         // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
     }
 
-    fn scroll_to(&self, _behavior: ScrollBehavior) -> EvalFuture<()> {
+    async fn scroll_to(&self, _behavior: ScrollBehavior) -> MountedResult<()> {
         todo!()
         // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
     }
 
-    fn set_focus(&self, _focus: bool) -> EvalFuture<()> {
+    async fn set_focus(&self, _focus: bool) -> MountedResult<()> {
         todo!()
         // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
     }

@@ -1,23 +1,15 @@
-#![allow(unused)]
-
 use dioxus_html::{
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    prelude::{SerializedMouseData, SerializedPointInteraction},
+    prelude::SerializedPointInteraction,
     FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData,
 };
 
 use serde::Deserialize;
-use std::{
-    cell::{Cell, RefCell},
-    path::PathBuf,
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{cell::RefCell, path::PathBuf, rc::Rc, str::FromStr, sync::Arc};
 use wry::DragDropEvent;
 
 #[derive(Debug, Deserialize)]
@@ -163,6 +155,7 @@ impl HasFormData for DesktopFileUploadForm {
 pub struct NativeFileHover {
     event: Rc<RefCell<Option<DragDropEvent>>>,
 }
+
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
         self.event.borrow_mut().replace(event);

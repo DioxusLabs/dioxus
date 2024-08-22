@@ -1,7 +1,10 @@
-#![allow(clippy::await_holding_refcell_ref)]
 #![doc = include_str!("../docs/eval.md")]
 
 use crate::error::EvalError;
+use std::{
+    future::{Future, IntoFuture},
+    pin::Pin,
+};
 
 #[doc = include_str!("../docs/eval.md")]
 pub struct Eval {
@@ -33,5 +36,14 @@ impl Eval {
     pub async fn recv_as<T: serde::de::DeserializeOwned>(self) -> Result<T, EvalError> {
         let res = self.recv().await?;
         serde_json::from_str(&res).map_err(|e| EvalError::Deserialization(e))
+    }
+}
+
+impl IntoFuture for Eval {
+    type Output = Result<String, EvalError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(self.recv().into_future())
     }
 }
