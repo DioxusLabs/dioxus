@@ -1,5 +1,7 @@
-use crate::config::Platform;
+use std::str::FromStr;
+
 use crate::{builder::BuildRequest, dioxus_crate::DioxusCrate};
+use crate::{builder::TargetPlatform, config::Platform};
 use anyhow::Context;
 
 use super::*;

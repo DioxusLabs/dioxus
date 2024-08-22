@@ -4,7 +4,7 @@ use std::{fs, path::PathBuf, time::Duration};
 use super::hot_reloading_file_map::HotreloadError;
 use crate::serve::hot_reloading_file_map::FileMap;
 use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
-use dioxus_devtools::HotReloadMsg;
+use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;

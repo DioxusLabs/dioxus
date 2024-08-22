@@ -2394,6 +2394,7 @@ dependencies = [
  "dioxus-check",
  "dioxus-core",
  "dioxus-core-types",
+ "dioxus-devtools-types",
  "dioxus-html",
  "dioxus-rsx",
  "dirs",
