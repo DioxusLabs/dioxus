@@ -1,24 +1,23 @@
-use std::{any::Any, collections::HashMap};
 
 use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
-    },
-    AnimationData, DragData, FormData, FormValue, HasDragData, HasFileData, HasFormData,
-    HasImageData, HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
-    ScrollData,
+    }, HasDragData, HasFileData, HasMouseData,
 };
-use js_sys::Array;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, Element, Event, MouseEvent};
+use wasm_bindgen::{JsCast};
+use web_sys::{MouseEvent};
+
+use super::synthetic::Synthetic;
 
 pub struct WebDragData {
-    raw: MouseEvent,
+    raw: Synthetic<MouseEvent>,
 }
 
 impl WebDragData {
     pub fn new(raw: MouseEvent) -> Self {
-        Self { raw }
+        Self {
+            raw: Synthetic::new(raw),
+        }
     }
 }
 
@@ -36,59 +35,51 @@ impl HasMouseData for WebDragData {
 
 impl PointerInteraction for WebDragData {
     fn trigger_button(&self) -> Option<dioxus_html::input_data::MouseButton> {
-        // self.raw.trigger_button()
-        todo!()
+        self.raw.trigger_button()
     }
 
     fn held_buttons(&self) -> dioxus_html::input_data::MouseButtonSet {
-        // self.raw.held_buttons()
-        todo!()
+        self.raw.held_buttons()
     }
 }
 
 impl ModifiersInteraction for WebDragData {
     fn modifiers(&self) -> dioxus_html::prelude::Modifiers {
-        // self.raw.modifiers()
-        todo!()
+        self.raw.modifiers()
     }
 }
 
 impl InteractionElementOffset for WebDragData {
     fn coordinates(&self) -> dioxus_html::geometry::Coordinates {
-        // self.raw.coordinates()
-        todo!()
+        self.raw.coordinates()
     }
 
     fn element_coordinates(&self) -> dioxus_html::geometry::ElementPoint {
-        // self.raw.element_coordinates()
-        todo!()
+        self.raw.element_coordinates()
     }
 }
 
 impl InteractionLocation for WebDragData {
     fn client_coordinates(&self) -> dioxus_html::geometry::ClientPoint {
-        // self.raw.client_coordinates()
-        todo!()
+        self.raw.client_coordinates()
     }
 
     fn screen_coordinates(&self) -> dioxus_html::geometry::ScreenPoint {
-        // self.raw.screen_coordinates()
-        todo!()
+        self.raw.screen_coordinates()
     }
 
     fn page_coordinates(&self) -> dioxus_html::geometry::PagePoint {
-        // self.raw.page_coordinates()
-        todo!()
+        self.raw.page_coordinates()
     }
 }
 
 impl HasFileData for WebDragData {
     #[cfg(feature = "file-engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
-        use crate::bindings::WebFileEngine;
+        use super::file::WebFileEngine;
 
-        let files = self
-            .raw
+        self.raw
+            .event
             .dyn_ref::<web_sys::DragEvent>()
             .and_then(|drag_event| {
                 drag_event.data_transfer().and_then(|dt| {
@@ -99,8 +90,6 @@ impl HasFileData for WebDragData {
                         })
                     })
                 })
-            });
-
-        files
+            })
     }
 }

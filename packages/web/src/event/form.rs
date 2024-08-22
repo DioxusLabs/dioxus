@@ -1,16 +1,11 @@
 use std::{any::Any, collections::HashMap};
 
 use dioxus_html::{
-    point_interaction::{
-        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
-    },
-    AnimationData, DragData, FormData, FormValue, HasDragData, HasFileData, HasFormData,
-    HasImageData, HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
-    ScrollData,
+    FormValue, HasFileData, HasFormData,
 };
 use js_sys::Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, Element, Event, MouseEvent};
+use web_sys::{Element, Event};
 
 pub struct WebFormData {
     pub element: Element,
@@ -103,7 +98,7 @@ impl HasFormData for WebFormData {
 impl HasFileData for WebFormData {
     #[cfg(feature = "file-engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
-        use crate::bindings::WebFileEngine;
+        use super::file::WebFileEngine;
 
         let files = self
             .element

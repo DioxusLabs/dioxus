@@ -1,5 +1,6 @@
 use std::any::Any;
 
+#[cfg(feature = "file-engine")]
 use dioxus_html::FileEngine;
 // use dioxus_html::FileEngine;
 use futures_channel::oneshot;

@@ -28,24 +28,22 @@ use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;
 mod dom;
-
 mod event;
 pub mod launch;
 mod mutations;
-pub use event::*;
-
-///
-mod bindings;
+use event::*;
 
 #[cfg(feature = "document")]
 mod document;
+
 #[cfg(feature = "document")]
 pub use document::WebDocument;
 
-#[cfg(all(feature = "hot_reload", debug_assertions))]
-mod hot_reload;
+#[cfg(all(feature = "devtools", debug_assertions))]
+mod devtools;
 
 mod hydration;
+
 #[allow(unused)]
 pub use hydration::*;
 
@@ -70,8 +68,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         console_error_panic_hook::set_once();
     }
 
-    #[cfg(all(feature = "hot_reload", debug_assertions))]
-    let mut hotreload_rx = hot_reload::init();
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    let mut hotreload_rx = devtools::init();
 
     let runtime = virtual_dom.runtime();
 
@@ -126,7 +124,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     loop {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
-        #[cfg(all(feature = "hot_reload", debug_assertions))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         let template;
         #[allow(unused)]
         let mut hydration_work: Option<SuspenseMessage> = None;
@@ -140,15 +138,15 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 .flatten();
             let mut rx_hydration = hydration_receiver_iter.select_next_some();
 
-            #[cfg(all(feature = "hot_reload", debug_assertions))]
+            #[cfg(all(feature = "devtools", debug_assertions))]
             #[allow(unused)]
             {
-                let mut hot_reload_next = hotreload_rx.select_next_some();
+                let mut devtools_next = hotreload_rx.select_next_some();
                 select! {
                     _ = work => {
                         template = None;
                     },
-                    new_template = hot_reload_next => {
+                    new_template = devtools_next => {
                         template = Some(new_template);
                     },
                     hydration_data = rx_hydration => {
@@ -161,7 +159,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 }
             }
 
-            #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
+            #[cfg(not(all(feature = "devtools", debug_assertions)))]
             #[allow(unused)]
             {
                 select! {
@@ -176,13 +174,13 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             }
         }
 
-        #[cfg(all(feature = "hot_reload", debug_assertions))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         if let Some(hr_msg) = template {
             // Replace all templates
-            dioxus_devtools::apply_changes(&mut virtual_dom, &hr_msg);
+            dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
 
             if !hr_msg.assets.is_empty() {
-                crate::hot_reload::invalidate_browser_asset_cache();
+                crate::devtools::invalidate_browser_asset_cache();
             }
         }
 
@@ -191,23 +189,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             websys_dom.rehydrate_streaming(hydration_data, &mut virtual_dom);
         }
 
-        // Todo: This is currently disabled because it has a negative impact on response times for events but it could be re-enabled for tasks
-        // Jank free rendering
-        //
-        // 1. wait for the browser to give us "idle" time
-        // 2. During idle time, diff the dom
-        // 3. Stop diffing if the deadline is exceeded
-        // 4. Wait for the animation frame to patch the dom
-
-        // wait for the mainthread to schedule us in
-        // let deadline = work_loop.wait_for_idle_time().await;
-
         // run the virtualdom work phase until the frame deadline is reached
         virtual_dom.render_immediate(&mut websys_dom);
 
-        // wait for the animation frame to fire so we can apply our changes
-        // work_loop.wait_for_raf().await;
-
+        // Flush all pending edits to the dom in one swoop
         websys_dom.flush_edits();
     }
 }

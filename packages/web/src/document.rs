@@ -22,11 +22,15 @@ pub struct WebDocument {
 impl Document for WebDocument {
     fn eval(&self, js: String) -> Eval {
         let (tx, eval) = Eval::from_parts();
-        let res = js_sys::eval(&js);
-        match res {
-            Ok(ok) => todo!(),
-            Err(err) => todo!(),
+
+        // todo: this deserialize is probably wrong.
+        _ = match js_sys::eval(&js) {
+            Ok(ok) => tx.send(Ok(serde_wasm_bindgen::from_value(ok).unwrap())),
+            Err(_err) => tx.send(Err(dioxus_document::EvalError::Communication(
+                "eval failed".to_string(),
+            ))),
         };
+
         eval
     }
 

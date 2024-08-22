@@ -1,16 +1,7 @@
-use std::{any::Any, collections::HashMap};
+use std::any::Any;
 
-use dioxus_html::{
-    point_interaction::{
-        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
-    },
-    AnimationData, DragData, FormData, FormValue, HasDragData, HasFileData, HasFormData,
-    HasImageData, HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
-    ScrollData,
-};
-use js_sys::Array;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, Element, Event, MouseEvent};
+use dioxus_html::HasImageData;
+use web_sys::Event;
 
 #[derive(Clone)]
 pub struct WebImageEvent {

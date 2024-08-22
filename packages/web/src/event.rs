@@ -1,23 +1,16 @@
-use std::{any::Any, collections::HashMap};
-
 use dioxus_html::{
-    point_interaction::{
-        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
-    },
-    AnimationData, DragData, FormData, FormValue, HasDragData, HasFileData, HasFormData,
-    HasImageData, HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
-    ScrollData, WheelEvent,
+    DragData, FormData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
 };
 use drag::WebDragData;
 use form::WebFormData;
 use image::WebImageEvent;
-use js_sys::Array;
 use synthetic::Synthetic;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, Element, Event, MouseEvent};
+use wasm_bindgen::JsCast;
+use web_sys::{Document, Element, Event};
 
 mod drag;
 mod ext;
+mod file;
 mod form;
 mod image;
 mod resize;
@@ -155,7 +148,7 @@ struct GenericWebSysEvent {
     raw: Event,
     element: Element,
 }
-
+/// Converts our Synthetic wrapper into the trait objects dioxus is expectinga
 trait Synthesize {
     fn synthesize<O: JsCast + 'static, F: From<Synthetic<O>>>(&self) -> F;
 }
@@ -177,8 +170,6 @@ fn downcast_event(event: &PlatformEventData) -> &GenericWebSysEvent {
         .expect("event should be a GenericWebSysEvent")
 }
 
-// todo: some of these events are being casted to the wrong event type.
-// We need tests that simulate clicks/etc and make sure every event type works.
 pub(crate) fn virtual_event_from_websys_event(
     event: web_sys::Event,
     target: Element,

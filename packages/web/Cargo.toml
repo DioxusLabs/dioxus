@@ -53,6 +53,7 @@ features = [
     "DragEvent",
     "FocusEvent",
     "HtmlElement",
+    "HtmlHeadElement",
     "HtmlFormElement",
     "HtmlInputElement",
     "HtmlSelectElement",
@@ -89,7 +90,12 @@ panic_hook = ["dep:console_error_panic_hook"]
 
 hydrate = ["web-sys/Comment", "ciborium", "dep:serde"]
 mounted = ["web-sys/Element", "dioxus-html/mounted"]
-file-engine = ["dioxus-html/file-engine"]
+file-engine = [
+    "dioxus-html/file-engine",
+    "web-sys/File",
+    "web-sys/FileList",
+    "web-sys/FileReader"
+]
 devtools = [
     "web-sys/MessageEvent",
     "web-sys/WebSocket",

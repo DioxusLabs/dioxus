@@ -1,28 +1,22 @@
-use dioxus_html::geometry::{self, PixelsSize};
+use dioxus_html::geometry::PixelsSize;
+use dioxus_html::geometry::WheelDelta;
 use dioxus_html::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
 use dioxus_html::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use dioxus_html::prelude::*;
 use dioxus_html::HasFileData;
 use dioxus_html::{events::HasKeyboardData, input_data::MouseButtonSet};
-use dioxus_html::{
-    events::{
-        AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
-        TransitionData, WheelData,
-    },
-    geometry::WheelDelta,
-};
 use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
 use wasm_bindgen::JsCast;
 use web_sys::{js_sys, ResizeObserverEntry};
 use web_sys::{
-    AnimationEvent, CompositionEvent, CustomEvent, Event, KeyboardEvent, MouseEvent, PointerEvent,
-    Touch, TouchEvent, TransitionEvent, WheelEvent,
+    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, Touch,
+    TouchEvent, TransitionEvent, WheelEvent,
 };
 
 /// A wrapper for the websys event that allows us to give it the impls from dioxus-html
 pub struct Synthetic<T: 'static> {
-    event: T,
+    pub event: T,
 }
 
 impl<T: 'static> Synthetic<T> {
@@ -451,34 +445,6 @@ impl HasTransitionData for Synthetic<TransitionEvent> {
     }
 }
 
-// impl From<Synthetic<web_sys::Element>> for MountedData {
-//     fn from(value: Synthetic<web_sys::Element>) -> Self {
-//         todo!()
-//     }
-// }
-
-// impl From<Event> for ResizeData {
-//     #[inline]
-//     fn from(e: Event) -> Self {
-//         <ResizeData as From<&Event>>::from(&e)
-//     }
-// }
-
-// impl From<&Event> for ResizeData {
-//     #[inline]
-//     fn from(e: &Event) -> Self {
-//         let e: &CustomEvent = e.unchecked_ref();
-//         let value = e.detail();
-//         Self::from(value.unchecked_into::<ResizeObserverEntry>())
-//     }
-// }
-// #[cfg(feature = "mounted")]
-// impl From<&web_sys::Element> for MountedData {
-//     fn from(e: &web_sys::Element) -> Self {
-//         MountedData::new(e.clone())
-//     }
-// }
-
 #[cfg(feature = "mounted")]
 impl RenderedElementBacking for Synthetic<web_sys::Element> {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -577,6 +543,15 @@ fn extract_first_size(resize_observer_output: js_sys::Array) -> ResizeResult<Pix
     Ok(PixelsSize::new(inline_size, block_size))
 }
 
+// impl From<&Event> for ResizeData {
+//     #[inline]
+//     fn from(e: &Event) -> Self {
+//         let e: &CustomEvent = e.unchecked_ref();
+//         let value = e.detail();
+//         Self::from(value.unchecked_into::<ResizeObserverEntry>())
+//     }
+// }
+
 impl HasResizeData for Synthetic<ResizeObserverEntry> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -636,7 +611,7 @@ impl HasFileData for Synthetic<web_sys::Event> {
             .and_then(|input: &web_sys::HtmlInputElement| {
                 input.files().and_then(|files| {
                     #[allow(clippy::arc_with_non_send_sync)]
-                    crate::bindings::WebFileEngine::new(files).map(|f| {
+                    super::file::WebFileEngine::new(files).map(|f| {
                         std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
                     })
                 })
