@@ -36,7 +36,7 @@ pub fn App() -> Element {
 #[component]
 fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
     rsx! {
-        head::Link { rel: "stylesheet", href: asset!("/assets/hackernews.css") }
+        document::Stylesheet { href: asset!("/assets/hackernews.css") }
         div { display: "flex", flex_direction: "row", width: "100%",
             div {
                 width: "50%",

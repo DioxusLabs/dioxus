@@ -1,3 +1,5 @@
+use dioxus_core_types::DioxusFormattable;
+
 use crate::innerlude::VProps;
 use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
@@ -722,9 +724,9 @@ impl Attribute {
     ///
     /// "Volatile" refers to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
-    pub fn new(
+    pub fn new<Marker>(
         name: &'static str,
-        value: impl IntoAttributeValue,
+        value: impl IntoAttributeValue<Marker>,
         namespace: Option<&'static str>,
         volatile: bool,
     ) -> Attribute {
@@ -1030,7 +1032,7 @@ impl IntoVNode for &Option<Element> {
 }
 
 /// A value that can be converted into an attribute value
-pub trait IntoAttributeValue {
+pub trait IntoAttributeValue<Marker = ()> {
     /// Convert into an attribute value
     fn into_value(self) -> AttributeValue;
 }
@@ -1108,28 +1110,21 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
-// #[cfg(feature = "manganis")]
-// impl IntoAttributeValue for manganis::ImageAsset {
-//     fn into_value(self) -> AttributeValue {
-//         AttributeValue::Text(self.to_string())
-//     }
-// }
-
-// #[cfg(feature = "manganis")]
-// impl IntoAttributeValue for manganis::Asset {
-//     fn into_value(self) -> AttributeValue {
-//         AttributeValue::Text(self.to_string())
-//     }
-// }
+pub struct DioxusFormattableMarker;
+impl<T: DioxusFormattable> IntoAttributeValue<DioxusFormattableMarker> for T {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.format().into_owned())
+    }
+}
 
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {
     /// Push an attribute onto the list of attributes
-    fn push_attribute(
+    fn push_attribute<T>(
         self,
         name: &'static str,
         ns: Option<&'static str>,
-        attr: impl IntoAttributeValue,
+        attr: impl IntoAttributeValue<T>,
         volatile: bool,
     ) -> Self;
 }

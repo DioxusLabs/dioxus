@@ -434,7 +434,7 @@ impl LinkProps {
 ///     rsx! {
 ///         // You can use the meta component to render a meta tag into the head of the page
 ///         // This meta tag will redirect the user to the dioxuslabs homepage in 10 seconds
-///         head::Link {
+///         document::Link {
 ///             href: asset!("/assets/style.css"),
 ///             rel: "stylesheet",
 ///         }

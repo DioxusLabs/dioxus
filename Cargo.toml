@@ -5,7 +5,6 @@ members = [
     "packages/dioxus-lib",
     "packages/core",
     "packages/cli",
-    "packages/cli-config",
     "packages/core-types",
     "packages/core-macro",
     "packages/config-macro",
@@ -66,6 +65,7 @@ members = [
     "packages/manganis-test-package/test-package-dependency",
     "packages/manganis-test-package/test-package-nested-dependency",
     "packages/document",
+    "packages/runtime-config",
 ]
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
@@ -97,7 +97,6 @@ dioxus-check = { path = "packages/check", version = "0.6.0-alpha.2" }
 dioxus-rsx = { path = "packages/rsx", version = "0.6.0-alpha.2" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.2" }
 dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.2" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.2", default-features = false}
 generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.2" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.6.0-alpha.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.2" }

@@ -17,7 +17,7 @@ fn app() -> Element {
     let mut state = use_signal(|| PlayerState { is_playing: false });
 
     rsx!(
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         h1 {"Select an option"}
 
         // Add some cute animations if the radio is playing!

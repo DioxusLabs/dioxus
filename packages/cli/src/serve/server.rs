@@ -1,3 +1,4 @@
+use crate::config::{Platform, WebHttpsConfig};
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::{next_or_pending, Serve};
 use crate::{Error, Result};
@@ -18,7 +19,6 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use dioxus_cli_config::{Platform, WebHttpsConfig};
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::stream;

@@ -1,3 +1,4 @@
+use crate::config::{AddressArguments, Platform};
 use crate::{
     builder::{
         BuildMessage, MessageSource, MessageType, Stage, TargetPlatform, UpdateBuildProgress,
@@ -17,7 +18,6 @@ use crossterm::{
     tty::IsTty,
     ExecutableCommand,
 };
-use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
@@ -633,7 +633,7 @@ impl Output {
                 // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
 
                 // Render the metadata
-                let mut spans = vec![
+                let mut spans: Vec<Span> = vec![
                     Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
                     Span::from(" ").green(),
                     Span::from("serve").green(),

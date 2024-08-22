@@ -8,3 +8,5 @@ dioxus-core = { workspace = true }
 dioxus-core-types = { workspace = true }
 dioxus-core-macro = { workspace = true }
 tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

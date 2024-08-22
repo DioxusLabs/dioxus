@@ -1,5 +1,5 @@
+use crate::config::WebProxyConfig;
 use crate::{Error, Result};
-use dioxus_cli_config::WebProxyConfig;
 
 use anyhow::{anyhow, Context};
 use axum::body::Body as MyBody;

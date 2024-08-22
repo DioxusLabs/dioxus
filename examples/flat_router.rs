@@ -14,7 +14,7 @@ const STYLE: Asset = asset!("/examples/assets/flat_router.css");
 fn main() {
     launch(|| {
         rsx! {
-            head::Link { rel: "stylesheet", href: STYLE }
+            document::Link { rel: "stylesheet", href: STYLE }
             Router::<Route> {}
         }
     })

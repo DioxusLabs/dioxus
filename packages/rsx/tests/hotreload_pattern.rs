@@ -10,9 +10,10 @@ use dioxus_core::{
     prelude::{Template, TemplateNode},
     TemplateAttribute, VNode,
 };
+use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::{
     hot_reload::{self, diff_rsx, ChangedRsx, HotReloadResult},
-    CallBody, HotReloadingContext,
+    CallBody,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};

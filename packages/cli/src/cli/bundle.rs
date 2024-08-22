@@ -1,5 +1,5 @@
-use crate::build::Build;
 use crate::DioxusCrate;
+use crate::{build::Build, bundle_utils::make_tauri_bundler_settings};
 use anyhow::Context;
 use std::env::current_dir;
 use std::fs::create_dir_all;
@@ -96,7 +96,9 @@ impl Bundle {
                 .set_src_path(Some(dioxus_crate.workspace_dir().display().to_string())),
         ];
 
-        let mut bundle_settings: BundleSettings = dioxus_crate.dioxus_config.bundle.clone().into();
+        let bundle_config = dioxus_crate.dioxus_config.bundle.clone();
+        let mut bundle_settings = make_tauri_bundler_settings(bundle_config);
+
         if cfg!(windows) {
             let windows_icon_override = dioxus_crate
                 .dioxus_config

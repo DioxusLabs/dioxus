@@ -147,9 +147,15 @@ impl WebviewInstance {
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
-        // tao makes small windows for some reason, make them bigger
-        if cfg.window.window.inner_size.is_none() {
-            window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+        // tao makes small windows for some reason, make them bigger on desktop
+        //
+        // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
+        // get a window that is not the size of the screen and weird black bars.
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            if cfg.window.window.inner_size.is_none() {
+                window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+            }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it

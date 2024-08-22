@@ -1,3 +1,4 @@
+use crate::config::AddressArguments;
 use crate::{
     settings::{self},
     tracer::CLILogControl,
@@ -5,7 +6,6 @@ use crate::{
 };
 use anyhow::Context;
 use build::Build;
-use dioxus_cli_config::AddressArguments;
 use std::ops::Deref;
 
 use super::*;

@@ -1,7 +1,6 @@
-use anyhow::Context;
-use dioxus_cli_config::Platform;
-
+use crate::config::Platform;
 use crate::{builder::BuildRequest, dioxus_crate::DioxusCrate};
+use anyhow::Context;
 
 use super::*;
 

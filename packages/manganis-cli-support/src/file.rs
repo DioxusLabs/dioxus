@@ -9,9 +9,9 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use swc::{config::JsMinifyOptions, try_with_handler, BoolOrDataConfig};
-use swc_common::{sync::Lrc, FileName};
-use swc_common::{SourceMap, GLOBALS};
+// use swc::{config::JsMinifyOptions, try_with_handler, BoolOrDataConfig};
+// use swc_common::{sync::Lrc, FileName};
+// use swc_common::{SourceMap, GLOBALS};
 
 pub trait Process {
     fn process(&self, source: &ResourceAsset, output_path: &Path) -> anyhow::Result<()>;
@@ -189,43 +189,44 @@ pub(crate) fn minify_css(css: &str) -> String {
 }
 
 pub(crate) fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
-    let cm = Arc::<SourceMap>::default();
+    todo!("disabled swc due to semver issues")
+    // let cm = Arc::<SourceMap>::default();
 
-    let js = source.read_to_string()?;
-    let c = swc::Compiler::new(cm.clone());
-    let output = GLOBALS
-        .set(&Default::default(), || {
-            try_with_handler(cm.clone(), Default::default(), |handler| {
-                // let filename = Lrc::new(match source {
-                //     manganis_common::ResourceAsset::Local(path) => {
-                //         FileName::Real(path.canonicalized.clone())
-                //     }
-                //     manganis_common::ResourceAsset::Remote(url) => FileName::Url(url.clone()),
-                // });
-                let filename = todo!();
-                let fm = cm.new_source_file(filename, js.to_string());
+    // let js = source.read_to_string()?;
+    // let c = swc::Compiler::new(cm.clone());
+    // let output = GLOBALS
+    //     .set(&Default::default(), || {
+    //         try_with_handler(cm.clone(), Default::default(), |handler| {
+    //             // let filename = Lrc::new(match source {
+    //             //     manganis_common::ResourceAsset::Local(path) => {
+    //             //         FileName::Real(path.canonicalized.clone())
+    //             //     }
+    //             //     manganis_common::ResourceAsset::Remote(url) => FileName::Url(url.clone()),
+    //             // });
+    //             let filename = todo!();
+    //             let fm = cm.new_source_file(filename, js.to_string());
 
-                c.minify(
-                    fm,
-                    handler,
-                    &JsMinifyOptions {
-                        compress: BoolOrDataConfig::from_bool(true),
-                        mangle: BoolOrDataConfig::from_bool(true),
-                        ..Default::default()
-                    },
-                )
-                .context("failed to minify javascript")
-            })
-        })
-        .map(|output| output.code);
+    //             c.minify(
+    //                 fm,
+    //                 handler,
+    //                 &JsMinifyOptions {
+    //                     compress: BoolOrDataConfig::from_bool(true),
+    //                     mangle: BoolOrDataConfig::from_bool(true),
+    //                     ..Default::default()
+    //                 },
+    //             )
+    //             .context("failed to minify javascript")
+    //         })
+    //     })
+    //     .map(|output| output.code);
 
-    match output {
-        Ok(output) => Ok(output),
-        Err(err) => {
-            tracing::error!("Failed to minify javascript: {}", err);
-            Ok(js)
-        }
-    }
+    // match output {
+    //     Ok(output) => Ok(output),
+    //     Err(err) => {
+    //         tracing::error!("Failed to minify javascript: {}", err);
+    //         Ok(js)
+    //     }
+    // }
 }
 
 impl Process for JsOptions {

@@ -14,7 +14,7 @@ dioxus-rsx = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
-dioxus-cli-config = { workspace = true, optional = true, features = ["read-config"] }
+# dioxus-cli-config = { workspace = true, optional = true, features = ["read-config"] }
 
 serde = { version = "1", features = ["derive"] }
 
@@ -44,7 +44,7 @@ serde_json = "1.0.91"
 [features]
 default = []
 client = ["dep:dioxus-signals"]
-serve = ["dep:dioxus-cli-config"]
+serve = []
 # serve = ["dep:tokio-stream", "dep:futures-util", "dep:tokio", "dep:tokio-tungstenite", "dep:dioxus-cli-config"]
 
 [package.metadata.docs.rs]

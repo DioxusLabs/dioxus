@@ -81,14 +81,15 @@ pub struct UseEval {
 //     }
 // }
 
-// impl IntoFuture for UseEval {
-//     type Output = Result<serde_json::Value, EvalError>;
-//     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
+impl IntoFuture for UseEval {
+    type Output = Result<serde_json::Value, EvalError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
 
-//     fn into_future(self) -> Self::IntoFuture {
-//         Box::pin(self.join())
-//     }
-// }
+    fn into_future(self) -> Self::IntoFuture {
+        todo!()
+        // Box::pin(self.join())
+    }
+}
 
 /// Represents an error when evaluating JavaScript
 #[derive(Debug)]

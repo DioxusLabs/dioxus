@@ -25,7 +25,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         h1 { "Dynamic Assets" }
         img { src: "custom://logos/logo.png" }
     }

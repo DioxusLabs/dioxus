@@ -30,15 +30,15 @@ fn app() -> Element {
             img { src: ASSET_PATH }
 
             // keep support for these too
-            // img {
-            //     src: "/Users/jonkelley/Development/dioxus/examples/assets/logo.png"
-            // }
-            // img {
-            //     src: "/examples/assets/logo.png"
-            // }
-            // img {
-            //     src: "examples/assets/logo.png"
-            // }
+            img {
+                src: "/Users/jonkelley/Development/dioxus/examples/assets/logo.png"
+            }
+            img {
+                src: "/examples/assets/logo.png"
+            }
+            img {
+                src: "examples/assets/logo.png"
+            }
         }
     }
 }

@@ -36,9 +36,9 @@ ravif = { version = "0.11", default-features = false }
 # CSS Minification
 lightningcss = "1.0.0-alpha.44"
 
-# Js minification
-swc = "=0.283.0"
-swc_common = "=0.37.1"
+# # Js minification
+# swc = "=0.283.0"
+# swc_common = "=0.37.1"
 
 # Remote assets
 url = { version = "2.4.0", features = ["serde"] }

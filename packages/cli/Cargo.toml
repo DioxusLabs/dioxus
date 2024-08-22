@@ -16,7 +16,6 @@ thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 wasm-bindgen-shared = "0.2"
 colored = "2.0.0"
-dioxus-cli-config = { workspace = true, features = ["cli"], default-features = false }
 
 # features
 log = "0.4.14"

@@ -18,29 +18,25 @@ fn app() -> Element {
         // The `eval` is available in the prelude - and simply takes a block of JS.
         // Dioxus' eval is interesting since it allows sending messages to and from the JS code using the `await dioxus.recv()`
         // builtin function. This allows you to create a two-way communication channel between Rust and JS.
-        let mut eval = eval(
+        let mut eval = document::eval(
             r#"
                 dioxus.send("Hi from JS!");
-                let msg = await dioxus.recv();
-                console.log(msg);
                 return "hi from JS!";
             "#,
         );
 
-        // Send a message to the JS code.
-        eval.send("Hi from Rust!".into()).unwrap();
-
-        // Our line on the JS side will log the message and then return "hello world".
-        let res = eval.recv().await.unwrap();
-
         // This will print "Hi from JS!" and "Hi from Rust!".
-        println!("{:?}", eval.await);
+        let res = eval.await;
+
+        println!("hello from js! {:?}", res);
 
         res
     });
 
-    match future.value().as_ref() {
-        Some(v) => rsx!( p { "{v}" } ),
-        _ => rsx!( p { "waiting.." } ),
-    }
+    todo!()
+    // future.read_unchecked().as_ref().map(|f| match f {
+    //     Some(Ok(v)) => rsx!( p { "{v:?}" } ),
+    //     Some(Err(e)) => rsx!( p { "{v:?}" } ),
+    //     None => rsx!( p { "waiting.." } ),
+    // })
 }

@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use dioxus_core_types::DioxusFormattable;
+
 /// Asset
 #[derive(Debug, PartialEq, Clone, Copy, Hash)]
 pub struct Asset {
@@ -274,6 +276,17 @@ impl FolderAsset {
 #[derive(Debug, PartialEq, Clone, Copy, Hash)]
 pub struct ImageAsset {
     src: AssetSource,
+}
+
+impl DioxusFormattable for ImageAsset {
+    fn format(&self) -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Owned(self.to_string())
+    }
+}
+impl DioxusFormattable for Asset {
+    fn format(&self) -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Owned(self.to_string())
+    }
 }
 
 impl std::fmt::Display for ImageAsset {

@@ -3,6 +3,8 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub mod assets;
+pub mod bundle_utils;
+pub mod config;
 pub mod dx_build_info;
 pub mod serve;
 pub mod tools;

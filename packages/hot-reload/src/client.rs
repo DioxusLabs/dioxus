@@ -6,7 +6,7 @@ use warnings::Warning;
 /// Applies template and literal changes to the VirtualDom
 ///
 /// Assets need to be handled by the renderer.
-pub fn apply_changes(dom: &mut VirtualDom, msg: &HotReloadMsg) {
+pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
     dom.runtime().on_scope(ScopeId::ROOT, || {
         let ctx = dioxus_signals::get_global_context();
 

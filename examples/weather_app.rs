@@ -19,7 +19,7 @@ fn app() -> Element {
     let current_weather = use_resource(move || async move { get_weather(&country()).await });
 
     rsx! {
-        head::Link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
+        document::Link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
         div { class: "mx-auto p-4 bg-gray-100 h-screen flex justify-center",
             div { class: "flex items-center justify-center flex-row",
                 div { class: "flex items-start justify-center flex-row",
