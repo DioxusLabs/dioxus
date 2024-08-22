@@ -5,7 +5,7 @@ use crate::Result;
 use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
 use futures_channel::mpsc::UnboundedSender;
-use manganis_cli_support::{process_file, AssetManifest, AssetManifestExt, AssetType};
+// use manganis_cli_support::{process_file, AssetManifest, AssetManifestExt, AssetType};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs;
 use std::path::Path;
@@ -15,6 +15,18 @@ use std::{ffi::OsString, path::PathBuf};
 use std::{fs::File, io::Write};
 use tracing::Level;
 use walkdir::WalkDir;
+
+mod file;
+mod folder;
+mod linker_intercept;
+mod manifest;
+
+pub use file::process_file;
+pub use folder::process_folder;
+pub use linker_intercept::*;
+pub use manifest::*;
+
+pub struct AssetManifest {}
 
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";

@@ -31,6 +31,8 @@ members = [
     "packages/server-macro",
     "packages/static-generation",
     "packages/lazy-js-bundle",
+    "packages/document",
+    "packages/runtime-config",
 
     # Fullstack examples
     "packages/fullstack/examples/hello-world",
@@ -44,10 +46,11 @@ members = [
     "packages/static-generation/examples/simple",
     "packages/static-generation/examples/router",
     "packages/static-generation/examples/github-pages",
+
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
-    # "examples/openid_connect_demo",
+
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
@@ -59,13 +62,10 @@ members = [
     # manganis
     "packages/manganis",
     "packages/manganis-macro",
-    "packages/manganis-common",
-    "packages/manganis-cli-support",
     "examples/manganis-test-package",
     "examples/manganis-test-package/test-package-dependency",
     "examples/manganis-test-package/test-package-nested-dependency",
-    "packages/document",
-    "packages/runtime-config",
+
 ]
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
@@ -105,18 +105,9 @@ dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.2
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.2" }
 
 manganis  = { path = "packages/manganis", version = "0.6.0-alpha.2" }
-manganis-common  = { path = "packages/manganis-common", version = "0.6.0-alpha.2" }
-manganis-cli-support  = { path = "packages/manganis-cli-support", version = "0.6.0-alpha.2" }
 manganis-macro  = { path = "packages/manganis-macro", version = "0.6.0-alpha.2" }
 
 warnings = { version = "0.2.0" }
-
-# manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"], path = "../ecosystem-dioxus/manganis/packages/cli-support" }
-# manganis = { version = "0.3.0-alpha.0", default-features = false, features = ["macro"], path = "../ecosystem-dioxus/manganis/packages/manganis" }
-# manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"] }
-# manganis = { version = "0.3.0-alpha.0", default-features = false }
-# manganis-cli-support = { version = "0.3.0-alpha.1", features = ["html"] }
-# manganis = { version = "0.3.0-alpha.1", default-features = false, features = ["html", "macro"]}
 
 
 # a fork of pretty please for tests
@@ -267,7 +258,6 @@ fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 server = ["dioxus/axum"]
 web = ["dioxus/web"]
-# collect-assets = ["dep:manganis"]
 http = ["dep:reqwest", "dep:http-range"]
 
 [[example]]

@@ -13,16 +13,6 @@ mod utils;
 
 use dioxus_rsx as rsx;
 
-#[doc = include_str!("../docs/props.md")]
-#[proc_macro_derive(Props, attributes(props))]
-pub fn derive_props(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as syn::DeriveInput);
-    match props::impl_my_derive(&input) {
-        Ok(output) => output.into(),
-        Err(error) => error.to_compile_error().into(),
-    }
-}
-
 #[doc = include_str!("../docs/rsx.md")]
 #[proc_macro]
 pub fn rsx(tokens: TokenStream) -> TokenStream {
@@ -38,4 +28,14 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
     parse_macro_input!(input as ComponentBody)
         .into_token_stream()
         .into()
+}
+
+#[doc = include_str!("../docs/props.md")]
+#[proc_macro_derive(Props, attributes(props))]
+pub fn derive_props(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+    match props::impl_my_derive(&input) {
+        Ok(output) => output.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
 }

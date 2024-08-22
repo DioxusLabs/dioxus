@@ -15,22 +15,22 @@ keywords = ["assets"]
 [dependencies]
 manganis-macro = { workspace = true, optional = true }
 once_cell = "1.19.0"
-# dirs = "5.0.1"
-# infer = { workspace = true }
-# manganis-common = { workspace = true }
 dunce = "1.0.2"
 dioxus-core-types = { workspace = true }
 
-# [target.'cfg(target_os = "macos")'.dependencies]
-# core-foundation = "0.9.3"
-
-# [target.'cfg(target_os ="macos")'.dependencies]
-# infer = { workspace = true }
-manganis-common = { workspace = true }
 # dunce = "1.0.2"
-
 # [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 # core-foundation = "0.10.0"
+# [target.'cfg(target_os = "macos")'.dependencies]
+# core-foundation = "0.9.3"
+# [target.'cfg(target_os ="macos")'.dependencies]
+# infer = { workspace = true }
+# dirs = "5.0.1"
+# infer = { workspace = true }
+# manganis-common = { workspace = true }
+serde = { version = "1.0.183", features = ["derive"] }
+anyhow = "1"
+base64 = { workspace = true }
 
 
 [features]

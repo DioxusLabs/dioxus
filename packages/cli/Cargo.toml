@@ -83,7 +83,6 @@ tauri-bundler = { workspace = true }
 prettyplease = { workspace = true }
 
 # Assets
-manganis-cli-support = { workspace = true, features = ["html"] }
 brotli = "6.0.0"
 
 dioxus-autofmt = { workspace = true }
@@ -105,6 +104,61 @@ ratatui = { version = "0.27.0", features = ["crossterm", "unstable"] }
 crossterm = { version = "0.27.0", features = ["event-stream"] }
 ansi-to-tui = "=5.0.0-rc.1"
 ansi-to-html = "0.2.1"
+
+
+
+
+
+# # just use the manganis crate directly since it has all the types we need
+# manganis = { workspace = true }
+# serde = { version = "1.0.183", features = ["derive"] }
+# serde_json = {version="1.0.116"}
+# anyhow = "1"
+# rayon = "1.7.0"
+# rustc-hash = "1.1.0"
+
+# # Tailwind
+# railwind = "0.1.5"
+
+# # Image compression/conversion
+# # JPEG
+# mozjpeg = { version = "0.10.7", default-features = false, features = ["parallel"] }
+# # PNG
+# imagequant = "4.2.0"
+# png = "0.17.9"
+# # Conversion
+# image = { version = "0.25" }
+# ravif = { version = "0.11", default-features = false }
+
+# # CSS Minification
+# lightningcss = "1.0.0-alpha.44"
+
+# # # Js minification
+# # swc = "=0.283.0"
+# # swc_common = "=0.37.1"
+
+# # Remote assets
+# url = { version = "2.4.0", features = ["serde"] }
+# reqwest = { version = "0.12.5", features = ["blocking"] }
+# tracing = "0.1.37"
+
+# # Extracting data from an executable
+# object = {version="0.36.0", features=["wasm"]}
+
+# [dev-dependencies]
+# tracing-subscriber = "0.3.18"
+
+# [features]
+# default = ["html"]
+# html = []
+# # html = ["manganis-common/html"]
+
+# asm = ["ravif/asm", "mozjpeg/nasm_simd"]
+
+# # Note: this feature now enables nothing and should be removed in the next major version
+# webp = []
+# avif = []
+
 
 # on macos, we need to specify the vendored feature on ssl when cross compiling
 # [target.'cfg(target_os = "macos")'.dependencies]

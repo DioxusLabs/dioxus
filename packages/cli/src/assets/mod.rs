@@ -12,3 +12,5 @@ pub use folder::process_folder;
 pub use linker_intercept::*;
 pub use manganis_common::*;
 pub use manifest::*;
+
+pub struct AssetManifest {}

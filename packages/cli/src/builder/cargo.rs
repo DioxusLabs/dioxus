@@ -15,7 +15,7 @@ use crate::link::LinkCommand;
 use crate::Result;
 use anyhow::Context;
 use futures_channel::mpsc::UnboundedSender;
-use manganis_cli_support::AssetManifest;
+// use manganis_cli_support::AssetManifest;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 
@@ -196,38 +196,39 @@ impl BuildRequest {
         cargo_args: Vec<String>,
         progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> anyhow::Result<Option<AssetManifest>> {
-        // If this is the server build, the client build already copied any assets we need
-        if self.target_platform == TargetPlatform::Server {
-            return Ok(None);
-        }
-        // If assets are skipped, we don't need to collect them
-        if self.build_arguments.skip_assets {
-            return Ok(None);
-        }
+        todo!("collect assets is disabled currently")
+        // // If this is the server build, the client build already copied any assets we need
+        // if self.target_platform == TargetPlatform::Server {
+        //     return Ok(None);
+        // }
+        // // If assets are skipped, we don't need to collect them
+        // if self.build_arguments.skip_assets {
+        //     return Ok(None);
+        // }
 
-        // Start Manganis linker intercept.
-        let linker_args = vec![format!("{}", self.target_out_dir().display())];
+        // // Start Manganis linker intercept.
+        // let linker_args = vec![format!("{}", self.target_out_dir().display())];
 
-        // Don't block the main thread - manganis should not be running its own std process but it's
-        // fine to wrap it here at the top
-        let build = self.clone();
-        let mut progress = progress.clone();
-        tokio::task::spawn_blocking(move || {
-            manganis_cli_support::start_linker_intercept(
-                &LinkCommand::command_name(),
-                cargo_args,
-                Some(linker_args),
-            )?;
-            let assets = asset_manifest(&build);
-            // Collect assets from the asset manifest the linker intercept created
-            process_assets(&build, &assets, &mut progress)?;
-            // Create the __assets_head.html file for bundling
-            create_assets_head(&build, &assets)?;
+        // // Don't block the main thread - manganis should not be running its own std process but it's
+        // // fine to wrap it here at the top
+        // let build = self.clone();
+        // let mut progress = progress.clone();
+        // tokio::task::spawn_blocking(move || {
+        //     manganis_cli_support::start_linker_intercept(
+        //         &LinkCommand::command_name(),
+        //         cargo_args,
+        //         Some(linker_args),
+        //     )?;
+        //     let assets = asset_manifest(&build);
+        //     // Collect assets from the asset manifest the linker intercept created
+        //     process_assets(&build, &assets, &mut progress)?;
+        //     // Create the __assets_head.html file for bundling
+        //     create_assets_head(&build, &assets)?;
 
-            Ok(Some(assets))
-        })
-        .await
-        .unwrap()
+        //     Ok(Some(assets))
+        // })
+        // .await
+        // .unwrap()
     }
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {

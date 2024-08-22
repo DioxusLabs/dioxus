@@ -14,7 +14,7 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 pub fn build_tracing() -> CLILogControl {
     // If {LOG_ENV} is set, default to env, otherwise filter to cli
     // and manganis warnings and errors from other crates
-    let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
+    let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info");
     if env::var(LOG_ENV).is_ok() {
         filter = EnvFilter::from_env(LOG_ENV);
     }
