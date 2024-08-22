@@ -11,13 +11,13 @@ pub struct AssetHandler {
 }
 
 #[derive(Clone)]
-pub struct AssetHandlerRegistry {
+pub struct AssetHandlers {
     handlers: Rc<RefCell<FxHashMap<String, AssetHandler>>>,
 }
 
-impl AssetHandlerRegistry {
+impl AssetHandlers {
     pub fn new() -> Self {
-        AssetHandlerRegistry {
+        AssetHandlers {
             handlers: Default::default(),
         }
     }

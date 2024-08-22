@@ -1,6 +1,6 @@
 use crate::{
     app::SharedContext,
-    assets::AssetHandlerRegistry,
+    assets::AssetHandlers,
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
     shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
@@ -53,7 +53,7 @@ pub struct DesktopService {
 
     pub(crate) shared: Rc<SharedContext>,
 
-    pub(crate) asset_handlers: AssetHandlerRegistry,
+    pub(crate) asset_handlers: AssetHandlers,
     pub(crate) file_hover: NativeFileHover,
 
     #[cfg(target_os = "ios")]
@@ -74,7 +74,7 @@ impl DesktopService {
         webview: WebView,
         window: Window,
         shared: Rc<SharedContext>,
-        asset_handlers: AssetHandlerRegistry,
+        asset_handlers: AssetHandlers,
         file_hover: NativeFileHover,
     ) -> Self {
         Self {

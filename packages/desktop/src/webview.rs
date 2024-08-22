@@ -3,9 +3,8 @@ use crate::file_upload::DesktopFileDragEvent;
 use crate::file_upload::NativeFileEngine;
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
-    DesktopContext, DesktopService,
+    app::SharedContext, assets::AssetHandlers, edits::WryQueue, file_upload::NativeFileHover,
+    ipc::UserWindowEvent, protocol, waker::tao_waker, Config, DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
@@ -188,7 +187,7 @@ impl WebviewInstance {
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
-        let asset_handlers = AssetHandlerRegistry::new();
+        let asset_handlers = AssetHandlers::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;

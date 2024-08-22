@@ -1,11 +1,11 @@
-
 use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
-    }, HasDragData, HasFileData, HasMouseData,
+    },
+    HasDragData, HasFileData, HasMouseData,
 };
-use wasm_bindgen::{JsCast};
-use web_sys::{MouseEvent};
+use wasm_bindgen::JsCast;
+use web_sys::MouseEvent;
 
 use super::synthetic::Synthetic;
 

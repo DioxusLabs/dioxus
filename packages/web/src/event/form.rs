@@ -1,8 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use dioxus_html::{
-    FormValue, HasFileData, HasFormData,
-};
+use dioxus_html::{FormValue, HasFileData, HasFormData};
 use js_sys::Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 use web_sys::{Element, Event};

@@ -28,7 +28,7 @@ static DEFAULT_INDEX: &str = include_str!("./index.html");
 /// - If that doesn't match, tries to serve a file from the filesystem
 pub(super) fn desktop_handler(
     request: Request<Vec<u8>>,
-    asset_handlers: AssetHandlerRegistry,
+    asset_handlers: AssetHandlers,
     responder: RequestAsyncResponder,
     edit_state: &WebviewEdits,
     custom_head: Option<String>,
