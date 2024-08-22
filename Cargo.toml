@@ -61,9 +61,9 @@ members = [
     "packages/manganis-macro",
     "packages/manganis-common",
     "packages/manganis-cli-support",
-    "packages/manganis-test-package",
-    "packages/manganis-test-package/test-package-dependency",
-    "packages/manganis-test-package/test-package-nested-dependency",
+    "examples/manganis-test-package",
+    "examples/manganis-test-package/test-package-dependency",
+    "examples/manganis-test-package/test-package-nested-dependency",
     "packages/document",
     "packages/runtime-config",
 ]

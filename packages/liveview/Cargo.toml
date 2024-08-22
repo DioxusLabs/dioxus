@@ -24,12 +24,12 @@ serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
 dioxus-html = { workspace = true, features = ["serialize", "document", "mounted"] }
 rustc-hash = { workspace = true }
+
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-document = { workspace = true }
 dioxus-core-types = { workspace = true }
-dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
+dioxus-document = { workspace = true }
 dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"] }
-# dioxus-cli-config = { workspace = true, features = ["read-config", "read-from-args"] }
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 generational-box = { workspace = true }
 
 # axum
