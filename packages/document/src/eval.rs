@@ -12,33 +12,16 @@ use std::task::{Context, Poll};
 
 use super::{document, Document};
 
-// type EvalCreator = Rc<dyn Fn(&str) -> UseEval>;
-
-pub const NATIVE_EVAL_JS: &str = include_str!("../../html/src/js/native_eval.js");
-
-// /// Get a struct that can execute any JavaScript.
-// ///
-// /// # Safety
-// ///
-// /// Please be very careful with this function. A script with too many dynamic
-// /// parts is practically asking for a hacker to find an XSS vulnerability in
-// /// it. **This applies especially to web targets, where the JavaScript context
-// /// has access to most, if not all of your application data.**
-// #[must_use]
-// pub fn eval_provider() -> EvalCreator {
-//     let doc = document();
-
-//     Rc::new(move |script: &str| UseEval::new(doc.new_evaluator(script.to_string())))
-//         as Rc<dyn Fn(&str) -> UseEval>
-// }
-
 #[doc = include_str!("../docs/eval.md")]
 #[doc(alias = "javascript")]
-pub fn eval(script: &str) -> UseEval {
+pub fn eval(script: &str) -> Eval {
     todo!()
     //     let document = use_hook(document);
     //     UseEval::new(document.new_evaluator(script.to_string()))
 }
+
+#[derive(Clone, Copy)]
+pub struct Eval {}
 
 /// A wrapper around the target platform's evaluator that lets you send and receive data from JavaScript spawned by [`eval`].
 ///
@@ -46,49 +29,6 @@ pub fn eval(script: &str) -> UseEval {
 #[derive(Clone, Copy)]
 pub struct UseEval {
     // evaluator: Rc<dyn Document>,
-}
-
-// impl UseEval {
-//     /// Creates a new UseEval
-//     pub fn new(evaluator: GenerationalBox<Box<dyn Evaluator + 'static>>) -> Self {
-//         Self { evaluator }
-//     }
-
-//     /// Sends a [`serde_json::Value`] to the evaluated JavaScript.
-//     pub fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
-//         match self.evaluator.try_read() {
-//             Ok(evaluator) => evaluator.send(data),
-//             Err(_) => Err(EvalError::Finished),
-//         }
-//     }
-
-//     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-//     pub async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
-//         poll_fn(|cx| match self.evaluator.try_write() {
-//             Ok(mut evaluator) => evaluator.poll_recv(cx),
-//             Err(_) => Poll::Ready(Err(EvalError::Finished)),
-//         })
-//         .await
-//     }
-
-//     /// Gets the return value of the evaluated JavaScript.
-//     pub async fn join(self) -> Result<serde_json::Value, EvalError> {
-//         poll_fn(|cx| match self.evaluator.try_write() {
-//             Ok(mut evaluator) => evaluator.poll_join(cx),
-//             Err(_) => Poll::Ready(Err(EvalError::Finished)),
-//         })
-//         .await
-//     }
-// }
-
-impl IntoFuture for UseEval {
-    type Output = Result<serde_json::Value, EvalError>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        todo!()
-        // Box::pin(self.join())
-    }
 }
 
 /// Represents an error when evaluating JavaScript
