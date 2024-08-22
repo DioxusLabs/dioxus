@@ -11,7 +11,11 @@ fn app() -> Element {
 
     let mut start = move || {
         if !started() {
-            let alert = move || gloo_dialogs::alert(&format!("Your score was {count}!",));
+            let alert = move || {
+                web_sys::console::log_1(&wasm_bindgen::JsValue::from(&format!(
+                    "Your score was {count}!",
+                )))
+            };
             gloo_timers::callback::Timeout::new(5_000, alert).forget();
         }
         started.set(true); // this cannot be done inside condition or infinite loop

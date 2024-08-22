@@ -2960,7 +2960,6 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
- "gloo-dialogs",
  "gloo-timers 0.3.0",
  "js-sys",
  "lazy-js-bundle",
