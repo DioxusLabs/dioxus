@@ -15,7 +15,8 @@ dioxus-html = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-devtools-types = { workspace = true }
-serde = { version = "1", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 # hot reloading serve
 tracing = { workspace = true }

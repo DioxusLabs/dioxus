@@ -120,7 +120,9 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     #[cfg(all(feature = "devtools", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        dioxus_devtools::connect(move |template| _ = tx.send(template));
+        if let Some(addr) = dioxus_runtime_config::devserver_addr() {
+            dioxus_devtools::connect(addr, move |template| _ = tx.send(template));
+        }
         rx
     };
 

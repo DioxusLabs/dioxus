@@ -136,10 +136,12 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions,))]
     pub fn connect_devtools(&self) {
-        let proxy = self.shared.proxy.clone();
-        dioxus_devtools::connect(move |msg| {
-            _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-        });
+        if let Some(addr) = dioxus_runtime_config::devserver_addr() {
+            let proxy = self.shared.proxy.clone();
+            dioxus_devtools::connect(addr, move |msg| {
+                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+            });
+        }
     }
 
     pub fn handle_new_window(&mut self) {

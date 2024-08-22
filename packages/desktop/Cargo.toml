@@ -19,8 +19,9 @@ dioxus-html = { workspace = true, features = [
 dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
-generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
+dioxus-runtime-config = { workspace = true }
+generational-box = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }

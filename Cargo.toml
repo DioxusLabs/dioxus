@@ -107,6 +107,7 @@ dioxus-static-site-generation = { path = "packages/static-generation", version =
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.2", default-features = false }
 dioxus-isrg = { path = "packages/isrg", version = "0.6.0-alpha.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.2" }
+dioxus-runtime-config = { path = "packages/runtime-config", version = "0.6.0-alpha.2" }
 
 manganis  = { path = "packages/manganis", version = "0.6.0-alpha.2" }
 manganis-macro  = { path = "packages/manganis-macro", version = "0.6.0-alpha.2" }

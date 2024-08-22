@@ -30,6 +30,7 @@ dioxus-core-types = { workspace = true }
 dioxus-document = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
+dioxus-runtime-config = { workspace = true }
 generational-box = { workspace = true }
 
 # axum

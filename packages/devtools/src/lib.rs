@@ -1,6 +1,10 @@
-pub use dioxus_devtools_types::*;
+use std::{
+    io::{self, BufRead},
+    net::SocketAddr,
+};
 
 use dioxus_core::{ScopeId, VirtualDom};
+pub use dioxus_devtools_types::*;
 use dioxus_signals::Writable;
 use warnings::Warning;
 
@@ -25,30 +29,42 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
     });
 }
 
-/// Connect to the devserver and handle its messages
-pub fn connect(mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
-    // Hi!
-    //
-    // yes, we read-raw from a tcp socket
-    // don't think about it too much :)
-    //
-    // we just don't want to bring in tls + tokio for just hotreloading
+/// Connect to the devserver and handle its messages with a callback.
+///
+/// This doesn't use any form of security or protocol, so it's not safe to expose to the internet.
+pub fn connect(addr: SocketAddr, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
     std::thread::spawn(move || {
-        let connect = std::net::TcpStream::connect("127.0.0.1:8080");
+        let connect = std::net::TcpStream::connect(addr);
         let Ok(mut stream) = connect else {
             return;
         };
 
-        loop {}
+        // Wrap the stream in a BufReader, so we can use the BufRead methods
+        let mut reader = io::BufReader::new(&mut stream);
 
-        // let mut buf = [0; 1024];
-        // loop {
-        //     let len = stream.read(&mut buf).unwrap();
-        //     if len == 0 {
-        //         break;
-        //     }
-        //     let msg = String::from_utf8_lossy(&buf[..len]);
-        //     callback(serde_json::from_str(&msg).unwrap());
-        // }
+        // Loop and read lines from the stream
+        loop {
+            let mut buf = String::new();
+            let msg = reader.read_line(&mut buf);
+
+            let Ok(amt) = msg else {
+                break;
+            };
+
+            // eof received - connection closed
+            if amt == 0 {
+                break;
+            }
+
+            reader.consume(amt);
+
+            if let Ok(msg) = serde_json::from_str(&buf) {
+                callback(msg);
+            } else {
+                eprintln!("Failed to parse message from devserver: {:?}", buf);
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     });
 }

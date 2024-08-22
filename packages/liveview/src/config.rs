@@ -2,14 +2,6 @@ use dioxus_core::VirtualDom;
 
 use crate::LiveviewRouter;
 
-pub(crate) fn app_title() -> String {
-    todo!()
-    // CURRENT_CONFIG
-    //     .as_ref()
-    //     .map(|c| c.web.app.title.clone())
-    //     .unwrap_or_else(|_| "Dioxus Liveview App".to_string())
-}
-
 /// A configuration for the LiveView server.
 pub struct Config<R: LiveviewRouter> {
     router: R,
@@ -19,14 +11,13 @@ pub struct Config<R: LiveviewRouter> {
 
 impl<R: LiveviewRouter> Default for Config<R> {
     fn default() -> Self {
-        let address = todo!();
-        todo!();
-        // let address = RuntimeCLIArguments::from_cli()
-        //     .map(|args| args.fullstack_address().address())
-        //     .unwrap_or(std::net::SocketAddr::V4(std::net::SocketAddrV4::new(
-        //         std::net::Ipv4Addr::new(127, 0, 0, 1),
-        //         8080,
-        //     )));
+        let address = dioxus_runtime_config::fullstack_address().unwrap_or_else(|| {
+            std::net::SocketAddr::V4(std::net::SocketAddrV4::new(
+                std::net::Ipv4Addr::new(127, 0, 0, 1),
+                8080,
+            ))
+        });
+
         Self {
             router: R::create_default_liveview_router(),
             address,
@@ -65,7 +56,7 @@ impl<R: LiveviewRouter> Config<R> {
 
     /// Launch the LiveView server.
     pub async fn launch(self) {
-        println!("{} started on http://{}", app_title(), self.address);
+        println!("Listening on http://{}", self.address);
         self.router.start(self.address).await
     }
 }

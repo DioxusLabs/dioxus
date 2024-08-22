@@ -25,35 +25,35 @@ impl RenderedElementBacking for DesktopElement {
         self
     }
 
-    async fn get_scroll_offset(&self) -> MountedResult<PixelsVector2D> {
-        let id = self.id.0;
-        let res = self.webview.eval(format!(
-            "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]"
-        ));
-        todo!()
-        // Box::pin(res.recv_as())
-        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
-    }
+    // async fn get_scroll_offset(&self) -> MountedResult<PixelsVector2D> {
+    //     let id = self.id.0;
+    //     let res = self.webview.eval(format!(
+    //         "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]"
+    //     ));
+    //     todo!()
+    //     // Box::pin(res.recv_as())
+    //     // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
+    // }
 
-    async fn get_scroll_size(&self) -> MountedResult<PixelsSize> {
-        todo!()
-        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
-    }
+    // async fn get_scroll_size(&self) -> MountedResult<PixelsSize> {
+    //     todo!()
+    //     // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
+    // }
 
-    async fn get_client_rect(&self) -> MountedResult<PixelsRect> {
-        todo!()
-        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
-    }
+    // async fn get_client_rect(&self) -> MountedResult<PixelsRect> {
+    //     todo!()
+    //     // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
+    // }
 
-    async fn scroll_to(&self, _behavior: ScrollBehavior) -> MountedResult<()> {
-        todo!()
-        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
-    }
+    // async fn scroll_to(&self, _behavior: ScrollBehavior) -> MountedResult<()> {
+    //     todo!()
+    //     // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
+    // }
 
-    async fn set_focus(&self, _focus: bool) -> MountedResult<()> {
-        todo!()
-        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
-    }
+    // async fn set_focus(&self, _focus: bool) -> MountedResult<()> {
+    //     todo!()
+    //     // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
+    // }
 
     // scripted_getter!(
     //     get_scroll_offset,

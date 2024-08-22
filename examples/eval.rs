@@ -20,8 +20,7 @@ fn app() -> Element {
         // builtin function. This allows you to create a two-way communication channel between Rust and JS.
         let mut eval = document::eval(
             r#"
-                dioxus.send("Hi from JS!");
-                return "hi from JS!";
+            return "hi from JS!";
             "#,
         );
 
