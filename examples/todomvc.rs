@@ -65,7 +65,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        document::Link { rel: "stylesheet", href: STYLE }
+        document::Stylesheet { href: STYLE }
         section { class: "todoapp",
             TodoHeader { todos }
             section { class: "main",

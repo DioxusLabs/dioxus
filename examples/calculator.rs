@@ -54,7 +54,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        document::Link { rel: "stylesheet", href: STYLE }
+        document::Stylesheet { href: STYLE }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator", tabindex: "0", onkeydown: handle_key_down_event,

@@ -36,7 +36,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        document::Link { rel: "stylesheet", href: "https://unpkg.com/bulma@0.9.0/css/bulma.min.css" }
+        document::Stylesheet { href: "https://unpkg.com/bulma@0.9.0/css/bulma.min.css" }
         div { class: "container",
             div { class: "columns",
                 div { class: "column",

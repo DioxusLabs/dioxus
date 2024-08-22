@@ -38,7 +38,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        document::Link { rel: "stylesheet", href: STYLE }
+        document::Stylesheet { href: STYLE }
         h1 { "Input Roulette" }
         button { onclick: move |_| running.toggle(), "Toggle roulette" }
         div { id: "roulette-grid",

@@ -16,7 +16,7 @@ fn app() -> Element {
     let sum = use_memo(move || counters.read().iter().copied().sum::<i32>());
 
     rsx! {
-        document::Link { rel: "stylesheet", href: STYLE }
+        document::Stylesheet { href: STYLE }
 
         div { id: "controls",
             button { onclick: move |_| counters.write().push(0), "Add counter" }

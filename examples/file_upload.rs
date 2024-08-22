@@ -43,7 +43,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        document::Link { rel: "stylesheet", href: STYLE }
+        document::Stylesheet { href: STYLE }
 
         h1 { "File Upload Example" }
         p { "Drop a .txt, .rs, or .js file here to read it" }

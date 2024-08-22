@@ -38,7 +38,7 @@ fn app() -> Element {
     );
 
     rsx! {
-        document::Link { rel: "stylesheet", href: STYLE }
+        document::Stylesheet { href: STYLE }
         div { id: "app",
             div { id: "title", "Carpe diem 🎉" }
             div { id: "clock-display", "{time}" }

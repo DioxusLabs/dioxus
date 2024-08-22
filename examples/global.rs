@@ -18,7 +18,7 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
-        document::Link { rel: "stylesheet", href: STYLE }
+        document::Stylesheet { href: STYLE }
         Increment {}
         Decrement {}
         Reset {}
