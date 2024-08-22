@@ -68,7 +68,7 @@ members = [
     "examples/manganis-test-package/test-package-nested-dependency",
     "packages/devtools",
     "packages/devtools-types",
-
+    "packages/isrg",
 ]
 
 [workspace.package]
@@ -105,6 +105,7 @@ dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alp
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.2" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.2" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.2", default-features = false }
+dioxus-isrg = { path = "packages/isrg", version = "0.6.0-alpha.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.2" }
 
 manganis  = { path = "packages/manganis", version = "0.6.0-alpha.2" }
@@ -116,6 +117,7 @@ warnings = { version = "0.2.0" }
 # a fork of pretty please for tests
 prettier-please = { version = "0.3.0", features = ["verbatim"]}
 
+askama_escape = "0.10.3"
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
 toml = "0.8"

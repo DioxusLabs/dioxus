@@ -14,11 +14,11 @@ resolver = "2"
 dioxus-fullstack = { workspace = true }
 dioxus-lib.workspace = true
 dioxus-router = { workspace = true, features = ["fullstack"] }
-dioxus-ssr = { workspace = true, features = ["incremental"], optional = true }
+dioxus-ssr = { workspace = true, optional = true }
+dioxus-isrg = { workspace = true, optional = true }
 axum = { workspace = true, features = ["ws", "macros"], optional = true }
 tower-http = { workspace = true, features = ["fs"], optional = true }
 dioxus-devtools = { workspace = true, optional = true }
-# dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 tokio = { workspace = true, optional = true }
 http = { workspace = true, optional = true }

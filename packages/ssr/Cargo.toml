@@ -12,40 +12,11 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true }
 dioxus-core-types = { workspace = true }
-dioxus-interpreter-js = { workspace = true }
-generational-box = { workspace = true }
-askama_escape = "0.10.3"
-thiserror = { workspace = true }
+askama_escape = { workspace = true }
 rustc-hash = { workspace = true }
-lru  = { workspace = true }
-tracing = { workspace = true }
-http = { workspace = true }
-async-trait = { workspace = true }
-serde_json = { workspace = true }
-chrono = { workspace = true, optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { workspace = true, features = ["io-util"], optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-dioxus-signals = { workspace = true }
-tokio = { version = "1", features = ["full"] }
-
-tracing = { workspace = true }
-fern = { version = "0.6.0", features = ["colored"] }
-anyhow = "1.0"
-argh = "0.1.4"
-serde = "1.0.120"
-serde_json = "1.0.61"
-fs_extra = "1.2.0"
-
-[features]
-default = []
-incremental = ["dep:tokio", "dep:chrono"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

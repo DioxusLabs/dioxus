@@ -234,37 +234,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 
 [[package]]
-name = "argh"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7af5ba06967ff7214ce4c7419c7d185be7ecd6cc4965a8f6e1d8ce0398aad219"
-dependencies = [
- "argh_derive",
- "argh_shared",
-]
-
-[[package]]
-name = "argh_derive"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56df0aeedf6b7a2fc67d06db35b09684c3e8da0c95f8f27685cb17e08413d87a"
-dependencies = [
- "argh_shared",
- "proc-macro2",
- "quote",
- "syn 2.0.74",
-]
-
-[[package]]
-name = "argh_shared"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5693f39141bda5760ecc4111ab08da40565d1771038c4a0250f03457ec707531"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2607,6 +2576,7 @@ dependencies = [
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-interpreter-js",
+ "dioxus-isrg",
  "dioxus-lib",
  "dioxus-mobile",
  "dioxus-ssr",
@@ -2704,6 +2674,18 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "dioxus-isrg"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "chrono",
+ "http 1.1.0",
+ "lru",
+ "rustc-hash 1.1.0",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -2893,28 +2875,12 @@ dependencies = [
 name = "dioxus-ssr"
 version = "0.6.0-alpha.2"
 dependencies = [
- "anyhow",
- "argh",
  "askama_escape",
- "async-trait",
- "chrono",
  "dioxus",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-html",
- "dioxus-interpreter-js",
- "dioxus-signals",
- "fern",
- "fs_extra",
- "generational-box",
- "http 1.1.0",
- "lru",
  "rustc-hash 1.1.0",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -2926,6 +2892,7 @@ dependencies = [
  "dioxus",
  "dioxus-devtools",
  "dioxus-fullstack",
+ "dioxus-isrg",
  "dioxus-lib",
  "dioxus-router",
  "dioxus-ssr",
