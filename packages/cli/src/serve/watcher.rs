@@ -22,7 +22,7 @@ pub struct Watcher {
     _tx: UnboundedSender<notify::Event>,
     rx: UnboundedReceiver<notify::Event>,
     _last_update_time: i64,
-    _watcher: Box<dyn notify::Watcher>,
+    watcher: Box<dyn notify::Watcher>,
     queued_events: Vec<notify::Event>,
     file_map: FileMap,
     ignore: Gitignore,
@@ -129,7 +129,7 @@ impl Watcher {
         Self {
             _tx: tx,
             rx,
-            _watcher: watcher,
+            watcher,
             file_map,
             ignore,
             queued_events: Vec::new(),

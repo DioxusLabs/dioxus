@@ -1,6 +1,6 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
-use super::{BuildRequest, UpdateBuildProgress};
+use super::{BuildReason, BuildRequest, UpdateBuildProgress};
 use crate::builder::Stage;
 use crate::Result;
 use crate::{assets::AssetManifest, builder::progress::MessageSource};
@@ -37,6 +37,10 @@ impl BuildRequest {
         Ok(html)
     }
 
+    fn is_dev_build(&self) -> bool {
+        self.reason == BuildReason::Serve && !self.build_arguments.release
+    }
+
     // Inject any resources from the config into the html
     fn inject_resources(
         &self,
@@ -49,12 +53,13 @@ impl BuildRequest {
         let mut style_list = resources.style.clone().unwrap_or_default();
         let mut script_list = resources.script.clone().unwrap_or_default();
 
-        if self.serve {
+        if self.is_dev_build() {
             style_list.extend(resources.dev.style.iter().cloned());
             script_list.extend(resources.dev.script.iter().cloned());
         }
 
         let mut head_resources = String::new();
+
         // Add all styles to the head
         for style in &style_list {
             writeln!(
@@ -62,10 +67,6 @@ impl BuildRequest {
                 "<link rel=\"stylesheet\" href=\"{}\">",
                 &style.to_str().unwrap(),
             )?;
-        }
-
-        if !style_list.is_empty() {
-            self.send_resource_deprecation_warning(progress, style_list, ResourceType::Style);
         }
 
         // Add all scripts to the head
@@ -77,14 +78,17 @@ impl BuildRequest {
             )?;
         }
 
+        if !style_list.is_empty() {
+            self.send_resource_deprecation_warning(progress, style_list, ResourceType::Style);
+        }
         if !script_list.is_empty() {
             self.send_resource_deprecation_warning(progress, script_list, ResourceType::Script);
         }
 
         // Inject any resources from manganis into the head
-        if let Some(assets) = assets {
-            head_resources.push_str(&assets.head());
-        }
+        // if let Some(assets) = assets {
+        //     head_resources.push_str(&assets.head());
+        // }
 
         replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
@@ -117,7 +121,8 @@ impl BuildRequest {
             </body"#,
         );
 
-        *html = match self.serve && !self.build_arguments.release {
+        // Trim out the toasts if we're in release, or add them if we're serving
+        *html = match self.is_dev_build() {
             true => html.replace("{DX_TOAST_UTILITIES}", TOAST_HTML),
             false => html.replace("{DX_TOAST_UTILITIES}", ""),
         };
@@ -127,7 +132,8 @@ impl BuildRequest {
             "</head",
             r#"<link rel="preload" href="/{base_path}/assets/dioxus/{app_name}_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
             <link rel="preload" href="/{base_path}/assets/dioxus/{app_name}.js" as="script">
-            </head"#);
+            </head"#
+        );
     }
 
     /// Replace any special placeholders in the HTML with resolved values

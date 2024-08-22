@@ -164,6 +164,8 @@ pub async fn serve_all(
 
                         // And then finally tell the server to reload
                         server.send_reload_command().await;
+
+                        // We also want to watch any of its assets for changes?
                     },
 
                     // If the process exited *cleanly*, we can exit

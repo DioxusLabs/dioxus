@@ -1,12 +1,11 @@
-// pub use railwind::warning::Warning as TailwindWarning;
-use std::path::PathBuf;
-
-// use manganis_common::{linker, AssetType};
-
-use crate::{file::process_file, process_folder};
-
+use manganis_core::LinkSection;
 use object::{File, Object, ObjectSection};
 use std::fs;
+use std::path::PathBuf;
+
+// pub use railwind::warning::Warning as TailwindWarning;
+// use crate::{file::process_file, process_folder};
+// use manganis_common::{linker, AssetType};
 
 // get the text containing all the asset descriptions
 // in the "link section" of the binary
@@ -14,7 +13,7 @@ fn get_string_manganis(file: &File) -> Option<String> {
     for section in file.sections() {
         if let Ok(section_name) = section.name() {
             // Check if the link section matches the asset section for one of the platforms we support. This may not be the current platform if the user is cross compiling
-            if linker::LinkSection::ALL
+            if LinkSection::ALL
                 .iter()
                 .any(|x| x.link_section == section_name)
             {
@@ -33,63 +32,69 @@ fn get_string_manganis(file: &File) -> Option<String> {
     None
 }
 
-// /// A manifest of all assets collected from dependencies
-// #[derive(Debug, PartialEq, Default, Clone)]
-// pub struct AssetManifest {
-//     pub(crate) assets: Vec<AssetType>,
-// }
+/// A manifest of all assets collected from dependencies
+#[derive(Debug, PartialEq, Default, Clone)]
+pub struct AssetManifest {
+    pub(crate) assets: Vec<AssetType>,
+}
 
-// impl AssetManifest {
-//     /// Creates a new asset manifest
-//     pub fn new(assets: Vec<AssetType>) -> Self {
-//         Self { assets }
-//     }
+#[derive(Debug, PartialEq, Clone)]
+pub enum AssetType {
+    File(PathBuf),
+    Folder(PathBuf),
+}
 
-//     /// Returns all assets collected from dependencies
-//     pub fn assets(&self) -> &Vec<AssetType> {
-//         &self.assets
-//     }
+impl AssetManifest {
+    /// Creates a new asset manifest
+    pub fn new(assets: Vec<AssetType>) -> Self {
+        Self { assets }
+    }
 
-//     /// Returns the HTML that should be injected into the head of the page
-//     pub fn head(&self) -> String {
-//         let mut head = String::new();
-//         for asset in &self.assets {
-//             if let crate::AssetType::Resource(file) = asset {
-//                 match file.options() {
-//                     crate::FileOptions::Css(css_options) => {
-//                         if css_options.preload() {
-//                             if let Ok(asset_path) = file.served_location() {
-//                                 head.push_str(&format!(
-//                                     "<link rel=\"preload\" as=\"style\" href=\"{asset_path}\">\n"
-//                                 ))
-//                             }
-//                         }
-//                     }
-//                     crate::FileOptions::Image(image_options) => {
-//                         if image_options.preload() {
-//                             if let Ok(asset_path) = file.served_location() {
-//                                 head.push_str(&format!(
-//                                     "<link rel=\"preload\" as=\"image\" href=\"{asset_path}\">\n"
-//                                 ))
-//                             }
-//                         }
-//                     }
-//                     crate::FileOptions::Js(js_options) => {
-//                         if js_options.preload() {
-//                             if let Ok(asset_path) = file.served_location() {
-//                                 head.push_str(&format!(
-//                                     "<link rel=\"preload\" as=\"script\" href=\"{asset_path}\">\n"
-//                                 ))
-//                             }
-//                         }
-//                     }
-//                     _ => {}
-//                 }
-//             }
-//         }
-//         head
-//     }
-// }
+    /// Returns all assets collected from dependencies
+    pub fn assets(&self) -> &Vec<AssetType> {
+        &self.assets
+    }
+
+    //     /// Returns the HTML that should be injected into the head of the page
+    //     pub fn head(&self) -> String {
+    //         let mut head = String::new();
+    //         for asset in &self.assets {
+    //             if let crate::AssetType::Resource(file) = asset {
+    //                 match file.options() {
+    //                     crate::FileOptions::Css(css_options) => {
+    //                         if css_options.preload() {
+    //                             if let Ok(asset_path) = file.served_location() {
+    //                                 head.push_str(&format!(
+    //                                     "<link rel=\"preload\" as=\"style\" href=\"{asset_path}\">\n"
+    //                                 ))
+    //                             }
+    //                         }
+    //                     }
+    //                     crate::FileOptions::Image(image_options) => {
+    //                         if image_options.preload() {
+    //                             if let Ok(asset_path) = file.served_location() {
+    //                                 head.push_str(&format!(
+    //                                     "<link rel=\"preload\" as=\"image\" href=\"{asset_path}\">\n"
+    //                                 ))
+    //                             }
+    //                         }
+    //                     }
+    //                     crate::FileOptions::Js(js_options) => {
+    //                         if js_options.preload() {
+    //                             if let Ok(asset_path) = file.served_location() {
+    //                                 head.push_str(&format!(
+    //                                     "<link rel=\"preload\" as=\"script\" href=\"{asset_path}\">\n"
+    //                                 ))
+    //                             }
+    //                         }
+    //                     }
+    //                     _ => {}
+    //                 }
+    //             }
+    //         }
+    //         head
+    //     }
+}
 
 // /// An extension trait CLI support for the asset manifest
 // pub trait AssetManifestExt {
@@ -196,12 +201,13 @@ fn get_string_manganis(file: &File) -> Option<String> {
 // }
 
 fn deserialize_assets(json: &str) -> Vec<AssetType> {
-    let deserializer = serde_json::Deserializer::from_str(json);
-    deserializer
-        .into_iter::<AssetType>()
-        .flat_map(|x| x.ok())
-        // .map(|x| x.unwrap())
-        .collect()
+    todo!()
+    // let deserializer = serde_json::Deserializer::from_str(json);
+    // deserializer
+    //     .into_iter::<AssetType>()
+    //     .flat_map(|x| x.ok())
+    //     // .map(|x| x.unwrap())
+    //     .collect()
 }
 
 /// Extract JSON Manganis strings from a list of object files.

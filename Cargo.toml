@@ -69,6 +69,7 @@ members = [
     "packages/devtools",
     "packages/devtools-types",
     "packages/isrg",
+    "packages/manganis-core",
 ]
 
 [workspace.package]
@@ -111,6 +112,7 @@ dioxus-runtime-config = { path = "packages/runtime-config", version = "0.6.0-alp
 
 manganis  = { path = "packages/manganis", version = "0.6.0-alpha.2" }
 manganis-macro  = { path = "packages/manganis-macro", version = "0.6.0-alpha.2" }
+manganis-core  = { path = "packages/manganis-core", version = "0.6.0-alpha.2" }
 
 warnings = { version = "0.2.0" }
 

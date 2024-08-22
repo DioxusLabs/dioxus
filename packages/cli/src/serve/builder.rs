@@ -1,7 +1,6 @@
-use crate::builder::BuildRequest;
-use crate::builder::BuildResult;
 use crate::builder::TargetPlatform;
 use crate::builder::UpdateBuildProgress;
+use crate::builder::{BuildReason, BuildRequest};
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::next_or_pending;
 use crate::serve::Serve;
@@ -10,7 +9,7 @@ use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::future::OptionFuture;
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use tokio::{
     process::{Child, Command},
     task::JoinHandle,
@@ -19,7 +18,7 @@ use tokio::{
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
     /// The results of the build
-    build_results: Option<JoinHandle<Result<Vec<BuildResult>>>>,
+    build_results: Option<JoinHandle<Result<Vec<BuildRequest>>>>,
 
     /// The progress of the builds
     build_progress: Vec<(TargetPlatform, UnboundedReceiver<UpdateBuildProgress>)>,
@@ -51,12 +50,15 @@ impl Builder {
     /// Start a new build - killing the current one if it exists
     pub fn build(&mut self) -> Result<()> {
         self.shutdown();
-        let build_requests =
-            BuildRequest::create(true, &self.config, self.serve.build_arguments.clone())?;
+        let build_requests = BuildRequest::create(
+            BuildReason::Serve,
+            &self.config,
+            self.serve.build_arguments.clone(),
+        )?;
 
         let mut set = tokio::task::JoinSet::new();
 
-        for build_request in build_requests {
+        for mut build_request in build_requests {
             let (mut tx, rx) = futures_channel::mpsc::unbounded();
             self.build_progress
                 .push((build_request.target_platform, rx));
@@ -180,10 +182,10 @@ pub enum BuilderUpdate {
         update: UpdateBuildProgress,
     },
     Ready {
-        results: Vec<BuildResult>,
+        results: Vec<BuildRequest>,
     },
     ProcessExited {
         target_platform: TargetPlatform,
-        status: Result<std::process::ExitStatus, std::io::Error>,
+        status: Result<ExitStatus, std::io::Error>,
     },
 }

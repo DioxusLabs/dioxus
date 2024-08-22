@@ -1,10 +1,10 @@
 use super::web::install_web_build_tooling;
 use super::BuildRequest;
-use super::BuildResult;
 use super::TargetPlatform;
-use crate::assets::create_assets_head;
-use crate::assets::{asset_manifest, process_assets};
-use crate::assets::{copy_dir_to, AssetManifest};
+// use crate::assets::create_assets_head;
+// use crate::assets::{asset_manifest, process_assets};
+use crate::assets::AssetManifest;
+// use crate::assets::{copy_dir_to, AssetManifest};
 use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
@@ -15,9 +15,11 @@ use crate::link::LinkCommand;
 use crate::Result;
 use anyhow::Context;
 use futures_channel::mpsc::UnboundedSender;
-// use manganis_cli_support::AssetManifest;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
+use tokio::process::Command;
+
+type ProgressChannel = UnboundedSender<UpdateBuildProgress>;
 
 impl BuildRequest {
     /// Create a list of arguments for cargo builds
@@ -78,8 +80,8 @@ impl BuildRequest {
     }
 
     /// Create a build command for cargo
-    fn prepare_build_command(&self) -> Result<(tokio::process::Command, Vec<String>)> {
-        let mut cmd = tokio::process::Command::new("cargo");
+    fn prepare_build_command(&self) -> Result<(Command, Vec<String>)> {
+        let mut cmd = Command::new("cargo");
         cmd.arg("rustc");
         if let Some(target_dir) = &self.target_dir {
             cmd.env("CARGO_TARGET_DIR", target_dir);
@@ -96,10 +98,7 @@ impl BuildRequest {
         Ok((cmd, cargo_args))
     }
 
-    pub(crate) async fn build(
-        &self,
-        mut progress: UnboundedSender<UpdateBuildProgress>,
-    ) -> Result<BuildResult> {
+    pub(crate) async fn build(self, mut progress: ProgressChannel) -> Result<BuildRequest> {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
@@ -122,8 +121,7 @@ impl BuildRequest {
         let cargo_result = build_cargo(crate_count, cmd, &mut progress).await?;
 
         // Post process the build result
-        let build_result = self
-            .post_process_build(cargo_args, &cargo_result, &mut progress)
+        self.post_process_build(cargo_args, &cargo_result, &mut progress)
             .await
             .context("Failed to post process build")?;
 
@@ -137,7 +135,7 @@ impl BuildRequest {
             update: UpdateStage::Start,
         });
 
-        Ok(build_result)
+        Ok(self)
     }
 
     async fn post_process_build(
@@ -145,7 +143,7 @@ impl BuildRequest {
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
         progress: &mut UnboundedSender<UpdateBuildProgress>,
-    ) -> Result<BuildResult> {
+    ) -> Result<()> {
         _ = progress.start_send(UpdateBuildProgress {
             stage: Stage::OptimizingAssets,
             update: UpdateStage::Start,
@@ -177,75 +175,12 @@ impl BuildRequest {
 
         self.copy_assets_dir()?;
 
-        // Create the build result
-        let build_result = BuildResult {
-            executable: output_path,
-            target_platform: self.target_platform,
-        };
-
         // If this is a web build, run web post processing steps
         if self.targeting_web() {
-            self.post_process_web_build(&build_result, assets.as_ref(), progress)
+            self.post_process_web_build(assets.as_ref(), progress)
                 .await?;
         }
 
-        Ok(build_result)
-    }
-
-    async fn collect_assets(
-        &self,
-        cargo_args: Vec<String>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
-    ) -> anyhow::Result<Option<AssetManifest>> {
-        todo!("collect assets is disabled currently")
-        // // If this is the server build, the client build already copied any assets we need
-        // if self.target_platform == TargetPlatform::Server {
-        //     return Ok(None);
-        // }
-        // // If assets are skipped, we don't need to collect them
-        // if self.build_arguments.skip_assets {
-        //     return Ok(None);
-        // }
-
-        // // Start Manganis linker intercept.
-        // let linker_args = vec![format!("{}", self.target_out_dir().display())];
-
-        // // Don't block the main thread - manganis should not be running its own std process but it's
-        // // fine to wrap it here at the top
-        // let build = self.clone();
-        // let mut progress = progress.clone();
-        // tokio::task::spawn_blocking(move || {
-        //     manganis_cli_support::start_linker_intercept(
-        //         &LinkCommand::command_name(),
-        //         cargo_args,
-        //         Some(linker_args),
-        //     )?;
-        //     let assets = asset_manifest(&build);
-        //     // Collect assets from the asset manifest the linker intercept created
-        //     process_assets(&build, &assets, &mut progress)?;
-        //     // Create the __assets_head.html file for bundling
-        //     create_assets_head(&build, &assets)?;
-
-        //     Ok(Some(assets))
-        // })
-        // .await
-        // .unwrap()
-    }
-
-    pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
-        tracing::info!("Copying public assets to the output directory...");
-        let out_dir = self.target_out_dir();
-        let asset_dir = self.dioxus_crate.asset_dir();
-
-        if asset_dir.is_dir() {
-            // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-            let pre_compress = self.targeting_web()
-                && self
-                    .dioxus_crate
-                    .should_pre_compress_web_assets(self.build_arguments.release);
-
-            copy_dir_to(asset_dir, out_dir, pre_compress)?;
-        }
         Ok(())
     }
 

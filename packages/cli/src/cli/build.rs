@@ -1,46 +1,13 @@
 use std::str::FromStr;
 
-use crate::{builder::BuildRequest, dioxus_crate::DioxusCrate};
 use crate::{builder::TargetPlatform, config::Platform};
+use crate::{
+    builder::{BuildReason, BuildRequest},
+    dioxus_crate::DioxusCrate,
+};
 use anyhow::Context;
 
 use super::*;
-
-/// Information about the target to build
-#[derive(Clone, Debug, Default, Deserialize, Parser)]
-pub struct TargetArgs {
-    /// Build for nightly [default: false]
-    #[clap(long)]
-    pub nightly: bool,
-
-    /// Build a example [default: ""]
-    #[clap(long)]
-    pub example: Option<String>,
-
-    /// Build a binary [default: ""]
-    #[clap(long)]
-    pub bin: Option<String>,
-
-    /// The package to build
-    #[clap(short, long)]
-    pub package: Option<String>,
-
-    /// Space separated list of features to activate
-    #[clap(long)]
-    pub features: Vec<String>,
-
-    /// The feature to use for the client in a fullstack app [default: "web"]
-    #[clap(long)]
-    pub client_feature: Option<String>,
-
-    /// The feature to use for the server in a fullstack app [default: "server"]
-    #[clap(long)]
-    pub server_feature: Option<String>,
-
-    /// Rustc platform triple
-    #[clap(long)]
-    pub target: Option<String>,
-}
 
 /// Build the Rust Dioxus app and all of its assets.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -92,6 +59,42 @@ pub struct Build {
     pub target_args: TargetArgs,
 }
 
+/// Information about the target to build
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
+pub struct TargetArgs {
+    /// Build for nightly [default: false]
+    #[clap(long)]
+    pub nightly: bool,
+
+    /// Build a example [default: ""]
+    #[clap(long)]
+    pub example: Option<String>,
+
+    /// Build a binary [default: ""]
+    #[clap(long)]
+    pub bin: Option<String>,
+
+    /// The package to build
+    #[clap(short, long)]
+    pub package: Option<String>,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub features: Vec<String>,
+
+    /// The feature to use for the client in a fullstack app [default: "web"]
+    #[clap(long)]
+    pub client_feature: Option<String>,
+
+    /// The feature to use for the server in a fullstack app [default: "server"]
+    #[clap(long)]
+    pub server_feature: Option<String>,
+
+    /// Rustc platform triple
+    #[clap(long)]
+    pub target: Option<String>,
+}
+
 impl Build {
     pub fn resolve(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         // Inherit the platform from the defaults
@@ -110,7 +113,7 @@ impl Build {
 
     pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         self.resolve(dioxus_crate)?;
-        let build_requests = BuildRequest::create(false, dioxus_crate, self.clone())?;
+        let build_requests = BuildRequest::create(BuildReason::Build, dioxus_crate, self.clone())?;
         BuildRequest::build_all_parallel(build_requests).await?;
         Ok(())
     }

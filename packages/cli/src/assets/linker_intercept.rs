@@ -106,6 +106,7 @@ where
     let exec_path = std::env::current_exe().unwrap();
 
     let mut cmd = std::process::Command::new("cargo");
+
     cmd.arg("rustc");
     cmd.args(args);
     cmd.arg("--");

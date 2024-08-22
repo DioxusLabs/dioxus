@@ -2400,6 +2400,7 @@ dependencies = [
  "ignore",
  "krates",
  "log",
+ "manganis-core",
  "notify",
  "object",
  "once_cell",
@@ -5904,6 +5905,10 @@ dependencies = [
  "once_cell",
  "serde",
 ]
+
+[[package]]
+name = "manganis-core"
+version = "0.6.0-alpha.2"
 
 [[package]]
 name = "manganis-macro"

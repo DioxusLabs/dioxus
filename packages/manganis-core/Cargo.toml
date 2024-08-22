@@ -1,0 +1,6 @@
+[package]
+name = "manganis-core"
+edition = "2021"
+version.workspace = true
+
+[dependencies]

@@ -1,7 +1,10 @@
 use std::net::SocketAddr;
 
 pub const DEVSERVER_ADDR_ENV: &str = "DIOXUS_DEVSERVER_ADDR";
-pub const MOBILE_DEVSERVER_ADDR_ENV: &str = "DIOXUS_MOBILE_DEVSERVER_ADDR";
+pub const FULLSTACK_ADDRESS_ENV: &str = "DIOXUS_FULLSTACK_ADDRESS";
+
+/// when targetting ios, we need to set a prefix to the argument such that it gets picked up by simctl
+pub const IOS_DEVSERVER_ADDR_ENV: &str = "SIMCTL_CHILD_DEVSERVER_ADDR";
 
 /// Get the address of the devserver
 pub fn devserver_addr() -> Option<SocketAddr> {
@@ -9,8 +12,6 @@ pub fn devserver_addr() -> Option<SocketAddr> {
         .ok()
         .and_then(|s| s.parse().ok())
 }
-
-pub const FULLSTACK_ADDRESS_ENV: &str = "DIOXUS_FULLSTACK_ADDRESS";
 
 pub fn fullstack_address() -> Option<SocketAddr> {
     std::env::var(FULLSTACK_ADDRESS_ENV)

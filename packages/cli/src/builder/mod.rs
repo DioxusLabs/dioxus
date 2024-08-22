@@ -4,61 +4,32 @@ use crate::{build::Build, config};
 use crate::{cli::serve::ServeArguments, config::Platform};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
-use std::net::SocketAddr;
-use std::str::FromStr;
+pub use platform::TargetPlatform;
+use std::{net::SocketAddr, path::Path};
 use std::{path::PathBuf, process::Stdio};
 use tokio::process::{Child, Command};
 
+mod assets;
 mod cargo;
 mod fullstack;
+mod platform;
 mod prepare_html;
 mod progress;
 mod web;
+
 pub use progress::{
     BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
 };
 
-/// The target platform for the build
-/// This is very similar to the Platform enum, but we need to be able to differentiate between the
-/// server and web targets for the fullstack platform
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TargetPlatform {
-    Web,
-    Desktop,
-    Server,
-    Liveview,
-}
-
-impl FromStr for TargetPlatform {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "web" => Ok(Self::Web),
-            "desktop" => Ok(Self::Desktop),
-            "axum" | "server" => Ok(Self::Server),
-            "liveview" => Ok(Self::Liveview),
-            _ => Err(()),
-        }
-    }
-}
-
-impl std::fmt::Display for TargetPlatform {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TargetPlatform::Web => write!(f, "web"),
-            TargetPlatform::Desktop => write!(f, "desktop"),
-            TargetPlatform::Server => write!(f, "server"),
-            TargetPlatform::Liveview => write!(f, "liveview"),
-        }
-    }
-}
-
 /// A request for a project to be built
+///
+/// As the build progresses, we'll fill in fields like assets, executable, entitlements, etc
+///
+/// This request will be then passed to the bundler to create a final bundled app
 #[derive(Clone)]
 pub struct BuildRequest {
     /// Whether the build is for serving the application
-    pub serve: bool,
+    pub reason: BuildReason,
 
     /// The configuration for the crate we are building
     pub dioxus_crate: DioxusCrate,
@@ -74,11 +45,22 @@ pub struct BuildRequest {
 
     /// The target directory for the build
     pub target_dir: Option<PathBuf>,
+
+    /// The output executable location
+    pub executable: Option<PathBuf>,
+}
+
+/// The reason for the build - this will determine how we prep the output
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BuildReason {
+    Serve,
+    Build,
+    Bundle,
 }
 
 impl BuildRequest {
     pub fn create(
-        serve: bool,
+        serve: BuildReason,
         dioxus_crate: &DioxusCrate,
         build_arguments: impl Into<Build>,
     ) -> crate::Result<Vec<Self>> {
@@ -86,15 +68,20 @@ impl BuildRequest {
         let platform = build_arguments.platform();
         let single_platform = |platform| {
             let dioxus_crate = dioxus_crate.clone();
-            vec![Self {
-                serve,
+
+            let request = Self {
+                reason: serve,
                 dioxus_crate,
                 build_arguments: build_arguments.clone(),
                 target_platform: platform,
                 rust_flags: Default::default(),
                 target_dir: Default::default(),
-            }]
+                executable: Default::default(),
+            };
+
+            vec![request]
         };
+
         Ok(match platform {
             Platform::Liveview => single_platform(TargetPlatform::Liveview),
             Platform::Web => single_platform(TargetPlatform::Web),
@@ -108,7 +95,7 @@ impl BuildRequest {
 
     pub(crate) async fn build_all_parallel(
         build_requests: Vec<BuildRequest>,
-    ) -> Result<Vec<BuildResult>> {
+    ) -> Result<Vec<BuildRequest>> {
         let multi_platform_build = build_requests.len() > 1;
         let mut build_progress = Vec::new();
         let mut set = tokio::task::JoinSet::new();
@@ -155,56 +142,58 @@ impl BuildRequest {
     pub fn targeting_web(&self) -> bool {
         self.target_platform == TargetPlatform::Web
     }
-}
 
-#[derive(Debug, Clone)]
-pub(crate) struct BuildResult {
-    pub executable: PathBuf,
-    pub target_platform: TargetPlatform,
-}
-
-impl BuildResult {
     /// Open the executable if this is a native build
     pub fn open(
         &self,
         config: &DioxusCrate,
         serve: &ServeArguments,
         fullstack_address: Option<SocketAddr>,
-        workspace: &std::path::Path,
+        workspace: &Path,
     ) -> std::io::Result<Option<Child>> {
         if self.target_platform == TargetPlatform::Web {
             return Ok(None);
         }
+
         if self.target_platform == TargetPlatform::Server {
             tracing::trace!("Proxying fullstack server from port {fullstack_address:?}");
         }
 
-        // let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
-        let executable = self.executable.canonicalize()?;
-        let mut cmd = Command::new(executable);
+        //
+        // open the exe with some arguments/envvars/etc
+        // we're going to try and configure this binary from the environment, if we can
+        //
+        // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
+        // index.html during dev
+        //
+        let res = Command::new(
+            self.executable
+                .as_deref()
+                .expect("executable should be built if we're trying to open it")
+                .canonicalize()?,
+        )
+        .env(
+            dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
+            fullstack_address
+                .as_ref()
+                .map(|addr| addr.to_string())
+                .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
+        )
+        .env(
+            dioxus_runtime_config::DEVSERVER_ADDR_ENV,
+            serve.address.address().to_string(),
+        )
+        .env(
+            dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
+            serve.address.address().to_string(),
+        )
+        .env("CARGO_MANIFEST_DIR", config.crate_dir())
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .kill_on_drop(true)
+        .current_dir(workspace)
+        .spawn()?;
 
-        let mut _cmd = cmd
-            .env(
-                dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
-                fullstack_address
-                    .as_ref()
-                    .map(|addr| addr.to_string())
-                    .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
-            )
-            .env(
-                dioxus_runtime_config::DEVSERVER_ADDR_ENV,
-                serve.address.address().to_string(),
-            )
-            .env(
-                dioxus_runtime_config::MOBILE_DEVSERVER_ADDR_ENV,
-                serve.address.address().to_string(),
-            )
-            .env("CARGO_MANIFEST_DIR", config.crate_dir())
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .kill_on_drop(true)
-            .current_dir(workspace);
-
-        Ok(Some(_cmd.spawn()?))
+        Ok(Some(res))
     }
 }

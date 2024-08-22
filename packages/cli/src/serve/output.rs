@@ -1,4 +1,8 @@
-use crate::config::{AddressArguments, Platform};
+use crate::{
+    builder::BuildRequest,
+    config::{AddressArguments, Platform},
+};
+use crate::{builder::UpdateStage, serve::Serve};
 use crate::{
     builder::{
         BuildMessage, MessageSource, MessageType, Stage, TargetPlatform, UpdateBuildProgress,
@@ -6,10 +10,6 @@ use crate::{
     dioxus_crate::DioxusCrate,
     serve::next_or_pending,
     tracer::CLILogControl,
-};
-use crate::{
-    builder::{BuildResult, UpdateStage},
-    serve::Serve,
 };
 use core::panic;
 use crossterm::{
@@ -525,7 +525,7 @@ impl Output {
         }
     }
 
-    pub fn new_ready_app(&mut self, build_engine: &mut Builder, results: Vec<BuildResult>) {
+    pub fn new_ready_app(&mut self, build_engine: &mut Builder, results: Vec<BuildRequest>) {
         for result in results {
             let out = build_engine
                 .children
@@ -980,7 +980,7 @@ async fn rustc_version() -> String {
 }
 
 pub struct RunningApp {
-    result: BuildResult,
+    result: BuildRequest,
     output: Option<RunningAppOutput>,
 }
 
