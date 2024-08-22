@@ -8965,9 +8965,9 @@ dependencies = [
 
 [[package]]
 name = "sledgehammer_utils"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4f70244f6c3edbc73f4d82f10ba50ff6ed4be22737beca5840e8761ac6a4cdb"
+checksum = "debdd4b83524961983cea3c55383b3910fd2f24fd13a188f5b091d2d504a61ae"
 dependencies = [
  "rustc-hash 1.1.0",
 ]
