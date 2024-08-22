@@ -9,8 +9,8 @@ use wasm_bindgen::{prelude::Closure, JsCast};
 #[cfg(feature = "file-engine")]
 use web_sys::{File, FileList, FileReader};
 
-#[cfg(feature = "file-engine")]
 /// A file engine for the web platform
+#[cfg(feature = "file-engine")]
 pub struct WebFileEngine {
     file_reader: FileReader,
     file_list: FileList,
