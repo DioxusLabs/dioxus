@@ -58,7 +58,7 @@ hot-reload = [
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis"]
-document = ["dioxus-web?/document", "dioxus-html?/document"]
+document = ["dioxus-web?/document"]
 
 launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]

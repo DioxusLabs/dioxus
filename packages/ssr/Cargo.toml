@@ -10,26 +10,25 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["document"]}
+dioxus-html = { workspace = true }
 dioxus-core-types = { workspace = true }
-# dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
 dioxus-interpreter-js = { workspace = true }
 generational-box = { workspace = true }
 askama_escape = "0.10.3"
-thiserror = "1.0.23"
-rustc-hash = "1.1.0"
+thiserror = { workspace = true }
+rustc-hash = { workspace = true }
 lru  = { workspace = true }
 tracing = { workspace = true }
 http = { workspace = true }
 async-trait = { workspace = true }
 serde_json = { workspace = true }
-chrono = { version = "0.4.34", optional = true }
+chrono = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { version = "1.28", features = ["io-util"], optional = true }
+tokio = { workspace = true, features = ["io-util"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { version = "1.28", features = ["fs", "io-util"], optional = true }
+tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }

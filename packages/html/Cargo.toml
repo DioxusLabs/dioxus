@@ -29,9 +29,9 @@ futures-channel = { workspace = true }
 
 # todo: we shouldn't have any wasm-bindgen dependencies in the html cratea
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = { workspace = true, optional = true }
-js-sys = { version = "0.3.56", optional = true }
-wasm-bindgen-futures = { workspace = true, optional = true }
+# wasm-bindgen = { workspace = true, optional = true }
+# js-sys = { version = "0.3.56", optional = true }
+# wasm-bindgen-futures = { workspace = true, optional = true }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
@@ -44,7 +44,7 @@ tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
 
 [features]
-default = ["serialize", "mounted", "document", "file-engine"]
+default = ["serialize", "mounted", "file-engine"]
 serialize = [
     "dep:serde",
     "dep:serde_json",
@@ -61,10 +61,6 @@ mounted = [
     # "web-sys?/ScrollBehavior",
     # "web-sys?/HtmlElement",
 ]
-document = [
-    "dep:serde",
-    "dep:serde_json"
-]
 file-engine = [
     "dep:async-trait",
     # "dep:js-sys",
@@ -72,12 +68,9 @@ file-engine = [
     # "web-sys?/FileList",
     # "web-sys?/FileReader"
 ]
-# wasm-bind = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
-# native-bind = ["dep:tokio", "file-engine"]
 hot-reload-context = ["dep:dioxus-rsx", "dioxus-rsx/hot_reload_traits"]
 html-to-rsx = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 feature = ["html-to-rsx", "hot-reload-context", "html-to-rsx"]
-# feature = ["html-to-rsx", "hot-reload-context", "html-to-rsx", "native-bind", "wasm-bind"]

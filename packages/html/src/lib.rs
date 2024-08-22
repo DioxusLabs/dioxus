@@ -43,9 +43,6 @@ pub use attribute_groups::*;
 pub use elements::*;
 pub use events::*;
 
-#[cfg(feature = "document")]
-pub mod document;
-
 pub mod extensions {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::elements::extensions::*;
@@ -53,11 +50,6 @@ pub mod extensions {
 
 pub mod prelude {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
-    // #[cfg(feature = "document")]
-    // pub use crate::document::{
-    //     self, document, eval, head, Document, Meta, MetaProps, Script, ScriptProps, Style,
-    //     StyleProps, Stylesheet, Title, TitleProps, UseEval,
-    // };
     pub use crate::elements::extensions::*;
     pub use crate::events::*;
     pub use crate::point_interaction::*;

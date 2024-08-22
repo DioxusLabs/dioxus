@@ -163,6 +163,7 @@ internment = { version = "0.7.0" }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
 env_logger = "0.11.0"
 tracing-subscriber = "0.3.17"
+chrono = { version = "0.4.34" }
 
 # desktop
 wry = { version = "0.42.0", default-features = false }

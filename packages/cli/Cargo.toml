@@ -32,7 +32,7 @@ cargo_metadata = "0.18.1"
 tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros", "process", "rt-multi-thread"] }
 tokio-stream = "0.1.15"
 atty = "0.2.14"
-chrono = "0.4.19"
+chrono = { workspace = true }
 anyhow = "1"
 hyper = { workspace = true }
 hyper-util = "0.1.3"

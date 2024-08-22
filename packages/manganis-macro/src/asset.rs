@@ -28,6 +28,7 @@ struct ResourceAsset {
     pub local: Option<PathBuf>,
     pub bundled: PathBuf,
 }
+
 #[derive(Debug)]
 struct AssetError {}
 impl ResourceAsset {

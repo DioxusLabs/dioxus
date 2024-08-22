@@ -2661,7 +2661,6 @@ dependencies = [
  "enumset",
  "euclid",
  "futures-channel",
- "js-sys",
  "keyboard-types",
  "lazy-js-bundle",
  "manganis",
@@ -2670,8 +2669,6 @@ dependencies = [
  "serde_repr",
  "tokio",
  "tracing",
- "wasm-bindgen",
- "wasm-bindgen-futures",
 ]
 
 [[package]]
