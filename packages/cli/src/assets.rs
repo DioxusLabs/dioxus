@@ -26,8 +26,6 @@ pub use folder::process_folder;
 pub use linker_intercept::*;
 pub use manifest::*;
 
-pub struct AssetManifest {}
-
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";
 

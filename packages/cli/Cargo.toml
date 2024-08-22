@@ -11,17 +11,15 @@ rust-version = "1.79.0"
 
 [dependencies]
 # cli core
-clap = { version = "4.2", features = ["derive", "cargo"] }
+clap = { workspace = true, features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 wasm-bindgen-shared = "0.2"
-colored = "2.0.0"
 
 # features
 log = "0.4.14"
-fern = { version = "0.6.0", features = ["colored"] }
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 toml = { workspace = true }
 fs_extra = "1.2.0"
 cargo_toml = { workspace = true }
@@ -29,7 +27,7 @@ futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { workspace = true, features = ["serde"] }
 html_parser = { workspace = true }
 cargo_metadata = "0.18.1"
-tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros", "process", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["fs", "sync", "rt", "macros", "process", "rt-multi-thread"] }
 tokio-stream = "0.1.15"
 atty = "0.2.14"
 chrono = { workspace = true }
@@ -53,7 +51,7 @@ tower-http = { workspace = true, features = ["full"] }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
 
-headers = "0.3.7"
+headers = "0.4.0"
 walkdir = "2"
 
 # tools download
@@ -93,6 +91,7 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-core-types = { workspace = true }
 dioxus-devtools-types = { workspace = true }
+dioxus-runtime-config = { workspace = true }
 ignore = "0.4.22"
 env_logger = { workspace = true }
 
@@ -137,13 +136,9 @@ ansi-to-html = "0.2.1"
 # # swc = "=0.283.0"
 # # swc_common = "=0.37.1"
 
-# # Remote assets
-# url = { version = "2.4.0", features = ["serde"] }
-# reqwest = { version = "0.12.5", features = ["blocking"] }
-# tracing = "0.1.37"
 
-# # Extracting data from an executable
-# object = {version="0.36.0", features=["wasm"]}
+# Extracting data from an executable
+object = {version="0.36.0", features=["wasm"]}
 
 # [dev-dependencies]
 # tracing-subscriber = "0.3.18"
@@ -159,11 +154,6 @@ ansi-to-html = "0.2.1"
 # webp = []
 # avif = []
 
-
-# on macos, we need to specify the vendored feature on ssl when cross compiling
-# [target.'cfg(target_os = "macos")'.dependencies]
-# openssl = { version = "0.10", features = ["vendored"] }
-
 [build-dependencies]
 built = { version = "=0.7.3", features = ["git2"] }
 
@@ -173,6 +163,10 @@ plugin = []
 tokio-console = ["dep:console-subscriber"]
 
 # when releasing dioxus, we want to enable wasm-opt
+# and then also maybe developing it too.
+# making this optional cuts workspace deps down from 1000 to 500, so it's very nice for workspace adev
+optimization = ["wasm-opt", "asset-opt"]
+asset-opt = []
 wasm-opt = ["dep:wasm-opt"]
 
 [[bin]]
@@ -183,13 +177,7 @@ name = "dx"
 tempfile = "3.3"
 
 [package.metadata.binstall]
-# temporarily, we're going to use the 0.5.0 download page for all binaries
 pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-v{ version }{ archive-suffix }"
-
-# the old one...
-# pkg-url = "{ repo }/releases/download/v0.5.0/dx-{ target }-v{ version }{ archive-suffix }"
-
-# pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
 pkg-fmt = "tgz"
 
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]

@@ -1,12 +1,11 @@
 use super::BuildRequest;
 use super::BuildResult;
-use crate::assets::pre_compress_folder;
+use crate::assets::{pre_compress_folder, AssetManifest};
 use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
 use futures_channel::mpsc::UnboundedSender;
-use manganis_cli_support::AssetManifest;
 use std::path::Path;
 use tokio::process::Command;
 use wasm_bindgen_cli_support::Bindgen;

@@ -1,11 +1,11 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
 use super::{BuildRequest, UpdateBuildProgress};
-use crate::builder::progress::MessageSource;
 use crate::builder::Stage;
 use crate::Result;
+use crate::{assets::AssetManifest, builder::progress::MessageSource};
 use futures_channel::mpsc::UnboundedSender;
-use manganis_cli_support::AssetManifest;
+
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use tracing::Level;
@@ -167,12 +167,11 @@ impl BuildRequest {
                     }
                 };
                 match variant {
-                    ResourceType::Style => format!(
-                        "    document::Link {{ rel: \"stylesheet\", href: asset!(css(\"{}\")) }}",
-                        path.display()
-                    ),
+                    ResourceType::Style => {
+                        format!("    Stylesheet {{ href: asset!(\"{}\") }}", path.display())
+                    }
                     ResourceType::Script => {
-                        format!("    Script {{ src: asset!(file(\"{}\")) }}", path.display())
+                        format!("    Script {{ src: asset!(\"{}\") }}", path.display())
                     }
                 }
             })

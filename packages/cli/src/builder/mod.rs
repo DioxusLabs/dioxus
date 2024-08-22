@@ -59,14 +59,19 @@ impl std::fmt::Display for TargetPlatform {
 pub struct BuildRequest {
     /// Whether the build is for serving the application
     pub serve: bool,
+
     /// The configuration for the crate we are building
     pub dioxus_crate: DioxusCrate,
+
     /// The target platform for the build
     pub target_platform: TargetPlatform,
+
     /// The arguments for the build
     pub build_arguments: Build,
+
     /// The rustc flags to pass to the build
     pub rust_flags: Vec<String>,
+
     /// The target directory for the build
     pub target_dir: Option<PathBuf>,
 }
@@ -174,21 +179,32 @@ impl BuildResult {
             tracing::trace!("Proxying fullstack server from port {fullstack_address:?}");
         }
 
-        todo!("set runtime env vars for the fullstack server")
         // let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
-        // let executable = self.executable.canonicalize()?;
-        // let mut cmd = Command::new(executable);
-        // cmd
-        //     // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
-        //     // .env(
-        //     //     dioxus_cli_config::__private::SERVE_ENV,
-        //     //     serde_json::to_string(&arguments).unwrap(),
-        //     // )
-        //     .env("CARGO_MANIFEST_DIR", config.crate_dir())
-        //     .stderr(Stdio::piped())
-        //     .stdout(Stdio::piped())
-        //     .kill_on_drop(true)
-        //     .current_dir(workspace);
-        // Ok(Some(cmd.spawn()?))
+        let executable = self.executable.canonicalize()?;
+        let mut cmd = Command::new(executable);
+
+        let mut _cmd = cmd
+            .env(
+                dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
+                fullstack_address
+                    .as_ref()
+                    .map(|addr| addr.to_string())
+                    .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
+            )
+            .env(
+                dioxus_runtime_config::DEVSERVER_ADDR_ENV,
+                serve.address.address().to_string(),
+            )
+            .env(
+                dioxus_runtime_config::MOBILE_DEVSERVER_ADDR_ENV,
+                serve.address.address().to_string(),
+            )
+            .env("CARGO_MANIFEST_DIR", config.crate_dir())
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .kill_on_drop(true)
+            .current_dir(workspace);
+
+        Ok(Some(_cmd.spawn()?))
     }
 }

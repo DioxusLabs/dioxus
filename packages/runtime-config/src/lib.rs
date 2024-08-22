@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 pub const DEVSERVER_ADDR_ENV: &str = "DIOXUS_DEVSERVER_ADDR";
+pub const MOBILE_DEVSERVER_ADDR_ENV: &str = "DIOXUS_MOBILE_DEVSERVER_ADDR";
 
 /// Get the address of the devserver
 pub fn devserver_addr() -> Option<SocketAddr> {

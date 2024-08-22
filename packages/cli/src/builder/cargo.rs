@@ -2,9 +2,9 @@ use super::web::install_web_build_tooling;
 use super::BuildRequest;
 use super::BuildResult;
 use super::TargetPlatform;
-use crate::assets::copy_dir_to;
 use crate::assets::create_assets_head;
 use crate::assets::{asset_manifest, process_assets};
+use crate::assets::{copy_dir_to, AssetManifest};
 use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
@@ -109,10 +109,6 @@ impl BuildRequest {
             dioxus_version.push_str(&format!("-{hash}"));
         }
 
-        // todo: put the base path here?
-        // let _asset_guard =
-        //     AssetConfigDropGuard::new(self.dioxus_crate.dioxus_config.web.app.base_path.as_deref());
-
         // If this is a web, build make sure we have the web build tooling set up
         if self.targeting_web() {
             install_web_build_tooling(&mut progress).await?;
@@ -164,12 +160,17 @@ impl BuildRequest {
         if !out_dir.is_dir() {
             create_dir_all(&out_dir)?;
         }
+
         let mut output_path = out_dir.join(file_name);
+
+        // todo: this should not be platform cfged but rather be a target config
+        // we dont always want to set the .exe extension...
         if self.targeting_web() {
             output_path.set_extension("wasm");
         } else if cfg!(windows) {
             output_path.set_extension("exe");
         }
+
         if let Some(res_path) = &cargo_build_result.output_location {
             std::fs::copy(res_path, &output_path)?;
         }

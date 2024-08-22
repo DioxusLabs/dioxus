@@ -1,4 +1,7 @@
-use crate::{assets, error::Result};
+use crate::{
+    assets::{self, get_json_from_object_files, linker_intercept},
+    error::Result,
+};
 use clap::Parser;
 use std::{fs, path::PathBuf};
 
@@ -12,14 +15,13 @@ pub struct LinkCommand {
 
 impl LinkCommand {
     pub fn link(self) -> Result<()> {
-        let Some((link_args, object_files)) = manganis_cli_support::linker_intercept(self.args)
-        else {
+        let Some((link_args, object_files)) = linker_intercept(self.args) else {
             tracing::warn!("Invalid linker arguments.");
             return Ok(());
         };
 
         // Parse object files, deserialize JSON, & create a file to propagate JSON.
-        let json = manganis_cli_support::get_json_from_object_files(object_files);
+        let json = get_json_from_object_files(object_files);
         let parsed = serde_json::to_string(&json).unwrap();
 
         let out_dir = PathBuf::from(link_args.first().unwrap());
