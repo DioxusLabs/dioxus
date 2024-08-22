@@ -126,7 +126,7 @@ pub trait HasResizeData: std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-use dioxus_core::Event;
+use dioxus_core_types::Event;
 
 use crate::geometry::PixelsSize;
 

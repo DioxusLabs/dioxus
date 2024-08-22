@@ -18,7 +18,7 @@ pub enum UserWindowEvent {
     Ipc { id: WindowId, msg: IpcMessage },
 
     /// Handle a hotreload event, basically telling us to update our templates
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     HotReloadEvent(dioxus_hot_reload::DevserverMsg),
 
     /// Create a new window

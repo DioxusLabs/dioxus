@@ -28,7 +28,8 @@ dioxus-static-site-generation = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 manganis = { workspace = true, optional = true }
-dioxus-hot-reload = { workspace = true, optional = true }
+dioxus-devtools = { workspace = true, optional = true }
+
 serde = { version = "1.0.136", optional = true }
 axum = { workspace = true, optional = true }
 
@@ -36,7 +37,7 @@ axum = { workspace = true, optional = true }
 default = [
     "macro",
     "html",
-    "hot-reload",
+    "devtools",
     "signals",
     "hooks",
     "launch",
@@ -45,15 +46,14 @@ default = [
     "asset",
 ]
 minimal = ["macro", "html", "signals", "hooks", "launch"]
-# default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
-hot-reload = [
-    "dep:dioxus-hot-reload",
-    "dioxus-web?/hot_reload",
-    "dioxus-fullstack?/hot-reload",
+devtools = [
+    "dioxus-web?/devtools",
+    "dioxus-fullstack?/devtools",
+    "dep:dioxus-devtools"
 ]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]

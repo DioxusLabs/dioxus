@@ -1,4 +1,4 @@
-use dioxus_core::Event;
+use dioxus_core_types::Event;
 
 pub type CompositionEvent = Event<CompositionData>;
 

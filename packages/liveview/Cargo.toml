@@ -28,7 +28,7 @@ rustc-hash = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-core-types = { workspace = true }
 dioxus-document = { workspace = true }
-dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"] }
+dioxus-devtools = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 generational-box = { workspace = true }
 
@@ -43,10 +43,10 @@ tower = { workspace = true }
 dioxus = { workspace = true }
 
 [features]
-default = ["hot-reload", "multi-thread"]
+default = ["devtools", "multi-thread"]
 axum = ["dep:axum"]
 multi-thread = ["tokio/rt-multi-thread"]
-hot-reload = ["dep:dioxus-hot-reload"]
+devtools = ["dep:dioxus-devtools"]
 
 [[example]]
 name = "axum"

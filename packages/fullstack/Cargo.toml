@@ -61,26 +61,24 @@ tower = { workspace = true, features = ["util"], optional = true }
 tower-layer = { version = "0.3.2", optional = true }
 parking_lot = { version = "0.12.1", features = ["send_guard"], optional = true }
 web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
-
 clap = { version = "4.5.7", optional = true, features = ["derive"] }
-
 aws-lc-rs = { version = "1.8.1", optional = true }
+dioxus-devtools = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dioxus-hot-reload = { workspace = true, features = ["serve"] }
 tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["hot-reload", "panic_hook", "document", "mounted"]
+default = ["panic_hook", "document", "mounted", "devtools"]
 panic_hook = ["dioxus-web?/panic_hook"]
-hot-reload = ["dioxus-web?/hot_reload", "dioxus-hot-reload/serve"]
 mounted = ["dioxus-web?/mounted"]
+devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
 # file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]
 web = ["dep:dioxus-web", "dep:web-sys"]

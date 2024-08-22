@@ -2,18 +2,6 @@ use dioxus_core::internal::HotReloadTemplateWithLocation;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[cfg(feature = "client")]
-mod client;
-
-#[cfg(feature = "client")]
-pub use client::*;
-
-#[cfg(feature = "serve")]
-mod ws_receiver;
-
-#[cfg(feature = "serve")]
-pub use ws_receiver::*;
-
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum DevserverMsg {

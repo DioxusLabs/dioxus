@@ -26,7 +26,8 @@ members = [
     "packages/rsx-rosetta",
     "packages/generational-box",
     "packages/signals",
-    "packages/hot-reload",
+    "packages/devtools",
+    "packages/devtools-types",
     "packages/fullstack",
     "packages/server-macro",
     "packages/static-generation",
@@ -65,6 +66,8 @@ members = [
     "examples/manganis-test-package",
     "examples/manganis-test-package/test-package-dependency",
     "examples/manganis-test-package/test-package-nested-dependency",
+    "packages/devtools",
+    "packages/devtools-types",
 
 ]
 
@@ -97,7 +100,8 @@ dioxus-rsx = { path = "packages/rsx", version = "0.6.0-alpha.2" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.2" }
 dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.2" }
 generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.2" }
-dioxus-hot-reload = { path = "packages/hot-reload", version = "0.6.0-alpha.2" }
+dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.2" }
+dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.2" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.2" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.2", default-features = false }

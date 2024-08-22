@@ -15,7 +15,6 @@ dioxus-core-types = { workspace = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
 
-# generational-box = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 euclid = "0.22.7"
@@ -27,6 +26,8 @@ tracing.workspace = true
 
 futures-channel = { workspace = true }
 
+# dioxus-core = { workspace = true }
+# generational-box = { workspace = true }
 # todo: we shouldn't have any wasm-bindgen dependencies in the html cratea
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
 # wasm-bindgen = { workspace = true, optional = true }

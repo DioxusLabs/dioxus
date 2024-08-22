@@ -1,7 +1,7 @@
 use crate::file_data::HasFileData;
 use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
-use dioxus_core::Event;
+use dioxus_core_types::Event;
 
 pub type FormEvent = Event<FormData>;
 

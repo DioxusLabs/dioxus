@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-hot-reload"
+name = "dioxus-devtools"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
 edition = "2021"

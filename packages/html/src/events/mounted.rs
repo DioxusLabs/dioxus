@@ -127,7 +127,7 @@ impl MountedData {
     }
 }
 
-use dioxus_core::Event;
+use dioxus_core_types::Event;
 
 use crate::geometry::{PixelsRect, PixelsSize, PixelsVector2D};
 

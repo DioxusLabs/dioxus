@@ -19,9 +19,8 @@ dioxus-html = { workspace = true, features = [
 dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
-# dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
-dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"]}
+dioxus-devtools = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }
@@ -70,16 +69,16 @@ objc = { workspace = true }
 objc_id = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "wry/objc-exception", "hot-reload", "devtools"]
+default = ["tokio_runtime", "wry/objc-exception", "devtools"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
-hot-reload = ["dep:dioxus-hot-reload", "dioxus-signals"]
+dev = ["dep:dioxus-devtools"]
 gnu = []
 
 [package.metadata.docs.rs]
-features = ["tokio_runtime", "hot-reload"]
+features = ["tokio_runtime", "devtools"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 default-features = false
 targets = [

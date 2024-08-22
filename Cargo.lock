@@ -2525,6 +2525,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-devserver-types"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "dioxus-document"
 version = "0.6.0-alpha.2"
 dependencies = [
@@ -2646,6 +2653,10 @@ dependencies = [
  "tracing",
  "warnings",
 ]
+
+[[package]]
+name = "dioxus-hotreload-receiver"
+version = "0.6.0-alpha.2"
 
 [[package]]
 name = "dioxus-html"
