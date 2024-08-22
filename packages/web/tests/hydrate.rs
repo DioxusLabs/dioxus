@@ -35,7 +35,7 @@ fn rehydrates() {
                     },
                     "listener test"
                 }
-                {false.then(|| rsx!{ "hello" })}
+                {false.then(|| rsx! { "hello" })}
             }
         }
     }
