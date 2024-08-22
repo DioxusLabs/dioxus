@@ -702,7 +702,7 @@ impl Output {
                         },
                         Line::from("  ").gray(),
                         Line::from(" [/] more").gray(),
-                        Line::from(" [r] reload").gray(),
+                        Line::from(" [r] rebuild").gray(),
                         Line::from(" [c] clear").gray(),
                         Line::from(" [o] open").gray(),
                         Line::from(" [h] hide").gray(),
@@ -888,8 +888,8 @@ impl ActiveBuild {
     fn update(&mut self, update: UpdateBuildProgress) {
         match update.update {
             UpdateStage::Start => {
-                // If we are already past the stage, don't roll back
-                if self.stage > update.stage {
+                // If we are already past the stage, don't roll back, but allow a fresh build to update.
+                if self.stage > update.stage && self.stage < Stage::Finished {
                     return;
                 }
                 self.stage = update.stage;

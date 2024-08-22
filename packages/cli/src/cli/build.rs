@@ -28,12 +28,12 @@ pub struct TargetArgs {
     pub features: Vec<String>,
 
     /// The feature to use for the client in a fullstack app [default: "web"]
-    #[clap(long, default_value_t = { "web".to_string() })]
-    pub client_feature: String,
+    #[clap(long)]
+    pub client_feature: Option<String>,
 
     /// The feature to use for the server in a fullstack app [default: "server"]
-    #[clap(long, default_value_t = { "server".to_string() })]
-    pub server_feature: String,
+    #[clap(long)]
+    pub server_feature: Option<String>,
 
     /// Rustc platform triple
     #[clap(long)]
@@ -108,7 +108,7 @@ impl Build {
 
     pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         self.resolve(dioxus_crate)?;
-        let build_requests = BuildRequest::create(false, dioxus_crate, self.clone());
+        let build_requests = BuildRequest::create(false, dioxus_crate, self.clone())?;
         BuildRequest::build_all_parallel(build_requests).await?;
         Ok(())
     }
@@ -120,7 +120,47 @@ impl Build {
         Ok(())
     }
 
+    pub(crate) fn auto_detect_client_platform(
+        &self,
+        resolved: &DioxusCrate,
+    ) -> (Option<String>, TargetPlatform) {
+        self.find_dioxus_feature(resolved, |platform| {
+            matches!(platform, TargetPlatform::Web | TargetPlatform::Desktop)
+        })
+        .unwrap_or_else(|| (Some("web".to_string()), TargetPlatform::Web))
+    }
+
+    pub(crate) fn auto_detect_server_feature(&self, resolved: &DioxusCrate) -> Option<String> {
+        self.find_dioxus_feature(resolved, |platform| {
+            matches!(platform, TargetPlatform::Server)
+        })
+        .map(|(feature, _)| feature)
+        .unwrap_or_else(|| Some("server".to_string()))
+    }
+
     fn auto_detect_platform(&self, resolved: &DioxusCrate) -> Platform {
+        self.auto_detect_platform_with_filter(resolved, |_| true).1
+    }
+
+    fn auto_detect_platform_with_filter(
+        &self,
+        resolved: &DioxusCrate,
+        filter_platform: fn(&Platform) -> bool,
+    ) -> (Option<String>, Platform) {
+        self.find_dioxus_feature(resolved, filter_platform)
+            .unwrap_or_else(|| {
+                let default_platform = resolved.dioxus_config.application.default_platform;
+
+                (Some(default_platform.to_string()), default_platform)
+            })
+    }
+
+    fn find_dioxus_feature<P: FromStr>(
+        &self,
+        resolved: &DioxusCrate,
+        filter_platform: fn(&P) -> bool,
+    ) -> Option<(Option<String>, P)> {
+        // First check the enabled features for any renderer enabled
         for dioxus in resolved.krates.krates_by_name("dioxus") {
             let Some(features) = resolved.krates.get_enabled_features(dioxus.kid) else {
                 continue;
@@ -128,13 +168,34 @@ impl Build {
 
             if let Some(platform) = features
                 .iter()
-                .find_map(|platform| platform.parse::<Platform>().ok())
+                .find_map(|platform| platform.parse::<P>().ok())
+                .filter(filter_platform)
             {
-                return platform;
+                return Some((None, platform));
             }
         }
 
-        resolved.dioxus_config.application.default_platform
+        // Then check the features that might get enabled
+        if let Some(platform) = resolved
+            .package()
+            .features
+            .iter()
+            .find_map(|(feature, enables)| {
+                enables
+                    .iter()
+                    .find_map(|f| {
+                        f.strip_prefix("dioxus/")
+                            .or_else(|| feature.strip_prefix("dep:dioxus/"))
+                            .and_then(|f| f.parse::<P>().ok())
+                            .filter(filter_platform)
+                    })
+                    .map(|platform| (Some(feature.clone()), platform))
+            })
+        {
+            return Some(platform);
+        }
+
+        None
     }
 
     /// Get the platform from the build arguments

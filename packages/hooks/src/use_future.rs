@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-use crate::{use_callback, use_hook_did_run, use_signal, UseCallback};
+use crate::{use_callback, use_hook_did_run, use_signal};
 use dioxus_core::prelude::*;
 use dioxus_signals::*;
 use std::future::Future;
@@ -82,7 +82,7 @@ where
 pub struct UseFuture {
     task: CopyValue<Task>,
     state: Signal<UseFutureState>,
-    callback: UseCallback<(), Task>,
+    callback: Callback<(), Task>,
 }
 
 /// A signal that represents the state of a future

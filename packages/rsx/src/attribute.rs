@@ -174,7 +174,9 @@ impl Attribute {
         let element_name = self.el_name.as_ref().unwrap();
         let rust_name = match element_name {
             ElementName::Ident(i) => i.to_string(),
-            ElementName::Custom(s) => return (intern(s.value()), None),
+            // If this is a web component, just use the name of the elements instead of mapping the attribute
+            // through the hot reloading context
+            ElementName::Custom(_) => return (intern(attribute_name_rust.as_str()), None),
         };
 
         Ctx::map_attribute(&rust_name, &attribute_name_rust)

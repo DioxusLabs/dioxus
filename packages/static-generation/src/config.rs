@@ -172,7 +172,7 @@ impl Config {
         }
         let cfg = cfg_builder.build();
 
-        FullstackHTMLTemplate::new(&cfg)
+        FullstackHTMLTemplate::new(&cfg.unwrap())
     }
 
     pub(crate) fn create_cache(&mut self) -> dioxus_ssr::incremental::IncrementalRenderer {

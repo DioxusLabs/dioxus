@@ -194,22 +194,6 @@ impl DioxusCrate {
             .join(&self.dioxus_config.application.out_dir)
     }
 
-    /// Compose an out directory for the fullstack platform. See `out_dir()`
-    /// method.
-    pub fn fullstack_out_dir(&self) -> PathBuf {
-        self.workspace_dir().join(".dioxus")
-    }
-
-    /// Compose a target directory for the server (fullstack-only?).
-    pub fn server_target_dir(&self) -> PathBuf {
-        self.fullstack_out_dir().join("ssr")
-    }
-
-    /// Compose a target directory for the client (fullstack-only?).
-    pub fn client_target_dir(&self) -> PathBuf {
-        self.fullstack_out_dir().join("web")
-    }
-
     /// Get the workspace directory for the crate
     pub fn workspace_dir(&self) -> PathBuf {
         self.krates.workspace_root().as_std_path().to_path_buf()

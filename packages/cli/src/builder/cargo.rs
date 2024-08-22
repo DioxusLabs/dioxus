@@ -254,6 +254,7 @@ impl BuildRequest {
         match self.build_arguments.platform {
             Some(Platform::Fullstack | Platform::StaticGeneration) => match self.target_platform {
                 TargetPlatform::Web => out_dir.join("public"),
+                TargetPlatform::Desktop => out_dir.join("desktop"),
                 _ => out_dir,
             },
             _ => out_dir,

@@ -418,7 +418,6 @@ impl SSRState {
 }
 
 /// The template that wraps the body of the HTML for a fullstack page. This template contains the data needed to hydrate server functions that were run on the server.
-#[derive(Default)]
 pub struct FullstackHTMLTemplate {
     cfg: ServeConfig,
 }
