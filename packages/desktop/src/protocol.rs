@@ -100,8 +100,8 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
             .body(std::fs::read(asset)?)?);
     }
 
-    // todo: we want to move the custom assets onto a different protocol or something
-    // if let Some(name) = path.iter().next().unwrap().to_str() {
+    // // todo: we want to move the custom assets onto a different protocol or something
+    // if let Some(name) = asset.iter().next().unwrap().to_str() {
     //     if asset_handlers.has_handler(name) {
     //         return asset_handlers.handle_request(name, request, responder);
     //     }

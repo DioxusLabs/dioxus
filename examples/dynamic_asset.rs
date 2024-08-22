@@ -15,18 +15,17 @@ fn main() {
 
 fn app() -> Element {
     use_asset_handler("logos", |request, response| {
-        todo!()
-        // // We get the original path - make sure you handle that!
-        // if request.uri().path() != "/logos/logo.png" {
-        //     return;
-        // }
+        // We get the original path - make sure you handle that!
+        if request.uri().path() != "/logos/logo.png" {
+            return;
+        }
 
-        // response.respond(Response::new(include_bytes!("./assets/logo.png").to_vec()));
+        response.respond(Response::new(include_bytes!("./assets/logo.png").to_vec()));
     });
 
     rsx! {
         document::Stylesheet { href: STYLE }
         h1 { "Dynamic Assets" }
-        img { src: "custom://logos/logo.png" }
+        img { src: "/logos/logo.png" }
     }
 }

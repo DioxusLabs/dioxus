@@ -5,12 +5,9 @@ use crate::{
     ipc::UserWindowEvent,
     shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
     webview::WebviewInstance,
-    AssetRequest, Config, WryEventHandler,
+    Config, WryEventHandler,
 };
-use dioxus_core::{
-    prelude::{current_scope_id, ScopeId},
-    VirtualDom,
-};
+use dioxus_core::{prelude::ScopeId, VirtualDom};
 use dioxus_document::Eval;
 use std::rc::{Rc, Weak};
 use tao::{
@@ -18,7 +15,7 @@ use tao::{
     event_loop::EventLoopWindowTarget,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
-use wry::{RequestAsyncResponder, WebView};
+use wry::WebView;
 
 #[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
@@ -221,33 +218,6 @@ impl DesktopService {
     /// Remove all global shortcuts
     pub fn remove_all_shortcuts(&self) {
         self.shared.shortcut_manager.remove_all()
-    }
-
-    /// Provide a callback to handle asset loading yourself.
-    /// If the ScopeId isn't provided, defaults to a global handler.
-    /// Note that the handler is namespaced by name, not ScopeId.
-    ///
-    /// When the component is dropped, the handler is removed.
-    ///
-    /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
-    pub fn register_asset_handler(
-        &self,
-        name: String,
-        handler: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
-        scope: Option<ScopeId>,
-    ) {
-        self.asset_handlers.register_handler(
-            name,
-            handler,
-            scope.unwrap_or(current_scope_id().unwrap_or(ScopeId(0))),
-        )
-    }
-
-    /// Removes an asset handler by its identifier.
-    ///
-    /// Returns `None` if the handler did not exist.
-    pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
-        self.asset_handlers.remove_handler(name).map(|_| ())
     }
 
     /// Eval a javascript string into the current document
