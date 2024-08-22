@@ -222,7 +222,7 @@ impl DesktopService {
 
     /// Eval a javascript string into the current document
     pub fn eval(&self, js: String) -> Eval {
-        todo!()
+        dioxus_document::Document::eval(self, js)
     }
 
     /// Push an objc view to the window

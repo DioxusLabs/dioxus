@@ -1,36 +1,34 @@
+use crate::DesktopService;
+use dioxus_document::{Document, Eval, EvalError};
 use std::sync::{Arc, Mutex};
 
-use crate::DesktopContext;
-use dioxus_document::{Document, Eval, EvalError};
-
-/// Represents the desktop-target's provider of evaluators.
-pub struct DesktopDocument {
-    pub(crate) cx: DesktopContext,
-}
-
-impl DesktopDocument {
-    pub fn new(desktop_ctx: DesktopContext) -> Self {
-        Self { cx: desktop_ctx }
+impl Document for DesktopService {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
-}
 
-impl Document for DesktopDocument {
+    fn set_title(&self, title: String) {
+        self.window.set_title(&title);
+    }
+
     fn eval(&self, js: String) -> Eval {
         let (tx, eval) = Eval::from_parts();
 
         // Dumb wry has a signature of Fn instead of FnOnce, meaning we need to put the callback in a closure
         // that uses rwlock + option to make sure we don't run the callback twice
-        let _tx = Arc::new(Mutex::new(Some(tx)));
-        let tx = _tx.clone();
-        let callback = move |res| {
-            if let Some(tx) = tx.lock().unwrap().take() {
-                let _ = tx.send(Ok(res));
+        let tx = Arc::new(Mutex::new(Some(tx)));
+        let callback = {
+            let tx = tx.clone();
+            move |res| {
+                if let Some(tx) = tx.lock().unwrap().take() {
+                    let _ = tx.send(Ok(res));
+                }
             }
         };
 
-        let res = self.cx.webview.evaluate_script_with_callback(&js, callback);
+        let res = self.webview.evaluate_script_with_callback(&js, callback);
         if let Err(err) = res {
-            _ = _tx
+            _ = tx
                 .lock()
                 .unwrap()
                 .take()
@@ -41,20 +39,26 @@ impl Document for DesktopDocument {
         eval
     }
 
-    fn set_title(&self, title: String) {
-        self.cx.window.set_title(&title);
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn create_head_element(
         &self,
         name: &str,
         attributes: Vec<(&str, String)>,
         contents: Option<String>,
     ) {
-        todo!("create the head element stuff")
+        let contents = contents.unwrap_or_default();
+        let attr_iter = attributes
+            .into_iter()
+            .map(|(name, value)| format!(r#"element.setAttribute("{name}", "{value}");"#))
+            .collect::<Vec<_>>()
+            .join("");
+
+        self.eval(format!(
+            r#"
+            let element = document.createElement("{name}");
+            {attr_iter}
+            element.innerHTML = "{contents}";
+            document.head.appendChild(element);
+            "#,
+        ));
     }
 }

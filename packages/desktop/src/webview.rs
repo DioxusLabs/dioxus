@@ -3,7 +3,7 @@ use crate::file_upload::DesktopFileDragEvent;
 use crate::file_upload::NativeFileEngine;
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::WryQueue,
+    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
     DesktopContext, DesktopService,
 };
@@ -328,6 +328,8 @@ impl WebviewInstance {
             None
         };
 
+        // The context will function as both the document and the context provider
+        // But we need to disambiguate the types for rust's TypeId to downcast Rc<dyn Document> properly
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
@@ -335,13 +337,14 @@ impl WebviewInstance {
             asset_handlers,
             file_hover,
         ));
+        let as_document: Rc<dyn Document> = desktop_context.clone() as Rc<dyn Document>;
 
         // Provide the desktop context to the virtual dom and edit handler
         edits.set_desktop_context(desktop_context.clone());
-        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
+
         dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
-            ScopeId::ROOT.provide_context(provider);
+            ScopeId::ROOT.provide_context(as_document);
         });
 
         WebviewInstance {

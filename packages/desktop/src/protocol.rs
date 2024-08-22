@@ -1,13 +1,7 @@
 use crate::{assets::*, webview::WebviewEdits};
-// use dioxus_document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
-use serde::Deserialize;
-use std::{
-    path::{Component, Path, PathBuf},
-    process::Command,
-    sync::OnceLock,
-};
+use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
@@ -60,6 +54,14 @@ pub(super) fn desktop_handler(
         return edit_state.handle_event(request, responder);
     }
 
+    // todo: we want to move the custom assets onto a different protocol or something
+    if let Some(name) = request.uri().path().split('/').next() {
+        if asset_handlers.has_handler(name) {
+            let _name = name.to_string();
+            return asset_handlers.handle_request(&_name, request, responder);
+        }
+    }
+
     match serve_asset(request) {
         Ok(res) => responder.respond(res),
         Err(_e) => responder.respond(
@@ -94,18 +96,13 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
 
     // If the asset exists, then we can serve it!
     if asset.exists() {
+        let mime_type = get_mime_from_path(&asset);
+        println!("mime type: {:?} for {:?}", mime_type, asset);
         return Ok(Response::builder()
-            .header("Content-Type", get_mime_from_path(&asset)?)
+            .header("Content-Type", mime_type?)
             .header("Access-Control-Allow-Origin", "*")
             .body(std::fs::read(asset)?)?);
     }
-
-    // // todo: we want to move the custom assets onto a different protocol or something
-    // if let Some(name) = asset.iter().next().unwrap().to_str() {
-    //     if asset_handlers.has_handler(name) {
-    //         return asset_handlers.handle_request(name, request, responder);
-    //     }
-    // }
 
     return Ok(Response::builder()
         .status(StatusCode::NOT_FOUND)
@@ -156,41 +153,6 @@ fn index_request(
         .header("Access-Control-Allow-Origin", "*")
         .body(index.into())
         .ok()
-}
-
-fn resolve_resource(path: &Path) -> PathBuf {
-    let mut base_path = get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap());
-
-    // println!("asset path: {:?}, {path:?}", base_path);
-    base_path.push(path);
-    // println!("asset path resolved: {:?}", base_path);
-
-    // // Even in dev mode, mobile needs to resolve the asset path from the bundle
-    // if running_in_dev_mode() || cfg!(any(target_os = "ios", target_os = "android")) {
-    //     base_path.push(path);
-    //     // Special handler for Manganis filesystem fallback.
-    //     // We need this since Manganis provides assets from workspace root.
-    //     if !base_path.exists() {
-    //         let workspace_root = get_workspace_root_from_cargo();
-    //         let asset_path = workspace_root.join(path);
-    //         return asset_path;
-    //     }
-    // } else {
-    //     let mut resource_path = PathBuf::new();
-    //     for component in path.components() {
-    //         // Tauri-bundle inserts special path segments for abnormal component paths
-    //         match component {
-    //             Component::Prefix(_) => {}
-    //             Component::RootDir => resource_path.push("_root_"),
-    //             Component::CurDir => {}
-    //             Component::ParentDir => resource_path.push("_up_"),
-    //             Component::Normal(p) => resource_path.push(p),
-    //         }
-    //     }
-    //     base_path.push(resource_path);
-    // }
-
-    base_path
 }
 
 /// Construct the inline script that boots up the page and bridges the webview with rust code.
@@ -257,34 +219,37 @@ fn get_asset_root() -> Option<PathBuf> {
 }
 
 /// Get the mime type from a path-like string
-fn get_mime_from_path(trimmed: &Path) -> Result<&'static str> {
-    if trimmed.extension().is_some_and(|ext| ext == "svg") {
+fn get_mime_from_path(asset: &Path) -> Result<&'static str> {
+    if asset.extension().is_some_and(|ext| ext == "svg") {
         return Ok("image/svg+xml");
     }
 
-    match infer::get_from_path(trimmed)?.map(|f| f.mime_type()) {
+    match infer::get_from_path(asset)?.map(|f| f.mime_type()) {
         Some(f) if f != "text/plain" => Ok(f),
-        _ => Ok(get_mime_by_ext(trimmed)),
+        _other => Ok(get_mime_by_ext(asset)),
     }
 }
 
 /// Get the mime type from a URI using its extension
 fn get_mime_by_ext(trimmed: &Path) -> &'static str {
     match trimmed.extension().and_then(|e| e.to_str()) {
+        // The common assets are all utf-8 encoded
+        Some("js") => "text/javascript; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
+        Some("svg") => "image/svg+xml; charset=utf-8",
+        Some("html") => "text/html; charset=utf-8",
+
+        // the rest... idk? probably not
+        Some("mjs") => "text/javascript; charset=utf-8",
         Some("bin") => "application/octet-stream",
-        Some("css") => "text/css",
         Some("csv") => "text/csv",
-        Some("html") => "text/html",
         Some("ico") => "image/vnd.microsoft.icon",
-        Some("js") => "text/javascript",
-        Some("json") => "application/json",
         Some("jsonld") => "application/ld+json",
-        Some("mjs") => "text/javascript",
         Some("rtf") => "application/rtf",
-        Some("svg") => "image/svg+xml",
         Some("mp4") => "video/mp4",
         // Assume HTML when a TLD is found for eg. `dioxus:://dioxuslabs.app` | `dioxus://hello.com`
-        Some(_) => "text/html",
+        Some(_) => "text/html; charset=utf-8",
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
         // using octet stream according to this:
         None => "application/octet-stream",
