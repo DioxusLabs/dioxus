@@ -11,6 +11,7 @@ use dioxus_core::{
     prelude::{current_scope_id, ScopeId},
     VirtualDom,
 };
+use dioxus_document::Eval;
 use std::rc::{Rc, Weak};
 use tao::{
     event::Event,
@@ -55,8 +56,6 @@ pub struct DesktopService {
 
     pub(crate) shared: Rc<SharedContext>,
 
-    /// The receiver for queries about the current window
-    pub(super) query: QueryEngine,
     pub(crate) asset_handlers: AssetHandlerRegistry,
     pub(crate) file_hover: NativeFileHover,
 
@@ -87,7 +86,6 @@ impl DesktopService {
             shared,
             asset_handlers,
             file_hover,
-            query: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -250,6 +248,11 @@ impl DesktopService {
     /// Returns `None` if the handler did not exist.
     pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
         self.asset_handlers.remove_handler(name).map(|_| ())
+    }
+
+    /// Eval a javascript string into the current document
+    pub fn eval(&self, js: String) -> Eval {
+        todo!()
     }
 
     /// Push an objc view to the window

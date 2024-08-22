@@ -14,6 +14,9 @@ pub enum UserWindowEvent {
     /// Poll the virtualdom
     Poll(WindowId),
 
+    /// Handle an ipc message eminating from the window.postMessage of a given webview
+    Ipc { id: WindowId, msg: IpcMessage },
+
     /// Handle a hotreload event, basically telling us to update our templates
     #[cfg(all(feature = "devtools", debug_assertions))]
     HotReloadEvent(dioxus_devtools::DevserverMsg),
@@ -41,8 +44,6 @@ pub struct IpcMessage {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum IpcMethod<'a> {
     FileDialog,
-    UserEvent,
-    Query,
     BrowserOpen,
     Initialize,
     Other(&'a str),
@@ -52,8 +53,6 @@ impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod {
         match self.method.as_str() {
             "file_dialog" => IpcMethod::FileDialog,
-            "user_event" => IpcMethod::UserEvent,
-            "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,
             "initialize" => IpcMethod::Initialize,
             _ => IpcMethod::Other(&self.method),

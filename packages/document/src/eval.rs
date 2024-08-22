@@ -29,4 +29,9 @@ impl Eval {
             .await
             .map_err(|_| EvalError::Communication("eval channel closed".to_string()))?
     }
+
+    pub async fn recv_as<T: serde::de::DeserializeOwned>(self) -> Result<T, EvalError> {
+        let res = self.recv().await?;
+        serde_json::from_str(&res).map_err(|e| EvalError::Deserialization(e))
+    }
 }

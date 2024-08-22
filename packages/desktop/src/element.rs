@@ -1,7 +1,7 @@
 use dioxus_core::ElementId;
 use dioxus_html::{
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
-    MountedResult, RenderedElementBacking,
+    MountedResult, RenderedElementBacking, ScrollBehavior,
 };
 
 use crate::desktop_context::DesktopContext;
@@ -15,127 +15,116 @@ pub struct DesktopElement {
 
 impl DesktopElement {
     pub(crate) fn new(id: ElementId, webview: DesktopContext) -> Self {
-        Self { id, webview, query }
+        Self { id, webview }
     }
 }
 
-macro_rules! scripted_getter {
-    ($meth_name:ident, $script:literal, $output_type:path) => {
-        fn $meth_name(
-            &self,
-        ) -> std::pin::Pin<
-            Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<$output_type>>>,
-        > {
-            let script = format!($script, id = self.id.0);
-
-            let fut = self
-                .query
-                .new_query::<Option<$output_type>>(&script, self.webview.clone())
-                .resolve();
-            Box::pin(async move {
-                match fut.await {
-                    Ok(Some(res)) => Ok(res),
-                    Ok(None) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                        Box::new(DesktopQueryError::FailedToQuery),
-                    )),
-                    Err(err) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                        Box::new(err),
-                    )),
-                }
-            })
-        }
-    };
-}
+pub type EvalFuture<T> = std::pin::Pin<Box<dyn std::future::Future<Output = MountedResult<T>>>>;
 
 impl RenderedElementBacking for DesktopElement {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    scripted_getter!(
-        get_scroll_offset,
-        "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]",
-        PixelsVector2D
-    );
-
-    scripted_getter!(
-        get_scroll_size,
-        "return [window.interpreter.getScrollWidth({id}), window.interpreter.getScrollHeight({id})]",
-        PixelsSize
-    );
-
-    scripted_getter!(
-        get_client_rect,
-        "return window.interpreter.getClientRect({id});",
-        PixelsRect
-    );
-
-    fn scroll_to(
-        &self,
-        behavior: dioxus_html::ScrollBehavior,
-    ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
-        let script = format!(
-            "return window.interpreter.scrollTo({}, {});",
-            self.id.0,
-            serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
-        );
-
-        let fut = self
-            .query
-            .new_query::<bool>(&script, self.webview.clone())
-            .resolve();
-        Box::pin(async move {
-            match fut.await {
-                Ok(true) => Ok(()),
-                Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                    Box::new(DesktopQueryError::FailedToQuery),
-                )),
-                Err(err) => {
-                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
-                }
-            }
-        })
+    fn get_scroll_offset(&self) -> EvalFuture<PixelsVector2D> {
+        let id = self.id.0;
+        let res = self.webview.eval(format!(
+            "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]"
+        ));
+        todo!()
+        // Box::pin(res.recv_as())
+        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
     }
 
-    fn set_focus(
-        &self,
-        focus: bool,
-    ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
-        let script = format!(
-            "return window.interpreter.setFocus({}, {});",
-            self.id.0, focus
-        );
-
-        let fut = self
-            .query
-            .new_query::<bool>(&script, self.webview.clone())
-            .resolve();
-
-        Box::pin(async move {
-            match fut.await {
-                Ok(true) => Ok(()),
-                Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                    Box::new(DesktopQueryError::FailedToQuery),
-                )),
-                Err(err) => {
-                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
-                }
-            }
-        })
+    fn get_scroll_size(&self) -> EvalFuture<PixelsSize> {
+        todo!()
+        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
     }
-}
 
-#[derive(Debug)]
-enum DesktopQueryError {
-    FailedToQuery,
-}
-
-impl std::fmt::Display for DesktopQueryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DesktopQueryError::FailedToQuery => write!(f, "Failed to query the element"),
-        }
+    fn get_client_rect(&self) -> EvalFuture<PixelsRect> {
+        todo!()
+        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
     }
-}
 
-impl std::error::Error for DesktopQueryError {}
+    fn scroll_to(&self, _behavior: ScrollBehavior) -> EvalFuture<()> {
+        todo!()
+        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
+    }
+
+    fn set_focus(&self, _focus: bool) -> EvalFuture<()> {
+        todo!()
+        // Box::pin(async { Err(dioxus_html::MountedError::NotSupported) })
+    }
+
+    // scripted_getter!(
+    //     get_scroll_offset,
+    //     "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]",
+    //     PixelsVector2D
+    // );
+
+    // scripted_getter!(
+    //     get_scroll_size,
+    //     "return [window.interpreter.getScrollWidth({id}), window.interpreter.getScrollHeight({id})]",
+    //     PixelsSize
+    // );
+
+    // scripted_getter!(
+    //     get_client_rect,
+    //     "return window.interpreter.getClientRect({id});",
+    //     PixelsRect
+    // );
+
+    // fn scroll_to(
+    //     &self,
+    //     behavior: dioxus_html::ScrollBehavior,
+    // ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
+    //     let script = format!(
+    //         "return window.interpreter.scrollTo({}, {});",
+    //         self.id.0,
+    //         serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
+    //     );
+
+    //     let fut = self
+    //         .query
+    //         .new_query::<bool>(&script, self.webview.clone())
+    //         .resolve();
+    //     Box::pin(async move {
+    //         match fut.await {
+    //             Ok(true) => Ok(()),
+    //             Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+    //                 Box::new(DesktopQueryError::FailedToQuery),
+    //             )),
+    //             Err(err) => {
+    //                 MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+    //             }
+    //         }
+    //     })
+    // }
+
+    // fn set_focus(
+    //     &self,
+    //     focus: bool,
+    // ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
+    //     let script = format!(
+    //         "return window.interpreter.setFocus({}, {});",
+    //         self.id.0, focus
+    //     );
+
+    //     let fut = self
+    //         .query
+    //         .new_query::<bool>(&script, self.webview.clone())
+    //         .resolve();
+
+    //     Box::pin(async move {
+    //         match fut.await {
+    //             Ok(true) => Ok(()),
+    //             Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+    //                 Box::new(DesktopQueryError::FailedToQuery),
+    //             )),
+    //             Err(err) => {
+    //                 MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+    //             }
+    //         }
+    //     })
+    // }
+}

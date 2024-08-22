@@ -52,13 +52,16 @@ pub fn use_asset_handler(
     name: &str,
     handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
 ) {
+    let callback = use_callback(move |args: (AssetRequest, RequestAsyncResponder)| {
+        //
+        todo!()
+    });
+
     use_hook_with_cleanup(
         || {
-            crate::window().asset_handlers.register_handler(
-                name.to_string(),
-                Box::new(handler),
-                current_scope_id().unwrap(),
-            );
+            crate::window()
+                .asset_handlers
+                .register_handler(name.to_string(), callback);
 
             Rc::new(name.to_string())
         },

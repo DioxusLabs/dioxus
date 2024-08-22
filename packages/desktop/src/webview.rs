@@ -83,13 +83,12 @@ impl WebviewEdits {
             return Default::default();
         };
 
-        let query = desktop_context.query.clone();
         let recent_file = desktop_context.file_hover.clone();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, desktop_context.clone(), query);
+                let element = DesktopElement::new(element, desktop_context.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
             dioxus_html::EventData::Drag(ref drag) => {

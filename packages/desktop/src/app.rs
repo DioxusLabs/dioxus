@@ -245,18 +245,6 @@ impl App {
         }
     }
 
-    pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
-        let Ok(result) = serde_json::from_value::<QueryResult>(msg.params()) else {
-            return;
-        };
-
-        let Some(view) = self.webviews.get(&id) else {
-            return;
-        };
-
-        view.desktop_context.query.send(result);
-    }
-
     #[cfg(all(feature = "devtools", debug_assertions,))]
     pub fn handle_devserver_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
         use dioxus_devtools::DevserverMsg;
