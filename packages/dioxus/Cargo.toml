@@ -108,14 +108,14 @@ server = [
 ]
 
 [dev-dependencies]
-futures-util = { workspace = true }
-tracing = { workspace = true }
-rand = { version = "0.8.4", features = ["small_rng"] }
 criterion = { workspace = true }
-thiserror = { workspace = true }
-env_logger = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true }
+env_logger = { workspace = true }
+futures-util = { workspace = true }
+rand = { version = "0.8.4", features = ["small_rng"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 
 [[bench]]
 name = "jsframework"

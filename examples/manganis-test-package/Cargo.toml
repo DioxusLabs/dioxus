@@ -9,4 +9,3 @@ publish = false
 [dependencies]
 manganis = { workspace = true }
 test-package-dependency = { path = "./test-package-dependency", version = "0.2.1" }
-tracing-subscriber = "0.3.17"

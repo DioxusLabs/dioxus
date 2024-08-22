@@ -9407,7 +9407,6 @@ version = "0.2.1"
 dependencies = [
  "manganis",
  "test-package-dependency",
- "tracing-subscriber",
 ]
 
 [[package]]

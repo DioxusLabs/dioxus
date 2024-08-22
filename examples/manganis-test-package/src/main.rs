@@ -31,8 +31,6 @@ use test_package_dependency::*;
 // ];
 
 fn main() {
-    tracing_subscriber::fmt::init();
-
     todo!()
     // // Make sure the macro paths match with the paths that actually exist
     // for path in ALL_ASSETS {

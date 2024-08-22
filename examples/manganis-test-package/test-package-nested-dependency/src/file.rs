@@ -1,4 +1,4 @@
-use manganis::{asset, classes, Asset, ImageAsset, ImageType};
+use manganis::{asset, Asset, ImageAsset, ImageType};
 
 // const _: &str = manganis::classes!("flex flex-row p-4");
 // pub const CSS_ASSET: &str = asset!(file("/all_the_assets/style.css"));
