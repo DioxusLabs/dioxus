@@ -1,34 +1,15 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-// use css::CssAssetParser;
-// use file::FileAssetParser;
-// use folder::FolderAssetParser;
-// use font::FontAssetParser;
-// use image::ImageAssetParser;
-// use js::JsAssetParser;
-// use json::JsonAssetParser;
-// use manganis_common::cache::macro_log_file;
-// use manganis_common::{MetadataAsset, ResourceAsset, TailwindAsset};
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens};
-// use resource::ResourceAssetParser;
 use serde::Serialize;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use syn::{parse::Parse, parse_macro_input, LitStr};
-
 pub(crate) mod asset;
-// pub(crate) mod css;
-// pub(crate) mod file;
-// pub(crate) mod folder;
-// pub(crate) mod font;
-// pub(crate) mod image;
-// pub(crate) mod js;
-// pub(crate) mod json;
-// pub(crate) mod resource;
 
 static LOG_FILE_FRESH: AtomicBool = AtomicBool::new(false);
 
@@ -68,34 +49,6 @@ fn generate_link_section(asset: &impl Serialize) -> TokenStream2 {
         #[used]
         static ASSET: [u8; #len] = * #asset_bytes;
     }
-}
-
-/// Collects tailwind classes that will be included in the final binary and returns them unmodified
-///
-/// ```rust
-/// // You can include tailwind classes that will be collected into the final binary
-/// const TAILWIND_CLASSES: &str = manganis::classes!("flex flex-col p-5");
-/// assert_eq!(TAILWIND_CLASSES, "flex flex-col p-5");
-/// ```
-#[proc_macro]
-pub fn classes(input: TokenStream) -> TokenStream {
-    todo!()
-    // trace_to_file();
-
-    // let input_as_str = parse_macro_input!(input as LitStr);
-    // let input_as_str = input_as_str.value();
-
-    // let asset = TailwindAsset::new(&input_as_str);
-    // let link_section = generate_link_section(&asset);
-
-    // quote! {
-    //     {
-    //         #link_section
-    //         #input_as_str
-    //     }
-    // }
-    // .into_token_stream()
-    // .into()
 }
 
 /// The mg macro collects assets that will be included in the final binary
@@ -191,54 +144,6 @@ pub fn meta(input: TokenStream) -> TokenStream {
     // }
     // .into_token_stream()
     // .into()
-}
-
-// #[cfg(feature = "url-encoding")]
-// pub(crate) fn url_encoded_asset(
-//     file_asset: &manganis_common::ResourceAsset,
-// ) -> Result<String, syn::Error> {
-//     use base64::Engine;
-
-//     let target_directory =
-//         std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
-//     let output_folder = std::path::Path::new(&target_directory)
-//         .join("manganis")
-//         .join("assets");
-//     std::fs::create_dir_all(&output_folder).map_err(|e| {
-//         syn::Error::new(
-//             proc_macro2::Span::call_site(),
-//             format!("Failed to create output folder: {}", e),
-//         )
-//     })?;
-//     manganis_cli_support::process_file(file_asset, &output_folder).map_err(|e| {
-//         syn::Error::new(
-//             proc_macro2::Span::call_site(),
-//             format!("Failed to process file: {}", e),
-//         )
-//     })?;
-//     let file = output_folder.join(file_asset.location().unique_name());
-//     let data = std::fs::read(file).map_err(|e| {
-//         syn::Error::new(
-//             proc_macro2::Span::call_site(),
-//             format!("Failed to read file: {}", e),
-//         )
-//     })?;
-//     let data = base64::engine::general_purpose::STANDARD_NO_PAD.encode(data);
-//     let mime = manganis_common::get_mime_from_ext(file_asset.options().extension());
-//     Ok(format!("data:{mime};base64,{data}"))
-// }
-
-pub(crate) fn verify_preload_valid(ident: &Ident) -> Result<(), syn::Error> {
-    // Compile time preload is only supported for the primary package
-    if std::env::var("CARGO_PRIMARY_PACKAGE").is_err() {
-        return Err(syn::Error::new(
-            ident.span(),
-            "The `preload` option is only supported for the primary package. Libraries should not preload assets or should preload assets\
-            at runtime with utilities your framework provides",
-        ));
-    }
-
-    Ok(())
 }
 
 /// Information about the manganis link section for a given platform

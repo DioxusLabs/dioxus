@@ -28,22 +28,33 @@ dioxus-static-site-generation = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 manganis = { workspace = true, optional = true }
-
+dioxus-hot-reload = { workspace = true, optional = true }
 serde = { version = "1.0.136", optional = true }
 axum = { workspace = true, optional = true }
 
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
-dioxus-hot-reload = { workspace = true, optional = true }
-
 [features]
-default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted",  "document", "asset"]
-# default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
+default = [
+    "macro",
+    "html",
+    "hot-reload",
+    "signals",
+    "hooks",
+    "launch",
+    "mounted",
+    "document",
+    "asset",
+]
 minimal = ["macro", "html", "signals", "hooks", "launch"]
+# default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
-hot-reload = ["dep:dioxus-hot-reload", "dioxus-web?/hot_reload", "dioxus-fullstack?/hot-reload"]
+hot-reload = [
+    "dep:dioxus-hot-reload",
+    "dioxus-web?/hot_reload",
+    "dioxus-fullstack?/hot-reload",
+]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis"]
@@ -53,18 +64,48 @@ launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]
 
 # Platforms
-fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde", "dioxus-router?/fullstack"]
-desktop = ["dep:dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
-mobile = ["dep:dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
-web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
+fullstack = [
+    "dep:dioxus-fullstack",
+    "dioxus-config-macro/fullstack",
+    "dep:serde",
+    "dioxus-router?/fullstack",
+]
+desktop = [
+    "dep:dioxus-desktop",
+    "dioxus-fullstack?/desktop",
+    "dioxus-config-macro/desktop",
+]
+mobile = [
+    "dep:dioxus-mobile",
+    "dioxus-fullstack?/mobile",
+    "dioxus-config-macro/mobile",
+]
+web = [
+    "dep:dioxus-web",
+    "dioxus-fullstack?/web",
+    "dioxus-static-site-generation?/web",
+    "dioxus-config-macro/web",
+    "dioxus-router?/web",
+]
 ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
-liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
-static-generation = ["dep:dioxus-static-site-generation", "dioxus-config-macro/static-generation"]
+liveview = [
+    "dep:dioxus-liveview",
+    "dioxus-config-macro/liveview",
+    "dioxus-router?/liveview",
+]
+static-generation = [
+    "dep:dioxus-static-site-generation",
+    "dioxus-config-macro/static-generation",
+]
 axum = ["server"]
-server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
-
-# This feature just disables the no-renderer-enabled warning
-third-party-renderer = []
+server = [
+    "dioxus-fullstack?/axum",
+    "dioxus-fullstack?/server",
+    "dioxus-static-site-generation?/server",
+    "ssr",
+    "dioxus-liveview?/axum",
+    "dep:axum",
+]
 
 [dev-dependencies]
 futures-util = { workspace = true }
@@ -72,7 +113,7 @@ tracing = { workspace = true }
 rand = { version = "0.8.4", features = ["small_rng"] }
 criterion = { workspace = true }
 thiserror = { workspace = true }
-env_logger = "0.10.0"
+env_logger = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true }
 
@@ -92,5 +133,5 @@ features = [
     "html",
     "liveview",
     "static-generation",
-    "server"
+    "server",
 ]

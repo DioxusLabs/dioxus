@@ -67,7 +67,6 @@ members = [
     "examples/manganis-test-package/test-package-nested-dependency",
 
 ]
-exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
 version = "0.6.0-alpha.2"
@@ -162,6 +161,7 @@ gloo-timers = "0.3.0"
 fluent-uri = { version = "0.2.0", features = ["serde"] }
 internment = { version = "0.7.0" }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
+env_logger = "0.11.0"
 
 # desktop
 wry = { version = "0.42.0", default-features = false }

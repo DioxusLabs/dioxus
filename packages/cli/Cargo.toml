@@ -94,7 +94,7 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-core-types = { workspace = true }
 dioxus-hot-reload = { workspace = true, features = ["serve"] }
 ignore = "0.4.22"
-env_logger = "0.11.3"
+env_logger = { workspace = true }
 
 tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
 console-subscriber = { version = "0.3.0", optional = true }
