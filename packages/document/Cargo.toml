@@ -10,3 +10,4 @@ dioxus-core-macro = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+futures-channel = { workspace = true }

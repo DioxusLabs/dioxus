@@ -42,7 +42,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 UserWindowEvent::MudaMenuEvent(evnt) => app.handle_menu_event(evnt),
 
                 #[cfg(all(feature = "devtools", debug_assertions))]
-                UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
+                UserWindowEvent::HotReloadEvent(msg) => app.handle_devserver_msg(msg),
 
                 UserWindowEvent::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),

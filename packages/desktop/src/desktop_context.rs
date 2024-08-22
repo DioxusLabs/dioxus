@@ -3,7 +3,6 @@ use crate::{
     assets::AssetHandlerRegistry,
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
-    query::QueryEngine,
     shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
     webview::WebviewInstance,
     AssetRequest, Config, WryEventHandler,

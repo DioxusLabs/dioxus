@@ -1,13 +1,12 @@
+use error::EvalError;
+
 use super::*;
 use std::rc::Rc;
 
 /// A provider for document-related functionality. By default most methods are driven through [`eval`].
 pub trait Document {
     /// Create a new evaluator for the document that evaluates JavaScript and facilitates communication between JavaScript and Rust.
-    // fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>>;
-    fn eval(&self, js: String) -> Result<Eval, EvalError> {
-        todo!()
-    }
+    fn eval(&self, js: String) -> Eval;
 
     /// Set the title of the document
     fn set_title(&self, title: String) {

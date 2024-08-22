@@ -4,18 +4,17 @@ use dioxus_html::{
     MountedResult, RenderedElementBacking,
 };
 
-use crate::{desktop_context::DesktopContext, query::QueryEngine};
+use crate::desktop_context::DesktopContext;
 
 #[derive(Clone)]
 /// A mounted element passed to onmounted events
 pub struct DesktopElement {
     id: ElementId,
     webview: DesktopContext,
-    query: QueryEngine,
 }
 
 impl DesktopElement {
-    pub(crate) fn new(id: ElementId, webview: DesktopContext, query: QueryEngine) -> Self {
+    pub(crate) fn new(id: ElementId, webview: DesktopContext) -> Self {
         Self { id, webview, query }
     }
 }

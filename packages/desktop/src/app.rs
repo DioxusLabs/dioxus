@@ -3,7 +3,6 @@ use crate::{
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
-    query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
@@ -85,9 +84,9 @@ impl App {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.set_menubar_receiver();
 
-        // Allow hotreloading to work - but only in debug mode
+        // Allow hotreloading and other devtools to work - but only in debug mode
         #[cfg(all(feature = "devtools", debug_assertions))]
-        app.connect_hotreload();
+        app.connect_devtools();
 
         #[cfg(debug_assertions)]
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -136,18 +135,10 @@ impl App {
     }
 
     #[cfg(all(feature = "devtools", debug_assertions,))]
-    pub fn connect_hotreload(&self) {
+    pub fn connect_devtools(&self) {
         let proxy = self.shared.proxy.clone();
-
-        tokio::task::spawn(async move {
-            // let Some(Ok(mut receiver)) = dioxus_devtools::NativeReceiver::create_from_cli().await
-            // else {
-            //     return;
-            // };
-
-            // while let Some(Ok(msg)) = receiver.next().await {
-            //     _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            // }
+        dioxus_devtools::connect(move |msg| {
+            _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
         });
     }
 
@@ -267,7 +258,7 @@ impl App {
     }
 
     #[cfg(all(feature = "devtools", debug_assertions,))]
-    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+    pub fn handle_devserver_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
         use dioxus_devtools::DevserverMsg;
 
         match msg {
