@@ -1,6 +1,5 @@
 use std::{io::Write as _, path::PathBuf};
 
-
 fn main() {
     check_gnu();
 
@@ -17,6 +16,7 @@ fn check_gnu() {
     }
 }
 
+// todo: maybe we don't want to do this in this build script
 fn maybe_copy_doc_scrope() {
     // To prepare for a release, we add extra examples to desktop for doc scraping and copy assets from the workspace to make those examples compile
     if option_env!("DIOXUS_RELEASE").is_some() {
@@ -44,7 +44,6 @@ fn maybe_copy_doc_scrope() {
         }
     }
 }
-
 
 const EXAMPLES_TOML: &str = r#"
 # Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs

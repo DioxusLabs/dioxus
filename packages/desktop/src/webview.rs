@@ -11,7 +11,6 @@ use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
-use dioxus_interpreter_js::SynchronousEventResponse;
 use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
@@ -151,6 +150,8 @@ impl WebviewInstance {
         //
         // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
         // get a window that is not the size of the screen and weird black bars.
+        //
+        // todo: move this to our launch function that's different for desktop and mobile
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
             if cfg.window.window.inner_size.is_none() {
@@ -391,5 +392,20 @@ impl WebviewInstance {
             .desktop_context
             .webview
             .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
+    }
+}
+
+/// A synchronous response to a browser event which may prevent the default browser's action
+#[derive(serde::Serialize, Default)]
+pub struct SynchronousEventResponse {
+    #[serde(rename = "preventDefault")]
+    prevent_default: bool,
+}
+
+impl SynchronousEventResponse {
+    /// Create a new SynchronousEventResponse
+    #[allow(unused)]
+    pub fn new(prevent_default: bool) -> Self {
+        Self { prevent_default }
     }
 }

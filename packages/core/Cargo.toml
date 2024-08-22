@@ -48,7 +48,6 @@ features = [
 
 [features]
 serialize = ["dep:serde"]
-# manganis = ["dep:manganis"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

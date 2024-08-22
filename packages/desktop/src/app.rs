@@ -266,12 +266,7 @@ impl App {
         view.desktop_context.query.send(result);
     }
 
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        // not(target_os = "android"),
-        // not(target_os = "ios")
-    ))]
+    #[cfg(all(feature = "hot-reload", debug_assertions,))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
         use dioxus_hot_reload::DevserverMsg;
 

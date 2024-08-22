@@ -14,28 +14,12 @@ dioxus-rsx = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
-# dioxus-cli-config = { workspace = true, optional = true, features = ["read-config"] }
 
 serde = { version = "1", features = ["derive"] }
 
 # hot reloading serve
 tracing = { workspace = true }
 warnings.workspace = true
-
-# tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
-# notify = { workspace = true, optional = true }
-# chrono = { version = "0.4.24", default-features = false, features = ["clock"], optional = true }
-# execute = { version = "0.2.11", optional = true }
-# once_cell = { version = "1.17.0", optional = true }
-# ignore = { version = "0.4.19", optional = true }
-
-# # use rustls on android
-# [target.'cfg(target_os = "android")'.dependencies]
-# tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"] }
-
-# # use native tls on other platforms
-# [target.'cfg(not(target_os = "android"))'.dependencies]
-# tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -45,7 +29,6 @@ serde_json = "1.0.91"
 default = []
 client = ["dep:dioxus-signals"]
 serve = []
-# serve = ["dep:tokio-stream", "dep:futures-util", "dep:tokio", "dep:tokio-tungstenite", "dep:dioxus-cli-config"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
