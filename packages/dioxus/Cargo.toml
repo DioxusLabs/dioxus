@@ -56,7 +56,7 @@ devtools = [
     "dep:dioxus-devtools"
 ]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
-file_engine = ["dioxus-web?/file_engine"]
+file-engine = ["dioxus-web?/file-engine"]
 asset = ["dep:manganis"]
 document = ["dioxus-web?/document"]
 

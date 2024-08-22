@@ -18,7 +18,7 @@ use crossterm::{
     tty::IsTty,
     ExecutableCommand,
 };
-use dioxus_hot_reload::ClientMsg;
+use dioxus_devtools::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{

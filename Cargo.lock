@@ -2296,10 +2296,10 @@ dependencies = [
  "dioxus-core-macro",
  "dioxus-core-types",
  "dioxus-desktop",
+ "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack",
  "dioxus-hooks",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-liveview",
  "dioxus-mobile",
@@ -2371,7 +2371,6 @@ dependencies = [
  "dioxus-check",
  "dioxus-core",
  "dioxus-core-types",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-rsx",
  "dirs",
@@ -2488,9 +2487,9 @@ dependencies = [
  "core-foundation 0.10.0",
  "dioxus",
  "dioxus-core",
+ "dioxus-devtools",
  "dioxus-document",
  "dioxus-hooks",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",
@@ -2525,9 +2524,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-devserver-types"
+name = "dioxus-devtools"
 version = "0.6.0-alpha.2"
 dependencies = [
+ "dioxus-core",
+ "dioxus-devtools-types",
+ "dioxus-html",
+ "dioxus-rsx",
+ "dioxus-signals",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "warnings",
+]
+
+[[package]]
+name = "dioxus-devtools-types"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
  "serde",
 ]
 
@@ -2588,8 +2604,8 @@ dependencies = [
  "dioxus",
  "dioxus-core-types",
  "dioxus-desktop",
+ "dioxus-devtools",
  "dioxus-document",
- "dioxus-hot-reload",
  "dioxus-interpreter-js",
  "dioxus-lib",
  "dioxus-mobile",
@@ -2638,25 +2654,6 @@ dependencies = [
  "warnings",
  "web-sys",
 ]
-
-[[package]]
-name = "dioxus-hot-reload"
-version = "0.6.0-alpha.2"
-dependencies = [
- "dioxus-core",
- "dioxus-html",
- "dioxus-rsx",
- "dioxus-signals",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "warnings",
-]
-
-[[package]]
-name = "dioxus-hotreload-receiver"
-version = "0.6.0-alpha.2"
 
 [[package]]
 name = "dioxus-html"
@@ -2732,8 +2729,8 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-types",
+ "dioxus-devtools",
  "dioxus-document",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
  "env_logger",
@@ -2927,8 +2924,8 @@ dependencies = [
  "axum 0.7.5",
  "criterion",
  "dioxus",
+ "dioxus-devtools",
  "dioxus-fullstack",
- "dioxus-hot-reload",
  "dioxus-lib",
  "dioxus-router",
  "dioxus-ssr",
@@ -2958,8 +2955,8 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-types",
+ "dioxus-devtools",
  "dioxus-document",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",
