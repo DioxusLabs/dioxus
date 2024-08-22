@@ -48,4 +48,13 @@ impl Document for DesktopDocument {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn create_head_element(
+        &self,
+        name: &str,
+        attributes: Vec<(&str, String)>,
+        contents: Option<String>,
+    ) {
+        todo!("create the head element stuff")
+    }
 }

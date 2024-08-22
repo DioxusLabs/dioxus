@@ -10,7 +10,6 @@ pub use document::*;
 pub use error::*;
 pub use eval::*;
 pub use head::*;
-pub use title::*;
 
 /// Get the document provider for the current platform or a no-op provider if the platform doesn't document functionality.
 pub fn document() -> Rc<dyn Document> {

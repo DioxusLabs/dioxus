@@ -18,8 +18,24 @@ pub struct LiveviewDocument {
 }
 
 impl Document for LiveviewDocument {
+    fn eval(&self, js: String) -> dioxus_document::Eval {
+        todo!()
+    }
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn set_title(&self, title: String) {
+        todo!()
+    }
+
+    fn create_head_element(
+        &self,
+        name: &str,
+        attributes: Vec<(&str, String)>,
+        contents: Option<String>,
+    ) {
+        todo!()
     }
 }
 

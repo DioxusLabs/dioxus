@@ -62,9 +62,10 @@ pub fn launch(
     #[cfg(feature = "document")]
     let factory = move || {
         let mut vdom = factory();
-        let document = std::rc::Rc::new(crate::document::web::FullstackWebDocument)
-            as std::rc::Rc<dyn dioxus_document::Document>;
-        vdom.provide_root_context(document);
+        todo!("Fullstack web document???");
+        // let document = std::rc::Rc::new(crate::document::web::FullstackWebDocument)
+        //     as std::rc::Rc<dyn dioxus_document::Document>;
+        // vdom.provide_root_context(document);
         vdom
     };
 

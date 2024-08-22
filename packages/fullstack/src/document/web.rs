@@ -11,42 +11,35 @@ fn head_element_written_on_server() -> bool {
         .unwrap_or_default()
 }
 
-pub(crate) struct FullstackWebDocument;
+pub(crate) struct FullstackWebDocument {
+    document: WebDocument,
+}
 
 impl Document for FullstackWebDocument {
+    fn create_head_element(
+        &self,
+        name: &str,
+        attributes: Vec<(&str, String)>,
+        contents: Option<String>,
+    ) {
+        if head_element_written_on_server() {
+            return;
+        }
+
+        self.document
+            .create_head_element(name, attributes, contents);
+    }
+
     fn set_title(&self, title: String) {
         if head_element_written_on_server() {
             return;
         }
-        WebDocument.set_title(title);
+
+        self.document.set_title(title);
     }
 
-    fn create_meta(&self, props: MetaProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.create_meta(props);
-    }
-
-    fn create_script(&self, props: ScriptProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.create_script(props);
-    }
-
-    fn create_style(&self, props: StyleProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.create_style(props);
-    }
-
-    fn create_link(&self, props: LinkProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.create_link(props);
+    fn eval(&self, js: String) -> dioxus_document::Eval {
+        self.document.eval(js)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

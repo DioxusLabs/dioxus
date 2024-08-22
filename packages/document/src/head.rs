@@ -123,7 +123,7 @@ pub struct MetaProps {
 }
 
 impl MetaProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(property) = &self.property {
             attributes.push(("property", property.clone()));
@@ -196,7 +196,7 @@ pub struct ScriptProps {
 }
 
 impl ScriptProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(defer) = &self.defer {
             attributes.push(("defer", defer.to_string()));
@@ -286,7 +286,7 @@ pub struct StyleProps {
 }
 
 impl StyleProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(href) = &self.href {
             attributes.push(("href", href.clone()));
@@ -374,7 +374,7 @@ pub struct LinkProps {
 }
 
 impl LinkProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(rel) = &self.rel {
             attributes.push(("rel", rel.clone()));
