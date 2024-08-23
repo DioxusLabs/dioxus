@@ -72,7 +72,7 @@ once_cell = "1.19.0"
 
 # plugin packages
 open = "5.0.1"
-cargo-generate = "=0.21.1"
+cargo-generate = "=0.21.3"
 toml_edit = "0.22.20"
 
 # bundling
@@ -110,7 +110,7 @@ ansi-to-html = "0.2.1"
 # openssl = { version = "0.10", features = ["vendored"] }
 
 [build-dependencies]
-built = { version = "=0.7.3", features = ["git2"] }
+built = { version = "=0.7.4", features = ["git2"] }
 
 [features]
 default = []
