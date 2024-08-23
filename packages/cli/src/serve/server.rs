@@ -147,9 +147,9 @@ impl DevServer {
         let base_path = cfg.dioxus_config.web.app.base_path.clone();
         let platform = serve.platform();
 
-        let mut listener = std::net::TcpListener::bind(addr).expect("Failed to bind port");
-        listener.set_nonblocking(true);
-        let ip = listener.local_addr().unwrap();
+        let listener = std::net::TcpListener::bind(addr).expect("Failed to bind port");
+        _ = listener.set_nonblocking(true);
+        let addr = listener.local_addr().unwrap();
 
         let _server_task = tokio::spawn(async move {
             let web_config = web_config.clone();
@@ -187,7 +187,7 @@ impl DevServer {
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
             _server_task,
-            ip,
+            ip: addr,
             fullstack_port,
 
             build_status,

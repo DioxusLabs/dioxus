@@ -1,8 +1,3 @@
-use std::{
-    io::{self, BufRead},
-    net::{SocketAddr, TcpListener, ToSocketAddrs},
-};
-
 use dioxus_core::{ScopeId, VirtualDom};
 pub use dioxus_devtools_types::*;
 use dioxus_signals::Writable;
@@ -32,7 +27,13 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
 /// Connect to the devserver and handle its messages with a callback.
 ///
 /// This doesn't use any form of security or protocol, so it's not safe to expose to the internet.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn connect(addr: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
+    use std::{
+        io::{self, BufRead},
+        net::{SocketAddr, TcpListener, ToSocketAddrs},
+    };
+
     std::thread::spawn(move || {
         let (mut websocket, req) = match tungstenite::connect(addr.clone()) {
             Ok((websocket, req)) => (websocket, req),
