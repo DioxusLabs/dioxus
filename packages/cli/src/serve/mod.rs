@@ -156,7 +156,7 @@ pub async fn serve_all(
             }
 
             ServeUpdate::BuildFailed { err } => {
-                tracing::error!("Build failed with err: {err}");
+                server.send_build_error(err).await;
             }
 
             ServeUpdate::BuildReady { results } => {
