@@ -111,6 +111,8 @@ impl Server {
         let addr = serve.server_arguments.address.address();
         let start_browser = serve.server_arguments.open.unwrap_or_default();
 
+        tracing::info!(dx_src = ?MessageSource::Dev, "Development server listening at http://{}", addr);
+
         // If we're serving a fullstack app, we need to find a port to proxy to
         let fullstack_port = if matches!(
             serve.build_arguments.platform(),

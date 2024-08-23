@@ -162,6 +162,7 @@ pub struct Output {
     console_size: ConsoleSize,
     scroll_position: ScrollPosition,
 
+    show_filter_menu: bool,
     more_modal_open: bool,
     anim_start: Instant,
 
@@ -257,6 +258,9 @@ impl Output {
             drag_start: None,
             drag_end: None,
             selected_lines: Vec::new(),
+
+            // Filter
+            show_filter_menu: true,
         })
     }
 
@@ -502,6 +506,10 @@ impl Output {
                         Some((self.console_size.width - 1, self.console_size.height - 1));
                 }
             }
+            Event::Key(key) if key.code == KeyCode::Char('f') => {
+                // Show filter menu and enable filter selection mode.
+                self.show_filter_menu = !self.show_filter_menu;
+            }
             Event::Resize(_width, _height) => {
                 // nothing, it should take care of itself
             }
@@ -663,10 +671,15 @@ impl Output {
             .as_mut()
             .unwrap()
             .draw(|frame| {
-                let layout = render::TuiLayout::new(frame.size());
+                // Get filter text line count
+                let frame_width = frame.size().width;
+                let filter_text = render::TuiLayout::get_filter_drawer_text(&[], String::from("something"));
+                let filter_text_line_count = filter_text.line_count(frame_width) as u16;
+
+                let layout = render::TuiLayout::new(frame.size(), self.show_filter_menu, filter_text_line_count);
                 self.console_size = layout.get_console_size();
 
-                layout.render_decor(frame);
+                layout.render_decor(frame, self.show_filter_menu);
 
                 // Render console
                 self.num_lines_wrapping =
@@ -678,6 +691,10 @@ impl Output {
                     self.drag_end,
                     &mut self.selected_lines,
                 );
+
+                if self.show_filter_menu {
+                    layout.render_filter_menu(frame, filter_text);
+                }
 
                 // Render info bar, status bar, and borders.
                 layout.render_status_bar(

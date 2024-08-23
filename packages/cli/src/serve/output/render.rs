@@ -5,6 +5,8 @@
 //! -- CONSOLE--
 //! ------------
 //! ---BORDER---
+//! {OPT DRAWER}
+//! {OPT BORDER}
 //! -STATUS BAR-
 
 use super::{BuildProgress, ConsoleSize, Message, MessageSource, NumLinesWrapping, ScrollPosition};
@@ -29,27 +31,42 @@ pub struct TuiLayout {
     _body: Rc<[Rect]>,
     /// The console where build logs are displayed.
     console: Rc<[Rect]>,
-    // The border that separates the two bars (info and status).
-    border_sep: Rect,
+    // The border that separates the console and info bars.
+    border_sep_top: Rect,
+    // The filter drawer if the drawer should be open.
+    filter_drawer: Option<Rc<[Rect]>>,
+    // The border that separates the two info bars.
+    border_sep_bottom: Rect,
     //. The status bar that displays build status, platform, versions, etc.
     status_bar: Rc<[Rect]>,
 }
 
 impl TuiLayout {
-    pub fn new(frame_size: Rect) -> Self {
+    pub fn new(frame_size: Rect, drawer_open: bool, filter_drawer_height: u16) -> Self {
+        let mut constraints = vec![
+            // Console
+            Constraint::Fill(1),
+            // Border Separator
+            Constraint::Length(1),
+            // Footer Status
+            Constraint::Length(1),
+            // Padding
+            Constraint::Length(1),
+        ];
+
+        let mut status_bar_index = 2;
+
+        if drawer_open {
+            // Insert the middle border and the filter drawer.
+            constraints.insert(2, Constraint::Length(1));
+            constraints.insert(2, Constraint::Length(filter_drawer_height));
+            status_bar_index = 4;
+        }
+
         // The full layout
         let body = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                // Console
-                Constraint::Fill(1),
-                // Border Separator
-                Constraint::Length(1),
-                // Footer Status
-                Constraint::Length(1),
-                // Padding
-                Constraint::Length(1),
-            ])
+            .constraints(constraints)
             .split(frame_size);
 
         // Build the console, where logs go.
@@ -58,35 +75,53 @@ impl TuiLayout {
             .constraints([Constraint::Fill(1)])
             .split(body[0]);
 
+        let filter_drawer = match drawer_open {
+            false => None,
+            true => Some(
+                Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Fill(1)])
+                    .split(body[2]),
+            ),
+        };
+
         // Build the status bar.
         let status_bar = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-            .split(body[2]);
+            .split(body[status_bar_index]);
 
         // Specify borders
-        let border_sep = body[1];
+        let border_sep_top = body[1];
+        let border_sep_bottom = body[3];
 
         Self {
             _body: body,
             console,
-            border_sep,
+            border_sep_top,
+            filter_drawer,
+            border_sep_bottom,
             status_bar,
         }
     }
 
     /// Render all decorations.
-    pub fn render_decor(&self, frame: &mut Frame) {
+    pub fn render_decor(&self, frame: &mut Frame, is_drawer_open: bool) {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
                 .border_style(Style::new().white()),
-            self.border_sep,
+            self.border_sep_top,
         );
 
-        // frame.render_widget(Block::new().bg(Color::DarkGray), self.body[1]);
-        // frame.render_widget(Block::new().bg(Color::DarkGray), self.body[2]);
-        // frame.render_widget(Block::new().bg(Color::DarkGray), self.body[3]);
+        if is_drawer_open {
+            frame.render_widget(
+                Block::new()
+                    .borders(Borders::TOP)
+                    .border_style(Style::new().dark_gray()),
+                self.border_sep_bottom,
+            );
+        }
     }
 
     /// Render the user's text selection and compile it into a list of lines.
@@ -415,6 +450,47 @@ impl TuiLayout {
         frame.render_widget(msg, modal);
     }
 
+    /// Render the filter drawer menu.
+    pub fn render_filter_menu(&self, frame: &mut Frame, text: Paragraph) {
+        let Some(ref filter_drawer) = self.filter_drawer else {
+            return;
+        };
+
+        let area = filter_drawer[0];
+        frame.render_widget(text, area);
+    }
+
+    /// Generate the paragraph for the filter drawer.
+    pub fn get_filter_drawer_text<'a>(_enabled_filters: &[MessageFilter], search_input: String) -> Paragraph<'a> {
+        let line = Line::from(vec![
+            Span::from("Filters: ").light_blue(),
+            Span::from("[1] ").dark_gray(),
+            Span::from("info, ").gray(),
+            Span::from("[2] ").dark_gray(),
+            Span::from("warn, ").gray(),
+            Span::from("[3] ").dark_gray(),
+            Span::from("error, ").gray(),
+            Span::from("[4] ").dark_gray(),
+            Span::from("dev, ").gray(),
+            Span::from("[5] ").dark_gray(),
+            Span::from("build, ").gray(),
+            Span::from("[6] ").dark_gray(),
+            Span::from("cargo, ").gray(),
+            Span::from("[7] ").dark_gray(),
+            Span::from("web, ").gray(),
+            Span::from("[8] ").dark_gray(),
+            Span::from("desktop, ").gray(),
+            Span::from("[9] ").dark_gray(),
+            Span::from("server").gray(),
+            Span::from(" | Search: ").gray(),
+            Span::from(search_input).dark_gray(),
+        ]);
+
+        Paragraph::new(line)
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: false })
+    }
+
     /// Returns the height of the console TUI area in number of lines.
     pub fn get_console_size(&self) -> ConsoleSize {
         ConsoleSize {
@@ -424,10 +500,28 @@ impl TuiLayout {
     }
 }
 
+/// Generate a string with a specified number of spaces.
 fn build_msg_padding(padding_len: usize) -> String {
     let mut padding = String::new();
     for _ in 0..padding_len {
         _ = write!(padding, " ");
     }
     padding
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MessageFilter {
+    // Levels
+    Info,
+    Warn,
+    Error,
+
+    // Sources
+    Dev,
+    Build,
+    Cargo,
+    Web,
+    Desktop,
+    Server,
 }
