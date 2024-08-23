@@ -61,7 +61,7 @@ pub async fn serve_all(
     // Start the first build
     builder.build()?;
 
-    let mut server = Server::start(&serve, &dioxus_crate);
+    let mut server = DevServer::start(&serve, &dioxus_crate);
     let mut watcher = Watcher::start(&serve, &dioxus_crate);
     let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
     let hotreload = serve.server_arguments.hot_reload.unwrap_or(true);
@@ -166,8 +166,7 @@ pub async fn serve_all(
 
                 // If we have a build result, open it
                 for build_result in results.iter() {
-                    let child =
-                        build_result.open(&serve.server_arguments, server.fullstack_address());
+                    let child = server.open(build_result);
 
                     match child {
                         Ok(Some(child_proc)) => builder

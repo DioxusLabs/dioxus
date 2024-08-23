@@ -17,6 +17,7 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-devtools-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+tungstenite = { version = "0.23.0" }
 
 # hot reloading serve
 tracing = { workspace = true }

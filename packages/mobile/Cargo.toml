@@ -10,12 +10,12 @@ keywords = ["dom", "ui", "gui", "react"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-dioxus-desktop = { workspace = true, features = ["tokio_runtime"] }
+dioxus-desktop = { workspace = true }
 
 [lib]
 doctest = false
-# tests suspended until package ready
 test = false
+# tests suspended until package ready
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

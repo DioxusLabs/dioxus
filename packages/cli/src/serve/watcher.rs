@@ -147,16 +147,18 @@ impl Watcher {
             self.queued_events.push(event);
         }
 
-        // if !self.queued_events.is_empty() {
-        //     return;
-        // }
+        if !self.queued_events.is_empty() {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tracing::info!("Waiting for file changes!");
+            return ServeUpdate::FilesChanged {};
+        }
 
-        // // If there are no queued events, wait for the next event
-        // if let Some(event) = self.rx.next().await {
-        //     self.queued_events.push(event);
-        // }
+        // If there are no queued events, wait for the next event
+        if let Some(event) = self.rx.next().await {
+            self.queued_events.push(event);
+        }
 
-        todo!()
+        ServeUpdate::FilesChanged {}
     }
 
     /// Deques changed files from the event queue, doing the proper intelligent filtering

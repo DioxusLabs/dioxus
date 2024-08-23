@@ -161,6 +161,9 @@ impl BuildRequest {
             std::fs::copy(res_path, &output_path)?;
         }
 
+        // Make sure we set the exeutable
+        self.executable = Some(output_path.canonicalize()?);
+
         self.copy_assets_dir()?;
 
         // If this is a web build, run web post processing steps

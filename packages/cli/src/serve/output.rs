@@ -36,7 +36,7 @@ use tokio::{
 };
 use tracing::Level;
 
-use super::{update::ServeUpdate, Builder, Server, Watcher};
+use super::{update::ServeUpdate, Builder, DevServer, Watcher};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogSource {
@@ -568,7 +568,7 @@ impl Output {
         _opts: &Serve,
         _config: &DioxusCrate,
         _build_engine: &Builder,
-        server: &Server,
+        server: &DevServer,
         _watcher: &Watcher,
     ) {
         // just drain the build logs
