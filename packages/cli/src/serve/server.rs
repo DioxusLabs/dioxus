@@ -1,6 +1,9 @@
-use crate::config::{Platform, WebHttpsConfig};
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::{next_or_pending, Serve};
+use crate::{
+    config::{Platform, WebHttpsConfig},
+    serve::update::ServeUpdate,
+};
 use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
@@ -21,7 +24,7 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::stream;
+use futures_util::{future, stream};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use hyper::header::ACCEPT;
 use hyper::HeaderMap;
@@ -240,7 +243,7 @@ impl Server {
     }
 
     /// Wait for new clients to be connected and then save them
-    pub async fn wait(&mut self) -> Option<ServerUpdate> {
+    pub async fn wait(&mut self) -> ServeUpdate {
         let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
         let mut new_build_status_socket = self.new_build_status_sockets.next();
         let mut new_message = self
@@ -256,7 +259,7 @@ impl Server {
                 if let Some(new_socket) = new_hot_reload_socket {
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
-                    return Some(ServerUpdate::NewConnection);
+                    return ServeUpdate::NewConnection;
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
@@ -271,14 +274,14 @@ impl Server {
                         _ = send_build_status_to(&self.build_status, &mut new_socket).await;
                         self.build_status_sockets.push(new_socket);
                     }
-                    return None;
+                    return future::pending::<ServeUpdate>().await;
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
             }
             (idx, message) = next_new_message => {
                 match message {
-                    Some(Ok(message)) => return Some(ServerUpdate::Message(message)),
+                    Some(Ok(message)) => return ServeUpdate::Message(message),
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
@@ -287,7 +290,7 @@ impl Server {
             }
         }
 
-        None
+        future::pending().await
     }
 
     /// Converts a `cargo` error to HTML and sends it to clients.

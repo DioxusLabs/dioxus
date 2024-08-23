@@ -1,3 +1,4 @@
+use futures_channel::mpsc::UnboundedSender;
 use toml_edit::Item;
 
 use crate::builder::Build;
@@ -6,19 +7,20 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::builder::BuildRequest;
 use std::io::Write;
 
-use super::{BuildReason, TargetPlatform};
+use super::{BuildReason, TargetPlatform, UpdateBuildProgress};
 
 impl BuildRequest {
     pub(crate) fn new_fullstack(
         config: DioxusCrate,
         build_arguments: Build,
         serve: BuildReason,
+        progress: UnboundedSender<UpdateBuildProgress>,
     ) -> Result<Vec<Self>, crate::Error> {
         initialize_profiles(&config)?;
 
         Ok(vec![
-            Self::new_client(serve, &config, &build_arguments),
-            Self::new_server(serve, &config, &build_arguments),
+            Self::new_client(serve, &config, &build_arguments, progress.clone()),
+            Self::new_server(serve, &config, &build_arguments, progress),
         ])
     }
 
@@ -28,9 +30,11 @@ impl BuildRequest {
         build: &Build,
         feature: Option<String>,
         target_platform: TargetPlatform,
+        progress: UnboundedSender<UpdateBuildProgress>,
     ) -> Self {
         let config = config.clone();
         let mut build = build.clone();
+
         // Add the server feature to the features we pass to the build
         if let Some(feature) = feature {
             build.target_args.features.push(feature);
@@ -40,15 +44,22 @@ impl BuildRequest {
         Self {
             reason: serve,
             build_arguments: build.clone(),
-            dioxus_crate: config,
+            krate: config,
             rust_flags: Default::default(),
             target_dir: None,
             target_platform,
             executable: None,
+            assets: Default::default(),
+            progress,
         }
     }
 
-    fn new_server(serve: BuildReason, config: &DioxusCrate, build: &Build) -> Self {
+    fn new_server(
+        serve: BuildReason,
+        config: &DioxusCrate,
+        build: &Build,
+        progress: UnboundedSender<UpdateBuildProgress>,
+    ) -> Self {
         let mut build = build.clone();
         if build.profile.is_none() {
             build.profile = Some(CLIENT_PROFILE.to_string());
@@ -60,10 +71,16 @@ impl BuildRequest {
             &build,
             build.target_args.server_feature.clone().or(client_feature),
             TargetPlatform::Server,
+            progress,
         )
     }
 
-    fn new_client(serve: BuildReason, config: &DioxusCrate, build: &Build) -> Self {
+    fn new_client(
+        serve: BuildReason,
+        config: &DioxusCrate,
+        build: &Build,
+        progress: UnboundedSender<UpdateBuildProgress>,
+    ) -> Self {
         let mut build = build.clone();
         if build.profile.is_none() {
             build.profile = Some(SERVER_PROFILE.to_string());
@@ -75,6 +92,7 @@ impl BuildRequest {
             &build,
             build.target_args.client_feature.clone().or(client_feature),
             client_platform,
+            progress,
         )
     }
 }

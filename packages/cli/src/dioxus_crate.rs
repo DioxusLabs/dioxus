@@ -33,6 +33,7 @@ fn load_dioxus_config(
         .as_std_path()
         .to_path_buf()
         .canonicalize()?;
+
     let workspace_path = krates
         .workspace_root()
         .as_std_path()

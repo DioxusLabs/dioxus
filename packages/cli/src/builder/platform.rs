@@ -8,7 +8,17 @@ pub enum TargetPlatform {
     Web,
     Desktop,
     Server,
+    Mobile,
     Liveview,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TargetArch {
+    Linux,
+    Mac,
+    Windows,
+    Ios,
+    Android,
 }
 
 impl FromStr for TargetPlatform {
@@ -32,6 +42,7 @@ impl std::fmt::Display for TargetPlatform {
             TargetPlatform::Desktop => write!(f, "desktop"),
             TargetPlatform::Server => write!(f, "server"),
             TargetPlatform::Liveview => write!(f, "liveview"),
+            TargetPlatform::Mobile => write!(f, "ios"),
         }
     }
 }

@@ -63,8 +63,6 @@ pub fn connect(addr: SocketAddr, mut callback: impl FnMut(DevserverMsg) + Send +
             } else {
                 eprintln!("Failed to parse message from devserver: {:?}", buf);
             }
-
-            std::thread::sleep(std::time::Duration::from_millis(100));
         }
     });
 }

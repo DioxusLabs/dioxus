@@ -136,7 +136,7 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions,))]
     pub fn connect_devtools(&self) {
-        if let Some(addr) = dioxus_runtime_config::devserver_addr() {
+        if let Some(addr) = dioxus_runtime_config::devserver_raw_addr() {
             let proxy = self.shared.proxy.clone();
             dioxus_devtools::connect(addr, move |msg| {
                 _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));

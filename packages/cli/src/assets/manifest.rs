@@ -1,7 +1,7 @@
 use manganis_core::LinkSection;
-use object::{File, Object, ObjectSection};
-use std::fs;
+use object::{Object, ObjectSection};
 use std::path::PathBuf;
+use std::{collections::HashMap, fs};
 
 // pub use railwind::warning::Warning as TailwindWarning;
 // use crate::{file::process_file, process_folder};
@@ -9,26 +9,33 @@ use std::path::PathBuf;
 
 // get the text containing all the asset descriptions
 // in the "link section" of the binary
-fn get_string_manganis(file: &File) -> Option<String> {
+fn get_string_manganis(file: &object::File) -> Option<String> {
     for section in file.sections() {
-        if let Ok(section_name) = section.name() {
-            // Check if the link section matches the asset section for one of the platforms we support. This may not be the current platform if the user is cross compiling
-            if LinkSection::ALL
-                .iter()
-                .any(|x| x.link_section == section_name)
-            {
-                let bytes = section.uncompressed_data().ok()?;
-                // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
-                return Some(
-                    std::str::from_utf8(&bytes)
-                        .ok()?
-                        .chars()
-                        .filter(|c| !c.is_control())
-                        .collect::<String>(),
-                );
-            }
+        let Ok(section_name) = section.name() else {
+            continue;
+        };
+
+        // Check if the link section matches the asset section for one of the platforms we support. This may not be the current platform if the user is cross compiling
+        let matches = LinkSection::ALL
+            .iter()
+            .any(|x| x.link_section == section_name);
+
+        if !matches {
+            continue;
         }
+
+        let bytes = section.uncompressed_data().ok()?;
+
+        // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
+        return Some(
+            std::str::from_utf8(&bytes)
+                .ok()?
+                .chars()
+                .filter(|c| !c.is_control())
+                .collect::<String>(),
+        );
     }
+
     None
 }
 
@@ -36,6 +43,7 @@ fn get_string_manganis(file: &File) -> Option<String> {
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct AssetManifest {
     pub(crate) assets: Vec<AssetType>,
+    pub(crate) asset_map: HashMap<PathBuf, AssetType>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -47,7 +55,14 @@ pub enum AssetType {
 impl AssetManifest {
     /// Creates a new asset manifest
     pub fn new(assets: Vec<AssetType>) -> Self {
-        Self { assets }
+        let mut asset_map = HashMap::new();
+        for asset in assets.iter() {
+            match asset {
+                AssetType::File(path) => asset_map.insert(path.clone(), asset.clone()),
+                AssetType::Folder(path) => asset_map.insert(path.clone(), asset.clone()),
+            };
+        }
+        Self { assets, asset_map }
     }
 
     /// Returns all assets collected from dependencies

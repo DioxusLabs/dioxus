@@ -1,25 +1,15 @@
-use super::web::install_web_build_tooling;
 use super::BuildRequest;
 use super::TargetPlatform;
-// use crate::assets::create_assets_head;
-// use crate::assets::{asset_manifest, process_assets};
-use crate::assets::AssetManifest;
-// use crate::assets::{copy_dir_to, AssetManifest};
-use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::config::Platform;
-use crate::link::LinkCommand;
 use crate::Result;
 use anyhow::Context;
-use futures_channel::mpsc::UnboundedSender;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use tokio::process::Command;
-
-type ProgressChannel = UnboundedSender<UpdateBuildProgress>;
 
 impl BuildRequest {
     /// Create a list of arguments for cargo builds
@@ -62,7 +52,7 @@ impl BuildRequest {
 
         cargo_args.append(&mut self.build_arguments.cargo_args.clone());
 
-        match self.dioxus_crate.executable_type() {
+        match self.krate.executable_type() {
             krates::cm::TargetKind::Bin => {
                 cargo_args.push("--bin".to_string());
             }
@@ -74,7 +64,7 @@ impl BuildRequest {
             }
             _ => {}
         };
-        cargo_args.push(self.dioxus_crate.executable_name().to_string());
+        cargo_args.push(self.krate.executable_name().to_string());
 
         cargo_args
     }
@@ -86,7 +76,7 @@ impl BuildRequest {
         if let Some(target_dir) = &self.target_dir {
             cmd.env("CARGO_TARGET_DIR", target_dir);
         }
-        cmd.current_dir(self.dioxus_crate.crate_dir())
+        cmd.current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi");
 
@@ -98,7 +88,7 @@ impl BuildRequest {
         Ok((cmd, cargo_args))
     }
 
-    pub(crate) async fn build(self, mut progress: ProgressChannel) -> Result<BuildRequest> {
+    pub(crate) async fn build(mut self) -> Result<BuildRequest> {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
@@ -110,7 +100,7 @@ impl BuildRequest {
 
         // If this is a web, build make sure we have the web build tooling set up
         if self.targeting_web() {
-            install_web_build_tooling(&mut progress).await?;
+            self.install_web_build_tooling().await?;
         }
 
         // Create the build command
@@ -118,19 +108,17 @@ impl BuildRequest {
 
         // Run the build command with a pretty loader
         let crate_count = self.get_unit_count_estimate().await;
-        let cargo_result = build_cargo(crate_count, cmd, &mut progress).await?;
+        let cargo_result = self.build_cargo(crate_count, cmd).await?;
 
         // Post process the build result
-        self.post_process_build(cargo_args, &cargo_result, &mut progress)
+        self.post_process_build(cargo_args, &cargo_result)
             .await
             .context("Failed to post process build")?;
 
-        tracing::info!(
-            "🚩 Build completed: [{}]",
-            self.dioxus_crate.out_dir().display()
-        );
+        tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
 
-        _ = progress.start_send(UpdateBuildProgress {
+        _ = self.progress.start_send(UpdateBuildProgress {
+            platform: self.target_platform,
             stage: Stage::Finished,
             update: UpdateStage::Start,
         });
@@ -139,19 +127,19 @@ impl BuildRequest {
     }
 
     async fn post_process_build(
-        &self,
+        &mut self,
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> Result<()> {
-        _ = progress.start_send(UpdateBuildProgress {
+        _ = self.progress.start_send(UpdateBuildProgress {
             stage: Stage::OptimizingAssets,
             update: UpdateStage::Start,
+            platform: self.target_platform,
         });
 
-        let assets = self.collect_assets(cargo_args, progress).await?;
+        self.collect_assets(cargo_args).await?;
 
-        let file_name = self.dioxus_crate.executable_name();
+        let file_name = self.krate.executable_name();
 
         // Move the final output executable into the dist folder
         let out_dir = self.target_out_dir();
@@ -177,8 +165,7 @@ impl BuildRequest {
 
         // If this is a web build, run web post processing steps
         if self.targeting_web() {
-            self.post_process_web_build(assets.as_ref(), progress)
-                .await?;
+            self.post_process_web_build().await?;
         }
 
         Ok(())
@@ -186,7 +173,7 @@ impl BuildRequest {
 
     /// Get the output directory for a specific built target
     pub fn target_out_dir(&self) -> PathBuf {
-        let out_dir = self.dioxus_crate.out_dir();
+        let out_dir = self.krate.out_dir();
         match self.build_arguments.platform {
             Some(Platform::Fullstack | Platform::StaticGeneration) => match self.target_platform {
                 TargetPlatform::Web => out_dir.join("public"),

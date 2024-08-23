@@ -36,7 +36,7 @@ use tokio::{
 };
 use tracing::Level;
 
-use super::{Builder, Server, Watcher};
+use super::{update::ServeUpdate, Builder, Server, Watcher};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogSource {
@@ -238,7 +238,7 @@ impl Output {
     /// Why is the ctrl_c handler here?
     ///
     /// Also tick animations every few ms
-    pub async fn wait(&mut self) -> io::Result<bool> {
+    pub async fn wait(&mut self) -> io::Result<ServeUpdate> {
         fn ok_and_some<F, T, E>(f: F) -> impl Future<Output = T>
         where
             F: Future<Output = Result<Option<T>, E>>,
@@ -302,12 +302,12 @@ impl Output {
 
             event = user_input => {
                 if self.handle_events(event).await? {
-                    return Ok(true)
+                    return Ok(ServeUpdate::TuiInput { rebuild: true });
                 }
             }
         }
 
-        Ok(false)
+        Ok(ServeUpdate::TuiInput { rebuild: false })
     }
 
     pub fn shutdown(&mut self) -> io::Result<()> {

@@ -1,10 +1,9 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
 use super::{BuildReason, BuildRequest, UpdateBuildProgress};
+use crate::builder::progress::MessageSource;
 use crate::builder::Stage;
 use crate::Result;
-use crate::{assets::AssetManifest, builder::progress::MessageSource};
-use futures_channel::mpsc::UnboundedSender;
 
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -14,15 +13,11 @@ const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 const TOAST_HTML: &str = include_str!("../../assets/toast.html");
 
 impl BuildRequest {
-    pub(crate) fn prepare_html(
-        &self,
-        assets: Option<&AssetManifest>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
-    ) -> Result<String> {
-        let mut html = html_or_default(&self.dioxus_crate.crate_dir());
+    pub(crate) fn prepare_html(&mut self) -> Result<String> {
+        let mut html = html_or_default(&self.krate.crate_dir());
 
         // Inject any resources from the config into the html
-        self.inject_resources(&mut html, assets, progress)?;
+        self.inject_resources(&mut html)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
@@ -30,7 +25,7 @@ impl BuildRequest {
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html);
 
-        let title = self.dioxus_crate.dioxus_config.web.app.title.clone();
+        let title = self.krate.dioxus_config.web.app.title.clone();
 
         replace_or_insert_before("{app_title}", "</title", &title, &mut html);
 
@@ -42,14 +37,9 @@ impl BuildRequest {
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(
-        &self,
-        html: &mut String,
-        assets: Option<&AssetManifest>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
-    ) -> Result<()> {
+    fn inject_resources(&mut self, html: &mut String) -> Result<()> {
         // Collect all resources into a list of styles and scripts
-        let resources = &self.dioxus_crate.dioxus_config.web.resource;
+        let resources = &self.krate.dioxus_config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
         let mut script_list = resources.script.clone().unwrap_or_default();
 
@@ -79,10 +69,10 @@ impl BuildRequest {
         }
 
         if !style_list.is_empty() {
-            self.send_resource_deprecation_warning(progress, style_list, ResourceType::Style);
+            self.send_resource_deprecation_warning(style_list, ResourceType::Style);
         }
         if !script_list.is_empty() {
-            self.send_resource_deprecation_warning(progress, script_list, ResourceType::Script);
+            self.send_resource_deprecation_warning(script_list, ResourceType::Script);
         }
 
         // Inject any resources from manganis into the head
@@ -96,7 +86,7 @@ impl BuildRequest {
     }
 
     /// Inject loading scripts if they are not already present
-    fn inject_loading_scripts(&self, html: &mut String) {
+    fn inject_loading_scripts(&mut self, html: &mut String) {
         // If it looks like we are already loading wasm or the current build opted out of injecting loading scripts, don't inject anything
         if !self.build_arguments.inject_loading_scripts || html.contains("__wbindgen_start") {
             return;
@@ -138,19 +128,14 @@ impl BuildRequest {
 
     /// Replace any special placeholders in the HTML with resolved values
     fn replace_template_placeholders(&self, html: &mut String) {
-        let base_path = self.dioxus_crate.dioxus_config.web.app.base_path();
+        let base_path = self.krate.dioxus_config.web.app.base_path();
         *html = html.replace("{base_path}", base_path);
 
-        let app_name = &self.dioxus_crate.dioxus_config.application.name;
+        let app_name = &self.krate.dioxus_config.application.name;
         *html = html.replace("{app_name}", app_name);
     }
 
-    fn send_resource_deprecation_warning(
-        &self,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
-        paths: Vec<PathBuf>,
-        variant: ResourceType,
-    ) {
+    fn send_resource_deprecation_warning(&mut self, paths: Vec<PathBuf>, variant: ResourceType) {
         const RESOURCE_DEPRECATION_MESSAGE: &str = r#"The `web.resource` config has been deprecated in favor of head components and will be removed in a future release. Instead of including assets in the config, you can include assets with the `asset!` macro and add them to the head with `document::Link` and `Script` components."#;
 
         let replacement_components = paths
@@ -162,10 +147,9 @@ impl BuildRequest {
                     // If the path is absolute, make it relative to the current directory before we join it
                     // The path is actually a web path which is relative to the root of the website
                     let path = path.strip_prefix("/").unwrap_or(path);
-                    let asset_dir_path = self.dioxus_crate.asset_dir().join(path);
+                    let asset_dir_path = self.krate.asset_dir().join(path);
                     if let Ok(absolute_path) = asset_dir_path.canonicalize() {
-                        let absolute_crate_root =
-                            self.dioxus_crate.crate_dir().canonicalize().unwrap();
+                        let absolute_crate_root = self.krate.crate_dir().canonicalize().unwrap();
                         PathBuf::from("./")
                             .join(absolute_path.strip_prefix(absolute_crate_root).unwrap())
                     } else {
@@ -189,10 +173,11 @@ impl BuildRequest {
         };
 
         let message = format!(
-        "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
-    );
+            "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
+        );
 
-        _ = progress.unbounded_send(UpdateBuildProgress {
+        _ = self.progress.unbounded_send(UpdateBuildProgress {
+            platform: self.target_platform,
             stage: Stage::OptimizingWasm,
             update: super::UpdateStage::AddMessage(super::BuildMessage {
                 level: Level::WARN,

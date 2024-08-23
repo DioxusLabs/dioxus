@@ -15,11 +15,13 @@ mod logs_tab;
 mod output;
 mod proxy;
 mod server;
+mod update;
 mod watcher;
 
 use builder::*;
 use output::*;
 use server::*;
+use update::ServeUpdate;
 use watcher::*;
 
 /// For *all* builds the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
@@ -62,8 +64,7 @@ pub async fn serve_all(
     let mut server = Server::start(&serve, &dioxus_crate);
     let mut watcher = Watcher::start(&serve, &dioxus_crate);
     let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
-
-    let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
+    let hotreload = serve.server_arguments.hot_reload.unwrap_or(true);
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
@@ -73,11 +74,20 @@ pub async fn serve_all(
         screen.render(&serve, &dioxus_crate, &builder, &server, &watcher);
 
         // And then wait for any updates before redrawing
-        tokio::select! {
-            // rebuild the project or hotreload it
-            _ = watcher.wait(), if is_hot_reload => {
+        let msg = tokio::select! {
+            msg = watcher.wait(), if hotreload => msg,
+            msg = server.wait() => msg,
+            msg = builder.wait() => msg,
+            msg = screen.wait() => match msg {
+                Ok(res) => res,
+                Err(_err) => break
+            }
+        };
+
+        match msg {
+            ServeUpdate::FilesChanged {} => {
                 if !watcher.pending_changes() {
-                    continue
+                    continue;
                 }
 
                 let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
@@ -87,7 +97,7 @@ pub async fn serve_all(
                 if let Some(hr) = watcher.attempt_hot_reload(&dioxus_crate, changed_files) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty() && hr.assets.is_empty() {
-                        continue
+                        continue;
                     }
 
                     server.send_hotreload(hr).await;
@@ -104,105 +114,109 @@ pub async fn serve_all(
                 }
             }
 
-            // reload the page
-            msg = server.wait() => {
-                // Run the server in the background
-                // Waiting for updates here lets us tap into when clients are added/removed
-                match msg {
-                    Some(ServerUpdate::NewConnection) => {
-                        if let Some(msg) = watcher.applied_hot_reload_changes() {
-                            server.send_hotreload(msg).await;
-                        }
-                    }
-                    Some(ServerUpdate::Message(msg)) => {
-                        screen.new_ws_message(TargetPlatform::Web, msg);
-                    }
-                    None => {}
+            // Run the server in the background
+            // Waiting for updates here lets us tap into when clients are added/removed
+            ServeUpdate::NewConnection => {
+                if let Some(msg) = watcher.applied_hot_reload_changes() {
+                    server.send_hotreload(msg).await;
                 }
             }
 
-            // Handle updates from the build engine
-            application = builder.wait() => {
-                // Wait for logs from the build engine
-                // These will cause us to update the screen
-                // We also can check the status of the builds here in case we have multiple ongoing builds
-                match application {
-                    Ok(BuilderUpdate::Progress { platform, update }) => {
-                        let update_clone = update.clone();
-                        screen.new_build_logs(platform, update_clone);
-                        server.update_build_status(screen.build_progress.progress(), update.stage.to_string()).await;
+            ServeUpdate::Message(msg) => {
+                screen.new_ws_message(TargetPlatform::Web, msg);
+            }
 
-                        match update {
-                            // Send rebuild start message.
-                            UpdateBuildProgress { stage: Stage::Compiling, update: UpdateStage::Start } => server.send_reload_start().await,
-                            // Send rebuild failed message.
-                            UpdateBuildProgress { stage: Stage::Finished, update: UpdateStage::Failed(_) } => server.send_reload_failed().await,
-                            _ => {},
+            // Wait for logs from the build engine
+            // These will cause us to update the screen
+            // We also can check the status of the builds here in case we have multiple ongoing builds
+            ServeUpdate::Progress { update } => {
+                let update_clone = update.clone();
+                screen.new_build_logs(update.platform, update_clone);
+                server
+                    .update_build_status(screen.build_progress.progress(), update.stage.to_string())
+                    .await;
+
+                match update {
+                    // Send rebuild start message.
+                    UpdateBuildProgress {
+                        stage: Stage::Compiling,
+                        update: UpdateStage::Start,
+                        platform: _,
+                    } => server.send_reload_start().await,
+
+                    // Send rebuild failed message.
+                    UpdateBuildProgress {
+                        stage: Stage::Finished,
+                        update: UpdateStage::Failed(_),
+                        platform: _,
+                    } => server.send_reload_failed().await,
+
+                    _ => {}
+                }
+            }
+
+            ServeUpdate::BuildFailed { err } => {
+                tracing::error!("Build failed with err: {err}");
+            }
+
+            ServeUpdate::BuildReady { results } => {
+                if !results.is_empty() {
+                    builder.children.clear();
+                }
+
+                // If we have a build result, open it
+                for build_result in results.iter() {
+                    let child =
+                        build_result.open(&serve.server_arguments, server.fullstack_address());
+
+                    match child {
+                        Ok(Some(child_proc)) => builder
+                            .children
+                            .push((build_result.target_platform, child_proc)),
+                        Err(e) => {
+                            tracing::error!("Failed to open build result: {e}");
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Make sure we immediately capture the stdout/stderr of the executable -
+                // otherwise it'll clobber our terminal output
+                screen.new_ready_app(&mut builder, results);
+
+                // And then finally tell the server to reload
+                server.send_reload_command().await;
+            }
+
+            // If the process exited *cleanly*, we can exit
+            ServeUpdate::ProcessExited {
+                status,
+                target_platform,
+            } => {
+                // Then remove the child process
+                builder
+                    .children
+                    .retain(|(platform, _)| *platform != target_platform);
+                match status {
+                    Ok(status) => {
+                        if status.success() {
+                            break;
+                        } else {
+                            tracing::error!("Application exited with status: {status}");
                         }
                     }
-                    Ok(BuilderUpdate::Ready { results }) => {
-                        if !results.is_empty() {
-                            builder.children.clear();
-                        }
-
-                        // If we have a build result, open it
-                        for build_result in results.iter() {
-                            let child = build_result.open(&dioxus_crate, &serve.server_arguments, server.fullstack_address(), &dioxus_crate.workspace_dir());
-                            match child {
-                                Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
-                                Err(e) => {
-                                    tracing::error!("Failed to open build result: {e}");
-                                    break;
-                                },
-                                _ => {}
-                            }
-                        }
-
-                        // Make sure we immediately capture the stdout/stderr of the executable -
-                        // otherwise it'll clobber our terminal output
-                        screen.new_ready_app(&mut builder, results);
-
-                        // And then finally tell the server to reload
-                        server.send_reload_command().await;
-
-                        // We also want to watch any of its assets for changes?
-                    },
-
-                    // If the process exited *cleanly*, we can exit
-                    Ok(BuilderUpdate::ProcessExited { status, target_platform }) => {
-                        // Then remove the child process
-                        builder.children.retain(|(platform, _)| *platform != target_platform);
-                        match status {
-                            Ok(status) => {
-                                if status.success() {
-                                    break;
-                                }
-                                else {
-                                    tracing::error!("Application exited with status: {status}");
-                                }
-                            },
-                            Err(e) => {
-                                tracing::error!("Application exited with error: {e}");
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        server.send_build_error(err).await;
+                    Err(e) => {
+                        tracing::error!("Application exited with error: {e}");
                     }
                 }
             }
 
-            // Handle input from the user using our settings
-            res = screen.wait() => {
-                match res {
-                    Ok(false) => {}
-                    // Request a rebuild.
-                    Ok(true) => {
-                        builder.build()?;
-                        server.start_build().await
-                    },
-                    // Shutdown the server.
-                    Err(_) => break,
+            ServeUpdate::TuiInput { rebuild } => {
+                // Request a rebuild.
+                if rebuild {
+                    builder.build()?;
+                    server.start_build().await
                 }
             }
         }

@@ -127,21 +127,10 @@ async fn launch_server(
     build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     context_providers: ContextProviders,
 ) {
-    use clap::Parser;
-
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
-    let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli();
-    let address = cli_args
-        .as_ref()
-        .map(|args| args.fullstack_address())
-        .unwrap_or_else(dioxus_cli_config::AddressArguments::parse)
-        .address();
-
-    // Point the user to the CLI address if the CLI is running or the fullstack address if not
-    let serve_address = cli_args
-        .map(|args| args.cli_address())
-        .unwrap_or_else(|| address);
+    let serve_address = dioxus_runtime_config::fullstack_address()
+        .unwrap_or_else(|| todo!("parse cli args for fullstack address"));
 
     #[cfg(feature = "axum")]
     {

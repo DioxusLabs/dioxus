@@ -1,11 +1,6 @@
-use super::web::install_web_build_tooling;
 use super::BuildRequest;
 use super::TargetPlatform;
-// use crate::assets::create_assets_head;
-// use crate::assets::{asset_manifest, process_assets};
 use crate::assets::{copy_dir_to, AssetManifest};
-// use crate::assets::{copy_dir_to, AssetManifest};
-use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
@@ -23,19 +18,20 @@ type ProgressChannel = UnboundedSender<UpdateBuildProgress>;
 
 impl BuildRequest {
     pub async fn collect_assets(
-        &self,
+        &mut self,
         cargo_args: Vec<String>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> anyhow::Result<Option<AssetManifest>> {
-        todo!("collect assets is disabled currently")
-        // // If this is the server build, the client build already copied any assets we need
-        // if self.target_platform == TargetPlatform::Server {
-        //     return Ok(None);
-        // }
-        // // If assets are skipped, we don't need to collect them
-        // if self.build_arguments.skip_assets {
-        //     return Ok(None);
-        // }
+        // If this is the server build, the client build already copied any assets we need
+        if self.target_platform == TargetPlatform::Server {
+            return Ok(None);
+        }
+
+        // If assets are skipped, we don't need to collect them
+        if self.build_arguments.skip_assets {
+            return Ok(None);
+        }
+
+        Ok(None)
 
         // // Start Manganis linker intercept.
         // let linker_args = vec![format!("{}", self.target_out_dir().display())];
@@ -65,13 +61,13 @@ impl BuildRequest {
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
         tracing::info!("Copying public assets to the output directory...");
         let out_dir = self.target_out_dir();
-        let asset_dir = self.dioxus_crate.asset_dir();
+        let asset_dir = self.krate.asset_dir();
 
         if asset_dir.is_dir() {
             // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
             let pre_compress = self.targeting_web()
                 && self
-                    .dioxus_crate
+                    .krate
                     .should_pre_compress_web_assets(self.build_arguments.release);
 
             copy_dir_to(asset_dir, out_dir, pre_compress)?;

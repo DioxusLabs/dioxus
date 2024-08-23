@@ -113,8 +113,11 @@ impl Build {
 
     pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         self.resolve(dioxus_crate)?;
-        let build_requests = BuildRequest::create(BuildReason::Build, dioxus_crate, self.clone())?;
-        BuildRequest::build_all_parallel(build_requests).await?;
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+
+        let build_requests =
+            BuildRequest::create(BuildReason::Build, dioxus_crate, self.clone(), tx)?;
+        BuildRequest::build_all_parallel(build_requests, rx).await?;
         Ok(())
     }
 

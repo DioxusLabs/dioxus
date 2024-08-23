@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 #[derive(
@@ -29,6 +28,10 @@ pub enum Platform {
     #[clap(name = "desktop")]
     #[serde(rename = "desktop")]
     Desktop,
+
+    #[clap(name = "mobile")]
+    #[serde(rename = "mobile")]
+    Mobile,
 
     /// Targeting the server platform using Axum and Dioxus-Fullstack
     #[clap(name = "fullstack")]
@@ -94,6 +97,7 @@ impl Platform {
             Platform::Fullstack => "fullstack",
             Platform::StaticGeneration => "static-generation",
             Platform::Liveview => "liveview",
+            Platform::Mobile => "mobile",
         }
     }
 }

@@ -5,7 +5,7 @@ use std::env::current_dir;
 use std::fs::create_dir_all;
 use std::ops::Deref;
 use std::str::FromStr;
-use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
+use tauri_bundler::{PackageSettings, SettingsBuilder};
 
 use super::*;
 
@@ -15,6 +15,7 @@ use super::*;
 pub struct Bundle {
     #[clap(long)]
     pub package: Option<Vec<String>>,
+
     /// The arguments for the dioxus build
     #[clap(flatten)]
     pub build_arguments: Build,

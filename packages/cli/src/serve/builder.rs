@@ -5,23 +5,23 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::serve::next_or_pending;
 use crate::serve::Serve;
 use crate::Result;
-use futures_channel::mpsc::UnboundedReceiver;
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::future::OptionFuture;
-use futures_util::stream::select_all;
 use futures_util::StreamExt;
-use std::process::{ExitStatus, Stdio};
+use std::process::Stdio;
 use tokio::{
     process::{Child, Command},
     task::JoinHandle,
 };
 
+use super::update::ServeUpdate;
+
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
     /// The results of the build
     build_results: Option<JoinHandle<Result<Vec<BuildRequest>>>>,
-
-    /// The progress of the builds
-    build_progress: Vec<(TargetPlatform, UnboundedReceiver<UpdateBuildProgress>)>,
+    tx: UnboundedSender<UpdateBuildProgress>,
+    rx: UnboundedReceiver<UpdateBuildProgress>,
 
     /// The application we are building
     config: DioxusCrate,
@@ -36,13 +36,13 @@ pub struct Builder {
 impl Builder {
     /// Create a new builder
     pub fn new(config: &DioxusCrate, serve: &Serve) -> Self {
-        let serve = serve.clone();
-        let config = config.clone();
+        let (tx, rx) = futures_channel::mpsc::unbounded();
         Self {
+            tx,
+            rx,
             build_results: None,
-            build_progress: Vec::new(),
             config: config.clone(),
-            serve,
+            serve: serve.clone(),
             children: Vec::new(),
         }
     }
@@ -50,25 +50,27 @@ impl Builder {
     /// Start a new build - killing the current one if it exists
     pub fn build(&mut self) -> Result<()> {
         self.shutdown();
+
         let build_requests = BuildRequest::create(
             BuildReason::Serve,
             &self.config,
             self.serve.build_arguments.clone(),
+            self.tx.clone(),
         )?;
 
         let mut set = tokio::task::JoinSet::new();
 
-        for mut build_request in build_requests {
-            let (mut tx, rx) = futures_channel::mpsc::unbounded();
-            self.build_progress
-                .push((build_request.target_platform, rx));
-            set.spawn(async move {
-                let res = build_request.build(tx.clone()).await;
+        for build_request in build_requests {
+            let mut tx = self.tx.clone();
 
+            set.spawn(async move {
+                let platform = build_request.target_platform.clone();
+                let res = build_request.build().await;
                 if let Err(err) = &res {
                     let _ = tx.start_send(UpdateBuildProgress {
                         stage: crate::builder::Stage::Finished,
                         update: crate::builder::UpdateStage::Failed(format!("{err}")),
+                        platform,
                     });
                 }
 
@@ -92,14 +94,9 @@ impl Builder {
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
-    pub async fn wait(&mut self) -> Result<BuilderUpdate> {
+    pub async fn wait(&mut self) -> ServeUpdate {
         // Wait for build progress
-        let mut next = select_all(
-            self.build_progress
-                .iter_mut()
-                .map(|(platform, rx)| rx.map(move |update| (*platform, update))),
-        );
-        let next = next_or_pending(next.next());
+        let next = next_or_pending(self.rx.next());
 
         // The ongoing builds directly
         let results: OptionFuture<_> = self.build_results.as_mut().into();
@@ -111,11 +108,12 @@ impl Builder {
             .children
             .iter_mut()
             .map(|(target, child)| Box::pin(async move { (*target, child.wait().await) }));
+
         let process_exited = async move {
-            if children_empty {
-                return futures_util::future::pending().await;
+            match children_empty {
+                true => return futures_util::future::pending().await,
+                false => futures_util::future::select_all(process_exited).await,
             }
-            futures_util::future::select_all(process_exited).await
         };
 
         // Wait for the next build result
@@ -124,16 +122,18 @@ impl Builder {
                 self.build_results = None;
 
                 // If we have a build result, bubble it up to the main loop
-                let build_results = build_results.map_err(|_| crate::Error::Unique("Build join failed".to_string()))??;
-
-                Ok(BuilderUpdate::Ready { results: build_results })
+                match build_results {
+                    Ok(Ok(build_results)) => ServeUpdate::BuildReady { results: build_results },
+                    Err(_ee) => ServeUpdate::BuildFailed { err: crate::Error::BuildFailed("Build join failed".to_string()) },
+                    Ok(Err(ee)) => ServeUpdate::BuildFailed { err: ee.into() },
+                }
             }
-            (platform, update) = next => {
+            update = next => {
                 // If we have a build progress, send it to the screen
-                 Ok(BuilderUpdate::Progress { platform, update })
+                 ServeUpdate::Progress { update }
             }
             ((target, exit_status), _, _) = process_exited => {
-                Ok(BuilderUpdate::ProcessExited { status: exit_status, target_platform: target })
+                ServeUpdate::ProcessExited { status: exit_status, target_platform: target }
             }
         }
     }
@@ -172,20 +172,5 @@ impl Builder {
         if let Some(tasks) = self.build_results.take() {
             tasks.abort();
         }
-        self.build_progress.clear();
     }
-}
-
-pub enum BuilderUpdate {
-    Progress {
-        platform: TargetPlatform,
-        update: UpdateBuildProgress,
-    },
-    Ready {
-        results: Vec<BuildRequest>,
-    },
-    ProcessExited {
-        target_platform: TargetPlatform,
-        status: Result<ExitStatus, std::io::Error>,
-    },
 }

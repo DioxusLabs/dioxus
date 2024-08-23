@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::{fs, path::PathBuf, time::Duration};
 
-use super::hot_reloading_file_map::HotreloadError;
+use super::{hot_reloading_file_map::HotreloadError, update::ServeUpdate};
 use crate::serve::hot_reloading_file_map::FileMap;
 use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
 use dioxus_devtools_types::HotReloadMsg;
@@ -141,20 +141,22 @@ impl Watcher {
     /// A cancel safe handle to the file watcher
     ///
     /// todo: this should be simpler logic?
-    pub async fn wait(&mut self) {
+    pub async fn wait(&mut self) -> ServeUpdate {
         // Pull off any queued events in succession
         while let Ok(Some(event)) = self.rx.try_next() {
             self.queued_events.push(event);
         }
 
-        if !self.queued_events.is_empty() {
-            return;
-        }
+        // if !self.queued_events.is_empty() {
+        //     return;
+        // }
 
-        // If there are no queued events, wait for the next event
-        if let Some(event) = self.rx.next().await {
-            self.queued_events.push(event);
-        }
+        // // If there are no queued events, wait for the next event
+        // if let Some(event) = self.rx.next().await {
+        //     self.queued_events.push(event);
+        // }
+
+        todo!()
     }
 
     /// Deques changed files from the event queue, doing the proper intelligent filtering
