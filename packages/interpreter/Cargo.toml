@@ -18,9 +18,10 @@ web-sys = { version = "0.3.56", optional = true, features = [
     "Element",
     "Node",
 ] }
-sledgehammer_bindgen = { version = "0.5.0", default-features = false, optional = true }
-sledgehammer_utils = { version = "0.2", optional = true }
+sledgehammer_bindgen = { version = "0.6.0", default-features = false, optional = true }
+sledgehammer_utils = { version = "0.3.1", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
+rustc-hash = { workspace = true, optional = true }
 
 dioxus-core = { workspace = true, optional = true }
 dioxus-core-types = { workspace = true, optional = true }
@@ -31,7 +32,7 @@ lazy-js-bundle = { workspace = true }
 [features]
 default = []
 serialize = ["dep:serde"]
-sledgehammer = ["dep:sledgehammer_bindgen", "dep:sledgehammer_utils"]
+sledgehammer = ["dep:sledgehammer_bindgen", "dep:sledgehammer_utils", "dep:rustc-hash"]
 webonly = [
     "sledgehammer",
     "dep:wasm-bindgen",
