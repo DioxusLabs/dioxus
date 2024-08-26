@@ -221,7 +221,25 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
 
 ## Running the examples
 
-The examples in the top level of this repository can be run with `cargo run --example <example>`. However, we encourage you to download the dioxus-cli and run the examples with `dx serve` since many examples also support web. When running for web, you either need to modify the Cargo.toml to disable the default desktop feature, or use
+> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.5 branch](https://github.com/DioxusLabs/dioxus/tree/v0.5/examples).
+
+The examples in the top level of this repository can be run with:
+
+```sh
+cargo run --example <example>
+```
+
+However, we encourage you to download the dioxus-cli. If you are running the git version of dioxus, you can install the matching version of the CLI with:
+
+```sh
+cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli --locked
+```
+
+With the CLI, you can also run examples with the web platform. You just need to disable the default desktop feature and enable the web feature with this command:
+
+```sh
+dx serve --example <example> --platform web -- --no-default-features
+```
 
 ## Dioxus vs other frameworks
 
