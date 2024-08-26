@@ -64,8 +64,8 @@ impl<'a> DynIdVisitor<'a> {
             BodyNode::Component(component) => {
                 self.assign_path_to_node(node);
                 let mut index = 0;
-                for property in &component.fields {
-                    if let AttributeValue::AttrLiteral(literal) = &property.value {
+                for (_, value) in component.component_props() {
+                    if let AttributeValue::AttrLiteral(literal) = &value {
                         if let HotLiteral::Fmted(segments) = literal {
                             self.assign_formatted_segment(segments);
                         }
