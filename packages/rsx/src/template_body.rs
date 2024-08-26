@@ -320,7 +320,7 @@ impl TemplateBody {
                 }
             })
             .flat_map(|component| {
-                component.fields.iter().filter_map(|field| {
+                component.component_props().filter_map(|field| {
                     if let AttributeValue::AttrLiteral(literal) = &field.value {
                         Some(literal)
                     } else {
