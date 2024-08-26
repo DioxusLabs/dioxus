@@ -406,13 +406,15 @@ impl HotReloadResult {
         }
 
         // Then check if the fields are the same
-        if new_component.fields.len() != old_component.fields.len() {
+        let new_non_key_fields: Vec<_> = new_component.component_props().collect();
+        let old_non_key_fields: Vec<_> = old_component.component_props().collect();
+        if new_non_key_fields.len() != old_non_key_fields.len() {
             return None;
         }
 
-        let mut new_fields = new_component.fields.clone();
+        let mut new_fields = new_non_key_fields.clone();
         new_fields.sort_by_key(|attribute| attribute.name.to_string());
-        let mut old_fields = old_component.fields.iter().enumerate().collect::<Vec<_>>();
+        let mut old_fields = old_non_key_fields.iter().enumerate().collect::<Vec<_>>();
         old_fields.sort_by_key(|(_, attribute)| attribute.name.to_string());
 
         // The literal component properties for the component in same the order as the original component property literals

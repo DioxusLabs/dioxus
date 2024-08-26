@@ -24,7 +24,7 @@ use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
+    token, AngleBracketedGenericArguments, Expr, PathArguments, Result,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -171,10 +171,10 @@ impl Component {
     }
 
     pub fn get_key(&self) -> Option<&AttributeValue> {
-        self.fields.iter().find_map(|attr| match &attr.name {
-            AttributeName::BuiltIn(key) if key == "key" => Some(&attr.value),
-            _ => None,
-        })
+        self.fields
+            .iter()
+            .find(|attr| attr.name.is_likely_key())
+            .map(|attr| &attr.value)
     }
 
     /// Ensure there's no duplicate props - this will be a compile error but we can move it to a
@@ -253,51 +253,40 @@ impl Component {
     }
 
     // Iterate over the props of the component (without spreads, key, and custom attributes)
-    pub(crate) fn component_props(&self) -> impl Iterator<Item = (&Ident, &AttributeValue)> {
-        self.fields.iter().filter_map(move |attr| {
-            let Attribute { name, value, .. } = attr;
-
-            match name {
-                AttributeName::BuiltIn(k) => {
-                    if k == "key" {
-                        return None;
-                    }
-                    Some((k, value))
-                }
-                AttributeName::Custom(_) => None,
-                AttributeName::Spread(_) => None,
-            }
-        })
+    pub(crate) fn component_props(&self) -> impl Iterator<Item = &Attribute> {
+        self.fields
+            .iter()
+            .filter(move |attr| !attr.name.is_likely_key())
     }
 
     fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
         let mut dynamic_literal_index = 0;
         self.component_props()
-            .map(|(attr, value)| {
-                let release_value = value.to_token_stream();
+            .map(|attribute| {
+                let release_value = attribute.value.to_token_stream();
 
-                // In debug mode, we try to grab the value from the dynamic literal pool if possible
-                let value = if let AttributeValue::AttrLiteral(literal) = &value {
-                    let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
-                    dynamic_literal_index += 1;
-                    let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
-                    quote! {
+            // In debug mode, we try to grab the value from the dynamic literal pool if possible
+            let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
+                let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
+                dynamic_literal_index += 1;
+                let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
+                quote! {
+                    {
+                        #[cfg(debug_assertions)]
                         {
-                            #[cfg(debug_assertions)]
-                            {
-                                #debug_value
-                            }
-                            #[cfg(not(debug_assertions))]
-                            {
-                                #release_value
-                            }
+                            #debug_value
+                        }
+                        #[cfg(not(debug_assertions))]
+                        {
+                            #release_value
                         }
                     }
-                } else {
-                    release_value
-                };
+                }
+            } else {
+                release_value
+            };
 
-                (attr.into_token_stream(), value)
+                (attribute.name.to_token_stream(), value)
             })
             .collect()
     }
