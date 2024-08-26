@@ -9,7 +9,7 @@
 //! {OPT BORDER}
 //! -STATUS BAR-
 
-use super::{BuildProgress, ConsoleSize, Message, MessageSource, NumLinesWrapping, ScrollPosition};
+use super::{BuildProgress, Message, MessageFilter, MessageSource, AVAILABLE_FILTERS};
 use ansi_to_tui::IntoText as _;
 use dioxus_cli_config::Platform;
 use ratatui::{
@@ -31,57 +31,54 @@ pub struct TuiLayout {
     _body: Rc<[Rect]>,
     /// The console where build logs are displayed.
     console: Rc<[Rect]>,
-    // The border that separates the console and info bars.
-    border_sep_top: Rect,
-    // The filter drawer if the drawer should be open.
+    // The filter drawer if the drawer is open.
     filter_drawer: Option<Rc<[Rect]>>,
-    // The border that separates the two info bars.
-    border_sep_bottom: Rect,
+    // The border that separates the console and info bars.
+    border_sep: Rect,
     //. The status bar that displays build status, platform, versions, etc.
     status_bar: Rc<[Rect]>,
 }
 
 impl TuiLayout {
-    pub fn new(frame_size: Rect, drawer_open: bool, filter_drawer_height: u16) -> Self {
-        let mut constraints = vec![
-            // Console
-            Constraint::Fill(1),
-            // Border Separator
-            Constraint::Length(1),
-            // Footer Status
-            Constraint::Length(1),
-            // Padding
-            Constraint::Length(1),
-        ];
-
-        let mut status_bar_index = 2;
-
-        if drawer_open {
-            // Insert the middle border and the filter drawer.
-            constraints.insert(2, Constraint::Length(1));
-            constraints.insert(2, Constraint::Length(filter_drawer_height));
-            status_bar_index = 4;
-        }
-
+    pub fn new(frame_size: Rect, filter_open: bool) -> Self {
         // The full layout
         let body = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(constraints)
+            .constraints([
+                // Console
+                Constraint::Fill(1),
+                // Border Separator
+                Constraint::Length(1),
+                // Footer Status
+                Constraint::Length(1),
+                // Padding
+                Constraint::Length(1),
+            ])
             .split(frame_size);
+
+        let mut console_constraints = vec![Constraint::Fill(1)];
+        if filter_open {
+            console_constraints.push(Constraint::Length(1));
+            console_constraints.push(Constraint::Length(25));
+        }
 
         // Build the console, where logs go.
         let console = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1)])
+            .direction(Direction::Horizontal)
+            .constraints(console_constraints)
             .split(body[0]);
 
-        let filter_drawer = match drawer_open {
+        let filter_drawer = match filter_open {
             false => None,
             true => Some(
                 Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Fill(1)])
-                    .split(body[2]),
+                    .constraints([
+                        Constraint::Length(1),
+                        Constraint::Fill(1),
+                        Constraint::Length(1),
+                    ])
+                    .split(console[2]),
             ),
         };
 
@@ -89,37 +86,35 @@ impl TuiLayout {
         let status_bar = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-            .split(body[status_bar_index]);
+            .split(body[2]);
 
         // Specify borders
         let border_sep_top = body[1];
-        let border_sep_bottom = body[3];
 
         Self {
             _body: body,
             console,
-            border_sep_top,
             filter_drawer,
-            border_sep_bottom,
+            border_sep: border_sep_top,
             status_bar,
         }
     }
 
     /// Render all decorations.
-    pub fn render_decor(&self, frame: &mut Frame, is_drawer_open: bool) {
+    pub fn render_decor(&self, frame: &mut Frame, filter_open: bool) {
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
                 .border_style(Style::new().white()),
-            self.border_sep_top,
+            self.border_sep,
         );
 
-        if is_drawer_open {
+        if filter_open {
             frame.render_widget(
                 Block::new()
-                    .borders(Borders::TOP)
-                    .border_style(Style::new().dark_gray()),
-                self.border_sep_bottom,
+                    .borders(Borders::LEFT)
+                    .border_style(Style::new().white()),
+                self.console[1],
             );
         }
     }
@@ -145,13 +140,16 @@ impl TuiLayout {
 
         let start_index = buffer.index_of(start.0, start.1);
         let end_index = buffer.index_of(end.0, end.1);
-        let console_y_end = console.as_size().height - 1;
+
+        let console_size = console.as_size();
+        let console_x_end = console_size.width;
+        let console_y_end = console_size.height;
 
         let mut new_selected_lines = Vec::new();
         let direction_forward = start_index < end_index;
 
         // The drag was started out of console area.
-        if start.1 > console_y_end {
+        if start.0 > console_x_end || start.1 > console_y_end {
             return;
         }
 
@@ -161,7 +159,7 @@ impl TuiLayout {
 
             // Skip any cells outside of console area.
             // This looping logic is a bit duplicated.
-            if y > console_y_end {
+            if y >= console_y_end || x >= console_x_end {
                 match direction_forward {
                     true => i += 1,
                     false => i -= 1,
@@ -217,13 +215,13 @@ impl TuiLayout {
         }
     }
 
-    /// Render the console and it's logs.
+    /// Render the console and it's logs, returning the number of lines required to render the entire log output.
     pub fn render_console(
         &self,
         frame: &mut Frame,
-        scroll: ScrollPosition,
+        scroll_position: u16,
         messages: &[Message],
-    ) -> NumLinesWrapping {
+    ) -> u16 {
         // TODO: Fancy filtering support "show me only app logs from web"
         let console = self.console[0];
         let mut out_text = Text::default();
@@ -249,7 +247,7 @@ impl TuiLayout {
             }
         }
 
-        let console_size = self.get_console_size();
+        let (console_width, console_height) = self.get_console_size();
         let msgs = messages.iter();
 
         // Assemble the messages
@@ -328,7 +326,7 @@ impl TuiLayout {
             .left_aligned()
             .wrap(Wrap { trim: false });
 
-        let num_lines_wrapping = NumLinesWrapping(paragraph.line_count(console_size.width) as u16);
+        let num_lines_wrapping = paragraph.line_count(console_width) as u16;
 
         // Render scrollbar
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -338,10 +336,10 @@ impl TuiLayout {
             .thumb_symbol("▐");
 
         let mut scrollbar_state =
-            ScrollbarState::new(num_lines_wrapping.0.saturating_sub(console_size.height) as usize)
-                .position(scroll.0 as usize);
+            ScrollbarState::new(num_lines_wrapping.saturating_sub(console_height) as usize)
+                .position(scroll_position as usize);
 
-        let paragraph = paragraph.scroll((scroll.0, 0));
+        let paragraph = paragraph.scroll((scroll_position, 0));
         paragraph
             .block(Block::new())
             .render(console, frame.buffer_mut());
@@ -369,6 +367,7 @@ impl TuiLayout {
         platform: Platform,
         build_progress: &BuildProgress,
         more_modal_open: bool,
+        filter_menu_open: bool,
     ) {
         // left aligned text
         let mut spans = vec![
@@ -410,13 +409,19 @@ impl TuiLayout {
             false => more_span.gray(),
         };
 
+        let filter_span = Span::from("[f] filter");
+        let filter_span = match filter_menu_open {
+            true => filter_span.light_yellow(),
+            false => filter_span.gray(),
+        };
+
         // Right-aligned text
         let right_line = Line::from(vec![
             more_span,
             Span::from(" | ").gray(),
             Span::from("[r] rebuild").gray(),
             Span::from(" | ").gray(),
-            Span::from("[c] clear").gray(),
+            filter_span,
             Span::from(" | ").gray(),
             Span::from("[o] open").gray(),
         ]);
@@ -451,40 +456,98 @@ impl TuiLayout {
     }
 
     /// Render the filter drawer menu.
-    pub fn render_filter_menu(&self, frame: &mut Frame, text: Paragraph) {
+    pub fn render_filter_menu(&self, frame: &mut Frame, search_input: Option<String>) {
         let Some(ref filter_drawer) = self.filter_drawer else {
             return;
         };
 
-        let area = filter_drawer[0];
-        frame.render_widget(text, area);
+        // Vertical layout
+        let container = Layout::default()
+            .constraints([Constraint::Length(4), Constraint::Fill(1)])
+            .direction(Direction::Vertical)
+            .split(filter_drawer[1]);
+
+        // Render the search section.
+        let top_area = Layout::default()
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+            ])
+            .direction(Direction::Vertical)
+            .split(container[0]);
+
+        let search_title = Line::from("Search").gray();
+        let search_input_block = Block::new().bg(Color::White);
+
+        let search_text = match search_input {
+            Some(s) => s,
+            None => "[enter] to type...".to_string(),
+        };
+
+        let search_input = Paragraph::new(Line::from(search_text))
+            .fg(Color::DarkGray)
+            .block(search_input_block);
+
+        frame.render_widget(search_title, top_area[1]);
+        frame.render_widget(search_input, top_area[2]);
+
+        // Render the enabled filters
+        let bottom_area = container[1];
+
+        let lines = vec![
+            Line::from("abcd").light_yellow(),
+            Line::from("my-cool-component").light_yellow(),
+            Line::from("info").dark_gray(),
+            Line::from("warn").light_yellow(),
+            Line::from("error").light_yellow(),
+        ];
+
+        let text = Text::from(lines);
+        frame.render_widget(text, bottom_area);
     }
 
     /// Generate the paragraph for the filter drawer.
-    pub fn get_filter_drawer_text<'a>(_enabled_filters: &[MessageFilter], search_input: String) -> Paragraph<'a> {
-        let line = Line::from(vec![
-            Span::from("Filters: ").light_blue(),
-            Span::from("[1] ").dark_gray(),
-            Span::from("info, ").gray(),
-            Span::from("[2] ").dark_gray(),
-            Span::from("warn, ").gray(),
-            Span::from("[3] ").dark_gray(),
-            Span::from("error, ").gray(),
-            Span::from("[4] ").dark_gray(),
-            Span::from("dev, ").gray(),
-            Span::from("[5] ").dark_gray(),
-            Span::from("build, ").gray(),
-            Span::from("[6] ").dark_gray(),
-            Span::from("cargo, ").gray(),
-            Span::from("[7] ").dark_gray(),
-            Span::from("web, ").gray(),
-            Span::from("[8] ").dark_gray(),
-            Span::from("desktop, ").gray(),
-            Span::from("[9] ").dark_gray(),
-            Span::from("server").gray(),
-            Span::from(" | Search: ").gray(),
+    pub fn get_filter_drawer_text<'a>(
+        enabled_filters: &[MessageFilter],
+        selected_filter_index: usize,
+        search_input: String,
+    ) -> Paragraph<'a> {
+        let mut spans = vec![Span::from("Filters: ").light_blue()];
+
+        for (i, filter) in AVAILABLE_FILTERS.iter().enumerate() {
+            let mut span = Span::from(filter.to_string()).dark_gray();
+            if enabled_filters.contains(filter) {
+                span = span.light_yellow();
+            }
+
+            // Add arrow prefix if currently focused
+            if selected_filter_index == i {
+                let prefix = Span::from("» ").gray();
+                spans.push(prefix);
+            }
+
+            spans.push(span);
+
+            let postfix = Span::from(", ").dark_gray();
+            spans.push(postfix);
+        }
+
+        let mut other_spans = vec![
+            Span::from("| ").gray(),
+            Span::from("[<] ").dark_gray(),
+            Span::from("left ").gray(),
+            Span::from("[>] ").dark_gray(),
+            Span::from("right ").gray(),
+            Span::from("[enter] ").dark_gray(),
+            Span::from("toggle filter ").gray(),
+            Span::from("| Search: ").gray(),
             Span::from(search_input).dark_gray(),
-        ]);
+        ];
+
+        spans.append(&mut other_spans);
+        let line = Line::from(spans);
 
         Paragraph::new(line)
             .alignment(Alignment::Left)
@@ -492,11 +555,8 @@ impl TuiLayout {
     }
 
     /// Returns the height of the console TUI area in number of lines.
-    pub fn get_console_size(&self) -> ConsoleSize {
-        ConsoleSize {
-            width: self.console[0].width,
-            height: self.console[0].height,
-        }
+    pub fn get_console_size(&self) -> (u16, u16) {
+        (self.console[0].width, self.console[0].height)
     }
 }
 
@@ -507,21 +567,4 @@ fn build_msg_padding(padding_len: usize) -> String {
         _ = write!(padding, " ");
     }
     padding
-}
-
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum MessageFilter {
-    // Levels
-    Info,
-    Warn,
-    Error,
-
-    // Sources
-    Dev,
-    Build,
-    Cargo,
-    Web,
-    Desktop,
-    Server,
 }

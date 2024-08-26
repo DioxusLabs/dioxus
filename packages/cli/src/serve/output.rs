@@ -26,7 +26,6 @@ use ratatui::{prelude::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    fmt::Display,
     io::{self, stdout},
     ops::{Deref, DerefMut},
     rc::Rc,
@@ -39,8 +38,11 @@ use tokio::{
 };
 use tracing::Level;
 
+mod message;
 mod render;
 mod selection;
+
+pub use message::*;
 
 // How many lines should be scroll on each mouse scroll or arrow key input.
 const SCROLL_SPEED: u16 = 1;
@@ -69,82 +71,6 @@ impl BuildProgress {
     }
 }
 
-/// Represents the terminal height in lines.
-#[derive(Default, Clone, Copy)]
-pub struct ConsoleSize {
-    pub width: u16,
-    pub height: u16,
-}
-
-impl ConsoleSize {
-    pub fn zero() -> Self {
-        Self {
-            width: 0,
-            height: 0,
-        }
-    }
-}
-
-/// Represent where the scroll is currently at.
-#[derive(Default, Clone, Copy)]
-pub struct ScrollPosition(pub u16);
-
-impl ScrollPosition {
-    pub fn zero() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u16> for ScrollPosition {
-    fn from(value: u16) -> Self {
-        Self(value)
-    }
-}
-
-impl Deref for ScrollPosition {
-    type Target = u16;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ScrollPosition {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// The number of lines in the console that are wrapping.
-#[derive(Default, Clone, Copy)]
-pub struct NumLinesWrapping(pub u16);
-
-impl NumLinesWrapping {
-    pub fn zero() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u16> for NumLinesWrapping {
-    fn from(value: u16) -> Self {
-        Self(value)
-    }
-}
-
-impl Deref for NumLinesWrapping {
-    type Target = u16;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for NumLinesWrapping {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
     log_control: CLILogControl,
@@ -158,11 +84,11 @@ pub struct Output {
     // A list of all messages from build, dev, app, and more.
     messages: Vec<Message>,
 
-    num_lines_wrapping: NumLinesWrapping,
-    console_size: ConsoleSize,
-    scroll_position: ScrollPosition,
+    num_lines_wrapping: u16,
+    scroll_position: u16,
+    console_width: u16,
+    console_height: u16,
 
-    show_filter_menu: bool,
     more_modal_open: bool,
     anim_start: Instant,
 
@@ -174,6 +100,11 @@ pub struct Output {
     drag_start: Option<(u16, u16)>,
     drag_end: Option<(u16, u16)>,
     selected_lines: Vec<String>,
+
+    // Filters
+    show_filter_menu: bool,
+    enabled_filters: Vec<MessageFilter>,
+    selected_filter_index: usize,
 
     _rustc_version: String,
     _rustc_nightly: bool,
@@ -248,9 +179,10 @@ impl Output {
             more_modal_open: false,
             build_progress: Default::default(),
             running_apps: HashMap::new(),
-            scroll_position: ScrollPosition::zero(),
-            console_size: ConsoleSize::zero(),
-            num_lines_wrapping: NumLinesWrapping::zero(),
+            scroll_position: 0,
+            num_lines_wrapping: 0,
+            console_width: 0,
+            console_height: 0,
             anim_start: Instant::now(),
             addr: cfg.server_arguments.address.clone(),
 
@@ -261,6 +193,8 @@ impl Output {
 
             // Filter
             show_filter_menu: true,
+            enabled_filters: Vec::new(),
+            selected_filter_index: 0,
         })
     }
 
@@ -440,7 +374,7 @@ impl Output {
                 if mouse.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
                 }
-                *self.scroll_position += scroll_speed;
+                self.scroll_position += scroll_speed;
                 self.reset_drag()
             }
             Event::Key(key) if key.code == KeyCode::Up => {
@@ -449,7 +383,7 @@ impl Output {
                 if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
                 }
-                *self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
+                self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
                 self.reset_drag();
             }
             Event::Key(key) if key.code == KeyCode::Down => {
@@ -458,8 +392,35 @@ impl Output {
                 if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
                 }
-                *self.scroll_position += scroll_speed;
+                self.scroll_position += scroll_speed;
                 self.reset_drag();
+            }
+            Event::Key(key) if key.code == KeyCode::Left => {
+                if self.show_filter_menu {
+                    self.selected_filter_index = self.selected_filter_index.saturating_sub(1);
+                }
+            }
+            Event::Key(key) if key.code == KeyCode::Right => {
+                if self.show_filter_menu {
+                    self.selected_filter_index += 1;
+
+                    // Cap the index to amount of allowed filters (adjusted to be 0-indexed)
+                    let filters_len = AVAILABLE_FILTERS.len();
+                    if self.selected_filter_index > filters_len - 1 {
+                        self.selected_filter_index = filters_len;
+                    }
+                }
+            }
+            Event::Key(key) if key.code == KeyCode::Enter => {
+                if self.show_filter_menu {
+                    let filter = AVAILABLE_FILTERS[self.selected_filter_index];
+                    // Remove the filter if it exists
+                    if let Some(index) = self.enabled_filters.iter().position(|x| *x == filter) {
+                        self.enabled_filters.remove(index);
+                    } else {
+                        self.enabled_filters.push(filter);
+                    }
+                }
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
                 self.reset_drag();
@@ -503,7 +464,7 @@ impl Output {
                 if is_ctrl {
                     self.drag_start = Some((0, 0));
                     self.drag_end =
-                        Some((self.console_size.width - 1, self.console_size.height - 1));
+                        Some((self.console_width - 1, self.console_height - 1));
                 }
             }
             Event::Key(key) if key.code == KeyCode::Char('f') => {
@@ -516,14 +477,14 @@ impl Output {
             _ => {}
         }
 
-        if *self.scroll_position
+        if self.scroll_position
             > self
                 .num_lines_wrapping
-                .saturating_sub(self.console_size.height + 1)
+                .saturating_sub(self.console_height + 1)
         {
             self.scroll_position = self
                 .num_lines_wrapping
-                .saturating_sub(self.console_size.height + 1)
+                .saturating_sub(self.console_height + 1)
                 .into();
         }
 
@@ -580,7 +541,7 @@ impl Output {
     pub fn scroll_to_bottom(&mut self) {
         self.scroll_position = self
             .num_lines_wrapping
-            .saturating_sub(self.console_size.height)
+            .saturating_sub(self.console_height)
             .into();
     }
 
@@ -671,17 +632,15 @@ impl Output {
             .as_mut()
             .unwrap()
             .draw(|frame| {
-                // Get filter text line count
-                let frame_width = frame.size().width;
-                let filter_text = render::TuiLayout::get_filter_drawer_text(&[], String::from("something"));
-                let filter_text_line_count = filter_text.line_count(frame_width) as u16;
+                let layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
+                let (console_width, console_height) = layout.get_console_size();
+                self.console_width = console_width;
+                self.console_height = console_height;
 
-                let layout = render::TuiLayout::new(frame.size(), self.show_filter_menu, filter_text_line_count);
-                self.console_size = layout.get_console_size();
-
+                // Render the decor first as some of it (such as backgrounds) may be rendered on top of.
                 layout.render_decor(frame, self.show_filter_menu);
 
-                // Render console
+                // Render console, we need the number of wrapping lines for scroll.
                 self.num_lines_wrapping =
                     layout.render_console(frame, self.scroll_position, &self.messages);
 
@@ -693,16 +652,16 @@ impl Output {
                 );
 
                 if self.show_filter_menu {
-                    layout.render_filter_menu(frame, filter_text);
+                    layout.render_filter_menu(frame, None);
                 }
 
-                // Render info bar, status bar, and borders.
                 layout.render_status_bar(
                     frame,
                     self.is_cli_release,
                     self.platform,
                     &self.build_progress,
                     self.more_modal_open,
+                    self.show_filter_menu,
                 );
 
                 if self.more_modal_open {
@@ -853,71 +812,4 @@ struct RunningAppOutput {
     stderr: Lines<BufReader<ChildStderr>>,
     stdout_line: String,
     stderr_line: String,
-}
-
-#[derive(Clone, PartialEq)]
-pub struct Message {
-    pub source: MessageSource,
-    pub level: Level,
-    pub content: String,
-}
-
-impl Message {
-    pub fn new(source: MessageSource, level: Level, content: String) -> Self {
-        Self {
-            source,
-            level,
-            content,
-        }
-    }
-}
-
-#[derive(Clone, PartialEq)]
-pub enum MessageSource {
-    App(TargetPlatform),
-    Dev,
-    Build,
-    /// Provides no formatting.
-    Cargo,
-    /// Avoid using this
-    Unknown,
-}
-
-impl std::fmt::Debug for MessageSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let as_string = self.to_string();
-        write!(f, "{as_string}")
-    }
-}
-
-impl From<String> for MessageSource {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "dev" => Self::Dev,
-            "build" => Self::Build,
-            "cargo" => Self::Cargo,
-            "web" => Self::App(TargetPlatform::Web),
-            "desktop" => Self::App(TargetPlatform::Desktop),
-            "server" => Self::App(TargetPlatform::Server),
-            "liveview" => Self::App(TargetPlatform::Liveview),
-            _ => Self::Unknown,
-        }
-    }
-}
-
-impl Display for MessageSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::App(platform) => match platform {
-                TargetPlatform::Web => write!(f, "web"),
-                TargetPlatform::Desktop => write!(f, "desktop"),
-                TargetPlatform::Server => write!(f, "server"),
-                TargetPlatform::Liveview => write!(f, "server"),
-            },
-            Self::Dev => write!(f, "dev"),
-            Self::Build => write!(f, "build"),
-            Self::Cargo => write!(f, "cargo"),
-            Self::Unknown => write!(f, "n/a"),
-        }
-    }
 }
