@@ -76,9 +76,9 @@ impl<'a> DynIdVisitor<'a> {
                                 component.component_literal_dyn_idx[index]
                                     .set(self.component_literal_index);
                                 self.component_literal_index += 1;
+                                index += 1;
                             }
                         }
-                        index += 1;
                     }
                 }
             }
