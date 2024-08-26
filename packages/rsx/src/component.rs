@@ -485,7 +485,7 @@ mod tests {
 
         let component: Component = syn::parse2(input).unwrap();
 
-        // THe key should exist
+        // The key should exist
         assert_eq!(component.get_key(), Some(&parse_quote!("{value}")));
 
         // The key should not be included in the properties
