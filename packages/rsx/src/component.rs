@@ -338,7 +338,7 @@ fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments
 mod tests {
     use super::*;
     use prettier_please::PrettyUnparse;
-    use syn::{parse, parse_quote};
+    use syn::parse_quote;
 
     /// Ensure we can parse a component
     #[test]
