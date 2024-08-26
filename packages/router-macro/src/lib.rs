@@ -642,10 +642,15 @@ impl RouteEnum {
 
                     let error_name = route.error_ident();
                     let route_str = &route.route;
+                    let comment = format!(
+                        " An error that can occur when trying to parse the route [`{}::{}`] ('{}').",
+                        self.name,
+                        route_name,
+                        route_str
+                    );
 
                     error_variants.push(quote! {
-                        // Placeholder doc to silence -W missing-docs warning in consuming code.
-                        #[doc = " TODO: Add documentation here"]
+                        #[doc = #comment]
                         #route_name(#error_name)
                     });
                     display_match.push(quote! { Self::#route_name(err) => write!(f, "Route '{}' ('{}') did not match:\n{}", stringify!(#route_name), #route_str, err)? });
@@ -655,10 +660,13 @@ impl RouteEnum {
                     let error_variant = redirect.error_variant();
                     let error_name = redirect.error_ident();
                     let route_str = &redirect.route;
+                    let comment = format!(
+                        " An error that can occur when trying to parse the redirect '{}'.",
+                        route_str.value()
+                    );
 
                     error_variants.push(quote! {
-                        // Placeholder doc to silence -W missing-docs warning in consuming code.
-                        #[doc = " TODO: Add documentation here"]
+                        #[doc = #comment]
                         #error_variant(#error_name)
                     });
                     display_match.push(quote! { Self::#error_variant(err) => write!(f, "Redirect '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
@@ -671,21 +679,28 @@ impl RouteEnum {
             let error_variant = nest.error_variant();
             let error_name = nest.error_ident();
             let route_str = &nest.route;
+            let comment = format!(
+                " An error that can occur when trying to parse the nested segment {} ('{}').",
+                error_name, route_str
+            );
 
             error_variants.push(quote! {
-                // Placeholder doc to silence -W missing-docs warning in consuming code.
-                #[doc = " TODO: Add documentation here"]
+                #[doc = #comment]
                 #error_variant(#error_name)
             });
             display_match.push(quote! { Self::#error_variant(err) => write!(f, "Nest '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
             type_defs.push(nest.error_type());
         }
 
+        let comment = format!(
+            " An error that can occur when trying to parse the route enum [`{}`].",
+            self.name
+        );
+
         quote! {
             #(#type_defs)*
 
-            // Placeholder doc to silence -W missing-docs warning in consuming code.
-            #[doc = " TODO: Add documentation here"]
+            #[doc = #comment]
             #[allow(non_camel_case_types)]
             #[allow(clippy::derive_partial_eq_without_eq)]
             pub enum #match_error_name {
