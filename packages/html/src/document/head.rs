@@ -2,6 +2,7 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
+use crate as dioxus_elements;
 use dioxus_core::{prelude::*, DynamicNode};
 use dioxus_core_macro::*;
 
@@ -112,6 +113,7 @@ pub fn Title(props: TitleProps) -> Element {
     VNode::empty()
 }
 
+#[non_exhaustive]
 /// Props for the [`Meta`] component
 #[derive(Clone, Props, PartialEq)]
 pub struct MetaProps {
@@ -120,6 +122,8 @@ pub struct MetaProps {
     pub charset: Option<String>,
     pub http_equiv: Option<String>,
     pub content: Option<String>,
+    #[props(extends = meta, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
 }
 
 impl MetaProps {
@@ -179,6 +183,7 @@ pub fn Meta(props: MetaProps) -> Element {
     VNode::empty()
 }
 
+#[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
 pub struct ScriptProps {
     /// The contents of the script tag. If present, the children must be a single text node.
@@ -193,6 +198,8 @@ pub struct ScriptProps {
     pub nonce: Option<String>,
     pub referrerpolicy: Option<String>,
     pub r#type: Option<String>,
+    #[props(extends = script, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
 }
 
 impl ScriptProps {
@@ -274,6 +281,7 @@ pub fn Script(props: ScriptProps) -> Element {
     VNode::empty()
 }
 
+#[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
 pub struct StyleProps {
     /// Styles are deduplicated by their href attribute
@@ -283,6 +291,8 @@ pub struct StyleProps {
     pub title: Option<String>,
     /// The contents of the style tag. If present, the children must be a single text node.
     pub children: Element,
+    #[props(extends = style, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
 }
 
 impl StyleProps {
@@ -354,6 +364,7 @@ pub fn Style(props: StyleProps) -> Element {
 
 use super::*;
 
+#[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
 pub struct LinkProps {
     pub rel: Option<String>,
@@ -371,6 +382,8 @@ pub struct LinkProps {
     pub integrity: Option<String>,
     pub r#type: Option<String>,
     pub blocking: Option<String>,
+    #[props(extends = link, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
 }
 
 impl LinkProps {

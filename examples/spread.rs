@@ -19,7 +19,8 @@ fn app() -> Element {
             extra_data: "hello{1}",
             extra_data2: "hello{2}",
             height: "10px",
-            left: 1
+            left: 1,
+            "custom-attribute-name": "value",
         }
     }
 }

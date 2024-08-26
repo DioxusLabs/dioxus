@@ -1017,21 +1017,21 @@ Finally, call `.build()` to create the instance of `{name}`.
                 impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
                     fn push_attribute(
                         mut self,
-                        name: &'static str,
-                        ns: Option<&'static str>,
-                        attr: impl dioxus_core::prelude::IntoAttributeValue,
-                        volatile: bool
+                        ____name: &'static str,
+                        ____ns: Option<&'static str>,
+                        ____attr: impl dioxus_core::prelude::IntoAttributeValue,
+                        ____volatile: bool
                     ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;
                         self.#field_name.push(
                             dioxus_core::Attribute::new(
-                                name,
+                                ____name,
                                 {
                                     use dioxus_core::prelude::IntoAttributeValue;
-                                    attr.into_value()
+                                    ____attr.into_value()
                                 },
-                                ns,
-                                volatile,
+                                ____ns,
+                                ____volatile,
                             )
                         );
                         #builder_name {
