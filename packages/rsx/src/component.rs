@@ -24,7 +24,7 @@ use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Expr, PathArguments, Result,
+    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -252,24 +252,28 @@ impl Component {
         self.spreads.first().map(|spread| &spread.expr)
     }
 
+    // Iterate over the props of the component (without spreads, key, and custom attributes)
+    pub(crate) fn component_props(&self) -> impl Iterator<Item = (&Ident, &AttributeValue)> {
+        self.fields.iter().filter_map(move |attr| {
+            let Attribute { name, value, .. } = attr;
+
+            match name {
+                AttributeName::BuiltIn(k) => {
+                    if k == "key" {
+                        return None;
+                    }
+                    Some((k, value))
+                }
+                AttributeName::Custom(_) => None,
+                AttributeName::Spread(_) => None,
+            }
+        })
+    }
+
     fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
         let mut dynamic_literal_index = 0;
-        self.fields
-            .iter()
-            .filter_map(move |attr| {
-                let Attribute { name, value, .. } = attr;
-
-                let attr = match name {
-                    AttributeName::BuiltIn(k) => {
-                        if k == "key" {
-                            return None;
-                        }
-                        quote! { #k }
-                    }
-                    AttributeName::Custom(_) => return None,
-                    AttributeName::Spread(_) => return None,
-                };
-
+        self.component_props()
+            .map(|(attr, value)| {
                 let release_value = value.to_token_stream();
 
                 // In debug mode, we try to grab the value from the dynamic literal pool if possible
@@ -293,7 +297,7 @@ impl Component {
                     release_value
                 };
 
-                Some((attr, value))
+                (attr.into_token_stream(), value)
             })
             .collect()
     }

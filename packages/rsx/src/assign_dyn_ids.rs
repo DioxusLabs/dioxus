@@ -1,6 +1,7 @@
 use crate::attribute::Attribute;
 use crate::{
-    AttributeValue, BodyNode, HotLiteral, HotReloadFormattedSegment, Segment, TemplateBody,
+    AttributeName, AttributeValue, BodyNode, HotLiteral, HotReloadFormattedSegment, Segment,
+    TemplateBody,
 };
 
 /// A visitor that assigns dynamic ids to nodes and attributes and accumulates paths to dynamic nodes and attributes
@@ -69,9 +70,14 @@ impl<'a> DynIdVisitor<'a> {
                         if let HotLiteral::Fmted(segments) = literal {
                             self.assign_formatted_segment(segments);
                         }
-                        component.component_literal_dyn_idx[index]
-                            .set(self.component_literal_index);
-                        self.component_literal_index += 1;
+                        // Don't include keys in the component dynamic pool
+                        if let AttributeName::BuiltIn(built_in) = &property.name {
+                            if built_in != "key" {
+                                component.component_literal_dyn_idx[index]
+                                    .set(self.component_literal_index);
+                                self.component_literal_index += 1;
+                            }
+                        }
                         index += 1;
                     }
                 }
