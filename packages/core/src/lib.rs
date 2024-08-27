@@ -76,9 +76,9 @@ pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
     Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, MarkerWrapper, Mutation,
-    Mutations, NoOpMutations, Ok, Properties, RenderReturn, Result, Runtime, ScopeId, ScopeState,
-    SpawnIfAsync, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner,
-    VPlaceholder, VText, VirtualDom, WriteMutations,
+    Mutations, NoOpMutations, Ok, Properties, Result, Runtime, ScopeId, ScopeState, SpawnIfAsync,
+    Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder,
+    VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -88,14 +88,14 @@ pub mod prelude {
     pub use crate::innerlude::{
         consume_context, consume_context_from_scope, current_owner, current_scope_id,
         fc_to_builder, generation, has_context, needs_update, needs_update_any, parent_scope,
-        provide_context, provide_root_context, queue_effect, remove_future, schedule_update,
-        schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend, throw_error,
-        try_consume_context, use_after_render, use_before_render, use_drop, use_error_boundary,
-        use_hook, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, Component,
+        provide_context, provide_error_boundary, provide_root_context, queue_effect, remove_future,
+        schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
+        throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
+        use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, Component,
         ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
         Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker,
-        Properties, ReactiveContext, RenderError, RenderReturn, Runtime, RuntimeGuard, ScopeId,
-        ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
+        Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard, ScopeId, ScopeState,
+        SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
         SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
         VNodeInner, VirtualDom,
     };

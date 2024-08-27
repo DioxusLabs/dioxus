@@ -6,7 +6,7 @@ pub type Config = crate::Config<axum::Router>;
 /// Launches the WebView and runs the event loop, with configuration and root props.
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) -> ! {
     #[cfg(feature = "multi-thread")]

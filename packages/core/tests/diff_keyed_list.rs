@@ -22,18 +22,18 @@ fn keyed_diffing_out_of_order() {
 
     {
         assert_eq!(
-            dom.rebuild_to_vec().sanitize().edits,
+            dom.rebuild_to_vec().edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(4,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(6,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(7,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(9,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(10,) },
+                LoadTemplate { index: 0, id: ElementId(1,) },
+                LoadTemplate { index: 0, id: ElementId(2,) },
+                LoadTemplate { index: 0, id: ElementId(3,) },
+                LoadTemplate { index: 0, id: ElementId(4,) },
+                LoadTemplate { index: 0, id: ElementId(5,) },
+                LoadTemplate { index: 0, id: ElementId(6,) },
+                LoadTemplate { index: 0, id: ElementId(7,) },
+                LoadTemplate { index: 0, id: ElementId(8,) },
+                LoadTemplate { index: 0, id: ElementId(9,) },
+                LoadTemplate { index: 0, id: ElementId(10,) },
                 AppendChildren { m: 10, id: ElementId(0) },
             ]
         );
@@ -169,10 +169,10 @@ fn keyed_diffing_additions() {
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(7) },
+            LoadTemplate { index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(7) },
             InsertAfter { id: ElementId(5), m: 2 }
         ]
     );
@@ -194,11 +194,11 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
             // create 11, 12
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(5) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             InsertAfter { id: ElementId(3), m: 2 },
             // move 7 to the front
             PushRoot { id: ElementId(4) },
@@ -224,15 +224,15 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     // LIS: 4, 5, 6
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
             // create 5, 6
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(5) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             InsertBefore { id: ElementId(3), m: 2 },
             // create 7, 8
-            LoadTemplate { name: "template", index: 0, id: ElementId(7) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(8) },
+            LoadTemplate { index: 0, id: ElementId(7) },
+            LoadTemplate { index: 0, id: ElementId(8) },
             InsertBefore { id: ElementId(2), m: 2 },
             // move 7
             PushRoot { id: ElementId(4) },
@@ -258,7 +258,7 @@ fn controlled_keyed_diffing_out_of_order() {
     // LIS: 5, 6
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
             // remove 7
             Remove { id: ElementId(4,) },
@@ -266,10 +266,10 @@ fn controlled_keyed_diffing_out_of_order() {
             PushRoot { id: ElementId(1) },
             InsertAfter { id: ElementId(3,), m: 1 },
             // create 9 and insert before 6
-            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
+            LoadTemplate { index: 0, id: ElementId(4) },
             InsertBefore { id: ElementId(3,), m: 1 },
             // create 0 and insert before 5
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+            LoadTemplate { index: 0, id: ElementId(5) },
             InsertBefore { id: ElementId(2,), m: 1 },
         ]
     );
@@ -291,10 +291,10 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
             Remove { id: ElementId(5,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+            LoadTemplate { index: 0, id: ElementId(5) },
             InsertBefore { id: ElementId(3,), m: 1 },
             PushRoot { id: ElementId(4) },
             InsertBefore { id: ElementId(1,), m: 1 },
@@ -320,7 +320,7 @@ fn remove_list() {
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
             Remove { id: ElementId(5) },
             Remove { id: ElementId(4) },
@@ -345,14 +345,103 @@ fn no_common_keys() {
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(4) },
+            LoadTemplate { index: 0, id: ElementId(5) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             Remove { id: ElementId(3) },
             Remove { id: ElementId(2) },
             ReplaceWith { id: ElementId(1), m: 3 }
+        ]
+    );
+}
+
+#[test]
+fn perfect_reverse() {
+    let mut dom = VirtualDom::new(|| {
+        let order: &[_] = match generation() % 2 {
+            0 => &[1, 2, 3, 4, 5, 6, 7, 8],
+            1 => &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+            _ => unreachable!(),
+        };
+
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
+    });
+
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+    dom.mark_dirty(ScopeId::APP);
+    let edits = dom.render_immediate_to_vec().edits;
+    assert_eq!(
+        edits,
+        [
+            LoadTemplate { index: 0, id: ElementId(9,) },
+            InsertAfter { id: ElementId(1,), m: 1 },
+            LoadTemplate { index: 0, id: ElementId(10,) },
+            PushRoot { id: ElementId(8,) },
+            PushRoot { id: ElementId(7,) },
+            PushRoot { id: ElementId(6,) },
+            PushRoot { id: ElementId(5,) },
+            PushRoot { id: ElementId(4,) },
+            PushRoot { id: ElementId(3,) },
+            PushRoot { id: ElementId(2,) },
+            InsertBefore { id: ElementId(1,), m: 8 },
+        ]
+    )
+}
+
+#[test]
+fn old_middle_empty_left_pivot() {
+    let mut dom = VirtualDom::new(|| {
+        let order: &[_] = match generation() % 2 {
+            0 => &[/* */ /* */ 6, 7, 8, 9, 10],
+            1 => &[/* */ 4, 5, /* */ 6, 7, 8, 9, 10],
+            _ => unreachable!(),
+        };
+
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
+    });
+
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+    dom.mark_dirty(ScopeId::APP);
+    let edits = dom.render_immediate_to_vec().edits;
+    assert_eq!(
+        edits,
+        [
+            LoadTemplate { index: 0, id: ElementId(6,) },
+            LoadTemplate { index: 0, id: ElementId(7,) },
+            InsertBefore { id: ElementId(1,), m: 2 },
+        ]
+    )
+}
+
+#[test]
+fn old_middle_empty_right_pivot() {
+    let mut dom = VirtualDom::new(|| {
+        let order: &[_] = match generation() % 2 {
+            0 => &[1, 2, 3, /*       */ 6, 7, 8, 9, 10],
+            1 => &[1, 2, 3, /* */ 4, 5, 6, 7, 8, 9, 10 /* */],
+
+            // 0 => &[/* */ 6, 7, 8, 9, 10],
+            // 1 => &[/* */ 6, 7, 8, 9, 10, /* */ 4, 5],
+            _ => unreachable!(),
+        };
+
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
+    });
+
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+    dom.mark_dirty(ScopeId::APP);
+    let edits = dom.render_immediate_to_vec().edits;
+    assert_eq!(
+        edits,
+        [
+            LoadTemplate { index: 0, id: ElementId(9) },
+            LoadTemplate { index: 0, id: ElementId(10) },
+            InsertBefore { id: ElementId(4), m: 2 },
         ]
     );
 }

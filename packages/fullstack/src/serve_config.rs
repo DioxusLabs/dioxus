@@ -50,7 +50,7 @@ impl ServeConfigBuilder {
     }
 
     /// Build the ServeConfig
-    pub fn build(self) -> ServeConfig {
+    pub fn build(self) -> Result<ServeConfig, UnableToLoadIndex> {
         // The CLI always bundles static assets into the exe/public directory
         let public_path = public_path();
 
@@ -61,16 +61,17 @@ impl ServeConfigBuilder {
 
         let root_id = self.root_id.unwrap_or("main");
 
-        let index_html = self
-            .index_html
-            .unwrap_or_else(|| load_index_path(index_path));
+        let index_html = match self.index_html {
+            Some(index) => index,
+            None => load_index_path(index_path)?,
+        };
 
         let index = load_index_html(index_html, root_id);
 
-        ServeConfig {
+        Ok(ServeConfig {
             index,
             incremental: self.incremental,
-        }
+        })
     }
 }
 
@@ -84,13 +85,25 @@ pub(crate) fn public_path() -> PathBuf {
         .join("public")
 }
 
-fn load_index_path(path: PathBuf) -> String {
-    let mut file = File::open(&path).unwrap_or_else(|_| panic!("Failed to find index.html. Make sure the index_path is set correctly and the WASM application has been built. Tried to open file at path: {path:?}"));
+/// An error that can occur when loading the index.html file
+#[derive(Debug)]
+pub struct UnableToLoadIndex(PathBuf);
+
+impl std::fmt::Display for UnableToLoadIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Failed to find index.html. Make sure the index_path is set correctly and the WASM application has been built. Tried to open file at path: {:?}", self.0)
+    }
+}
+
+impl std::error::Error for UnableToLoadIndex {}
+
+fn load_index_path(path: PathBuf) -> Result<String, UnableToLoadIndex> {
+    let mut file = File::open(&path).map_err(|_| UnableToLoadIndex(path))?;
 
     let mut contents = String::new();
     file.read_to_string(&mut contents)
         .expect("Failed to read index.html");
-    contents
+    Ok(contents)
 }
 
 fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
@@ -156,21 +169,14 @@ pub struct ServeConfig {
     pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
 }
 
-impl Default for ServeConfig {
-    fn default() -> Self {
-        Self::builder().build()
-    }
-}
-
 impl ServeConfig {
+    /// Create a new ServeConfig
+    pub fn new() -> Result<Self, UnableToLoadIndex> {
+        ServeConfigBuilder::new().build()
+    }
+
     /// Create a new builder for a ServeConfig
     pub fn builder() -> ServeConfigBuilder {
         ServeConfigBuilder::new()
-    }
-}
-
-impl From<ServeConfigBuilder> for ServeConfig {
-    fn from(builder: ServeConfigBuilder) -> Self {
-        builder.build()
     }
 }

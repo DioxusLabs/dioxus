@@ -1,5 +1,5 @@
 [package]
-name = "axum-auth"
+name = "fullstack-auth-example"
 version = "0.1.0"
 edition = "2021"
 publish = false

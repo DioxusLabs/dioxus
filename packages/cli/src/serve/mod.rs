@@ -57,7 +57,7 @@ pub async fn serve_all(
     let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
-    builder.build();
+    builder.build()?;
 
     let mut server = Server::start(&serve, &dioxus_crate);
     let mut watcher = Watcher::start(&serve, &dioxus_crate);
@@ -94,7 +94,10 @@ pub async fn serve_all(
                 } else {
                     // If the change is not binary patchable, rebuild the project
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    builder.build();
+                    builder.build()?;
+
+                    // Clear the hot reload changes
+                    watcher.clear_hot_reload_changes();
 
                     // Tell the server to show a loading page for any new requests
                     server.start_build().await;
@@ -105,8 +108,16 @@ pub async fn serve_all(
             msg = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
-                if let Some(msg) = msg {
-                    screen.new_ws_message(TargetPlatform::Web, msg);
+                match msg {
+                    Some(ServerUpdate::NewConnection) => {
+                        if let Some(msg) = watcher.applied_hot_reload_changes() {
+                            server.send_hotreload(msg).await;
+                        }
+                    }
+                    Some(ServerUpdate::Message(msg)) => {
+                        screen.new_ws_message(TargetPlatform::Web, msg);
+                    }
+                    None => {}
                 }
             }
 
@@ -185,7 +196,7 @@ pub async fn serve_all(
                     Ok(false) => {}
                     // Request a rebuild.
                     Ok(true) => {
-                        builder.build();
+                        builder.build()?;
                         server.start_build().await
                     },
                     // Shutdown the server.

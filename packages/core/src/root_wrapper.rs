@@ -5,7 +5,6 @@ use crate::{prelude::*, properties::RootProps, DynamicNode, VComponent};
 #[allow(clippy::let_and_return)]
 pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
     static TEMPLATE: Template = Template {
-        name: "root_wrapper.rs:16:5:561",
         roots: &[TemplateNode::Dynamic { id: 0usize }],
         node_paths: &[&[0u8]],
         attr_paths: &[],

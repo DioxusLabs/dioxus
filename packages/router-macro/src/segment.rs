@@ -1,4 +1,4 @@
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use syn::{Ident, Type};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -230,6 +230,7 @@ pub fn parse_route_segments<'a>(
 }
 
 pub(crate) fn create_error_type(
+    route: &str,
     error_name: Ident,
     segments: &[RouteSegment],
     child_type: Option<&Type>,
@@ -241,20 +242,42 @@ pub(crate) fn create_error_type(
         let error_name = segment.error_name(i);
         match segment {
             RouteSegment::Static(index) => {
-                error_variants.push(quote! { #error_name(String) });
+                let comment = format!(
+                    " An error that can occur when trying to parse the static segment '/{}'.",
+                    index
+                );
+                error_variants.push(quote! {
+                    #[doc = #comment]
+                    #error_name(String)
+                });
                 display_match.push(quote! { Self::#error_name(found) => write!(f, "Static segment '{}' did not match instead found '{}'", #index, found)? });
             }
             RouteSegment::Dynamic(ident, ty) => {
                 let missing_error = segment.missing_error_name().unwrap();
-                error_variants.push(
-                    quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err) },
+                let comment = format!(
+                    " An error that can occur when trying to parse the dynamic segment '/:{}'.",
+                    ident
                 );
+                error_variants.push(quote! {
+                    #[doc = #comment]
+                    #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err)
+                });
                 display_match.push(quote! { Self::#error_name(err) => write!(f, "Dynamic segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
-                error_variants.push(quote! { #missing_error });
+                error_variants.push(quote! {
+                    #[doc = #comment]
+                    #missing_error
+                });
                 display_match.push(quote! { Self::#missing_error => write!(f, "Dynamic segment '({}:{})' was missing", stringify!(#ident), stringify!(#ty))? });
             }
             RouteSegment::CatchAll(ident, ty) => {
-                error_variants.push(quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegments>::Err) });
+                let comment = format!(
+                    " An error that can occur when trying to parse the catch-all segment '/:..{}'.",
+                    ident
+                );
+                error_variants.push(quote! {
+                    #[doc = #comment]
+                    #error_name(<#ty as dioxus_router::routable::FromRouteSegments>::Err)
+                });
                 display_match.push(quote! { Self::#error_name(err) => write!(f, "Catch-all segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
             }
         }
@@ -262,7 +285,14 @@ pub(crate) fn create_error_type(
 
     let child_type_variant = child_type
         .map(|child_type| {
-            quote! { ChildRoute(<#child_type as std::str::FromStr>::Err) }
+            let comment = format!(
+                " An error that can occur when trying to parse the child route [`{}`].",
+                child_type.to_token_stream()
+            );
+            quote! {
+                #[doc = #comment]
+                ChildRoute(<#child_type as std::str::FromStr>::Err)
+            }
         })
         .into_iter();
 
@@ -276,10 +306,17 @@ pub(crate) fn create_error_type(
         })
         .into_iter();
 
+    let comment = format!(
+        " An error that can occur when trying to parse the route variant `{}`.",
+        route
+    );
+
     quote! {
+        #[doc = #comment]
         #[allow(non_camel_case_types)]
         #[allow(clippy::derive_partial_eq_without_eq)]
         pub enum #error_name {
+            #[doc = " An error that can occur when extra segments are provided after the route."]
             ExtraSegments(String),
             #(#child_type_variant,)*
             #(#error_variants,)*

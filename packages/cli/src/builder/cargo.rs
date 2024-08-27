@@ -231,12 +231,12 @@ impl BuildRequest {
             Ok(Some(assets))
         })
         .await
-        .unwrap()
+        .map_err(|e| anyhow::anyhow!(e))?
     }
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
         tracing::info!("Copying public assets to the output directory...");
-        let out_dir = self.dioxus_crate.out_dir();
+        let out_dir = self.target_out_dir();
         let asset_dir = self.dioxus_crate.asset_dir();
 
         if asset_dir.is_dir() {
@@ -257,6 +257,7 @@ impl BuildRequest {
         match self.build_arguments.platform {
             Some(Platform::Fullstack | Platform::StaticGeneration) => match self.target_platform {
                 TargetPlatform::Web => out_dir.join("public"),
+                TargetPlatform::Desktop => out_dir.join("desktop"),
                 _ => out_dir,
             },
             _ => out_dir,
