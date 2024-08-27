@@ -41,7 +41,9 @@ pub fn launch(
                 .unwrap();
 
             // Serve the program if we are running with cargo
-            if std::env::var_os("CARGO").is_some() || std::env::var_os("DIOXUS_ACTIVE").is_some() {
+            if std::env::var_os("CARGO").is_some()
+                || std::env::var_os(dioxus_cli_config::__private::SERVE_ENV).is_some()
+            {
                 // Get the address the server should run on. If the CLI is running, the CLI proxies static generation into the main address
                 // and we use the generated address the CLI gives us
                 let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli();
