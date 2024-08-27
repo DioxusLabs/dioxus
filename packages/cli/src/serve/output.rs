@@ -446,12 +446,6 @@ impl Output {
                 open::that(format!("http://{}:{}", self.addr.addr, self.addr.port))?;
             }
             Event::Key(key)
-                if key.code == KeyCode::Char('c') && key.kind == KeyEventKind::Press =>
-            {
-                // Clear the currently selected build logs.
-                self.messages.clear();
-            }
-            Event::Key(key)
                 if key.code == KeyCode::Char('C') && key.kind == KeyEventKind::Press =>
             {
                 // Copy any selected lines to the clipboard.

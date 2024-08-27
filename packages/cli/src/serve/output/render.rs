@@ -155,14 +155,18 @@ impl TuiLayout {
 
         let mut i = start_index;
         loop {
+            if i == end_index {
+                break;
+            }
+
             let (x, y) = buffer.pos_of(i);
 
             // Skip any cells outside of console area.
             // This looping logic is a bit duplicated.
             if y >= console_y_end || x >= console_x_end {
                 match direction_forward {
-                    true => i += 1,
-                    false => i -= 1,
+                    true => i = i.saturating_add(1),
+                    false => i = i.saturating_sub(1),
                 }
                 if i == end_index {
                     break;
@@ -188,14 +192,10 @@ impl TuiLayout {
                 new_selected_lines.push(line);
             }
 
-            if i == end_index {
-                break;
-            }
-
             // Determine which direction we need to iterate through in the buffer.
             match direction_forward {
-                true => i += 1,
-                false => i -= 1,
+                true => i = i.saturating_add(1),
+                false => i = i.saturating_sub(1),
             }
         }
 
