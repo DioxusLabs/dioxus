@@ -11,9 +11,10 @@ use crate::{
 };
 use core::panic;
 use crossterm::{
+    cursor::{Hide, Show},
     event::{
-        DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyModifiers,
-        MouseButton, MouseEventKind,
+        DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyEventKind,
+        KeyModifiers, MouseButton, MouseEventKind,
     },
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
@@ -27,7 +28,6 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     io::{self, stdout},
-    ops::{Deref, DerefMut},
     rc::Rc,
     sync::atomic::Ordering,
     time::{Duration, Instant},
@@ -123,8 +123,9 @@ impl Output {
             log_control.output_enabled.store(true, Ordering::SeqCst);
             enable_raw_mode()?;
             stdout()
+                .execute(EnterAlternateScreen)?
                 .execute(EnableMouseCapture)?
-                .execute(EnterAlternateScreen)?;
+                .execute(Hide)?;
 
             // workaround for ci where the terminal is not fully initialized
             // this stupid bug
@@ -316,7 +317,8 @@ impl Output {
             disable_raw_mode()?;
             stdout()
                 .execute(DisableMouseCapture)?
-                .execute(LeaveAlternateScreen)?;
+                .execute(LeaveAlternateScreen)?
+                .execute(Show)?;
             self.drain_print_logs();
         }
 
@@ -352,12 +354,6 @@ impl Output {
             }
         }
 
-        if let Event::Key(key) = input {
-            if let KeyCode::Char('/') = key.code {
-                self.more_modal_open = !self.more_modal_open;
-            }
-        }
-
         match input {
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollUp => {
                 // Scroll up
@@ -377,7 +373,7 @@ impl Output {
                 self.scroll_position += scroll_speed;
                 self.reset_drag()
             }
-            Event::Key(key) if key.code == KeyCode::Up => {
+            Event::Key(key) if key.code == KeyCode::Up && key.kind == KeyEventKind::Press => {
                 // Scroll up
                 let mut scroll_speed = SCROLL_SPEED;
                 if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
@@ -386,7 +382,7 @@ impl Output {
                 self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
                 self.reset_drag();
             }
-            Event::Key(key) if key.code == KeyCode::Down => {
+            Event::Key(key) if key.code == KeyCode::Down && key.kind == KeyEventKind::Press => {
                 // Scroll down
                 let mut scroll_speed = SCROLL_SPEED;
                 if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
@@ -395,12 +391,12 @@ impl Output {
                 self.scroll_position += scroll_speed;
                 self.reset_drag();
             }
-            Event::Key(key) if key.code == KeyCode::Left => {
+            Event::Key(key) if key.code == KeyCode::Left && key.kind == KeyEventKind::Press => {
                 if self.show_filter_menu {
                     self.selected_filter_index = self.selected_filter_index.saturating_sub(1);
                 }
             }
-            Event::Key(key) if key.code == KeyCode::Right => {
+            Event::Key(key) if key.code == KeyCode::Right && key.kind == KeyEventKind::Press => {
                 if self.show_filter_menu {
                     self.selected_filter_index += 1;
 
@@ -411,7 +407,7 @@ impl Output {
                     }
                 }
             }
-            Event::Key(key) if key.code == KeyCode::Enter => {
+            Event::Key(key) if key.code == KeyCode::Enter && key.kind == KeyEventKind::Press => {
                 if self.show_filter_menu {
                     let filter = AVAILABLE_FILTERS[self.selected_filter_index];
                     // Remove the filter if it exists
@@ -437,19 +433,27 @@ impl Output {
                     self.drag_end = self.drag_start;
                 }
             }
-            Event::Key(key) if key.code == KeyCode::Char('r') => {
+            Event::Key(key)
+                if key.code == KeyCode::Char('r') && key.kind == KeyEventKind::Press =>
+            {
                 // Reload the app
                 return Ok(true);
             }
-            Event::Key(key) if key.code == KeyCode::Char('o') => {
+            Event::Key(key)
+                if key.code == KeyCode::Char('o') && key.kind == KeyEventKind::Press =>
+            {
                 // Open the running app.
                 open::that(format!("http://{}:{}", self.addr.addr, self.addr.port))?;
             }
-            Event::Key(key) if key.code == KeyCode::Char('c') => {
+            Event::Key(key)
+                if key.code == KeyCode::Char('c') && key.kind == KeyEventKind::Press =>
+            {
                 // Clear the currently selected build logs.
                 self.messages.clear();
             }
-            Event::Key(key) if key.code == KeyCode::Char('C') => {
+            Event::Key(key)
+                if key.code == KeyCode::Char('C') && key.kind == KeyEventKind::Press =>
+            {
                 // Copy any selected lines to the clipboard.
                 let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
@@ -458,18 +462,27 @@ impl Output {
                     selection::set_clipboard(text);
                 }
             }
-            Event::Key(key) if key.code == KeyCode::Char('a') => {
+            Event::Key(key)
+                if key.code == KeyCode::Char('a') && key.kind == KeyEventKind::Press =>
+            {
                 // Select all visible lines in the console.
                 let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
                 if is_ctrl {
                     self.drag_start = Some((0, 0));
-                    self.drag_end =
-                        Some((self.console_width - 1, self.console_height - 1));
+                    self.drag_end = Some((self.console_width - 1, self.console_height - 1));
                 }
             }
-            Event::Key(key) if key.code == KeyCode::Char('f') => {
+            Event::Key(key)
+                if key.code == KeyCode::Char('f') && key.kind == KeyEventKind::Press =>
+            {
                 // Show filter menu and enable filter selection mode.
                 self.show_filter_menu = !self.show_filter_menu;
+            }
+            Event::Key(key)
+                if key.code == KeyCode::Char('/') && key.kind == KeyEventKind::Press =>
+            {
+                // Toggle more modal
+                self.more_modal_open = !self.more_modal_open;
             }
             Event::Resize(_width, _height) => {
                 // nothing, it should take care of itself
@@ -741,7 +754,7 @@ impl ActiveBuild {
             Stage::Compiling => "compiling... ",
             Stage::OptimizingWasm => "optimizing wasm... ",
             Stage::OptimizingAssets => "optimizing assets... ",
-            Stage::Finished => "finished! 🎉 ",
+            Stage::Finished => "finished! √ ",
         };
         let progress = format!("{}%", (self.progress * 100.0) as u8);
 

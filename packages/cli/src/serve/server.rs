@@ -7,7 +7,7 @@ use axum::{
     body::Body,
     extract::{
         ws::{Message, WebSocket},
-        Extension, WebSocketUpgrade,
+        WebSocketUpgrade,
     },
     http::{
         header::{HeaderName, HeaderValue, CACHE_CONTROL, EXPIRES, PRAGMA},
@@ -418,23 +418,21 @@ fn setup_router(
         "/_dioxus",
         Router::new()
             .route(
-                "/",
-                get(
-                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
-                    },
-                ),
+                "/hot_reload",
+                get(|ws: WebSocketUpgrade| async move {
+                    ws.on_upgrade(move |socket| async move {
+                        _ = hot_reload_sockets.unbounded_send(socket)
+                    })
+                }),
             )
-            .layer(Extension(hot_reload_sockets))
             .route(
                 "/build_status",
-                get(
-                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
-                    },
-                ),
-            )
-            .layer(Extension(build_status_sockets)),
+                get(|ws: WebSocketUpgrade| async move {
+                    ws.on_upgrade(move |socket| async move {
+                        _ = build_status_sockets.unbounded_send(socket)
+                    })
+                }),
+            ),
     );
 
     // Setup cors

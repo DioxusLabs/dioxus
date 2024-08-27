@@ -34,10 +34,13 @@ pub fn set_clipboard(content: String) {
     let is_wayland = is_wayland();
 
     if is_wayland {
-        use wl_clipboard_rs::copy::{MimeType, Options, Source};
-        let opts = Options::new();
-        if let Err(e) = opts.copy(Source::Bytes(content.as_bytes().into()), MimeType::Text) {
-            tracing::error!(dx_src = ?MessageSource::Dev, err = ?e, "{USER_ERR_MSG}");
+        #[cfg(target_family = "unix")]
+        {
+            use wl_clipboard_rs::copy::{MimeType, Options, Source};
+            let opts = Options::new();
+            if let Err(e) = opts.copy(Source::Bytes(content.as_bytes().into()), MimeType::Text) {
+                tracing::error!(dx_src = ?MessageSource::Dev, err = ?e, "{USER_ERR_MSG}");
+            }
         }
     } else {
         let ctx = get_generic_clipboard();

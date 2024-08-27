@@ -105,6 +105,9 @@ crossterm = { version = "0.27.0", features = ["event-stream"] }
 ansi-to-tui = "=5.0.0-rc.1"
 ansi-to-html = "0.2.1"
 clipboard-rs = "0.1.11"
+
+# WL Clipboard should only be included as dep if compiling on unix
+[target.'cfg(target_family = "unix")'.dependencies]
 wl-clipboard-rs = "0.9.0"
 
 # on macos, we need to specify the vendored feature on ssl when cross compiling
