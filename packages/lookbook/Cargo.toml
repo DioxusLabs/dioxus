@@ -5,13 +5,13 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-dioxus = "0.6.0-alpha.1"
-dioxus-router = "0.6.0-alpha.0"
+dioxus = { workspace = true }
+dioxus-router = { workspace = true }
 dioxus-material = "0.3.0-alpha.1"
 dioxus-use-mounted = "0.3.0-alpha.1"
 dioxus-resize-observer = "0.3.0-alpha.1"
 dioxus_markdown = { git = "https://github.com/matthunz/markdown", branch = "v0.6" }
-lookbook-macros = { path = "../lookbook-macros" }
+lookbook-macros = { workspace = true }
 serde_json = "1.0.107"
 serde = "1.0.189"
 
