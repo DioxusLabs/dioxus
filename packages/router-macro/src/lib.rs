@@ -14,7 +14,7 @@ use syn::{parse::ParseStream, parse_macro_input, Ident, Token, Type};
 
 use proc_macro2::TokenStream as TokenStream2;
 
-use crate::{layout::LayoutId, route_tree::RouteTree};
+use crate::{layout::LayoutId, route_tree::ParseRouteTree};
 
 mod hash;
 mod layout;
@@ -574,7 +574,7 @@ impl RouteEnum {
     }
 
     fn parse_impl(&self) -> TokenStream2 {
-        let tree = RouteTree::new(&self.endpoints, &self.nests);
+        let tree = ParseRouteTree::new(&self.endpoints, &self.nests);
         let name = &self.name;
 
         let error_name = format_ident!("{}MatchError", self.name);
@@ -599,14 +599,16 @@ impl RouteEnum {
                     let route = s;
                     let (route, hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
+                    // Remove any trailing slashes. We parse /route/ and /route in the same way
+                    // Note: we don't use trim because it incudes more code
+                    let route = route.strip_suffix('/').unwrap_or(route);
                     let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
                     let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
                     let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
                     // skip the first empty segment
                     if s.starts_with('/') {
                         let _ = segments.next();
-                    }
-                    else {
+                    } else {
                         // if this route does not start with a slash, it is not a valid route
                         return Err(dioxus_router::routable::RouteParseError {
                             attempted_routes: Vec::new(),
