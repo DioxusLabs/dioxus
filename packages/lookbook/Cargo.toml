@@ -11,9 +11,9 @@ dioxus-material = "0.3.0-alpha.1"
 dioxus-use-mounted = "0.3.0-alpha.1"
 dioxus-resize-observer = "0.3.0-alpha.1"
 dioxus_markdown = { git = "https://github.com/matthunz/markdown", branch = "v0.6" }
-lookbook-macros = { workspace = true }
+lookbook-macros = { path = "../lookbook-macros" }
 serde_json = "1.0.107"
 serde = "1.0.189"
 
 [dev-dependencies]
-dioxus = { version = "0.6.0-alpha.1", features = ["web"] }
+dioxus = { workspace = true, features = ["web"] }

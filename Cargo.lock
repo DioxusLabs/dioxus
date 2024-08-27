@@ -3247,17 +3247,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus_server_macro"
-version = "0.6.0-alpha.2"
-dependencies = [
- "convert_case 0.6.0",
- "proc-macro2",
- "quote",
- "server_fn_macro",
- "syn 2.0.74",
-]
-
-[[package]]
 name = "dirs"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5894,20 +5883,6 @@ dependencies = [
  "cfg-expr 0.16.0",
  "petgraph",
  "semver 1.0.23",
-]
-
-[[package]]
-name = "krates"
-version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "866bd5c1d0fc9c130a2469a1b3086803ea67b93b35683ae8ab2ec8a970120a65"
-dependencies = [
- "camino",
- "cfg-expr 0.16.0",
- "petgraph",
- "semver 1.0.23",
- "serde",
- "serde_json",
 ]
 
 [[package]]
