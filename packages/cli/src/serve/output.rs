@@ -103,8 +103,10 @@ pub struct Output {
 
     // Filters
     show_filter_menu: bool,
-    enabled_filters: Vec<MessageFilter>,
+    filters: Vec<(String, bool)>,
     selected_filter_index: usize,
+    filter_search_mode: bool,
+    filter_search_input: Option<String>,
 
     _rustc_version: String,
     _rustc_nightly: bool,
@@ -194,8 +196,10 @@ impl Output {
 
             // Filter
             show_filter_menu: true,
-            enabled_filters: Vec::new(),
+            filters: Vec::new(),
             selected_filter_index: 0,
+            filter_search_input: None,
+            filter_search_mode: false,
         })
     }
 
@@ -354,6 +358,43 @@ impl Output {
             }
         }
 
+        // If we're in filter search mode we must capture all key inputs.
+        // This also handles when a filter is submitted.
+        if self.filter_search_mode {
+            if let Event::Key(key) = input {
+                if key.kind != KeyEventKind::Press {
+                    return Ok(false);
+                }
+
+                match key.code {
+                    KeyCode::Char(c) => {
+                        if let Some(input) = self.filter_search_input.as_mut() {
+                            input.push(c);
+                        } else {
+                            self.filter_search_input = Some(String::from(c));
+                        }
+                    }
+                    KeyCode::Enter => {
+                        if let Some(search) = &self.filter_search_input {
+                            self.filters.push((search.to_string(), true));
+                        }
+                        self.filter_search_input = None;
+                        self.filter_search_mode = false;
+                    }
+                    KeyCode::Backspace => {
+                        if let Some(search) = self.filter_search_input.as_mut() {
+                            search.pop();
+                            if search.is_empty() {
+                                self.filter_search_input = None;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                return Ok(false);
+            }
+        }
+
         match input {
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollUp => {
                 // Scroll up
@@ -374,48 +415,45 @@ impl Output {
                 self.reset_drag()
             }
             Event::Key(key) if key.code == KeyCode::Up && key.kind == KeyEventKind::Press => {
-                // Scroll up
-                let mut scroll_speed = SCROLL_SPEED;
-                if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
-                    scroll_speed += SCROLL_MODIFIER;
-                }
-                self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
-                self.reset_drag();
-            }
-            Event::Key(key) if key.code == KeyCode::Down && key.kind == KeyEventKind::Press => {
-                // Scroll down
-                let mut scroll_speed = SCROLL_SPEED;
-                if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
-                    scroll_speed += SCROLL_MODIFIER;
-                }
-                self.scroll_position += scroll_speed;
-                self.reset_drag();
-            }
-            Event::Key(key) if key.code == KeyCode::Left && key.kind == KeyEventKind::Press => {
+                // Select filter list item if filter is showing, otherwise scroll console.
                 if self.show_filter_menu {
                     self.selected_filter_index = self.selected_filter_index.saturating_sub(1);
+                } else {
+                    // Scroll up
+                    let mut scroll_speed = SCROLL_SPEED;
+                    if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
+                        scroll_speed += SCROLL_MODIFIER;
+                    }
+                    self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
+                    self.reset_drag();
+                }
+            }
+            Event::Key(key) if key.code == KeyCode::Down && key.kind == KeyEventKind::Press => {
+                // Select filter list item if filter is showing, otherwise scroll console.
+                if self.show_filter_menu {
+                    let list_len = self.filters.len();
+                    if self.selected_filter_index < list_len - 1 {
+                        self.selected_filter_index += 1;
+                    }
+                } else {
+                    // Scroll down
+                    let mut scroll_speed = SCROLL_SPEED;
+                    if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
+                        scroll_speed += SCROLL_MODIFIER;
+                    }
+                    self.scroll_position += scroll_speed;
+                    self.reset_drag();
                 }
             }
             Event::Key(key) if key.code == KeyCode::Right && key.kind == KeyEventKind::Press => {
-                if self.show_filter_menu {
-                    self.selected_filter_index += 1;
-
-                    // Cap the index to amount of allowed filters (adjusted to be 0-indexed)
-                    let filters_len = AVAILABLE_FILTERS.len();
-                    if self.selected_filter_index > filters_len - 1 {
-                        self.selected_filter_index = filters_len;
-                    }
-                }
+                // Toggle filter if filter menu is shown.
+                if self.show_filter_menu {}
             }
             Event::Key(key) if key.code == KeyCode::Enter && key.kind == KeyEventKind::Press => {
+                // We only need to listen to the enter key when not in search mode
+                // as there is other logic that handles adding filters and disabling the mdoe.
                 if self.show_filter_menu {
-                    let filter = AVAILABLE_FILTERS[self.selected_filter_index];
-                    // Remove the filter if it exists
-                    if let Some(index) = self.enabled_filters.iter().position(|x| *x == filter) {
-                        self.enabled_filters.remove(index);
-                    } else {
-                        self.enabled_filters.push(filter);
-                    }
+                    self.filter_search_mode = !self.filter_search_mode;
                 }
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
@@ -470,6 +508,11 @@ impl Output {
                 if key.code == KeyCode::Char('f') && key.kind == KeyEventKind::Press =>
             {
                 // Show filter menu and enable filter selection mode.
+                if self.show_filter_menu {
+                    // Reset inputs when filter menu is closed.
+                    self.filter_search_mode = false;
+                    self.filter_search_input = None;
+                }
                 self.show_filter_menu = !self.show_filter_menu;
             }
             Event::Key(key)
@@ -639,7 +682,7 @@ impl Output {
             .as_mut()
             .unwrap()
             .draw(|frame| {
-                let layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
+                let mut layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
                 let (console_width, console_height) = layout.get_console_size();
                 self.console_width = console_width;
                 self.console_height = console_height;
@@ -659,7 +702,13 @@ impl Output {
                 );
 
                 if self.show_filter_menu {
-                    layout.render_filter_menu(frame, None);
+                    layout.render_filter_menu(
+                        frame,
+                        &self.filters,
+                        self.selected_filter_index,
+                        self.filter_search_mode,
+                        self.filter_search_input.as_ref(),
+                    );
                 }
 
                 layout.render_status_bar(
@@ -788,7 +837,10 @@ fn set_fix_term_hook() {
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         _ = disable_raw_mode();
-        _ = stdout().execute(LeaveAlternateScreen);
+        let mut stdout = stdout();
+        _ = stdout.execute(LeaveAlternateScreen);
+        _ = stdout.execute(DisableMouseCapture);
+        _ = stdout.execute(Show);
         original_hook(info);
     }));
 }

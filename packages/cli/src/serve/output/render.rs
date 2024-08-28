@@ -9,7 +9,7 @@
 //! {OPT BORDER}
 //! -STATUS BAR-
 
-use super::{BuildProgress, Message, MessageFilter, MessageSource, AVAILABLE_FILTERS};
+use super::{BuildProgress, Message, MessageSource};
 use ansi_to_tui::IntoText as _;
 use dioxus_cli_config::Platform;
 use ratatui::{
@@ -17,8 +17,8 @@ use ratatui::{
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Widget,
-        Wrap,
+        Block, Borders, Clear, List, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
+        ScrollbarState, Widget, Wrap,
     },
     Frame,
 };
@@ -37,6 +37,9 @@ pub struct TuiLayout {
     border_sep: Rect,
     //. The status bar that displays build status, platform, versions, etc.
     status_bar: Rc<[Rect]>,
+
+    // Misc
+    filter_list_state: ListState,
 }
 
 impl TuiLayout {
@@ -97,6 +100,7 @@ impl TuiLayout {
             filter_drawer,
             border_sep: border_sep_top,
             status_bar,
+            filter_list_state: ListState::default(),
         }
     }
 
@@ -456,14 +460,25 @@ impl TuiLayout {
     }
 
     /// Render the filter drawer menu.
-    pub fn render_filter_menu(&self, frame: &mut Frame, search_input: Option<String>) {
+    pub fn render_filter_menu(
+        &mut self,
+        frame: &mut Frame,
+        filters: &[(String, bool)],
+        selected_filter_index: usize,
+        search_mode: bool,
+        search_input: Option<&String>,
+    ) {
         let Some(ref filter_drawer) = self.filter_drawer else {
             return;
         };
 
         // Vertical layout
         let container = Layout::default()
-            .constraints([Constraint::Length(4), Constraint::Fill(1)])
+            .constraints([
+                Constraint::Length(4),
+                Constraint::Fill(1),
+                Constraint::Length(5),
+            ])
             .direction(Direction::Vertical)
             .split(filter_drawer[1]);
 
@@ -483,76 +498,97 @@ impl TuiLayout {
 
         let search_text = match search_input {
             Some(s) => s,
-            None => "[enter] to type...".to_string(),
+            None => {
+                if search_mode {
+                    "..."
+                } else {
+                    "[enter] to type..."
+                }
+            }
         };
 
         let search_input = Paragraph::new(Line::from(search_text))
-            .fg(Color::DarkGray)
+            .fg(Color::Black)
             .block(search_input_block);
 
         frame.render_widget(search_title, top_area[1]);
         frame.render_widget(search_input, top_area[2]);
 
-        // Render the enabled filters
-        let bottom_area = container[1];
+        // Render the filters
+        let list_area = container[1];
+        let mut list_items = Vec::new();
 
-        let lines = vec![
-            Line::from("abcd").light_yellow(),
-            Line::from("my-cool-component").light_yellow(),
-            Line::from("info").dark_gray(),
-            Line::from("warn").light_yellow(),
-            Line::from("error").light_yellow(),
-        ];
-
-        let text = Text::from(lines);
-        frame.render_widget(text, bottom_area);
-    }
-
-    /// Generate the paragraph for the filter drawer.
-    pub fn get_filter_drawer_text<'a>(
-        enabled_filters: &[MessageFilter],
-        selected_filter_index: usize,
-        search_input: String,
-    ) -> Paragraph<'a> {
-        let mut spans = vec![Span::from("Filters: ").light_blue()];
-
-        for (i, filter) in AVAILABLE_FILTERS.iter().enumerate() {
-            let mut span = Span::from(filter.to_string()).dark_gray();
-            if enabled_filters.contains(filter) {
-                span = span.light_yellow();
-            }
-
-            // Add arrow prefix if currently focused
-            if selected_filter_index == i {
-                let prefix = Span::from("» ").gray();
-                spans.push(prefix);
-            }
-
-            spans.push(span);
-
-            let postfix = Span::from(", ").dark_gray();
-            spans.push(postfix);
+        for (filter, enabled) in filters {
+            let filter = Span::from(filter);
+            let filter = match enabled {
+                true => filter.light_yellow(),
+                false => filter.dark_gray(),
+            };
+            list_items.push(filter);
         }
+        list_items.reverse();
 
-        let mut other_spans = vec![
-            Span::from("| ").gray(),
-            Span::from("[<] ").dark_gray(),
-            Span::from("left ").gray(),
-            Span::from("[>] ").dark_gray(),
-            Span::from("right ").gray(),
-            Span::from("[enter] ").dark_gray(),
-            Span::from("toggle filter ").gray(),
-            Span::from("| Search: ").gray(),
-            Span::from(search_input).dark_gray(),
+        let list = List::new(list_items).highlight_symbol("» ");
+        self.filter_list_state.select(Some(selected_filter_index));
+        frame.render_stateful_widget(list, list_area, &mut self.filter_list_state);
+
+        // Render the keybind list at the bottom.
+        let keybinds = container[2];
+        let lines = vec![
+            Line::from("[↑] Up").white(),
+            Line::from("[↓] Down").white(),
+            Line::from("[→] Toggle").white(),
+            Line::from("[enter] Type / Submit").white(),
         ];
-
-        spans.append(&mut other_spans);
-        let line = Line::from(spans);
-
-        Paragraph::new(line)
-            .alignment(Alignment::Left)
-            .wrap(Wrap { trim: false })
+        let text = Text::from(lines);
+        frame.render_widget(text, keybinds);
     }
+
+    // /// Generate the paragraph for the filter drawer.
+    // pub fn get_filter_drawer_text<'a>(
+    //     enabled_filters: &[MessageFilter],
+    //     selected_filter_index: usize,
+    //     search_input: String,
+    // ) -> Paragraph<'a> {
+    //     let mut spans = vec![Span::from("Filters: ").light_blue()];
+
+    //     for (i, filter) in AVAILABLE_FILTERS.iter().enumerate() {
+    //         let mut span = Span::from(filter.to_string()).dark_gray();
+    //         if enabled_filters.contains(filter) {
+    //             span = span.light_yellow();
+    //         }
+
+    //         // Add arrow prefix if currently focused
+    //         if selected_filter_index == i {
+    //             let prefix = Span::from("» ").gray();
+    //             spans.push(prefix);
+    //         }
+
+    //         spans.push(span);
+
+    //         let postfix = Span::from(", ").dark_gray();
+    //         spans.push(postfix);
+    //     }
+
+    //     let mut other_spans = vec![
+    //         Span::from("| ").gray(),
+    //         Span::from("[<] ").dark_gray(),
+    //         Span::from("left ").gray(),
+    //         Span::from("[>] ").dark_gray(),
+    //         Span::from("right ").gray(),
+    //         Span::from("[enter] ").dark_gray(),
+    //         Span::from("toggle filter ").gray(),
+    //         Span::from("| Search: ").gray(),
+    //         Span::from(search_input).dark_gray(),
+    //     ];
+
+    //     spans.append(&mut other_spans);
+    //     let line = Line::from(spans);
+
+    //     Paragraph::new(line)
+    //         .alignment(Alignment::Left)
+    //         .wrap(Wrap { trim: false })
+    // }
 
     /// Returns the height of the console TUI area in number of lines.
     pub fn get_console_size(&self) -> (u16, u16) {
