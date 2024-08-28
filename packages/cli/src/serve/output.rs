@@ -447,7 +447,14 @@ impl Output {
             }
             Event::Key(key) if key.code == KeyCode::Right && key.kind == KeyEventKind::Press => {
                 // Toggle filter if filter menu is shown.
-                if self.show_filter_menu {}
+                if self.show_filter_menu {
+                    let index = self.selected_filter_index;
+                    self.filters.reverse();
+                    if let Some(item) = self.filters.get_mut(index) {
+                        item.1 = !item.1;
+                    }
+                    self.filters.reverse();
+                }
             }
             Event::Key(key) if key.code == KeyCode::Enter && key.kind == KeyEventKind::Press => {
                 // We only need to listen to the enter key when not in search mode

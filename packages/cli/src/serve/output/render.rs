@@ -544,52 +544,6 @@ impl TuiLayout {
         frame.render_widget(text, keybinds);
     }
 
-    // /// Generate the paragraph for the filter drawer.
-    // pub fn get_filter_drawer_text<'a>(
-    //     enabled_filters: &[MessageFilter],
-    //     selected_filter_index: usize,
-    //     search_input: String,
-    // ) -> Paragraph<'a> {
-    //     let mut spans = vec![Span::from("Filters: ").light_blue()];
-
-    //     for (i, filter) in AVAILABLE_FILTERS.iter().enumerate() {
-    //         let mut span = Span::from(filter.to_string()).dark_gray();
-    //         if enabled_filters.contains(filter) {
-    //             span = span.light_yellow();
-    //         }
-
-    //         // Add arrow prefix if currently focused
-    //         if selected_filter_index == i {
-    //             let prefix = Span::from("» ").gray();
-    //             spans.push(prefix);
-    //         }
-
-    //         spans.push(span);
-
-    //         let postfix = Span::from(", ").dark_gray();
-    //         spans.push(postfix);
-    //     }
-
-    //     let mut other_spans = vec![
-    //         Span::from("| ").gray(),
-    //         Span::from("[<] ").dark_gray(),
-    //         Span::from("left ").gray(),
-    //         Span::from("[>] ").dark_gray(),
-    //         Span::from("right ").gray(),
-    //         Span::from("[enter] ").dark_gray(),
-    //         Span::from("toggle filter ").gray(),
-    //         Span::from("| Search: ").gray(),
-    //         Span::from(search_input).dark_gray(),
-    //     ];
-
-    //     spans.append(&mut other_spans);
-    //     let line = Line::from(spans);
-
-    //     Paragraph::new(line)
-    //         .alignment(Alignment::Left)
-    //         .wrap(Wrap { trim: false })
-    // }
-
     /// Returns the height of the console TUI area in number of lines.
     pub fn get_console_size(&self) -> (u16, u16) {
         (self.console[0].width, self.console[0].height)
