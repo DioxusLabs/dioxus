@@ -150,7 +150,7 @@ impl<T> Clone for Coroutine<T> {
 }
 
 impl<T> PartialEq for Coroutine<T> {
-    fn eq(&self) -> Self {
+    fn eq(&self, other: &Self) -> Self {
         self.needs_regen == other.needs_regen && self.tx == other.tx && self.task == other.task
     }
 }
