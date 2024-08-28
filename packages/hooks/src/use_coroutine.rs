@@ -110,7 +110,6 @@ pub fn use_coroutine_handle<M: 'static>() -> Coroutine<M> {
     use_hook(consume_context::<Coroutine<M>>)
 }
 
-#[derive(PartialEq)]
 pub struct Coroutine<T: 'static> {
     needs_regen: Signal<bool>,
     tx: CopyValue<Option<UnboundedSender<T>>>,
@@ -147,5 +146,11 @@ impl<T> Copy for Coroutine<T> {}
 impl<T> Clone for Coroutine<T> {
     fn clone(&self) -> Self {
         *self
+    }
+}
+
+impl<T> PartialEq for Coroutine<T> {
+    fn clone(&self) -> Self {
+        self.needs_regen == other.needs_regen && self.tx == other.tx && self.task == other.task
     }
 }
