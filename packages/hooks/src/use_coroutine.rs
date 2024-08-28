@@ -140,7 +140,7 @@ impl<T> Coroutine<T> {
     }
 }
 
-// manual impl since deriving doesn't work with generics
+// manually implement Copy, Clone, and PartialEw impl since deriving doesn't work with generics
 impl<T> Copy for Coroutine<T> {}
 
 impl<T> Clone for Coroutine<T> {
