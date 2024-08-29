@@ -600,7 +600,7 @@ impl RouteEnum {
                     let (route, hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
                     // Remove any trailing slashes. We parse /route/ and /route in the same way
-                    // Note: we don't use trim because it incudes more code
+                    // Note: we don't use trim because it includes more code
                     let route = route.strip_suffix('/').unwrap_or(route);
                     let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
                     let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
