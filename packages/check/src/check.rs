@@ -208,7 +208,11 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
                 .unwrap_or_else(|| i.span())
                 .into(),
         )));
-        syn::visit::visit_expr_if(self, i);
+        // only visit the body and else branch, calling hooks inside the expression is not conditional
+        self.visit_block(&i.then_branch);
+        if let Some(it) = &i.else_branch {
+            self.visit_expr(&(it).1);
+        }
         self.context.pop();
     }
 
@@ -221,7 +225,10 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
                 .unwrap_or_else(|| i.span())
                 .into(),
         )));
-        syn::visit::visit_expr_match(self, i);
+        // only visit the arms, calling hooks inside the expression is not conditional
+        for it in &i.arms {
+            self.visit_arm(it);
+        }
         self.context.pop();
     }
 
@@ -417,6 +424,22 @@ mod tests {
     }
 
     #[test]
+    fn test_use_in_match_expr() {
+        let contents = indoc! {r#"
+            fn use_thing() {
+                match use_resource(|| async {}) {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
     fn test_for_loop_hook() {
         let contents = indoc! {r#"
             fn App() -> Element {
@@ -539,6 +562,21 @@ mod tests {
             fn App() -> Element {
                 let something = use_signal(|| "hands");
                 if you_are_happy && you_know_it {
+                    println!("clap your {something}")
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
+    fn test_conditional_expr_okay() {
+        let contents = indoc! {r#"
+            fn App() -> Element {
+                if use_signal(|| true) {
                     println!("clap your {something}")
                 }
             }
