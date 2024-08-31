@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
       - name: Install omnix
         run: nix --accept-flake-config profile install "github:juspay/omnix"
       - name: Build all flake outputs
