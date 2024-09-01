@@ -213,6 +213,7 @@ tokio = { version = "1.16.1", default-features = false, features = [
     "rt",
     "time"
 ] }
+web-time = "1.1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.16.1", features = ["full"] }
@@ -282,7 +283,6 @@ doc-scrape-examples = true
 
 [[example]]
 name = "clock"
-required-features = ["desktop"]
 doc-scrape-examples = true
 
 [[example]]

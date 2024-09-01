@@ -4,10 +4,15 @@
 use async_std::task::sleep;
 use dioxus::prelude::*;
 
+#[cfg(not(target_family = "wasm"))]
+use std::time::Instant;
+#[cfg(target_family = "wasm")]
+use web_time::Instant;
+
 const STYLE: &str = asset!("./examples/assets/clock.css");
 
 fn main() {
-    launch_desktop(app);
+    launch(app);
 }
 
 fn app() -> Element {
@@ -15,7 +20,7 @@ fn app() -> Element {
 
     use_future(move || async move {
         // Save our initial timea
-        let start = std::time::Instant::now();
+        let start = Instant::now();
 
         loop {
             sleep(std::time::Duration::from_millis(27)).await;
