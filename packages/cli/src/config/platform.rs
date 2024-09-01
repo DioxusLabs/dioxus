@@ -39,11 +39,6 @@ pub enum Platform {
     Fullstack,
 
     /// Targeting the static generation platform using SSR and Dioxus-Fullstack
-    #[clap(name = "static-generation")]
-    #[serde(rename = "static-generation")]
-    StaticGeneration,
-
-    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
     #[clap(name = "liveview")]
     #[serde(rename = "liveview")]
     Liveview,
@@ -66,7 +61,6 @@ impl FromStr for Platform {
             "web" => Ok(Self::Web),
             "desktop" => Ok(Self::Desktop),
             "fullstack" => Ok(Self::Fullstack),
-            "static-generation" => Ok(Self::StaticGeneration),
             "liveview" => Ok(Self::Liveview),
             _ => Err(UnknownPlatformError),
         }
@@ -82,12 +76,7 @@ impl Display for Platform {
 
 impl Platform {
     /// All platforms the dioxus CLI supports
-    pub const ALL: &'static [Self] = &[
-        Platform::Web,
-        Platform::Desktop,
-        Platform::Fullstack,
-        Platform::StaticGeneration,
-    ];
+    pub const ALL: &'static [Self] = &[Platform::Web, Platform::Desktop, Platform::Fullstack];
 
     /// Get the feature name for the platform in the dioxus crate
     pub fn feature_name(&self) -> &str {
@@ -95,7 +84,6 @@ impl Platform {
             Platform::Web => "web",
             Platform::Desktop => "desktop",
             Platform::Fullstack => "fullstack",
-            Platform::StaticGeneration => "static-generation",
             Platform::Liveview => "liveview",
             Platform::Mobile => "mobile",
         }

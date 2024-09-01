@@ -1,41 +1,42 @@
-use crate::{
-    assets::{self, get_json_from_object_files, linker_intercept},
-    error::Result,
-};
-use clap::Parser;
-use std::{fs, path::PathBuf};
+use std::{env::current_dir, path::PathBuf};
 
-#[derive(Clone, Debug, Parser)]
-#[clap(name = "link", hide = true)]
-pub struct LinkCommand {
-    // Allow us to accept any argument after `dx link`
-    #[clap(trailing_var_arg = true, allow_hyphen_values = true)]
+use serde::{Deserialize, Serialize};
+
+/// The env var that will be set by the linker intercept cmd to indicate that we should act as a linker
+pub const LINK_OUTPUT_ENV_VAR: &str = "dx-magic-link-file";
+
+/// Should we act as a linker?
+///
+/// Just check if the magic env var is set
+pub fn should_link() -> bool {
+    std::env::var(LINK_OUTPUT_ENV_VAR).is_ok()
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct InterceptedArgs {
+    pub work_dir: PathBuf,
     pub args: Vec<String>,
 }
 
-impl LinkCommand {
-    pub fn link(self) -> Result<()> {
-        let Some((link_args, object_files)) = linker_intercept(self.args) else {
-            tracing::warn!("Invalid linker arguments.");
-            return Ok(());
-        };
+/// Write the incoming linker args to a file
+///
+/// The file will be given by the dx-magic-link-arg env var itself, so we use
+/// it both for determining if we should act as a linker and the for the file name itself.
+///
+/// This will panic if it fails
+pub fn dump_link_args() -> anyhow::Result<()> {
+    let output = std::env::var(LINK_OUTPUT_ENV_VAR).expect("Missing env var with target file");
 
-        // Parse object files, deserialize JSON, & create a file to propagate JSON.
-        let json = get_json_from_object_files(object_files);
-        let parsed = serde_json::to_string(&json).unwrap();
+    // get the args and then dump them to the file
+    let args: Vec<_> = std::env::args().collect();
+    let escaped = serde_json::to_string(&InterceptedArgs {
+        args,
+        work_dir: current_dir().unwrap(),
+    })
+    .expect("Failed to escape env args");
 
-        let out_dir = PathBuf::from(link_args.first().unwrap());
-        fs::create_dir_all(&out_dir).unwrap();
+    // write the file
+    std::fs::write(output, escaped).expect("Failed to write output file");
 
-        let path = out_dir.join(assets::MG_JSON_OUT);
-        fs::write(path, parsed).unwrap();
-
-        Ok(())
-    }
-
-    /// We need to pass the subcommand name to Manganis so this
-    /// helps centralize where we set the subcommand "name".
-    pub fn command_name() -> String {
-        "link".to_string()
-    }
+    Ok(())
 }

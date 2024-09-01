@@ -92,7 +92,6 @@ pub struct Output {
     _dx_version: String,
     interactive: bool,
     pub(crate) build_progress: BuildProgress,
-    running_apps: HashMap<TargetPlatform, RunningApp>,
     is_cli_release: bool,
     platform: Platform,
 
@@ -177,7 +176,6 @@ impl Output {
             platform,
             fly_modal_open: false,
             build_progress: Default::default(),
-            running_apps: HashMap::new(),
             scroll: 0,
             term_height: 0,
             num_lines_with_wrapping: 0,
@@ -189,48 +187,50 @@ impl Output {
 
     /// Add a message from stderr to the logs
     fn push_stderr(&mut self, platform: TargetPlatform, stderr: String) {
-        self.set_tab(Tab::BuildLog);
+        todo!()
+        // self.set_tab(Tab::BuildLog);
 
-        self.running_apps
-            .get_mut(&platform)
-            .unwrap()
-            .output
-            .as_mut()
-            .unwrap()
-            .stderr_line
-            .push_str(&stderr);
-        self.build_progress
-            .build_logs
-            .get_mut(&platform)
-            .unwrap()
-            .messages
-            .push(BuildMessage {
-                level: Level::ERROR,
-                message: MessageType::Text(stderr),
-                source: MessageSource::App,
-            });
+        // self.running_apps
+        //     .get_mut(&platform)
+        //     .unwrap()
+        //     .output
+        //     .as_mut()
+        //     .unwrap()
+        //     .stderr_line
+        //     .push_str(&stderr);
+        // self.build_progress
+        //     .build_logs
+        //     .get_mut(&platform)
+        //     .unwrap()
+        //     .messages
+        //     .push(BuildMessage {
+        //         level: Level::ERROR,
+        //         message: MessageType::Text(stderr),
+        //         source: MessageSource::App,
+        //     });
     }
 
     /// Add a message from stdout to the logs
     fn push_stdout(&mut self, platform: TargetPlatform, stdout: String) {
-        self.running_apps
-            .get_mut(&platform)
-            .unwrap()
-            .output
-            .as_mut()
-            .unwrap()
-            .stdout_line
-            .push_str(&stdout);
-        self.build_progress
-            .build_logs
-            .get_mut(&platform)
-            .unwrap()
-            .messages
-            .push(BuildMessage {
-                level: Level::INFO,
-                message: MessageType::Text(stdout),
-                source: MessageSource::App,
-            });
+        todo!()
+        // self.running_apps
+        //     .get_mut(&platform)
+        //     .unwrap()
+        //     .output
+        //     .as_mut()
+        //     .unwrap()
+        //     .stdout_line
+        //     .push_str(&stdout);
+        // self.build_progress
+        //     .build_logs
+        //     .get_mut(&platform)
+        //     .unwrap()
+        //     .messages
+        //     .push(BuildMessage {
+        //         level: Level::INFO,
+        //         message: MessageType::Text(stdout),
+        //         source: MessageSource::App,
+        //     });
     }
 
     /// Wait for either the ctrl_c handler or the next event
@@ -245,67 +245,69 @@ impl Output {
         {
             next_or_pending(async move { f.await.ok().flatten() })
         }
+
         let user_input = async {
             let events = self.events.as_mut()?;
             events.next().await
         };
+
         let user_input = ok_and_some(user_input.map(|e| e.transpose()));
 
-        let has_running_apps = !self.running_apps.is_empty();
-        let next_stdout = self.running_apps.values_mut().map(|app| {
-            let future = async move {
-                let (stdout, stderr) = match &mut app.output {
-                    Some(out) => (
-                        ok_and_some(out.stdout.next_line()),
-                        ok_and_some(out.stderr.next_line()),
-                    ),
-                    None => return futures_util::future::pending().await,
-                };
+        // let has_running_apps = !self.running_apps.is_empty();
+        // let next_stdout = self.running_apps.values_mut().map(|app| {
+        //     let future = async move {
+        //         let (stdout, stderr) = match &mut app.output {
+        //             Some(out) => (
+        //                 ok_and_some(out.stdout.next_line()),
+        //                 ok_and_some(out.stderr.next_line()),
+        //             ),
+        //             None => return futures_util::future::pending().await,
+        //         };
 
-                tokio::select! {
-                    line = stdout => (app.result.target_platform, Some(line), None),
-                    line = stderr => (app.result.target_platform, None, Some(line)),
-                }
-            };
-            Box::pin(future)
-        });
+        //         tokio::select! {
+        //             line = stdout => (app.result.target_platform, Some(line), None),
+        //             line = stderr => (app.result.target_platform, None, Some(line)),
+        //         }
+        //     };
+        //     Box::pin(future)
+        // });
 
-        let next_stdout = async {
-            if has_running_apps {
-                select_all(next_stdout).await.0
-            } else {
-                futures_util::future::pending().await
-            }
-        };
+        // let next_stdout = async {
+        //     if has_running_apps {
+        //         select_all(next_stdout).await.0
+        //     } else {
+        //         futures_util::future::pending().await
+        //     }
+        // };
 
-        let tui_log_rx = &mut self.log_control.tui_rx;
-        let next_tui_log = next_or_pending(tui_log_rx.next());
+        // let tui_log_rx = &mut self.log_control.tui_rx;
+        // let next_tui_log = next_or_pending(tui_log_rx.next());
 
-        tokio::select! {
-            (platform, stdout, stderr) = next_stdout => {
-                if let Some(stdout) = stdout {
-                    self.push_stdout(platform, stdout);
-                }
-                if let Some(stderr) = stderr {
-                    self.push_stderr(platform, stderr);
-                }
-            },
+        // tokio::select! {
+        //     (platform, stdout, stderr) = next_stdout => {
+        //         if let Some(stdout) = stdout {
+        //             self.push_stdout(platform, stdout);
+        //         }
+        //         if let Some(stderr) = stderr {
+        //             self.push_stderr(platform, stderr);
+        //         }
+        //     },
 
-            // Handle internal CLI tracing logs.
-            log = next_tui_log => {
-                self.push_log(LogSource::Internal, BuildMessage {
-                    level: Level::INFO,
-                    message: MessageType::Text(log),
-                    source: MessageSource::Dev,
-                });
-            }
+        //     // Handle internal CLI tracing logs.
+        //     log = next_tui_log => {
+        //         self.push_log(LogSource::Internal, BuildMessage {
+        //             level: Level::INFO,
+        //             message: MessageType::Text(log),
+        //             source: MessageSource::Dev,
+        //         });
+        //     }
 
-            event = user_input => {
-                if self.handle_events(event).await? {
-                    return Ok(ServeUpdate::TuiInput { rebuild: true });
-                }
-            }
-        }
+        //     event = user_input => {
+        //         if self.handle_events(event).await? {
+        //             return Ok(ServeUpdate::TuiInput { rebuild: true });
+        //         }
+        //     }
+        // }
 
         Ok(ServeUpdate::TuiInput { rebuild: false })
     }
@@ -525,42 +527,43 @@ impl Output {
         }
     }
 
-    pub fn new_ready_app(&mut self, build_engine: &mut Builder, results: Vec<BuildRequest>) {
-        for result in results {
-            let out = build_engine
-                .children
-                .iter_mut()
-                .find_map(|(platform, child)| {
-                    if platform == &result.target_platform {
-                        let stdout = child.stdout.take().unwrap();
-                        let stderr = child.stderr.take().unwrap();
-                        Some((stdout, stderr))
-                    } else {
-                        None
-                    }
-                });
+    pub fn new_ready_app(&mut self, build_engine: &mut Builder, target: TargetPlatform) {
+        todo!()
+        // for result in results {
+        //     let out = build_engine
+        //         .finished
+        //         .iter_mut()
+        //         .find_map(|(platform, child)| {
+        //             if platform == &result.target_platform {
+        //                 let stdout = child.stdout.take().unwrap();
+        //                 let stderr = child.stderr.take().unwrap();
+        //                 Some((stdout, stderr))
+        //             } else {
+        //                 None
+        //             }
+        //         });
 
-            let platform = result.target_platform;
+        //     let platform = result.target_platform;
 
-            let stdout = out.map(|(stdout, stderr)| RunningAppOutput {
-                stdout: BufReader::new(stdout).lines(),
-                stderr: BufReader::new(stderr).lines(),
-                stdout_line: String::new(),
-                stderr_line: String::new(),
-            });
+        //     let stdout = out.map(|(stdout, stderr)| RunningAppOutput {
+        //         stdout: BufReader::new(stdout).lines(),
+        //         stderr: BufReader::new(stderr).lines(),
+        //         stdout_line: String::new(),
+        //         stderr_line: String::new(),
+        //     });
 
-            let app = RunningApp {
-                result,
-                output: stdout,
-            };
+        //     let app = RunningApp {
+        //         result,
+        //         output: stdout,
+        //     };
 
-            self.running_apps.insert(platform, app);
+        //     self.running_apps.insert(platform, app);
 
-            // Finish the build progress for the platform that just finished building
-            if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
-                build.stage = Stage::Finished;
-            }
-        }
+        //     // Finish the build progress for the platform that just finished building
+        //     if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
+        //         build.stage = Stage::Finished;
+        //     }
+        // }
     }
 
     pub fn render(
@@ -977,16 +980,4 @@ async fn rustc_version() -> String {
             out.split_ascii_whitespace().nth(1).map(|v| v.to_string())
         })
         .unwrap_or_else(|| "<unknown>".to_string())
-}
-
-pub struct RunningApp {
-    result: BuildRequest,
-    output: Option<RunningAppOutput>,
-}
-
-struct RunningAppOutput {
-    stdout: Lines<BufReader<ChildStdout>>,
-    stderr: Lines<BufReader<ChildStderr>>,
-    stdout_line: String,
-    stderr_line: String,
 }

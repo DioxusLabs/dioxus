@@ -9,7 +9,31 @@ use std::io::Write;
 
 use super::{BuildReason, TargetPlatform, UpdateBuildProgress};
 
+static CLIENT_PROFILE: &str = "dioxus-client";
+static SERVER_PROFILE: &str = "dioxus-server";
+
 impl BuildRequest {
+    pub(crate) fn new_single(
+        reason: BuildReason,
+        krate: DioxusCrate,
+        arguments: Build,
+        progress: UnboundedSender<UpdateBuildProgress>,
+        platform: TargetPlatform,
+    ) -> Self {
+        Self {
+            progress,
+            reason,
+            krate,
+            target_platform: platform,
+            build_arguments: arguments,
+            target_dir: Default::default(),
+            rust_flags: Default::default(),
+            executable: Default::default(),
+            assets: Default::default(),
+            child: None,
+        }
+    }
+
     pub(crate) fn new_fullstack(
         config: DioxusCrate,
         build_arguments: Build,
@@ -19,8 +43,8 @@ impl BuildRequest {
         initialize_profiles(&config)?;
 
         Ok(vec![
-            Self::new_client(serve, &config, &build_arguments, progress.clone()),
-            Self::new_server(serve, &config, &build_arguments, progress),
+            Self::new_client(serve, &config, build_arguments.clone(), progress.clone()),
+            Self::new_server(serve, &config, build_arguments, progress),
         ])
     }
 
@@ -51,16 +75,16 @@ impl BuildRequest {
             executable: None,
             assets: Default::default(),
             progress,
+            child: None,
         }
     }
 
     fn new_server(
         serve: BuildReason,
         config: &DioxusCrate,
-        build: &Build,
+        mut build: Build,
         progress: UnboundedSender<UpdateBuildProgress>,
     ) -> Self {
-        let mut build = build.clone();
         if build.profile.is_none() {
             build.profile = Some(CLIENT_PROFILE.to_string());
         }
@@ -78,10 +102,9 @@ impl BuildRequest {
     fn new_client(
         serve: BuildReason,
         config: &DioxusCrate,
-        build: &Build,
+        mut build: Build,
         progress: UnboundedSender<UpdateBuildProgress>,
     ) -> Self {
-        let mut build = build.clone();
         if build.profile.is_none() {
             build.profile = Some(SERVER_PROFILE.to_string());
         }
@@ -96,9 +119,6 @@ impl BuildRequest {
         )
     }
 }
-
-static CLIENT_PROFILE: &str = "dioxus-client";
-static SERVER_PROFILE: &str = "dioxus-server";
 
 // The `opt-level=2` increases build times, but can noticeably decrease time
 // between saving changes and being able to interact with an app. The "overall"

@@ -14,10 +14,11 @@ pub enum ServeUpdate {
     },
 
     BuildReady {
-        results: Vec<BuildRequest>,
+        target: TargetPlatform,
     },
 
     BuildFailed {
+        target: TargetPlatform,
         err: crate::Error,
     },
 

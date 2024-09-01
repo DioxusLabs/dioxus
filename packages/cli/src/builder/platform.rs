@@ -7,8 +7,8 @@ use std::str::FromStr;
 pub enum TargetPlatform {
     Web,
     Desktop,
-    Server,
     Mobile,
+    Server,
     Liveview,
 }
 

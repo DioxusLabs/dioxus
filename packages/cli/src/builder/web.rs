@@ -1,4 +1,4 @@
-use super::BuildRequest;
+use super::{BuildRequest, TargetPlatform};
 use crate::assets::pre_compress_folder;
 use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
@@ -191,5 +191,10 @@ impl BuildRequest {
         );
 
         Ok(())
+    }
+
+    /// Check if the build is targeting the web platform
+    pub fn targeting_web(&self) -> bool {
+        self.target_platform == TargetPlatform::Web
     }
 }

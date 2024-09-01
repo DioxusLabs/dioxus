@@ -115,6 +115,10 @@ impl Serve {
         crate::serve::serve_all(self, dioxus_crate, log_control).await?;
         Ok(())
     }
+
+    pub fn should_hotreload(&self) -> bool {
+        self.server_arguments.hot_reload.unwrap_or(true)
+    }
 }
 
 impl Deref for Serve {

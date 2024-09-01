@@ -2,12 +2,12 @@ mod app;
 mod bundle;
 mod desktop;
 mod dioxus_config;
-// mod fullstack;
-// mod liveview;
 mod platform;
 mod serve;
-// mod static_generation;
 mod web;
+// mod fullstack;
+// mod liveview;
+// mod static_generation;
 
 pub use app::*;
 pub use bundle::*;

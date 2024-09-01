@@ -2407,7 +2407,6 @@ dependencies = [
  "hyper-util",
  "ignore",
  "krates",
- "log",
  "manganis-core",
  "notify",
  "object",
@@ -2554,8 +2553,6 @@ version = "0.6.0-alpha.2"
 dependencies = [
  "dioxus-core",
  "dioxus-devtools-types",
- "dioxus-html",
- "dioxus-rsx",
  "dioxus-signals",
  "serde",
  "serde_json",
@@ -2997,7 +2994,7 @@ dependencies = [
  "lazy-js-bundle",
  "rustc-hash 1.1.0",
  "serde",
- "serde-wasm-bindgen",
+ "serde-wasm-bindgen 0.6.5",
  "serde_json",
  "tracing",
  "tracing-wasm",
@@ -4509,7 +4506,7 @@ dependencies = [
  "gloo-events",
  "gloo-utils 0.1.7",
  "serde",
- "serde-wasm-bindgen",
+ "serde-wasm-bindgen 0.5.0",
  "serde_urlencoded",
  "thiserror",
  "wasm-bindgen",
@@ -5942,11 +5939,16 @@ dependencies = [
 [[package]]
 name = "manganis-core"
 version = "0.6.0-alpha.2"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "manganis-macro"
 version = "0.6.0-alpha.2"
 dependencies = [
+ "manganis-core",
  "proc-macro2",
  "quote",
  "serde",
@@ -8346,6 +8348,17 @@ name = "serde-wasm-bindgen"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3b143e2833c57ab9ad3ea280d21fd34e285a42837aeb0ee301f4f41890fa00e"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
 dependencies = [
  "js-sys",
  "serde",

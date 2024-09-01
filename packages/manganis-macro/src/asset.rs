@@ -1,8 +1,5 @@
 use core::panic;
-// use manganis_common::{
-//     CssOptions, FileOptions, FontOptions, ImageOptions, JsOptions, JsonOptions, MetadataAsset,
-//     ResourceAsset, TailwindAsset, UnknownFileOptions, VideoOptions,
-// };
+use manganis_core::ResourceAsset;
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use proc_macro2::TokenStream as TokenStream2;
@@ -11,50 +8,22 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File, path::Path, sync::atomic::AtomicBool};
 use std::{path::PathBuf, sync::atomic::Ordering};
 use syn::{
-    parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated, token::Token, Expr,
-    ExprLit, Lit, LitStr, PatLit, Token,
+    parenthesized,
+    parse::{Parse, ParseStream},
+    parse_macro_input,
+    punctuated::Punctuated,
+    token::Token,
+    Expr, ExprLit, Lit, LitStr, PatLit, Token,
 };
 
+use crate::asset_options::MethodCallOption;
+
 pub struct AssetParser {
+    /// The source of the trailing builder pattern
     option_source: TokenStream2,
-    resource: ResourceAsset,
-    name: Option<syn::Ident>,
-    // parsed_options: Option<FileOptions>,
-}
 
-#[derive(Serialize, Deserialize)]
-struct ResourceAsset {
-    pub input: PathBuf,
-    pub local: Option<PathBuf>,
-    pub bundled: PathBuf,
-}
-
-#[derive(Debug)]
-struct AssetError {}
-impl ResourceAsset {
-    fn parse_any(input: &str) -> Result<Self, AssetError> {
-        let absolute = std::env::var("CARGO_MANIFEST_DIR")
-            .map(|s| s.into())
-            .unwrap_or_else(|_| std::env::current_dir().unwrap());
-        let absolute = absolute.join(input.trim_start_matches('/'));
-
-        let input = PathBuf::from(input);
-        let local = Some(absolute.clone());
-        let bundled = input.clone();
-        // let local = match input.canonicalized().is_file() {
-        //     true => Some(input.canonicalized()),
-        //     false => None,
-        // };
-        // let bundled = match input.canonicalized().is_file() {
-        //     true => input.canonicalized(),
-        //     false => input,
-        // };
-        Ok(Self {
-            input,
-            local,
-            bundled,
-        })
-    }
+    /// The asset itself
+    asset: ResourceAsset,
 }
 
 impl Parse for AssetParser {
@@ -65,17 +34,18 @@ impl Parse for AssetParser {
     // asset!("myfile.png")
     // ```
     //
-    // To narrow the type, use a call to get the refined type
+    // To narrow the type, use a method call to get the refined type
     // ```
     // asset!(
-    //     image("myfile.png")
+    //     "myfile.png"
+    //      .image()
     //      .format(ImageType::Jpg)
     //      .size(512, 512)
     // )
     // ```
     //
     // But we need to decide the hint first before parsing the options
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
         // Get the source of the macro, excluding the first token
         let option_source = {
             let fork = input.fork();
@@ -88,22 +58,17 @@ impl Parse for AssetParser {
         let src = src.value();
         let resource = ResourceAsset::parse_any(&src).unwrap();
 
-        fn parse_call(input: syn::parse::ParseStream) -> syn::Result<MethodCallOption> {
-            let ident = input.parse::<syn::Ident>()?;
+        fn parse_call(input: ParseStream) -> syn::Result<MethodCallOption> {
+            let method = input.parse::<syn::Ident>()?;
             let content;
             parenthesized!(content in input);
 
-            // Parse as puncutated literals
-            let lits = Punctuated::<Lit, Token![,]>::parse_separated_nonempty(&content)?;
+            let args = Punctuated::<Lit, Token![,]>::parse_separated_nonempty(&content)?;
 
-            Ok(MethodCallOption {
-                method: ident,
-                args: lits,
-            })
+            Ok(MethodCallOption { method, args })
         }
 
         let mut options = vec![];
-        let name = None;
 
         while !input.is_empty() {
             let option = parse_call(input);
@@ -111,105 +76,64 @@ impl Parse for AssetParser {
                 options.push(option);
             } else {
                 // todo: make sure we toss a warning in the output
-                let remaining: TokenStream2 = input.parse()?;
+                let _remaining: TokenStream2 = input.parse()?;
             }
         }
 
-        // let parsed_options = MethodCalls::new(options);
-
         Ok(Self {
             option_source,
-            resource,
-            name,
-            // parsed_options,a
+            asset: resource,
         })
     }
 }
 
 impl ToTokens for AssetParser {
+    // Need to generate:
+    //
+    // - 1. absolute file path on the user's system: `/users/dioxus/dev/project/assets/blah.css`
+    // - 2. original input in case that's useful: `../blah.css`
+    // - 3. path relative to the CARGO_MANIFEST_DIR - and then we'll add a `/`: `/assets/blah.css
+    // - 4. file from which this macro was called: `/users/dioxus/dev/project/src/lib.rs`
+    // - 5: The link section containing all this data
+    // - 6: the input tokens such that the builder gets validated by the const code
+    // - 7: the bundled name `/blahcss123.css`
+    //
+    // Not that we'll use everything, but at least we have this metadata for more post-processing.
+    //
+    // For now, `2` and `3` will be the same since we don't support relative paths... a bit of
+    // a limitation from rust itself. We technically could support them but not without some hoops
+    // to jump through
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        // 1. the link section itself
+        let link_section = crate::generate_link_section(&self.asset);
+
+        // 2. original
+        let input = self.asset.input.display().to_string();
+
+        // 3. resolved on the user's system
+        let local = self.asset.absolute.display().to_string();
+
+        // 4. bundled
+        let bundled = self.asset.bundled.to_string();
+
+        // 5. source tokens
         let option_source = &self.option_source;
-        let asset = &self.resource;
-        let link_section = crate::generate_link_section(&asset);
-        let input = asset.input.display().to_string();
-        let bundled = asset.bundled.display().to_string();
-
-        let local = match asset.local.as_ref() {
-            Some(local) => {
-                let local = local.display().to_string();
-                quote! { #local }
-            }
-            None => {
-                todo!("relative paths are not supported yet")
-                // quote! {
-                //     {
-                //         // ensure it exists by throwing away the include_bytes
-                //         static _BLAH: &[u8] = include_bytes!(#input);
-
-                //         // But then pass along the path
-                //         concat!(env!("CARGO_MANIFEST_DIR"), "/", file!(), "/<split>/", #input)
-                //     }
-                // }
-            }
-        };
-
-        let manifest_dir: PathBuf = std::env::var("CARGO_MANIFEST_DIR").unwrap().into();
-        let displayed_manifest_dir = manifest_dir.display().to_string();
 
         tokens.extend(quote! {
             Asset::new(
                 {
                     #link_section
-                    manganis::AssetSource {
+                    manganis::Asset {
+                        // "/assets/blah.css"
                         input: #input,
-                        source_file: concat!(#displayed_manifest_dir, "/", file!()),
+
+                        // "/users/dioxus/dev/app/assets/blah.css"
                         local: #local,
+
                         bundled: #bundled,
                     }
                 }
             ) #option_source
         })
     }
-}
-
-struct MethodCalls {
-    options: Vec<MethodCallOption>,
-}
-
-/// A builder method in the form of `.method(arg1, arg2)`
-struct MethodCallOption {
-    method: syn::Ident,
-    args: Punctuated<syn::Lit, Token![,]>,
-}
-
-impl MethodCalls {
-    // fn new(args: Vec<MethodCallOption>) -> Option<FileOptions> {
-    //     let asset_type = args.first()?.method.to_string();
-
-    //     let stack = args
-    //         .into_iter()
-    //         .skip(1)
-    //         .map(|x| (x.method.to_string(), x.args.into_iter().collect::<Vec<_>>()))
-    //         .collect::<HashMap<String, Vec<syn::Lit>>>();
-
-    // let opts = match asset_type.as_str() {
-    //     "image" => {
-    //         let mut opts = ImageOptions::new(manganis_common::ImageType::Avif, Some((32, 32)));
-    //         // opts.set_preload(preload);
-    //         // opts.set_url_encoded(url_encoded);
-    //         // opts.set_low_quality_preview(low_quality_preview);
-    //         FileOptions::Image(opts)
-    //     }
-
-    //     "video" => FileOptions::Video(VideoOptions::new(todo!())),
-    //     "font" => FileOptions::Font(FontOptions::new(todo!())),
-    //     "css" => FileOptions::Css(CssOptions::new()),
-    //     "js" => FileOptions::Js(JsOptions::new(todo!())),
-    //     "json" => FileOptions::Json(JsonOptions::new()),
-    //     other => FileOptions::Other(UnknownFileOptions::new(todo!())),
-    // };
-
-    // Some(opts)
-    //     None
-    // }
 }

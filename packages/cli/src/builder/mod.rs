@@ -1,19 +1,17 @@
+use crate::build::Build;
+use crate::config::Platform;
 use crate::Result;
 use crate::{assets::AssetManifest, dioxus_crate::DioxusCrate};
-use crate::{build::Build, config};
-use crate::{cli::serve::ServeArguments, config::Platform};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::stream::select_all;
 use futures_util::StreamExt;
-pub use platform::TargetArch;
 pub use platform::TargetPlatform;
-use std::{net::SocketAddr, path::Path};
-use std::{path::PathBuf, process::Stdio};
-use tokio::process::{Child, Command};
+use std::path::PathBuf;
 
 mod assets;
+mod bundle;
 mod cargo;
 mod fullstack;
+mod handle;
 mod platform;
 mod prepare_html;
 mod progress;
@@ -23,12 +21,11 @@ pub use progress::{
     BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
 };
 
-/// A request for a project to be built
+/// An app that's built, bundled, processed, and a handle to its running app, if it exists
 ///
 /// As the build progresses, we'll fill in fields like assets, executable, entitlements, etc
 ///
-/// This request will be then passed to the bundler to create a final bundled app
-#[derive(Clone)]
+/// If the app needs to be bundled, we'll add the bundle info here too
 pub struct BuildRequest {
     /// Whether the build is for serving the application
     pub reason: BuildReason,
@@ -54,6 +51,11 @@ pub struct BuildRequest {
     /// The assets manifest - starts empty and will be populated as we go
     pub assets: AssetManifest,
 
+    /// The child process of this running app that has yet to be spawned.
+    ///
+    /// We might need to finangle this into something else
+    pub child: Option<tokio::process::Child>,
+
     /// Status channel to send our progress updates to
     pub progress: UnboundedSender<UpdateBuildProgress>,
 }
@@ -74,34 +76,28 @@ impl BuildRequest {
         progress: UnboundedSender<UpdateBuildProgress>,
     ) -> crate::Result<Vec<Self>> {
         let build_arguments: Build = build_arguments.into();
-        let platform = build_arguments.platform();
+
         let single_platform = |platform| {
-            let dioxus_crate = dioxus_crate.clone();
-
-            let request = Self {
-                reason: serve,
-                krate: dioxus_crate,
-                build_arguments: build_arguments.clone(),
-                target_platform: platform,
-                rust_flags: Default::default(),
-                target_dir: Default::default(),
-                executable: Default::default(),
-                assets: Default::default(),
-                progress: progress.clone(),
-            };
-
-            vec![request]
+            let req = Self::new_single(
+                serve,
+                dioxus_crate.clone(),
+                build_arguments.clone(),
+                progress.clone(),
+                platform,
+            );
+            Ok(vec![req])
         };
 
-        Ok(match platform {
+        match build_arguments.platform() {
             Platform::Liveview => single_platform(TargetPlatform::Liveview),
             Platform::Web => single_platform(TargetPlatform::Web),
             Platform::Desktop => single_platform(TargetPlatform::Desktop),
-            Platform::StaticGeneration | Platform::Fullstack => {
-                Self::new_fullstack(dioxus_crate.clone(), build_arguments, serve, progress)?
+            Platform::Mobile => single_platform(TargetPlatform::Mobile),
+
+            Platform::Fullstack => {
+                Self::new_fullstack(dioxus_crate.clone(), build_arguments, serve, progress)
             }
-            _ => unimplemented!("Unknown platform: {platform:?}"),
-        })
+        }
     }
 
     pub(crate) async fn build_all_parallel(
@@ -136,10 +132,5 @@ impl BuildRequest {
         }
 
         Ok(all_results)
-    }
-
-    /// Check if the build is targeting the web platform
-    pub fn targeting_web(&self) -> bool {
-        self.target_platform == TargetPlatform::Web
     }
 }

@@ -32,7 +32,7 @@ js-sys = "0.3.56"
 rustc-hash = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-serde-wasm-bindgen = { version = "0.5.0", optional = true }
+serde-wasm-bindgen = { version = "0.6.5", optional = true }
 tracing = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4.29"
@@ -42,11 +42,9 @@ version = "0.3.56"
 features = [
     "AnimationEvent",
     "ClipboardEvent",
-    "CloseEvent",
     "Comment",
     "CompositionEvent",
     "console",
-    "CustomEvent",
     "CustomEvent",
     "DataTransfer",
     "Document",
@@ -79,7 +77,7 @@ features = [
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["panic_hook", "full"]
+default = ["panic_hook"]
 full = [
     "devtools",
     "mounted",

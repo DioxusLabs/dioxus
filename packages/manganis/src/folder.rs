@@ -7,6 +7,20 @@ pub struct FolderAsset {
     src: Asset,
 }
 
+impl Asset {
+    ///
+    pub const fn folder(self) -> FolderAsset {
+        FolderAsset::new(self)
+    }
+}
+
+impl FolderAsset {
+    ///
+    pub const fn new(src: Asset) -> Self {
+        Self { src }
+    }
+}
+
 ///
 pub struct FolderAssetBuilder;
 

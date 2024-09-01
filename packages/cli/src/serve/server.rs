@@ -41,7 +41,6 @@ use std::{
     net::{IpAddr, SocketAddr},
 };
 use std::{path::Path, process::Stdio};
-use syn::LitCStr;
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
@@ -50,11 +49,6 @@ use tower_http::{
     services::fs::{ServeDir, ServeFileSystemResponseBody},
     ServiceBuilderExt,
 };
-
-pub enum ServerUpdate {
-    NewConnection,
-    Message(Message),
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -123,7 +117,7 @@ impl DevServer {
         // If we're serving a fullstack app, we need to find a port to proxy to
         let fullstack_port = if matches!(
             serve.build_arguments.platform(),
-            Platform::Liveview | Platform::Fullstack | Platform::StaticGeneration
+            Platform::Liveview | Platform::Fullstack
         ) {
             get_available_port(addr.ip())
         } else {
@@ -132,7 +126,7 @@ impl DevServer {
 
         let fullstack_address = fullstack_port.map(|port| SocketAddr::new(addr.ip(), port));
 
-        let router = setup_router(
+        let router = Self::setup_router(
             serve,
             cfg,
             hot_reload_sockets_tx,
@@ -467,54 +461,53 @@ impl DevServer {
         // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
         todo!("Open mobile apps")
     }
-}
 
-/// Sets up and returns a router
-///
-/// Steps include:
-/// - Setting up cors
-/// - Setting up the proxy to the endpoint specified in the config
-/// - Setting up the file serve service
-/// - Setting up the websocket endpoint for devtools
-fn setup_router(
-    serve: &Serve,
-    config: &DioxusCrate,
-    hot_reload_sockets: UnboundedSender<WebSocket>,
-    build_status_sockets: UnboundedSender<WebSocket>,
-    fullstack_address: Option<SocketAddr>,
-    build_status: SharedStatus,
-) -> Result<Router> {
-    let mut router = Router::new();
-    let platform = serve.build_arguments.platform();
+    /// Sets up and returns a router
+    ///
+    /// Steps include:
+    /// - Setting up cors
+    /// - Setting up the proxy to the endpoint specified in the config
+    /// - Setting up the file serve service
+    /// - Setting up the websocket endpoint for devtools
+    fn setup_router(
+        serve: &Serve,
+        config: &DioxusCrate,
+        hot_reload_sockets: UnboundedSender<WebSocket>,
+        build_status_sockets: UnboundedSender<WebSocket>,
+        fullstack_address: Option<SocketAddr>,
+        build_status: SharedStatus,
+    ) -> Result<Router> {
+        let mut router = Router::new();
+        let platform = serve.build_arguments.platform();
 
-    // Setup proxy for the endpoint specified in the config
-    for proxy_config in config.dioxus_config.web.proxy.iter() {
-        router = super::proxy::add_proxy(router, proxy_config)?;
-    }
-
-    // server the dir if it's web, otherwise let the fullstack server itself handle it
-    match platform {
-        Platform::Web => {
-            // Route file service to output the .wasm and assets if this is a web build
-            let base_path = format!(
-                "/{}",
-                config
-                    .dioxus_config
-                    .web
-                    .app
-                    .base_path
-                    .as_deref()
-                    .unwrap_or_default()
-                    .trim_matches('/')
-            );
-
-            router = router.nest_service(&base_path, build_serve_dir(serve, config));
+        // Setup proxy for the endpoint specified in the config
+        for proxy_config in config.dioxus_config.web.proxy.iter() {
+            router = super::proxy::add_proxy(router, proxy_config)?;
         }
-        Platform::Liveview | Platform::Fullstack | Platform::StaticGeneration => {
-            // For fullstack and static generation, forward all requests to the server
-            let address = fullstack_address.unwrap();
 
-            router = router.nest_service("/",super::proxy::proxy_to(
+        // server the dir if it's web, otherwise let the fullstack server itself handle it
+        match platform {
+            Platform::Web => {
+                // Route file service to output the .wasm and assets if this is a web build
+                let base_path = format!(
+                    "/{}",
+                    config
+                        .dioxus_config
+                        .web
+                        .app
+                        .base_path
+                        .as_deref()
+                        .unwrap_or_default()
+                        .trim_matches('/')
+                );
+
+                router = router.nest_service(&base_path, build_serve_dir(serve, config));
+            }
+            Platform::Liveview | Platform::Fullstack => {
+                // For fullstack and static generation, forward all requests to the server
+                let address = fullstack_address.unwrap();
+
+                router = router.nest_service("/",super::proxy::proxy_to(
                 format!("http://{address}").parse().unwrap(),
                 true,
                 |error| {
@@ -527,18 +520,18 @@ fn setup_router(
                         .unwrap()
                 },
             ));
+            }
+            _ => {}
         }
-        _ => {}
-    }
 
-    // Setup middleware to intercept html requests if the build status is "Building"
-    router = router.layer(middleware::from_fn_with_state(
-        build_status,
-        build_status_middleware,
-    ));
+        // Setup middleware to intercept html requests if the build status is "Building"
+        router = router.layer(middleware::from_fn_with_state(
+            build_status,
+            build_status_middleware,
+        ));
 
-    // Setup websocket endpoint - and pass in the extension layer immediately after
-    router = router.nest(
+        // Setup websocket endpoint - and pass in the extension layer immediately after
+        router = router.nest(
         "/_dioxus",
         Router::new()
             .route(
@@ -561,17 +554,18 @@ fn setup_router(
             .layer(Extension(build_status_sockets)),
     );
 
-    // Setup cors
-    router = router.layer(
-        CorsLayer::new()
-            // allow `GET` and `POST` when accessing the resource
-            .allow_methods([Method::GET, Method::POST])
-            // allow requests from any origin
-            .allow_origin(Any)
-            .allow_headers(Any),
-    );
+        // Setup cors
+        router = router.layer(
+            CorsLayer::new()
+                // allow `GET` and `POST` when accessing the resource
+                .allow_methods([Method::GET, Method::POST])
+                // allow requests from any origin
+                .allow_origin(Any)
+                .allow_headers(Any),
+        );
 
-    Ok(router)
+        Ok(router)
+    }
 }
 
 fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRouter {

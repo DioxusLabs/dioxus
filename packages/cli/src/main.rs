@@ -3,28 +3,23 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub mod assets;
+pub mod builder;
 pub mod bundle_utils;
+pub mod cli;
 pub mod config;
+pub mod dioxus_crate;
 pub mod dx_build_info;
+pub mod error;
+pub mod metadata;
 pub mod serve;
+pub mod settings;
 pub mod tools;
 pub mod tracer;
 
-pub mod cli;
 pub use cli::*;
-
-pub mod error;
-pub use error::*;
-
-pub(crate) mod builder;
-
-mod dioxus_crate;
 pub use dioxus_crate::*;
-
-mod settings;
-pub(crate) use settings::*;
-
-pub(crate) mod metadata;
+pub use error::*;
+pub use settings::*;
 
 use anyhow::Context;
 use clap::Parser;
@@ -33,8 +28,12 @@ use Commands::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = Cli::parse();
+    // If we have a magic env var set, we want to operate as a linker instead.
+    if link::should_link() {
+        return link::dump_link_args();
+    }
 
+    let args = Cli::parse();
     let log_control = tracer::build_tracing();
 
     match args.action {
@@ -62,10 +61,6 @@ async fn main() -> anyhow::Result<()> {
             .check()
             .await
             .context(error_wrapper("Error checking RSX")),
-
-        Link(opts) => opts
-            .link()
-            .context(error_wrapper("Error with linker passthrough")),
 
         Build(mut opts) => opts
             .run()

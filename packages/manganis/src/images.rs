@@ -1,3 +1,5 @@
+use dioxus_core_types::DioxusFormattable;
+
 use crate::Asset;
 
 /// An image asset that is built by the [`asset!`] macro
@@ -9,6 +11,13 @@ pub struct ImageAsset {
     preview: Option<&'static str>,
     /// A caption for the image
     caption: Option<&'static str>,
+}
+
+impl Asset {
+    /// Convert this asset into an image asset
+    pub const fn image(self) -> ImageAsset {
+        ImageAsset::new(self)
+    }
 }
 
 impl ImageAsset {
@@ -58,6 +67,12 @@ impl std::ops::Deref for ImageAsset {
 impl std::fmt::Display for ImageAsset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.asset.fmt(f)
+    }
+}
+
+impl DioxusFormattable for ImageAsset {
+    fn format(&self) -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Owned(self.to_string())
     }
 }
 

@@ -1,292 +1,192 @@
-use manganis_core::LinkSection;
-use object::{Object, ObjectSection};
-use std::path::PathBuf;
-use std::{collections::HashMap, fs};
+use manganis_core::{LinkSection, ResourceAsset};
+use object::{read::archive::ArchiveFile, File as ObjectFile, Object, ObjectSection};
+use std::{collections::HashMap, path::PathBuf};
 
-// pub use railwind::warning::Warning as TailwindWarning;
-// use crate::{file::process_file, process_folder};
-// use manganis_common::{linker, AssetType};
-
-// get the text containing all the asset descriptions
-// in the "link section" of the binary
-fn get_string_manganis(file: &object::File) -> Option<String> {
-    for section in file.sections() {
-        let Ok(section_name) = section.name() else {
-            continue;
-        };
-
-        // Check if the link section matches the asset section for one of the platforms we support. This may not be the current platform if the user is cross compiling
-        let matches = LinkSection::ALL
-            .iter()
-            .any(|x| x.link_section == section_name);
-
-        if !matches {
-            continue;
-        }
-
-        let bytes = section.uncompressed_data().ok()?;
-
-        // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
-        return Some(
-            std::str::from_utf8(&bytes)
-                .ok()?
-                .chars()
-                .filter(|c| !c.is_control())
-                .collect::<String>(),
-        );
-    }
-
-    None
-}
+use crate::link::InterceptedArgs;
 
 /// A manifest of all assets collected from dependencies
+///
+/// This will be filled in primarly by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct AssetManifest {
-    pub(crate) assets: Vec<AssetType>,
-    pub(crate) asset_map: HashMap<PathBuf, AssetType>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum AssetType {
-    File(PathBuf),
-    Folder(PathBuf),
+    /// Map of asset pathbuf to its
+    pub(crate) assets: HashMap<PathBuf, ResourceAsset>,
 }
 
 impl AssetManifest {
     /// Creates a new asset manifest
-    pub fn new(assets: Vec<AssetType>) -> Self {
-        let mut asset_map = HashMap::new();
-        for asset in assets.iter() {
-            match asset {
-                AssetType::File(path) => asset_map.insert(path.clone(), asset.clone()),
-                AssetType::Folder(path) => asset_map.insert(path.clone(), asset.clone()),
-            };
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
         }
-        Self { assets, asset_map }
     }
 
-    /// Returns all assets collected from dependencies
-    pub fn assets(&self) -> &Vec<AssetType> {
-        &self.assets
+    /// Fill this manifest from the intercepted rustc args used to link the app together
+    pub fn add_from_linker_intercept(&mut self, args: InterceptedArgs) {
+        // Attempt to load the arg as a command file, otherwise just use the args themselves
+        // This is because windows will pass in `@linkerargs.txt` as a source of linker args
+        if let Some(command) = args.args.iter().find(|arg| arg.starts_with('@')).cloned() {
+            self.add_from_command_file(args, &command);
+        } else {
+            self.add_from_linker_args(args);
+        }
     }
 
-    //     /// Returns the HTML that should be injected into the head of the page
-    //     pub fn head(&self) -> String {
-    //         let mut head = String::new();
-    //         for asset in &self.assets {
-    //             if let crate::AssetType::Resource(file) = asset {
-    //                 match file.options() {
-    //                     crate::FileOptions::Css(css_options) => {
-    //                         if css_options.preload() {
-    //                             if let Ok(asset_path) = file.served_location() {
-    //                                 head.push_str(&format!(
-    //                                     "<link rel=\"preload\" as=\"style\" href=\"{asset_path}\">\n"
-    //                                 ))
-    //                             }
-    //                         }
-    //                     }
-    //                     crate::FileOptions::Image(image_options) => {
-    //                         if image_options.preload() {
-    //                             if let Ok(asset_path) = file.served_location() {
-    //                                 head.push_str(&format!(
-    //                                     "<link rel=\"preload\" as=\"image\" href=\"{asset_path}\">\n"
-    //                                 ))
-    //                             }
-    //                         }
-    //                     }
-    //                     crate::FileOptions::Js(js_options) => {
-    //                         if js_options.preload() {
-    //                             if let Ok(asset_path) = file.served_location() {
-    //                                 head.push_str(&format!(
-    //                                     "<link rel=\"preload\" as=\"script\" href=\"{asset_path}\">\n"
-    //                                 ))
-    //                             }
-    //                         }
-    //                     }
-    //                     _ => {}
-    //                 }
-    //             }
-    //         }
-    //         head
-    //     }
-}
+    /// Fill this manifest from the contents of a linker command file.
+    ///
+    /// Rustc will pass a file as link args to linkers on windows instead of args directly.
+    ///
+    /// We actually need to read that file and then pull out the args directly.
+    pub fn add_from_command_file(&mut self, args: InterceptedArgs, arg: &str) {
+        let path = arg.trim().trim_start_matches('@');
+        let file_binary = std::fs::read(path).unwrap();
 
-// /// An extension trait CLI support for the asset manifest
-// pub trait AssetManifestExt {
-//     /// Load a manifest from a list of Manganis JSON strings.
-//     ///
-//     /// The asset descriptions are stored inside a manifest file that is produced when the linker is intercepted.
-//     fn load(json: Vec<String>) -> Self;
-//     /// Load a manifest from the assets propogated through object files.
-//     ///
-//     /// The asset descriptions are stored inside a manifest file that is produced when the linker is intercepted.
-//     fn load_from_objects(object_paths: Vec<PathBuf>) -> Self;
-//     /// Optimize and copy all assets in the manifest to a folder
-//     fn copy_static_assets_to(&self, location: impl Into<PathBuf>) -> anyhow::Result<()>;
-//     /// Collect all tailwind classes and generate string with the output css
-//     fn collect_tailwind_css(
-//         &self,
-//         include_preflight: bool,
-//         warnings: &mut Vec<TailwindWarning>,
-//     ) -> String;
-// }
+        // This may be a utf-16le file. Let's try utf-8 first.
+        let content = match String::from_utf8(file_binary.clone()) {
+            Ok(s) => s,
+            Err(_) => {
+                // Convert Vec<u8> to Vec<u16> to convert into a String
+                let binary_u16le: Vec<u16> = file_binary
+                    .chunks_exact(2)
+                    .map(|a| u16::from_le_bytes([a[0], a[1]]))
+                    .collect();
 
-// impl AssetManifestExt for AssetManifest {
-//     fn load(json: Vec<String>) -> Self {
-//         let mut all_assets = Vec::new();
+                String::from_utf16_lossy(&binary_u16le)
+            }
+        };
 
-//         // Collect all assets for each manganis string found.
-//         for item in json {
-//             let mut assets = deserialize_assets(item.as_str());
-//             all_assets.append(&mut assets);
-//         }
+        // Gather linker args
+        let mut linker_args = Vec::new();
+        let lines = content.lines();
+        for line in lines {
+            // Remove quotes from the line - windows link args files are quoted
+            let line_parsed = line.to_string();
+            let line_parsed = line_parsed.trim_end_matches('"').to_string();
+            let line_parsed = line_parsed.trim_start_matches('"').to_string();
+            linker_args.push(line_parsed);
+        }
 
-//         // If we don't see any manganis assets used in the binary, just return an empty manifest
-//         if all_assets.is_empty() {
-//             return Self::default();
-//         };
+        self.add_from_linker_args(InterceptedArgs {
+            args: linker_args,
+            ..args
+        });
+    }
 
-//         Self::new(all_assets)
-//     }
+    pub fn add_from_linker_args(&mut self, args: InterceptedArgs) {
+        // Parse through linker args for `.o` or `.rlib` files.
+        for item in args.args {
+            if item.ends_with(".o") || item.ends_with(".rlib") {
+                self.add_from_object_path(args.work_dir.join(PathBuf::from(item)));
+            }
+        }
+    }
 
-//     fn load_from_objects(object_files: Vec<PathBuf>) -> Self {
-//         let json = get_json_from_object_files(object_files);
-//         Self::load(json)
-//     }
-
-//     fn copy_static_assets_to(&self, location: impl Into<PathBuf>) -> anyhow::Result<()> {
-//         let location = location.into();
-//         match std::fs::create_dir_all(&location) {
-//             Ok(_) => {}
-//             Err(err) => {
-//                 tracing::error!("Failed to create directory for static assets: {}", err);
-//                 return Err(err.into());
-//             }
-//         }
-
-//         self.assets().iter().try_for_each(|asset| {
-//             match asset {
-//                 AssetType::Resource(file_asset) => {
-//                     tracing::info!("Optimizing and bundling {:?}", file_asset);
-//                     tracing::trace!("Copying asset from {:?} to {:?}", file_asset, location);
-//                     match process_file(file_asset, &location) {
-//                         Ok(_) => {}
-//                         Err(err) => {
-//                             tracing::error!("Failed to copy static asset: {}", err);
-//                             return Err(err);
-//                         }
-//                     }
-
-//                     // tracing::info!("Copying folder asset {}", folder_asset);
-//                     // match process_folder(folder_asset, &location) {
-//                     //     Ok(_) => {}
-//                     //     Err(err) => {
-//                     //         tracing::error!("Failed to copy static asset: {}", err);
-//                     //         return Err(err);
-//                     //     }
-//                     // }
-//                 }
-
-//                 _ => {}
-//             }
-//             Ok::<(), anyhow::Error>(())
-//         })
-//     }
-
-//     // fn collect_tailwind_css(
-//     //     self: &AssetManifest,
-//     //     include_preflight: bool,
-//     //     warnings: &mut Vec<TailwindWarning>,
-//     // ) -> String {
-//     //     let mut all_classes = String::new();
-
-//     //     for asset in self.assets() {
-//     //         if let AssetType::Tailwind(classes) = asset {
-//     //             all_classes.push_str(classes.classes());
-//     //             all_classes.push(' ');
-//     //         }
-//     //     }
-
-//     //     let source = railwind::Source::String(all_classes, railwind::CollectionOptions::String);
-
-//     //     let css = railwind::parse_to_string(source, include_preflight, warnings);
-
-//     //     crate::file::minify_css(&css)
-//     // }
-// }
-
-fn deserialize_assets(json: &str) -> Vec<AssetType> {
-    todo!()
-    // let deserializer = serde_json::Deserializer::from_str(json);
-    // deserializer
-    //     .into_iter::<AssetType>()
-    //     .flat_map(|x| x.ok())
-    //     // .map(|x| x.unwrap())
-    //     .collect()
-}
-
-/// Extract JSON Manganis strings from a list of object files.
-pub fn get_json_from_object_files(object_paths: Vec<PathBuf>) -> Vec<String> {
-    let mut all_json = Vec::new();
-
-    for path in object_paths {
+    /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
+    pub fn add_from_object_path(&mut self, path: PathBuf) {
         let Some(ext) = path.extension() else {
-            continue;
+            return;
         };
 
         let Some(ext) = ext.to_str() else {
-            continue;
+            return;
         };
 
-        let is_rlib = match ext {
-            "rlib" => true,
-            "o" => false,
-            _ => continue,
-        };
+        let data = std::fs::read(path.clone()).expect("Failed to read asset optimization file");
 
-        // Read binary data and try getting assets from manganis string
-        let binary_data = fs::read(path).unwrap();
-
-        // rlibs are archives with object files inside.
-        let mut data = match is_rlib {
-            false => {
-                // Parse an unarchived object file. We use a Vec to match the return types.
-                let file = object::File::parse(&*binary_data).unwrap();
-                let mut data = Vec::new();
-                if let Some(string) = get_string_manganis(&file) {
-                    data.push(string);
-                }
-                data
+        match ext {
+            // Parse an unarchived object file
+            "o" => {
+                let object = object::File::parse(&*data).unwrap();
+                self.add_from_object_file(&object);
             }
-            true => {
-                let file = object::read::archive::ArchiveFile::parse(&*binary_data).unwrap();
 
-                // rlibs can contain many object files so we collect each manganis string here.
-                let mut manganis_strings = Vec::new();
-
-                // Look through each archive member for object files.
-                // Read the archive member's binary data (we know it's an object file)
-                // And parse it with the normal `object::File::parse` to find the manganis string.
-                for member in file.members() {
-                    let member = member.unwrap();
-                    let name = String::from_utf8_lossy(member.name()).to_string();
-
-                    // Check if the archive member is an object file and parse it.
-                    if name.ends_with(".o") {
-                        let data = member.data(&*binary_data).unwrap();
-                        let o_file = object::File::parse(data).unwrap();
-                        if let Some(manganis_str) = get_string_manganis(&o_file) {
-                            manganis_strings.push(manganis_str);
-                        }
-                    }
-                }
-
-                manganis_strings
+            // Parse an rlib as a collection of objects
+            "rlib" => {
+                let archive = object::read::archive::ArchiveFile::parse(&*data).unwrap();
+                self.add_from_archive_file(&archive, &data);
             }
-        };
-
-        all_json.append(&mut data);
+            _ => {}
+        }
     }
 
-    all_json
+    /// Fill this manifest from an rlib / ar file that contains many object files and their entryies
+    pub fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) {
+        // Look through each archive member for object files.
+        // Read the archive member's binary data (we know it's an object file)
+        // And parse it with the normal `object::File::parse` to find the manganis string.
+        for member in archive.members() {
+            let member = member.unwrap();
+            let name = String::from_utf8_lossy(member.name()).to_string();
+
+            // Check if the archive member is an object file and parse it.
+            if name.ends_with(".o") {
+                let data = member.data(&*data).unwrap();
+                let object = object::File::parse(data).unwrap();
+                self.add_from_object_file(&object);
+            }
+        }
+    }
+
+    /// Fill this manifest with whatever tables might come from the object file
+    pub fn add_from_object_file(&mut self, obj: &ObjectFile) -> Option<()> {
+        for section in obj.sections() {
+            let Ok(section_name) = section.name() else {
+                continue;
+            };
+
+            // Check if the link section matches the asset section for one of the platforms we support. This may not be the current platform if the user is cross compiling
+            let matches = LinkSection::ALL
+                .iter()
+                .any(|x| x.link_section == section_name);
+
+            if !matches {
+                continue;
+            }
+
+            let bytes = section.uncompressed_data().ok()?;
+
+            let as_str = std::str::from_utf8(&bytes)
+                .ok()?
+                .chars()
+                .filter(|c| !c.is_control())
+                .collect::<String>();
+
+            let stream = serde_json::Deserializer::from_str(&as_str).into_iter::<ResourceAsset>();
+
+            for as_resource in stream {
+                let as_resource = as_resource.unwrap();
+
+                // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
+                self.assets
+                    .insert(as_resource.absolute.clone(), as_resource);
+            }
+        }
+
+        None
+    }
+
+    /// Copy the assest from this manifest to a target folder
+    ///
+    /// If `optimize` is enabled, then we will run the optimizer for this asset.
+    ///
+    /// The output file is guaranteed to be the destination + the ResourceAsset bundle name
+    ///
+    /// Will not actually copy the asset if the source asset hasn't changed?
+    pub fn copy_asset_to(&self, destination: PathBuf, target_asset: PathBuf, optimize: bool) {
+        let src = self.assets.get(&target_asset).unwrap();
+
+        let local = src.absolute.clone();
+
+        if !local.exists() {
+            panic!("Specified asset does not exist while trying to copy {target_asset:?} to {destination:?}")
+        }
+
+        // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
+        if !optimize {
+            std::fs::copy(local, destination.join(&src.bundled)).expect("Failed to copy asset");
+            return;
+        }
+
+        // Otherwise, let's attempt to optimize the thing
+    }
 }

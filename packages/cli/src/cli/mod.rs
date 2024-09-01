@@ -82,10 +82,6 @@ pub enum Commands {
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
-
-    /// Handles parsing of linker arguments for linker-based systems
-    /// such as Manganis and binary patching.
-    Link(link::LinkCommand),
 }
 
 impl Display for Commands {
@@ -101,7 +97,6 @@ impl Display for Commands {
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
-            Commands::Link(_) => write!(f, "link"),
         }
     }
 }

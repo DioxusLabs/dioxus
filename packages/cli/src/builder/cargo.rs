@@ -106,8 +106,10 @@ impl BuildRequest {
         // Create the build command
         let (cmd, cargo_args) = self.prepare_build_command()?;
 
-        // Run the build command with a pretty loader
+        // We want to provide helpful data - maybe we can do this earlier?
         let crate_count = self.get_unit_count_estimate().await;
+
+        // Run the build command with a pretty loader
         let cargo_result = self.build_cargo(crate_count, cmd).await?;
 
         // Post process the build result
@@ -164,6 +166,8 @@ impl BuildRequest {
         // Make sure we set the exeutable
         self.executable = Some(output_path.canonicalize()?);
 
+        // And then copy over the asset dir into the bundle
+        // todo: this will eventually become a full bundle step
         self.copy_assets_dir()?;
 
         // If this is a web build, run web post processing steps
@@ -178,7 +182,7 @@ impl BuildRequest {
     pub fn target_out_dir(&self) -> PathBuf {
         let out_dir = self.krate.out_dir();
         match self.build_arguments.platform {
-            Some(Platform::Fullstack | Platform::StaticGeneration) => match self.target_platform {
+            Some(Platform::Fullstack) => match self.target_platform {
                 TargetPlatform::Web => out_dir.join("public"),
                 TargetPlatform::Desktop => out_dir.join("desktop"),
                 _ => out_dir,

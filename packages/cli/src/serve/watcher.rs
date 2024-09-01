@@ -1,6 +1,4 @@
-use std::collections::{HashMap, HashSet};
-use std::{fs, path::PathBuf, time::Duration};
-
+use super::detect::is_wsl;
 use super::{hot_reloading_file_map::HotreloadError, update::ServeUpdate};
 use crate::serve::hot_reloading_file_map::FileMap;
 use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
@@ -13,6 +11,8 @@ use notify::{
     event::{MetadataKind, ModifyKind},
     Config, EventKind,
 };
+use std::collections::{HashMap, HashSet};
+use std::{fs, path::PathBuf, time::Duration};
 
 /// This struct stores the file watcher and the filemap for the project.
 ///
@@ -211,11 +211,11 @@ impl Watcher {
 
             // If the path is ignored, don't watch it
             if self.ignore.matched(path, path.is_dir()).is_ignore() {
-                tracing::trace!("Ignoring update to file: {:?}", path);
+                tracing::info!("Ignoring update to file: {:?}", path);
                 continue;
             }
 
-            tracing::trace!("Enqueuing hotreload update to file: {:?}", path);
+            tracing::info!("Enqueuing hotreload update to file: {:?}", path);
 
             modified_files.push(path.clone());
         }
@@ -364,39 +364,6 @@ fn is_allowed_notify_event(event: &notify::Event) -> bool {
         // Don't care about anything else.
         _ => false,
     }
-}
-
-const WSL_1: &str = "/proc/sys/kernel/osrelease";
-const WSL_2: &str = "/proc/version";
-const WSL_KEYWORDS: [&str; 2] = ["microsoft", "wsl"];
-
-/// Detects if `dx` is being ran in a WSL environment.
-///
-/// We determine this based on whether the keyword `microsoft` or `wsl` is contained within the [`WSL_1`] or [`WSL_2`] files.
-/// This may fail in the future as it isn't guaranteed by Microsoft.
-/// See https://github.com/microsoft/WSL/issues/423#issuecomment-221627364
-fn is_wsl() -> bool {
-    // Test 1st File
-    if let Ok(content) = fs::read_to_string(WSL_1) {
-        let lowercase = content.to_lowercase();
-        for keyword in WSL_KEYWORDS {
-            if lowercase.contains(keyword) {
-                return true;
-            }
-        }
-    }
-
-    // Test 2nd File
-    if let Ok(content) = fs::read_to_string(WSL_2) {
-        let lowercase = content.to_lowercase();
-        for keyword in WSL_KEYWORDS {
-            if lowercase.contains(keyword) {
-                return true;
-            }
-        }
-    }
-
-    false
 }
 
 #[test]
