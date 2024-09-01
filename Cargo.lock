@@ -2603,6 +2603,7 @@ dependencies = [
 name = "dioxus-examples"
 version = "0.6.0-alpha.2"
 dependencies = [
+ "async-std",
  "base64 0.21.7",
  "ciborium",
  "dioxus",
