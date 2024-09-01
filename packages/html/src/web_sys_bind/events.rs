@@ -4,14 +4,16 @@ use crate::events::{
     TransitionData, WheelData,
 };
 use crate::file_data::HasFileData;
-use crate::geometry::PixelsSize;
 use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
+use crate::geometry::{PixelsRect, PixelsSize};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::prelude::*;
+
+use euclid::{Point2D, Size2D};
 use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
 use wasm_bindgen::JsCast;
-use web_sys::{js_sys, ResizeObserverEntry};
+use web_sys::{js_sys, DomRectReadOnly, IntersectionObserverEntry, ResizeObserverEntry};
 use web_sys::{
     AnimationEvent, CompositionEvent, CustomEvent, Event, KeyboardEvent, MouseEvent, PointerEvent,
     Touch, TouchEvent, TransitionEvent, WheelEvent,
@@ -66,6 +68,22 @@ impl From<&Event> for ResizeData {
         let e: &CustomEvent = e.unchecked_ref();
         let value = e.detail();
         Self::from(value.unchecked_into::<ResizeObserverEntry>())
+    }
+}
+
+impl From<Event> for VisibleData {
+    #[inline]
+    fn from(e: Event) -> Self {
+        <VisibleData as From<&Event>>::from(&e)
+    }
+}
+
+impl From<&Event> for VisibleData {
+    #[inline]
+    fn from(e: &Event) -> Self {
+        let e: &CustomEvent = e.unchecked_ref();
+        let value = e.detail();
+        Self::from(value.unchecked_into::<IntersectionObserverEntry>())
     }
 }
 
@@ -646,6 +664,52 @@ impl HasToggleData for web_sys::Event {
 }
 
 impl HasSelectionData for web_sys::Event {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+fn dom_rect_ro_to_pixel_rect(dom_rect: &DomRectReadOnly) -> PixelsRect {
+    PixelsRect::new(
+        Point2D::new(dom_rect.x(), dom_rect.y()),
+        Size2D::new(dom_rect.width(), dom_rect.height()),
+    )
+}
+
+impl HasVisibleData for IntersectionObserverEntry {
+    /// Get the bounds rectangle of the target element
+    fn get_bounding_client_rect(&self) -> VisibleResult<PixelsRect> {
+        Ok(dom_rect_ro_to_pixel_rect(&self.bounding_client_rect()))
+    }
+
+    /// Get the ratio of the intersectionRect to the boundingClientRect
+    fn get_intersection_ratio(&self) -> VisibleResult<f64> {
+        Ok(self.intersection_ratio())
+    }
+
+    /// Get the rect representing the target's visible area
+    fn get_intersection_rect(&self) -> VisibleResult<PixelsRect> {
+        Ok(dom_rect_ro_to_pixel_rect(&self.intersection_rect()))
+    }
+
+    /// Get if the target element intersects with the intersection observer's root
+    fn is_intersecting(&self) -> VisibleResult<bool> {
+        Ok(self.is_intersecting())
+    }
+
+    /// Get the rect for the intersection observer's root
+    fn get_root_bounds(&self) -> VisibleResult<PixelsRect> {
+        match self.root_bounds() {
+            Some(root_bounds) => Ok(dom_rect_ro_to_pixel_rect(&root_bounds)),
+            None => Err(VisibleError::NotSupported),
+        }
+    }
+
+    /// Get a timestamp indicating the time at which the intersection was recorded
+    fn get_time(&self) -> VisibleResult<f64> {
+        Ok(self.time())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

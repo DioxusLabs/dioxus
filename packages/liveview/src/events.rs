@@ -147,6 +147,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .into()
     }
 
+    fn convert_visible_data(&self, event: &PlatformEventData) -> VisibleData {
+        event
+            .downcast::<SerializedVisibleData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
     fn convert_wheel_data(&self, event: &PlatformEventData) -> WheelData {
         event
             .downcast::<SerializedWheelData>()

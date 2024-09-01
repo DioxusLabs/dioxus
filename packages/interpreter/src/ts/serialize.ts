@@ -62,6 +62,8 @@ export function serializeEvent(
     const detail = event.detail;
     if (detail instanceof ResizeObserverEntry) {
       extend(serializeResizeEventDetail(detail));
+    } else if (detail instanceof IntersectionObserverEntry) {
+      extend(serializeIntersectionEventDetail(detail));
     }
   }
 
@@ -142,6 +144,18 @@ export function serializeResizeEventDetail(
         : detail.contentRect,
     content_rect: detail.contentRect,
   };
+}
+
+export function serializeIntersectionEventDetail(
+  detail: IntersectionObserverEntry): SerializedEvent {
+  return {
+    bounding_client_rect: detail.boundingClientRect,
+    intersection_ratio: detail.intersectionRatio,
+    intersection_rect: detail.intersectionRect,
+    is_intersecting: detail.isIntersecting,
+    root_bounds: detail.rootBounds,
+    time: detail.time,
+  }
 }
 
 function serializeInputEvent(
