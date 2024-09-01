@@ -367,3 +367,11 @@ doc-scrape-examples = true
 name = "window_zoom"
 required-features = ["desktop"]
 doc-scrape-examples = true
+
+[[example]]
+name = "control_focus"
+doc-scrape-examples = true
+
+[[example]]
+name = "eval"
+doc-scrape-examples = true
