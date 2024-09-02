@@ -22,6 +22,8 @@ pub struct Builder {
     /// Ongoing apps running in place
     ///
     /// They might be actively being being, running, or have exited.
+    ///
+    /// When a new full rebuild occurs, we will keep these requests here
     pub running: HashMap<TargetPlatform, BuildRequest>,
 
     tx: UnboundedSender<UpdateBuildProgress>,
