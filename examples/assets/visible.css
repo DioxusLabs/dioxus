@@ -3,13 +3,14 @@
 }
 
 .container {
-  height: 1800px;
+  height: 500px;
   width: 500px;
   margin: 100px auto;
 }
 
 p {
-    line-height: 20px;;
+  line-height: 30px;
+
 }
 
 .animated-text {
