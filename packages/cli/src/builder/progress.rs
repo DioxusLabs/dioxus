@@ -149,7 +149,7 @@ impl BuildRequest {
         crate_count: usize,
         mut cmd: tokio::process::Command,
     ) -> anyhow::Result<CargoBuildResult> {
-        _ = self.progress.start_send(UpdateBuildProgress {
+        _ = self.progress.unbounded_send(UpdateBuildProgress {
             stage: Stage::Compiling,
             update: UpdateStage::Start,
             platform: self.target_platform,
@@ -190,7 +190,7 @@ impl BuildRequest {
             match message {
                 Message::CompilerMessage(msg) => {
                     let message = msg.message;
-                    _ = self.progress.start_send(UpdateBuildProgress {
+                    _ = self.progress.unbounded_send(UpdateBuildProgress {
                         stage: Stage::Compiling,
                         update: UpdateStage::AddMessage(message.clone().into()),
                         platform: self.target_platform,
@@ -223,7 +223,7 @@ impl BuildRequest {
                         output_location = Some(executable.into());
                     } else {
                         let build_progress = units_compiled as f64 / crate_count as f64;
-                        _ = self.progress.start_send(UpdateBuildProgress {
+                        _ = self.progress.unbounded_send(UpdateBuildProgress {
                             platform: self.target_platform,
                             stage: Stage::Compiling,
                             update: UpdateStage::SetProgress((build_progress).clamp(0.0, 1.00)),
@@ -239,7 +239,7 @@ impl BuildRequest {
                     }
                 }
                 Message::TextLine(line) => {
-                    _ = self.progress.start_send(UpdateBuildProgress {
+                    _ = self.progress.unbounded_send(UpdateBuildProgress {
                         platform: self.target_platform,
                         stage: Stage::Compiling,
                         update: UpdateStage::AddMessage(BuildMessage {

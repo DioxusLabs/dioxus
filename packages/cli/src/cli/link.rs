@@ -24,6 +24,9 @@ pub struct InterceptedArgs {
 /// it both for determining if we should act as a linker and the for the file name itself.
 ///
 /// This will panic if it fails
+///
+/// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
+/// is nicer to just bounce back the args and let the host do the parsing/canonicalization
 pub fn dump_link_args() -> anyhow::Result<()> {
     let output = std::env::var(LINK_OUTPUT_ENV_VAR).expect("Missing env var with target file");
 

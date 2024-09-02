@@ -1,9 +1,6 @@
 use super::BuildRequest;
 use super::TargetPlatform;
-use crate::builder::progress::CargoBuildResult;
-use crate::builder::progress::Stage;
-use crate::builder::progress::UpdateBuildProgress;
-use crate::builder::progress::UpdateStage;
+use crate::builder::progress::*;
 use crate::config::Platform;
 use crate::Result;
 use anyhow::Context;
@@ -119,7 +116,7 @@ impl BuildRequest {
 
         tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
 
-        _ = self.progress.start_send(UpdateBuildProgress {
+        _ = self.progress.unbounded_send(UpdateBuildProgress {
             platform: self.target_platform,
             stage: Stage::Finished,
             update: UpdateStage::Start,
@@ -133,7 +130,7 @@ impl BuildRequest {
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
     ) -> Result<()> {
-        _ = self.progress.start_send(UpdateBuildProgress {
+        _ = self.progress.unbounded_send(UpdateBuildProgress {
             stage: Stage::OptimizingAssets,
             update: UpdateStage::Start,
             platform: self.target_platform,
@@ -181,13 +178,15 @@ impl BuildRequest {
     /// Get the output directory for a specific built target
     pub fn target_out_dir(&self) -> PathBuf {
         let out_dir = self.krate.out_dir();
-        match self.build_arguments.platform {
-            Some(Platform::Fullstack) => match self.target_platform {
+
+        if let Some(Platform::Fullstack) = self.build_arguments.platform {
+            match self.target_platform {
                 TargetPlatform::Web => out_dir.join("public"),
                 TargetPlatform::Desktop => out_dir.join("desktop"),
                 _ => out_dir,
-            },
-            _ => out_dir,
+            }
+        } else {
+            out_dir
         }
     }
 }

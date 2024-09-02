@@ -26,13 +26,17 @@ use watcher::*;
 /// This includes web, desktop, mobile, fullstack, etc.
 ///
 /// Platform specifics:
-/// - Web:       we need to attach a filesystem server to our devtools webserver to serve the project. We
-///              want to emulate GithubPages here since most folks are deploying there and expect things like
-///              basepath to match.
-/// - Fullstack: We spin up the same dev server but in this case the fullstack server itself needs to
-///              proxy all dev requests to our dev server
-/// - Desktop:   We spin up the dev server but without a filesystem server.
-/// - Mobile:    Basically the same as desktop.
+/// -------------------
+/// - Web:         we need to attach a filesystem server to our devtools webserver to serve the project. We
+///                want to emulate GithubPages here since most folks are deploying there and expect things like
+///                basepath to match.
+/// - Fullstack:   We spin up the same dev server but in this case the fullstack server itself needs to
+///                proxy all dev requests to our dev server. Todo: we might just want "web" to use the
+///                fullstack server by default, such that serving web on non-wasm platforms is just a
+///                serving a proper server.
+/// - Desktop:     We spin up the dev server but without a filesystem server.
+/// - Mobile:      Basically the same as desktop.
+///
 ///
 /// Notes:
 /// - All filesystem changes are tracked here
@@ -45,17 +49,17 @@ use watcher::*;
 /// - Handle logs from the build engine separately?
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub async fn serve_all(
-    serve: Serve,
-    krate: DioxusCrate,
-    log_control: crate::tracer::CLILogControl,
-) -> Result<()> {
+pub async fn serve_all(serve: Serve, krate: DioxusCrate) -> Result<()> {
     // Start each component of the devserver.
-    // Starting the builder will queue up a build
-    let mut builder = Builder::start(&krate, &serve)?;
+    // Start the screen first, since it'll start to swallow the tracing logs from the rest of the the cli
+    let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
+
+    // Note that starting the builder will queue up a build immediately
+    let mut builder = Builder::start(&serve, &krate)?;
+
+    // The watcher and devserver are started after but don't really matter in order
     let mut server = DevServer::start(&serve, &krate);
     let mut watcher = Watcher::start(&serve, &krate);
-    let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor if we're not careful

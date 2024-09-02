@@ -12,21 +12,21 @@ use notify::{
     Config, EventKind,
 };
 use std::collections::{HashMap, HashSet};
-use std::{fs, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 /// This struct stores the file watcher and the filemap for the project.
 ///
 /// This is where we do workspace discovery and recursively listen for changes in Rust files and asset
 /// directories.
 pub struct Watcher {
-    _tx: UnboundedSender<notify::Event>,
     rx: UnboundedReceiver<notify::Event>,
-    _last_update_time: i64,
-    watcher: Box<dyn notify::Watcher>,
     queued_events: Vec<notify::Event>,
     file_map: FileMap,
     ignore: Gitignore,
     applied_hot_reload_message: Option<HotReloadMsg>,
+    _tx: UnboundedSender<notify::Event>,
+    _last_update_time: i64,
+    _watcher: Box<dyn notify::Watcher>,
 }
 
 impl Watcher {
@@ -129,7 +129,7 @@ impl Watcher {
         Self {
             _tx: tx,
             rx,
-            watcher,
+            _watcher: watcher,
             file_map,
             ignore,
             queued_events: Vec::new(),
@@ -292,33 +292,31 @@ impl Watcher {
 
     /// Store the hot reload changes for any future clients that connect
     fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
-        match &mut self.applied_hot_reload_message {
-            Some(applied) => {
-                // Merge the assets, unknown files, and templates
-                // We keep the newer change if there is both a old and new change
-                let mut templates: HashMap<String, _> = std::mem::take(&mut applied.templates)
-                    .into_iter()
-                    .map(|template| (template.location.clone(), template))
-                    .collect();
-                let mut assets: HashSet<PathBuf> =
-                    std::mem::take(&mut applied.assets).into_iter().collect();
-                let mut unknown_files: HashSet<PathBuf> =
-                    std::mem::take(&mut applied.unknown_files)
-                        .into_iter()
-                        .collect();
-                for template in &msg.templates {
-                    templates.insert(template.location.clone(), template.clone());
-                }
-                assets.extend(msg.assets.iter().cloned());
-                unknown_files.extend(msg.unknown_files.iter().cloned());
-                applied.templates = templates.into_values().collect();
-                applied.assets = assets.into_iter().collect();
-                applied.unknown_files = unknown_files.into_iter().collect();
-            }
-            None => {
-                self.applied_hot_reload_message = Some(msg.clone());
-            }
+        let Some(applied) = &mut self.applied_hot_reload_message else {
+            self.applied_hot_reload_message = Some(msg.clone());
+            return;
+        };
+
+        // Merge the assets, unknown files, and templates
+        // We keep the newer change if there is both a old and new change
+        let mut templates: HashMap<String, _> = std::mem::take(&mut applied.templates)
+            .into_iter()
+            .map(|template| (template.location.clone(), template))
+            .collect();
+        let mut assets: HashSet<PathBuf> =
+            std::mem::take(&mut applied.assets).into_iter().collect();
+        let mut unknown_files: HashSet<PathBuf> = std::mem::take(&mut applied.unknown_files)
+            .into_iter()
+            .collect();
+        for template in &msg.templates {
+            templates.insert(template.location.clone(), template.clone());
         }
+
+        assets.extend(msg.assets.iter().cloned());
+        unknown_files.extend(msg.unknown_files.iter().cloned());
+        applied.templates = templates.into_values().collect();
+        applied.assets = assets.into_iter().collect();
+        applied.unknown_files = unknown_files.into_iter().collect();
     }
 
     /// Ensure the changes we've received from the queue are actually legit changes to either assets or

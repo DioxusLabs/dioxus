@@ -54,7 +54,7 @@ impl BuildRequest {
 
     /// Post process the WASM build artifacts
     pub(crate) async fn post_process_web_build(&mut self) -> Result<()> {
-        _ = self.progress.start_send(UpdateBuildProgress {
+        _ = self.progress.unbounded_send(UpdateBuildProgress {
             stage: Stage::OptimizingWasm,
             update: UpdateStage::Start,
             platform: self.target_platform,
@@ -104,7 +104,7 @@ impl BuildRequest {
         if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output().await {
             let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
             if !wasm_check_output.contains("wasm32-unknown-unknown") {
-                _ = self.progress.start_send(UpdateBuildProgress {
+                _ = self.progress.unbounded_send(UpdateBuildProgress {
                     stage: Stage::InstallingWasmTooling,
                     update: UpdateStage::Start,
                     platform: self.target_platform,

@@ -32,6 +32,7 @@ const HASH_SIZE: usize = 16;
 
 #[derive(Debug)]
 pub struct AssetError {}
+
 impl ResourceAsset {
     pub fn parse_any(raw: &str) -> Result<Self, AssetError> {
         // get the location where the asset is absolute, relative to
@@ -62,7 +63,7 @@ impl ResourceAsset {
         })
     }
 
-    pub fn make_unique_name(file_path: PathBuf) -> String {
+    fn make_unique_name(file_path: PathBuf) -> String {
         // Create a hasher
         let mut hash = std::collections::hash_map::DefaultHasher::new();
 

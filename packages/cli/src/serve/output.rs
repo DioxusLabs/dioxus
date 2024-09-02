@@ -115,7 +115,12 @@ enum Tab {
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub fn start(cfg: &Serve, log_control: CLILogControl) -> io::Result<Self> {
+    pub fn start(cfg: &Serve) -> io::Result<Self> {
+        // Start a tracing instance just for serving.
+        // This ensures that any tracing we do while serving doesn't break the TUI itself, and instead is
+        // redirected to the serve process.
+        let log_control = crate::tracer::build_tracing();
+
         let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
 
         let mut events = None;

@@ -18,8 +18,6 @@ use walkdir::WalkDir;
 mod file;
 mod manifest;
 
-// pub use file::process_file;
-// pub use folder::process_folder;
 pub use manifest::*;
 
 pub(crate) fn copy_dir_to(
@@ -89,6 +87,7 @@ fn compressed_path(path: &Path) -> Option<PathBuf> {
         }
         None => OsString::from("br"),
     };
+
     Some(path.with_extension(new_extension))
 }
 

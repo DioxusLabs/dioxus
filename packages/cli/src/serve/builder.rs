@@ -36,7 +36,7 @@ pub struct Builder {
 
 impl Builder {
     /// Create a new builder and immediately start a build
-    pub fn start(config: &DioxusCrate, serve: &Serve) -> Result<Self> {
+    pub fn start(serve: &Serve, config: &DioxusCrate) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut builder = Self {
@@ -73,7 +73,7 @@ impl Builder {
                 let platform = build_request.target_platform.clone();
                 let res = build_request.build().await;
                 if let Err(err) = &res {
-                    let _ = tx.start_send(UpdateBuildProgress {
+                    let _ = tx.unbounded_send(UpdateBuildProgress {
                         stage: crate::builder::Stage::Finished,
                         update: crate::builder::UpdateStage::Failed(format!("{err}")),
                         platform,

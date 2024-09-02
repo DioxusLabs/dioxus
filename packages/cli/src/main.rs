@@ -34,7 +34,6 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let args = Cli::parse();
-    let log_control = tracer::build_tracing();
 
     match args.action {
         Translate(opts) => opts
@@ -72,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
             .context(error_wrapper("Cleaning project failed")),
 
         Serve(opts) => opts
-            .serve(log_control)
+            .serve()
             .await
             .context(error_wrapper("Serving project failed")),
 

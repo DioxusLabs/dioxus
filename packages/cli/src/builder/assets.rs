@@ -1,9 +1,12 @@
 use super::BuildRequest;
 use super::TargetPlatform;
-use crate::builder::{progress::UpdateBuildProgress, BuildMessage, MessageType};
 use crate::builder::{progress::UpdateStage, MessageSource};
 use crate::config::Platform;
 use crate::Result;
+use crate::{
+    assets::OptimizeOptions,
+    builder::{progress::UpdateBuildProgress, BuildMessage, MessageType},
+};
 use crate::{
     assets::{copy_dir_to, AssetManifest},
     link::LINK_OUTPUT_ENV_VAR,
@@ -54,14 +57,17 @@ impl BuildRequest {
         // `dx` to act as a linker
         //
         // Pass in the tmp_file as the env var itself
+        //
+        // NOTE: that -Csave-temps=y is needed to prevent rustc from deleting the incremental cache...
+        // This might not be a "stable" way of keeping artifacts around, but it's in stable rustc
         tokio::process::Command::new("cargo")
-            .env(LINK_OUTPUT_ENV_VAR, tmp_file.path())
             .arg("rustc")
             .args(cargo_args)
-            .arg("--offline")
+            .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
-            .arg(format!("-Clinker={}", current_exe().unwrap().display()))
-            .arg("-Csave-temps=y")
+            .arg(format!("-Clinker={}", current_exe().unwrap().display())) /* pass ourselves in */
+            .env(LINK_OUTPUT_ENV_VAR, tmp_file.path()) /* but with the env var pointing to the temp file */
+            .arg("-Csave-temps=y") /* don't delete the incremental cache */
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -96,14 +102,17 @@ impl BuildRequest {
         let manifest = &self.assets;
         let platform = self.target_platform;
 
+        let options = OptimizeOptions {
+            precompress: self.should_precompress_assets(),
+            enabled: false,
+        };
+
         assets
             .par_iter()
             .enumerate()
             .try_for_each(|(_idx, asset)| {
-                let mut progress = self.progress.clone();
-
                 // Update the progress
-                _ = progress.start_send(UpdateBuildProgress {
+                _ = self.progress.unbounded_send(UpdateBuildProgress {
                     stage: Stage::OptimizingAssets,
                     update: UpdateStage::AddMessage(BuildMessage {
                         level: Level::INFO,
@@ -116,21 +125,23 @@ impl BuildRequest {
                     platform,
                 });
 
-                manifest.copy_asset_to(static_asset_output_dir.clone(), asset.to_path_buf(), false);
+                // Copy the asset into the bundled d
+                manifest.copy_asset_to(
+                    static_asset_output_dir.clone(),
+                    asset.to_path_buf(),
+                    &options,
+                );
 
                 let finished = assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-                _ = progress.start_send(UpdateBuildProgress {
+                _ = self.progress.unbounded_send(UpdateBuildProgress {
                     stage: Stage::OptimizingAssets,
                     update: UpdateStage::SetProgress(finished as f64 / asset_count as f64),
                     platform,
                 });
 
-                // idx, &assets_finished
                 Ok(()) as anyhow::Result<()>
             })?;
-
-        if self.should_precompress_assets() {}
 
         Ok(())
     }

@@ -164,7 +164,15 @@ impl AssetManifest {
 
         None
     }
+}
 
+#[derive(Clone)]
+pub struct OptimizeOptions {
+    pub precompress: bool,
+    pub enabled: bool,
+}
+
+impl AssetManifest {
     /// Copy the assest from this manifest to a target folder
     ///
     /// If `optimize` is enabled, then we will run the optimizer for this asset.
@@ -172,7 +180,12 @@ impl AssetManifest {
     /// The output file is guaranteed to be the destination + the ResourceAsset bundle name
     ///
     /// Will not actually copy the asset if the source asset hasn't changed?
-    pub fn copy_asset_to(&self, destination: PathBuf, target_asset: PathBuf, optimize: bool) {
+    pub fn copy_asset_to(
+        &self,
+        destination: PathBuf,
+        target_asset: PathBuf,
+        optimize: &OptimizeOptions,
+    ) {
         let src = self.assets.get(&target_asset).unwrap();
 
         let local = src.absolute.clone();
@@ -182,11 +195,11 @@ impl AssetManifest {
         }
 
         // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
-        if !optimize {
+        if !optimize.enabled {
             std::fs::copy(local, destination.join(&src.bundled)).expect("Failed to copy asset");
             return;
         }
 
-        // Otherwise, let's attempt to optimize the thing
+        // Otherwise, let's attempt to optimize the the asset we're copying
     }
 }

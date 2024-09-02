@@ -1,11 +1,9 @@
-use futures_channel::mpsc::UnboundedSender;
-use toml_edit::Item;
-
 use crate::builder::Build;
-use crate::dioxus_crate::DioxusCrate;
-
 use crate::builder::BuildRequest;
+use crate::dioxus_crate::DioxusCrate;
+use futures_channel::mpsc::UnboundedSender;
 use std::io::Write;
+use toml_edit::Item;
 
 use super::{BuildReason, TargetPlatform, UpdateBuildProgress};
 
