@@ -151,7 +151,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     #[serde(tag = "method", content = "params")]
     enum IpcMessage {
         #[serde(rename = "user_event")]
-        Event(HtmlEvent),
+        Event(Box<HtmlEvent>),
         #[serde(rename = "query")]
         Query(QueryResult),
     }
