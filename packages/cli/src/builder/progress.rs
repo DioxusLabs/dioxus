@@ -101,10 +101,12 @@ pub enum MessageType {
 pub enum MessageSource {
     /// Represents any message from the running application. Renders `[app]`
     App,
+
     /// Represents any generic message from the CLI. Renders `[dev]`
     ///
     /// Usage of Tracing inside of the CLI will be routed to this type.
     Dev,
+
     /// Represents a message from the build process. Renders `[bld]`
     ///
     /// This is anything emitted from a build process such as cargo and optimizations.
@@ -145,7 +147,7 @@ pub(crate) struct CargoBuildResult {
 
 impl BuildRequest {
     pub(crate) async fn build_cargo(
-        &mut self,
+        &self,
         crate_count: usize,
         mut cmd: tokio::process::Command,
     ) -> anyhow::Result<CargoBuildResult> {
@@ -160,6 +162,7 @@ impl BuildRequest {
             .stderr(Stdio::piped())
             .spawn()
             .context("Failed to spawn cargo build")?;
+
         let stdout = child.stdout.take().unwrap();
         let stderr = child.stderr.take().unwrap();
         let stdout = tokio::io::BufReader::new(stdout);
@@ -170,23 +173,23 @@ impl BuildRequest {
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
         let mut errors = Vec::new();
+
         loop {
             let line = tokio::select! {
-                line = stdout.next_line() => {
-                    line
-                }
-                line = stderr.next_line() => {
-                    line
-                }
+                line = stdout.next_line() => line,
+                line = stderr.next_line() => line,
             };
+
             let Some(line) = line? else {
                 break;
             };
+
             let mut deserializer = serde_json::Deserializer::from_str(line.trim());
             deserializer.disable_recursion_limit();
 
             let message =
                 Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));
+
             match message {
                 Message::CompilerMessage(msg) => {
                     let message = msg.message;
@@ -265,20 +268,19 @@ impl BuildRequest {
             units: Vec<serde_json::Value>,
         }
 
-        let mut cmd = tokio::process::Command::new("cargo");
-        cmd.arg("+nightly");
-        cmd.arg("build");
-        cmd.arg("--unit-graph");
-        cmd.arg("-Z").arg("unstable-options");
-
-        cmd.args(self.build_arguments());
-
-        let output = cmd
+        let output = tokio::process::Command::new("cargo")
+            .arg("+nightly")
+            .arg("build")
+            .arg("--unit-graph")
+            .arg("-Z")
+            .arg("unstable-options")
+            .args(self.build_arguments())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
             .await
             .ok()?;
+
         if !output.status.success() {
             return None;
         }

@@ -99,12 +99,13 @@ impl BuildRequest {
 
         let assets_finished = AtomicUsize::new(0);
         let asset_count = assets.len();
-        let manifest = &self.assets;
-        let platform = self.target_platform;
 
         let options = OptimizeOptions {
-            precompress: self.should_precompress_assets(),
             enabled: false,
+            precompress: self.targeting_web()
+                && self
+                    .krate
+                    .should_pre_compress_web_assets(self.build_arguments.release),
         };
 
         assets
@@ -122,11 +123,11 @@ impl BuildRequest {
                         )),
                         source: MessageSource::Build,
                     }),
-                    platform,
+                    platform: self.target_platform,
                 });
 
-                // Copy the asset into the bundled d
-                manifest.copy_asset_to(
+                // Copy the asset into the bundle directory
+                self.assets.copy_asset_to(
                     static_asset_output_dir.clone(),
                     asset.to_path_buf(),
                     &options,
@@ -137,19 +138,12 @@ impl BuildRequest {
                 _ = self.progress.unbounded_send(UpdateBuildProgress {
                     stage: Stage::OptimizingAssets,
                     update: UpdateStage::SetProgress(finished as f64 / asset_count as f64),
-                    platform,
+                    platform: self.target_platform,
                 });
 
                 Ok(()) as anyhow::Result<()>
             })?;
 
         Ok(())
-    }
-
-    fn should_precompress_assets(&self) -> bool {
-        self.targeting_web()
-            && self
-                .krate
-                .should_pre_compress_web_assets(self.build_arguments.release)
     }
 }

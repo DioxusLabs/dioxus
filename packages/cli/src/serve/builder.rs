@@ -11,15 +11,18 @@ use futures_util::StreamExt;
 use std::{collections::HashMap, process::Stdio};
 use tokio::{
     process::{Child, Command},
-    task::JoinHandle,
+    task::{JoinHandle, JoinSet},
 };
+use tokio_util::task::TaskTracker;
 
 use super::update::ServeUpdate;
 
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
-    /// The results of the build
-    ongoing: Option<JoinHandle<Result<Vec<BuildRequest>>>>,
+    /// Ongoing apps running in place
+    ///
+    /// They might be actively being being, running, or have exited.
+    pub running: HashMap<TargetPlatform, BuildRequest>,
 
     tx: UnboundedSender<UpdateBuildProgress>,
     rx: UnboundedReceiver<UpdateBuildProgress>,
@@ -29,9 +32,6 @@ pub struct Builder {
 
     /// The arguments for the build
     serve: Serve,
-
-    /// The children of the build process
-    pub finished: HashMap<TargetPlatform, BuildRequest>,
 }
 
 impl Builder {
@@ -42,10 +42,10 @@ impl Builder {
         let mut builder = Self {
             tx,
             rx,
-            ongoing: None,
+            building: Default::default(),
             config: config.clone(),
             serve: serve.clone(),
-            finished: Default::default(),
+            running: Default::default(),
         };
 
         builder.build()?;
@@ -64,37 +64,22 @@ impl Builder {
             self.tx.clone(),
         )?;
 
-        let mut set = tokio::task::JoinSet::new();
-
         for build_request in build_requests {
-            let mut tx = self.tx.clone();
-
-            set.spawn(async move {
-                let platform = build_request.target_platform.clone();
-                let res = build_request.build().await;
-                if let Err(err) = &res {
-                    let _ = tx.unbounded_send(UpdateBuildProgress {
-                        stage: crate::builder::Stage::Finished,
-                        update: crate::builder::UpdateStage::Failed(format!("{err}")),
-                        platform,
+            // Queue the build
+            let platform = build_request.target_platform.clone();
+            self.building.spawn(async move {
+                // Run the build, but in a protected spawn, ensuring we can't produce panics and thus, joinerrors
+                let res = tokio::spawn(build_request.build())
+                    .await
+                    .unwrap_or_else(|err| {
+                        Err(crate::Error::Unique(format!(
+                            "Panic while building project: {err:?}"
+                        )))
                     });
-                }
 
-                res
+                (platform, build_request)
             });
         }
-
-        self.ongoing = Some(tokio::spawn(async move {
-            let mut all_results = Vec::new();
-            while let Some(result) = set.join_next().await {
-                let res = result.map_err(|err| {
-                    crate::Error::Unique(format!("Panic while building project: {err:?}"))
-                })??;
-
-                all_results.push(res);
-            }
-            Ok(all_results)
-        }));
 
         Ok(())
     }
@@ -103,54 +88,40 @@ impl Builder {
     ///
     /// Also listen for any input from the app's handle
     pub async fn wait(&mut self) -> ServeUpdate {
-        // Wait for build progress
-        let next = next_or_pending(self.rx.next());
+        // Exits and stdout/stderr
+        let processes = self.running.iter_mut().filter_map(|(target, request)| {
+            let Some(child) = request.child else {
+                return None;
+            };
 
-        // The ongoing builds directly
-        let results: OptionFuture<_> = self.ongoing.as_mut().into();
-        let results = next_or_pending(results);
+            Some(Box::pin(async move {
+                //
+                (*target, child.wait().await)
+            }))
+        });
 
-        todo!("wait for builds to be finished")
+        // Wait for the next build result
+        tokio::select! {
+            Some(update) = self.rx.next() => {
+                ServeUpdate::Progress { update }
+            }
 
-        // // The process exits
-        // let children_empty = self.children.is_empty();
-        // let process_exited = self
-        //     .children
-        //     .iter_mut()
-        //     .map(|(target, child)| Box::pin(async move { (*target, child.wait().await) }));
+            Some(Ok((target, build_result))) = self.building.join_next() => {
+                match build_result {
+                    Ok(build_result) => ServeUpdate::BuildReady { target, request: build_result },
+                    Err(err) => ServeUpdate::BuildFailed { err, target },
+                }
+            }
 
-        // let process_exited = async move {
-        //     match children_empty {
-        //         true => return futures_util::future::pending().await,
-        //         false => futures_util::future::select_all(process_exited).await,
-        //     }
-        // };
-
-        // // Wait for the next build result
-        // tokio::select! {
-        //     build_results = results => {
-        //         self.ongoing = None;
-
-        //         // If we have a build result, bubble it up to the main loop
-        //         match build_results {
-        //             Ok(Ok(build_results)) => ServeUpdate::BuildReady {  },
-        //             Err(_ee) => ServeUpdate::BuildFailed { err: crate::Error::BuildFailed("Build join failed".to_string()) },
-        //             Ok(Err(ee)) => ServeUpdate::BuildFailed { err: ee.into() },
-        //         }
-        //     }
-        //     update = next => {
-        //         // If we have a build progress, send it to the screen
-        //          ServeUpdate::Progress { update }
-        //     }
-        //     ((target, exit_status), _, _) = process_exited => {
-        //         ServeUpdate::ProcessExited { status: exit_status, target_platform: target }
-        //     }
-        // }
+            ((target, exit_status), _, _) = futures_util::future::select_all(processes) => {
+                ServeUpdate::ProcessExited { status: exit_status, target_platform: target }
+            }
+        }
     }
 
     /// Shutdown the current build process
     pub(crate) fn shutdown(&mut self) {
-        for (_target, app) in self.finished.drain() {
+        for (_target, app) in self.running.drain() {
             let Some(mut child) = app.child else {
                 continue;
             };
@@ -183,7 +154,7 @@ impl Builder {
             _ = child.start_kill();
         }
 
-        if let Some(tasks) = self.ongoing.take() {
+        if let Some(tasks) = self.building.take() {
             tasks.abort();
         }
     }

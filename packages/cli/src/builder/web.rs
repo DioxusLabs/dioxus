@@ -97,7 +97,7 @@ impl BuildRequest {
     }
 
     /// Check if the wasm32-unknown-unknown target is installed and try to install it if not
-    pub(crate) async fn install_web_build_tooling(&mut self) -> Result<()> {
+    pub(crate) async fn install_web_build_tooling(&self) -> Result<()> {
         // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
         // Otherwise we can just assume it is installed - which is not great...
         // Eventually we can poke at the errors and let the user know they need to install the target

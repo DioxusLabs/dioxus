@@ -15,6 +15,7 @@ pub enum ServeUpdate {
 
     BuildReady {
         target: TargetPlatform,
+        request: BuildRequest,
     },
 
     BuildFailed {

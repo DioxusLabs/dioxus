@@ -85,15 +85,8 @@ impl BuildRequest {
         Ok((cmd, cargo_args))
     }
 
-    pub(crate) async fn build(mut self) -> Result<BuildRequest> {
+    pub(crate) async fn build(&mut self) -> Result<()> {
         tracing::info!("🚅 Running build [Desktop] command...");
-
-        // Set up runtime guards
-        let mut dioxus_version = crate::dx_build_info::PKG_VERSION.to_string();
-        if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
-            let hash = &hash.trim_start_matches('g')[..4];
-            dioxus_version.push_str(&format!("-{hash}"));
-        }
 
         // If this is a web, build make sure we have the web build tooling set up
         if self.targeting_web() {
@@ -122,7 +115,7 @@ impl BuildRequest {
             update: UpdateStage::Start,
         });
 
-        Ok(self)
+        Ok(())
     }
 
     async fn post_process_build(

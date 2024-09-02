@@ -140,6 +140,7 @@ tempfile = "3.3"
 
 # Extracting data from an executable
 object = {version="0.36.0", features=["wasm"]}
+tokio-util = { version = "0.7.11", features = ["full"] }
 
 # [dev-dependencies]
 # tracing-subscriber = "0.3.18"

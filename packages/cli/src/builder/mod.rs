@@ -85,6 +85,7 @@ impl BuildRequest {
                 progress.clone(),
                 platform,
             );
+
             Ok(vec![req])
         };
 
@@ -93,7 +94,6 @@ impl BuildRequest {
             Platform::Web => single_platform(TargetPlatform::Web),
             Platform::Desktop => single_platform(TargetPlatform::Desktop),
             Platform::Mobile => single_platform(TargetPlatform::Mobile),
-
             Platform::Fullstack => {
                 Self::new_fullstack(dioxus_crate.clone(), build_arguments, serve, progress)
             }
@@ -105,32 +105,34 @@ impl BuildRequest {
         mut rx: UnboundedReceiver<UpdateBuildProgress>,
     ) -> Result<Vec<BuildRequest>> {
         let multi_platform_build = build_requests.len() > 1;
-        let mut set = tokio::task::JoinSet::new();
+        // let mut set = tokio::task::JoinSet::new();
 
-        for build_request in build_requests {
-            set.spawn(async move { build_request.build().await });
-        }
+        // for build_request in build_requests {
+        //     set.spawn(async move { build_request.build().await });
+        // }
 
-        // Watch the build progress as it comes in
-        while let Some(update) = rx.next().await {
-            if multi_platform_build {
-                let platform = update.platform;
-                print!("{platform} build: ");
-                update.to_std_out();
-            } else {
-                update.to_std_out();
-            }
-        }
+        // // Watch the build progress as it comes in
+        // while let Some(update) = rx.next().await {
+        //     if multi_platform_build {
+        //         let platform = update.platform;
+        //         print!("{platform} build: ");
+        //         update.to_std_out();
+        //     } else {
+        //         update.to_std_out();
+        //     }
+        // }
 
-        let mut all_results = Vec::new();
+        todo!()
 
-        while let Some(result) = set.join_next().await {
-            all_results.push(
-                result
-                    .map_err(|_| crate::Error::Unique("Failed to build project".to_owned()))??,
-            );
-        }
+        // let mut all_results = Vec::new();
 
-        Ok(all_results)
+        // while let Some(result) = set.join_next().await {
+        //     all_results.push(
+        //         result
+        //             .map_err(|_| crate::Error::Unique("Failed to build project".to_owned()))??,
+        //     );
+        // }
+
+        // Ok(all_results)
     }
 }
