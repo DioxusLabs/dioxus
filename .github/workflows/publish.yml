@@ -72,7 +72,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.75.0"
+          toolchain: "1.76.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -98,7 +98,6 @@ jobs:
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
-
 
   # todo: these things
   # Run benchmarks, which we'll use to display on the website
@@ -146,13 +145,12 @@ jobs:
   #         # todo: actually just publish!
   #         # cargo workspaces publish -y ${{ github.event.inputs.semver }}
 
-      # this will be more useful when we publish the website with updated docs
-      # Build the docs.rs docs and publish them to the website under the right folder
-      # v0.4.x -> docs/0.4
-      # v0.5.x -> docs/0.5 etc
-      # main -> docs/nightly
-      # strip the v from the channel, and the .x from the end, and replace main with nightly
-      # - name: determine docs folder by channel
-      #   id: determine_docs_folder
-      #   run: echo "::set-output name=folder::$(echo ${{ github.event.inputs.channel }} | sed 's/v//g' | sed 's/\.x//g' | sed 's/main/nightly/g')"
-
+  # this will be more useful when we publish the website with updated docs
+  # Build the docs.rs docs and publish them to the website under the right folder
+  # v0.4.x -> docs/0.4
+  # v0.5.x -> docs/0.5 etc
+  # main -> docs/nightly
+  # strip the v from the channel, and the .x from the end, and replace main with nightly
+  # - name: determine docs folder by channel
+  #   id: determine_docs_folder
+  #   run: echo "::set-output name=folder::$(echo ${{ github.event.inputs.channel }} | sed 's/v//g' | sed 's/\.x//g' | sed 's/main/nightly/g')"
