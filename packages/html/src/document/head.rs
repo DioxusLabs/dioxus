@@ -359,13 +359,14 @@ use super::*;
 
 #[derive(Clone, Props, PartialEq)]
 pub struct LinkProps {
+    /// Links are deduplicated by their href and rel attributes
     pub rel: Option<String>,
     pub media: Option<String>,
     pub title: Option<String>,
     pub disabled: Option<bool>,
     pub r#as: Option<String>,
     pub sizes: Option<String>,
-    /// Links are deduplicated by their href attribute
+    /// Links are deduplicated by their href and rel attributes
     pub href: Option<String>,
     pub crossorigin: Option<String>,
     pub referrerpolicy: Option<String>,
@@ -457,7 +458,7 @@ pub fn Link(props: LinkProps) -> Element {
 
     use_hook(|| {
         if let Some(href) = &props.href {
-            if !should_insert_link(href) {
+            if !should_insert_link(href, props.rel.as_deref().unwrap_or_default()) {
                 return;
             }
         }
@@ -482,10 +483,10 @@ fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {
 #[derive(Default, Clone)]
 struct LinkContext(DeduplicationContext);
 
-fn should_insert_link(href: &str) -> bool {
+fn should_insert_link(href: &str, rel: &str) -> bool {
     get_or_insert_root_context::<LinkContext>()
         .0
-        .should_insert(href)
+        .should_insert(format!("{href}:{rel}").as_ref())
 }
 
 #[derive(Default, Clone)]
