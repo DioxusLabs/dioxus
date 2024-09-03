@@ -1,12 +1,8 @@
 //! A simple little clock that updates the time every few milliseconds.
 //!
 
-use async_std::task::sleep;
 use dioxus::prelude::*;
-
-#[cfg(not(target_family = "wasm"))]
-use std::time::Instant;
-#[cfg(target_family = "wasm")]
+use tokio::time::sleep;
 use web_time::Instant;
 
 const STYLE: &str = asset!("./examples/assets/clock.css");
