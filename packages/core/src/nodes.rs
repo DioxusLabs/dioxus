@@ -871,14 +871,7 @@ impl<T: IntoDynNode> IntoDynNode for Option<T> {
         }
     }
 }
-impl IntoDynNode for &Element {
-    fn into_dyn_node(self) -> DynamicNode {
-        match self.as_ref() {
-            Ok(val) => val.into_dyn_node(),
-            _ => DynamicNode::default(),
-        }
-    }
-}
+
 impl IntoDynNode for Element {
     fn into_dyn_node(self) -> DynamicNode {
         match self {
@@ -887,52 +880,46 @@ impl IntoDynNode for Element {
         }
     }
 }
-impl IntoDynNode for &Option<VNode> {
-    fn into_dyn_node(self) -> DynamicNode {
-        match self.as_ref() {
-            Some(val) => val.clone().into_dyn_node(),
-            _ => DynamicNode::default(),
-        }
-    }
-}
-impl IntoDynNode for &str {
-    fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText {
-            value: self.to_string(),
-        })
-    }
-}
+
 impl IntoDynNode for String {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText { value: self })
     }
 }
-impl IntoDynNode for Arguments<'_> {
+
+impl<'a> IntoDynNode for &'a str {
     fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText {
-            value: self.to_string(),
-        })
+        self.to_string().into_dyn_node()
     }
 }
-impl IntoDynNode for &VNode {
+
+impl<'a> IntoDynNode for Arguments<'a> {
     fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Fragment(vec![self.clone()])
+        self.to_string().into_dyn_node()
+    }
+}
+
+/// Blanket impl for references of types that are already [IntoDynNode]
+impl<'a, T> IntoDynNode for &T
+where
+    T: ToOwned,
+    T::Owned: IntoDynNode,
+{
+    fn into_dyn_node(self) -> DynamicNode {
+        self.to_owned().into_dyn_node()
     }
 }
 
 pub trait IntoVNode {
     fn into_vnode(self) -> VNode;
 }
+
 impl IntoVNode for VNode {
     fn into_vnode(self) -> VNode {
         self
     }
 }
-impl IntoVNode for &VNode {
-    fn into_vnode(self) -> VNode {
-        self.clone()
-    }
-}
+
 impl IntoVNode for Element {
     fn into_vnode(self) -> VNode {
         match self {
@@ -941,14 +928,7 @@ impl IntoVNode for Element {
         }
     }
 }
-impl IntoVNode for &Element {
-    fn into_vnode(self) -> VNode {
-        match self {
-            Ok(val) => val.into_vnode(),
-            _ => VNode::empty().unwrap(),
-        }
-    }
-}
+
 impl IntoVNode for Option<VNode> {
     fn into_vnode(self) -> VNode {
         match self {
@@ -957,14 +937,7 @@ impl IntoVNode for Option<VNode> {
         }
     }
 }
-impl IntoVNode for &Option<VNode> {
-    fn into_vnode(self) -> VNode {
-        match self.as_ref() {
-            Some(val) => val.clone().into_vnode(),
-            _ => VNode::empty().unwrap(),
-        }
-    }
-}
+
 impl IntoVNode for Option<Element> {
     fn into_vnode(self) -> VNode {
         match self {
@@ -973,12 +946,15 @@ impl IntoVNode for Option<Element> {
         }
     }
 }
-impl IntoVNode for &Option<Element> {
+
+/// Blanket impl for references of types that are already [IntoVNode]
+impl<'a, T> IntoVNode for &T
+where
+    T: ToOwned,
+    T::Owned: IntoVNode,
+{
     fn into_vnode(self) -> VNode {
-        match self.as_ref() {
-            Some(val) => val.clone().into_vnode(),
-            _ => VNode::empty().unwrap(),
-        }
+        self.to_owned().into_vnode()
     }
 }
 
