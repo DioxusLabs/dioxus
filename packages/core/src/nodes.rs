@@ -7,6 +7,7 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
+use std::borrow::Cow;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -1011,15 +1012,31 @@ impl IntoAttributeValue for AttributeValue {
     }
 }
 
-impl IntoAttributeValue for &str {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.to_string())
-    }
-}
-
 impl IntoAttributeValue for String {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Text(self)
+    }
+}
+
+impl<'a> IntoAttributeValue for &'a str {
+    fn into_value(self) -> AttributeValue {
+        self.to_string().into_value()
+    }
+}
+
+impl<'a, T> IntoAttributeValue for Cow<'a, T>
+where
+    T: ToOwned,
+    T::Owned: IntoAttributeValue,
+{
+    fn into_value(self) -> AttributeValue {
+        self.into_owned().into_value()
+    }
+}
+
+impl<'a> IntoAttributeValue for Arguments<'a> {
+    fn into_value(self) -> AttributeValue {
+        self.to_string().into_value()
     }
 }
 
@@ -1057,12 +1074,6 @@ impl IntoAttributeValue for bool {
     }
 }
 
-impl IntoAttributeValue for Arguments<'_> {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.to_string())
-    }
-}
-
 impl IntoAttributeValue for Rc<dyn AnyValue> {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Any(self)
@@ -1078,10 +1089,21 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
+/// Blanket impl for references of types that are already [IntoAttributeValue]
+impl<'a, T> IntoAttributeValue for &'a T
+where
+    T: ToOwned,
+    T::Owned: IntoAttributeValue,
+{
+    fn into_value(self) -> AttributeValue {
+        self.to_owned().into_value()
+    }
+}
+
 #[cfg(feature = "manganis")]
 impl IntoAttributeValue for manganis::ImageAsset {
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.path().to_string())
+        self.path().to_string().into_value()
     }
 }
 
