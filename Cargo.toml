@@ -202,6 +202,8 @@ serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }
 form_urlencoded = "1.2.0"
+async-std = "1.12.0"
+web-time = "1.1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
@@ -281,7 +283,6 @@ doc-scrape-examples = true
 
 [[example]]
 name = "clock"
-required-features = ["desktop"]
 doc-scrape-examples = true
 
 [[example]]
@@ -316,7 +317,6 @@ doc-scrape-examples = true
 
 [[example]]
 name = "future"
-required-features = ["desktop"]
 doc-scrape-examples = true
 
 [[example]]
@@ -351,7 +351,6 @@ doc-scrape-examples = true
 
 [[example]]
 name = "streams"
-required-features = ["desktop"]
 doc-scrape-examples = true
 
 [[example]]
@@ -367,4 +366,12 @@ doc-scrape-examples = true
 [[example]]
 name = "window_zoom"
 required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "control_focus"
+doc-scrape-examples = true
+
+[[example]]
+name = "eval"
 doc-scrape-examples = true
