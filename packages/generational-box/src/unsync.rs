@@ -142,7 +142,7 @@ impl UnsyncStorage {
 
     fn create_new(
         value: RefCellStorageEntryData,
-        caller: &'static std::panic::Location<'static>,
+        #[allow(unused)] caller: &'static std::panic::Location<'static>,
     ) -> GenerationalPointer<Self> {
         UNSYNC_RUNTIME.with(|runtime| match runtime.borrow_mut().pop() {
             Some(storage) => {
@@ -238,7 +238,9 @@ impl AnyStorage for UnsyncStorage {
             RefCellStorageEntryData::Rc(_) => {}
             // If this is a reference, decrement the reference count
             RefCellStorageEntryData::Reference(reference) => {
-                drop_ref(*reference);
+                let reference = *reference;
+                drop(borrow_mut);
+                drop_ref(reference);
             }
             RefCellStorageEntryData::Empty => {}
         }
@@ -326,17 +328,20 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         Self::create_new(RefCellStorageEntryData::Reference(data), caller)
     }
 
-    fn new_reference(location: GenerationalPointer<Self>) -> GenerationalPointer<Self> {
+    fn new_reference(pointer: GenerationalPointer<Self>) -> GenerationalPointer<Self> {
         // Chase the reference to get the final location
-        let (location, mut value) = Self::get_split_mut(location).unwrap();
+        let (pointer, mut value) = Self::get_split_mut(pointer).unwrap();
         if let RefCellStorageEntryData::Rc(data) = &mut value.data {
             data.add_ref();
         } else {
             unreachable!()
         }
         Self::create_new(
-            RefCellStorageEntryData::Reference(location),
-            location.location.created_at,
+            RefCellStorageEntryData::Reference(pointer),
+            pointer
+                .location
+                .created_at()
+                .unwrap_or(std::panic::Location::caller()),
         )
     }
 
@@ -359,6 +364,9 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         }
 
         if let RefCellStorageEntryData::Reference(reference) = &mut write.data {
+            if reference == &other_final {
+                return Ok(());
+            }
             drop_ref(*reference);
             *reference = other_final;
         }

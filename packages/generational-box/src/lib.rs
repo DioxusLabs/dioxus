@@ -121,14 +121,7 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Try to get the location the generational box was created at. In release mode this will always return None.
     pub fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
-        #[cfg(debug_assertions)]
-        {
-            Some(self.raw.location.created_at)
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            None
-        }
+        self.raw.location.created_at()
     }
 
     /// Get a reference to the value
@@ -257,6 +250,19 @@ pub(crate) struct GenerationalLocation {
     generation: NonZeroU64,
     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
     created_at: &'static std::panic::Location<'static>,
+}
+
+impl GenerationalLocation {
+    pub(crate) fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
+        #[cfg(debug_assertions)]
+        {
+            Some(self.created_at)
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            None
+        }
+    }
 }
 
 /// A pointer to a specific generational box and generation in that box.

@@ -128,7 +128,7 @@ impl SyncStorage {
 
     fn create_new(
         value: RwLockStorageEntryData,
-        caller: &'static std::panic::Location<'static>,
+        #[allow(unused)] caller: &'static std::panic::Location<'static>,
     ) -> GenerationalPointer<Self> {
         match sync_runtime().lock().pop() {
             Some(storage) => {
@@ -329,7 +329,10 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         }
         Self::create_new(
             RwLockStorageEntryData::Reference(location),
-            location.location.created_at,
+            location
+                .location
+                .created_at()
+                .unwrap_or(std::panic::Location::caller()),
         )
     }
 
