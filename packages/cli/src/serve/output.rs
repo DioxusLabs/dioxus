@@ -1,11 +1,9 @@
-use crate::{
-    builder::BuildRequest,
-    config::{AddressArguments, Platform},
-};
-use crate::{builder::UpdateStage, serve::Serve};
+use crate::config::AddressArguments;
+use crate::{builder::UpdateStage, serve::ServeArgs};
 use crate::{
     builder::{
-        BuildMessage, MessageSource, MessageType, Stage, TargetPlatform, UpdateBuildProgress,
+        BuildMessage, BuildRequest, MessageSource, MessageType, Platform, Stage,
+        UpdateBuildProgress,
     },
     dioxus_crate::DioxusCrate,
     serve::next_or_pending,
@@ -41,7 +39,7 @@ use super::{update::ServeUpdate, Builder, DevServer, Watcher};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogSource {
     Internal,
-    Target(TargetPlatform),
+    Target(Platform),
 }
 
 impl Display for LogSource {
@@ -53,8 +51,8 @@ impl Display for LogSource {
     }
 }
 
-impl From<TargetPlatform> for LogSource {
-    fn from(platform: TargetPlatform) -> Self {
+impl From<Platform> for LogSource {
+    fn from(platform: Platform) -> Self {
         LogSource::Target(platform)
     }
 }
@@ -62,7 +60,7 @@ impl From<TargetPlatform> for LogSource {
 #[derive(Default)]
 pub struct BuildProgress {
     internal_logs: Vec<BuildMessage>,
-    build_logs: HashMap<TargetPlatform, ActiveBuild>,
+    build_logs: HashMap<Platform, ActiveBuild>,
 }
 
 impl BuildProgress {
@@ -115,7 +113,7 @@ enum Tab {
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub fn start(cfg: &Serve) -> io::Result<Self> {
+    pub fn start(cfg: &ServeArgs) -> io::Result<Self> {
         // Start a tracing instance just for serving.
         // This ensures that any tracing we do while serving doesn't break the TUI itself, and instead is
         // redirected to the serve process.
@@ -186,12 +184,12 @@ impl Output {
             num_lines_with_wrapping: 0,
             anim_start: Instant::now(),
             tab: Tab::BuildLog,
-            addr: cfg.server_arguments.address.clone(),
+            addr: cfg.address.clone(),
         })
     }
 
     /// Add a message from stderr to the logs
-    fn push_stderr(&mut self, platform: TargetPlatform, stderr: String) {
+    fn push_stderr(&mut self, platform: Platform, stderr: String) {
         todo!()
         // self.set_tab(Tab::BuildLog);
 
@@ -216,7 +214,7 @@ impl Output {
     }
 
     /// Add a message from stdout to the logs
-    fn push_stdout(&mut self, platform: TargetPlatform, stdout: String) {
+    fn push_stdout(&mut self, platform: Platform, stdout: String) {
         todo!()
         // self.running_apps
         //     .get_mut(&platform)
@@ -243,20 +241,21 @@ impl Output {
     /// Why is the ctrl_c handler here?
     ///
     /// Also tick animations every few ms
-    pub async fn wait(&mut self) -> io::Result<ServeUpdate> {
-        fn ok_and_some<F, T, E>(f: F) -> impl Future<Output = T>
-        where
-            F: Future<Output = Result<Option<T>, E>>,
-        {
-            next_or_pending(async move { f.await.ok().flatten() })
-        }
+    pub async fn wait(&mut self) -> ServeUpdate {
+        todo!()
+        // fn ok_and_some<F, T, E>(f: F) -> impl Future<Output = T>
+        // where
+        //     F: Future<Output = Result<Option<T>, E>>,
+        // {
+        //     next_or_pending(async move { f.await.ok().flatten() })
+        // }
 
-        let user_input = async {
-            let events = self.events.as_mut()?;
-            events.next().await
-        };
+        // let user_input = async {
+        //     let events = self.events.as_mut()?;
+        //     events.next().await
+        // };
 
-        let user_input = ok_and_some(user_input.map(|e| e.transpose()));
+        // let user_input = ok_and_some(user_input.map(|e| e.transpose()));
 
         // let has_running_apps = !self.running_apps.is_empty();
         // let next_stdout = self.running_apps.values_mut().map(|app| {
@@ -314,7 +313,7 @@ impl Output {
         //     }
         // }
 
-        Ok(ServeUpdate::TuiInput { rebuild: false })
+        // Ok(ServeUpdate::TuiInput { rebuild: false })
     }
 
     pub fn shutdown(&mut self) -> io::Result<()> {
@@ -437,11 +436,7 @@ impl Output {
         Ok(false)
     }
 
-    pub fn new_ws_message(
-        &mut self,
-        platform: TargetPlatform,
-        message: axum::extract::ws::Message,
-    ) {
+    pub fn new_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
         if let axum::extract::ws::Message::Text(text) = message {
             let msg = serde_json::from_str::<ClientMsg>(text.as_str());
             match msg {
@@ -513,7 +508,7 @@ impl Output {
         }
     }
 
-    pub fn new_build_logs(&mut self, platform: TargetPlatform, update: UpdateBuildProgress) {
+    pub fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
         let snapped = self.is_snapped(LogSource::Target(platform));
 
         // when the build is finished, switch to the console
@@ -532,7 +527,7 @@ impl Output {
         }
     }
 
-    pub fn new_ready_app(&mut self, build_engine: &mut Builder, target: TargetPlatform) {
+    pub fn new_ready_app(&mut self, build_engine: &mut Builder, target: Platform) {
         todo!()
         // for result in results {
         //     let out = build_engine
@@ -573,9 +568,9 @@ impl Output {
 
     pub fn render(
         &mut self,
-        _opts: &Serve,
-        _config: &DioxusCrate,
-        _build_engine: &Builder,
+        _opts: &ServeArgs,
+        _krate: &DioxusCrate,
+        _builder: &Builder,
         server: &DevServer,
         _watcher: &Watcher,
     ) {

@@ -1,21 +1,21 @@
-use crate::builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage};
-use crate::cli::serve::Serve;
+use crate::builder::{BuildUpdate, Builder, Platform, Stage, UpdateBuildProgress, UpdateStage};
+use crate::cli::serve::ServeArgs;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 
-mod builder;
 mod detect;
 mod hot_reloading_file_map;
 mod logs_tab;
 mod output;
 mod proxy;
+mod runner;
 mod server;
 mod update;
 mod util;
 mod watcher;
 
-use builder::*;
 use output::*;
+use runner::*;
 use server::*;
 use update::*;
 use util::*;
@@ -49,63 +49,59 @@ use watcher::*;
 /// - Handle logs from the build engine separately?
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub async fn serve_all(serve: Serve, krate: DioxusCrate) -> Result<()> {
+pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
     // Start each component of the devserver.
     // Start the screen first, since it'll start to swallow the tracing logs from the rest of the the cli
-    let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
+    let mut screen = Output::start(&args).expect("Failed to open terminal logger");
 
     // Note that starting the builder will queue up a build immediately
-    let mut builder = Builder::start(&serve, &krate)?;
+    let mut builder = Builder::start(&krate, args.build_arguments.clone())?;
 
     // The watcher and devserver are started after but don't really matter in order
-    let mut server = DevServer::start(&serve, &krate);
-    let mut watcher = Watcher::start(&serve, &krate);
+    let mut devserver = DevServer::start(&args, &krate);
+    let mut watcher = Watcher::start(&args, &krate);
+    let mut runner = AppRunner::start(&args, &krate);
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor if we're not careful
         tokio::task::yield_now().await;
 
         // Draw the state of the server to the screen
-        screen.render(&serve, &krate, &builder, &server, &watcher);
+        screen.render(&args, &krate, &builder, &devserver, &watcher);
 
         // And then wait for any updates before redrawing
         let msg = tokio::select! {
-            msg = watcher.wait(), if serve.should_hotreload() => msg,
-            msg = server.wait() => msg,
-            msg = builder.wait() => msg,
-            msg = screen.wait() => match msg {
-                Ok(res) => res,
-                Err(_err) => break
-            }
+            msg = builder.wait() => ServeUpdate::BuildUpdate(msg),
+            msg = watcher.wait() => msg,
+            msg = devserver.wait() => msg,
+            msg = screen.wait() => msg,
+            msg = runner.wait() => msg,
         };
 
         match msg {
-            ServeUpdate::FilesChanged {} => {
-                if !watcher.pending_changes() {
+            ServeUpdate::FilesChanged { files } => {
+                if files.is_empty() || args.should_hotreload() {
                     continue;
                 }
 
-                let changed_files = watcher.dequeue_changed_files(&krate);
-
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = watcher.attempt_hot_reload(&krate, changed_files) {
+                if let Some(hr) = watcher.attempt_hot_reload(&krate, files) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty() && hr.assets.is_empty() {
                         continue;
                     }
 
-                    server.send_hotreload(hr).await;
+                    devserver.send_hotreload(hr).await;
                 } else {
-                    // If the change is not binary patchable, rebuild the project
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    builder.build()?;
+                    builder.build(args.build_arguments.clone())?;
 
                     // Clear the hot reload changes
                     watcher.clear_hot_reload_changes();
 
                     // Tell the server to show a loading page for any new requests
-                    server.start_build().await;
+                    devserver.start_build().await;
                 }
             }
 
@@ -113,21 +109,23 @@ pub async fn serve_all(serve: Serve, krate: DioxusCrate) -> Result<()> {
             // Waiting for updates here lets us tap into when clients are added/removed
             ServeUpdate::NewConnection => {
                 if let Some(msg) = watcher.applied_hot_reload_changes() {
-                    server.send_hotreload(msg).await;
+                    devserver.send_hotreload(msg).await;
                 }
             }
 
-            ServeUpdate::Message(msg) => {
-                screen.new_ws_message(TargetPlatform::Web, msg);
+            // Received a message from the devtools server - currently we only use this for
+            // logging, so we just forward it the tui
+            ServeUpdate::WsMessage(msg) => {
+                screen.new_ws_message(Platform::Web, msg);
             }
 
             // Wait for logs from the build engine
             // These will cause us to update the screen
             // We also can check the status of the builds here in case we have multiple ongoing builds
-            ServeUpdate::Progress { update } => {
+            ServeUpdate::BuildUpdate(BuildUpdate::Progress(update)) => {
                 let update_clone = update.clone();
                 screen.new_build_logs(update.platform, update_clone);
-                server
+                devserver
                     .update_build_status(screen.build_progress.progress(), update.stage.to_string())
                     .await;
 
@@ -137,24 +135,24 @@ pub async fn serve_all(serve: Serve, krate: DioxusCrate) -> Result<()> {
                         stage: Stage::Compiling,
                         update: UpdateStage::Start,
                         platform: _,
-                    } => server.send_reload_start().await,
+                    } => devserver.send_reload_start().await,
 
                     // Send rebuild failed message.
                     UpdateBuildProgress {
                         stage: Stage::Finished,
                         update: UpdateStage::Failed(_),
                         platform: _,
-                    } => server.send_reload_failed().await,
+                    } => devserver.send_reload_failed().await,
 
                     _ => {}
                 }
             }
 
-            ServeUpdate::BuildFailed { err, target } => {
-                server.send_build_error(err).await;
+            ServeUpdate::BuildUpdate(BuildUpdate::BuildFailed { err, target }) => {
+                devserver.send_build_error(err).await;
             }
 
-            ServeUpdate::BuildReady { target } => {
+            ServeUpdate::BuildUpdate(BuildUpdate::BuildReady { target, result }) => {
                 // if !results.is_empty() {
                 //     builder.children.clear();
                 // }
@@ -183,6 +181,10 @@ pub async fn serve_all(serve: Serve, krate: DioxusCrate) -> Result<()> {
                 // server.send_reload_command().await;
             }
 
+            ServeUpdate::StdoutReceived { target, msg } => {}
+
+            ServeUpdate::StderrReceived { target, msg } => {}
+
             // If the process exited *cleanly*, we can exit
             ServeUpdate::ProcessExited {
                 status,
@@ -207,20 +209,23 @@ pub async fn serve_all(serve: Serve, krate: DioxusCrate) -> Result<()> {
                 // }
             }
 
+            // Handle TUI input and maybe even rebuild the app
             ServeUpdate::TuiInput { rebuild } => {
-                // Request a rebuild.
                 if rebuild {
-                    builder.build()?;
-                    server.start_build().await
+                    builder.build(args.build_arguments.clone())?;
+                    devserver.start_build().await
                 }
             }
+
+            // A fatal error occured and we need to exit + cleanup
+            ServeUpdate::Fatal { err } => break,
         }
     }
 
     // Kill the clients first
-    _ = server.shutdown().await;
+    _ = devserver.shutdown().await;
     _ = screen.shutdown();
-    _ = builder.shutdown();
+    _ = builder.abort_all();
 
     Ok(())
 }

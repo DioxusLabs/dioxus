@@ -5,6 +5,7 @@
 pub mod assets;
 pub mod builder;
 pub mod bundle_utils;
+pub mod bundler;
 pub mod cli;
 pub mod config;
 pub mod dioxus_crate;

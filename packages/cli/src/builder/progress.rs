@@ -1,4 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
+use super::{BuildRequest, Platform};
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use serde::Deserialize;
@@ -6,10 +7,8 @@ use std::fmt::Display;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::Stdio;
-use tokio::io::AsyncBufReadExt;
+use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::Level;
-
-use super::{BuildRequest, TargetPlatform};
 
 #[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
 pub enum Stage {
@@ -47,7 +46,7 @@ impl std::fmt::Display for Stage {
 pub struct UpdateBuildProgress {
     pub stage: Stage,
     pub update: UpdateStage,
-    pub platform: TargetPlatform,
+    pub platform: Platform,
 }
 
 impl UpdateBuildProgress {
@@ -141,21 +140,34 @@ impl From<Diagnostic> for BuildMessage {
     }
 }
 
-pub(crate) struct CargoBuildResult {
-    pub(crate) output_location: Option<PathBuf>,
-}
-
 impl BuildRequest {
-    pub(crate) async fn build_cargo(
-        &self,
-        crate_count: usize,
-        mut cmd: tokio::process::Command,
-    ) -> anyhow::Result<CargoBuildResult> {
+    /// Run `cargo`, returning the location of the final exectuable
+    ///
+    /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
+    pub async fn build_cargo(&self) -> anyhow::Result<PathBuf> {
+        // Extract the unit count of the crate graph so build_cargo has more accurate data
+        let crate_count = self.get_unit_count_estimate().await;
+
         _ = self.progress.unbounded_send(UpdateBuildProgress {
             stage: Stage::Compiling,
             update: UpdateStage::Start,
-            platform: self.target_platform,
+            platform: self.platform(),
         });
+
+        let mut cmd = Command::new("cargo");
+
+        cmd.arg("rustc")
+            .envs(
+                self.custom_target_dir
+                    .as_ref()
+                    .map(|dir| ("CARGO_TARGET_DIR", dir)),
+            )
+            .current_dir(self.krate.crate_dir())
+            .arg("--message-format")
+            .arg("json-diagnostic-rendered-ansi")
+            .args(&self.build_arguments())
+            .arg("--")
+            .args(self.rust_flags.clone());
 
         let mut child = cmd
             .stdout(Stdio::piped())
@@ -196,7 +208,7 @@ impl BuildRequest {
                     _ = self.progress.unbounded_send(UpdateBuildProgress {
                         stage: Stage::Compiling,
                         update: UpdateStage::AddMessage(message.clone().into()),
-                        platform: self.target_platform,
+                        platform: self.platform(),
                     });
                     const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
                         cargo_metadata::diagnostic::DiagnosticLevel::Help,
@@ -227,7 +239,7 @@ impl BuildRequest {
                     } else {
                         let build_progress = units_compiled as f64 / crate_count as f64;
                         _ = self.progress.unbounded_send(UpdateBuildProgress {
-                            platform: self.target_platform,
+                            platform: self.platform(),
                             stage: Stage::Compiling,
                             update: UpdateStage::SetProgress((build_progress).clamp(0.0, 1.00)),
                         });
@@ -243,7 +255,7 @@ impl BuildRequest {
                 }
                 Message::TextLine(line) => {
                     _ = self.progress.unbounded_send(UpdateBuildProgress {
-                        platform: self.target_platform,
+                        platform: self.platform(),
                         stage: Stage::Compiling,
                         update: UpdateStage::AddMessage(BuildMessage {
                             level: Level::DEBUG,
@@ -258,7 +270,7 @@ impl BuildRequest {
             }
         }
 
-        Ok(CargoBuildResult { output_location })
+        output_location.context("Build did not return an executable")
     }
 
     /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
@@ -306,5 +318,17 @@ impl BuildRequest {
                 .sum::<usize>() as f64
                 / 3.5) as usize
         })
+    }
+}
+
+impl BuildRequest {
+    pub fn status_build_finished(&self) {
+        tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
+
+        _ = self.progress.unbounded_send(UpdateBuildProgress {
+            platform: self.platform(),
+            stage: Stage::Finished,
+            update: UpdateStage::Start,
+        });
     }
 }

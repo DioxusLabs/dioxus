@@ -1,12 +1,12 @@
-use crate::{builder::BuildRequest, dioxus_crate::DioxusCrate};
 use crate::{
-    builder::TargetPlatform,
-    serve::{next_or_pending, Serve},
+    builder::Platform,
+    serve::{next_or_pending, ServeArgs},
 };
 use crate::{
-    config::{Platform, WebHttpsConfig},
-    serve::update::ServeUpdate,
+    builder::{BuildRequest, BuildResult},
+    dioxus_crate::DioxusCrate,
 };
+use crate::{config::WebHttpsConfig, serve::update::ServeUpdate};
 use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
@@ -85,7 +85,7 @@ impl SharedStatus {
 }
 
 pub struct DevServer {
-    pub serve: Serve,
+    pub serve: ServeArgs,
     pub hot_reload_sockets: Vec<WebSocket>,
     pub build_status_sockets: Vec<WebSocket>,
     pub ip: SocketAddr,
@@ -102,7 +102,7 @@ pub struct DevServer {
 }
 
 impl DevServer {
-    pub fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
+    pub fn start(args: &ServeArgs, cfg: &DioxusCrate) -> Self {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
@@ -111,14 +111,11 @@ impl DevServer {
             build_message: "Starting the build...".to_string(),
         });
 
-        let addr = serve.server_arguments.address.address();
-        let start_browser = serve.server_arguments.open.unwrap_or_default();
+        let addr = args.address.address();
+        let start_browser = args.open.unwrap_or_default();
 
         // If we're serving a fullstack app, we need to find a port to proxy to
-        let fullstack_port = if matches!(
-            serve.build_arguments.platform(),
-            Platform::Liveview | Platform::Fullstack
-        ) {
+        let fullstack_port = if matches!(args.build_arguments.platform(), Platform::Liveview) {
             get_available_port(addr.ip())
         } else {
             None
@@ -127,7 +124,7 @@ impl DevServer {
         let fullstack_address = fullstack_port.map(|port| SocketAddr::new(addr.ip(), port));
 
         let router = Self::setup_router(
-            serve,
+            args,
             cfg,
             hot_reload_sockets_tx,
             build_status_sockets_tx,
@@ -139,7 +136,7 @@ impl DevServer {
         // Actually just start the server, cloning in a few bits of config
         let web_config = cfg.dioxus_config.web.https.clone();
         let base_path = cfg.dioxus_config.web.app.base_path.clone();
-        let platform = serve.platform();
+        let platform = args.platform();
 
         let listener = std::net::TcpListener::bind(addr).expect("Failed to bind port");
         _ = listener.set_nonblocking(true);
@@ -175,7 +172,7 @@ impl DevServer {
         });
 
         Self {
-            serve: serve.clone(),
+            serve: args.clone(),
             hot_reload_sockets: Default::default(),
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
@@ -186,7 +183,7 @@ impl DevServer {
 
             build_status,
             application_name: cfg.dioxus_config.application.name.clone(),
-            platform: serve.build_arguments.platform().to_string(),
+            platform: args.build_arguments.platform().to_string(),
         }
     }
 
@@ -287,7 +284,7 @@ impl DevServer {
             }
             (idx, message) = next_new_message => {
                 match message {
-                    Some(Ok(message)) => return ServeUpdate::Message(message),
+                    Some(Ok(message)) => return ServeUpdate::WsMessage(message),
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
@@ -356,18 +353,19 @@ impl DevServer {
     }
 
     /// Open the executable if this is a native build
-    pub fn open(&self, build: &BuildRequest) -> std::io::Result<Option<Child>> {
-        match build.target_platform {
-            TargetPlatform::Web => Ok(None),
-            TargetPlatform::Mobile => self.open_bundled_ios_app(build),
-            TargetPlatform::Desktop | TargetPlatform::Server | TargetPlatform::Liveview => {
+    pub fn open(&self, build: &BuildResult) -> std::io::Result<Option<Child>> {
+        match build.request.platform() {
+            Platform::Web => Ok(None),
+            Platform::Ios => self.open_bundled_ios_app(build),
+            Platform::Android => todo!("Android not supported yet"),
+            Platform::Desktop | Platform::Server | Platform::Liveview => {
                 self.open_unbundled_native_app(build)
             }
         }
     }
 
-    fn open_unbundled_native_app(&self, build: &BuildRequest) -> std::io::Result<Option<Child>> {
-        if build.target_platform == TargetPlatform::Server {
+    fn open_unbundled_native_app(&self, build: &BuildResult) -> std::io::Result<Option<Child>> {
+        if build.request.platform() == Platform::Server {
             tracing::trace!(
                 "Proxying fullstack server from port {:?}",
                 self.fullstack_address()
@@ -379,46 +377,38 @@ impl DevServer {
             self.ip.to_string()
         );
 
-        //
         // open the exe with some arguments/envvars/etc
         // we're going to try and configure this binary from the environment, if we can
         //
         // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
         // index.html during dev
-        //
-        let res = Command::new(
-            build
-                .executable
-                .as_deref()
-                .expect("executable should be built if we're trying to open it")
-                .canonicalize()?,
-        )
-        .env(
-            dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
-            self.fullstack_address()
-                .as_ref()
-                .map(|addr| addr.to_string())
-                .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
-        )
-        .env(
-            dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
-            format!("ws://{}/_dioxus", self.ip.to_string()),
-        )
-        .env(
-            dioxus_runtime_config::DEVSERVER_RAW_ADDR_ENV,
-            format!("ws://{}/_dioxus", self.ip.to_string()),
-        )
-        .env("CARGO_MANIFEST_DIR", build.krate.crate_dir())
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .kill_on_drop(true)
-        .current_dir(build.krate.workspace_dir())
-        .spawn()?;
+        let res = Command::new(build.bundle.path())
+            .env(
+                dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
+                self.fullstack_address()
+                    .as_ref()
+                    .map(|addr| addr.to_string())
+                    .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
+            )
+            .env(
+                dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
+                format!("ws://{}/_dioxus", self.ip.to_string()),
+            )
+            .env(
+                dioxus_runtime_config::DEVSERVER_RAW_ADDR_ENV,
+                format!("ws://{}/_dioxus", self.ip.to_string()),
+            )
+            .env("CARGO_MANIFEST_DIR", build.request.krate.crate_dir())
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .kill_on_drop(true)
+            .current_dir(build.request.krate.workspace_dir())
+            .spawn()?;
 
         Ok(Some(res))
     }
 
-    fn open_bundled_ios_app(&self, build: &BuildRequest) -> std::io::Result<Option<Child>> {
+    fn open_bundled_ios_app(&self, build: &BuildResult) -> std::io::Result<Option<Child>> {
         // command = "xcrun"
         // args = [
         // "simctl",
@@ -470,18 +460,18 @@ impl DevServer {
     /// - Setting up the file serve service
     /// - Setting up the websocket endpoint for devtools
     fn setup_router(
-        serve: &Serve,
-        config: &DioxusCrate,
+        args: &ServeArgs,
+        krate: &DioxusCrate,
         hot_reload_sockets: UnboundedSender<WebSocket>,
         build_status_sockets: UnboundedSender<WebSocket>,
         fullstack_address: Option<SocketAddr>,
         build_status: SharedStatus,
     ) -> Result<Router> {
         let mut router = Router::new();
-        let platform = serve.build_arguments.platform();
+        let platform = args.build_arguments.platform();
 
         // Setup proxy for the endpoint specified in the config
-        for proxy_config in config.dioxus_config.web.proxy.iter() {
+        for proxy_config in krate.dioxus_config.web.proxy.iter() {
             router = super::proxy::add_proxy(router, proxy_config)?;
         }
 
@@ -491,7 +481,7 @@ impl DevServer {
                 // Route file service to output the .wasm and assets if this is a web build
                 let base_path = format!(
                     "/{}",
-                    config
+                    krate
                         .dioxus_config
                         .web
                         .app
@@ -501,9 +491,9 @@ impl DevServer {
                         .trim_matches('/')
                 );
 
-                router = router.nest_service(&base_path, build_serve_dir(serve, config));
+                router = router.nest_service(&base_path, build_serve_dir(args, krate));
             }
-            Platform::Liveview | Platform::Fullstack => {
+            Platform::Liveview => {
                 // For fullstack and static generation, forward all requests to the server
                 let address = fullstack_address.unwrap();
 
@@ -568,7 +558,7 @@ impl DevServer {
     }
 }
 
-fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
+fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
     static CORS_UNSAFE: (HeaderValue, HeaderValue) = (
         HeaderValue::from_static("unsafe-none"),
         HeaderValue::from_static("unsafe-none"),
@@ -579,7 +569,7 @@ fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRou
         HeaderValue::from_static("same-origin"),
     );
 
-    let (coep, coop) = match serve.server_arguments.cross_origin_policy {
+    let (coep, coop) = match args.cross_origin_policy {
         true => CORS_REQUIRE.clone(),
         false => CORS_UNSAFE.clone(),
     };

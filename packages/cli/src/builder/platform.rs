@@ -1,48 +1,112 @@
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use std::str::FromStr;
 
-/// The target platform for the build
-/// This is very similar to the Platform enum, but we need to be able to differentiate between the
-/// server and web targets for the fullstack platform
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TargetPlatform {
+#[derive(
+    Copy,
+    Clone,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Debug,
+    Default,
+    clap::ValueEnum,
+)]
+#[non_exhaustive]
+pub enum Platform {
+    /// Targeting the web platform using WASM
+    #[clap(name = "web")]
+    #[serde(rename = "web")]
+    #[default]
     Web,
+
+    /// Targeting the desktop platform using Tao/Wry-based webview
+    ///
+    /// Will only build for your native architecture - to do cross builds you need to use a VM.
+    /// Read more about cross-builds on the Dioxus Website.
+    #[clap(name = "desktop")]
+    #[serde(rename = "desktop")]
     Desktop,
-    Mobile,
+
+    /// Targeting the ios platform
+    ///
+    /// Can't work properly if you're not building from an Apple device.
+    #[clap(name = "ios")]
+    #[serde(rename = "ios")]
+    Ios,
+
+    /// Targetting the server platform using Axum and Dioxus-Fullstack
+    ///
+    /// This is implicitly passed if `fullstack` is enabled as a feature. Using this variant simply
+    /// means you're only building the server variant without the `.wasm` to serve.
+    #[clap(name = "server")]
+    #[serde(rename = "server")]
     Server,
+
+    /// Targeting the android platform
+    #[clap(name = "android")]
+    #[serde(rename = "android")]
+    Android,
+
+    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
+    #[clap(name = "liveview")]
+    #[serde(rename = "liveview")]
     Liveview,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TargetArch {
-    Linux,
-    Mac,
-    Windows,
-    Ios,
-    Android,
+/// An error that occurs when a platform is not recognized
+pub struct UnknownPlatformError;
+
+impl std::fmt::Display for UnknownPlatformError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unknown platform")
+    }
 }
 
-impl FromStr for TargetPlatform {
-    type Err = ();
+impl FromStr for Platform {
+    type Err = UnknownPlatformError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "web" => Ok(Self::Web),
             "desktop" => Ok(Self::Desktop),
-            "axum" | "server" => Ok(Self::Server),
             "liveview" => Ok(Self::Liveview),
-            _ => Err(()),
+            _ => Err(UnknownPlatformError),
         }
     }
 }
 
-impl std::fmt::Display for TargetPlatform {
+impl Display for Platform {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let feature = self.feature_name();
+        f.write_str(feature)
+    }
+}
+
+impl Platform {
+    /// All platforms the dioxus CLI supports
+    pub const ALL: &'static [Self] = &[
+        Platform::Web,
+        Platform::Desktop,
+        Platform::Ios,
+        Platform::Android,
+        Platform::Liveview,
+        Platform::Server,
+    ];
+
+    /// Get the feature name for the platform in the dioxus crate
+    pub fn feature_name(&self) -> &str {
         match self {
-            TargetPlatform::Web => write!(f, "web"),
-            TargetPlatform::Desktop => write!(f, "desktop"),
-            TargetPlatform::Server => write!(f, "server"),
-            TargetPlatform::Liveview => write!(f, "liveview"),
-            TargetPlatform::Mobile => write!(f, "ios"),
+            Platform::Web => "web",
+            Platform::Desktop => "desktop",
+            Platform::Liveview => "liveview",
+            Platform::Ios => "ios",
+            Platform::Android => "android",
+            Platform::Server => "server",
         }
     }
 }

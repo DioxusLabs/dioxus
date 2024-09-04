@@ -1,5 +1,5 @@
 use crate::DioxusCrate;
-use crate::{build::Build, bundle_utils::make_tauri_bundler_settings};
+use crate::{build::BuildArgs, bundle_utils::make_tauri_bundler_settings};
 use anyhow::Context;
 use std::env::current_dir;
 use std::fs::create_dir_all;
@@ -18,11 +18,11 @@ pub struct Bundle {
 
     /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub build_arguments: Build,
+    pub build_arguments: BuildArgs,
 }
 
 impl Deref for Bundle {
-    type Target = Build;
+    type Target = BuildArgs;
 
     fn deref(&self) -> &Self::Target {
         &self.build_arguments

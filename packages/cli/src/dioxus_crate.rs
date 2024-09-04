@@ -1,7 +1,5 @@
-use crate::{
-    build::TargetArgs,
-    config::{DioxusConfig, Platform},
-};
+use crate::builder::Platform;
+use crate::{build::TargetArgs, config::DioxusConfig};
 use krates::cm::Target;
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use serde::{Deserialize, Serialize};
@@ -12,125 +10,6 @@ use std::{
 };
 
 use crate::metadata::CargoError;
-
-/// Load the dioxus config from a path
-fn load_dioxus_config(
-    krates: &Krates,
-    package: NodeId,
-) -> Result<Option<DioxusConfig>, CrateConfigError> {
-    fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
-        ["Dioxus.toml", "dioxus.toml"]
-            .into_iter()
-            .map(|file| dir.join(file))
-            .find(|path| path.is_file())
-    }
-
-    // Walk up from the cargo.toml to the root of the workspace looking for Dioxus.toml
-    let mut current_dir = krates[package]
-        .manifest_path
-        .parent()
-        .unwrap()
-        .as_std_path()
-        .to_path_buf()
-        .canonicalize()?;
-
-    let workspace_path = krates
-        .workspace_root()
-        .as_std_path()
-        .to_path_buf()
-        .canonicalize()?;
-
-    let mut dioxus_conf_file = None;
-    while current_dir.starts_with(&workspace_path) {
-        // Try to find Dioxus.toml in the current directory
-        if let Some(new_config) = acquire_dioxus_toml(&current_dir) {
-            dioxus_conf_file = Some(new_config.as_path().to_path_buf());
-            break;
-        }
-        // If we can't find it, go up a directory
-        current_dir = current_dir
-            .parent()
-            .ok_or(CrateConfigError::CurrentPackageNotFound)?
-            .to_path_buf();
-    }
-
-    let Some(dioxus_conf_file) = dioxus_conf_file else {
-        return Ok(None);
-    };
-
-    let cfg = toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
-        .map_err(|err| {
-            CrateConfigError::LoadDioxusConfig(LoadDioxusConfigError {
-                location: dioxus_conf_file.display().to_string(),
-                error: err.to_string(),
-            })
-        })
-        .map(Some);
-    match cfg {
-        Ok(Some(mut cfg)) => {
-            let name = cfg.application.name.clone();
-            if cfg.bundle.identifier.is_none() {
-                cfg.bundle.identifier = Some(format!("io.github.{name}"));
-            }
-            if cfg.bundle.publisher.is_none() {
-                cfg.bundle.publisher = Some(name);
-            }
-
-            Ok(Some(cfg))
-        }
-        cfg => cfg,
-    }
-}
-
-// Find the main package in the workspace
-fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId, CrateConfigError> {
-    let kid = match package {
-        Some(package) => {
-            let mut workspace_members = krates.workspace_members();
-            workspace_members
-                .find_map(|node| {
-                    if let krates::Node::Krate { id, krate, .. } = node {
-                        if krate.name == package {
-                            return Some(id);
-                        }
-                    }
-                    None
-                })
-                .ok_or_else(|| CrateConfigError::PackageNotFound(package.clone()))?
-        }
-        None => {
-            // Otherwise find the package that is the closest parent of the current directory
-            let current_dir = std::env::current_dir()?;
-            let current_dir = current_dir.as_path();
-            // Go through each member and find the path that is a parent of the current directory
-            let mut closest_parent = None;
-            for member in krates.workspace_members() {
-                if let krates::Node::Krate { id, krate, .. } = member {
-                    let member_path = krate.manifest_path.parent().unwrap();
-                    if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
-                        let len = path.components().count();
-                        match closest_parent {
-                            Some((_, closest_parent_len)) => {
-                                if len < closest_parent_len {
-                                    closest_parent = Some((id, len));
-                                }
-                            }
-                            None => {
-                                closest_parent = Some((id, len));
-                            }
-                        }
-                    }
-                }
-            }
-            closest_parent
-                .map(|(id, _)| id)
-                .ok_or(CrateConfigError::CurrentPackageNotFound)?
-        }
-    };
-
-    let package = krates.nid_for_kid(kid).unwrap();
-    Ok(package)
-}
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
 #[derive(Clone)]
@@ -356,3 +235,122 @@ impl Display for CrateConfigError {
 }
 
 impl std::error::Error for CrateConfigError {}
+
+/// Load the dioxus config from a path
+fn load_dioxus_config(
+    krates: &Krates,
+    package: NodeId,
+) -> Result<Option<DioxusConfig>, CrateConfigError> {
+    fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
+        ["Dioxus.toml", "dioxus.toml"]
+            .into_iter()
+            .map(|file| dir.join(file))
+            .find(|path| path.is_file())
+    }
+
+    // Walk up from the cargo.toml to the root of the workspace looking for Dioxus.toml
+    let mut current_dir = krates[package]
+        .manifest_path
+        .parent()
+        .unwrap()
+        .as_std_path()
+        .to_path_buf()
+        .canonicalize()?;
+
+    let workspace_path = krates
+        .workspace_root()
+        .as_std_path()
+        .to_path_buf()
+        .canonicalize()?;
+
+    let mut dioxus_conf_file = None;
+    while current_dir.starts_with(&workspace_path) {
+        // Try to find Dioxus.toml in the current directory
+        if let Some(new_config) = acquire_dioxus_toml(&current_dir) {
+            dioxus_conf_file = Some(new_config.as_path().to_path_buf());
+            break;
+        }
+        // If we can't find it, go up a directory
+        current_dir = current_dir
+            .parent()
+            .ok_or(CrateConfigError::CurrentPackageNotFound)?
+            .to_path_buf();
+    }
+
+    let Some(dioxus_conf_file) = dioxus_conf_file else {
+        return Ok(None);
+    };
+
+    let cfg = toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
+        .map_err(|err| {
+            CrateConfigError::LoadDioxusConfig(LoadDioxusConfigError {
+                location: dioxus_conf_file.display().to_string(),
+                error: err.to_string(),
+            })
+        })
+        .map(Some);
+    match cfg {
+        Ok(Some(mut cfg)) => {
+            let name = cfg.application.name.clone();
+            if cfg.bundle.identifier.is_none() {
+                cfg.bundle.identifier = Some(format!("io.github.{name}"));
+            }
+            if cfg.bundle.publisher.is_none() {
+                cfg.bundle.publisher = Some(name);
+            }
+
+            Ok(Some(cfg))
+        }
+        cfg => cfg,
+    }
+}
+
+// Find the main package in the workspace
+fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId, CrateConfigError> {
+    let kid = match package {
+        Some(package) => {
+            let mut workspace_members = krates.workspace_members();
+            workspace_members
+                .find_map(|node| {
+                    if let krates::Node::Krate { id, krate, .. } = node {
+                        if krate.name == package {
+                            return Some(id);
+                        }
+                    }
+                    None
+                })
+                .ok_or_else(|| CrateConfigError::PackageNotFound(package.clone()))?
+        }
+        None => {
+            // Otherwise find the package that is the closest parent of the current directory
+            let current_dir = std::env::current_dir()?;
+            let current_dir = current_dir.as_path();
+            // Go through each member and find the path that is a parent of the current directory
+            let mut closest_parent = None;
+            for member in krates.workspace_members() {
+                if let krates::Node::Krate { id, krate, .. } = member {
+                    let member_path = krate.manifest_path.parent().unwrap();
+                    if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
+                        let len = path.components().count();
+                        match closest_parent {
+                            Some((_, closest_parent_len)) => {
+                                if len < closest_parent_len {
+                                    closest_parent = Some((id, len));
+                                }
+                            }
+                            None => {
+                                closest_parent = Some((id, len));
+                            }
+                        }
+                    }
+                }
+            }
+            closest_parent
+                .map(|(id, _)| id)
+                .ok_or(CrateConfigError::CurrentPackageNotFound)?
+        }
+    };
+
+    let package = krates.nid_for_kid(kid).unwrap();
+    Ok(package)
+}

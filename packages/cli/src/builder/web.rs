@@ -1,20 +1,63 @@
-use super::{BuildRequest, TargetPlatform};
+use super::{BuildRequest, Platform};
 use crate::assets::pre_compress_folder;
 use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 use wasm_bindgen_cli_support::Bindgen;
 
 impl BuildRequest {
+    /// Post process the WASM build artifacts
+    pub(crate) async fn post_process_web_build(&self, executable: PathBuf) -> Result<()> {
+        _ = self.progress.unbounded_send(UpdateBuildProgress {
+            stage: Stage::OptimizingWasm,
+            update: UpdateStage::Start,
+            platform: self.platform(),
+        });
+
+        // Find the wasm file
+        let output_location = executable.clone();
+        let input_path = output_location.with_extension("wasm");
+
+        // Create the directory where the bindgen output will be placed
+        let bindgen_outdir = self.target_out_dir().join("assets").join("dioxus");
+
+        // Run wasm-bindgen
+        self.run_wasm_bindgen(&input_path, &bindgen_outdir).await?;
+
+        // Only run wasm-opt if the feature is enabled
+        // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
+        // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
+        #[cfg(feature = "wasm-opt")]
+        self.run_wasm_opt(&bindgen_outdir)?;
+
+        // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
+        let pre_compress = self
+            .krate
+            .should_pre_compress_web_assets(self.build.release);
+
+        tokio::task::spawn_blocking(move || pre_compress_folder(&bindgen_outdir, pre_compress))
+            .await
+            .unwrap()?;
+
+        // Create the index.html file
+        // Note that we do this last since the webserver will attempt to serve the index.html file
+        // If we do this too early, the wasm won't be ready but the index.html will be served, leading
+        // to test failures and broken pages.
+        let html = self.prepare_html()?;
+        let html_path = self.target_out_dir().join("index.html");
+        std::fs::write(html_path, html)?;
+
+        Ok(())
+    }
+
     async fn run_wasm_bindgen(&self, input_path: &Path, bindgen_outdir: &Path) -> Result<()> {
         tracing::info!("Running wasm-bindgen");
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
-        let keep_debug =
-            self.krate.dioxus_config.web.wasm_opt.debug || (!self.build_arguments.release);
+        let keep_debug = self.krate.dioxus_config.web.wasm_opt.debug || (!self.build.release);
         let name = self.krate.dioxus_config.application.name.clone();
 
         let run_wasm_bindgen = move || {
@@ -52,50 +95,6 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Post process the WASM build artifacts
-    pub(crate) async fn post_process_web_build(&mut self) -> Result<()> {
-        _ = self.progress.unbounded_send(UpdateBuildProgress {
-            stage: Stage::OptimizingWasm,
-            update: UpdateStage::Start,
-            platform: self.target_platform,
-        });
-
-        // Find the wasm file
-        let output_location = self.executable.clone().unwrap();
-        let input_path = output_location.with_extension("wasm");
-
-        // Create the directory where the bindgen output will be placed
-        let bindgen_outdir = self.target_out_dir().join("assets").join("dioxus");
-
-        // Run wasm-bindgen
-        self.run_wasm_bindgen(&input_path, &bindgen_outdir).await?;
-
-        // Only run wasm-opt if the feature is enabled
-        // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
-        // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
-        #[cfg(feature = "wasm-opt")]
-        self.run_wasm_opt(&bindgen_outdir)?;
-
-        // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
-        let pre_compress = self
-            .krate
-            .should_pre_compress_web_assets(self.build_arguments.release);
-
-        tokio::task::spawn_blocking(move || pre_compress_folder(&bindgen_outdir, pre_compress))
-            .await
-            .unwrap()?;
-
-        // Create the index.html file
-        // Note that we do this last since the webserver will attempt to serve the index.html file
-        // If we do this too early, the wasm won't be ready but the index.html will be served, leading
-        // to test failures and broken pages.
-        let html = self.prepare_html()?;
-        let html_path = self.target_out_dir().join("index.html");
-        std::fs::write(html_path, html)?;
-
-        Ok(())
-    }
-
     /// Check if the wasm32-unknown-unknown target is installed and try to install it if not
     pub(crate) async fn install_web_build_tooling(&self) -> Result<()> {
         // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
@@ -107,7 +106,7 @@ impl BuildRequest {
                 _ = self.progress.unbounded_send(UpdateBuildProgress {
                     stage: Stage::InstallingWasmTooling,
                     update: UpdateStage::Start,
-                    platform: self.target_platform,
+                    platform: self.platform(),
                 });
                 tracing::info!("wasm32-unknown-unknown target not detected, installing..");
                 let _ = Command::new("rustup")
@@ -195,6 +194,6 @@ impl BuildRequest {
 
     /// Check if the build is targeting the web platform
     pub fn targeting_web(&self) -> bool {
-        self.target_platform == TargetPlatform::Web
+        self.platform() == Platform::Web
     }
 }

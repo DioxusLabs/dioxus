@@ -50,13 +50,13 @@ pub struct Cli {
 #[derive(Parser)]
 pub enum Commands {
     /// Build the Dioxus project and all of its assets.
-    Build(build::Build),
+    Build(build::BuildArgs),
 
     /// Translate a source file into Dioxus code.
     Translate(translate::Translate),
 
     /// Build, watch & serve the Dioxus project and all of its assets.
-    Serve(serve::Serve),
+    Serve(serve::ServeArgs),
 
     /// Create a new project for Dioxus.
     New(create::Create),

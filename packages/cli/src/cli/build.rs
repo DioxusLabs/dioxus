@@ -1,18 +1,15 @@
+use super::*;
+use crate::builder::Platform;
+use crate::dioxus_crate::DioxusCrate;
+use anyhow::Context;
 use std::str::FromStr;
 
-use crate::{builder::TargetPlatform, config::Platform};
-use crate::{
-    builder::{BuildReason, BuildRequest},
-    dioxus_crate::DioxusCrate,
-};
-use anyhow::Context;
-
-use super::*;
-
 /// Build the Rust Dioxus app and all of its assets.
+///
+/// Produces a final output bundle designed to be run on the target platform.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "build")]
-pub struct Build {
+pub struct BuildArgs {
     /// Build in release mode [default: false]
     #[clap(long, short)]
     #[serde(default)]
@@ -40,6 +37,16 @@ pub struct Build {
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
+
+    /// Build the fullstack variant of this app, using that as the fileserver and backend
+    ///
+    /// This defaults to `false` but will be overriden to true if the `fullstack` feature is enabled.
+    #[clap(long)]
+    pub fullstack: bool,
+
+    /// Run the ssg config of the app and generate the files
+    #[clap(long)]
+    pub ssg: bool,
 
     /// Skip collecting assets from dependencies [default: false]
     #[clap(long)]
@@ -90,17 +97,29 @@ pub struct TargetArgs {
     #[clap(long)]
     pub server_feature: Option<String>,
 
+    /// The architecture to build for [default: "native"]
+    ///
+    /// Can either be `arm | arm64 | x86 | x86_64 | native`
+    #[clap(long)]
+    pub arch: Option<String>,
+
     /// Rustc platform triple
     #[clap(long)]
     pub target: Option<String>,
 }
 
-impl Build {
+impl BuildArgs {
+    /// Update the arguments of the CLI by inspecting the DioxusCrate itself and learning about how
+    /// the user has configured their app.
+    ///
+    /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
+    /// fullstack variant even if they omitted the `--fullstack` flag.
     pub fn resolve(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         // Inherit the platform from the defaults
         let platform = self
             .platform
             .unwrap_or_else(|| self.auto_detect_platform(dioxus_crate));
+
         self.platform = Some(platform);
 
         // Add any features required to turn on the platform we are building for
@@ -113,11 +132,18 @@ impl Build {
 
     pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         self.resolve(dioxus_crate)?;
-        let (tx, rx) = futures_channel::mpsc::unbounded();
 
-        let build_requests =
-            BuildRequest::create(BuildReason::Build, dioxus_crate, self.clone(), tx)?;
-        BuildRequest::build_all_parallel(build_requests, rx).await?;
+        let mut builder = crate::builder::Builder::new(dioxus_crate);
+
+        // if self.fullstack {
+        //     builder.build_fullstack(dioxus_crate)?;
+        // }
+
+        // let (tx, rx) = futures_channel::mpsc::unbounded();
+
+        // let build_requests = BuildRequest::create(dioxus_crate, self.clone(), tx)?;
+        // BuildRequest::build_all_parallel(build_requests, rx).await?;
+
         Ok(())
     }
 
@@ -131,19 +157,17 @@ impl Build {
     pub(crate) fn auto_detect_client_platform(
         &self,
         resolved: &DioxusCrate,
-    ) -> (Option<String>, TargetPlatform) {
+    ) -> (Option<String>, Platform) {
         self.find_dioxus_feature(resolved, |platform| {
-            matches!(platform, TargetPlatform::Web | TargetPlatform::Desktop)
+            matches!(platform, Platform::Web | Platform::Desktop)
         })
-        .unwrap_or_else(|| (Some("web".to_string()), TargetPlatform::Web))
+        .unwrap_or_else(|| (Some("web".to_string()), Platform::Web))
     }
 
     pub(crate) fn auto_detect_server_feature(&self, resolved: &DioxusCrate) -> Option<String> {
-        self.find_dioxus_feature(resolved, |platform| {
-            matches!(platform, TargetPlatform::Server)
-        })
-        .map(|(feature, _)| feature)
-        .unwrap_or_else(|| Some("server".to_string()))
+        self.find_dioxus_feature(resolved, |platform| matches!(platform, Platform::Server))
+            .map(|(feature, _)| feature)
+            .unwrap_or_else(|| Some("server".to_string()))
     }
 
     fn auto_detect_platform(&self, resolved: &DioxusCrate) -> Platform {

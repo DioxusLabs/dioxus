@@ -1,7 +1,6 @@
-use super::BuildRequest;
-use super::TargetPlatform;
+use super::Platform;
+use super::{BuildRequest, BuildResult};
 use crate::builder::{progress::UpdateStage, MessageSource};
-use crate::config::Platform;
 use crate::Result;
 use crate::{
     assets::OptimizeOptions,
@@ -37,15 +36,15 @@ impl BuildRequest {
     /// This will execute `dx` with an env var set to force `dx` to operate as a linker, and then
     /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
     /// tables marked by manganis and parsing them as a ResourceAsset.
-    pub async fn collect_assets(&mut self, cargo_args: Vec<String>) -> anyhow::Result<()> {
+    pub async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
         // If this is the server build, the client build already copied any assets we need
-        if self.target_platform == TargetPlatform::Server {
-            return Ok(());
+        if self.platform() == Platform::Server {
+            return Ok(AssetManifest::default());
         }
 
         // If assets are skipped, we don't need to collect them
-        if self.build_arguments.skip_assets {
-            return Ok(());
+        if self.build.skip_assets {
+            return Ok(AssetManifest::default());
         }
 
         // Create a temp file to put the output of the args
@@ -62,7 +61,7 @@ impl BuildRequest {
         // This might not be a "stable" way of keeping artifacts around, but it's in stable rustc
         tokio::process::Command::new("cargo")
             .arg("rustc")
-            .args(cargo_args)
+            .args(self.build_arguments())
             .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
             .arg(format!("-Clinker={}", current_exe().unwrap().display())) /* pass ourselves in */
@@ -81,69 +80,67 @@ impl BuildRequest {
         let args =
             serde_json::from_str::<InterceptedArgs>(&args).expect("Failed to parse linker output");
 
-        self.assets.add_from_linker_intercept(args);
-
-        Ok(())
+        Ok(AssetManifest::new_from_linker_intercept(args))
     }
 
-    pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
-        tracing::info!("Copying public assets to the output directory...");
+    // pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
+    //     tracing::info!("Copying public assets to the output directory...");
 
-        let static_asset_output_dir = self.target_out_dir();
-        std::fs::create_dir_all(&static_asset_output_dir)
-            .context("Failed to create static asset output directory")?;
+    //     let static_asset_output_dir = self.target_out_dir();
+    //     std::fs::create_dir_all(&static_asset_output_dir)
+    //         .context("Failed to create static asset output directory")?;
 
-        // todo: join the entire asset dir here
-        let asset_dir = self.krate.asset_dir();
-        let assets = self.assets.assets.keys().collect::<Vec<_>>();
+    //     // todo: join the entire asset dir here
+    //     let asset_dir = self.krate.asset_dir();
+    //     let assets = self.assets.assets.keys().collect::<Vec<_>>();
 
-        let assets_finished = AtomicUsize::new(0);
-        let asset_count = assets.len();
+    //     let assets_finished = AtomicUsize::new(0);
+    //     let asset_count = assets.len();
 
-        let options = OptimizeOptions {
-            enabled: false,
-            precompress: self.targeting_web()
-                && self
-                    .krate
-                    .should_pre_compress_web_assets(self.build_arguments.release),
-        };
+    //     let options = OptimizeOptions {
+    //         enabled: false,
+    //         precompress: self.targeting_web()
+    //             && self
+    //                 .krate
+    //                 .should_pre_compress_web_assets(self.build_arguments.release),
+    //     };
 
-        assets
-            .par_iter()
-            .enumerate()
-            .try_for_each(|(_idx, asset)| {
-                // Update the progress
-                _ = self.progress.unbounded_send(UpdateBuildProgress {
-                    stage: Stage::OptimizingAssets,
-                    update: UpdateStage::AddMessage(BuildMessage {
-                        level: Level::INFO,
-                        message: MessageType::Text(format!(
-                            "Optimized static asset {}",
-                            asset.display()
-                        )),
-                        source: MessageSource::Build,
-                    }),
-                    platform: self.target_platform,
-                });
+    //     assets
+    //         .par_iter()
+    //         .enumerate()
+    //         .try_for_each(|(_idx, asset)| {
+    //             // Update the progress
+    //             _ = self.progress.unbounded_send(UpdateBuildProgress {
+    //                 stage: Stage::OptimizingAssets,
+    //                 update: UpdateStage::AddMessage(BuildMessage {
+    //                     level: Level::INFO,
+    //                     message: MessageType::Text(format!(
+    //                         "Optimized static asset {}",
+    //                         asset.display()
+    //                     )),
+    //                     source: MessageSource::Build,
+    //                 }),
+    //                 platform: self.target_platform,
+    //             });
 
-                // Copy the asset into the bundle directory
-                self.assets.copy_asset_to(
-                    static_asset_output_dir.clone(),
-                    asset.to_path_buf(),
-                    &options,
-                );
+    //             // Copy the asset into the bundle directory
+    //             self.assets.copy_asset_to(
+    //                 static_asset_output_dir.clone(),
+    //                 asset.to_path_buf(),
+    //                 &options,
+    //             );
 
-                let finished = assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    //             let finished = assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-                _ = self.progress.unbounded_send(UpdateBuildProgress {
-                    stage: Stage::OptimizingAssets,
-                    update: UpdateStage::SetProgress(finished as f64 / asset_count as f64),
-                    platform: self.target_platform,
-                });
+    //             _ = self.progress.unbounded_send(UpdateBuildProgress {
+    //                 stage: Stage::OptimizingAssets,
+    //                 update: UpdateStage::SetProgress(finished as f64 / asset_count as f64),
+    //                 platform: self.target_platform,
+    //             });
 
-                Ok(()) as anyhow::Result<()>
-            })?;
+    //             Ok(()) as anyhow::Result<()>
+    //         })?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }

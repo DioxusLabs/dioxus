@@ -1,4 +1,4 @@
-use super::Platform;
+use crate::builder::Platform;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

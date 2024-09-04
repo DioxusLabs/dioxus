@@ -1,6 +1,6 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
-use super::{BuildReason, BuildRequest, UpdateBuildProgress};
+use super::{BuildRequest, UpdateBuildProgress};
 use crate::builder::progress::MessageSource;
 use crate::builder::Stage;
 use crate::Result;
@@ -13,7 +13,7 @@ const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 const TOAST_HTML: &str = include_str!("../../assets/toast.html");
 
 impl BuildRequest {
-    pub(crate) fn prepare_html(&mut self) -> Result<String> {
+    pub(crate) fn prepare_html(&self) -> Result<String> {
         let mut html = html_or_default(&self.krate.crate_dir());
 
         // Inject any resources from the config into the html
@@ -33,11 +33,12 @@ impl BuildRequest {
     }
 
     fn is_dev_build(&self) -> bool {
-        self.reason == BuildReason::Serve && !self.build_arguments.release
+        todo!()
+        // self.reason == BuildReason::Serve && !self.build_arguments.release
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(&mut self, html: &mut String) -> Result<()> {
+    fn inject_resources(&self, html: &mut String) -> Result<()> {
         // Collect all resources into a list of styles and scripts
         let resources = &self.krate.dioxus_config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
@@ -86,9 +87,9 @@ impl BuildRequest {
     }
 
     /// Inject loading scripts if they are not already present
-    fn inject_loading_scripts(&mut self, html: &mut String) {
+    fn inject_loading_scripts(&self, html: &mut String) {
         // If it looks like we are already loading wasm or the current build opted out of injecting loading scripts, don't inject anything
-        if !self.build_arguments.inject_loading_scripts || html.contains("__wbindgen_start") {
+        if !self.build.inject_loading_scripts || html.contains("__wbindgen_start") {
             return;
         }
 
@@ -135,7 +136,7 @@ impl BuildRequest {
         *html = html.replace("{app_name}", app_name);
     }
 
-    fn send_resource_deprecation_warning(&mut self, paths: Vec<PathBuf>, variant: ResourceType) {
+    fn send_resource_deprecation_warning(&self, paths: Vec<PathBuf>, variant: ResourceType) {
         const RESOURCE_DEPRECATION_MESSAGE: &str = r#"The `web.resource` config has been deprecated in favor of head components and will be removed in a future release. Instead of including assets in the config, you can include assets with the `asset!` macro and add them to the head with `document::Link` and `Script` components."#;
 
         let replacement_components = paths
@@ -177,7 +178,7 @@ impl BuildRequest {
         );
 
         _ = self.progress.unbounded_send(UpdateBuildProgress {
-            platform: self.target_platform,
+            platform: self.platform(),
             stage: Stage::OptimizingWasm,
             update: super::UpdateStage::AddMessage(super::BuildMessage {
                 level: Level::WARN,
