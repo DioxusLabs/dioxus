@@ -154,6 +154,7 @@ export function serializeIntersectionEventDetail(
     intersection_rect: detail.intersectionRect,
     is_intersecting: detail.isIntersecting,
     root_bounds: detail.rootBounds,
+    target: +detail.target.getAttribute?.("data-dioxus-id") || null,
     time: detail.time,
   }
 }

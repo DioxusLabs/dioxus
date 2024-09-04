@@ -9,6 +9,7 @@ use crate::geometry::{PixelsRect, PixelsSize};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::prelude::*;
 
+use dioxus_core::ElementId;
 use euclid::{Point2D, Size2D};
 use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
@@ -703,6 +704,16 @@ impl HasVisibleData for IntersectionObserverEntry {
             Some(root_bounds) => Ok(dom_rect_ro_to_pixel_rect(&root_bounds)),
             None => Err(VisibleError::NotSupported),
         }
+    }
+
+    /// Get the element whose intersection with the root changed
+    fn get_target(&self) -> VisibleResult<ElementId> {
+        if let Some(target_id) = self.target().get_attribute("data-dioxus-id") {
+            if let Ok(target_id) = target_id.parse::<usize>() {
+                return Ok(ElementId(target_id));
+            }
+        }
+        Err(VisibleError::NoElementId)
     }
 
     /// Get a timestamp indicating the time at which the intersection was recorded
