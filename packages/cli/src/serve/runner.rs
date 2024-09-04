@@ -5,6 +5,10 @@ use crate::{
     cli::serve::ServeArgs,
     DioxusCrate,
 };
+use tokio::{
+    io::{AsyncBufReadExt, BufReader, Lines},
+    process::{ChildStderr, ChildStdout},
+};
 
 use super::ServeUpdate;
 
@@ -14,7 +18,19 @@ pub struct AppRunner {
     /// They might be actively being being, running, or have exited.
     ///
     /// When a new full rebuild occurs, we will keep these requests here
-    pub running: HashMap<Platform, BuildResult>,
+    pub running: HashMap<Platform, AppHandle>,
+}
+
+use tokio::process::Child;
+
+/// A handle to a running app
+pub struct AppHandle {
+    pub app: BuildResult,
+    pub child: Option<Child>,
+    pub stdout: Lines<BufReader<ChildStdout>>,
+    pub stderr: Lines<BufReader<ChildStderr>>,
+    pub stdout_line: String,
+    pub stderr_line: String,
 }
 
 impl AppRunner {

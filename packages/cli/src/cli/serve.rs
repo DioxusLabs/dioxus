@@ -3,7 +3,6 @@ use crate::settings;
 use crate::DioxusCrate;
 use anyhow::Context;
 use build::BuildArgs;
-use std::ops::Deref;
 
 use super::*;
 
@@ -51,6 +50,15 @@ pub struct ServeArgs {
 }
 
 impl ServeArgs {
+    pub async fn serve(mut self) -> Result<()> {
+        let mut krate = DioxusCrate::new(&self.build_arguments.target_args)
+            .context("Failed to load Dioxus workspace")?;
+
+        self.resolve(&mut krate)?;
+
+        crate::serve::serve_all(self, krate).await
+    }
+
     /// Resolve the serve arguments from the arguments or the config
     fn resolve(&mut self, crate_config: &mut DioxusCrate) -> Result<()> {
         // Set config settings.
@@ -75,6 +83,7 @@ impl ServeArgs {
         if self.always_on_top.is_none() {
             self.always_on_top = Some(settings.always_on_top.unwrap_or(true))
         }
+
         crate_config.dioxus_config.desktop.always_on_top = self.always_on_top.unwrap_or(true);
 
         // Resolve the build arguments
@@ -93,22 +102,12 @@ impl ServeArgs {
         Ok(())
     }
 
-    pub async fn serve(mut self) -> anyhow::Result<()> {
-        let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
-            .context("Failed to load Dioxus workspace")?;
-
-        self.resolve(&mut dioxus_crate)?;
-
-        crate::serve::serve_all(self, dioxus_crate).await?;
-        Ok(())
-    }
-
     pub fn should_hotreload(&self) -> bool {
         self.hot_reload.unwrap_or(true)
     }
 }
 
-impl Deref for ServeArgs {
+impl std::ops::Deref for ServeArgs {
     type Target = BuildArgs;
 
     fn deref(&self) -> &Self::Target {

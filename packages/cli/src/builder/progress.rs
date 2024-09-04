@@ -2,6 +2,7 @@
 use super::{BuildRequest, Platform};
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use serde::Deserialize;
 use std::fmt::Display;
 use std::ops::Deref;
@@ -9,6 +10,9 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::Level;
+
+pub type ProgressTx = UnboundedSender<UpdateBuildProgress>;
+pub type ProgressRx = UnboundedReceiver<UpdateBuildProgress>;
 
 #[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
 pub enum Stage {

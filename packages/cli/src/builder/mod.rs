@@ -18,11 +18,12 @@ mod profiles;
 mod progress;
 mod web;
 
+use crate::build::BuildArgs;
 use crate::Result;
 use crate::{assets::AssetManifest, dioxus_crate::DioxusCrate};
 
-use crate::build::BuildArgs;
 pub use builder::*;
 pub use platform::*;
+pub use progress::*;
 pub use request::*;
 pub use result::*;

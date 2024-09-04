@@ -1,12 +1,9 @@
-//! The primary  interface for building Dioxus apps in parallel
-
-use crate::builder::BuildRequest;
-use crate::builder::{BuildResult, Platform};
+use crate::build::BuildArgs;
+use crate::builder::*;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
-use crate::{build::BuildArgs, builder::UpdateBuildProgress};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
+use progress::{ProgressRx, ProgressTx, UpdateBuildProgress};
 use tokio::task::JoinSet;
 
 /// A handle to ongoing builds and then the spawned tasks themselves
@@ -18,10 +15,7 @@ pub struct Builder {
     pub building: JoinSet<(Platform, Result<BuildResult>)>,
 
     /// Messages from the build engine will be sent to this channel
-    pub channel: (
-        UnboundedSender<UpdateBuildProgress>,
-        UnboundedReceiver<UpdateBuildProgress>,
-    ),
+    pub channel: (ProgressTx, ProgressRx),
 }
 
 pub enum BuildUpdate {
@@ -36,6 +30,9 @@ pub enum BuildUpdate {
         target: Platform,
         err: crate::Error,
     },
+
+    /// All builds have finished and there's nothing left to do
+    Finished,
 }
 
 impl Builder {
@@ -91,16 +88,32 @@ impl Builder {
         Ok(())
     }
 
+    /// Wait for the build to finish
+    pub async fn wait_for_finish(&mut self) {
+        loop {
+            let next = self.wait().await;
+            if let BuildUpdate::Finished = next {
+                return;
+            }
+        }
+    }
+
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
     ///
     /// Also listen for any input from the app's handle
+    ///
+    /// Returns immediately with `Finished` if there are no more builds to run - don't poll-loop this!
     pub async fn wait(&mut self) -> BuildUpdate {
+        if self.building.is_empty() {
+            return BuildUpdate::Finished;
+        }
+
         tokio::select! {
             Some(update) = self.channel.1.next() => BuildUpdate::Progress(update),
             Some(Ok((target, result))) = self.building.join_next() => {
                 match result {
                     Ok(result) => BuildUpdate::BuildReady { target, result },
-                    Err(err) => BuildUpdate::BuildFailed { err, target },
+                    Err(err) => BuildUpdate::BuildFailed { target, err },
                 }
             }
         }
@@ -113,7 +126,7 @@ impl Builder {
         self.building.abort_all();
     }
 
-    fn tx(&self) -> UnboundedSender<UpdateBuildProgress> {
+    fn tx(&self) -> ProgressTx {
         self.channel.0.clone()
     }
 }

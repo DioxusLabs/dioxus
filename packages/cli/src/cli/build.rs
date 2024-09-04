@@ -133,16 +133,10 @@ impl BuildArgs {
     pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         self.resolve(dioxus_crate)?;
 
-        let mut builder = crate::builder::Builder::new(dioxus_crate);
-
-        // if self.fullstack {
-        //     builder.build_fullstack(dioxus_crate)?;
-        // }
-
-        // let (tx, rx) = futures_channel::mpsc::unbounded();
-
-        // let build_requests = BuildRequest::create(dioxus_crate, self.clone(), tx)?;
-        // BuildRequest::build_all_parallel(build_requests, rx).await?;
+        // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
+        crate::builder::Builder::start(dioxus_crate, self.clone())?
+            .wait_for_finish()
+            .await;
 
         Ok(())
     }

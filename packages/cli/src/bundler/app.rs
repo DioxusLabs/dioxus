@@ -5,14 +5,14 @@ use crate::{assets::AssetManifest, builder::Platform};
 pub struct AppBundle {}
 
 impl AppBundle {
-    pub fn new(platform: Platform) -> Self {
+    pub fn new(_platform: Platform) -> Self {
         todo!()
     }
 
     pub fn set_main_executable(&mut self) {}
 
     /// Copy the assets out of the manifest and into the target location
-    pub async fn copy_assets(&mut self, manifest: &AssetManifest) {
+    pub async fn copy_assets(&mut self, _manifest: &AssetManifest) {
         todo!()
     }
 

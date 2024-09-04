@@ -1,16 +1,9 @@
 use super::profiles::*;
-use super::BuildResult;
+use super::progress::ProgressTx;
 use crate::build::BuildArgs;
 use crate::builder::Platform;
-use crate::Result;
-use crate::{assets::AssetManifest, dioxus_crate::DioxusCrate};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::StreamExt;
+use crate::dioxus_crate::DioxusCrate;
 use std::path::PathBuf;
-
-pub use super::progress::{
-    BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
-};
 
 /// An app that's built, bundled, processed, and a handle to its running app, if it exists
 ///
@@ -31,17 +24,11 @@ pub struct BuildRequest {
     pub custom_target_dir: Option<PathBuf>,
 
     /// Status channel to send our progress updates to
-    pub progress: UnboundedSender<UpdateBuildProgress>,
+    pub progress: ProgressTx,
 }
 
 impl BuildRequest {
-    pub fn new(
-        krate: DioxusCrate,
-        build_arguments: impl Into<BuildArgs>,
-        progress: UnboundedSender<UpdateBuildProgress>,
-    ) -> Self {
-        let build: BuildArgs = build_arguments.into();
-
+    pub fn new(krate: DioxusCrate, build: BuildArgs, progress: ProgressTx) -> Self {
         Self {
             progress,
             build,
@@ -55,8 +42,7 @@ impl BuildRequest {
         krate: &DioxusCrate,
         build: &BuildArgs,
         feature: Option<String>,
-        target_platform: Platform,
-        progress: UnboundedSender<UpdateBuildProgress>,
+        progress: ProgressTx,
     ) -> Self {
         let config = krate.clone();
         let mut build = build.clone();
@@ -76,11 +62,7 @@ impl BuildRequest {
         }
     }
 
-    pub fn new_server(
-        krate: &DioxusCrate,
-        mut build: BuildArgs,
-        progress: UnboundedSender<UpdateBuildProgress>,
-    ) -> Self {
+    pub fn new_server(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
         if build.profile.is_none() {
             build.profile = Some(CLIENT_PROFILE.to_string());
         }
@@ -89,16 +71,11 @@ impl BuildRequest {
             krate,
             &build,
             build.target_args.server_feature.clone().or(client_feature),
-            Platform::Server,
             progress,
         )
     }
 
-    pub fn new_client(
-        krate: &DioxusCrate,
-        mut build: BuildArgs,
-        progress: UnboundedSender<UpdateBuildProgress>,
-    ) -> Self {
+    pub fn new_client(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
         if build.profile.is_none() {
             build.profile = Some(SERVER_PROFILE.to_string());
         }
@@ -107,59 +84,8 @@ impl BuildRequest {
             krate,
             &build,
             build.target_args.client_feature.clone().or(client_feature),
-            client_platform,
             progress,
         )
-    }
-
-    pub(crate) async fn build_all_parallel(
-        build_requests: Vec<BuildRequest>,
-        mut rx: UnboundedReceiver<UpdateBuildProgress>,
-    ) -> Result<Vec<BuildRequest>> {
-        let multi_platform_build = build_requests.len() > 1;
-        // let mut set = tokio::task::JoinSet::new();
-
-        // for build_request in build_requests {
-        //     set.spawn(async move { build_request.build().await });
-        // }
-
-        // // Watch the build progress as it comes in
-        // while let Some(update) = rx.next().await {
-        //     if multi_platform_build {
-        //         let platform = update.platform;
-        //         print!("{platform} build: ");
-        //         update.to_std_out();
-        //     } else {
-        //         update.to_std_out();
-        //     }
-        // }
-
-        todo!()
-
-        // let mut all_results = Vec::new();
-
-        // while let Some(result) = set.join_next().await {
-        //     all_results.push(
-        //         result
-        //             .map_err(|_| crate::Error::Unique("Failed to build project".to_owned()))??,
-        //     );
-        // }
-
-        // Ok(all_results)
-    }
-
-    pub(crate) fn new_single(
-        krate: DioxusCrate,
-        arguments: BuildArgs,
-        progress: UnboundedSender<UpdateBuildProgress>,
-    ) -> Self {
-        Self {
-            progress,
-            krate,
-            build: arguments,
-            custom_target_dir: Default::default(),
-            rust_flags: Default::default(),
-        }
     }
 
     /// Get the platform for this build

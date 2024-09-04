@@ -13,6 +13,5 @@ pub use app::*;
 pub use bundle::*;
 pub use desktop::*;
 pub use dioxus_config::*;
-pub use platform::*;
 pub use serve::*;
 pub use web::*;

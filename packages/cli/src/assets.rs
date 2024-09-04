@@ -31,14 +31,7 @@ use crate::link::InterceptedArgs;
 /// This will be filled in primarly by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct AssetManifest {
-    /// Map of asset pathbuf to its
     pub(crate) assets: HashMap<PathBuf, ResourceAsset>,
-}
-
-#[derive(Clone)]
-pub struct OptimizeOptions {
-    pub precompress: bool,
-    pub enabled: bool,
 }
 
 impl AssetManifest {
@@ -210,7 +203,8 @@ impl AssetManifest {
         &self,
         destination: &Path,
         target_asset: &Path,
-        optimize: &OptimizeOptions,
+        optimize: bool,
+        pre_compress: bool,
     ) {
         let src = self.assets.get(target_asset).unwrap();
 
@@ -221,7 +215,7 @@ impl AssetManifest {
         }
 
         // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
-        if !optimize.enabled {
+        if !optimize {
             std::fs::copy(local, destination.join(&src.bundled)).expect("Failed to copy asset");
             return;
         }

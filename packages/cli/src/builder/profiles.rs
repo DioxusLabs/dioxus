@@ -1,11 +1,6 @@
-use crate::builder::BuildArgs;
-use crate::builder::BuildRequest;
 use crate::dioxus_crate::DioxusCrate;
-use futures_channel::mpsc::UnboundedSender;
 use std::io::Write;
 use toml_edit::Item;
-
-use super::{Platform, UpdateBuildProgress};
 
 pub static CLIENT_PROFILE: &str = "dioxus-client";
 pub static SERVER_PROFILE: &str = "dioxus-server";

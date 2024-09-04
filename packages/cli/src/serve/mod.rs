@@ -185,6 +185,10 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
 
             ServeUpdate::StderrReceived { target, msg } => {}
 
+            ServeUpdate::BuildUpdate(BuildUpdate::Finished) => {
+                // nothing - the builder just signals that there are no more pending builds
+            }
+
             // If the process exited *cleanly*, we can exit
             ServeUpdate::ProcessExited {
                 status,

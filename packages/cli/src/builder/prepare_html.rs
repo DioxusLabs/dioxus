@@ -1,8 +1,9 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
-use super::{BuildRequest, UpdateBuildProgress};
-use crate::builder::progress::MessageSource;
-use crate::builder::Stage;
+use super::BuildRequest;
+use crate::builder::progress::{
+    BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
+};
 use crate::Result;
 
 use std::fmt::Write;
@@ -180,9 +181,9 @@ impl BuildRequest {
         _ = self.progress.unbounded_send(UpdateBuildProgress {
             platform: self.platform(),
             stage: Stage::OptimizingWasm,
-            update: super::UpdateStage::AddMessage(super::BuildMessage {
+            update: UpdateStage::AddMessage(BuildMessage {
                 level: Level::WARN,
-                message: super::MessageType::Text(message),
+                message: MessageType::Text(message),
                 source: MessageSource::Build,
             }),
         });

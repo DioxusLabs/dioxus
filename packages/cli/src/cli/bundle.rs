@@ -3,7 +3,6 @@ use crate::{build::BuildArgs, bundle_utils::make_tauri_bundler_settings};
 use anyhow::Context;
 use std::env::current_dir;
 use std::fs::create_dir_all;
-use std::ops::Deref;
 use std::str::FromStr;
 use tauri_bundler::{PackageSettings, SettingsBuilder};
 
@@ -21,7 +20,7 @@ pub struct Bundle {
     pub build_arguments: BuildArgs,
 }
 
-impl Deref for Bundle {
+impl std::ops::Deref for Bundle {
     type Target = BuildArgs;
 
     fn deref(&self) -> &Self::Target {

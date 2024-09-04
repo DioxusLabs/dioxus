@@ -1,11 +1,8 @@
 use super::Platform;
 use super::{BuildRequest, BuildResult};
-use crate::builder::{progress::UpdateStage, MessageSource};
+use crate::builder::progress::UpdateBuildProgress;
+use crate::builder::progress::UpdateStage;
 use crate::Result;
-use crate::{
-    assets::OptimizeOptions,
-    builder::{progress::UpdateBuildProgress, BuildMessage, MessageType},
-};
 use crate::{
     assets::{copy_dir_to, AssetManifest},
     link::LINK_OUTPUT_ENV_VAR,

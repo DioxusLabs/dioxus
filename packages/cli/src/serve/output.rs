@@ -1,14 +1,7 @@
+use crate::builder::*;
 use crate::config::AddressArguments;
-use crate::{builder::UpdateStage, serve::ServeArgs};
-use crate::{
-    builder::{
-        BuildMessage, BuildRequest, MessageSource, MessageType, Platform, Stage,
-        UpdateBuildProgress,
-    },
-    dioxus_crate::DioxusCrate,
-    serve::next_or_pending,
-    tracer::CLILogControl,
-};
+use crate::serve::ServeArgs;
+use crate::{builder::Platform, dioxus_crate::DioxusCrate, tracer::CLILogControl};
 use core::panic;
 use crossterm::{
     event::{Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
@@ -28,10 +21,7 @@ use std::{
     sync::atomic::Ordering,
     time::{Duration, Instant},
 };
-use tokio::{
-    io::{AsyncBufReadExt, BufReader, Lines},
-    process::{ChildStderr, ChildStdout},
-};
+
 use tracing::Level;
 
 use super::{update::ServeUpdate, Builder, DevServer, Watcher};
