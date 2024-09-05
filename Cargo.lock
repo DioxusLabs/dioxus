@@ -7,6 +7,8 @@ name = "DioxusApp"
 version = "0.1.0"
 dependencies = [
  "dioxus",
+ "reqwest",
+ "serde",
 ]
 
 [[package]]

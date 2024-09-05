@@ -53,8 +53,13 @@ impl AppBundle {
                 // let output_location = destination.join(self.build.app_name());
                 // Ok(output_location)
             }
-            Platform::Server => todo!(),
-            Platform::Liveview => todo!(),
+
+            Platform::Server => {
+                Ok(self.executable.clone())
+            },
+            Platform::Liveview => {
+                Ok(self.executable.clone())
+            },
 
             // Create a .ipa, only from macOS
             Platform::Ios => todo!(),

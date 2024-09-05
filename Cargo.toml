@@ -39,14 +39,6 @@ members = [
     "packages/isrg",
     "packages/manganis-core",
 
-    # Fullstack examples
-    "packages/fullstack/examples/hello-world",
-    "packages/fullstack/examples/router",
-    "packages/fullstack/examples/streaming",
-    "packages/fullstack/examples/desktop",
-    "packages/fullstack/examples/auth",
-    "packages/fullstack/examples/hackernews",
-
     # Static generation examples
     "packages/static-generation/examples/simple",
     "packages/static-generation/examples/router",
@@ -67,7 +59,13 @@ members = [
     "example-projects/manganis-test-package/test-package-dependency",
     "example-projects/manganis-test-package/test-package-nested-dependency",
 
-    # Some default projects that act as integration tests
+    # Helpful full projects
+    "example-projects/hello-world",
+    "example-projects/router",
+    "example-projects/streaming",
+    "example-projects/desktop",
+    "example-projects/auth",
+    "example-projects/hackernews",
     "example-projects/fullstack-mobile",
     "example-projects/tailwind",
     "example-projects/PWA-example",

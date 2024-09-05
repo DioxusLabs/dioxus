@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dioxus = { workspace = true, features = ["fullstack", "mobile"] }
+dioxus = { workspace = true, features = ["fullstack"] }
+serde = { workspace = true, features = ["derive"] }
+reqwest = { workspace = true, features = ["json"] }
 
 [features]
 desktop = ["dioxus/desktop"]
