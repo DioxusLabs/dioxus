@@ -55,8 +55,7 @@ impl AppHandle {
         // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
         // index.html during dev
         match handle.app.build.platform() {
-            Platform::Web => {}
-            Platform::Desktop => {
+            Platform::Desktop | Platform::Server | Platform::Liveview => {
                 let mut cmd = Command::new(handle.executable.clone());
                 cmd.env(
                     dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
@@ -89,10 +88,9 @@ impl AppHandle {
                 handle.stderr = Some(stderr.lines());
                 handle.child = Some(child);
             }
+            Platform::Web => {}
             Platform::Ios => {}
             Platform::Android => {}
-            Platform::Server => {}
-            Platform::Liveview => {}
         }
 
         Ok(handle)
@@ -105,7 +103,8 @@ impl AppHandle {
     pub(crate) fn hotreload_asset(&self, path: &PathBuf) -> Option<PathBuf> {
         let resource = self.app.assets.assets.get(path).cloned()?;
 
-        self.app
+        _ = self
+            .app
             .assets
             .copy_asset_to(&self.app.asset_dir(), path, false, false);
 

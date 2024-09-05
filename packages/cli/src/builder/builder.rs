@@ -56,6 +56,8 @@ impl Builder {
     pub(crate) fn build(&mut self, args: BuildArgs) -> Result<()> {
         self.abort_all();
 
+        super::profiles::initialize_profiles(&self.krate)?;
+
         let mut requests = vec![
             // At least one request for the target app
             BuildRequest::new_client(&self.krate, args.clone(), self.channel.0.clone()),
@@ -63,7 +65,6 @@ impl Builder {
 
         // And then the fullstack app if we're building a fullstack app
         if args.fullstack {
-            super::profiles::initialize_profiles(&self.krate)?;
             let server = BuildRequest::new_server(&self.krate, args.clone(), self.tx());
             requests.push(server);
         }
@@ -71,6 +72,7 @@ impl Builder {
         // Queue the builds on the joinset, being careful to not panic, so we can unwrap
         for build_request in requests {
             let platform = build_request.platform();
+            tracing::info!("Spawning build request for {platform:?}");
             self.building.spawn(async move {
                 // Run the build, but in a protected spawn, ensuring we can't produce panics and thus, joinerrors
                 let res = tokio::spawn(build_request.build())

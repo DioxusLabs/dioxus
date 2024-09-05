@@ -87,6 +87,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
                 export function get_initial_hydration_data() {
+                    if (window.initial_dioxus_hydration_data === undefined) {
+                        return new Uint8Array();
+                    }
+
                     const decoded = atob(window.initial_dioxus_hydration_data);
                     return Uint8Array.from(decoded, (c) => c.charCodeAt(0))
                 }
@@ -95,18 +99,23 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 fn get_initial_hydration_data() -> js_sys::Uint8Array;
             }
             let hydration_data = get_initial_hydration_data().to_vec();
-            let server_data = HTMLDataCursor::from_serialized(&hydration_data);
-            // If the server serialized an error into the root suspense boundary, throw it into the root scope
-            if let Some(error) = server_data.error() {
-                virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
-            }
-            with_server_data(server_data, || {
-                virtual_dom.rebuild(&mut websys_dom);
-            });
-            websys_dom.skip_mutations = false;
 
-            let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
-            hydration_receiver = Some(rx);
+            if let Some(server_data) = HTMLDataCursor::from_serialized(&hydration_data) {
+                // If the server serialized an error into the root suspense boundary, throw it into the root scope
+                if let Some(error) = server_data.error() {
+                    virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
+                }
+                with_server_data(server_data, || {
+                    virtual_dom.rebuild(&mut websys_dom);
+                });
+                websys_dom.skip_mutations = false;
+
+                let rx = websys_dom
+                    .rehydrate(&virtual_dom)
+                    .expect("Failed to rehydrate");
+
+                hydration_receiver = Some(rx);
+            }
         }
         #[cfg(not(feature = "hydrate"))]
         {

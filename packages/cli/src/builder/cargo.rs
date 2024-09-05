@@ -70,7 +70,7 @@ impl BuildRequest {
         // Pass in the tmp_file as the env var itself
         //
         // NOTE: that -Csave-temps=y is needed to prevent rustc from deleting the incremental cache...
-        // This might not be a "stable" way of keeping artifacts around, but it's in stable rustc
+        // This might not be a "stable" way of keeping artifacts around, but it's in stable rustc, so we use it
         Command::new("cargo")
             .arg("rustc")
             .args(self.build_arguments())

@@ -66,7 +66,7 @@ impl AppBundle {
 
     // Create the workdir and then clean its contents, in case it already exists
     fn prepare_workdir(&self) -> Result<()> {
-        _ = std::fs::remove_dir_all(&self.workdir);
+        // _ = std::fs::remove_dir_all(&self.workdir);
         _ = std::fs::create_dir_all(&self.workdir);
         Ok(())
     }
@@ -148,8 +148,13 @@ impl AppBundle {
                 asset,
             );
 
-            self.assets
-                .copy_asset_to(&asset_dir, asset, optimize, pre_compress)?;
+            let res = self
+                .assets
+                .copy_asset_to(&asset_dir, asset, optimize, pre_compress);
+
+            if let Err(err) = res {
+                tracing::error!("Failed to copy asset {asset:?}: {err}");
+            }
 
             self.build.status_finished_asset(
                 assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst),

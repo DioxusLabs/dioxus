@@ -28,7 +28,7 @@ pub(crate) struct BuildRequest {
 }
 
 impl BuildRequest {
-    pub(crate) fn new_server(
+    pub(crate) fn new_client(
         krate: &DioxusCrate,
         mut build: BuildArgs,
         progress: ProgressTx,
@@ -37,18 +37,28 @@ impl BuildRequest {
             build.profile = Some(CLIENT_PROFILE.to_string());
         }
 
-        let client_feature = build.auto_detect_server_feature(krate);
+        let (client_feature, client_platform) = build.auto_detect_client_platform(krate);
+
+        let client_feature = match build.platform {
+            Some(platform::Platform::Ios) => Some("mobile".to_string()),
+            Some(platform::Platform::Android) => Some("android".to_string()),
+            Some(plat) => Some(plat.to_string()),
+            None => client_feature,
+        };
+
+        let features = build.target_args.client_feature.clone().or(client_feature);
+
+        tracing::info!("Client feature: {features:?}");
+
         let mut build = Self::new_with_target_directory_rust_flags_and_features(
-            krate,
-            &build,
-            build.target_args.server_feature.clone().or(client_feature),
-            progress,
+            krate, &build, features, progress,
         );
-        build.build.platform = Some(platform::Platform::Server);
+
+        build.build.platform = build.build.platform.or(Some(client_platform));
         build
     }
 
-    pub(crate) fn new_client(
+    pub(crate) fn new_server(
         krate: &DioxusCrate,
         mut build: BuildArgs,
         progress: ProgressTx,
@@ -56,15 +66,15 @@ impl BuildRequest {
         if build.profile.is_none() {
             build.profile = Some(SERVER_PROFILE.to_string());
         }
-        let (client_feature, client_platform) = build.auto_detect_client_platform(krate);
+
+        let client_feature = build.auto_detect_server_feature(krate);
+        let features = build.target_args.server_feature.clone().or(client_feature);
+        tracing::info!("Server feature: {features:?}");
         let mut build = Self::new_with_target_directory_rust_flags_and_features(
-            krate,
-            &build,
-            build.target_args.client_feature.clone().or(client_feature),
-            progress,
+            krate, &build, features, progress,
         );
 
-        build.build.platform = Some(client_platform);
+        build.build.platform = Some(platform::Platform::Server);
         build
     }
 

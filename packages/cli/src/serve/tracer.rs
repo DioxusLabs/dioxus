@@ -27,7 +27,7 @@ impl TraceController {
         // redirected to the serve process.
         // If {LOG_ENV} is set, default to env, otherwise filter to cli
         // and manganis warnings and errors from other crates
-        let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info");
+        let mut filter = EnvFilter::new("error,dx=info,devdx=info,dioxus-cli=info");
 
         if env::var(LOG_ENV).is_ok() {
             filter = EnvFilter::from_env(LOG_ENV);

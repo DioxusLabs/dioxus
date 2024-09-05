@@ -83,12 +83,15 @@ impl DioxusCrate {
         files
     }
 
+    pub(crate) fn bundle_out_dir(&self) -> PathBuf {
+        todo!("bundle out dir")
+    }
+
     /// Compose an out directory. Represents the typical "dist" directory that
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
     pub(crate) fn out_dir(&self) -> PathBuf {
-        self.workspace_dir()
-            .join(&self.dioxus_config.application.out_dir)
+        self.workspace_dir().join("target").join("dx-dist")
     }
 
     /// Get the workspace directory for the crate
