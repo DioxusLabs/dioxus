@@ -224,10 +224,8 @@ impl Watcher {
 
                 // Look through the runners to see if any of them have an asset that matches the path
                 _ => {
-                    tracing::info!("Hotreloading asset {path:?}");
                     for runner in runner.running.values() {
-                        if let Some(bundled_name) = runner.update_asset(&path) {
-                            tracing::info!("Hotreloading bundled asset {bundled_name:?}");
+                        if let Some(bundled_name) = runner.hotreload_asset(&path) {
                             assets.push(bundled_name);
                         }
                     }

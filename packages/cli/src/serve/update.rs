@@ -19,7 +19,7 @@ pub enum ServeUpdate {
     ///
     /// We will poll lines and any content in a 50ms interval
     StdoutReceived {
-        target: Platform,
+        platform: Platform,
         msg: String,
     },
 
@@ -28,13 +28,13 @@ pub enum ServeUpdate {
     ///
     /// We will poll lines and any content in a 50ms interval
     StderrReceived {
-        target: Platform,
+        platform: Platform,
         msg: String,
     },
 
     ProcessExited {
-        target_platform: Platform,
-        status: Result<ExitStatus, std::io::Error>,
+        platform: Platform,
+        status: ExitStatus,
     },
 
     FilesChanged {

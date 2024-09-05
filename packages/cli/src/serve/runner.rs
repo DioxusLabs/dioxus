@@ -5,6 +5,8 @@ use crate::{
     cli::serve::ServeArgs,
     DioxusCrate, Result,
 };
+use axum::serve::Serve;
+use futures_util::stream::FuturesUnordered;
 use manganis_core::ResourceAsset;
 use std::{collections::HashMap, fs, net::SocketAddr, path::PathBuf, process::Stdio};
 use tokio::process::Child;
@@ -12,6 +14,7 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::{ChildStderr, ChildStdout, Command},
 };
+use tokio_stream::StreamExt;
 use uuid::Uuid;
 
 pub struct AppRunner {
@@ -23,18 +26,6 @@ pub struct AppRunner {
     pub running: HashMap<Platform, AppHandle>,
 }
 
-/// A handle to a running app
-pub struct AppHandle {
-    pub id: Uuid,
-    pub app: AppBundle,
-    pub executable: PathBuf,
-    pub child: Option<Child>,
-    pub stdout: Option<BufReader<ChildStdout>>,
-    pub stderr: Option<BufReader<ChildStderr>>,
-    // pub stdout_line: String,
-    // pub stderr_line: String,
-}
-
 impl AppRunner {
     pub fn start(serve: &ServeArgs, config: &DioxusCrate) -> Self {
         Self {
@@ -43,58 +34,29 @@ impl AppRunner {
     }
 
     pub async fn wait(&mut self) -> ServeUpdate {
-        // // Exits and stdout/stderr
-        //         let processes = self.running.iter_mut().filter_map(|(target, request)| {
-        //             let Some(child) = request.child else {
-        //                 return None;
-        //             };
+        let next = self.running.iter_mut().map(|(platform, handle)| async {
+            let platform = *platform;
 
-        //             Some(Box::pin(async move {
-        //                 //
-        //                 (*target, child.wait().await)
-        //             }))
-        //         });
+            tokio::select! {
+                Ok(Some(msg)) = handle.stdout.as_mut().unwrap().next_line(), if handle.stdout.is_some() => {
+                    ServeUpdate::StdoutReceived { platform, msg }
+                },
+                Ok(Some(msg)) = handle.stderr.as_mut().unwrap().next_line(), if handle.stderr.is_some() => {
+                    ServeUpdate::StderrReceived { platform, msg }
+                },
+                status = handle.child.as_mut().unwrap().wait(), if handle.child.is_some() => {
+                    match status {
+                        Ok(status) => ServeUpdate::ProcessExited { status, platform },
+                        Err(_err) => todo!("handle error in process joining?"),
+                    }
+                }
+            }
+        });
 
-        //             ((target, exit_status), _, _) = futures_util::future::select_all(processes) => {
-        //                 BuildUpdate::ProcessExited { status: exit_status, target_platform: target }
-        //             }
-
-        // let has_running_apps = !self.running_apps.is_empty();
-        // let next_stdout = self.running_apps.values_mut().map(|app| {
-        //     let future = async move {
-        //         let (stdout, stderr) = match &mut app.output {
-        //             Some(out) => (
-        //                 ok_and_some(out.stdout.next_line()),
-        //                 ok_and_some(out.stderr.next_line()),
-        //             ),
-        //             None => return futures_util::future::pending().await,
-        //         };
-
-        //         tokio::select! {
-        //             line = stdout => (app.result.target_platform, Some(line), None),
-        //             line = stderr => (app.result.target_platform, None, Some(line)),
-        //         }
-        //     };
-        //     Box::pin(future)
-        // });
-
-        // let next_stdout = async {
-        //     if has_running_apps {
-        //         select_all(next_stdout).await.0
-        //     } else {
-        //         futures_util::future::pending().await
-        //     }
-        // };
-        //     (platform, stdout, stderr) = next_stdout => {
-        //         if let Some(stdout) = stdout {
-        //             self.push_stdout(platform, stdout);
-        //         }
-        //         if let Some(stderr) = stderr {
-        //             self.push_stderr(platform, stderr);
-        //         }
-        //     },
-
-        futures_util::future::pending().await
+        match FuturesUnordered::from_iter(next).next().await {
+            Some(msg) => msg,
+            None => futures_util::future::pending().await,
+        }
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -162,8 +124,8 @@ impl AppRunner {
                 let mut child = cmd.spawn()?;
                 let stdout = BufReader::new(child.stdout.take().unwrap());
                 let stderr = BufReader::new(child.stderr.take().unwrap());
-                handle.stdout = Some(stdout);
-                handle.stderr = Some(stderr);
+                handle.stdout = Some(stdout.lines());
+                handle.stderr = Some(stderr.lines());
                 handle.child = Some(child);
             }
             Platform::Ios => {}
@@ -225,13 +187,25 @@ impl AppRunner {
     }
 }
 
+/// A handle to a running app
+pub struct AppHandle {
+    pub id: Uuid,
+    pub app: AppBundle,
+    pub executable: PathBuf,
+    pub child: Option<Child>,
+    pub stdout: Option<Lines<BufReader<ChildStdout>>>,
+    pub stderr: Option<Lines<BufReader<ChildStderr>>>,
+    // pub stdout_line: String,
+    // pub stderr_line: String,
+}
+
 impl AppHandle {
     /// Update an asset in the running apps
     ///
     /// Might need to upload the asset to the simulator or overwrite it within the bundle
     ///
     /// Returns the name of the asset in the bundle if it exists
-    pub fn update_asset(&self, path: &PathBuf) -> Option<PathBuf> {
+    pub fn hotreload_asset(&self, path: &PathBuf) -> Option<PathBuf> {
         let resource = self.app.assets.assets.get(path).cloned()?;
 
         self.app

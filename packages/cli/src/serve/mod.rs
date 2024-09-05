@@ -203,9 +203,15 @@ async fn handle_msg(
             }
         }
 
-        ServeUpdate::StdoutReceived { target, msg } => {}
+        ServeUpdate::StdoutReceived {
+            platform: target,
+            msg,
+        } => {}
 
-        ServeUpdate::StderrReceived { target, msg } => {}
+        ServeUpdate::StderrReceived {
+            platform: target,
+            msg,
+        } => {}
 
         // nothing - the builder just signals that there are no more pending builds
         // maybe ping the logger to wipe any logs and/or clear the screen
@@ -214,7 +220,7 @@ async fn handle_msg(
         // If the process exited *cleanly*, we can exit
         ServeUpdate::ProcessExited {
             status,
-            target_platform,
+            platform: target_platform,
         } => {
             // // Then remove the child process
             // builder

@@ -198,7 +198,7 @@ impl AssetManifest {
         destination: &Path,
         target_asset: &Path,
         optimize: bool,
-        pre_compress: bool,
+        _pre_compress: bool,
     ) {
         let src = self.assets.get(target_asset).unwrap();
 
