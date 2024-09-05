@@ -1,14 +1,11 @@
 use super::ServeUpdate;
 use crate::{
-    build,
-    builder::{AppBundle, BuildUpdate, Platform},
+    builder::{AppBundle, Platform},
     cli::serve::ServeArgs,
     DioxusCrate, Result,
 };
-use axum::serve::Serve;
 use futures_util::stream::FuturesUnordered;
-use manganis_core::ResourceAsset;
-use std::{collections::HashMap, fs, net::SocketAddr, path::PathBuf, process::Stdio};
+use std::{collections::HashMap, net::SocketAddr, path::PathBuf, process::Stdio};
 use tokio::process::Child;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
@@ -33,10 +30,22 @@ impl AppRunner {
         }
     }
 
-    pub async fn wait(&mut self) -> ServeUpdate {
-        let next = self.running.iter_mut().map(|(platform, handle)| async {
-            let platform = *platform;
+    pub async fn shutdown(&mut self) {
+        for (_, mut handle) in self.running.drain() {
+            if let Some(mut child) = handle.child.take() {
+                let _ = child.kill().await;
+            }
+        }
+    }
 
+    pub async fn wait(&mut self) -> ServeUpdate {
+        // If there are no running apps, we can just return pending to avoid deadlocking
+        if self.running.is_empty() {
+            return futures_util::future::pending().await;
+        }
+
+        self.running.iter_mut().map(|(platform, handle)| async {
+            let platform = *platform;
             tokio::select! {
                 Ok(Some(msg)) = handle.stdout.as_mut().unwrap().next_line(), if handle.stdout.is_some() => {
                     ServeUpdate::StdoutReceived { platform, msg }
@@ -45,18 +54,18 @@ impl AppRunner {
                     ServeUpdate::StderrReceived { platform, msg }
                 },
                 status = handle.child.as_mut().unwrap().wait(), if handle.child.is_some() => {
+                    tracing::info!("Child process exited with status: {status:?}");
                     match status {
                         Ok(status) => ServeUpdate::ProcessExited { status, platform },
                         Err(_err) => todo!("handle error in process joining?"),
                     }
                 }
             }
-        });
-
-        match FuturesUnordered::from_iter(next).next().await {
-            Some(msg) => msg,
-            None => futures_util::future::pending().await,
-        }
+        })
+        .collect::<FuturesUnordered<_>>()
+        .next()
+        .await
+        .expect("Stream to pending if not empty")
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -134,7 +143,7 @@ impl AppRunner {
             Platform::Liveview => {}
         }
 
-        if let Some(previous) = self.running.insert(platform, handle) {
+        if let Some(_previous) = self.running.insert(platform, handle) {
             // close the old app, gracefully, hopefully
         }
 

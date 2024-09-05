@@ -6,7 +6,6 @@ use core::panic;
 use crossterm::{
     event::{Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    tty::IsTty,
     ExecutableCommand,
 };
 use dioxus_devtools_types::ClientMsg;
@@ -24,48 +23,6 @@ use std::{
 use tracing::Level;
 
 use super::{update::ServeUpdate, AppHandle, Builder, DevServer, Watcher};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LogSource {
-    Internal,
-    Target(Platform),
-}
-
-impl Display for LogSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LogSource::Internal => write!(f, "CLI"),
-            LogSource::Target(platform) => write!(f, "{platform}"),
-        }
-    }
-}
-
-impl From<Platform> for LogSource {
-    fn from(platform: Platform) -> Self {
-        LogSource::Target(platform)
-    }
-}
-
-#[derive(Default)]
-pub struct BuildProgress {
-    internal_logs: Vec<BuildMessage>,
-    build_logs: HashMap<Platform, ActiveBuild>,
-}
-
-impl BuildProgress {
-    pub fn progress(&self) -> f64 {
-        self.build_logs
-            .values()
-            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|build| match build.stage {
-                Stage::Initializing => 0.0,
-                Stage::InstallingWasmTooling => 0.0,
-                Stage::Compiling => build.progress,
-                Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
-            })
-            .unwrap_or_default()
-    }
-}
 
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
@@ -168,7 +125,7 @@ impl Output {
     }
 
     /// Add a message from stderr to the logs
-    fn push_stderr(&mut self, platform: Platform, stderr: String) {
+    pub fn push_stderr(&mut self, platform: Platform, stderr: String) {
 
         // self.set_tab(Tab::BuildLog);
 
@@ -193,7 +150,7 @@ impl Output {
     }
 
     /// Add a message from stdout to the logs
-    fn push_stdout(&mut self, platform: Platform, stdout: String) {
+    pub fn push_stdout(&mut self, platform: Platform, stdout: String) {
 
         // self.running_apps
         //     .get_mut(&platform)
@@ -427,6 +384,17 @@ impl Output {
 
     pub fn scroll_to_bottom(&mut self) {
         self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+    }
+
+    pub fn push_inner_log(&mut self, msg: String) {
+        self.push_log(
+            LogSource::Internal,
+            crate::builder::BuildMessage {
+                level: tracing::Level::INFO,
+                message: crate::builder::MessageType::Text(msg),
+                source: crate::builder::MessageSource::Dev,
+            },
+        );
     }
 
     pub fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
@@ -888,4 +856,46 @@ async fn rustc_version() -> String {
             out.split_ascii_whitespace().nth(1).map(|v| v.to_string())
         })
         .unwrap_or_else(|| "<unknown>".to_string())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LogSource {
+    Internal,
+    Target(Platform),
+}
+
+impl Display for LogSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogSource::Internal => write!(f, "CLI"),
+            LogSource::Target(platform) => write!(f, "{platform}"),
+        }
+    }
+}
+
+impl From<Platform> for LogSource {
+    fn from(platform: Platform) -> Self {
+        LogSource::Target(platform)
+    }
+}
+
+#[derive(Default)]
+pub struct BuildProgress {
+    internal_logs: Vec<BuildMessage>,
+    build_logs: HashMap<Platform, ActiveBuild>,
+}
+
+impl BuildProgress {
+    pub fn progress(&self) -> f64 {
+        self.build_logs
+            .values()
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|build| match build.stage {
+                Stage::Initializing => 0.0,
+                Stage::InstallingWasmTooling => 0.0,
+                Stage::Compiling => build.progress,
+                Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
+            })
+            .unwrap_or_default()
+    }
 }

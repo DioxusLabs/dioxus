@@ -185,10 +185,11 @@ async fn handle_msg(
         ServeUpdate::BuildUpdate(BuildUpdate::BuildReady { target, result }) => {
             tracing::info!("Opening app for [{}]", target);
 
-            match runner
+            let handle = runner
                 .open(result, devserver.ip, devserver.fullstack_address())
-                .await
-            {
+                .await;
+
+            match handle {
                 Ok(handle) => {
                     // Make sure we immediately capture the stdout/stderr of the executable -
                     // otherwise it'll clobber our terminal output
@@ -197,47 +198,37 @@ async fn handle_msg(
                     // And then finally tell the server to reload
                     devserver.send_reload_command().await;
                 }
+
                 Err(e) => {
                     tracing::error!("Failed to open app: {}", e);
                 }
             }
         }
 
-        ServeUpdate::StdoutReceived {
-            platform: target,
-            msg,
-        } => {}
-
-        ServeUpdate::StderrReceived {
-            platform: target,
-            msg,
-        } => {}
-
         // nothing - the builder just signals that there are no more pending builds
-        // maybe ping the logger to wipe any logs and/or clear the screen
-        ServeUpdate::BuildUpdate(BuildUpdate::Finished) => {}
+        ServeUpdate::BuildUpdate(BuildUpdate::AllFinished) => {}
 
         // If the process exited *cleanly*, we can exit
-        ServeUpdate::ProcessExited {
-            status,
-            platform: target_platform,
-        } => {
-            // // Then remove the child process
-            // builder
-            //     .children
-            //     .retain(|(platform, _)| *platform != target_platform);
-            // match status {
-            //     Ok(status) => {
-            //         if status.success() {
-            //             break;
-            //         } else {
-            //             tracing::error!("Application exited with status: {status}");
-            //         }
-            //     }
-            //     Err(e) => {
-            //         tracing::error!("Application exited with error: {e}");
-            //     }
-            // }
+        ServeUpdate::ProcessExited { status, platform } => {
+            runner.shutdown().await;
+
+            if !status.success() {
+                tracing::error!("Application [{platform}] exited with status: {status}");
+            }
+
+            return Ok(ControlFlow::Break(()));
+        }
+
+        ServeUpdate::StdoutReceived { platform, msg } => {
+            screen.push_stdout(platform, msg);
+        }
+
+        ServeUpdate::StderrReceived { platform, msg } => {
+            screen.push_stderr(platform, msg);
+        }
+
+        ServeUpdate::TracingLog { log } => {
+            screen.push_inner_log(log);
         }
 
         ServeUpdate::TuiInput { event } => {
@@ -246,17 +237,6 @@ async fn handle_msg(
                 builder.build(args.build_arguments.clone())?;
                 devserver.start_build().await
             }
-        }
-
-        ServeUpdate::TracingLog { log } => {
-            screen.push_log(
-                LogSource::Internal,
-                crate::builder::BuildMessage {
-                    level: tracing::Level::INFO,
-                    message: crate::builder::MessageType::Text(log),
-                    source: crate::builder::MessageSource::Dev,
-                },
-            );
         }
     }
 

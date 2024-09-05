@@ -33,7 +33,7 @@ pub enum BuildUpdate {
     },
 
     /// All builds have finished and there's nothing left to do
-    Finished,
+    AllFinished,
 }
 
 impl Builder {
@@ -93,7 +93,7 @@ impl Builder {
     pub async fn wait_for_finish(&mut self) {
         loop {
             let next = self.wait().await;
-            if let BuildUpdate::Finished = next {
+            if let BuildUpdate::AllFinished = next {
                 return;
             }
         }
@@ -106,7 +106,7 @@ impl Builder {
     /// Returns immediately with `Finished` if there are no more builds to run - don't poll-loop this!
     pub async fn wait(&mut self) -> BuildUpdate {
         if self.building.is_empty() {
-            return BuildUpdate::Finished;
+            return BuildUpdate::AllFinished;
         }
 
         tokio::select! {
