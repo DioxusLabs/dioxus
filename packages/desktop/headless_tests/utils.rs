@@ -1,7 +1,6 @@
 #![allow(unused)] // for whatever reason, the compiler is not recognizing the use of these functions
 
 use dioxus::prelude::*;
-use dioxus_core::Element;
 
 pub fn check_app_exits(app: fn() -> Element) {
     use dioxus_desktop::tao::window::WindowBuilder;
