@@ -121,7 +121,7 @@ impl BuildRequest {
             Platform::Web => "web".to_string(),
             Platform::Desktop => todo!(),
             Platform::Ios => todo!(),
-            Platform::Server => todo!(),
+            Platform::Server => "server".to_string(),
             Platform::Android => todo!(),
             Platform::Liveview => todo!(),
         }

@@ -33,16 +33,13 @@ impl TraceController {
             filter = EnvFilter::from_env(LOG_ENV);
         }
 
-        let cli_writer = Mutex::new(Writer {
-            stdout: io::stdout(),
-        });
-
-        // Build tracing
-        let fmt_layer = tracing_subscriber::fmt::layer()
-            .with_writer(cli_writer)
-            .with_filter(filter);
-
-        let sub = tracing_subscriber::registry().with(fmt_layer);
+        let sub = tracing_subscriber::registry().with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(Mutex::new(Writer {
+                    stdout: io::stdout(),
+                }))
+                .with_filter(filter),
+        );
 
         #[cfg(feature = "tokio-console")]
         let sub = sub.with(console_subscriber::spawn());

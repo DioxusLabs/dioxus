@@ -37,7 +37,9 @@ impl AppHandle {
             );
         }
 
-        let work_dir = std::env::temp_dir();
+        // let work_dir = std::env::temp_dir();
+        let work_dir = app.build.krate.out_dir().join("launch");
+        std::fs::create_dir_all(&work_dir)?;
         let executable = app.finish(work_dir).await?;
 
         let mut handle = AppHandle {

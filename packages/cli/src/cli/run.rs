@@ -33,7 +33,9 @@ impl RunArgs {
         let fullstack_ip = "127.0.0.1:6955".parse().unwrap();
 
         for bundle in bundles {
-            runner.open(bundle, devserver_ip, Some(fullstack_ip)).await;
+            runner
+                .open(bundle, devserver_ip, Some(fullstack_ip))
+                .await?;
         }
 
         loop {

@@ -16,14 +16,13 @@ mod tracer;
 mod update;
 mod watcher;
 
-use handle::*;
-use output::*;
+pub(crate) use handle::*;
+pub(crate) use output::*;
 pub(crate) use runner::*;
-use server::*;
+pub(crate) use server::*;
 pub(crate) use tracer::*;
 pub(crate) use update::*;
-use update::*;
-use watcher::*;
+pub(crate) use watcher::*;
 
 /// For *all* builds, the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
 ///

@@ -39,6 +39,8 @@ impl AppBundle {
     /// Perform any finishing steps here:
     /// - Signing the bundle
     pub(crate) async fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
+        // std::fs::create_dir_all(&destination.join(self.build.app_name()))?;
+
         match self.build.platform() {
             // Nothing special to do - just copy the workdir to the output location
             Platform::Web => {
@@ -49,17 +51,20 @@ impl AppBundle {
             // Create a final .app/.exe/etc depending on the host platform, not dependent on the host
             Platform::Desktop => {
                 // for now, until we have bundled hotreload, just copy the executable to the output location
-                Ok(self.executable.clone())
                 // let output_location = destination.join(self.build.app_name());
+                Ok(self.executable.clone())
                 // Ok(output_location)
             }
 
             Platform::Server => {
-                Ok(self.executable.clone())
-            },
-            Platform::Liveview => {
-                Ok(self.executable.clone())
-            },
+                std::fs::copy(
+                    self.executable.clone(),
+                    destination.join(self.build.app_name()),
+                )?;
+
+                Ok(destination.join(self.build.app_name()))
+            }
+            Platform::Liveview => Ok(self.executable.clone()),
 
             // Create a .ipa, only from macOS
             Platform::Ios => todo!(),

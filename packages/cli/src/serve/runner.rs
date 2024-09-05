@@ -1,5 +1,5 @@
 use super::{handle::AppHandle, ServeUpdate};
-use crate::{builder::Platform, bundler::AppBundle, cli::serve::ServeArgs, DioxusCrate, Result};
+use crate::{builder::Platform, bundler::AppBundle, Result};
 use futures_util::{future::OptionFuture, stream::FuturesUnordered};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio_stream::StreamExt;
@@ -17,14 +17,6 @@ impl AppRunner {
     pub(crate) fn start() -> Self {
         Self {
             running: Default::default(),
-        }
-    }
-
-    pub(crate) async fn shutdown(&mut self) {
-        for (_, mut handle) in self.running.drain() {
-            if let Some(mut child) = handle.child.take() {
-                let _ = child.kill().await;
-            }
         }
     }
 
@@ -69,12 +61,11 @@ impl AppRunner {
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
     ) -> Result<&AppHandle> {
-        let handle = AppHandle::start(app, devserver_ip, fullstack_address).await?;
-        let platform = handle.app.build.platform();
+        let platform = app.build.build.platform();
+        self.kill(platform).await;
 
-        if let Some(_previous) = self.running.insert(platform, handle) {
-            // close the old app, gracefully, hopefully
-        }
+        let handle = AppHandle::start(app, devserver_ip, fullstack_address).await?;
+        self.running.insert(platform, handle);
 
         Ok(self.running.get(&platform).unwrap())
     }
