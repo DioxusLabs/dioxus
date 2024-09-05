@@ -98,9 +98,9 @@ impl BuildRequest {
             "</body",
             r#"<script>
             // We can't use a module script here because we need to start the script immediately when streaming
-            import("/{base_path}/assets/dioxus/{app_name}.js").then(
+            import("/{base_path}/wasm/{app_name}.js").then(
                 ({ default: init }) => {
-                init("/{base_path}/assets/dioxus/{app_name}_bg.wasm").then((wasm) => {
+                init("/{base_path}/wasm/{app_name}_bg.wasm").then((wasm) => {
                     if (wasm.__wbindgen_start == undefined) {
                     wasm.main();
                     }
@@ -121,8 +121,8 @@ impl BuildRequest {
         // And try to insert preload links for the wasm and js files
         *html = html.replace(
             "</head",
-            r#"<link rel="preload" href="/{base_path}/assets/dioxus/{app_name}_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
-            <link rel="preload" href="/{base_path}/assets/dioxus/{app_name}.js" as="script">
+            r#"<link rel="preload" href="/{base_path}/wasm/{app_name}_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
+            <link rel="preload" href="/{base_path}/wasm/{app_name}.js" as="script">
             </head"#
         );
     }

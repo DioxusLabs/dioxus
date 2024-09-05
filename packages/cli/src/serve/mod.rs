@@ -15,11 +15,10 @@ mod update;
 mod util;
 mod watcher;
 
-use dioxus_html::tr;
 use output::*;
 use runner::*;
 use server::*;
-use tracer::*;
+pub use tracer::*;
 use update::*;
 use util::*;
 use watcher::*;
@@ -46,8 +45,7 @@ use watcher::*;
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
 pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
-    // Start the tracer so it captures logs from the build engine before we start the builder
-    let mut tracer = TraceController::start(&args);
+    let mut tracer = tracer::TraceController::start();
 
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;
@@ -75,13 +73,13 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
 
         match msg {
             ServeUpdate::FilesChanged { files } => {
-                if files.is_empty() || args.should_hotreload() {
+                if files.is_empty() || !args.should_hotreload() {
                     continue;
                 }
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = watcher.attempt_hot_reload(&krate, files) {
+                if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty() && hr.assets.is_empty() {
                         continue;
@@ -148,7 +146,9 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
             }
 
             ServeUpdate::BuildUpdate(BuildUpdate::BuildReady { target, result }) => {
-                match runner.open(result).await {
+                tracing::info!("Opening app for [{}]", target);
+
+                match runner.open(result, devserver.ip).await {
                     Ok(handle) => {
                         // Make sure we immediately capture the stdout/stderr of the executable -
                         // otherwise it'll clobber our terminal output
@@ -196,22 +196,26 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
 
             // Handle TUI input and maybe even rebuild the app
             ServeUpdate::TuiInput { event } => {
-                let should_rebuild = screen.handle_input(event)?;
-                if should_rebuild {
-                    builder.build(args.build_arguments.clone())?;
-                    devserver.start_build().await
+                let should_rebuild = screen.handle_input(event);
+                match should_rebuild {
+                    Ok(true) => {
+                        builder.build(args.build_arguments.clone())?;
+                        devserver.start_build().await
+                    }
+                    Ok(false) => {}
+                    Err(_) => break,
                 }
             }
 
             ServeUpdate::TracingLog { log } => {
-                // screen.push_log(
-                //     LogSource::Internal,
-                //     BuildMessage {
-                //         level: Level::INFO,
-                //         message: MessageType::Text(log),
-                //         source: MessageSource::Dev,
-                //     },
-                // );
+                screen.push_log(
+                    LogSource::Internal,
+                    crate::builder::BuildMessage {
+                        level: tracing::Level::INFO,
+                        message: crate::builder::MessageType::Text(log),
+                        source: crate::builder::MessageSource::Dev,
+                    },
+                );
             }
 
             // A fatal error occured and we need to exit + cleanup

@@ -1,4 +1,4 @@
-use super::detect::is_wsl;
+use super::{detect::is_wsl, AppRunner};
 use super::{hot_reloading_file_map::HotreloadError, update::ServeUpdate};
 use crate::serve::hot_reloading_file_map::FileMap;
 use crate::{cli::serve::ServeArgs, dioxus_crate::DioxusCrate};
@@ -20,7 +20,7 @@ use std::{path::PathBuf, time::Duration};
 /// directories.
 pub struct Watcher {
     rx: UnboundedReceiver<notify::Event>,
-    _krate: DioxusCrate,
+    krate: DioxusCrate,
     file_map: FileMap,
     ignore: Gitignore,
     applied_hot_reload_message: Option<HotReloadMsg>,
@@ -127,7 +127,7 @@ impl Watcher {
 
         Self {
             _tx: tx,
-            _krate: krate.clone(),
+            krate: krate.clone(),
             rx,
             _watcher: watcher,
             file_map,
@@ -200,17 +200,16 @@ impl Watcher {
 
     pub fn attempt_hot_reload(
         &mut self,
-        krate: &DioxusCrate,
         modified_files: Vec<PathBuf>,
+        runner: &AppRunner,
     ) -> Option<HotReloadMsg> {
         // If we have any changes to the rust files, we need to update the file map
-        let crate_dir = krate.crate_dir();
+        let crate_dir = self.krate.crate_dir();
         let mut templates = vec![];
 
         // Prepare the hotreload message we need to send
         let mut edited_rust_files = Vec::new();
         let mut assets = Vec::new();
-        let mut unknown_files = Vec::new();
 
         for path in modified_files {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
@@ -221,22 +220,37 @@ impl Watcher {
 
             match ext {
                 "rs" => edited_rust_files.push(path),
-                _ if path.starts_with("assets") => assets.push(path),
-                _ => unknown_files.push(path),
+
+                // Look through the runners to see if any of them have an asset that matches the path
+                _ => {
+                    tracing::info!("Hotreloading asset {path:?}");
+                    for runner in runner.running.values() {
+                        if let Some(bundled_name) = runner.update_asset(&path) {
+                            tracing::info!("Hotreloading bundled asset {bundled_name:?}");
+                            assets.push(bundled_name);
+                        }
+                    }
+                }
             }
         }
 
+        assets.dedup();
+
+        // Process the rust files
         for rust_file in edited_rust_files {
             match self.file_map.update_rsx::<HtmlCtx>(&rust_file, &crate_dir) {
                 Ok(hotreloaded_templates) => {
                     templates.extend(hotreloaded_templates);
                 }
+
                 // If the file is not reloadable, we need to rebuild
                 Err(HotreloadError::Notreloadable) => return None,
+
                 // The rust file may have failed to parse, but that is most likely
                 // because the user is in the middle of adding new code
                 // We just ignore the error and let Rust analyzer warn about the problem
                 Err(HotreloadError::Parse) => {}
+
                 // Otherwise just log the error
                 Err(err) => {
                     tracing::error!("Error hotreloading file {rust_file:?}: {err}")
@@ -244,11 +258,7 @@ impl Watcher {
             }
         }
 
-        let msg = HotReloadMsg {
-            templates,
-            assets,
-            unknown_files,
-        };
+        let msg = HotReloadMsg { templates, assets };
 
         self.add_hot_reload_message(&msg);
 
@@ -280,18 +290,13 @@ impl Watcher {
             .collect();
         let mut assets: HashSet<PathBuf> =
             std::mem::take(&mut applied.assets).into_iter().collect();
-        let mut unknown_files: HashSet<PathBuf> = std::mem::take(&mut applied.unknown_files)
-            .into_iter()
-            .collect();
         for template in &msg.templates {
             templates.insert(template.location.clone(), template.clone());
         }
 
         assets.extend(msg.assets.iter().cloned());
-        unknown_files.extend(msg.unknown_files.iter().cloned());
         applied.templates = templates.into_values().collect();
         applied.assets = assets.into_iter().collect();
-        applied.unknown_files = unknown_files.into_iter().collect();
     }
 }
 

@@ -46,8 +46,11 @@ impl AppBundle {
         assets: AssetManifest,
         executable: PathBuf,
     ) -> Result<Self> {
+        let workdir = build.krate.out_dir();
+        std::fs::create_dir_all(&workdir)?;
+
         let bundle = Self {
-            workdir: std::env::temp_dir(),
+            workdir,
             build,
             executable,
             assets,
@@ -72,7 +75,7 @@ impl AppBundle {
             // Web is a simple fs copy of the workdir to the output location
             Platform::Web => {
                 let output_location = destination.join(self.build.app_name());
-                copy_dir_to(self.workdir.clone(), output_location.clone(), false)?;
+                // copy_dir_to(self.workdir.clone(), output_location.clone(), false)?;
                 Ok(output_location)
             }
 

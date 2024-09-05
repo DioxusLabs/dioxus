@@ -9,7 +9,7 @@ use tokio::process::Command;
 
 impl BuildRequest {
     pub async fn build(self) -> Result<AppBundle> {
-        tracing::info!("🚅 Running build [Desktop] command...");
+        tracing::info!("🚅 Running build command...");
 
         // Install any tooling that might be required for this build.
         self.verify_tooling().await?;

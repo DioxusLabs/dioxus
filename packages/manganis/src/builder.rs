@@ -42,7 +42,7 @@ impl Asset {
 
         // todo: actually properly resolve this
         base_path()
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or("/".into()))
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or("/assets/".into()))
             .join(PathBuf::from(self.bundled.trim_start_matches('/')))
     }
 }

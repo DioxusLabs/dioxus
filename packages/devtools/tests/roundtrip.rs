@@ -23,7 +23,6 @@ fn roundtrip() {
             let line = serde_json::to_string(&DevserverMsg::HotReload(HotReloadMsg {
                 templates: vec![],
                 assets: vec!["/asd/bcc".into()],
-                unknown_files: vec![],
             }))
             .unwrap();
             writer.write(line.as_bytes()).unwrap();

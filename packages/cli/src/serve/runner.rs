@@ -1,17 +1,17 @@
-use std::{collections::HashMap, fs, net::SocketAddr, path::PathBuf, process::Stdio};
-
+use super::ServeUpdate;
 use crate::{
     builder::{AppBundle, BuildUpdate, Platform},
     cli::serve::ServeArgs,
     DioxusCrate, Result,
 };
+use manganis_core::ResourceAsset;
+use std::{collections::HashMap, fs, net::SocketAddr, path::PathBuf, process::Stdio};
+use tokio::process::Child;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::{ChildStderr, ChildStdout, Command},
 };
 use uuid::Uuid;
-
-use super::ServeUpdate;
 
 pub struct AppRunner {
     /// Ongoing apps running in place
@@ -22,23 +22,23 @@ pub struct AppRunner {
     pub running: HashMap<Platform, AppHandle>,
 }
 
-use tokio::process::Child;
-
 /// A handle to a running app
 pub struct AppHandle {
     pub app: AppBundle,
     pub executable: PathBuf,
-    pub child: Option<Child>,
-    pub stdout: Lines<BufReader<ChildStdout>>,
-    pub stderr: Lines<BufReader<ChildStderr>>,
-    pub stdout_line: String,
-    pub stderr_line: String,
     pub id: Uuid,
+    pub child: Option<Child>,
+    // pub stdout: Lines<BufReader<ChildStdout>>,
+    // pub stderr: Lines<BufReader<ChildStderr>>,
+    // pub stdout_line: String,
+    // pub stderr_line: String,
 }
 
 impl AppRunner {
     pub fn start(serve: &ServeArgs, config: &DioxusCrate) -> Self {
-        todo!()
+        Self {
+            running: Default::default(),
+        }
     }
 
     pub async fn wait(&mut self) -> ServeUpdate {
@@ -93,75 +93,86 @@ impl AppRunner {
         //         }
         //     },
 
-        // pending
         futures_util::future::pending().await
     }
 
     /// Finally "bundle" this app and return a handle to it
-    pub async fn open(&self, build: AppBundle) -> Result<&AppHandle> {
-        let ip = self.ip().to_string();
+    pub async fn open(&mut self, app: AppBundle, fullstack_addr: SocketAddr) -> Result<&AppHandle> {
+        let platform = app.build.platform();
 
-        if build.build.platform() == Platform::Server {
-            tracing::trace!(
-                "Proxying fullstack server from port {:?}",
-                self.fullstack_address()
-            );
+        if platform == Platform::Server {
+            tracing::trace!("Proxying fullstack server from port {:?}", fullstack_addr);
         }
 
         let work_dir = std::env::temp_dir();
+        let executable = app.finish(work_dir).await?;
 
-        // First, we need to "install" the app
-        let exe = build.finish(work_dir).await?;
-        let mut open = match build.build.platform() {
-            // Run `dx http-server` to serve the app
-            Platform::Web => todo!(),
+        //         stdout: BufReader::new(stdout).lines(),
+        //         stderr: BufReader::new(stderr).lines(),
+        //         stdout_line: String::new(),
+        //         stderr_line: String::new(),
 
-            // Open up the .ipa for the .app
-            Platform::Ios => todo!(),
-
-            Platform::Desktop => Command::new("open"),
-            Platform::Android => todo!("Android not supported yet"),
-            Platform::Server | Platform::Liveview => Command::new(exe.display().to_string()),
+        let handle = AppHandle {
+            app,
+            executable,
+            child: None,
+            // stdout: BufReader::new(stdout).lines(),
+            // stderr: BufReader::new(stderr).lines(),
+            // stdout_line: String::new(),
+            // stderr_line: String::new(),
+            id: Uuid::new_v4(),
         };
+
+        if let Some(previous) = self.running.insert(platform, handle) {
+            // close the old app, gracefully, hopefully
+        }
+
+        Ok(self.running.get(&platform).unwrap())
+
+        // // First, we need to "install" the app
+        // let exe = build.finish(work_dir).await?;
+        // let mut open = match build.build.platform() {
+        //     // Run `dx http-server` to serve the app
+        //     Platform::Web => todo!(),
+
+        //     // Open up the .ipa for the .app
+        //     Platform::Ios => todo!(),
+
+        //     Platform::Desktop => Command::new("open"),
+        //     Platform::Android => todo!("Android not supported yet"),
+        //     Platform::Server | Platform::Liveview => Command::new(exe.display().to_string()),
+        // };
 
         // open the exe with some arguments/envvars/etc
         // we're going to try and configure this binary from the environment, if we can
         //
         // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
         // index.html during dev
-        let _ = open
-            .env(
-                dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
-                self.fullstack_address()
-                    .as_ref()
-                    .map(|addr| addr.to_string())
-                    .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
-            )
-            .env(
-                dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
-                format!("ws://{}/_dioxus", ip),
-            )
-            .env(
-                dioxus_runtime_config::DEVSERVER_RAW_ADDR_ENV,
-                format!("ws://{}/_dioxus", ip),
-            )
-            .env("CARGO_MANIFEST_DIR", build.build.krate.crate_dir())
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .kill_on_drop(true);
+        // let _ = open
+        //     .env(
+        //         dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
+        //         self.fullstack_address()
+        //             .as_ref()
+        //             .map(|addr| addr.to_string())
+        //             .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
+        //     )
+        //     .env(
+        //         dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
+        //         format!("ws://{}/_dioxus", ip),
+        //     )
+        //     .env(
+        //         dioxus_runtime_config::DEVSERVER_RAW_ADDR_ENV,
+        //         format!("ws://{}/_dioxus", ip),
+        //     )
+        //     .env("CARGO_MANIFEST_DIR", build.build.krate.crate_dir())
+        //     .stderr(Stdio::piped())
+        //     .stdout(Stdio::piped())
+        //     .kill_on_drop(true);
 
-        todo!()
+        // todo!()
     }
 
     fn install_app(&self, build: &AppBundle) -> Result<()> {
-        todo!()
-    }
-
-    fn fullstack_address(&self) -> Option<SocketAddr> {
-        todo!()
-    }
-
-    fn ip(&self) -> SocketAddr {
         todo!()
     }
 
@@ -207,5 +218,22 @@ impl AppRunner {
         // # # now that metro is ready, resume the app from background
         // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
         todo!("Open mobile apps")
+    }
+}
+
+impl AppHandle {
+    /// Update an asset in the running apps
+    ///
+    /// Might need to upload the asset to the simulator or overwrite it within the bundle
+    ///
+    /// Returns the name of the asset in the bundle if it exists
+    pub fn update_asset(&self, path: &PathBuf) -> Option<PathBuf> {
+        let resource = self.app.assets.assets.get(path).cloned()?;
+
+        self.app
+            .assets
+            .copy_asset_to(&self.app.asset_dir(), path, false, false);
+
+        Some(resource.bundled.into())
     }
 }

@@ -36,6 +36,9 @@ async fn main() -> anyhow::Result<()> {
         return link::dump_link_args();
     }
 
+    // Start the tracer so it captures logs from the build engine before we start the builder
+    crate::serve::TraceController::initialize();
+
     let args = Cli::parse();
     match args.action {
         Translate(opts) => opts

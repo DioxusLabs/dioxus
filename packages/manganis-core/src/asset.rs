@@ -41,19 +41,20 @@ impl ResourceAsset {
         // /users/dioxus/dev/app/
         // is the root of
         // /users/dioxus/dev/app/assets/blah.css
-        let mfst_dir = std::env::var("CARGO_MANIFEST_DIR")
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
             .map(PathBuf::from)
             .unwrap();
 
         // 1. the input file should be a pathbuf
         let input = PathBuf::from(raw);
 
-        // 2.
-        let absolute = mfst_dir
+        // 2. absolute path to the asset
+        let absolute = manifest_dir
             .join(raw.trim_start_matches('/'))
             .canonicalize()
             .unwrap();
 
+        // 3. the bundled path is the unique name of the asset
         let bundled = Self::make_unique_name(absolute.clone());
 
         Ok(Self {
