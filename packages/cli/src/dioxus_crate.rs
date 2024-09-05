@@ -61,9 +61,26 @@ impl DioxusCrate {
 
     /// Compose an asset directory. Represents the typical "public" directory
     /// with publicly available resources (configurable in the `Dioxus.toml`).
-    pub fn asset_dir(&self) -> PathBuf {
+    pub fn legacy_asset_dir(&self) -> PathBuf {
         self.crate_dir()
             .join(&self.dioxus_config.application.asset_dir)
+    }
+
+    /// Get the list of files in the legacy asset directory
+    pub fn legacy_asset_dir_files(&self) -> Vec<PathBuf> {
+        let mut files = vec![];
+
+        let Ok(read_dir) = self.legacy_asset_dir().read_dir() else {
+            return files;
+        };
+
+        for entry in read_dir {
+            if let Ok(entry) = entry {
+                files.push(entry.path());
+            }
+        }
+
+        files
     }
 
     /// Compose an out directory. Represents the typical "dist" directory that

@@ -1,6 +1,7 @@
 use crate::build::BuildArgs;
 use crate::builder::*;
 use crate::dioxus_crate::DioxusCrate;
+use crate::AppBundle;
 use crate::Result;
 use futures_util::StreamExt;
 use progress::{ProgressRx, ProgressTx, UpdateBuildProgress};
@@ -12,7 +13,7 @@ pub struct Builder {
     pub krate: DioxusCrate,
 
     /// Ongoing builds
-    pub building: JoinSet<(Platform, Result<BuildResult>)>,
+    pub building: JoinSet<(Platform, Result<AppBundle>)>,
 
     /// Messages from the build engine will be sent to this channel
     pub channel: (ProgressTx, ProgressRx),
@@ -23,7 +24,7 @@ pub enum BuildUpdate {
 
     BuildReady {
         target: Platform,
-        result: BuildResult,
+        result: AppBundle,
     },
 
     BuildFailed {

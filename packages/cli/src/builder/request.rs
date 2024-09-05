@@ -1,8 +1,8 @@
 use super::profiles::*;
 use super::progress::ProgressTx;
-use crate::build::BuildArgs;
 use crate::builder::Platform;
 use crate::dioxus_crate::DioxusCrate;
+use crate::{build::BuildArgs, bundler::BundleFormat};
 use std::path::PathBuf;
 
 /// An app that's built, bundled, processed, and a handle to its running app, if it exists
@@ -93,5 +93,23 @@ impl BuildRequest {
         self.build
             .platform
             .unwrap_or_else(|| self.krate.dioxus_config.application.default_platform)
+    }
+
+    /// The final output name of the app, primarly to be used when bundled
+    ///
+    /// Needs to be very disambiguated
+    /// Eg: my-app-web-macos-x86_64.app
+    /// {app_name}-{platform}-{arch}
+    ///
+    /// Does not include the extension
+    pub fn app_name(&self) -> String {
+        match self.platform() {
+            Platform::Web => "web".to_string(),
+            Platform::Desktop => todo!(),
+            Platform::Ios => todo!(),
+            Platform::Server => todo!(),
+            Platform::Android => todo!(),
+            Platform::Liveview => todo!(),
+        }
     }
 }

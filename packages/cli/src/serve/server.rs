@@ -3,7 +3,7 @@ use crate::{
     serve::{next_or_pending, ServeArgs},
 };
 use crate::{
-    builder::{BuildRequest, BuildResult},
+    builder::{AppBundle, BuildRequest},
     dioxus_crate::DioxusCrate,
 };
 use crate::{config::WebHttpsConfig, serve::update::ServeUpdate};
@@ -352,106 +352,6 @@ impl DevServer {
             .map(|port| SocketAddr::new(self.ip.ip(), port))
     }
 
-    /// Open the executable if this is a native build
-    pub fn open(&self, build: &BuildResult) -> std::io::Result<Option<Child>> {
-        match build.request.platform() {
-            Platform::Web => Ok(None),
-            Platform::Ios => self.open_bundled_ios_app(build),
-            Platform::Android => todo!("Android not supported yet"),
-            Platform::Desktop | Platform::Server | Platform::Liveview => {
-                self.open_unbundled_native_app(build)
-            }
-        }
-    }
-
-    fn open_unbundled_native_app(&self, build: &BuildResult) -> std::io::Result<Option<Child>> {
-        if build.request.platform() == Platform::Server {
-            tracing::trace!(
-                "Proxying fullstack server from port {:?}",
-                self.fullstack_address()
-            );
-        }
-
-        tracing::info!(
-            "Opening exectuable with dev server ip {}",
-            self.ip.to_string()
-        );
-
-        // open the exe with some arguments/envvars/etc
-        // we're going to try and configure this binary from the environment, if we can
-        //
-        // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
-        // index.html during dev
-        let res = Command::new(build.bundle.path())
-            .env(
-                dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
-                self.fullstack_address()
-                    .as_ref()
-                    .map(|addr| addr.to_string())
-                    .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
-            )
-            .env(
-                dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
-                format!("ws://{}/_dioxus", self.ip.to_string()),
-            )
-            .env(
-                dioxus_runtime_config::DEVSERVER_RAW_ADDR_ENV,
-                format!("ws://{}/_dioxus", self.ip.to_string()),
-            )
-            .env("CARGO_MANIFEST_DIR", build.request.krate.crate_dir())
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .kill_on_drop(true)
-            .current_dir(build.request.krate.workspace_dir())
-            .spawn()?;
-
-        Ok(Some(res))
-    }
-
-    fn open_bundled_ios_app(&self, build: &BuildResult) -> std::io::Result<Option<Child>> {
-        // command = "xcrun"
-        // args = [
-        // "simctl",
-        // "install",
-        // "booted",
-        // "target/aarch64-apple-ios-sim/debug/bundle/ios/DioxusApp.app",
-        // ]
-
-        // [tasks.run_ios_sim]
-        // args = ["simctl", "launch", "--console", "booted", "com.dioxuslabs"]
-        // command = "xcrun"
-        // dependencies = ["build_ios_sim", "install_ios_sim"]
-
-        // [tasks.serve-sim]
-        // dependencies = ["build_ios_sim", "install_ios_sim", "run_ios_sim"]
-
-        // APP_PATH="target/aarch64-apple-ios/debug/bundle/ios/DioxusApp.app"
-
-        // # get the device id by jq-ing the json of the device list
-        // xcrun devicectl list devices --json-output target/deviceid.json
-        // DEVICE_UUID=$(jq -r '.result.devices[0].identifier' target/deviceid.json)
-
-        // xcrun devicectl device install app --device "${DEVICE_UUID}" "${APP_PATH}" --json-output target/xcrun.json
-
-        // # get the installation url by jq-ing the json of the device install
-        // INSTALLATION_URL=$(jq -r '.result.installedApplications[0].installationURL' target/xcrun.json)
-
-        // # launch the app
-        // # todo: we can just background it immediately and then pick it up for loading its logs
-        // xcrun devicectl device process launch --device "${DEVICE_UUID}" "${INSTALLATION_URL}"
-
-        // # # launch the app and put it in background
-        // # xcrun devicectl device process launch --no-activate --verbose --device "${DEVICE_UUID}" "${INSTALLATION_URL}" --json-output "${XCRUN_DEVICE_PROCESS_LAUNCH_LOG_DIR}"
-
-        // # # Extract background PID of status app
-        // # STATUS_PID=$(jq -r '.result.process.processIdentifier' "${XCRUN_DEVICE_PROCESS_LAUNCH_LOG_DIR}")
-        // # "${GIT_ROOT}/scripts/wait-for-metro-port.sh"  2>&1
-
-        // # # now that metro is ready, resume the app from background
-        // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
-        todo!("Open mobile apps")
-    }
-
     /// Sets up and returns a router
     ///
     /// Steps include:
@@ -703,7 +603,7 @@ pub fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String,
 }
 
 /// Open the browser to the address
-pub(crate) fn open_browser(base_path: Option<String>, address: SocketAddr, https: bool) {
+pub fn open_browser(base_path: Option<String>, address: SocketAddr, https: bool) {
     let protocol = if https { "https" } else { "http" };
     let base_path = match base_path.as_deref() {
         Some(base_path) => format!("/{}", base_path.trim_matches('/')),

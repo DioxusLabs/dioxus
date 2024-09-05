@@ -12,7 +12,7 @@ resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
+server_fn = { version = "0.6.5", features = ["json", "url"], default-features = false }
 dioxus_server_macro = { workspace = true }
 
 # axum
@@ -82,7 +82,7 @@ mounted = ["dioxus-web?/mounted"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
 document = ["dioxus-web?/document"]
 web = ["dep:dioxus-web", "dep:web-sys"]
-desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
+desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest", "server_fn/browser"]
 mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]

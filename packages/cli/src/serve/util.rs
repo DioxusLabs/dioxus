@@ -8,7 +8,7 @@ use std::task::Poll;
 use tokio::task::yield_now;
 
 // Grab the output of a future that returns an option or wait forever
-pub(crate) fn next_or_pending<F, T>(f: F) -> impl Future<Output = T>
+pub fn next_or_pending<F, T>(f: F) -> impl Future<Output = T>
 where
     F: IntoFuture<Output = Option<T>>,
 {

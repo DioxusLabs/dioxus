@@ -39,6 +39,11 @@ pub enum Platform {
     #[serde(rename = "ios")]
     Ios,
 
+    /// Targeting the android platform
+    #[clap(name = "android")]
+    #[serde(rename = "android")]
+    Android,
+
     /// Targetting the server platform using Axum and Dioxus-Fullstack
     ///
     /// This is implicitly passed if `fullstack` is enabled as a feature. Using this variant simply
@@ -46,11 +51,6 @@ pub enum Platform {
     #[clap(name = "server")]
     #[serde(rename = "server")]
     Server,
-
-    /// Targeting the android platform
-    #[clap(name = "android")]
-    #[serde(rename = "android")]
-    Android,
 
     /// Targeting the static generation platform using SSR and Dioxus-Fullstack
     #[clap(name = "liveview")]

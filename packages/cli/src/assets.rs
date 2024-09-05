@@ -31,21 +31,15 @@ use crate::link::InterceptedArgs;
 /// This will be filled in primarly by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct AssetManifest {
-    pub(crate) assets: HashMap<PathBuf, ResourceAsset>,
+    pub assets: HashMap<PathBuf, ResourceAsset>,
 }
 
 impl AssetManifest {
-    /// Creates a new asset manifest
-    pub fn new() -> Self {
-        Self {
-            ..Default::default()
-        }
-    }
-
+    /// Create a new asset manifest pre-populated with the assets from the linker intercept
     pub fn new_from_linker_intercept(args: InterceptedArgs) -> Self {
-        let mut _self = Self::new();
-        _self.add_from_linker_intercept(args);
-        _self
+        let mut manifest = Self::default();
+        manifest.add_from_linker_intercept(args);
+        manifest
     }
 
     /// Fill this manifest from the intercepted rustc args used to link the app together
@@ -227,11 +221,7 @@ impl AssetManifest {
     pub fn sync_with_folder(&self, destination: &Path) {}
 }
 
-pub(crate) fn copy_dir_to(
-    src_dir: PathBuf,
-    dest_dir: PathBuf,
-    pre_compress: bool,
-) -> std::io::Result<()> {
+pub fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::io::Result<()> {
     let entries = std::fs::read_dir(&src_dir)?;
     let mut children: Vec<std::thread::JoinHandle<std::io::Result<()>>> = Vec::new();
 
@@ -299,20 +289,22 @@ fn compressed_path(path: &Path) -> Option<PathBuf> {
 }
 
 /// pre-compress a file with brotli
-pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
+pub fn pre_compress_file(path: &Path) -> std::io::Result<()> {
     let Some(compressed_path) = compressed_path(path) else {
         return Ok(());
     };
+
     let file = std::fs::File::open(path)?;
     let mut stream = std::io::BufReader::new(file);
     let mut buffer = std::fs::File::create(compressed_path)?;
     let params = BrotliEncoderParams::default();
     brotli::BrotliCompress(&mut stream, &mut buffer, &params)?;
+
     Ok(())
 }
 
 /// pre-compress all files in a folder
-pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<()> {
+pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<()> {
     let walk_dir = WalkDir::new(path);
     for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
         let entry_path = entry.path();
@@ -499,7 +491,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
 //     }
 // }
 
-// pub(crate) fn minify_css(css: &str) -> String {
+// pub fn minify_css(css: &str) -> String {
 //     let mut stylesheet = StyleSheet::parse(css, ParserOptions::default()).unwrap();
 //     stylesheet.minify(MinifyOptions::default()).unwrap();
 //     let printer = PrinterOptions {
@@ -510,7 +502,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
 //     res.code
 // }
 
-// pub(crate) fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
+// pub fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
 //     todo!("disabled swc due to semver issues")
 //     // let cm = Arc::<SourceMap>::default();
 
@@ -570,7 +562,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
 //     }
 // }
 
-// pub(crate) fn minify_json(source: &str) -> anyhow::Result<String> {
+// pub fn minify_json(source: &str) -> anyhow::Result<String> {
 //     // First try to parse the json
 //     let json: serde_json::Value = serde_json::from_str(source)?;
 //     // Then print it in a minified format
@@ -827,7 +819,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
 //     }
 // }
 
-// pub(crate) fn minify_css(css: &str) -> String {
+// pub fn minify_css(css: &str) -> String {
 //     let mut stylesheet = StyleSheet::parse(css, ParserOptions::default()).unwrap();
 //     stylesheet.minify(MinifyOptions::default()).unwrap();
 //     let printer = PrinterOptions {
@@ -838,7 +830,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
 //     res.code
 // }
 
-// pub(crate) fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
+// pub fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
 //     todo!("disabled swc due to semver issues")
 //     // let cm = Arc::<SourceMap>::default();
 
@@ -898,7 +890,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
 //     }
 // }
 
-// pub(crate) fn minify_json(source: &str) -> anyhow::Result<String> {
+// pub fn minify_json(source: &str) -> anyhow::Result<String> {
 //     // First try to parse the json
 //     let json: serde_json::Value = serde_json::from_str(source)?;
 //     // Then print it in a minified format

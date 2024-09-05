@@ -4,10 +4,10 @@ use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use serde::Deserialize;
-use std::fmt::Display;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::{fmt::Display, path::Path};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::Level;
 
@@ -309,7 +309,7 @@ impl BuildRequest {
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
     /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-    pub(crate) async fn get_unit_count_estimate(&self) -> usize {
+    pub async fn get_unit_count_estimate(&self) -> usize {
         // Try to get it from nightly
         self.get_unit_count().await.unwrap_or_else(|| {
             // Otherwise, use cargo metadata
@@ -334,5 +334,30 @@ impl BuildRequest {
             stage: Stage::Finished,
             update: UpdateStage::Start,
         });
+    }
+
+    pub fn status_copying_asset(&self, cur: usize, total: usize, asset: &Path) {
+        // Update the progress
+        // _ = self.progress.unbounded_send(UpdateBuildProgress {
+        //     stage: Stage::OptimizingAssets,
+        //     update: UpdateStage::AddMessage(BuildMessage {
+        //         level: Level::INFO,
+        //         message: MessageType::Text(format!(
+        //             "Optimized static asset {}",
+        //             asset.display()
+        //         )),
+        //         source: MessageSource::Build,
+        //     }),
+        //     platform: self.target_platform,
+        // });
+    }
+
+    pub fn status_finished_asset(&self, idx: usize, total: usize, asset: &Path) {
+        // Update the progress
+        // _ = self.progress.unbounded_send(UpdateBuildProgress {
+        //     stage: Stage::OptimizingAssets,
+        //     update: UpdateStage::SetProgress(finished as f64 / asset_count as f64),
+        //     platform: self.target_platform,
+        // });
     }
 }

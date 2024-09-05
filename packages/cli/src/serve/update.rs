@@ -1,6 +1,8 @@
-use crate::builder::{BuildRequest, BuildResult, BuildUpdate, Platform, UpdateBuildProgress};
+use crate::builder::{AppBundle, BuildRequest, BuildUpdate, Platform, UpdateBuildProgress};
 use axum::extract::ws::Message as WsMessage;
 use std::{path::PathBuf, process::ExitStatus};
+
+use super::LogSource;
 
 /// One fat enum to rule them all....
 ///
@@ -40,7 +42,12 @@ pub enum ServeUpdate {
     },
 
     TuiInput {
-        rebuild: bool,
+        event: crossterm::event::Event,
+    },
+
+    TracingLog {
+        // source: LogSource,
+        log: String,
     },
 
     Fatal {

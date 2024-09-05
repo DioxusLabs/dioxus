@@ -2391,6 +2391,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools-types",
+ "dioxus-fullstack",
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-runtime-config",

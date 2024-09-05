@@ -1,6 +1,6 @@
 use crate::builder::{BuildUpdate, Builder, Platform, Stage, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::ServeArgs;
-use crate::dioxus_crate::DioxusCrate;
+use crate::DioxusCrate;
 use crate::Result;
 
 mod detect;
@@ -10,13 +10,16 @@ mod output;
 mod proxy;
 mod runner;
 mod server;
+mod tracer;
 mod update;
 mod util;
 mod watcher;
 
+use dioxus_html::tr;
 use output::*;
 use runner::*;
 use server::*;
+use tracer::*;
 use update::*;
 use util::*;
 use watcher::*;
@@ -30,19 +33,12 @@ use watcher::*;
 /// - Web:         we need to attach a filesystem server to our devtools webserver to serve the project. We
 ///                want to emulate GithubPages here since most folks are deploying there and expect things like
 ///                basepath to match.
-/// - Fullstack:   We spin up the same dev server but in this case the fullstack server itself needs to
-///                proxy all dev requests to our dev server. Todo: we might just want "web" to use the
-///                fullstack server by default, such that serving web on non-wasm platforms is just a
-///                serving a proper server.
 /// - Desktop:     We spin up the dev server but without a filesystem server.
 /// - Mobile:      Basically the same as desktop.
 ///
-///
-/// Notes:
-/// - All filesystem changes are tracked here
-/// - We send all updates to connected websocket connections. Even desktop connects via the websocket
-/// - Right now desktop compiles tokio-tungstenite to do the connection but we could in theory reuse
-///   the websocket logic from the webview for thinner builds.
+/// When fullstack is enabled, we'll also build for the `server` target and then hotreload the server.
+/// The "server" is special here since "fullstack" is functionaly just an addition to the regular client
+/// setup.
 ///
 /// Todos(Jon):
 /// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
@@ -50,14 +46,12 @@ use watcher::*;
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
 pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
-    // Start each component of the devserver.
-    // Start the screen first, since it'll start to swallow the tracing logs from the rest of the the cli
-    let mut screen = Output::start(&args).expect("Failed to open terminal logger");
+    // Start the tracer so it captures logs from the build engine before we start the builder
+    let mut tracer = TraceController::start(&args);
 
     // Note that starting the builder will queue up a build immediately
-    let mut builder = Builder::start(&krate, args.build_arguments.clone())?;
-
-    // The watcher and devserver are started after but don't really matter in order
+    let mut builder = Builder::start(&krate, args.build_args())?;
+    let mut screen = Output::start(&args).expect("Failed to open terminal logger");
     let mut devserver = DevServer::start(&args, &krate);
     let mut watcher = Watcher::start(&args, &krate);
     let mut runner = AppRunner::start(&args, &krate);
@@ -76,6 +70,7 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
             msg = devserver.wait() => msg,
             msg = screen.wait() => msg,
             msg = runner.wait() => msg,
+            msg = tracer.wait() => msg,
         };
 
         match msg {
@@ -148,53 +143,39 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
                 }
             }
 
-            ServeUpdate::BuildUpdate(BuildUpdate::BuildFailed { err, target }) => {
+            ServeUpdate::BuildUpdate(BuildUpdate::BuildFailed { err, .. }) => {
                 devserver.send_build_error(err).await;
             }
 
             ServeUpdate::BuildUpdate(BuildUpdate::BuildReady { target, result }) => {
-                // if !results.is_empty() {
-                //     builder.children.clear();
-                // }
+                match runner.open(result).await {
+                    Ok(handle) => {
+                        // Make sure we immediately capture the stdout/stderr of the executable -
+                        // otherwise it'll clobber our terminal output
+                        screen.new_ready_app(handle);
 
-                // // If we have a build result, open it
-                // for build_result in results.iter() {
-                //     let child = server.open(build_result);
-
-                //     match child {
-                //         Ok(Some(child_proc)) => builder
-                //             .children
-                //             .push((build_result.target_platform, child_proc)),
-                //         Err(e) => {
-                //             tracing::error!("Failed to open build result: {e}");
-                //             break;
-                //         }
-                //         _ => {}
-                //     }
-                // }
-
-                // // Make sure we immediately capture the stdout/stderr of the executable -
-                // // otherwise it'll clobber our terminal output
-                // screen.new_ready_app(&mut builder, results);
-
-                // // And then finally tell the server to reload
-                // server.send_reload_command().await;
+                        // And then finally tell the server to reload
+                        devserver.send_reload_command().await;
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to open app: {}", e);
+                    }
+                }
             }
 
             ServeUpdate::StdoutReceived { target, msg } => {}
 
             ServeUpdate::StderrReceived { target, msg } => {}
 
-            ServeUpdate::BuildUpdate(BuildUpdate::Finished) => {
-                // nothing - the builder just signals that there are no more pending builds
-            }
+            // nothing - the builder just signals that there are no more pending builds
+            // maybe ping the logger to wipe any logs and/or clear the screen
+            ServeUpdate::BuildUpdate(BuildUpdate::Finished) => {}
 
             // If the process exited *cleanly*, we can exit
             ServeUpdate::ProcessExited {
                 status,
                 target_platform,
             } => {
-                todo!("process exited")
                 // // Then remove the child process
                 // builder
                 //     .children
@@ -214,11 +195,23 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
             }
 
             // Handle TUI input and maybe even rebuild the app
-            ServeUpdate::TuiInput { rebuild } => {
-                if rebuild {
+            ServeUpdate::TuiInput { event } => {
+                let should_rebuild = screen.handle_input(event)?;
+                if should_rebuild {
                     builder.build(args.build_arguments.clone())?;
                     devserver.start_build().await
                 }
+            }
+
+            ServeUpdate::TracingLog { log } => {
+                // screen.push_log(
+                //     LogSource::Internal,
+                //     BuildMessage {
+                //         level: Level::INFO,
+                //         message: MessageType::Text(log),
+                //         source: MessageSource::Dev,
+                //     },
+                // );
             }
 
             // A fatal error occured and we need to exit + cleanup
@@ -230,6 +223,7 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
     _ = builder.abort_all();
+    _ = tracer.shutdown();
 
     Ok(())
 }

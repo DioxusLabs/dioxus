@@ -3,7 +3,7 @@ use cargo_generate::{GenerateArgs, TemplatePath};
 use cargo_metadata::Metadata;
 use std::path::Path;
 
-pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
+pub static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]

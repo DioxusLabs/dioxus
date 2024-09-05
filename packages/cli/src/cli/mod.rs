@@ -5,6 +5,7 @@ pub mod check;
 pub mod clean;
 pub mod config;
 pub mod create;
+pub mod httpserver;
 pub mod init;
 pub mod link;
 pub mod serve;
@@ -79,6 +80,10 @@ pub enum Commands {
     #[clap(name = "check")]
     Check(check::Check),
 
+    /// Start a local http server, akin to a default fullstack app
+    #[clap(name = "http-server")]
+    HttpServer(httpserver::Httpserver),
+
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
@@ -97,6 +102,7 @@ impl Display for Commands {
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
+            Commands::HttpServer(_) => write!(f, "http-server"),
         }
     }
 }

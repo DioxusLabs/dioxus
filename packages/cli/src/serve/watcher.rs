@@ -20,7 +20,7 @@ use std::{path::PathBuf, time::Duration};
 /// directories.
 pub struct Watcher {
     rx: UnboundedReceiver<notify::Event>,
-    krate: DioxusCrate,
+    _krate: DioxusCrate,
     file_map: FileMap,
     ignore: Gitignore,
     applied_hot_reload_message: Option<HotReloadMsg>,
@@ -127,7 +127,7 @@ impl Watcher {
 
         Self {
             _tx: tx,
-            krate: krate.clone(),
+            _krate: krate.clone(),
             rx,
             _watcher: watcher,
             file_map,

@@ -1,10 +1,10 @@
+use super::*;
 use crate::config::AddressArguments;
 use crate::settings;
 use crate::DioxusCrate;
 use anyhow::Context;
 use build::BuildArgs;
-
-use super::*;
+use crossterm::tty::IsTty;
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Default, Parser)]
@@ -40,16 +40,17 @@ pub struct ServeArgs {
     #[clap(long, default_missing_value = "2")]
     pub wsl_file_poll_interval: Option<u16>,
 
-    /// Arguments for the dioxus build
-    #[clap(flatten)]
-    pub(crate) build_arguments: BuildArgs,
-
     /// Run the server in interactive mode
     #[arg(long, default_missing_value="true", num_args=0..=1, short = 'i')]
     pub interactive: Option<bool>,
+
+    /// Arguments for the build itself
+    #[clap(flatten)]
+    pub build_arguments: BuildArgs,
 }
 
 impl ServeArgs {
+    /// Start the tui, builder, etc by resolving the arguments and then running the actual top-level serve function
     pub async fn serve(mut self) -> Result<()> {
         let mut krate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
@@ -104,6 +105,14 @@ impl ServeArgs {
 
     pub fn should_hotreload(&self) -> bool {
         self.hot_reload.unwrap_or(true)
+    }
+
+    pub fn build_args(&self) -> BuildArgs {
+        self.build_arguments.clone()
+    }
+
+    pub fn interactive_tty(&self) -> bool {
+        std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
     }
 }
 

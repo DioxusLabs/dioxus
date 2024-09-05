@@ -1,14 +1,14 @@
-use super::{BuildRequest, BuildResult};
-use crate::Result;
-use crate::{assets::AssetManifest, builder::progress::*};
-use crate::{builder::Platform, bundler::AppBundle};
+use super::{AppBundle, BuildRequest};
+use crate::builder::Platform;
+use crate::{assets::AssetManifest, builder::progress::*, link::LINK_OUTPUT_ENV_VAR};
+use crate::{link::InterceptedArgs, Result};
 use anyhow::Context;
-use std::fs::create_dir_all;
-use std::path::PathBuf;
+use std::{env::current_exe, fs::create_dir_all};
+use std::{path::PathBuf, process::Stdio};
 use tokio::process::Command;
 
 impl BuildRequest {
-    pub async fn build(self) -> Result<BuildResult> {
+    pub async fn build(self) -> Result<AppBundle> {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Install any tooling that might be required for this build.
@@ -21,96 +21,83 @@ impl BuildRequest {
         let assets = self.collect_assets().await?;
 
         // Assemble a bundle from everything
-        let bundle = self.bundle_app(executable, &assets).await?;
-
-        // And then construct a final BuildResult which we can then modify while the app is running
-        BuildResult::new(self, assets, bundle)
-            .await
-            .map_err(Into::into)
+        AppBundle::new(self, assets, executable).await
     }
 
     pub async fn verify_tooling(&self) -> Result<()> {
-        // If this is a web, build make sure we have the web build tooling set up
-        if self.targeting_web() {
-            self.install_web_build_tooling().await?;
+        match self.platform() {
+            // If this is a web, build make sure we have the web build tooling set up
+            Platform::Web => self.install_web_build_tooling().await?,
+
+            // Make sure we have mobile tooling if need be
+            Platform::Ios => {}
+            Platform::Android => {}
+
+            // Make sure we have the required deps for desktop. More important for linux
+            Platform::Desktop => {}
+
+            // Generally nothing for the server, pretty simple
+            Platform::Server => {}
+            Platform::Liveview => {}
         }
 
         Ok(())
     }
 
-    pub(crate) async fn bundle_app(
-        &self,
-        executable: PathBuf,
-        assets: &AssetManifest,
-    ) -> Result<AppBundle> {
-        let mut bundle = AppBundle::new(self.platform());
+    /// Run the linker intercept and then fill in our AssetManifest from the incremental artifacts
+    ///
+    /// This will execute `dx` with an env var set to force `dx` to operate as a linker, and then
+    /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
+    /// tables marked by manganis and parsing them as a ResourceAsset.
+    pub async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
+        // If this is the server build, the client build already copied any assets we need
+        if self.platform() == Platform::Server {
+            return Ok(AssetManifest::default());
+        }
 
-        bundle.copy_assets(assets);
+        // If assets are skipped, we don't need to collect them
+        if self.build.skip_assets {
+            return Ok(AssetManifest::default());
+        }
 
-        //     _ = self.progress.unbounded_send(UpdateBuildProgress {
-        //         stage: Stage::OptimizingAssets,
-        //         update: UpdateStage::Start,
-        //         platform: self.target_platform,
-        //     });
+        // Create a temp file to put the output of the args
+        // We need to do this since rustc won't actually print the link args to stdout, so we need to
+        // give `dx` a file to dump its env::args into
+        let tmp_file = tempfile::NamedTempFile::new()?;
 
-        //     self.collect_assets().await?;
+        // Run `cargo rustc` again, but this time with a custom linker (dx) and an env var to force
+        // `dx` to act as a linker
+        //
+        // Pass in the tmp_file as the env var itself
+        //
+        // NOTE: that -Csave-temps=y is needed to prevent rustc from deleting the incremental cache...
+        // This might not be a "stable" way of keeping artifacts around, but it's in stable rustc
+        tokio::process::Command::new("cargo")
+            .arg("rustc")
+            .args(self.build_arguments())
+            .arg("--offline") /* don't use the network, should already be resolved */
+            .arg("--")
+            .arg(format!("-Clinker={}", current_exe().unwrap().display())) /* pass ourselves in */
+            .env(LINK_OUTPUT_ENV_VAR, tmp_file.path()) /* but with the env var pointing to the temp file */
+            .arg("-Csave-temps=y") /* don't delete the incremental cache */
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
 
-        //     let file_name = self.krate.executable_name();
+        // Read the contents of the temp file
+        let args = std::fs::read_to_string(tmp_file.path()).expect("Failed to read linker output");
 
-        //     // Move the final output executable into the dist folder
-        //     let out_dir = self.target_out_dir();
-        //     if !out_dir.is_dir() {
-        //         create_dir_all(&out_dir)?;
-        //     }
+        // Parse them as a Vec<String> which is just our informal format for link args in the cli
+        // Todo: this might be wrong-ish on windows? The format is weird
+        let args =
+            serde_json::from_str::<InterceptedArgs>(&args).expect("Failed to parse linker output");
 
-        //     let mut output_path = out_dir.join(file_name);
-
-        //     // todo: this should not be platform cfged but rather be a target config
-        //     // we dont always want to set the .exe extension...
-        //     if self.targeting_web() {
-        //         output_path.set_extension("wasm");
-        //     } else if cfg!(windows) {
-        //         output_path.set_extension("exe");
-        //     }
-
-        //     // if let Some(res_path) = &cargo_build_result.output_location {
-        //     //     std::fs::copy(res_path, &output_path)?;
-        //     // }
-
-        //     // // Make sure we set the exeutable
-        //     // self.executable = Some(output_path.canonicalize()?);
-
-        //     // // And then copy over the asset dir into the bundle
-        //     // // todo: this will eventually become a full bundle step
-        //     // self.copy_assets_dir()?;
-
-        //     // If this is a web build, run web post processing steps
-        //     if self.targeting_web() {
-        //         self.post_process_web_build().await?;
-        //     }
-
-        todo!()
-    }
-
-    /// Get the output directory for a specific built target
-    pub fn target_out_dir(&self) -> PathBuf {
-        let out_dir = self.krate.out_dir();
-
-        todo!()
-
-        // if let Some(Platform::Fullstack) = self.build_arguments.platform {
-        //     match self.platform {
-        //         Platform::Web => out_dir.join("public"),
-        //         Platform::Desktop => out_dir.join("desktop"),
-        //         _ => out_dir,
-        //     }
-        // } else {
-        //     out_dir
-        // }
+        Ok(AssetManifest::new_from_linker_intercept(args))
     }
 
     /// Create a list of arguments for cargo builds
-    pub(crate) fn build_arguments(&self) -> Vec<String> {
+    pub fn build_arguments(&self) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
         if self.build.release {

@@ -14,7 +14,7 @@ const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 const TOAST_HTML: &str = include_str!("../../assets/toast.html");
 
 impl BuildRequest {
-    pub(crate) fn prepare_html(&self) -> Result<String> {
+    pub fn prepare_html(&self) -> Result<String> {
         let mut html = html_or_default(&self.krate.crate_dir());
 
         // Inject any resources from the config into the html
@@ -34,8 +34,7 @@ impl BuildRequest {
     }
 
     fn is_dev_build(&self) -> bool {
-        todo!()
-        // self.reason == BuildReason::Serve && !self.build_arguments.release
+        !self.build.release
     }
 
     // Inject any resources from the config into the html
@@ -149,7 +148,7 @@ impl BuildRequest {
                     // If the path is absolute, make it relative to the current directory before we join it
                     // The path is actually a web path which is relative to the root of the website
                     let path = path.strip_prefix("/").unwrap_or(path);
-                    let asset_dir_path = self.krate.asset_dir().join(path);
+                    let asset_dir_path = self.krate.legacy_asset_dir().join(path);
                     if let Ok(absolute_path) = asset_dir_path.canonicalize() {
                         let absolute_crate_root = self.krate.crate_dir().canonicalize().unwrap();
                         PathBuf::from("./")

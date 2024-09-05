@@ -91,7 +91,7 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     Ok(router)
 }
 
-pub(crate) fn proxy_to(
+pub fn proxy_to(
     url: Uri,
     nocache: bool,
     handle_error: fn(Error) -> Response<Body>,

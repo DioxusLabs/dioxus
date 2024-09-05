@@ -1,7 +1,7 @@
 use crate::builder::*;
 use crate::config::AddressArguments;
 use crate::serve::ServeArgs;
-use crate::{builder::Platform, dioxus_crate::DioxusCrate, tracer::CLILogControl};
+use crate::{builder::Platform, dioxus_crate::DioxusCrate};
 use core::panic;
 use crossterm::{
     event::{Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
@@ -18,13 +18,12 @@ use std::{
     fmt::Display,
     io::{self, stdout},
     rc::Rc,
-    sync::atomic::Ordering,
     time::{Duration, Instant},
 };
 
 use tracing::Level;
 
-use super::{update::ServeUpdate, Builder, DevServer, Watcher};
+use super::{update::ServeUpdate, AppHandle, Builder, DevServer, Watcher};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogSource {
@@ -70,7 +69,6 @@ impl BuildProgress {
 
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
-    log_control: CLILogControl,
 
     // optional since when there's no tty there's no eventstream to read from - just stdin
     events: Option<EventStream>,
@@ -79,7 +77,7 @@ pub struct Output {
     _rustc_nightly: bool,
     _dx_version: String,
     interactive: bool,
-    pub(crate) build_progress: BuildProgress,
+    pub build_progress: BuildProgress,
     is_cli_release: bool,
     platform: Platform,
 
@@ -104,20 +102,12 @@ type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
     pub fn start(cfg: &ServeArgs) -> io::Result<Self> {
-        // Start a tracing instance just for serving.
-        // This ensures that any tracing we do while serving doesn't break the TUI itself, and instead is
-        // redirected to the serve process.
-        let log_control = crate::tracer::build_tracing();
-
-        let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
-
+        let interactive = cfg.interactive_tty();
         let mut events = None;
 
         if interactive {
-            log_control.tui_enabled.store(true, Ordering::SeqCst);
             enable_raw_mode()?;
             stdout().execute(EnterAlternateScreen)?;
-
             // workaround for ci where the terminal is not fully initialized
             // this stupid bug
             // https://github.com/crossterm-rs/crossterm/issues/659
@@ -159,14 +149,13 @@ impl Output {
 
         Ok(Self {
             term: Rc::new(RefCell::new(term)),
-            log_control,
             events,
             _rustc_version,
             _rustc_nightly,
             _dx_version: dx_version,
-            interactive,
             is_cli_release,
             platform,
+            interactive,
             fly_modal_open: false,
             build_progress: Default::default(),
             scroll: 0,
@@ -180,7 +169,7 @@ impl Output {
 
     /// Add a message from stderr to the logs
     fn push_stderr(&mut self, platform: Platform, stderr: String) {
-        todo!()
+
         // self.set_tab(Tab::BuildLog);
 
         // self.running_apps
@@ -205,7 +194,7 @@ impl Output {
 
     /// Add a message from stdout to the logs
     fn push_stdout(&mut self, platform: Platform, stdout: String) {
-        todo!()
+
         // self.running_apps
         //     .get_mut(&platform)
         //     .unwrap()
@@ -232,84 +221,16 @@ impl Output {
     ///
     /// Also tick animations every few ms
     pub async fn wait(&mut self) -> ServeUpdate {
-        todo!()
-        // fn ok_and_some<F, T, E>(f: F) -> impl Future<Output = T>
-        // where
-        //     F: Future<Output = Result<Option<T>, E>>,
-        // {
-        //     next_or_pending(async move { f.await.ok().flatten() })
-        // }
+        let event = tokio::select! {
+            Some(Ok(event)) = self.events.as_mut().unwrap().next(), if self.events.is_some() => event
+        };
 
-        // let user_input = async {
-        //     let events = self.events.as_mut()?;
-        //     events.next().await
-        // };
-
-        // let user_input = ok_and_some(user_input.map(|e| e.transpose()));
-
-        // let has_running_apps = !self.running_apps.is_empty();
-        // let next_stdout = self.running_apps.values_mut().map(|app| {
-        //     let future = async move {
-        //         let (stdout, stderr) = match &mut app.output {
-        //             Some(out) => (
-        //                 ok_and_some(out.stdout.next_line()),
-        //                 ok_and_some(out.stderr.next_line()),
-        //             ),
-        //             None => return futures_util::future::pending().await,
-        //         };
-
-        //         tokio::select! {
-        //             line = stdout => (app.result.target_platform, Some(line), None),
-        //             line = stderr => (app.result.target_platform, None, Some(line)),
-        //         }
-        //     };
-        //     Box::pin(future)
-        // });
-
-        // let next_stdout = async {
-        //     if has_running_apps {
-        //         select_all(next_stdout).await.0
-        //     } else {
-        //         futures_util::future::pending().await
-        //     }
-        // };
-
-        // let tui_log_rx = &mut self.log_control.tui_rx;
-        // let next_tui_log = next_or_pending(tui_log_rx.next());
-
-        // tokio::select! {
-        //     (platform, stdout, stderr) = next_stdout => {
-        //         if let Some(stdout) = stdout {
-        //             self.push_stdout(platform, stdout);
-        //         }
-        //         if let Some(stderr) = stderr {
-        //             self.push_stderr(platform, stderr);
-        //         }
-        //     },
-
-        //     // Handle internal CLI tracing logs.
-        //     log = next_tui_log => {
-        //         self.push_log(LogSource::Internal, BuildMessage {
-        //             level: Level::INFO,
-        //             message: MessageType::Text(log),
-        //             source: MessageSource::Dev,
-        //         });
-        //     }
-
-        //     event = user_input => {
-        //         if self.handle_events(event).await? {
-        //             return Ok(ServeUpdate::TuiInput { rebuild: true });
-        //         }
-        //     }
-        // }
-
-        // Ok(ServeUpdate::TuiInput { rebuild: false })
+        ServeUpdate::TuiInput { event }
     }
 
     pub fn shutdown(&mut self) -> io::Result<()> {
         // if we're a tty then we need to disable the raw mode
         if self.interactive {
-            self.log_control.tui_enabled.store(false, Ordering::SeqCst);
             disable_raw_mode()?;
             stdout().execute(LeaveAlternateScreen)?;
             self.drain_print_logs();
@@ -359,6 +280,36 @@ impl Output {
 
     /// Handle an input event, returning `true` if the event should cause the program to restart.
     pub fn handle_input(&mut self, input: Event) -> io::Result<bool> {
+        // let mut events = vec![event];
+
+        // // Collect all the events within the next 10ms in one stream
+        // let collect_events = async {
+        //     loop {
+        //         let Some(Ok(next)) = self.events.as_mut().unwrap().next().await else {
+        //             break;
+        //         };
+        //         events.push(next);
+        //     }
+        // };
+        // tokio::select! {
+        //     _ = collect_events => {},
+        //     _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+        // }
+
+        // // Debounce events within the same frame
+        // let mut handled = HashSet::new();
+        // for event in events {
+        //     if !handled.contains(&event) {
+        //         if self.handle_input(event.clone())? {
+        //             // Restart the running app.
+        //             return Ok(true);
+        //         }
+        //         handled.insert(event);
+        //     }
+        // }
+
+        // Ok(false)
+
         // handle ctrlc
         if let Event::Key(key) = input {
             if let KeyCode::Char('c') = key.code {
@@ -517,8 +468,7 @@ impl Output {
         }
     }
 
-    pub fn new_ready_app(&mut self, build_engine: &mut Builder, target: Platform) {
-        todo!()
+    pub fn new_ready_app(&mut self, handle: &AppHandle) {
         // for result in results {
         //     let out = build_engine
         //         .finished
@@ -808,38 +758,6 @@ impl Output {
                 // render the fly modal
                 self.render_fly_modal(frame, console[0]);
             });
-    }
-
-    async fn handle_events(&mut self, event: Event) -> io::Result<bool> {
-        let mut events = vec![event];
-
-        // Collect all the events within the next 10ms in one stream
-        let collect_events = async {
-            loop {
-                let Some(Ok(next)) = self.events.as_mut().unwrap().next().await else {
-                    break;
-                };
-                events.push(next);
-            }
-        };
-        tokio::select! {
-            _ = collect_events => {},
-            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
-        }
-
-        // Debounce events within the same frame
-        let mut handled = HashSet::new();
-        for event in events {
-            if !handled.contains(&event) {
-                if self.handle_input(event.clone())? {
-                    // Restart the running app.
-                    return Ok(true);
-                }
-                handled.insert(event);
-            }
-        }
-
-        Ok(false)
     }
 
     fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::builder::Platform;
+use crate::builder::{Builder, Platform};
 use crate::dioxus_crate::DioxusCrate;
 use anyhow::Context;
 use std::str::FromStr;
@@ -109,6 +109,26 @@ pub struct TargetArgs {
 }
 
 impl BuildArgs {
+    pub async fn run(mut self) -> anyhow::Result<()> {
+        let mut dioxus_crate =
+            DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
+
+        self.build(&mut dioxus_crate).await?;
+
+        Ok(())
+    }
+
+    pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
+        self.resolve(dioxus_crate)?;
+
+        // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
+        Builder::start(dioxus_crate, self.clone())?
+            .wait_for_finish()
+            .await;
+
+        Ok(())
+    }
+
     /// Update the arguments of the CLI by inspecting the DioxusCrate itself and learning about how
     /// the user has configured their app.
     ///
@@ -130,25 +150,7 @@ impl BuildArgs {
         Ok(())
     }
 
-    pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
-        self.resolve(dioxus_crate)?;
-
-        // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
-        crate::builder::Builder::start(dioxus_crate, self.clone())?
-            .wait_for_finish()
-            .await;
-
-        Ok(())
-    }
-
-    pub async fn run(&mut self) -> anyhow::Result<()> {
-        let mut dioxus_crate =
-            DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
-        self.build(&mut dioxus_crate).await?;
-        Ok(())
-    }
-
-    pub(crate) fn auto_detect_client_platform(
+    pub fn auto_detect_client_platform(
         &self,
         resolved: &DioxusCrate,
     ) -> (Option<String>, Platform) {
@@ -158,7 +160,7 @@ impl BuildArgs {
         .unwrap_or_else(|| (Some("web".to_string()), Platform::Web))
     }
 
-    pub(crate) fn auto_detect_server_feature(&self, resolved: &DioxusCrate) -> Option<String> {
+    pub fn auto_detect_server_feature(&self, resolved: &DioxusCrate) -> Option<String> {
         self.find_dioxus_feature(resolved, |platform| matches!(platform, Platform::Server))
             .map(|(feature, _)| feature)
             .unwrap_or_else(|| Some("server".to_string()))
