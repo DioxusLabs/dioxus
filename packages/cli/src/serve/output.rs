@@ -9,7 +9,7 @@ use crossterm::{
     ExecutableCommand,
 };
 use dioxus_devtools_types::ClientMsg;
-use futures_util::{future::select_all, Future, FutureExt, StreamExt};
+use futures_util::{Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
@@ -92,10 +92,10 @@ impl Output {
 
         dx_version.push_str(env!("CARGO_PKG_VERSION"));
 
-        let is_cli_release = crate::dx_build_info::PROFILE == "release";
+        let is_cli_release = crate::build_info::PROFILE == "release";
 
         if !is_cli_release {
-            if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
+            if let Some(hash) = crate::build_info::GIT_COMMIT_HASH_SHORT {
                 let hash = &hash.trim_start_matches('g')[..4];
                 dx_version.push('-');
                 dx_version.push_str(hash);

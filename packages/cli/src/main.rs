@@ -3,22 +3,20 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub mod assets;
+pub mod build_info;
 pub mod builder;
 pub mod bundle_utils;
 pub mod bundler;
 pub mod cli;
 pub mod config;
 pub mod dioxus_crate;
-pub mod dx_build_info;
 pub mod error;
 pub mod fastfs;
 pub mod metadata;
 pub mod serve;
 pub mod settings;
 pub mod tools;
-pub mod tracer;
 
-pub use bundler::AppBundle;
 pub use cli::*;
 pub use dioxus_crate::*;
 pub use error::*;
@@ -26,7 +24,6 @@ pub use settings::*;
 
 use anyhow::Context;
 use clap::Parser;
-
 use Commands::*;
 
 #[tokio::main]

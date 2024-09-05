@@ -1,10 +1,9 @@
 use super::{AppBundle, BuildRequest};
 use crate::builder::Platform;
-use crate::{assets::AssetManifest, builder::progress::*, link::LINK_OUTPUT_ENV_VAR};
+use crate::{assets::AssetManifest, link::LINK_OUTPUT_ENV_VAR};
 use crate::{link::InterceptedArgs, Result};
 use anyhow::Context;
-use std::{env::current_exe, fs::create_dir_all};
-use std::{path::PathBuf, process::Stdio};
+use std::process::Stdio;
 use tokio::process::Command;
 
 impl BuildRequest {
@@ -72,12 +71,12 @@ impl BuildRequest {
         //
         // NOTE: that -Csave-temps=y is needed to prevent rustc from deleting the incremental cache...
         // This might not be a "stable" way of keeping artifacts around, but it's in stable rustc
-        tokio::process::Command::new("cargo")
+        Command::new("cargo")
             .arg("rustc")
             .args(self.build_arguments())
             .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
-            .arg(format!("-Clinker={}", current_exe().unwrap().display())) /* pass ourselves in */
+            .arg(format!("-Clinker={}", std::env::current_exe().unwrap().display())) /* pass ourselves in */
             .env(LINK_OUTPUT_ENV_VAR, tmp_file.path()) /* but with the env var pointing to the temp file */
             .arg("-Csave-temps=y") /* don't delete the incremental cache */
             .stdout(Stdio::piped())
@@ -86,12 +85,13 @@ impl BuildRequest {
             .await?;
 
         // Read the contents of the temp file
-        let args = std::fs::read_to_string(tmp_file.path()).expect("Failed to read linker output");
+        let args =
+            std::fs::read_to_string(tmp_file.path()).context("Failed to read linker output")?;
 
         // Parse them as a Vec<String> which is just our informal format for link args in the cli
         // Todo: this might be wrong-ish on windows? The format is weird
-        let args =
-            serde_json::from_str::<InterceptedArgs>(&args).expect("Failed to parse linker output");
+        let args = serde_json::from_str::<InterceptedArgs>(&args)
+            .context("Failed to parse linker output")?;
 
         Ok(AssetManifest::new_from_linker_intercept(args))
     }

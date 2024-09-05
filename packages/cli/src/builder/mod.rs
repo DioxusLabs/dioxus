@@ -6,7 +6,6 @@
 /// receiver.
 mod builder;
 mod cargo;
-mod handle;
 mod platform;
 mod profiles;
 mod progress;

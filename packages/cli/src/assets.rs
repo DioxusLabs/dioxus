@@ -1,13 +1,8 @@
-use crate::builder::{
-    BuildMessage, BuildRequest, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
-};
 use crate::Result;
 use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
-use futures_channel::mpsc::UnboundedSender;
 use manganis_core::{LinkSection, ResourceAsset};
 use object::{read::archive::ArchiveFile, File as ObjectFile, Object, ObjectSection};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::ffi::OsString;
 use std::fs;
 use std::path::Path;

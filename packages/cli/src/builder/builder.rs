@@ -1,7 +1,6 @@
 use crate::build::BuildArgs;
 use crate::builder::*;
 use crate::dioxus_crate::DioxusCrate;
-use crate::AppBundle;
 use crate::Result;
 use futures_util::StreamExt;
 use progress::{ProgressRx, ProgressTx, UpdateBuildProgress};

@@ -27,8 +27,8 @@ use std::{
 pub static VERSION: Lazy<String> = Lazy::new(|| {
     format!(
         "{} ({})",
-        crate::dx_build_info::PKG_VERSION,
-        crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("was built without git repository")
+        crate::build_info::PKG_VERSION,
+        crate::build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("was built without git repository")
     )
 });
 

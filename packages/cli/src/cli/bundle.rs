@@ -20,14 +20,6 @@ pub struct Bundle {
     pub build_arguments: BuildArgs,
 }
 
-impl std::ops::Deref for Bundle {
-    type Target = BuildArgs;
-
-    fn deref(&self) -> &Self::Target {
-        &self.build_arguments
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum PackageType {
     MacOsBundle,
@@ -185,7 +177,7 @@ impl Bundle {
             );
         }
 
-        if let Some(target) = &self.target_args.target {
+        if let Some(target) = &self.build_arguments.target_args.target {
             settings = settings.target(target.to_string());
         }
 
