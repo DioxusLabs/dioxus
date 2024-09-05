@@ -66,7 +66,7 @@ impl DioxusCrate {
             .join(&self.dioxus_config.application.asset_dir)
     }
 
-    /// Get the list of files in the legacy asset directory
+    /// Get the list of files in the "legacy" asset directory
     pub fn legacy_asset_dir_files(&self) -> Vec<PathBuf> {
         let mut files = vec![];
 

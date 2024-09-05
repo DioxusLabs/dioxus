@@ -1,5 +1,6 @@
 use super::ServeUpdate;
 use crate::{
+    build,
     builder::{AppBundle, BuildUpdate, Platform},
     cli::serve::ServeArgs,
     DioxusCrate, Result,
@@ -97,11 +98,20 @@ impl AppRunner {
     }
 
     /// Finally "bundle" this app and return a handle to it
-    pub async fn open(&mut self, app: AppBundle, fullstack_addr: SocketAddr) -> Result<&AppHandle> {
+    pub async fn open(
+        &mut self,
+        app: AppBundle,
+        devserver_ip: SocketAddr,
+        fullstack_address: Option<SocketAddr>,
+    ) -> Result<&AppHandle> {
         let platform = app.build.platform();
+        let ip = devserver_ip.to_string();
 
         if platform == Platform::Server {
-            tracing::trace!("Proxying fullstack server from port {:?}", fullstack_addr);
+            tracing::trace!(
+                "Proxying fullstack server from port {:?}",
+                fullstack_address
+            );
         }
 
         let work_dir = std::env::temp_dir();
@@ -112,7 +122,7 @@ impl AppRunner {
         //         stdout_line: String::new(),
         //         stderr_line: String::new(),
 
-        let handle = AppHandle {
+        let mut handle = AppHandle {
             app,
             executable,
             child: None,
@@ -122,6 +132,44 @@ impl AppRunner {
             // stderr_line: String::new(),
             id: Uuid::new_v4(),
         };
+
+        // open the exe with some arguments/envvars/etc
+        // we're going to try and configure this binary from the environment, if we can
+        //
+        // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
+        // index.html during dev
+        match handle.app.build.platform() {
+            Platform::Web => {}
+            Platform::Desktop => {
+                let mut cmd = Command::new(handle.executable.clone());
+                cmd.env(
+                    dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
+                    fullstack_address
+                        .as_ref()
+                        .map(|addr| addr.to_string())
+                        .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
+                )
+                .env(
+                    dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
+                    format!("ws://{}/_dioxus", ip),
+                )
+                .env(
+                    dioxus_runtime_config::DEVSERVER_RAW_ADDR_ENV,
+                    format!("ws://{}/_dioxus", ip),
+                )
+                .env("CARGO_MANIFEST_DIR", handle.app.build.krate.crate_dir())
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .kill_on_drop(true);
+
+                let child = cmd.spawn()?;
+                handle.child = Some(child);
+            }
+            Platform::Ios => {}
+            Platform::Android => {}
+            Platform::Server => {}
+            Platform::Liveview => {}
+        }
 
         if let Some(previous) = self.running.insert(platform, handle) {
             // close the old app, gracefully, hopefully
@@ -142,32 +190,6 @@ impl AppRunner {
         //     Platform::Android => todo!("Android not supported yet"),
         //     Platform::Server | Platform::Liveview => Command::new(exe.display().to_string()),
         // };
-
-        // open the exe with some arguments/envvars/etc
-        // we're going to try and configure this binary from the environment, if we can
-        //
-        // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
-        // index.html during dev
-        // let _ = open
-        //     .env(
-        //         dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
-        //         self.fullstack_address()
-        //             .as_ref()
-        //             .map(|addr| addr.to_string())
-        //             .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
-        //     )
-        //     .env(
-        //         dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
-        //         format!("ws://{}/_dioxus", ip),
-        //     )
-        //     .env(
-        //         dioxus_runtime_config::DEVSERVER_RAW_ADDR_ENV,
-        //         format!("ws://{}/_dioxus", ip),
-        //     )
-        //     .env("CARGO_MANIFEST_DIR", build.build.krate.crate_dir())
-        //     .stderr(Stdio::piped())
-        //     .stdout(Stdio::piped())
-        //     .kill_on_drop(true);
 
         // todo!()
     }

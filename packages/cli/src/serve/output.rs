@@ -508,11 +508,11 @@ impl Output {
 
     pub fn render(
         &mut self,
-        _opts: &ServeArgs,
-        _krate: &DioxusCrate,
-        _builder: &Builder,
+        args: &ServeArgs,
+        krate: &DioxusCrate,
+        builder: &Builder,
         server: &DevServer,
-        _watcher: &Watcher,
+        watcher: &Watcher,
     ) {
         // just drain the build logs
         if !self.interactive {

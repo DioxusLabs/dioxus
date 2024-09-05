@@ -5,17 +5,15 @@
 /// Uses a request -> response architecture that allows you to monitor the progress with an optional message
 /// receiver.
 mod builder;
-mod request;
-mod result;
-
-mod assets;
 mod bundle;
 mod cargo;
 mod handle;
 mod platform;
-mod prepare_html;
 mod profiles;
 mod progress;
+mod request;
+mod result;
+mod tooling;
 mod web;
 
 use crate::build::BuildArgs;

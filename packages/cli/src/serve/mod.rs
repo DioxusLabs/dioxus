@@ -148,7 +148,10 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
             ServeUpdate::BuildUpdate(BuildUpdate::BuildReady { target, result }) => {
                 tracing::info!("Opening app for [{}]", target);
 
-                match runner.open(result, devserver.ip).await {
+                match runner
+                    .open(result, devserver.ip, devserver.fullstack_address())
+                    .await
+                {
                     Ok(handle) => {
                         // Make sure we immediately capture the stdout/stderr of the executable -
                         // otherwise it'll clobber our terminal output

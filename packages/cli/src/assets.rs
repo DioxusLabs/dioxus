@@ -216,9 +216,6 @@ impl AssetManifest {
 
         // Otherwise, let's attempt to optimize the the asset we're copying
     }
-
-    /// Sync the assets with the folder - will update any assets that have changed since the last sync
-    pub fn sync_with_folder(&self, destination: &Path) {}
 }
 
 pub fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::io::Result<()> {
