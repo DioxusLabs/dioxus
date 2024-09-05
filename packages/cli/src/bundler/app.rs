@@ -149,7 +149,7 @@ impl AppBundle {
             );
 
             self.assets
-                .copy_asset_to(&asset_dir, asset, optimize, pre_compress);
+                .copy_asset_to(&asset_dir, asset, optimize, pre_compress)?;
 
             self.build.status_finished_asset(
                 assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst),

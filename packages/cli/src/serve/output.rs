@@ -2,7 +2,6 @@ use crate::builder::*;
 use crate::config::AddressArguments;
 use crate::serve::ServeArgs;
 use crate::{builder::Platform, dioxus_crate::DioxusCrate};
-use core::panic;
 use crossterm::{
     event::{Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -160,7 +159,8 @@ impl Output {
     /// Also tick animations every few ms
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         let event = tokio::select! {
-            Some(Some(Ok(event))) = OptionFuture::from(self.events.as_mut().map(|f| f.next())) => event
+            Some(Some(Ok(event))) = OptionFuture::from(self.events.as_mut().map(|f| f.next())) => event,
+            else => futures_util::future::pending().await
         };
 
         ServeUpdate::TuiInput { event }

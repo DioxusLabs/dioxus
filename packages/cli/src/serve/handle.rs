@@ -1,5 +1,5 @@
-use crate::builder::{AppBundle, Platform};
 use crate::Result;
+use crate::{builder::Platform, bundler::AppBundle};
 use std::{net::SocketAddr, path::PathBuf, process::Stdio};
 use tokio::{
     io::AsyncBufReadExt,

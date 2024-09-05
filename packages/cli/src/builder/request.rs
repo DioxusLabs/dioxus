@@ -1,5 +1,5 @@
-use super::profiles::*;
 use super::progress::ProgressTx;
+use super::{platform, profiles::*};
 use crate::build::BuildArgs;
 use crate::builder::Platform;
 use crate::dioxus_crate::DioxusCrate;
@@ -28,14 +28,44 @@ pub(crate) struct BuildRequest {
 }
 
 impl BuildRequest {
-    pub(crate) fn new(krate: DioxusCrate, build: BuildArgs, progress: ProgressTx) -> Self {
-        Self {
-            progress,
-            build,
-            krate,
-            custom_target_dir: Default::default(),
-            rust_flags: Default::default(),
+    pub(crate) fn new_server(
+        krate: &DioxusCrate,
+        mut build: BuildArgs,
+        progress: ProgressTx,
+    ) -> Self {
+        if build.profile.is_none() {
+            build.profile = Some(CLIENT_PROFILE.to_string());
         }
+
+        let client_feature = build.auto_detect_server_feature(krate);
+        let mut build = Self::new_with_target_directory_rust_flags_and_features(
+            krate,
+            &build,
+            build.target_args.server_feature.clone().or(client_feature),
+            progress,
+        );
+        build.build.platform = Some(platform::Platform::Server);
+        build
+    }
+
+    pub(crate) fn new_client(
+        krate: &DioxusCrate,
+        mut build: BuildArgs,
+        progress: ProgressTx,
+    ) -> Self {
+        if build.profile.is_none() {
+            build.profile = Some(SERVER_PROFILE.to_string());
+        }
+        let (client_feature, client_platform) = build.auto_detect_client_platform(krate);
+        let mut build = Self::new_with_target_directory_rust_flags_and_features(
+            krate,
+            &build,
+            build.target_args.client_feature.clone().or(client_feature),
+            progress,
+        );
+
+        build.build.platform = Some(client_platform);
+        build
     }
 
     fn new_with_target_directory_rust_flags_and_features(
@@ -60,32 +90,6 @@ impl BuildRequest {
             custom_target_dir: None,
             progress,
         }
-    }
-
-    pub(crate) fn new_server(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
-        if build.profile.is_none() {
-            build.profile = Some(CLIENT_PROFILE.to_string());
-        }
-        let client_feature = build.auto_detect_server_feature(krate);
-        Self::new_with_target_directory_rust_flags_and_features(
-            krate,
-            &build,
-            build.target_args.server_feature.clone().or(client_feature),
-            progress,
-        )
-    }
-
-    pub(crate) fn new_client(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
-        if build.profile.is_none() {
-            build.profile = Some(SERVER_PROFILE.to_string());
-        }
-        let (client_feature, client_platform) = build.auto_detect_client_platform(krate);
-        Self::new_with_target_directory_rust_flags_and_features(
-            krate,
-            &build,
-            build.target_args.client_feature.clone().or(client_feature),
-            progress,
-        )
     }
 
     /// Get the platform for this build

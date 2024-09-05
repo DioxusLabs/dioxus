@@ -1,6 +1,6 @@
-use super::{AppBundle, BuildRequest};
-use crate::builder::Platform;
+use super::BuildRequest;
 use crate::{assets::AssetManifest, link::LINK_OUTPUT_ENV_VAR};
+use crate::{builder::Platform, bundler::AppBundle};
 use crate::{link::InterceptedArgs, Result};
 use anyhow::Context;
 use std::process::Stdio;

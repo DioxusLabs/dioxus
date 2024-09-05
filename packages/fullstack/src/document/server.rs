@@ -4,9 +4,9 @@
 
 use std::cell::RefCell;
 
-use dioxus_lib::{html::document::*, prelude::*};
+use dioxus_document::*;
+use dioxus_lib::prelude::*;
 use dioxus_ssr::Renderer;
-use generational_box::GenerationalBox;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 
@@ -71,10 +71,6 @@ impl ServerDocument {
 }
 
 impl Document for ServerDocument {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        NoOpDocument.new_evaluator(js)
-    }
-
     fn set_title(&self, title: String) {
         self.warn_if_streaming();
         self.serialize_for_hydration();
@@ -115,7 +111,7 @@ impl Document for ServerDocument {
         });
     }
 
-    fn create_link(&self, props: document::LinkProps) {
+    fn create_link(&self, props: LinkProps) {
         self.warn_if_streaming();
         self.serialize_for_hydration();
         self.0.borrow_mut().link.push(rsx! {
@@ -140,5 +136,18 @@ impl Document for ServerDocument {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn eval(&self, js: String) -> Eval {
+        todo!("server evalator")
+    }
+
+    fn create_head_element(
+        &self,
+        name: &str,
+        attributes: Vec<(&str, String)>,
+        contents: Option<String>,
+    ) {
+        todo!()
     }
 }

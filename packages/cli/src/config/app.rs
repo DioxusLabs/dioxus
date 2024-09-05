@@ -21,7 +21,7 @@ pub(crate) struct ApplicationConfig {
 }
 
 pub(crate) fn default_name() -> String {
-    "my-cool-project".into()
+    "dioxus-app".into()
 }
 
 pub(crate) fn default_platform() -> Platform {
@@ -29,7 +29,7 @@ pub(crate) fn default_platform() -> Platform {
 }
 
 pub(crate) fn asset_dir_default() -> PathBuf {
-    PathBuf::from("public")
+    PathBuf::from("assets")
 }
 
 pub(crate) fn out_dir_default() -> PathBuf {

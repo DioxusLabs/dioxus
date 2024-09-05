@@ -10,12 +10,9 @@ mod platform;
 mod profiles;
 mod progress;
 mod request;
-mod result;
-mod tooling;
 mod web;
 
 pub(crate) use builder::*;
 pub(crate) use platform::*;
 pub(crate) use progress::*;
 pub(crate) use request::*;
-pub(crate) use result::*;

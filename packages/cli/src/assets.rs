@@ -194,8 +194,11 @@ impl AssetManifest {
         target_asset: &Path,
         optimize: bool,
         _pre_compress: bool,
-    ) {
-        let src = self.assets.get(target_asset).unwrap();
+    ) -> anyhow::Result<()> {
+        let src = self
+            .assets
+            .get(target_asset)
+            .with_context(|| format!("Failed to find asset {target_asset:?}"))?;
 
         let local = src.absolute.clone();
 
@@ -206,10 +209,12 @@ impl AssetManifest {
         // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
         if !optimize {
             std::fs::copy(local, destination.join(&src.bundled)).expect("Failed to copy asset");
-            return;
+            return Ok(());
         }
 
         // Otherwise, let's attempt to optimize the the asset we're copying
+
+        Ok(())
     }
 }
 

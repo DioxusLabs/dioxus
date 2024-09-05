@@ -1,7 +1,7 @@
-use crate::build::BuildArgs;
 use crate::builder::*;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
+use crate::{build::BuildArgs, bundler::AppBundle};
 use futures_util::StreamExt;
 use progress::{BuildUpdateProgress, ProgressRx, ProgressTx};
 use tokio::task::JoinSet;
@@ -9,13 +9,13 @@ use tokio::task::JoinSet;
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub(crate) struct Builder {
     /// The application we are building
-    pub(crate) krate: DioxusCrate,
+    krate: DioxusCrate,
 
     /// Ongoing builds
-    pub(crate) building: JoinSet<(Platform, Result<AppBundle>)>,
+    building: JoinSet<(Platform, Result<AppBundle>)>,
 
     /// Messages from the build engine will be sent to this channel
-    pub(crate) channel: (ProgressTx, ProgressRx),
+    channel: (ProgressTx, ProgressRx),
 }
 
 pub(crate) enum BuildUpdate {
@@ -58,7 +58,7 @@ impl Builder {
 
         let mut requests = vec![
             // At least one request for the target app
-            BuildRequest::new(self.krate.clone(), args.clone(), self.channel.0.clone()),
+            BuildRequest::new_client(&self.krate, args.clone(), self.channel.0.clone()),
         ];
 
         // And then the fullstack app if we're building a fullstack app
@@ -68,7 +68,7 @@ impl Builder {
             requests.push(server);
         }
 
-        // Queue the builds on the joinset
+        // Queue the builds on the joinset, being careful to not panic, so we can unwrap
         for build_request in requests {
             let platform = build_request.platform();
             self.building.spawn(async move {
@@ -89,11 +89,26 @@ impl Builder {
     }
 
     /// Wait for the build to finish
-    pub(crate) async fn wait_for_finish(&mut self) {
+    pub(crate) async fn wait_for_finish(&mut self) -> Result<Vec<AppBundle>> {
+        let mut results = vec![];
+
         loop {
             let next = self.wait().await;
-            if let BuildUpdate::AllFinished = next {
-                return;
+
+            match next {
+                BuildUpdate::Progress(_) => {}
+                BuildUpdate::BuildReady { target, result } => {
+                    results.push(result);
+                    tracing::info!("Build ready for target {target:?}");
+                }
+                BuildUpdate::BuildFailed { target, err } => {
+                    tracing::error!("Build failed for target {target:?}: {err}");
+                    return Err(err);
+                }
+                BuildUpdate::AllFinished => {
+                    tracing::info!("All builds finished!");
+                    return Ok(results);
+                }
             }
         }
     }

@@ -1,9 +1,5 @@
 use super::{handle::AppHandle, ServeUpdate};
-use crate::{
-    builder::{AppBundle, Platform},
-    cli::serve::ServeArgs,
-    DioxusCrate, Result,
-};
+use crate::{builder::Platform, bundler::AppBundle, cli::serve::ServeArgs, DioxusCrate, Result};
 use futures_util::{future::OptionFuture, stream::FuturesUnordered};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio_stream::StreamExt;
@@ -57,6 +53,7 @@ impl AppRunner {
                             Err(_err) => todo!("handle error in process joining?"),
                         }
                     }
+                    else => futures_util::future::pending().await
                 }
             })
             .collect::<FuturesUnordered<_>>()
