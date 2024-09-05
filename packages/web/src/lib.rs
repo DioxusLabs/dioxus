@@ -83,21 +83,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
-            websys_dom.skip_mutations = true;
-            // Get the initial hydration data from the client
-            #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-                export function get_initial_hydration_data() {
-                    if (window.initial_dioxus_hydration_data === undefined) {
-                        return new Uint8Array();
-                    }
-
-                    const decoded = atob(window.initial_dioxus_hydration_data);
-                    return Uint8Array.from(decoded, (c) => c.charCodeAt(0))
-                }
-            "#)]
-            extern "C" {
-                fn get_initial_hydration_data() -> js_sys::Uint8Array;
-            }
             let hydration_data = get_initial_hydration_data().to_vec();
 
             if let Some(server_data) = HTMLDataCursor::from_serialized(&hydration_data) {
@@ -105,6 +90,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 if let Some(error) = server_data.error() {
                     virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
                 }
+
+                websys_dom.skip_mutations = true;
                 with_server_data(server_data, || {
                     virtual_dom.rebuild(&mut websys_dom);
                 });
@@ -115,6 +102,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     .expect("Failed to rehydrate");
 
                 hydration_receiver = Some(rx);
+            } else {
+                tracing::error!("Hydration data is missing");
+                virtual_dom.rebuild(&mut websys_dom);
+                websys_dom.flush_edits();
             }
         }
         #[cfg(not(feature = "hydrate"))]

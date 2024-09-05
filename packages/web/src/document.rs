@@ -5,10 +5,7 @@ use dioxus_document::{Document, Eval};
 
 /// Provides the WebEvalProvider through [`ScopeId::provide_context`].
 pub fn init_document() {
-    let window = web_sys::window().unwrap();
-    let document = window.document().unwrap();
-    let provider: Rc<dyn Document> = Rc::new(WebDocument { document });
-
+    let provider = WebDocument::get();
     if ScopeId::ROOT.has_context::<Rc<dyn Document>>().is_none() {
         ScopeId::ROOT.provide_context(provider);
     }
@@ -19,13 +16,28 @@ pub struct WebDocument {
     document: web_sys::Document,
 }
 
+impl WebDocument {
+    /// Get the web document provider
+    pub fn get() -> Rc<dyn Document> {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let provider: Rc<dyn Document> = Rc::new(WebDocument { document });
+        provider
+    }
+}
+
 impl Document for WebDocument {
     fn eval(&self, js: String) -> Eval {
         let (tx, eval) = Eval::from_parts();
 
         // todo: this deserialize is probably wrong.
         _ = match js_sys::eval(&js) {
-            Ok(ok) => tx.send(Ok(serde_wasm_bindgen::from_value(ok).unwrap())),
+            Ok(ok) => {
+                tracing::trace!("eval result: {ok:#?}");
+                let msg = serde_wasm_bindgen::from_value(ok).unwrap_or_default();
+
+                tx.send(Ok(msg))
+            }
             Err(_err) => tx.send(Err(dioxus_document::EvalError::Communication(
                 "eval failed".to_string(),
             ))),

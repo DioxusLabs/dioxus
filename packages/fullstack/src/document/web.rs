@@ -11,9 +11,7 @@ fn head_element_written_on_server() -> bool {
         .unwrap_or_default()
 }
 
-pub(crate) struct FullstackWebDocument {
-    // document: WebDocument,
-}
+pub(crate) struct FullstackWebDocument {}
 
 impl FullstackWebDocument {
     pub(crate) fn new() -> Self {
@@ -32,8 +30,7 @@ impl Document for FullstackWebDocument {
             return;
         }
 
-        // self.document
-        //     .create_head_element(name, attributes, contents);
+        WebDocument::get().create_head_element(name, attributes, contents);
     }
 
     fn set_title(&self, title: String) {
@@ -41,12 +38,11 @@ impl Document for FullstackWebDocument {
             return;
         }
 
-        // self.document.set_title(title);
+        WebDocument::get().set_title(title);
     }
 
     fn eval(&self, js: String) -> dioxus_document::Eval {
-        todo!()
-        // self.document.eval(js)
+        WebDocument::get().eval(js)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
