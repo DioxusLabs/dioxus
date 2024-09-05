@@ -8,6 +8,7 @@ pub(crate) mod create;
 pub(crate) mod httpserver;
 pub(crate) mod init;
 pub(crate) mod link;
+pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod translate;
 
@@ -84,6 +85,10 @@ pub(crate) enum Commands {
     #[clap(name = "http-server")]
     HttpServer(httpserver::Httpserver),
 
+    /// Run the project without any hotreloading
+    #[clap(name = "run")]
+    Run(run::RunArgs),
+
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
@@ -103,6 +108,7 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::HttpServer(_) => write!(f, "http-server"),
+            Commands::Run(_) => write!(f, "run"),
         }
     }
 }

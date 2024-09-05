@@ -18,9 +18,10 @@ mod watcher;
 
 use handle::*;
 use output::*;
-use runner::*;
+pub(crate) use runner::*;
 use server::*;
 pub(crate) use tracer::*;
+pub(crate) use update::*;
 use update::*;
 use watcher::*;
 
@@ -53,7 +54,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     let mut screen = Output::start(&args).expect("Failed to open terminal logger");
     let mut devserver = DevServer::start(&args, &krate);
     let mut watcher = Watcher::start(&args, &krate);
-    let mut runner = AppRunner::start(&args, &krate);
+    let mut runner = AppRunner::start();
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor if we're not careful
@@ -212,13 +213,12 @@ async fn handle_msg(
 
         // If the process exited *cleanly*, we can exit
         ServeUpdate::ProcessExited { status, platform } => {
-            runner.shutdown().await;
-
             if !status.success() {
                 tracing::error!("Application [{platform}] exited with status: {status}");
+                return Ok(ControlFlow::Break(()));
             }
 
-            return Ok(ControlFlow::Break(()));
+            runner.kill(platform).await;
         }
 
         ServeUpdate::StdoutReceived { platform, msg } => {

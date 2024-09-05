@@ -9,6 +9,7 @@ dependencies = [
  "dioxus",
  "reqwest",
  "serde",
+ "tracing",
 ]
 
 [[package]]

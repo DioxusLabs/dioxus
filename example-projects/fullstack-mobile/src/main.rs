@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 
 fn main() {
+    println!("[server] Launching app!");
+
     dioxus::launch(app);
 }
 
@@ -15,9 +17,7 @@ fn app() -> Element {
             h1 { class: "text-4xl font-bold", "Dioxus iOS apps!" }
             h3 { class: "sparkles", "Favorite dog: {favorite_dog}" }
             button { onclick: move |_| async move {
-                let dog = get_random_dog(
-                    "husky".to_string()
-                ).await.unwrap_or_else(|err| format!("Error: {err}"));
+                let dog = get_random_dog().await.unwrap_or_else(|err| format!("Error: {err}"));
                 favorite_dog.set(dog);
             }, "New favorite dog!" }
         }
@@ -43,18 +43,24 @@ fn ImageList(dogs: ReadOnlySignal<i32>, style: String) -> Element {
     }
 }
 
-#[server]
-async fn get_random_dog(breed: String) -> Result<String, ServerFnError> {
-    #[derive(serde::Deserialize, Debug)]
-    struct DogApi {
-        message: String,
-    }
+#[server(endpoint = "get_random_dog")]
+async fn get_random_dog() -> Result<String, ServerFnError> {
+    println!("Getting a random dog from the server!");
+    tracing::info!("Getting a random dog from the server!");
+    let breed = "husky".to_string();
 
-    let dog = reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
-        .await
-        .unwrap()
-        .json::<DogApi>()
-        .await?;
+    Ok(breed)
 
-    Ok(dog.message)
+    // #[derive(serde::Deserialize, Debug)]
+    // struct DogApi {
+    //     message: String,
+    // }
+
+    // let dog = reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
+    //     .await
+    //     .unwrap()
+    //     .json::<DogApi>()
+    //     .await?;
+
+    // Ok(dog.message)
 }

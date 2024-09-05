@@ -75,7 +75,7 @@ impl DevServer {
         let start_browser = args.open.unwrap_or_default();
 
         // If we're serving a fullstack app, we need to find a port to proxy to
-        let fullstack_port = if matches!(args.build_arguments.platform(), Platform::Liveview) {
+        let fullstack_port = if args.should_boot_default_server() {
             get_available_port(addr.ip())
         } else {
             None
@@ -352,7 +352,7 @@ impl DevServer {
 
                 router = router.nest_service(&base_path, build_serve_dir(args, krate));
             }
-            Platform::Liveview => {
+            Platform::Liveview | Platform::Server => {
                 // For fullstack and static generation, forward all requests to the server
                 let address = fullstack_address.unwrap();
 

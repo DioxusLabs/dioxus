@@ -30,8 +30,8 @@ impl AppHandle {
         let platform = app.build.platform();
         let ip = devserver_ip.to_string();
 
-        if platform == Platform::Server {
-            tracing::trace!(
+        if platform == Platform::Server || app.build.build.fullstack {
+            tracing::info!(
                 "Proxying fullstack server from port {:?}",
                 fullstack_address
             );

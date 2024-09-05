@@ -1,7 +1,7 @@
 use super::*;
-use crate::config::AddressArguments;
 use crate::settings;
 use crate::DioxusCrate;
+use crate::{builder::Platform, config::AddressArguments};
 use anyhow::Context;
 use build::BuildArgs;
 use crossterm::tty::IsTty;
@@ -113,6 +113,16 @@ impl ServeArgs {
 
     pub(crate) fn interactive_tty(&self) -> bool {
         std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
+    }
+
+    pub(crate) fn should_boot_default_server(&self) -> bool {
+        match self.build_arguments.platform() {
+            Platform::Server => true,
+            Platform::Liveview => true,
+            Platform::Web | Platform::Desktop | Platform::Ios | Platform::Android => {
+                self.build_arguments.fullstack
+            }
+        }
     }
 }
 

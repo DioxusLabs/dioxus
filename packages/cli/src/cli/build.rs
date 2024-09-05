@@ -25,10 +25,15 @@ pub(crate) struct BuildArgs {
     #[serde(default)]
     pub(crate) force_sequential: bool,
 
-    // Use verbose output [default: false]
+    /// Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
     pub(crate) verbose: bool,
+
+    /// Pass -Awarnings to the cargo build
+    #[clap(long)]
+    #[serde(default)]
+    pub(crate) silent: bool,
 
     /// Build with custom profile
     #[clap(long)]

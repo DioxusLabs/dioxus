@@ -14,7 +14,7 @@ pub(crate) struct AppRunner {
 }
 
 impl AppRunner {
-    pub(crate) fn start(_args: &ServeArgs, _krate: &DioxusCrate) -> Self {
+    pub(crate) fn start() -> Self {
         Self {
             running: Default::default(),
         }
@@ -77,5 +77,9 @@ impl AppRunner {
         }
 
         Ok(self.running.get(&platform).unwrap())
+    }
+
+    pub(crate) async fn kill(&mut self, platform: Platform) {
+        self.running.remove(&platform);
     }
 }
