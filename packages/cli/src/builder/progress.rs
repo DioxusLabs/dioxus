@@ -19,7 +19,7 @@ impl BuildRequest {
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         let crate_count = self.get_unit_count_estimate().await;
 
-        _ = self.progress.unbounded_send(UpdateBuildProgress {
+        _ = self.progress.unbounded_send(BuildUpdateProgress {
             stage: Stage::Compiling,
             update: UpdateStage::Start,
             platform: self.platform(),
@@ -76,7 +76,7 @@ impl BuildRequest {
             match message {
                 Message::CompilerMessage(msg) => {
                     let message = msg.message;
-                    _ = self.progress.unbounded_send(UpdateBuildProgress {
+                    _ = self.progress.unbounded_send(BuildUpdateProgress {
                         stage: Stage::Compiling,
                         update: UpdateStage::AddMessage(message.clone().into()),
                         platform: self.platform(),
@@ -109,7 +109,7 @@ impl BuildRequest {
                         output_location = Some(executable.into());
                     } else {
                         let build_progress = units_compiled as f64 / crate_count as f64;
-                        _ = self.progress.unbounded_send(UpdateBuildProgress {
+                        _ = self.progress.unbounded_send(BuildUpdateProgress {
                             platform: self.platform(),
                             stage: Stage::Compiling,
                             update: UpdateStage::SetProgress((build_progress).clamp(0.0, 1.00)),
@@ -125,7 +125,7 @@ impl BuildRequest {
                     }
                 }
                 Message::TextLine(line) => {
-                    _ = self.progress.unbounded_send(UpdateBuildProgress {
+                    _ = self.progress.unbounded_send(BuildUpdateProgress {
                         platform: self.platform(),
                         stage: Stage::Compiling,
                         update: UpdateStage::AddMessage(BuildMessage {
@@ -194,7 +194,7 @@ impl BuildRequest {
     pub(crate) fn status_build_finished(&self) {
         tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
 
-        _ = self.progress.unbounded_send(UpdateBuildProgress {
+        _ = self.progress.unbounded_send(BuildUpdateProgress {
             platform: self.platform(),
             stage: Stage::Finished,
             update: UpdateStage::Start,
@@ -227,8 +227,8 @@ impl BuildRequest {
     }
 }
 
-pub(crate) type ProgressTx = UnboundedSender<UpdateBuildProgress>;
-pub(crate) type ProgressRx = UnboundedReceiver<UpdateBuildProgress>;
+pub(crate) type ProgressTx = UnboundedSender<BuildUpdateProgress>;
+pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdateProgress>;
 
 #[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum Stage {
@@ -263,13 +263,13 @@ impl std::fmt::Display for Stage {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct UpdateBuildProgress {
+pub(crate) struct BuildUpdateProgress {
     pub(crate) stage: Stage,
     pub(crate) update: UpdateStage,
     pub(crate) platform: Platform,
 }
 
-impl UpdateBuildProgress {
+impl BuildUpdateProgress {
     pub(crate) fn to_std_out(&self) {
         match &self.update {
             UpdateStage::Start => println!("--- {} ---", self.stage),

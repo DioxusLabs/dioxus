@@ -3,7 +3,7 @@ use crate::builder::*;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use futures_util::StreamExt;
-use progress::{ProgressRx, ProgressTx, UpdateBuildProgress};
+use progress::{BuildUpdateProgress, ProgressRx, ProgressTx};
 use tokio::task::JoinSet;
 
 /// A handle to ongoing builds and then the spawned tasks themselves
@@ -19,7 +19,7 @@ pub(crate) struct Builder {
 }
 
 pub(crate) enum BuildUpdate {
-    Progress(UpdateBuildProgress),
+    Progress(BuildUpdateProgress),
 
     BuildReady {
         target: Platform,

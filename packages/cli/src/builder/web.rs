@@ -1,6 +1,6 @@
 use super::{BuildRequest, Platform};
 use crate::builder::progress::{
-    BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
+    BuildMessage, MessageSource, MessageType, Stage, BuildUpdateProgress, UpdateStage,
 };
 use crate::error::{Error, Result};
 use anyhow::Context;
@@ -101,7 +101,7 @@ impl BuildRequest {
         if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output().await {
             let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
             if !wasm_check_output.contains("wasm32-unknown-unknown") {
-                _ = self.progress.unbounded_send(UpdateBuildProgress {
+                _ = self.progress.unbounded_send(BuildUpdateProgress {
                     stage: Stage::InstallingWasmTooling,
                     update: UpdateStage::Start,
                     platform: self.platform(),
@@ -317,7 +317,7 @@ impl BuildRequest {
             "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
         );
 
-        _ = self.progress.unbounded_send(UpdateBuildProgress {
+        _ = self.progress.unbounded_send(BuildUpdateProgress {
             platform: self.platform(),
             stage: Stage::OptimizingWasm,
             update: UpdateStage::AddMessage(BuildMessage {

@@ -1,10 +1,11 @@
-use crate::builder::{BuildUpdate, Builder, Platform, Stage, UpdateBuildProgress, UpdateStage};
+use crate::builder::{BuildUpdate, BuildUpdateProgress, Builder, Platform, Stage, UpdateStage};
 use crate::cli::serve::ServeArgs;
 use crate::DioxusCrate;
 use crate::Result;
 use std::ops::ControlFlow;
 
 mod detect;
+mod handle;
 mod hot_reloading_file_map;
 mod logs_tab;
 mod output;
@@ -15,6 +16,7 @@ mod tracer;
 mod update;
 mod watcher;
 
+use handle::*;
 use output::*;
 use runner::*;
 use server::*;
@@ -161,14 +163,14 @@ async fn handle_msg(
 
             match update {
                 // Send rebuild start message.
-                UpdateBuildProgress {
+                BuildUpdateProgress {
                     stage: Stage::Compiling,
                     update: UpdateStage::Start,
                     platform: _,
                 } => devserver.send_reload_start().await,
 
                 // Send rebuild failed message.
-                UpdateBuildProgress {
+                BuildUpdateProgress {
                     stage: Stage::Finished,
                     update: UpdateStage::Failed(_),
                     platform: _,

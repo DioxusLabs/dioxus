@@ -2,18 +2,18 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::{builder::Platform, serve::ServeArgs};
 use crate::{config::WebHttpsConfig, serve::update::ServeUpdate};
 use crate::{Error, Result};
-use axum::extract::{Request, State};
-use axum::middleware::{self, Next};
 use axum::{
     body::Body,
     extract::{
         ws::{Message, WebSocket},
         Extension, WebSocketUpgrade,
     },
+    extract::{Request, State},
     http::{
         header::{HeaderName, HeaderValue, CACHE_CONTROL, EXPIRES, PRAGMA},
         Method, Response, StatusCode,
     },
+    middleware::{self, Next},
     response::IntoResponse,
     routing::{get, get_service},
     Router,
@@ -21,21 +21,21 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::{future, stream};
-use futures_util::{stream::FuturesUnordered, StreamExt};
-use hyper::header::ACCEPT;
-use hyper::HeaderMap;
+use futures_util::{
+    future,
+    stream::{self, FuturesUnordered},
+    StreamExt,
+};
+use hyper::{header::ACCEPT, HeaderMap};
 use serde::{Deserialize, Serialize};
-use std::net::TcpListener;
-use std::sync::Arc;
-use std::sync::RwLock;
 use std::{
     convert::Infallible,
     fs, io,
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, SocketAddr, TcpListener},
+    sync::RwLock,
 };
-use std::{path::Path, process::Stdio};
-use tokio::process::{Child, Command};
+use std::{path::Path, sync::Arc};
+use tokio::process::Command;
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -44,42 +44,8 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "data")]
-enum Status {
-    ClientInit {
-        application_name: String,
-        platform: String,
-    },
-    Building {
-        progress: f64,
-        build_message: String,
-    },
-    BuildError {
-        error: String,
-    },
-    Ready,
-}
-
-#[derive(Debug, Clone)]
-struct SharedStatus(Arc<RwLock<Status>>);
-
-impl SharedStatus {
-    fn new(status: Status) -> Self {
-        Self(Arc::new(RwLock::new(status)))
-    }
-
-    fn set(&self, status: Status) {
-        *self.0.write().unwrap() = status;
-    }
-
-    fn get(&self) -> Status {
-        self.0.read().unwrap().clone()
-    }
-}
-
 pub(crate) struct DevServer {
-    pub(crate) serve: ServeArgs,
+    pub(crate) _args: ServeArgs,
     pub(crate) hot_reload_sockets: Vec<WebSocket>,
     pub(crate) build_status_sockets: Vec<WebSocket>,
     pub(crate) ip: SocketAddr,
@@ -166,7 +132,7 @@ impl DevServer {
         });
 
         Self {
-            serve: args.clone(),
+            _args: args.clone(),
             hot_reload_sockets: Default::default(),
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
@@ -536,7 +502,9 @@ pub(crate) async fn get_rustls(web_config: &WebHttpsConfig) -> Result<Option<Rus
     ))
 }
 
-pub(crate) async fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
+pub(crate) async fn get_rustls_with_mkcert(
+    web_config: &WebHttpsConfig,
+) -> Result<(String, String)> {
     const DEFAULT_KEY_PATH: &str = "ssl/key.pem";
     const DEFAULT_CERT_PATH: &str = "ssl/cert.pem";
 
@@ -648,4 +616,38 @@ async fn send_build_status_to(
 ) -> Result<(), axum::Error> {
     let msg = serde_json::to_string(&build_status.get()).unwrap();
     socket.send(Message::Text(msg)).await
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+enum Status {
+    ClientInit {
+        application_name: String,
+        platform: String,
+    },
+    Building {
+        progress: f64,
+        build_message: String,
+    },
+    BuildError {
+        error: String,
+    },
+    Ready,
+}
+
+#[derive(Debug, Clone)]
+struct SharedStatus(Arc<RwLock<Status>>);
+
+impl SharedStatus {
+    fn new(status: Status) -> Self {
+        Self(Arc::new(RwLock::new(status)))
+    }
+
+    fn set(&self, status: Status) {
+        *self.0.write().unwrap() = status;
+    }
+
+    fn get(&self) -> Status {
+        self.0.read().unwrap().clone()
+    }
 }

@@ -9,15 +9,15 @@ use crossterm::{
     ExecutableCommand,
 };
 use dioxus_devtools_types::ClientMsg;
-use futures_util::{Future, FutureExt, StreamExt};
+use futures_util::StreamExt;
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::Display,
     io::{self, stdout},
     rc::Rc,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use tracing::Level;
@@ -126,50 +126,31 @@ impl Output {
 
     /// Add a message from stderr to the logs
     pub(crate) fn push_stderr(&mut self, platform: Platform, stderr: String) {
-
-        // self.set_tab(Tab::BuildLog);
-
-        // self.running_apps
-        //     .get_mut(&platform)
-        //     .unwrap()
-        //     .output
-        //     .as_mut()
-        //     .unwrap()
-        //     .stderr_line
-        //     .push_str(&stderr);
-        // self.build_progress
-        //     .build_logs
-        //     .get_mut(&platform)
-        //     .unwrap()
-        //     .messages
-        //     .push(BuildMessage {
-        //         level: Level::ERROR,
-        //         message: MessageType::Text(stderr),
-        //         source: MessageSource::App,
-        //     });
+        self.set_tab(Tab::BuildLog);
+        self.build_progress
+            .build_logs
+            .get_mut(&platform)
+            .unwrap()
+            .messages
+            .push(BuildMessage {
+                level: Level::ERROR,
+                message: MessageType::Text(stderr),
+                source: MessageSource::App,
+            });
     }
 
     /// Add a message from stdout to the logs
     pub(crate) fn push_stdout(&mut self, platform: Platform, stdout: String) {
-
-        // self.running_apps
-        //     .get_mut(&platform)
-        //     .unwrap()
-        //     .output
-        //     .as_mut()
-        //     .unwrap()
-        //     .stdout_line
-        //     .push_str(&stdout);
-        // self.build_progress
-        //     .build_logs
-        //     .get_mut(&platform)
-        //     .unwrap()
-        //     .messages
-        //     .push(BuildMessage {
-        //         level: Level::INFO,
-        //         message: MessageType::Text(stdout),
-        //         source: MessageSource::App,
-        //     });
+        self.build_progress
+            .build_logs
+            .get_mut(&platform)
+            .unwrap()
+            .messages
+            .push(BuildMessage {
+                level: Level::INFO,
+                message: MessageType::Text(stdout),
+                source: MessageSource::App,
+            });
     }
 
     /// Wait for either the ctrl_c handler or the next event
@@ -198,36 +179,6 @@ impl Output {
 
     /// Handle an input event, returning `true` if the event should cause the program to restart.
     pub(crate) fn handle_input(&mut self, input: Event) -> io::Result<bool> {
-        // let mut events = vec![event];
-
-        // // Collect all the events within the next 10ms in one stream
-        // let collect_events = async {
-        //     loop {
-        //         let Some(Ok(next)) = self.events.as_mut().unwrap().next().await else {
-        //             break;
-        //         };
-        //         events.push(next);
-        //     }
-        // };
-        // tokio::select! {
-        //     _ = collect_events => {},
-        //     _ = tokio::time::sleep(Duration::from_millis(10)) => {}
-        // }
-
-        // // Debounce events within the same frame
-        // let mut handled = HashSet::new();
-        // for event in events {
-        //     if !handled.contains(&event) {
-        //         if self.handle_input(event.clone())? {
-        //             // Restart the running app.
-        //             return Ok(true);
-        //         }
-        //         handled.insert(event);
-        //     }
-        // }
-
-        // Ok(false)
-
         // handle ctrlc
         if let Event::Key(key) = input {
             if let KeyCode::Char('c') = key.code {
@@ -352,7 +303,7 @@ impl Output {
         );
     }
 
-    pub(crate) fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
+    pub(crate) fn new_build_logs(&mut self, platform: Platform, update: BuildUpdateProgress) {
         let snapped = self.is_snapped(LogSource::Target(platform));
 
         // when the build is finished, switch to the console
@@ -372,50 +323,23 @@ impl Output {
     }
 
     pub(crate) fn new_ready_app(&mut self, handle: &AppHandle) {
-        // for result in results {
-        //     let out = build_engine
-        //         .finished
-        //         .iter_mut()
-        //         .find_map(|(platform, child)| {
-        //             if platform == &result.target_platform {
-        //                 let stdout = child.stdout.take().unwrap();
-        //                 let stderr = child.stderr.take().unwrap();
-        //                 Some((stdout, stderr))
-        //             } else {
-        //                 None
-        //             }
-        //         });
-
-        //     let platform = result.target_platform;
-
-        //     let stdout = out.map(|(stdout, stderr)| RunningAppOutput {
-        //         stdout: BufReader::new(stdout).lines(),
-        //         stderr: BufReader::new(stderr).lines(),
-        //         stdout_line: String::new(),
-        //         stderr_line: String::new(),
-        //     });
-
-        //     let app = RunningApp {
-        //         result,
-        //         output: stdout,
-        //     };
-
-        //     self.running_apps.insert(platform, app);
-
-        //     // Finish the build progress for the platform that just finished building
-        //     if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
-        //         build.stage = Stage::Finished;
-        //     }
-        // }
+        // Finish the build progress for the platform that just finished building
+        if let Some(build) = self
+            .build_progress
+            .build_logs
+            .get_mut(&handle.app.build.platform())
+        {
+            build.stage = Stage::Finished;
+        }
     }
 
     pub(crate) fn render(
         &mut self,
-        args: &ServeArgs,
-        krate: &DioxusCrate,
-        builder: &Builder,
+        _args: &ServeArgs,
+        _krate: &DioxusCrate,
+        _builder: &Builder,
         server: &DevServer,
-        watcher: &Watcher,
+        _watcher: &Watcher,
     ) {
         // just drain the build logs
         if !self.interactive {
@@ -764,7 +688,7 @@ pub(crate) struct ActiveBuild {
 }
 
 impl ActiveBuild {
-    fn update(&mut self, update: UpdateBuildProgress) {
+    fn update(&mut self, update: BuildUpdateProgress) {
         match update.update {
             UpdateStage::Start => {
                 // If we are already past the stage, don't roll back, but allow a fresh build to update.
