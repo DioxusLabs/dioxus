@@ -15,7 +15,6 @@ pub(crate) mod fastfs;
 pub(crate) mod metadata;
 pub(crate) mod serve;
 pub(crate) mod settings;
-pub(crate) mod tools;
 
 pub(crate) use cli::*;
 pub(crate) use dioxus_crate::*;
