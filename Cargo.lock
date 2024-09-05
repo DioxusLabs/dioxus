@@ -3,6 +3,13 @@
 version = 3
 
 [[package]]
+name = "DioxusApp"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

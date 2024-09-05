@@ -34,6 +34,10 @@ members = [
     "packages/lazy-js-bundle",
     "packages/document",
     "packages/runtime-config",
+    "packages/devtools",
+    "packages/devtools-types",
+    "packages/isrg",
+    "packages/manganis-core",
 
     # Fullstack examples
     "packages/fullstack/examples/hello-world",
@@ -48,10 +52,6 @@ members = [
     "packages/static-generation/examples/router",
     "packages/static-generation/examples/github-pages",
 
-    # Full project examples
-    "examples/tailwind",
-    "examples/PWA-example",
-
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
@@ -63,13 +63,14 @@ members = [
     # manganis
     "packages/manganis",
     "packages/manganis-macro",
-    "examples/manganis-test-package",
-    "examples/manganis-test-package/test-package-dependency",
-    "examples/manganis-test-package/test-package-nested-dependency",
-    "packages/devtools",
-    "packages/devtools-types",
-    "packages/isrg",
-    "packages/manganis-core",
+    "example-projects/manganis-test-package",
+    "example-projects/manganis-test-package/test-package-dependency",
+    "example-projects/manganis-test-package/test-package-nested-dependency",
+
+    # Some default projects that act as integration tests
+    "example-projects/fullstack-mobile",
+    "example-projects/tailwind",
+    "example-projects/PWA-example",
 ]
 
 [workspace.package]

@@ -4,11 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-dioxus = { path = "../../dioxus/packages/dioxus", features = ["fullstack"] }
-# reqwest = { version = "0.12.7", features = ["json"] }
-# serde = "1.0.208"
-# dioxus = { path = "../../dioxus/packages/dioxus", features = ["mobile"] }
-# dioxus-runtime-config = { path = "../../dioxus/packages/runtime-config" }
+dioxus = { workspace = true, features = ["fullstack", "mobile"] }
 
 [features]
 desktop = ["dioxus/desktop"]
