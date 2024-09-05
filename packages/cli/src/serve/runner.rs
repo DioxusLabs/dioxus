@@ -4,7 +4,7 @@ use crate::{
     cli::serve::ServeArgs,
     DioxusCrate, Result,
 };
-use futures_util::stream::FuturesUnordered;
+use futures_util::{future::OptionFuture, stream::FuturesUnordered};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio_stream::StreamExt;
 
@@ -38,28 +38,31 @@ impl AppRunner {
             return futures_util::future::pending().await;
         }
 
-        self.running.iter_mut().map(|(platform, handle)| async {
-            let platform = *platform;
-            tokio::select! {
-                Ok(Some(msg)) = handle.stdout.as_mut().unwrap().next_line(), if handle.stdout.is_some() => {
-                    ServeUpdate::StdoutReceived { platform, msg }
-                },
-                Ok(Some(msg)) = handle.stderr.as_mut().unwrap().next_line(), if handle.stderr.is_some() => {
-                    ServeUpdate::StderrReceived { platform, msg }
-                },
-                status = handle.child.as_mut().unwrap().wait(), if handle.child.is_some() => {
-                    tracing::info!("Child process exited with status: {status:?}");
-                    match status {
-                        Ok(status) => ServeUpdate::ProcessExited { status, platform },
-                        Err(_err) => todo!("handle error in process joining?"),
+        self.running
+            .iter_mut()
+            .map(|(platform, handle)| async {
+                use ServeUpdate::*;
+                let platform = *platform;
+                tokio::select! {
+                    Some(Ok(Some(msg))) = OptionFuture::from(handle.stdout.as_mut().map(|f| f.next_line())) => {
+                        StdoutReceived { platform, msg }
+                    },
+                    Some(Ok(Some(msg))) = OptionFuture::from(handle.stderr.as_mut().map(|f| f.next_line())) => {
+                        StderrReceived { platform, msg }
+                    },
+                    Some(status) = OptionFuture::from(handle.child.as_mut().map(|f| f.wait())) => {
+                        tracing::info!("Child process exited with status: {status:?}");
+                        match status {
+                            Ok(status) => ProcessExited { status, platform },
+                            Err(_err) => todo!("handle error in process joining?"),
+                        }
                     }
                 }
-            }
-        })
-        .collect::<FuturesUnordered<_>>()
-        .next()
-        .await
-        .expect("Stream to pending if not empty")
+            })
+            .collect::<FuturesUnordered<_>>()
+            .next()
+            .await
+            .expect("Stream to pending if not empty")
     }
 
     /// Finally "bundle" this app and return a handle to it

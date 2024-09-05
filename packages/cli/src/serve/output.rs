@@ -9,7 +9,7 @@ use crossterm::{
     ExecutableCommand,
 };
 use dioxus_devtools_types::ClientMsg;
-use futures_util::StreamExt;
+use futures_util::{future::OptionFuture, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
@@ -160,7 +160,7 @@ impl Output {
     /// Also tick animations every few ms
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         let event = tokio::select! {
-            Some(Ok(event)) = self.events.as_mut().unwrap().next(), if self.events.is_some() => event
+            Some(Some(Ok(event))) = OptionFuture::from(self.events.as_mut().map(|f| f.next())) => event
         };
 
         ServeUpdate::TuiInput { event }
