@@ -9,9 +9,9 @@ mod web;
 // mod liveview;
 // mod static_generation;
 
-pub use app::*;
-pub use bundle::*;
-pub use desktop::*;
-pub use dioxus_config::*;
-pub use serve::*;
-pub use web::*;
+pub(crate) use app::*;
+pub(crate) use bundle::*;
+pub(crate) use desktop::*;
+pub(crate) use dioxus_config::*;
+pub(crate) use serve::*;
+pub(crate) use web::*;

@@ -11,17 +11,17 @@ use super::*;
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "bundle")]
-pub struct Bundle {
+pub(crate) struct Bundle {
     #[clap(long)]
-    pub package: Option<Vec<String>>,
+    pub(crate) package: Option<Vec<String>>,
 
     /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub build_arguments: BuildArgs,
+    pub(crate) build_arguments: BuildArgs,
 }
 
 #[derive(Clone, Debug)]
-pub enum PackageType {
+pub(crate) enum PackageType {
     MacOsBundle,
     IosBundle,
     WindowsMsi,
@@ -65,7 +65,7 @@ impl From<PackageType> for tauri_bundler::PackageType {
 }
 
 impl Bundle {
-    pub async fn bundle(mut self) -> anyhow::Result<()> {
+    pub(crate) async fn bundle(mut self) -> anyhow::Result<()> {
         let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 

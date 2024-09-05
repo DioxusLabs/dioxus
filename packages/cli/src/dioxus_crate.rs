@@ -13,15 +13,15 @@ use crate::metadata::CargoError;
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
 #[derive(Clone)]
-pub struct DioxusCrate {
-    pub krates: Arc<Krates>,
-    pub package: NodeId,
-    pub dioxus_config: DioxusConfig,
-    pub target: Target,
+pub(crate) struct DioxusCrate {
+    pub(crate) krates: Arc<Krates>,
+    pub(crate) package: NodeId,
+    pub(crate) dioxus_config: DioxusConfig,
+    pub(crate) target: Target,
 }
 
 impl DioxusCrate {
-    pub fn new(target: &TargetArgs) -> Result<Self, CrateConfigError> {
+    pub(crate) fn new(target: &TargetArgs) -> Result<Self, CrateConfigError> {
         let mut cmd = Cmd::new();
         cmd.features(target.features.clone());
         let builder = krates::Builder::new();
@@ -61,13 +61,13 @@ impl DioxusCrate {
 
     /// Compose an asset directory. Represents the typical "public" directory
     /// with publicly available resources (configurable in the `Dioxus.toml`).
-    pub fn legacy_asset_dir(&self) -> PathBuf {
+    pub(crate) fn legacy_asset_dir(&self) -> PathBuf {
         self.crate_dir()
             .join(&self.dioxus_config.application.asset_dir)
     }
 
     /// Get the list of files in the "legacy" asset directory
-    pub fn legacy_asset_dir_files(&self) -> Vec<PathBuf> {
+    pub(crate) fn legacy_asset_dir_files(&self) -> Vec<PathBuf> {
         let mut files = vec![];
 
         let Ok(read_dir) = self.legacy_asset_dir().read_dir() else {
@@ -86,18 +86,18 @@ impl DioxusCrate {
     /// Compose an out directory. Represents the typical "dist" directory that
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
-    pub fn out_dir(&self) -> PathBuf {
+    pub(crate) fn out_dir(&self) -> PathBuf {
         self.workspace_dir()
             .join(&self.dioxus_config.application.out_dir)
     }
 
     /// Get the workspace directory for the crate
-    pub fn workspace_dir(&self) -> PathBuf {
+    pub(crate) fn workspace_dir(&self) -> PathBuf {
         self.krates.workspace_root().as_std_path().to_path_buf()
     }
 
     /// Get the directory of the crate
-    pub fn crate_dir(&self) -> PathBuf {
+    pub(crate) fn crate_dir(&self) -> PathBuf {
         self.package()
             .manifest_path
             .parent()
@@ -107,26 +107,26 @@ impl DioxusCrate {
     }
 
     /// Get the main source file of the target
-    pub fn main_source_file(&self) -> PathBuf {
+    pub(crate) fn main_source_file(&self) -> PathBuf {
         self.target.src_path.as_std_path().to_path_buf()
     }
 
     /// Get the package we are currently in
-    pub fn package(&self) -> &krates::cm::Package {
+    pub(crate) fn package(&self) -> &krates::cm::Package {
         &self.krates[self.package]
     }
 
     /// Get the name of the package we are compiling
-    pub fn executable_name(&self) -> &str {
+    pub(crate) fn executable_name(&self) -> &str {
         &self.target.name
     }
 
     /// Get the type of executable we are compiling
-    pub fn executable_type(&self) -> krates::cm::TargetKind {
+    pub(crate) fn executable_type(&self) -> krates::cm::TargetKind {
         self.target.kind[0].clone()
     }
 
-    pub fn features_for_platform(&mut self, platform: Platform) -> Vec<String> {
+    pub(crate) fn features_for_platform(&mut self, platform: Platform) -> Vec<String> {
         let package = self.package();
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = platform.feature_name();
@@ -152,19 +152,19 @@ impl DioxusCrate {
 
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
-    pub fn should_pre_compress_web_assets(&self, release: bool) -> bool {
+    pub(crate) fn should_pre_compress_web_assets(&self, release: bool) -> bool {
         self.dioxus_config.web.pre_compress && release
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Executable {
-    pub name: String,
-    pub ty: ExecutableType,
+pub(crate) struct Executable {
+    pub(crate) name: String,
+    pub(crate) ty: ExecutableType,
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-pub enum ExecutableType {
+pub(crate) enum ExecutableType {
     Binary,
     Lib,
     Example,
@@ -172,13 +172,13 @@ pub enum ExecutableType {
 
 impl ExecutableType {
     /// Get the name of the executable if it is a binary or an example.
-    pub fn executable(&self) -> bool {
+    pub(crate) fn executable(&self) -> bool {
         matches!(self, Self::Binary | Self::Example)
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoadDioxusConfigError {
+pub(crate) struct LoadDioxusConfigError {
     location: String,
     error: String,
 }
@@ -193,7 +193,7 @@ impl std::error::Error for LoadDioxusConfigError {}
 
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum CrateConfigError {
+pub(crate) enum CrateConfigError {
     Cargo(CargoError),
     Io(std::io::Error),
     Toml(toml::de::Error),

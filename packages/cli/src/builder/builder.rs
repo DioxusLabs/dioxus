@@ -7,18 +7,18 @@ use progress::{ProgressRx, ProgressTx, UpdateBuildProgress};
 use tokio::task::JoinSet;
 
 /// A handle to ongoing builds and then the spawned tasks themselves
-pub struct Builder {
+pub(crate) struct Builder {
     /// The application we are building
-    pub krate: DioxusCrate,
+    pub(crate) krate: DioxusCrate,
 
     /// Ongoing builds
-    pub building: JoinSet<(Platform, Result<AppBundle>)>,
+    pub(crate) building: JoinSet<(Platform, Result<AppBundle>)>,
 
     /// Messages from the build engine will be sent to this channel
-    pub channel: (ProgressTx, ProgressRx),
+    pub(crate) channel: (ProgressTx, ProgressRx),
 }
 
-pub enum BuildUpdate {
+pub(crate) enum BuildUpdate {
     Progress(UpdateBuildProgress),
 
     BuildReady {
@@ -37,7 +37,7 @@ pub enum BuildUpdate {
 
 impl Builder {
     /// Create a new builder that can accept multiple simultaneous builds
-    pub fn new(krate: &DioxusCrate) -> Self {
+    pub(crate) fn new(krate: &DioxusCrate) -> Self {
         Self {
             channel: futures_channel::mpsc::unbounded(),
             krate: krate.clone(),
@@ -46,14 +46,14 @@ impl Builder {
     }
 
     /// Create a new builder and immediately start a build
-    pub fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
+    pub(crate) fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
         let mut builder = Self::new(krate);
         builder.build(args)?;
         Ok(builder)
     }
 
     /// Start a new build - killing the current one if it exists
-    pub fn build(&mut self, args: BuildArgs) -> Result<()> {
+    pub(crate) fn build(&mut self, args: BuildArgs) -> Result<()> {
         self.abort_all();
 
         let mut requests = vec![
@@ -89,7 +89,7 @@ impl Builder {
     }
 
     /// Wait for the build to finish
-    pub async fn wait_for_finish(&mut self) {
+    pub(crate) async fn wait_for_finish(&mut self) {
         loop {
             let next = self.wait().await;
             if let BuildUpdate::AllFinished = next {
@@ -103,7 +103,7 @@ impl Builder {
     /// Also listen for any input from the app's handle
     ///
     /// Returns immediately with `Finished` if there are no more builds to run - don't poll-loop this!
-    pub async fn wait(&mut self) -> BuildUpdate {
+    pub(crate) async fn wait(&mut self) -> BuildUpdate {
         if self.building.is_empty() {
             return BuildUpdate::AllFinished;
         }
@@ -122,7 +122,7 @@ impl Builder {
     /// Shutdown the current build process
     ///
     /// todo: might want to use a cancellation token here to allow cleaner shutdowns
-    pub fn abort_all(&mut self) {
+    pub(crate) fn abort_all(&mut self) {
         self.building.abort_all();
     }
 

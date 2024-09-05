@@ -5,15 +5,15 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
 /// The arguments for the address the server will run on
 #[derive(Clone, Debug, Parser)]
-pub struct AddressArguments {
+pub(crate) struct AddressArguments {
     /// The port the server will run on
     #[clap(long)]
     #[clap(default_value_t = default_port())]
-    pub port: u16,
+    pub(crate) port: u16,
 
     /// The address the server will run on
     #[clap(long, default_value_t = default_address())]
-    pub addr: std::net::IpAddr,
+    pub(crate) addr: std::net::IpAddr,
 }
 
 impl Default for AddressArguments {
@@ -27,7 +27,7 @@ impl Default for AddressArguments {
 
 impl AddressArguments {
     /// Get the address the server should run on
-    pub fn address(&self) -> SocketAddr {
+    pub(crate) fn address(&self) -> SocketAddr {
         SocketAddr::new(self.addr, self.port)
     }
 }

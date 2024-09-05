@@ -14,23 +14,23 @@ use tokio::{
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
-pub struct AppRunner {
+pub(crate) struct AppRunner {
     /// Ongoing apps running in place
     ///
     /// They might be actively being being, running, or have exited.
     ///
     /// When a new full rebuild occurs, we will keep these requests here
-    pub running: HashMap<Platform, AppHandle>,
+    pub(crate) running: HashMap<Platform, AppHandle>,
 }
 
 impl AppRunner {
-    pub fn start(serve: &ServeArgs, config: &DioxusCrate) -> Self {
+    pub(crate) fn start(serve: &ServeArgs, config: &DioxusCrate) -> Self {
         Self {
             running: Default::default(),
         }
     }
 
-    pub async fn shutdown(&mut self) {
+    pub(crate) async fn shutdown(&mut self) {
         for (_, mut handle) in self.running.drain() {
             if let Some(mut child) = handle.child.take() {
                 let _ = child.kill().await;
@@ -38,7 +38,7 @@ impl AppRunner {
         }
     }
 
-    pub async fn wait(&mut self) -> ServeUpdate {
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
         // If there are no running apps, we can just return pending to avoid deadlocking
         if self.running.is_empty() {
             return futures_util::future::pending().await;
@@ -69,7 +69,7 @@ impl AppRunner {
     }
 
     /// Finally "bundle" this app and return a handle to it
-    pub async fn open(
+    pub(crate) async fn open(
         &mut self,
         app: AppBundle,
         devserver_ip: SocketAddr,
@@ -197,15 +197,15 @@ impl AppRunner {
 }
 
 /// A handle to a running app
-pub struct AppHandle {
-    pub id: Uuid,
-    pub app: AppBundle,
-    pub executable: PathBuf,
-    pub child: Option<Child>,
-    pub stdout: Option<Lines<BufReader<ChildStdout>>>,
-    pub stderr: Option<Lines<BufReader<ChildStderr>>>,
-    // pub stdout_line: String,
-    // pub stderr_line: String,
+pub(crate) struct AppHandle {
+    pub(crate) id: Uuid,
+    pub(crate) app: AppBundle,
+    pub(crate) executable: PathBuf,
+    pub(crate) child: Option<Child>,
+    pub(crate) stdout: Option<Lines<BufReader<ChildStdout>>>,
+    pub(crate) stderr: Option<Lines<BufReader<ChildStderr>>>,
+    // pub(crate) stdout_line: String,
+    // pub(crate) stderr_line: String,
 }
 
 impl AppHandle {
@@ -214,7 +214,7 @@ impl AppHandle {
     /// Might need to upload the asset to the simulator or overwrite it within the bundle
     ///
     /// Returns the name of the asset in the bundle if it exists
-    pub fn hotreload_asset(&self, path: &PathBuf) -> Option<PathBuf> {
+    pub(crate) fn hotreload_asset(&self, path: &PathBuf) -> Option<PathBuf> {
         let resource = self.app.assets.assets.get(path).cloned()?;
 
         self.app

@@ -17,7 +17,7 @@ use std::str::FromStr;
     clap::ValueEnum,
 )]
 #[non_exhaustive]
-pub enum Platform {
+pub(crate) enum Platform {
     /// Targeting the web platform using WASM
     #[clap(name = "web")]
     #[serde(rename = "web")]
@@ -59,7 +59,7 @@ pub enum Platform {
 }
 
 /// An error that occurs when a platform is not recognized
-pub struct UnknownPlatformError;
+pub(crate) struct UnknownPlatformError;
 
 impl std::fmt::Display for UnknownPlatformError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -89,7 +89,7 @@ impl Display for Platform {
 
 impl Platform {
     /// All platforms the dioxus CLI supports
-    pub const ALL: &'static [Self] = &[
+    pub(crate) const ALL: &'static [Self] = &[
         Platform::Web,
         Platform::Desktop,
         Platform::Ios,
@@ -99,7 +99,7 @@ impl Platform {
     ];
 
     /// Get the feature name for the platform in the dioxus crate
-    pub fn feature_name(&self) -> &str {
+    pub(crate) fn feature_name(&self) -> &str {
         match self {
             Platform::Web => "web",
             Platform::Desktop => "desktop",

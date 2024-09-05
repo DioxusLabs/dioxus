@@ -7,7 +7,7 @@ use std::process::Stdio;
 use tokio::process::Command;
 
 impl BuildRequest {
-    pub async fn build(self) -> Result<AppBundle> {
+    pub(crate) async fn build(self) -> Result<AppBundle> {
         tracing::info!("🚅 Running build command...");
 
         // Install any tooling that might be required for this build.
@@ -23,7 +23,7 @@ impl BuildRequest {
         AppBundle::new(self, assets, executable).await
     }
 
-    pub async fn verify_tooling(&self) -> Result<()> {
+    pub(crate) async fn verify_tooling(&self) -> Result<()> {
         match self.platform() {
             // If this is a web, build make sure we have the web build tooling set up
             Platform::Web => self.install_web_build_tooling().await?,
@@ -48,7 +48,7 @@ impl BuildRequest {
     /// This will execute `dx` with an env var set to force `dx` to operate as a linker, and then
     /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
     /// tables marked by manganis and parsing them as a ResourceAsset.
-    pub async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
+    pub(crate) async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
         // If this is the server build, the client build already copied any assets we need
         if self.platform() == Platform::Server {
             return Ok(AssetManifest::default());
@@ -97,7 +97,7 @@ impl BuildRequest {
     }
 
     /// Create a list of arguments for cargo builds
-    pub fn build_arguments(&self) -> Vec<String> {
+    pub(crate) fn build_arguments(&self) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
         if self.build.release {

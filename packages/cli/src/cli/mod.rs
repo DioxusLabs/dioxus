@@ -1,15 +1,15 @@
-pub mod autoformat;
-pub mod build;
-pub mod bundle;
-pub mod check;
-pub mod clean;
-pub mod config;
-pub mod create;
-pub mod httpserver;
-pub mod init;
-pub mod link;
-pub mod serve;
-pub mod translate;
+pub(crate) mod autoformat;
+pub(crate) mod build;
+pub(crate) mod bundle;
+pub(crate) mod check;
+pub(crate) mod clean;
+pub(crate) mod config;
+pub(crate) mod create;
+pub(crate) mod httpserver;
+pub(crate) mod init;
+pub(crate) mod link;
+pub(crate) mod serve;
+pub(crate) mod translate;
 
 use crate::{custom_error, error::Result, Error};
 use clap::{Parser, Subcommand};
@@ -24,7 +24,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-pub static VERSION: Lazy<String> = Lazy::new(|| {
+pub(crate) static VERSION: Lazy<String> = Lazy::new(|| {
     format!(
         "{} ({})",
         crate::build_info::PKG_VERSION,
@@ -35,21 +35,21 @@ pub static VERSION: Lazy<String> = Lazy::new(|| {
 /// Build, Bundle & Ship Dioxus Apps.
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
-pub struct Cli {
+pub(crate) struct Cli {
     #[clap(subcommand)]
-    pub action: Commands,
+    pub(crate) action: Commands,
 
     /// Enable verbose logging.
     #[clap(short)]
-    pub v: bool,
+    pub(crate) v: bool,
 
     /// Specify a binary target.
     #[clap(global = true, long)]
-    pub bin: Option<String>,
+    pub(crate) bin: Option<String>,
 }
 
 #[derive(Parser)]
-pub enum Commands {
+pub(crate) enum Commands {
     /// Build the Dioxus project and all of its assets.
     Build(build::BuildArgs),
 

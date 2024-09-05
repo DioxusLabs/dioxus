@@ -18,7 +18,7 @@ mod watcher;
 use output::*;
 use runner::*;
 use server::*;
-pub use tracer::*;
+pub(crate) use tracer::*;
 use update::*;
 use watcher::*;
 
@@ -43,7 +43,7 @@ use watcher::*;
 /// - Handle logs from the build engine separately?
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
+pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
     let mut tracer = tracer::TraceController::start();
 
     // Note that starting the builder will queue up a build immediately

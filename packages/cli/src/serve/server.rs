@@ -78,17 +78,17 @@ impl SharedStatus {
     }
 }
 
-pub struct DevServer {
-    pub serve: ServeArgs,
-    pub hot_reload_sockets: Vec<WebSocket>,
-    pub build_status_sockets: Vec<WebSocket>,
-    pub ip: SocketAddr,
-    pub new_hot_reload_sockets: UnboundedReceiver<WebSocket>,
-    pub new_build_status_sockets: UnboundedReceiver<WebSocket>,
+pub(crate) struct DevServer {
+    pub(crate) serve: ServeArgs,
+    pub(crate) hot_reload_sockets: Vec<WebSocket>,
+    pub(crate) build_status_sockets: Vec<WebSocket>,
+    pub(crate) ip: SocketAddr,
+    pub(crate) new_hot_reload_sockets: UnboundedReceiver<WebSocket>,
+    pub(crate) new_build_status_sockets: UnboundedReceiver<WebSocket>,
     _server_task: JoinHandle<Result<()>>,
 
     /// We proxy (not hot reloading) fullstack requests to this port
-    pub fullstack_port: Option<u16>,
+    pub(crate) fullstack_port: Option<u16>,
 
     build_status: SharedStatus,
     application_name: String,
@@ -96,7 +96,7 @@ pub struct DevServer {
 }
 
 impl DevServer {
-    pub fn start(args: &ServeArgs, cfg: &DioxusCrate) -> Self {
+    pub(crate) fn start(args: &ServeArgs, cfg: &DioxusCrate) -> Self {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
@@ -198,7 +198,7 @@ impl DevServer {
     }
 
     /// Sends a start build message to all clients.
-    pub async fn start_build(&mut self) {
+    pub(crate) async fn start_build(&mut self) {
         self.build_status.set(Status::Building {
             progress: 0.0,
             build_message: "Starting the build...".to_string(),
@@ -207,7 +207,7 @@ impl DevServer {
     }
 
     /// Sends an updated build status to all clients.
-    pub async fn update_build_status(&mut self, progress: f64, build_message: String) {
+    pub(crate) async fn update_build_status(&mut self, progress: f64, build_message: String) {
         if !matches!(self.build_status.get(), Status::Building { .. }) {
             return;
         }
@@ -219,7 +219,7 @@ impl DevServer {
     }
 
     /// Sends hot reloadable changes to all clients.
-    pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
+    pub(crate) async fn send_hotreload(&mut self, reload: HotReloadMsg) {
         if !reload.assets.is_empty() {
             tracing::debug!("Hot reloading assets {:?}", reload.assets);
         }
@@ -240,7 +240,7 @@ impl DevServer {
     }
 
     /// Wait for new clients to be connected and then save them
-    pub async fn wait(&mut self) -> ServeUpdate {
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
         let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
         let mut new_build_status_socket = self.new_build_status_sockets.next();
         let mut new_message = self
@@ -290,7 +290,7 @@ impl DevServer {
     }
 
     /// Converts a `cargo` error to HTML and sends it to clients.
-    pub async fn send_build_error(&mut self, error: Error) {
+    pub(crate) async fn send_build_error(&mut self, error: Error) {
         let error = error.to_string();
         self.build_status.set(Status::BuildError {
             error: ansi_to_html::convert(&error).unwrap_or(error),
@@ -299,19 +299,19 @@ impl DevServer {
     }
 
     /// Tells all clients that a full rebuild has started.
-    pub async fn send_reload_start(&mut self) {
+    pub(crate) async fn send_reload_start(&mut self) {
         self.send_devserver_message(DevserverMsg::FullReloadStart)
             .await;
     }
 
     /// Tells all clients that a full rebuild has failed.
-    pub async fn send_reload_failed(&mut self) {
+    pub(crate) async fn send_reload_failed(&mut self) {
         self.send_devserver_message(DevserverMsg::FullReloadFailed)
             .await;
     }
 
     /// Tells all clients to reload if possible for new changes.
-    pub async fn send_reload_command(&mut self) {
+    pub(crate) async fn send_reload_command(&mut self) {
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
         self.send_devserver_message(DevserverMsg::FullReloadCommand)
@@ -319,7 +319,7 @@ impl DevServer {
     }
 
     /// Send a shutdown message to all connected clients.
-    pub async fn send_shutdown(&mut self) {
+    pub(crate) async fn send_shutdown(&mut self) {
         self.send_devserver_message(DevserverMsg::Shutdown).await;
     }
 
@@ -332,7 +332,7 @@ impl DevServer {
         }
     }
 
-    pub async fn shutdown(&mut self) {
+    pub(crate) async fn shutdown(&mut self) {
         self.send_shutdown().await;
         for socket in self.hot_reload_sockets.drain(..) {
             _ = socket.close().await;
@@ -340,7 +340,7 @@ impl DevServer {
     }
 
     /// Get the address the fullstack server should run on if we're serving a fullstack app
-    pub fn fullstack_address(&self) -> Option<SocketAddr> {
+    pub(crate) fn fullstack_address(&self) -> Option<SocketAddr> {
         self.fullstack_port
             .map(|port| SocketAddr::new(self.ip.ip(), port))
     }
@@ -514,14 +514,14 @@ fn no_cache(
     response
 }
 
-pub fn insert_no_cache_headers(headers: &mut HeaderMap) {
+pub(crate) fn insert_no_cache_headers(headers: &mut HeaderMap) {
     headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
     headers.insert(PRAGMA, HeaderValue::from_static("no-cache"));
     headers.insert(EXPIRES, HeaderValue::from_static("0"));
 }
 
 /// Returns an enum of rustls config
-pub async fn get_rustls(web_config: &WebHttpsConfig) -> Result<Option<RustlsConfig>> {
+pub(crate) async fn get_rustls(web_config: &WebHttpsConfig) -> Result<Option<RustlsConfig>> {
     if web_config.enabled != Some(true) {
         return Ok(None);
     }
@@ -536,7 +536,7 @@ pub async fn get_rustls(web_config: &WebHttpsConfig) -> Result<Option<RustlsConf
     ))
 }
 
-pub async fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
+pub(crate) async fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
     const DEFAULT_KEY_PATH: &str = "ssl/key.pem";
     const DEFAULT_CERT_PATH: &str = "ssl/cert.pem";
 
@@ -585,7 +585,7 @@ pub async fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(Stri
     Ok((cert_path, key_path))
 }
 
-pub fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
+pub(crate) fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
     // get paths to cert & key
     if let (Some(key), Some(cert)) = (web_config.key_path.clone(), web_config.cert_path.clone()) {
         Ok((cert, key))
@@ -596,7 +596,7 @@ pub fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String,
 }
 
 /// Open the browser to the address
-pub fn open_browser(base_path: Option<String>, address: SocketAddr, https: bool) {
+pub(crate) fn open_browser(base_path: Option<String>, address: SocketAddr, https: bool) {
     let protocol = if https { "https" } else { "http" };
     let base_path = match base_path.as_deref() {
         Some(base_path) => format!("/{}", base_path.trim_matches('/')),

@@ -55,7 +55,7 @@ impl ProxyClient {
 /// - the exact path of the proxy config's backend URL, e.g. /api
 /// - the exact path with a trailing slash, e.g. /api/
 /// - any subpath of the backend URL, e.g. /api/foo/bar
-pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
+pub(crate) fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     let url: Uri = proxy.backend.parse()?;
     let path = url.path().to_string();
     let trimmed_path = path.trim_start_matches('/');
@@ -91,7 +91,7 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     Ok(router)
 }
 
-pub fn proxy_to(
+pub(crate) fn proxy_to(
     url: Uri,
     nocache: bool,
     handle_error: fn(Error) -> Response<Body>,

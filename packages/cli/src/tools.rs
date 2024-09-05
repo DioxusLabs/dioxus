@@ -12,12 +12,12 @@ use tar::Archive;
 use tokio::io::AsyncWriteExt;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Tool {
+pub(crate) enum Tool {
     Sass,
     Tailwind,
 }
 
-pub fn app_path() -> PathBuf {
+pub(crate) fn app_path() -> PathBuf {
     let data_local = dirs::data_local_dir().unwrap();
     let dioxus_dir = data_local.join("dioxus");
     if !dioxus_dir.is_dir() {
@@ -26,7 +26,7 @@ pub fn app_path() -> PathBuf {
     dioxus_dir
 }
 
-pub fn temp_path() -> PathBuf {
+pub(crate) fn temp_path() -> PathBuf {
     let app_path = app_path();
     let temp_path = app_path.join("temp");
     if !temp_path.is_dir() {
@@ -35,7 +35,7 @@ pub fn temp_path() -> PathBuf {
     temp_path
 }
 
-pub fn clone_repo(dir: &Path, url: &str) -> anyhow::Result<()> {
+pub(crate) fn clone_repo(dir: &Path, url: &str) -> anyhow::Result<()> {
     let target_dir = dir.parent().unwrap();
     let dir_name = dir.file_name().unwrap();
 
@@ -51,7 +51,7 @@ pub fn clone_repo(dir: &Path, url: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn tools_path() -> PathBuf {
+pub(crate) fn tools_path() -> PathBuf {
     let app_path = app_path();
     let temp_path = app_path.join("tools");
     if !temp_path.is_dir() {
@@ -63,7 +63,7 @@ pub fn tools_path() -> PathBuf {
 #[allow(clippy::should_implement_trait)]
 impl Tool {
     /// from str to tool enum
-    pub fn from_str(name: &str) -> Option<Self> {
+    pub(crate) fn from_str(name: &str) -> Option<Self> {
         match name {
             "sass" => Some(Self::Sass),
             "tailwindcss" => Some(Self::Tailwind),
@@ -72,7 +72,7 @@ impl Tool {
     }
 
     /// get current tool name str
-    pub fn name(&self) -> &str {
+    pub(crate) fn name(&self) -> &str {
         match self {
             Self::Sass => "sass",
             Self::Tailwind => "tailwindcss",
@@ -80,7 +80,7 @@ impl Tool {
     }
 
     /// get tool bin dir path
-    pub fn bin_path(&self) -> &str {
+    pub(crate) fn bin_path(&self) -> &str {
         match self {
             Self::Sass => ".",
             Self::Tailwind => ".",
@@ -88,7 +88,7 @@ impl Tool {
     }
 
     /// get target platform
-    pub fn target_platform(&self) -> &str {
+    pub(crate) fn target_platform(&self) -> &str {
         match self {
             Self::Sass => {
                 if cfg!(target_os = "windows") {
@@ -116,7 +116,7 @@ impl Tool {
     }
 
     /// get tool version
-    pub fn tool_version(&self) -> &str {
+    pub(crate) fn tool_version(&self) -> &str {
         match self {
             Self::Sass => "1.51.0",
             Self::Tailwind => "v3.1.6",
@@ -124,7 +124,7 @@ impl Tool {
     }
 
     /// get tool package download url
-    pub fn download_url(&self) -> String {
+    pub(crate) fn download_url(&self) -> String {
         match self {
             Self::Sass => {
                 format!(
@@ -150,7 +150,7 @@ impl Tool {
     }
 
     /// get package extension name
-    pub fn extension(&self) -> &str {
+    pub(crate) fn extension(&self) -> &str {
         match self {
             Self::Sass => {
                 if cfg!(target_os = "windows") {
@@ -164,17 +164,17 @@ impl Tool {
     }
 
     /// check tool state
-    pub fn is_installed(&self) -> bool {
+    pub(crate) fn is_installed(&self) -> bool {
         tools_path().join(self.name()).is_dir()
     }
 
     /// get download temp path
-    pub fn temp_out_path(&self) -> PathBuf {
+    pub(crate) fn temp_out_path(&self) -> PathBuf {
         temp_path().join(format!("{}-tool.tmp", self.name()))
     }
 
     /// start to download package
-    pub async fn download_package(&self) -> anyhow::Result<PathBuf> {
+    pub(crate) async fn download_package(&self) -> anyhow::Result<PathBuf> {
         let download_url = self.download_url();
         let temp_out = self.temp_out_path();
         let mut file = tokio::fs::File::create(&temp_out)
@@ -193,7 +193,7 @@ impl Tool {
     }
 
     /// start to install package
-    pub async fn install_package(&self) -> anyhow::Result<()> {
+    pub(crate) async fn install_package(&self) -> anyhow::Result<()> {
         let temp_path = self.temp_out_path();
         let tool_path = tools_path();
 
@@ -248,7 +248,7 @@ impl Tool {
         Ok(())
     }
 
-    pub fn call(&self, command: &str, args: Vec<&str>) -> anyhow::Result<Vec<u8>> {
+    pub(crate) fn call(&self, command: &str, args: Vec<&str>) -> anyhow::Result<Vec<u8>> {
         let bin_path = tools_path().join(self.name()).join(self.bin_path());
 
         let command_file = match self {
@@ -283,7 +283,7 @@ impl Tool {
     }
 }
 
-pub fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
+pub(crate) fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
     let zip_file = std::fs::File::open(file)?;
     let mut zip = zip::ZipArchive::new(zip_file)?;
 

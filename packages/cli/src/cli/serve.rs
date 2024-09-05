@@ -10,48 +10,48 @@ use crossterm::tty::IsTty;
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 #[clap(name = "serve")]
-pub struct ServeArgs {
+pub(crate) struct ServeArgs {
     /// The arguments for the address the server will run on
     #[clap(flatten)]
-    pub address: AddressArguments,
+    pub(crate) address: AddressArguments,
 
     /// Open the app in the default browser [default: true - unless cli settings are set]
     #[arg(long, default_missing_value="true", num_args=0..=1)]
-    pub open: Option<bool>,
+    pub(crate) open: Option<bool>,
 
     /// Enable full hot reloading for the app [default: true - unless cli settings are set]
     #[clap(long, group = "release-incompatible")]
-    pub hot_reload: Option<bool>,
+    pub(crate) hot_reload: Option<bool>,
 
     /// Configure always-on-top for desktop apps [default: true - unless cli settings are set]
     #[clap(long, default_missing_value = "true")]
-    pub always_on_top: Option<bool>,
+    pub(crate) always_on_top: Option<bool>,
 
     /// Set cross-origin-policy to same-origin [default: false]
     #[clap(name = "cross-origin-policy")]
     #[clap(long)]
-    pub cross_origin_policy: bool,
+    pub(crate) cross_origin_policy: bool,
 
     /// Additional arguments to pass to the executable
     #[clap(long)]
-    pub args: Vec<String>,
+    pub(crate) args: Vec<String>,
 
     /// Sets the interval in seconds that the CLI will poll for file changes on WSL.
     #[clap(long, default_missing_value = "2")]
-    pub wsl_file_poll_interval: Option<u16>,
+    pub(crate) wsl_file_poll_interval: Option<u16>,
 
     /// Run the server in interactive mode
     #[arg(long, default_missing_value="true", num_args=0..=1, short = 'i')]
-    pub interactive: Option<bool>,
+    pub(crate) interactive: Option<bool>,
 
     /// Arguments for the build itself
     #[clap(flatten)]
-    pub build_arguments: BuildArgs,
+    pub(crate) build_arguments: BuildArgs,
 }
 
 impl ServeArgs {
     /// Start the tui, builder, etc by resolving the arguments and then running the actual top-level serve function
-    pub async fn serve(mut self) -> Result<()> {
+    pub(crate) async fn serve(mut self) -> Result<()> {
         let mut krate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
@@ -103,15 +103,15 @@ impl ServeArgs {
         Ok(())
     }
 
-    pub fn should_hotreload(&self) -> bool {
+    pub(crate) fn should_hotreload(&self) -> bool {
         self.hot_reload.unwrap_or(true)
     }
 
-    pub fn build_args(&self) -> BuildArgs {
+    pub(crate) fn build_args(&self) -> BuildArgs {
         self.build_arguments.clone()
     }
 
-    pub fn interactive_tty(&self) -> bool {
+    pub(crate) fn interactive_tty(&self) -> bool {
         std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
     }
 }

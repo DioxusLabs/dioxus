@@ -9,107 +9,107 @@ use std::str::FromStr;
 /// Produces a final output bundle designed to be run on the target platform.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "build")]
-pub struct BuildArgs {
+pub(crate) struct BuildArgs {
     /// Build in release mode [default: false]
     #[clap(long, short)]
     #[serde(default)]
-    pub release: bool,
+    pub(crate) release: bool,
 
     /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub force_debug: bool,
+    pub(crate) force_debug: bool,
 
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub force_sequential: bool,
+    pub(crate) force_sequential: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub verbose: bool,
+    pub(crate) verbose: bool,
 
     /// Build with custom profile
     #[clap(long)]
-    pub profile: Option<String>,
+    pub(crate) profile: Option<String>,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long, value_enum)]
-    pub platform: Option<Platform>,
+    pub(crate) platform: Option<Platform>,
 
     /// Build the fullstack variant of this app, using that as the fileserver and backend
     ///
     /// This defaults to `false` but will be overriden to true if the `fullstack` feature is enabled.
     #[clap(long)]
-    pub fullstack: bool,
+    pub(crate) fullstack: bool,
 
     /// Run the ssg config of the app and generate the files
     #[clap(long)]
-    pub ssg: bool,
+    pub(crate) ssg: bool,
 
     /// Skip collecting assets from dependencies [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub skip_assets: bool,
+    pub(crate) skip_assets: bool,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
-    pub cargo_args: Vec<String>,
+    pub(crate) cargo_args: Vec<String>,
 
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
     #[clap(long, default_value_t = true)]
-    pub inject_loading_scripts: bool,
+    pub(crate) inject_loading_scripts: bool,
 
     /// Information about the target to build
     #[clap(flatten)]
-    pub target_args: TargetArgs,
+    pub(crate) target_args: TargetArgs,
 }
 
 /// Information about the target to build
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-pub struct TargetArgs {
+pub(crate) struct TargetArgs {
     /// Build for nightly [default: false]
     #[clap(long)]
-    pub nightly: bool,
+    pub(crate) nightly: bool,
 
     /// Build a example [default: ""]
     #[clap(long)]
-    pub example: Option<String>,
+    pub(crate) example: Option<String>,
 
     /// Build a binary [default: ""]
     #[clap(long)]
-    pub bin: Option<String>,
+    pub(crate) bin: Option<String>,
 
     /// The package to build
     #[clap(short, long)]
-    pub package: Option<String>,
+    pub(crate) package: Option<String>,
 
     /// Space separated list of features to activate
     #[clap(long)]
-    pub features: Vec<String>,
+    pub(crate) features: Vec<String>,
 
     /// The feature to use for the client in a fullstack app [default: "web"]
     #[clap(long)]
-    pub client_feature: Option<String>,
+    pub(crate) client_feature: Option<String>,
 
     /// The feature to use for the server in a fullstack app [default: "server"]
     #[clap(long)]
-    pub server_feature: Option<String>,
+    pub(crate) server_feature: Option<String>,
 
     /// The architecture to build for [default: "native"]
     ///
     /// Can either be `arm | arm64 | x86 | x86_64 | native`
     #[clap(long)]
-    pub arch: Option<String>,
+    pub(crate) arch: Option<String>,
 
     /// Rustc platform triple
     #[clap(long)]
-    pub target: Option<String>,
+    pub(crate) target: Option<String>,
 }
 
 impl BuildArgs {
-    pub async fn run(mut self) -> anyhow::Result<()> {
+    pub(crate) async fn run(mut self) -> anyhow::Result<()> {
         let mut dioxus_crate =
             DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 
@@ -118,7 +118,7 @@ impl BuildArgs {
         Ok(())
     }
 
-    pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
+    pub(crate) async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         self.resolve(dioxus_crate)?;
 
         // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
@@ -134,7 +134,7 @@ impl BuildArgs {
     ///
     /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
     /// fullstack variant even if they omitted the `--fullstack` flag.
-    pub fn resolve(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
+    pub(crate) fn resolve(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         // Inherit the platform from the defaults
         let platform = self
             .platform
@@ -150,7 +150,7 @@ impl BuildArgs {
         Ok(())
     }
 
-    pub fn auto_detect_client_platform(
+    pub(crate) fn auto_detect_client_platform(
         &self,
         resolved: &DioxusCrate,
     ) -> (Option<String>, Platform) {
@@ -160,7 +160,7 @@ impl BuildArgs {
         .unwrap_or_else(|| (Some("web".to_string()), Platform::Web))
     }
 
-    pub fn auto_detect_server_feature(&self, resolved: &DioxusCrate) -> Option<String> {
+    pub(crate) fn auto_detect_server_feature(&self, resolved: &DioxusCrate) -> Option<String> {
         self.find_dioxus_feature(resolved, |platform| matches!(platform, Platform::Server))
             .map(|(feature, _)| feature)
             .unwrap_or_else(|| Some("server".to_string()))
@@ -227,7 +227,7 @@ impl BuildArgs {
     }
 
     /// Get the platform from the build arguments
-    pub fn platform(&self) -> Platform {
+    pub(crate) fn platform(&self) -> Platform {
         self.platform.unwrap_or_default()
     }
 }

@@ -4,7 +4,7 @@ use cargo_generate::{GenerateArgs, TemplatePath};
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "init")]
-pub struct Init {
+pub(crate) struct Init {
     /// Template path
     #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
     template: String,
@@ -24,7 +24,7 @@ pub struct Init {
 }
 
 impl Init {
-    pub fn init(self) -> Result<()> {
+    pub(crate) fn init(self) -> Result<()> {
         let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
 
         // Get directory name.

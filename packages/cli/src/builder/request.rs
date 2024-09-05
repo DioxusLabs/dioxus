@@ -10,25 +10,25 @@ use std::path::PathBuf;
 /// As the build progresses, we'll fill in fields like assets, executable, entitlements, etc
 ///
 /// If the app needs to be bundled, we'll add the bundle info here too
-pub struct BuildRequest {
+pub(crate) struct BuildRequest {
     /// The configuration for the crate we are building
-    pub krate: DioxusCrate,
+    pub(crate) krate: DioxusCrate,
 
     /// The arguments for the build
-    pub build: BuildArgs,
+    pub(crate) build: BuildArgs,
 
     /// The rustc flags to pass to the build
-    pub rust_flags: Vec<String>,
+    pub(crate) rust_flags: Vec<String>,
 
     /// The target directory for the build
-    pub custom_target_dir: Option<PathBuf>,
+    pub(crate) custom_target_dir: Option<PathBuf>,
 
     /// Status channel to send our progress updates to
-    pub progress: ProgressTx,
+    pub(crate) progress: ProgressTx,
 }
 
 impl BuildRequest {
-    pub fn new(krate: DioxusCrate, build: BuildArgs, progress: ProgressTx) -> Self {
+    pub(crate) fn new(krate: DioxusCrate, build: BuildArgs, progress: ProgressTx) -> Self {
         Self {
             progress,
             build,
@@ -62,7 +62,7 @@ impl BuildRequest {
         }
     }
 
-    pub fn new_server(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
+    pub(crate) fn new_server(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
         if build.profile.is_none() {
             build.profile = Some(CLIENT_PROFILE.to_string());
         }
@@ -75,7 +75,7 @@ impl BuildRequest {
         )
     }
 
-    pub fn new_client(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
+    pub(crate) fn new_client(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
         if build.profile.is_none() {
             build.profile = Some(SERVER_PROFILE.to_string());
         }
@@ -89,7 +89,7 @@ impl BuildRequest {
     }
 
     /// Get the platform for this build
-    pub fn platform(&self) -> Platform {
+    pub(crate) fn platform(&self) -> Platform {
         self.build
             .platform
             .unwrap_or_else(|| self.krate.dioxus_config.application.default_platform)
@@ -102,7 +102,7 @@ impl BuildRequest {
     /// {app_name}-{platform}-{arch}
     ///
     /// Does not include the extension
-    pub fn app_name(&self) -> String {
+    pub(crate) fn app_name(&self) -> String {
         match self.platform() {
             Platform::Web => "web".to_string(),
             Platform::Desktop => todo!(),

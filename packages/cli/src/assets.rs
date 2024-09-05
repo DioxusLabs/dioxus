@@ -25,20 +25,20 @@ use crate::link::InterceptedArgs;
 ///
 /// This will be filled in primarly by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone)]
-pub struct AssetManifest {
-    pub assets: HashMap<PathBuf, ResourceAsset>,
+pub(crate) struct AssetManifest {
+    pub(crate) assets: HashMap<PathBuf, ResourceAsset>,
 }
 
 impl AssetManifest {
     /// Create a new asset manifest pre-populated with the assets from the linker intercept
-    pub fn new_from_linker_intercept(args: InterceptedArgs) -> Self {
+    pub(crate) fn new_from_linker_intercept(args: InterceptedArgs) -> Self {
         let mut manifest = Self::default();
         manifest.add_from_linker_intercept(args);
         manifest
     }
 
     /// Fill this manifest from the intercepted rustc args used to link the app together
-    pub fn add_from_linker_intercept(&mut self, args: InterceptedArgs) {
+    pub(crate) fn add_from_linker_intercept(&mut self, args: InterceptedArgs) {
         // Attempt to load the arg as a command file, otherwise just use the args themselves
         // This is because windows will pass in `@linkerargs.txt` as a source of linker args
         if let Some(command) = args.args.iter().find(|arg| arg.starts_with('@')).cloned() {
@@ -53,7 +53,7 @@ impl AssetManifest {
     /// Rustc will pass a file as link args to linkers on windows instead of args directly.
     ///
     /// We actually need to read that file and then pull out the args directly.
-    pub fn add_from_command_file(&mut self, args: InterceptedArgs, arg: &str) {
+    pub(crate) fn add_from_command_file(&mut self, args: InterceptedArgs, arg: &str) {
         let path = arg.trim().trim_start_matches('@');
         let file_binary = std::fs::read(path).unwrap();
 
@@ -88,7 +88,7 @@ impl AssetManifest {
         });
     }
 
-    pub fn add_from_linker_args(&mut self, args: InterceptedArgs) {
+    pub(crate) fn add_from_linker_args(&mut self, args: InterceptedArgs) {
         // Parse through linker args for `.o` or `.rlib` files.
         for item in args.args {
             if item.ends_with(".o") || item.ends_with(".rlib") {
@@ -98,7 +98,7 @@ impl AssetManifest {
     }
 
     /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
-    pub fn add_from_object_path(&mut self, path: PathBuf) {
+    pub(crate) fn add_from_object_path(&mut self, path: PathBuf) {
         let Some(ext) = path.extension() else {
             return;
         };
@@ -126,7 +126,7 @@ impl AssetManifest {
     }
 
     /// Fill this manifest from an rlib / ar file that contains many object files and their entryies
-    pub fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) {
+    pub(crate) fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) {
         // Look through each archive member for object files.
         // Read the archive member's binary data (we know it's an object file)
         // And parse it with the normal `object::File::parse` to find the manganis string.
@@ -144,7 +144,7 @@ impl AssetManifest {
     }
 
     /// Fill this manifest with whatever tables might come from the object file
-    pub fn add_from_object_file(&mut self, obj: &ObjectFile) -> Option<()> {
+    pub(crate) fn add_from_object_file(&mut self, obj: &ObjectFile) -> Option<()> {
         for section in obj.sections() {
             let Ok(section_name) = section.name() else {
                 continue;
@@ -188,7 +188,7 @@ impl AssetManifest {
     /// The output file is guaranteed to be the destination + the ResourceAsset bundle name
     ///
     /// Will not actually copy the asset if the source asset hasn't changed?
-    pub fn copy_asset_to(
+    pub(crate) fn copy_asset_to(
         &self,
         destination: &Path,
         target_asset: &Path,
@@ -213,7 +213,11 @@ impl AssetManifest {
     }
 }
 
-pub fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::io::Result<()> {
+pub(crate) fn copy_dir_to(
+    src_dir: PathBuf,
+    dest_dir: PathBuf,
+    pre_compress: bool,
+) -> std::io::Result<()> {
     let entries = std::fs::read_dir(&src_dir)?;
     let mut children: Vec<std::thread::JoinHandle<std::io::Result<()>>> = Vec::new();
 
@@ -281,7 +285,7 @@ fn compressed_path(path: &Path) -> Option<PathBuf> {
 }
 
 /// pre-compress a file with brotli
-pub fn pre_compress_file(path: &Path) -> std::io::Result<()> {
+pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
     let Some(compressed_path) = compressed_path(path) else {
         return Ok(());
     };
@@ -296,7 +300,7 @@ pub fn pre_compress_file(path: &Path) -> std::io::Result<()> {
 }
 
 /// pre-compress all files in a folder
-pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<()> {
+pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<()> {
     let walk_dir = WalkDir::new(path);
     for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
         let entry_path = entry.path();
@@ -319,12 +323,12 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 // use swc_common::{sync::Lrc, FileName};
 // use swc_common::{SourceMap, GLOBALS};
 
-// pub trait Process {
+// pub(crate) trait Process {
 //     fn process(&self, source: &ResourceAsset, output_path: &Path) -> anyhow::Result<()>;
 // }
 
 // /// Process a specific file asset
-// pub fn process_file(file: &ResourceAsset, output_folder: &Path) -> anyhow::Result<()> {
+// pub(crate) fn process_file(file: &ResourceAsset, output_folder: &Path) -> anyhow::Result<()> {
 //     todo!()
 //     // let location = file.location();
 //     // let source = location.source();
@@ -483,7 +487,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 //     }
 // }
 
-// pub fn minify_css(css: &str) -> String {
+// pub(crate) fn minify_css(css: &str) -> String {
 //     let mut stylesheet = StyleSheet::parse(css, ParserOptions::default()).unwrap();
 //     stylesheet.minify(MinifyOptions::default()).unwrap();
 //     let printer = PrinterOptions {
@@ -494,7 +498,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 //     res.code
 // }
 
-// pub fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
+// pub(crate) fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
 //     todo!("disabled swc due to semver issues")
 //     // let cm = Arc::<SourceMap>::default();
 
@@ -554,7 +558,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 //     }
 // }
 
-// pub fn minify_json(source: &str) -> anyhow::Result<String> {
+// pub(crate) fn minify_json(source: &str) -> anyhow::Result<String> {
 //     // First try to parse the json
 //     let json: serde_json::Value = serde_json::from_str(source)?;
 //     // Then print it in a minified format
@@ -585,7 +589,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 // }
 
 // /// Process a folder, optimizing and copying all assets into the output folder
-// pub fn process_folder(folder: &FolderAsset, output_folder: &Path) -> anyhow::Result<()> {
+// pub(crate) fn process_folder(folder: &FolderAsset, output_folder: &Path) -> anyhow::Result<()> {
 //     // Push the unique name of the folder to the output folder
 //     let output_folder = output_folder.join(folder.unique_name());
 
@@ -647,12 +651,12 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 // use swc_common::{sync::Lrc, FileName};
 // use swc_common::{SourceMap, GLOBALS};
 
-// pub trait Process {
+// pub(crate) trait Process {
 //     fn process(&self, source: &ResourceAsset, output_path: &Path) -> anyhow::Result<()>;
 // }
 
 // /// Process a specific file asset
-// pub fn process_file(file: &ResourceAsset, output_folder: &Path) -> anyhow::Result<()> {
+// pub(crate) fn process_file(file: &ResourceAsset, output_folder: &Path) -> anyhow::Result<()> {
 //     todo!()
 //     // let location = file.location();
 //     // let source = location.source();
@@ -811,7 +815,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 //     }
 // }
 
-// pub fn minify_css(css: &str) -> String {
+// pub(crate) fn minify_css(css: &str) -> String {
 //     let mut stylesheet = StyleSheet::parse(css, ParserOptions::default()).unwrap();
 //     stylesheet.minify(MinifyOptions::default()).unwrap();
 //     let printer = PrinterOptions {
@@ -822,7 +826,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 //     res.code
 // }
 
-// pub fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
+// pub(crate) fn minify_js(source: &ResourceAsset) -> anyhow::Result<String> {
 //     todo!("disabled swc due to semver issues")
 //     // let cm = Arc::<SourceMap>::default();
 
@@ -882,7 +886,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 //     }
 // }
 
-// pub fn minify_json(source: &str) -> anyhow::Result<String> {
+// pub(crate) fn minify_json(source: &str) -> anyhow::Result<String> {
 //     // First try to parse the json
 //     let json: serde_json::Value = serde_json::from_str(source)?;
 //     // Then print it in a minified format
@@ -913,7 +917,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 // }
 
 //     /// Returns the HTML that should be injected into the head of the page
-//     pub fn head(&self) -> String {
+//     pub(crate) fn head(&self) -> String {
 //         let mut head = String::new();
 //         for asset in &self.assets {
 //             if let crate::AssetType::Resource(file) = asset {
@@ -953,7 +957,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 //     }
 
 // /// An extension trait CLI support for the asset manifest
-// pub trait AssetManifestExt {
+// pub(crate) trait AssetManifestExt {
 //     /// Load a manifest from a list of Manganis JSON strings.
 //     ///
 //     /// The asset descriptions are stored inside a manifest file that is produced when the linker is intercepted.
@@ -1057,10 +1061,10 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 // }
 
 // The temp file name for passing manganis json from linker to current exec.
-// pub const MG_JSON_OUT: &str = "mg-out";
+// pub(crate) const MG_JSON_OUT: &str = "mg-out";
 
 // /// Create a head file that contains all of the imports for assets that the user project uses
-// pub fn create_assets_head(build: &BuildRequest, manifest: &AssetManifest) -> Result<()> {
+// pub(crate) fn create_assets_head(build: &BuildRequest, manifest: &AssetManifest) -> Result<()> {
 //     let out_dir = build.target_out_dir();
 //     std::fs::create_dir_all(&out_dir)?;
 //     let mut file = File::create(out_dir.join("__assets_head.html"))?;
@@ -1071,7 +1075,7 @@ pub fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<(
 // use crate::file::Process;
 
 // /// Process a folder, optimizing and copying all assets into the output folder
-// pub fn process_folder(folder: &FolderAsset, output_folder: &Path) -> anyhow::Result<()> {
+// pub(crate) fn process_folder(folder: &FolderAsset, output_folder: &Path) -> anyhow::Result<()> {
 //     // Push the unique name of the folder to the output folder
 //     let output_folder = output_folder.join(folder.unique_name());
 

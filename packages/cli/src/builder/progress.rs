@@ -15,7 +15,7 @@ impl BuildRequest {
     /// Run `cargo`, returning the location of the final exectuable
     ///
     /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
-    pub async fn build_cargo(&self) -> anyhow::Result<PathBuf> {
+    pub(crate) async fn build_cargo(&self) -> anyhow::Result<PathBuf> {
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         let crate_count = self.get_unit_count_estimate().await;
 
@@ -176,7 +176,7 @@ impl BuildRequest {
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
     /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-    pub async fn get_unit_count_estimate(&self) -> usize {
+    pub(crate) async fn get_unit_count_estimate(&self) -> usize {
         // Try to get it from nightly
         self.get_unit_count().await.unwrap_or_else(|| {
             // Otherwise, use cargo metadata
@@ -191,7 +191,7 @@ impl BuildRequest {
         })
     }
 
-    pub fn status_build_finished(&self) {
+    pub(crate) fn status_build_finished(&self) {
         tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
 
         _ = self.progress.unbounded_send(UpdateBuildProgress {
@@ -201,7 +201,7 @@ impl BuildRequest {
         });
     }
 
-    pub fn status_copying_asset(&self, cur: usize, total: usize, asset: &Path) {
+    pub(crate) fn status_copying_asset(&self, cur: usize, total: usize, asset: &Path) {
         // Update the progress
         // _ = self.progress.unbounded_send(UpdateBuildProgress {
         //     stage: Stage::OptimizingAssets,
@@ -217,7 +217,7 @@ impl BuildRequest {
         // });
     }
 
-    pub fn status_finished_asset(&self, idx: usize, total: usize, asset: &Path) {
+    pub(crate) fn status_finished_asset(&self, idx: usize, total: usize, asset: &Path) {
         // Update the progress
         // _ = self.progress.unbounded_send(UpdateBuildProgress {
         //     stage: Stage::OptimizingAssets,
@@ -227,11 +227,11 @@ impl BuildRequest {
     }
 }
 
-pub type ProgressTx = UnboundedSender<UpdateBuildProgress>;
-pub type ProgressRx = UnboundedReceiver<UpdateBuildProgress>;
+pub(crate) type ProgressTx = UnboundedSender<UpdateBuildProgress>;
+pub(crate) type ProgressRx = UnboundedReceiver<UpdateBuildProgress>;
 
 #[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
-pub enum Stage {
+pub(crate) enum Stage {
     #[default]
     Initializing = 0,
     InstallingWasmTooling = 1,
@@ -263,14 +263,14 @@ impl std::fmt::Display for Stage {
 }
 
 #[derive(Debug, Clone)]
-pub struct UpdateBuildProgress {
-    pub stage: Stage,
-    pub update: UpdateStage,
-    pub platform: Platform,
+pub(crate) struct UpdateBuildProgress {
+    pub(crate) stage: Stage,
+    pub(crate) update: UpdateStage,
+    pub(crate) platform: Platform,
 }
 
 impl UpdateBuildProgress {
-    pub fn to_std_out(&self) {
+    pub(crate) fn to_std_out(&self) {
         match &self.update {
             UpdateStage::Start => println!("--- {} ---", self.stage),
             UpdateStage::AddMessage(message) => match &message.message {
@@ -292,7 +292,7 @@ impl UpdateBuildProgress {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum UpdateStage {
+pub(crate) enum UpdateStage {
     Start,
     AddMessage(BuildMessage),
     SetProgress(f64),
@@ -300,14 +300,14 @@ pub enum UpdateStage {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct BuildMessage {
-    pub level: Level,
-    pub message: MessageType,
-    pub source: MessageSource,
+pub(crate) struct BuildMessage {
+    pub(crate) level: Level,
+    pub(crate) message: MessageType,
+    pub(crate) source: MessageSource,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum MessageType {
+pub(crate) enum MessageType {
     Cargo(Diagnostic),
     Text(String),
 }
@@ -317,7 +317,7 @@ pub enum MessageType {
 /// The CLI will render a prefix according to the message type
 /// but this prefix, [`MessageSource::to_string()`] shouldn't be used if a strict message source is required.
 #[derive(Debug, Clone, PartialEq)]
-pub enum MessageSource {
+pub(crate) enum MessageSource {
     /// Represents any message from the running application. Renders `[app]`
     App,
 

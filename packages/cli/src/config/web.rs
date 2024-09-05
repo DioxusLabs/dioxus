@@ -2,29 +2,29 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebConfig {
+pub(crate) struct WebConfig {
     #[serde(default)]
-    pub app: WebAppConfig,
+    pub(crate) app: WebAppConfig,
 
     #[serde(default)]
-    pub proxy: Vec<WebProxyConfig>,
+    pub(crate) proxy: Vec<WebProxyConfig>,
 
     #[serde(default)]
-    pub watcher: WebWatcherConfig,
+    pub(crate) watcher: WebWatcherConfig,
 
     #[serde(default)]
-    pub resource: WebResourceConfig,
+    pub(crate) resource: WebResourceConfig,
 
     #[serde(default)]
-    pub https: WebHttpsConfig,
+    pub(crate) https: WebHttpsConfig,
 
     /// Whether to enable pre-compression of assets and wasm during a web build in release mode
     #[serde(default = "true_bool")]
-    pub pre_compress: bool,
+    pub(crate) pre_compress: bool,
 
     /// The wasm-opt configuration
     #[serde(default)]
-    pub wasm_opt: WasmOptConfig,
+    pub(crate) wasm_opt: WasmOptConfig,
 }
 
 impl Default for WebConfig {
@@ -43,7 +43,7 @@ impl Default for WebConfig {
 
 /// The wasm-opt configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct WasmOptConfig {
+pub(crate) struct WasmOptConfig {
     /// The wasm-opt level to use for release builds [default: s]
     /// Options:
     /// - z: optimize aggressively for size
@@ -53,16 +53,16 @@ pub struct WasmOptConfig {
     /// - 3: optimize for even more for speed
     /// - 4: optimize aggressively for speed
     #[serde(default)]
-    pub level: WasmOptLevel,
+    pub(crate) level: WasmOptLevel,
 
     /// Keep debug symbols in the wasm file
     #[serde(default = "false_bool")]
-    pub debug: bool,
+    pub(crate) debug: bool,
 }
 
 /// The wasm-opt level to use for release web builds [default: 4]
 #[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
-pub enum WasmOptLevel {
+pub(crate) enum WasmOptLevel {
     /// Optimize aggressively for size
     #[serde(rename = "z")]
     Z,
@@ -88,15 +88,15 @@ pub enum WasmOptLevel {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebAppConfig {
+pub(crate) struct WebAppConfig {
     #[serde(default = "default_title")]
-    pub title: String,
-    pub base_path: Option<String>,
+    pub(crate) title: String,
+    pub(crate) base_path: Option<String>,
 }
 
 impl WebAppConfig {
     /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
-    pub fn base_path(&self) -> &str {
+    pub(crate) fn base_path(&self) -> &str {
         match &self.base_path {
             Some(path) => path.trim_matches('/'),
             None => ".",
@@ -114,20 +114,20 @@ impl Default for WebAppConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebProxyConfig {
-    pub backend: String,
+pub(crate) struct WebProxyConfig {
+    pub(crate) backend: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebWatcherConfig {
+pub(crate) struct WebWatcherConfig {
     #[serde(default = "watch_path_default")]
-    pub watch_path: Vec<PathBuf>,
+    pub(crate) watch_path: Vec<PathBuf>,
 
     #[serde(default)]
-    pub reload_html: bool,
+    pub(crate) reload_html: bool,
 
     #[serde(default = "true_bool")]
-    pub index_on_404: bool,
+    pub(crate) index_on_404: bool,
 }
 
 impl Default for WebWatcherConfig {
@@ -145,26 +145,26 @@ fn watch_path_default() -> Vec<PathBuf> {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct WebResourceConfig {
-    pub dev: WebDevResourceConfig,
-    pub style: Option<Vec<PathBuf>>,
-    pub script: Option<Vec<PathBuf>>,
+pub(crate) struct WebResourceConfig {
+    pub(crate) dev: WebDevResourceConfig,
+    pub(crate) style: Option<Vec<PathBuf>>,
+    pub(crate) script: Option<Vec<PathBuf>>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct WebDevResourceConfig {
+pub(crate) struct WebDevResourceConfig {
     #[serde(default)]
-    pub style: Vec<PathBuf>,
+    pub(crate) style: Vec<PathBuf>,
     #[serde(default)]
-    pub script: Vec<PathBuf>,
+    pub(crate) script: Vec<PathBuf>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct WebHttpsConfig {
-    pub enabled: Option<bool>,
-    pub mkcert: Option<bool>,
-    pub key_path: Option<String>,
-    pub cert_path: Option<String>,
+pub(crate) struct WebHttpsConfig {
+    pub(crate) enabled: Option<bool>,
+    pub(crate) mkcert: Option<bool>,
+    pub(crate) key_path: Option<String>,
+    pub(crate) cert_path: Option<String>,
 }
 
 fn true_bool() -> bool {
@@ -175,6 +175,6 @@ fn false_bool() -> bool {
     false
 }
 
-pub fn default_title() -> String {
+pub(crate) fn default_title() -> String {
     "dioxus | ⛺".into()
 }

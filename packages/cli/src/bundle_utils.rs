@@ -2,7 +2,7 @@
 
 use crate::config::BundleConfig;
 
-pub fn make_tauri_bundler_settings(bundle_config: BundleConfig) -> tauri_bundler::BundleSettings {
+pub(crate) fn make_tauri_bundler_settings(bundle_config: BundleConfig) -> tauri_bundler::BundleSettings {
     todo!()
 }
 

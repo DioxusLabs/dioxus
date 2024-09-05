@@ -1,1 +1,1 @@
-pub use crate::bundler::AppBundle;
+pub(crate) use crate::bundler::AppBundle;

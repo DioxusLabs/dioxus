@@ -7,7 +7,7 @@ use super::LogSource;
 /// One fat enum to rule them all....
 ///
 /// Thanks to libraries like winit for the inspiration
-pub enum ServeUpdate {
+pub(crate) enum ServeUpdate {
     NewConnection,
     WsMessage(WsMessage),
 

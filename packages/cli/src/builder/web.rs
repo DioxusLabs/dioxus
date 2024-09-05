@@ -14,7 +14,7 @@ const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 const TOAST_HTML: &str = include_str!("../../assets/toast.html");
 
 impl BuildRequest {
-    pub async fn run_wasm_bindgen(&self, input_path: &Path, bindgen_outdir: &Path) -> Result<()> {
+    pub(crate) async fn run_wasm_bindgen(&self, input_path: &Path, bindgen_outdir: &Path) -> Result<()> {
         tracing::info!("Running wasm-bindgen");
 
         let input_path = input_path.to_path_buf();
@@ -47,7 +47,7 @@ impl BuildRequest {
     }
 
     #[allow(unused)]
-    pub fn run_wasm_opt(&self, bindgen_outdir: &std::path::PathBuf) -> Result<(), Error> {
+    pub(crate) fn run_wasm_opt(&self, bindgen_outdir: &std::path::PathBuf) -> Result<(), Error> {
         if !self.build.release {
             return Ok(());
         };
@@ -94,7 +94,7 @@ impl BuildRequest {
     }
 
     /// Check if the wasm32-unknown-unknown target is installed and try to install it if not
-    pub async fn install_web_build_tooling(&self) -> Result<()> {
+    pub(crate) async fn install_web_build_tooling(&self) -> Result<()> {
         // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
         // Otherwise we can just assume it is installed - which is not great...
         // Eventually we can poke at the errors and let the user know they need to install the target
@@ -118,7 +118,7 @@ impl BuildRequest {
     }
 
     // Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
-    pub async fn update_wasm_bindgen_version() -> Result<()> {
+    pub(crate) async fn update_wasm_bindgen_version() -> Result<()> {
         let cli_bindgen_version = wasm_bindgen_shared::version();
         tracing::info!("Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
 
@@ -150,7 +150,7 @@ impl BuildRequest {
         Err(Error::BuildFailed(format!("WASM bindgen build failed!\nThis is probably due to the Bindgen version, dioxus-cli is using `{cli_bindgen_version}` which is not compatible with your crate.\nPlease reinstall the dioxus cli to fix this issue.\nYou can reinstall the dioxus cli by running `cargo install dioxus-cli --force` and then rebuild your project")))
     }
 
-    pub fn prepare_html(&self) -> Result<String> {
+    pub(crate) fn prepare_html(&self) -> Result<String> {
         let mut html = {
             let crate_root: &Path = &self.krate.crate_dir();
             let custom_html_file = crate_root.join("index.html");
@@ -329,7 +329,7 @@ impl BuildRequest {
     }
 
     /// Check if the build is targeting the web platform
-    pub fn targeting_web(&self) -> bool {
+    pub(crate) fn targeting_web(&self) -> bool {
         self.platform() == Platform::Web
     }
 }

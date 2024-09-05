@@ -18,7 +18,7 @@ use std::{path::PathBuf, time::Duration};
 ///
 /// This is where we do workspace discovery and recursively listen for changes in Rust files and asset
 /// directories.
-pub struct Watcher {
+pub(crate) struct Watcher {
     rx: UnboundedReceiver<notify::Event>,
     krate: DioxusCrate,
     file_map: FileMap,
@@ -30,7 +30,7 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    pub fn start(serve: &ServeArgs, krate: &DioxusCrate) -> Self {
+    pub(crate) fn start(serve: &ServeArgs, krate: &DioxusCrate) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         // Extend the watch path to include:
@@ -139,7 +139,7 @@ impl Watcher {
     }
 
     /// Wait for changed files to be detected
-    pub async fn wait(&mut self) -> ServeUpdate {
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
         // Wait for the next file to change
         let mut changes: Vec<_> = self.rx.next().await.into_iter().collect();
 
@@ -199,7 +199,7 @@ impl Watcher {
         ServeUpdate::FilesChanged { files }
     }
 
-    pub fn attempt_hot_reload(
+    pub(crate) fn attempt_hot_reload(
         &mut self,
         modified_files: Vec<PathBuf>,
         runner: &AppRunner,
@@ -265,12 +265,12 @@ impl Watcher {
     }
 
     /// Get any hot reload changes that have been applied since the last full rebuild
-    pub fn applied_hot_reload_changes(&mut self) -> Option<HotReloadMsg> {
+    pub(crate) fn applied_hot_reload_changes(&mut self) -> Option<HotReloadMsg> {
         self.applied_hot_reload_message.clone()
     }
 
     /// Clear the hot reload changes. This should be called any time a new build is starting
-    pub fn clear_hot_reload_changes(&mut self) {
+    pub(crate) fn clear_hot_reload_changes(&mut self) {
         self.applied_hot_reload_message.take();
     }
 

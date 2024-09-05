@@ -24,7 +24,7 @@ use tracing::Level;
 
 use super::{update::ServeUpdate, AppHandle, Builder, DevServer, Watcher};
 
-pub struct Output {
+pub(crate) struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
 
     // optional since when there's no tty there's no eventstream to read from - just stdin
@@ -34,7 +34,7 @@ pub struct Output {
     _rustc_nightly: bool,
     _dx_version: String,
     interactive: bool,
-    pub build_progress: BuildProgress,
+    pub(crate) build_progress: BuildProgress,
     is_cli_release: bool,
     platform: Platform,
 
@@ -58,7 +58,7 @@ enum Tab {
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub fn start(cfg: &ServeArgs) -> io::Result<Self> {
+    pub(crate) fn start(cfg: &ServeArgs) -> io::Result<Self> {
         let interactive = cfg.interactive_tty();
         let mut events = None;
 
@@ -125,7 +125,7 @@ impl Output {
     }
 
     /// Add a message from stderr to the logs
-    pub fn push_stderr(&mut self, platform: Platform, stderr: String) {
+    pub(crate) fn push_stderr(&mut self, platform: Platform, stderr: String) {
 
         // self.set_tab(Tab::BuildLog);
 
@@ -150,7 +150,7 @@ impl Output {
     }
 
     /// Add a message from stdout to the logs
-    pub fn push_stdout(&mut self, platform: Platform, stdout: String) {
+    pub(crate) fn push_stdout(&mut self, platform: Platform, stdout: String) {
 
         // self.running_apps
         //     .get_mut(&platform)
@@ -177,7 +177,7 @@ impl Output {
     /// Why is the ctrl_c handler here?
     ///
     /// Also tick animations every few ms
-    pub async fn wait(&mut self) -> ServeUpdate {
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
         let event = tokio::select! {
             Some(Ok(event)) = self.events.as_mut().unwrap().next(), if self.events.is_some() => event
         };
@@ -185,7 +185,7 @@ impl Output {
         ServeUpdate::TuiInput { event }
     }
 
-    pub fn shutdown(&mut self) -> io::Result<()> {
+    pub(crate) fn shutdown(&mut self) -> io::Result<()> {
         // if we're a tty then we need to disable the raw mode
         if self.interactive {
             disable_raw_mode()?;
@@ -196,47 +196,8 @@ impl Output {
         Ok(())
     }
 
-    /// Emit the build logs as println! statements such that the terminal has the same output as cargo
-    ///
-    /// This is used when the terminal is shutdown and we want the build logs in the terminal. Old
-    /// versions of the cli would just eat build logs making debugging issues harder than they needed
-    /// to be.
-    fn drain_print_logs(&mut self) {
-        fn log_build_message(platform: &LogSource, message: &BuildMessage) {
-            match &message.message {
-                MessageType::Text(text) => {
-                    for line in text.lines() {
-                        println!("{platform}: {line}");
-                    }
-                }
-                MessageType::Cargo(diagnostic) => {
-                    println!("{platform}: {diagnostic}");
-                }
-            }
-        }
-
-        // todo: print the build info here for the most recent build, and then the logs of the most recent build
-        for (platform, build) in self.build_progress.build_logs.iter_mut() {
-            if build.messages.is_empty() {
-                continue;
-            }
-
-            let messages = build.messages.drain(0..);
-
-            for message in messages {
-                log_build_message(&LogSource::Target(*platform), &message);
-            }
-        }
-
-        // Log the internal logs
-        let messaegs = self.build_progress.internal_logs.drain(..);
-        for message in messaegs {
-            log_build_message(&LogSource::Internal, &message);
-        }
-    }
-
     /// Handle an input event, returning `true` if the event should cause the program to restart.
-    pub fn handle_input(&mut self, input: Event) -> io::Result<bool> {
+    pub(crate) fn handle_input(&mut self, input: Event) -> io::Result<bool> {
         // let mut events = vec![event];
 
         // // Collect all the events within the next 10ms in one stream
@@ -334,7 +295,11 @@ impl Output {
         Ok(false)
     }
 
-    pub fn new_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
+    pub(crate) fn new_ws_message(
+        &mut self,
+        platform: Platform,
+        message: axum::extract::ws::Message,
+    ) {
         if let axum::extract::ws::Message::Text(text) = message {
             let msg = serde_json::from_str::<ClientMsg>(text.as_str());
             match msg {
@@ -372,21 +337,11 @@ impl Output {
         }
     }
 
-    // todo: re-enable
-    #[allow(unused)]
-    fn is_snapped(&self, _platform: LogSource) -> bool {
-        true
-        // let prev_scrol = self
-        //     .num_lines_with_wrapping
-        //     .saturating_sub(self.term_height);
-        // prev_scrol == self.scroll
-    }
-
-    pub fn scroll_to_bottom(&mut self) {
+    pub(crate) fn scroll_to_bottom(&mut self) {
         self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
     }
 
-    pub fn push_inner_log(&mut self, msg: String) {
+    pub(crate) fn push_inner_log(&mut self, msg: String) {
         self.push_log(
             LogSource::Internal,
             crate::builder::BuildMessage {
@@ -397,27 +352,7 @@ impl Output {
         );
     }
 
-    pub fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
-        let source = platform.into();
-        let snapped = self.is_snapped(source);
-
-        match source {
-            LogSource::Internal => self.build_progress.internal_logs.push(message),
-            LogSource::Target(platform) => self
-                .build_progress
-                .build_logs
-                .entry(platform)
-                .or_default()
-                .stdout_logs
-                .push(message),
-        }
-
-        if snapped {
-            self.scroll_to_bottom();
-        }
-    }
-
-    pub fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
+    pub(crate) fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
         let snapped = self.is_snapped(LogSource::Target(platform));
 
         // when the build is finished, switch to the console
@@ -436,7 +371,7 @@ impl Output {
         }
     }
 
-    pub fn new_ready_app(&mut self, handle: &AppHandle) {
+    pub(crate) fn new_ready_app(&mut self, handle: &AppHandle) {
         // for result in results {
         //     let out = build_engine
         //         .finished
@@ -474,7 +409,7 @@ impl Output {
         // }
     }
 
-    pub fn render(
+    pub(crate) fn render(
         &mut self,
         args: &ServeArgs,
         krate: &DioxusCrate,
@@ -752,10 +687,75 @@ impl Output {
         self.tab = tab;
         self.scroll = 0;
     }
+
+    fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
+        let source = platform.into();
+        let snapped = self.is_snapped(source);
+
+        match source {
+            LogSource::Internal => self.build_progress.internal_logs.push(message),
+            LogSource::Target(platform) => self
+                .build_progress
+                .build_logs
+                .entry(platform)
+                .or_default()
+                .stdout_logs
+                .push(message),
+        }
+
+        if snapped {
+            self.scroll_to_bottom();
+        }
+    }
+
+    /// Emit the build logs as println! statements such that the terminal has the same output as cargo
+    ///
+    /// This is used when the terminal is shutdown and we want the build logs in the terminal. Old
+    /// versions of the cli would just eat build logs making debugging issues harder than they needed
+    /// to be.
+    fn drain_print_logs(&mut self) {
+        fn log_build_message(platform: &LogSource, message: &BuildMessage) {
+            match &message.message {
+                MessageType::Text(text) => {
+                    for line in text.lines() {
+                        println!("{platform}: {line}");
+                    }
+                }
+                MessageType::Cargo(diagnostic) => {
+                    println!("{platform}: {diagnostic}");
+                }
+            }
+        }
+
+        // todo: print the build info here for the most recent build, and then the logs of the most recent build
+        for (platform, build) in self.build_progress.build_logs.iter_mut() {
+            if build.messages.is_empty() {
+                continue;
+            }
+
+            let messages = build.messages.drain(0..);
+
+            for message in messages {
+                log_build_message(&LogSource::Target(*platform), &message);
+            }
+        }
+
+        // Log the internal logs
+        let messaegs = self.build_progress.internal_logs.drain(..);
+        for message in messaegs {
+            log_build_message(&LogSource::Internal, &message);
+        }
+    }
+
+    // todo: re-enable
+    #[allow(unused)]
+    fn is_snapped(&self, _platform: LogSource) -> bool {
+        true
+    }
 }
 
 #[derive(Default, Debug, PartialEq)]
-pub struct ActiveBuild {
+pub(crate) struct ActiveBuild {
     stage: Stage,
     messages: Vec<BuildMessage>,
     stdout_logs: Vec<BuildMessage>,
@@ -859,7 +859,7 @@ async fn rustc_version() -> String {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LogSource {
+pub(crate) enum LogSource {
     Internal,
     Target(Platform),
 }
@@ -880,13 +880,13 @@ impl From<Platform> for LogSource {
 }
 
 #[derive(Default)]
-pub struct BuildProgress {
+pub(crate) struct BuildProgress {
     internal_logs: Vec<BuildMessage>,
     build_logs: HashMap<Platform, ActiveBuild>,
 }
 
 impl BuildProgress {
-    pub fn progress(&self) -> f64 {
+    pub(crate) fn progress(&self) -> f64 {
         self.build_logs
             .values()
             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))

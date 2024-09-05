@@ -3,94 +3,94 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct BundleConfig {
-    pub identifier: Option<String>,
-    pub publisher: Option<String>,
-    pub icon: Option<Vec<String>>,
-    pub resources: Option<Vec<String>>,
-    pub copyright: Option<String>,
-    pub category: Option<String>,
-    pub short_description: Option<String>,
-    pub long_description: Option<String>,
-    pub external_bin: Option<Vec<String>>,
-    pub deb: Option<DebianSettings>,
-    pub macos: Option<MacOsSettings>,
-    pub windows: Option<WindowsSettings>,
+pub(crate) struct BundleConfig {
+    pub(crate) identifier: Option<String>,
+    pub(crate) publisher: Option<String>,
+    pub(crate) icon: Option<Vec<String>>,
+    pub(crate) resources: Option<Vec<String>>,
+    pub(crate) copyright: Option<String>,
+    pub(crate) category: Option<String>,
+    pub(crate) short_description: Option<String>,
+    pub(crate) long_description: Option<String>,
+    pub(crate) external_bin: Option<Vec<String>>,
+    pub(crate) deb: Option<DebianSettings>,
+    pub(crate) macos: Option<MacOsSettings>,
+    pub(crate) windows: Option<WindowsSettings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct DebianSettings {
-    pub depends: Option<Vec<String>>,
-    pub files: HashMap<PathBuf, PathBuf>,
-    pub nsis: Option<NsisSettings>,
+pub(crate) struct DebianSettings {
+    pub(crate) depends: Option<Vec<String>>,
+    pub(crate) files: HashMap<PathBuf, PathBuf>,
+    pub(crate) nsis: Option<NsisSettings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct WixSettings {
-    pub language: Vec<(String, Option<PathBuf>)>,
-    pub template: Option<PathBuf>,
-    pub fragment_paths: Vec<PathBuf>,
-    pub component_group_refs: Vec<String>,
-    pub component_refs: Vec<String>,
-    pub feature_group_refs: Vec<String>,
-    pub feature_refs: Vec<String>,
-    pub merge_refs: Vec<String>,
-    pub skip_webview_install: bool,
-    pub license: Option<PathBuf>,
-    pub enable_elevated_update_task: bool,
-    pub banner_path: Option<PathBuf>,
-    pub dialog_image_path: Option<PathBuf>,
-    pub fips_compliant: bool,
+pub(crate) struct WixSettings {
+    pub(crate) language: Vec<(String, Option<PathBuf>)>,
+    pub(crate) template: Option<PathBuf>,
+    pub(crate) fragment_paths: Vec<PathBuf>,
+    pub(crate) component_group_refs: Vec<String>,
+    pub(crate) component_refs: Vec<String>,
+    pub(crate) feature_group_refs: Vec<String>,
+    pub(crate) feature_refs: Vec<String>,
+    pub(crate) merge_refs: Vec<String>,
+    pub(crate) skip_webview_install: bool,
+    pub(crate) license: Option<PathBuf>,
+    pub(crate) enable_elevated_update_task: bool,
+    pub(crate) banner_path: Option<PathBuf>,
+    pub(crate) dialog_image_path: Option<PathBuf>,
+    pub(crate) fips_compliant: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct MacOsSettings {
-    pub frameworks: Option<Vec<String>>,
-    pub minimum_system_version: Option<String>,
-    pub license: Option<String>,
-    pub exception_domain: Option<String>,
-    pub signing_identity: Option<String>,
-    pub provider_short_name: Option<String>,
-    pub entitlements: Option<String>,
-    pub info_plist_path: Option<PathBuf>,
+pub(crate) struct MacOsSettings {
+    pub(crate) frameworks: Option<Vec<String>>,
+    pub(crate) minimum_system_version: Option<String>,
+    pub(crate) license: Option<String>,
+    pub(crate) exception_domain: Option<String>,
+    pub(crate) signing_identity: Option<String>,
+    pub(crate) provider_short_name: Option<String>,
+    pub(crate) entitlements: Option<String>,
+    pub(crate) info_plist_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WindowsSettings {
-    pub digest_algorithm: Option<String>,
-    pub certificate_thumbprint: Option<String>,
-    pub timestamp_url: Option<String>,
-    pub tsp: bool,
-    pub wix: Option<WixSettings>,
-    pub icon_path: Option<PathBuf>,
-    pub webview_install_mode: WebviewInstallMode,
-    pub webview_fixed_runtime_path: Option<PathBuf>,
-    pub allow_downgrades: bool,
-    pub nsis: Option<NsisSettings>,
+pub(crate) struct WindowsSettings {
+    pub(crate) digest_algorithm: Option<String>,
+    pub(crate) certificate_thumbprint: Option<String>,
+    pub(crate) timestamp_url: Option<String>,
+    pub(crate) tsp: bool,
+    pub(crate) wix: Option<WixSettings>,
+    pub(crate) icon_path: Option<PathBuf>,
+    pub(crate) webview_install_mode: WebviewInstallMode,
+    pub(crate) webview_fixed_runtime_path: Option<PathBuf>,
+    pub(crate) allow_downgrades: bool,
+    pub(crate) nsis: Option<NsisSettings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NsisSettings {
-    pub template: Option<PathBuf>,
-    pub license: Option<PathBuf>,
-    pub header_image: Option<PathBuf>,
-    pub sidebar_image: Option<PathBuf>,
-    pub installer_icon: Option<PathBuf>,
-    pub install_mode: NSISInstallerMode,
-    pub languages: Option<Vec<String>>,
-    pub custom_language_files: Option<HashMap<String, PathBuf>>,
-    pub display_language_selector: bool,
+pub(crate) struct NsisSettings {
+    pub(crate) template: Option<PathBuf>,
+    pub(crate) license: Option<PathBuf>,
+    pub(crate) header_image: Option<PathBuf>,
+    pub(crate) sidebar_image: Option<PathBuf>,
+    pub(crate) installer_icon: Option<PathBuf>,
+    pub(crate) install_mode: NSISInstallerMode,
+    pub(crate) languages: Option<Vec<String>>,
+    pub(crate) custom_language_files: Option<HashMap<String, PathBuf>>,
+    pub(crate) display_language_selector: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum NSISInstallerMode {
+pub(crate) enum NSISInstallerMode {
     CurrentUser,
     PerMachine,
     Both,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum WebviewInstallMode {
+pub(crate) enum WebviewInstallMode {
     Skip,
     DownloadBootstrapper { silent: bool },
     EmbedBootstrapper { silent: bool },

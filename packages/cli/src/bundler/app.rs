@@ -5,15 +5,15 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 
-pub struct AppBundle {
-    pub build: BuildRequest,
-    pub workdir: PathBuf,
-    pub executable: PathBuf,
-    pub assets: AssetManifest,
+pub(crate) struct AppBundle {
+    pub(crate) build: BuildRequest,
+    pub(crate) workdir: PathBuf,
+    pub(crate) executable: PathBuf,
+    pub(crate) assets: AssetManifest,
 }
 
 impl AppBundle {
-    pub async fn new(
+    pub(crate) async fn new(
         build: BuildRequest,
         assets: AssetManifest,
         executable: PathBuf,
@@ -38,7 +38,7 @@ impl AppBundle {
     ///
     /// Perform any finishing steps here:
     /// - Signing the bundle
-    pub async fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
+    pub(crate) async fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
         match self.build.platform() {
             // Nothing special to do - just copy the workdir to the output location
             Platform::Web => {
@@ -163,7 +163,7 @@ impl AppBundle {
         Ok(())
     }
 
-    pub fn all_source_assets(&self) -> Vec<PathBuf> {
+    pub(crate) fn all_source_assets(&self) -> Vec<PathBuf> {
         // Merge the legacy asset dir assets with the assets from the manifest
         // Legacy assets need to retain their name in case they're referenced in the manifest
         // todo: we should only copy over assets that appear in `img { src: "assets/logo.png" }` to
@@ -180,7 +180,7 @@ impl AppBundle {
         Ok(())
     }
 
-    pub fn asset_dir(&self) -> PathBuf {
+    pub(crate) fn asset_dir(&self) -> PathBuf {
         let dir: PathBuf = match self.build.platform() {
             Platform::Web => self.workdir.join("assets"),
             Platform::Desktop => self.workdir.join("Resources"),
@@ -198,7 +198,7 @@ impl AppBundle {
     }
 
     /// Run the optimizers, obfuscators, minimizers, etc
-    pub async fn optimize(&self) -> Result<()> {
+    pub(crate) async fn optimize(&self) -> Result<()> {
         match self.build.platform() {
             Platform::Web => {
                 // Compress the asset dir

@@ -2,25 +2,25 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-pub mod assets;
-pub mod build_info;
-pub mod builder;
-pub mod bundle_utils;
-pub mod bundler;
-pub mod cli;
-pub mod config;
-pub mod dioxus_crate;
-pub mod error;
-pub mod fastfs;
-pub mod metadata;
-pub mod serve;
-pub mod settings;
-pub mod tools;
+pub(crate) mod assets;
+pub(crate) mod build_info;
+pub(crate) mod builder;
+pub(crate) mod bundle_utils;
+pub(crate) mod bundler;
+pub(crate) mod cli;
+pub(crate) mod config;
+pub(crate) mod dioxus_crate;
+pub(crate) mod error;
+pub(crate) mod fastfs;
+pub(crate) mod metadata;
+pub(crate) mod serve;
+pub(crate) mod settings;
+pub(crate) mod tools;
 
-pub use cli::*;
-pub use dioxus_crate::*;
-pub use error::*;
-pub use settings::*;
+pub(crate) use cli::*;
+pub(crate) use dioxus_crate::*;
+pub(crate) use error::*;
+pub(crate) use settings::*;
 
 use anyhow::Context;
 use clap::Parser;

@@ -2,17 +2,17 @@ use super::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DioxusConfig {
-    pub application: ApplicationConfig,
+pub(crate) struct DioxusConfig {
+    pub(crate) application: ApplicationConfig,
 
     #[serde(default)]
-    pub web: WebConfig,
+    pub(crate) web: WebConfig,
 
     #[serde(default)]
-    pub desktop: DesktopConfig,
+    pub(crate) desktop: DesktopConfig,
 
     #[serde(default)]
-    pub bundle: BundleConfig,
+    pub(crate) bundle: BundleConfig,
 }
 
 impl Default for DioxusConfig {

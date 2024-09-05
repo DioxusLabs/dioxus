@@ -7,10 +7,10 @@ use super::*;
 /// Clean build artifacts.
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "clean")]
-pub struct Clean {}
+pub(crate) struct Clean {}
 
 impl Clean {
-    pub fn clean(self) -> anyhow::Result<()> {
+    pub(crate) fn clean(self) -> anyhow::Result<()> {
         let dioxus_crate =
             DioxusCrate::new(&TargetArgs::default()).context("Failed to load Dioxus workspace")?;
 

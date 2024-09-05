@@ -3,11 +3,11 @@ use cargo_generate::{GenerateArgs, TemplatePath};
 use cargo_metadata::Metadata;
 use std::path::Path;
 
-pub static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
+pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
-pub struct Create {
+pub(crate) struct Create {
     /// Project name (required when `--yes` is used)
     name: Option<String>,
 
@@ -38,7 +38,7 @@ pub struct Create {
 }
 
 impl Create {
-    pub fn create(mut self) -> Result<()> {
+    pub(crate) fn create(mut self) -> Result<()> {
         let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
 
         // If we're getting pass a `.` name, that's actually a path
@@ -111,7 +111,7 @@ impl Create {
 
 /// Post-creation actions for newly setup crates.
 // Also used by `init`.
-pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
+pub(crate) fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     // 1. Add the new project to the workspace, if it exists.
     //    This must be executed first in order to run `cargo fmt` on the new project.
     metadata.and_then(|metadata| {

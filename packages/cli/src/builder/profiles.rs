@@ -2,8 +2,8 @@ use crate::dioxus_crate::DioxusCrate;
 use std::io::Write;
 use toml_edit::Item;
 
-pub static CLIENT_PROFILE: &str = "dioxus-client";
-pub static SERVER_PROFILE: &str = "dioxus-server";
+pub(crate) static CLIENT_PROFILE: &str = "dioxus-client";
+pub(crate) static SERVER_PROFILE: &str = "dioxus-server";
 
 // The `opt-level=2` increases build times, but can noticeably decrease time
 // between saving changes and being able to interact with an app. The "overall"
@@ -11,7 +11,7 @@ pub static SERVER_PROFILE: &str = "dioxus-server";
 // almost imperceptible (~1 s) but also can be very noticeable (~6 s) — depends
 // on setup (hardware, OS, browser, idle load).
 // Find or create the client and server profiles in the .cargo/config.toml file
-pub fn initialize_profiles(krate: &DioxusCrate) -> crate::Result<()> {
+pub(crate) fn initialize_profiles(krate: &DioxusCrate) -> crate::Result<()> {
     let config_path = krate.workspace_dir().join(".cargo/config.toml");
     let mut config = match std::fs::read_to_string(&config_path) {
         Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {

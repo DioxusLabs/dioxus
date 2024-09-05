@@ -3,19 +3,19 @@ use std::{env::current_dir, path::PathBuf};
 use serde::{Deserialize, Serialize};
 
 /// The env var that will be set by the linker intercept cmd to indicate that we should act as a linker
-pub const LINK_OUTPUT_ENV_VAR: &str = "dx-magic-link-file";
+pub(crate) const LINK_OUTPUT_ENV_VAR: &str = "dx-magic-link-file";
 
 /// Should we act as a linker?
 ///
 /// Just check if the magic env var is set
-pub fn should_link() -> bool {
+pub(crate) fn should_link() -> bool {
     std::env::var(LINK_OUTPUT_ENV_VAR).is_ok()
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct InterceptedArgs {
-    pub work_dir: PathBuf,
-    pub args: Vec<String>,
+pub(crate) struct InterceptedArgs {
+    pub(crate) work_dir: PathBuf,
+    pub(crate) args: Vec<String>,
 }
 
 /// Write the incoming linker args to a file
@@ -27,7 +27,7 @@ pub struct InterceptedArgs {
 ///
 /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
 /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
-pub fn dump_link_args() -> anyhow::Result<()> {
+pub(crate) fn dump_link_args() -> anyhow::Result<()> {
     let output = std::env::var(LINK_OUTPUT_ENV_VAR).expect("Missing env var with target file");
 
     // get the args and then dump them to the file

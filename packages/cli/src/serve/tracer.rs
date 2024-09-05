@@ -16,12 +16,12 @@ use super::ServeUpdate;
 static TUI_ENABLED: AtomicBool = AtomicBool::new(false);
 static TUI_TX: OnceCell<UnboundedSender<String>> = OnceCell::new();
 
-pub struct TraceController {
-    pub tui_rx: UnboundedReceiver<String>,
+pub(crate) struct TraceController {
+    pub(crate) tui_rx: UnboundedReceiver<String>,
 }
 
 impl TraceController {
-    pub fn initialize() {
+    pub(crate) fn initialize() {
         // Start a tracing instance just for serving.
         // This ensures that any tracing we do while serving doesn't break the TUI itself, and instead is
         // redirected to the serve process.
@@ -50,7 +50,7 @@ impl TraceController {
         sub.init();
     }
 
-    pub fn start() -> Self {
+    pub(crate) fn start() -> Self {
         // Create writer controller and custom writer.
         let (tui_tx, tui_rx) = unbounded();
         TUI_TX.set(tui_tx.clone()).unwrap();
@@ -60,13 +60,13 @@ impl TraceController {
     }
 
     /// Wait for the internal logger to send a message
-    pub async fn wait(&mut self) -> ServeUpdate {
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
         ServeUpdate::TracingLog {
             log: self.tui_rx.next().await.expect("tracer should never die"),
         }
     }
 
-    pub fn shutdown(&self) {
+    pub(crate) fn shutdown(&self) {
         TUI_ENABLED.store(false, Ordering::SeqCst);
     }
 }

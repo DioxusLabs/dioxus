@@ -3,7 +3,7 @@
 /// We determine this based on whether the keyword `microsoft` or `wsl` is contained within the [`WSL_1`] or [`WSL_2`] files.
 /// This may fail in the future as it isn't guaranteed by Microsoft.
 /// See https://github.com/microsoft/WSL/issues/423#issuecomment-221627364
-pub fn is_wsl() -> bool {
+pub(crate) fn is_wsl() -> bool {
     const WSL_1: &str = "/proc/sys/kernel/osrelease";
     const WSL_2: &str = "/proc/version";
     const WSL_KEYWORDS: [&str; 2] = ["microsoft", "wsl"];

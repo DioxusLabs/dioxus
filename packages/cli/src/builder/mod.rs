@@ -14,8 +14,8 @@ mod result;
 mod tooling;
 mod web;
 
-pub use builder::*;
-pub use platform::*;
-pub use progress::*;
-pub use request::*;
-pub use result::*;
+pub(crate) use builder::*;
+pub(crate) use platform::*;
+pub(crate) use progress::*;
+pub(crate) use request::*;
+pub(crate) use result::*;
