@@ -1,7 +1,4 @@
-use crate::{
-    builder::Platform,
-    serve::{next_or_pending, ServeArgs},
-};
+use crate::{builder::Platform, serve::ServeArgs};
 use crate::{
     builder::{AppBundle, BuildRequest},
     dioxus_crate::DioxusCrate,
@@ -255,7 +252,6 @@ impl DevServer {
             .enumerate()
             .map(|(idx, socket)| async move { (idx, socket.next().await) })
             .collect::<FuturesUnordered<_>>();
-        let next_new_message = next_or_pending(new_message.next());
 
         tokio::select! {
             new_hot_reload_socket = &mut new_hot_reload_socket => {
@@ -282,7 +278,7 @@ impl DevServer {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
             }
-            (idx, message) = next_new_message => {
+            Some((idx, message)) = new_message.next() => {
                 match message {
                     Some(Ok(message)) => return ServeUpdate::WsMessage(message),
                     _ => {

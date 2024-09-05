@@ -1,8 +1,8 @@
 use super::profiles::*;
 use super::progress::ProgressTx;
+use crate::build::BuildArgs;
 use crate::builder::Platform;
 use crate::dioxus_crate::DioxusCrate;
-use crate::{build::BuildArgs, bundler::BundleFormat};
 use std::path::PathBuf;
 
 /// An app that's built, bundled, processed, and a handle to its running app, if it exists

@@ -25,12 +25,12 @@ pub struct AppRunner {
 
 /// A handle to a running app
 pub struct AppHandle {
+    pub id: Uuid,
     pub app: AppBundle,
     pub executable: PathBuf,
-    pub id: Uuid,
     pub child: Option<Child>,
-    // pub stdout: Lines<BufReader<ChildStdout>>,
-    // pub stderr: Lines<BufReader<ChildStderr>>,
+    pub stdout: Option<BufReader<ChildStdout>>,
+    pub stderr: Option<BufReader<ChildStderr>>,
     // pub stdout_line: String,
     // pub stderr_line: String,
 }
@@ -117,20 +117,13 @@ impl AppRunner {
         let work_dir = std::env::temp_dir();
         let executable = app.finish(work_dir).await?;
 
-        //         stdout: BufReader::new(stdout).lines(),
-        //         stderr: BufReader::new(stderr).lines(),
-        //         stdout_line: String::new(),
-        //         stderr_line: String::new(),
-
         let mut handle = AppHandle {
             app,
             executable,
             child: None,
-            // stdout: BufReader::new(stdout).lines(),
-            // stderr: BufReader::new(stderr).lines(),
-            // stdout_line: String::new(),
-            // stderr_line: String::new(),
             id: Uuid::new_v4(),
+            stderr: None,
+            stdout: None,
         };
 
         // open the exe with some arguments/envvars/etc
@@ -158,11 +151,19 @@ impl AppRunner {
                     format!("ws://{}/_dioxus", ip),
                 )
                 .env("CARGO_MANIFEST_DIR", handle.app.build.krate.crate_dir())
+                .env(
+                    "SIMCTL_CHILD_CARGO_MANIFEST_DIR",
+                    handle.app.build.krate.crate_dir(),
+                )
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .kill_on_drop(true);
 
-                let child = cmd.spawn()?;
+                let mut child = cmd.spawn()?;
+                let stdout = BufReader::new(child.stdout.take().unwrap());
+                let stderr = BufReader::new(child.stderr.take().unwrap());
+                handle.stdout = Some(stdout);
+                handle.stderr = Some(stderr);
                 handle.child = Some(child);
             }
             Platform::Ios => {}
@@ -176,28 +177,9 @@ impl AppRunner {
         }
 
         Ok(self.running.get(&platform).unwrap())
-
-        // // First, we need to "install" the app
-        // let exe = build.finish(work_dir).await?;
-        // let mut open = match build.build.platform() {
-        //     // Run `dx http-server` to serve the app
-        //     Platform::Web => todo!(),
-
-        //     // Open up the .ipa for the .app
-        //     Platform::Ios => todo!(),
-
-        //     Platform::Desktop => Command::new("open"),
-        //     Platform::Android => todo!("Android not supported yet"),
-        //     Platform::Server | Platform::Liveview => Command::new(exe.display().to_string()),
-        // };
-
-        // todo!()
     }
 
-    fn install_app(&self, build: &AppBundle) -> Result<()> {
-        todo!()
-    }
-
+    #[allow(unused)]
     fn open_bundled_ios_app(&self, build: &AppBundle) -> std::io::Result<Option<Child>> {
         // command = "xcrun"
         // args = [

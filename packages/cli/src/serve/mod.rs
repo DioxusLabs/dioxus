@@ -2,6 +2,7 @@ use crate::builder::{BuildUpdate, Builder, Platform, Stage, UpdateBuildProgress,
 use crate::cli::serve::ServeArgs;
 use crate::DioxusCrate;
 use crate::Result;
+use std::ops::ControlFlow;
 
 mod detect;
 mod hot_reloading_file_map;
@@ -12,7 +13,6 @@ mod runner;
 mod server;
 mod tracer;
 mod update;
-mod util;
 mod watcher;
 
 use output::*;
@@ -20,7 +20,6 @@ use runner::*;
 use server::*;
 pub use tracer::*;
 use update::*;
-use util::*;
 use watcher::*;
 
 /// For *all* builds, the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
@@ -71,158 +70,23 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
             msg = tracer.wait() => msg,
         };
 
-        match msg {
-            ServeUpdate::FilesChanged { files } => {
-                if files.is_empty() || !args.should_hotreload() {
-                    continue;
-                }
-
-                // if change is hotreloadable, hotreload it
-                // and then send that update to all connected clients
-                if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {
-                    // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                    if hr.templates.is_empty() && hr.assets.is_empty() {
-                        continue;
-                    }
-
-                    devserver.send_hotreload(hr).await;
-                } else {
-                    // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    builder.build(args.build_arguments.clone())?;
-
-                    // Clear the hot reload changes
-                    watcher.clear_hot_reload_changes();
-
-                    // Tell the server to show a loading page for any new requests
-                    devserver.start_build().await;
-                }
+        match handle_msg(
+            msg,
+            &args,
+            &mut devserver,
+            &mut screen,
+            &mut builder,
+            &mut runner,
+            &mut watcher,
+        )
+        .await
+        {
+            Ok(ControlFlow::Break(())) => break,
+            Ok(ControlFlow::Continue(())) => {}
+            Err(e) => {
+                tracing::error!("Error handling message: {}", e);
+                break;
             }
-
-            // Run the server in the background
-            // Waiting for updates here lets us tap into when clients are added/removed
-            ServeUpdate::NewConnection => {
-                if let Some(msg) = watcher.applied_hot_reload_changes() {
-                    devserver.send_hotreload(msg).await;
-                }
-            }
-
-            // Received a message from the devtools server - currently we only use this for
-            // logging, so we just forward it the tui
-            ServeUpdate::WsMessage(msg) => {
-                screen.new_ws_message(Platform::Web, msg);
-            }
-
-            // Wait for logs from the build engine
-            // These will cause us to update the screen
-            // We also can check the status of the builds here in case we have multiple ongoing builds
-            ServeUpdate::BuildUpdate(BuildUpdate::Progress(update)) => {
-                let update_clone = update.clone();
-                screen.new_build_logs(update.platform, update_clone);
-                devserver
-                    .update_build_status(screen.build_progress.progress(), update.stage.to_string())
-                    .await;
-
-                match update {
-                    // Send rebuild start message.
-                    UpdateBuildProgress {
-                        stage: Stage::Compiling,
-                        update: UpdateStage::Start,
-                        platform: _,
-                    } => devserver.send_reload_start().await,
-
-                    // Send rebuild failed message.
-                    UpdateBuildProgress {
-                        stage: Stage::Finished,
-                        update: UpdateStage::Failed(_),
-                        platform: _,
-                    } => devserver.send_reload_failed().await,
-
-                    _ => {}
-                }
-            }
-
-            ServeUpdate::BuildUpdate(BuildUpdate::BuildFailed { err, .. }) => {
-                devserver.send_build_error(err).await;
-            }
-
-            ServeUpdate::BuildUpdate(BuildUpdate::BuildReady { target, result }) => {
-                tracing::info!("Opening app for [{}]", target);
-
-                match runner
-                    .open(result, devserver.ip, devserver.fullstack_address())
-                    .await
-                {
-                    Ok(handle) => {
-                        // Make sure we immediately capture the stdout/stderr of the executable -
-                        // otherwise it'll clobber our terminal output
-                        screen.new_ready_app(handle);
-
-                        // And then finally tell the server to reload
-                        devserver.send_reload_command().await;
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to open app: {}", e);
-                    }
-                }
-            }
-
-            ServeUpdate::StdoutReceived { target, msg } => {}
-
-            ServeUpdate::StderrReceived { target, msg } => {}
-
-            // nothing - the builder just signals that there are no more pending builds
-            // maybe ping the logger to wipe any logs and/or clear the screen
-            ServeUpdate::BuildUpdate(BuildUpdate::Finished) => {}
-
-            // If the process exited *cleanly*, we can exit
-            ServeUpdate::ProcessExited {
-                status,
-                target_platform,
-            } => {
-                // // Then remove the child process
-                // builder
-                //     .children
-                //     .retain(|(platform, _)| *platform != target_platform);
-                // match status {
-                //     Ok(status) => {
-                //         if status.success() {
-                //             break;
-                //         } else {
-                //             tracing::error!("Application exited with status: {status}");
-                //         }
-                //     }
-                //     Err(e) => {
-                //         tracing::error!("Application exited with error: {e}");
-                //     }
-                // }
-            }
-
-            // Handle TUI input and maybe even rebuild the app
-            ServeUpdate::TuiInput { event } => {
-                let should_rebuild = screen.handle_input(event);
-                match should_rebuild {
-                    Ok(true) => {
-                        builder.build(args.build_arguments.clone())?;
-                        devserver.start_build().await
-                    }
-                    Ok(false) => {}
-                    Err(_) => break,
-                }
-            }
-
-            ServeUpdate::TracingLog { log } => {
-                screen.push_log(
-                    LogSource::Internal,
-                    crate::builder::BuildMessage {
-                        level: tracing::Level::INFO,
-                        message: crate::builder::MessageType::Text(log),
-                        source: crate::builder::MessageSource::Dev,
-                    },
-                );
-            }
-
-            // A fatal error occured and we need to exit + cleanup
-            ServeUpdate::Fatal { err } => break,
         }
     }
 
@@ -233,4 +97,162 @@ pub async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
     _ = tracer.shutdown();
 
     Ok(())
+}
+
+async fn handle_msg(
+    msg: ServeUpdate,
+    args: &ServeArgs,
+    devserver: &mut DevServer,
+    screen: &mut Output,
+    builder: &mut Builder,
+    runner: &mut AppRunner,
+    watcher: &mut Watcher,
+) -> Result<ControlFlow<()>> {
+    match msg {
+        ServeUpdate::FilesChanged { files } => {
+            if files.is_empty() || !args.should_hotreload() {
+                return Ok(ControlFlow::Continue(()));
+            }
+
+            // if change is hotreloadable, hotreload it
+            // and then send that update to all connected clients
+            if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {
+                // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+                if hr.templates.is_empty() && hr.assets.is_empty() {
+                    return Ok(ControlFlow::Continue(()));
+                }
+
+                devserver.send_hotreload(hr).await;
+            } else {
+                // We're going to kick off a new build, interrupting the current build if it's ongoing
+                builder.build(args.build_arguments.clone())?;
+
+                // Clear the hot reload changes
+                watcher.clear_hot_reload_changes();
+
+                // Tell the server to show a loading page for any new requests
+                devserver.start_build().await;
+            }
+        }
+
+        // Run the server in the background
+        // Waiting for updates here lets us tap into when clients are added/removed
+        ServeUpdate::NewConnection => {
+            if let Some(msg) = watcher.applied_hot_reload_changes() {
+                devserver.send_hotreload(msg).await;
+            }
+        }
+
+        // Received a message from the devtools server - currently we only use this for
+        // logging, so we just forward it the tui
+        ServeUpdate::WsMessage(msg) => {
+            screen.new_ws_message(Platform::Web, msg);
+        }
+
+        // Wait for logs from the build engine
+        // These will cause us to update the screen
+        // We also can check the status of the builds here in case we have multiple ongoing builds
+        ServeUpdate::BuildUpdate(BuildUpdate::Progress(update)) => {
+            let update_clone = update.clone();
+            screen.new_build_logs(update.platform, update_clone);
+            devserver
+                .update_build_status(screen.build_progress.progress(), update.stage.to_string())
+                .await;
+
+            match update {
+                // Send rebuild start message.
+                UpdateBuildProgress {
+                    stage: Stage::Compiling,
+                    update: UpdateStage::Start,
+                    platform: _,
+                } => devserver.send_reload_start().await,
+
+                // Send rebuild failed message.
+                UpdateBuildProgress {
+                    stage: Stage::Finished,
+                    update: UpdateStage::Failed(_),
+                    platform: _,
+                } => devserver.send_reload_failed().await,
+
+                _ => {}
+            }
+        }
+
+        ServeUpdate::BuildUpdate(BuildUpdate::BuildFailed { err, .. }) => {
+            devserver.send_build_error(err).await;
+        }
+
+        ServeUpdate::BuildUpdate(BuildUpdate::BuildReady { target, result }) => {
+            tracing::info!("Opening app for [{}]", target);
+
+            match runner
+                .open(result, devserver.ip, devserver.fullstack_address())
+                .await
+            {
+                Ok(handle) => {
+                    // Make sure we immediately capture the stdout/stderr of the executable -
+                    // otherwise it'll clobber our terminal output
+                    screen.new_ready_app(handle);
+
+                    // And then finally tell the server to reload
+                    devserver.send_reload_command().await;
+                }
+                Err(e) => {
+                    tracing::error!("Failed to open app: {}", e);
+                }
+            }
+        }
+
+        ServeUpdate::StdoutReceived { target, msg } => {}
+
+        ServeUpdate::StderrReceived { target, msg } => {}
+
+        // nothing - the builder just signals that there are no more pending builds
+        // maybe ping the logger to wipe any logs and/or clear the screen
+        ServeUpdate::BuildUpdate(BuildUpdate::Finished) => {}
+
+        // If the process exited *cleanly*, we can exit
+        ServeUpdate::ProcessExited {
+            status,
+            target_platform,
+        } => {
+            // // Then remove the child process
+            // builder
+            //     .children
+            //     .retain(|(platform, _)| *platform != target_platform);
+            // match status {
+            //     Ok(status) => {
+            //         if status.success() {
+            //             break;
+            //         } else {
+            //             tracing::error!("Application exited with status: {status}");
+            //         }
+            //     }
+            //     Err(e) => {
+            //         tracing::error!("Application exited with error: {e}");
+            //     }
+            // }
+        }
+
+        ServeUpdate::TuiInput { event } => {
+            let should_rebuild = screen.handle_input(event)?;
+            if should_rebuild {
+                builder.build(args.build_arguments.clone())?;
+                devserver.start_build().await
+            }
+        }
+
+        ServeUpdate::TracingLog { log } => {
+            screen.push_log(
+                LogSource::Internal,
+                crate::builder::BuildMessage {
+                    level: tracing::Level::INFO,
+                    message: crate::builder::MessageType::Text(log),
+                    source: crate::builder::MessageSource::Dev,
+                },
+            );
+        }
+    }
+
+    Ok(ControlFlow::Continue(()))
 }

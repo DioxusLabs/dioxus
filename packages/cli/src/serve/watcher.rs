@@ -41,6 +41,7 @@ impl Watcher {
         allow_watch_path.push(krate.dioxus_config.application.asset_dir.clone());
         allow_watch_path.push("Cargo.toml".to_string().into());
         allow_watch_path.push("Dioxus.toml".to_string().into());
+        allow_watch_path.push("assets".to_string().into());
         allow_watch_path.dedup();
 
         let crate_dir = krate.crate_dir();

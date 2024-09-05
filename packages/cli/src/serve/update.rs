@@ -49,8 +49,4 @@ pub enum ServeUpdate {
         // source: LogSource,
         log: String,
     },
-
-    Fatal {
-        err: Box<dyn std::error::Error + Send + Sync>,
-    },
 }

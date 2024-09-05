@@ -4,7 +4,7 @@ pub const DEVSERVER_RAW_ADDR_ENV: &str = "DIOXUS_DEVSERVER_ADDR";
 pub const FULLSTACK_ADDRESS_ENV: &str = "DIOXUS_FULLSTACK_ADDRESS";
 
 /// when targetting ios, we need to set a prefix to the argument such that it gets picked up by simctl
-pub const IOS_DEVSERVER_ADDR_ENV: &str = "SIMCTL_CHILDDIOXUS_DEVSERVER_ADDR";
+pub const IOS_DEVSERVER_ADDR_ENV: &str = "SIMCTL_CHILD_DIOXUS_DEVSERVER_ADDR";
 
 /// Get the address of the devserver for use over a raw socket
 ///

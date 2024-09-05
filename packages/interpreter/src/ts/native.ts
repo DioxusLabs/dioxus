@@ -336,6 +336,8 @@ export class NativeInterpreter extends JSChannel_ {
 
 
   kickAllStylesheetsOnPage() {
+    console.log("kicking all stylesheets");
+
     // If this function is being called and we have not explicitly set kickStylesheets to true, then we should
     // force kick the stylesheets, regardless if they have a dioxus attribute or not
     // This happens when any hotreload happens.
