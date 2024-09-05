@@ -6,6 +6,10 @@ use std::any::Any;
 
 use crate::prelude::*;
 
+pub fn launch_builder() -> LaunchBuilder {
+    LaunchBuilder::new()
+}
+
 pub fn launch(app: fn() -> Element) {
     #[allow(deprecated)]
     LaunchBuilder::new().launch(app)
@@ -397,7 +401,7 @@ impl LaunchBuilder {
 // #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
 // /// Launch your fullstack application without any additional configuration. See [`LaunchBuilder`] for more options.
 // pub fn launch_fullstack(app: fn() -> Element) {
-//     LaunchBuilder::fullstack().launch(app)
+//     LaunchBuilder::new().launch(app)
 // }
 
 // #[cfg(feature = "mobile")]
