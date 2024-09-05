@@ -402,7 +402,7 @@ impl Output {
                 if mouse.modifiers.contains(SCROLL_MODIFIER_KEY) {
                     scroll_speed += SCROLL_MODIFIER;
                 }
-                self.scroll_position = self.scroll_position.saturating_sub(scroll_speed).into();
+                self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
                 self.reset_drag();
             }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollDown => {
@@ -443,6 +443,13 @@ impl Output {
                     }
                     self.scroll_position += scroll_speed;
                     self.reset_drag();
+                }
+            }
+            Event::Key(key) if key.code == KeyCode::Left && key.kind == KeyEventKind::Press => {
+                // Remove selected filter if filter menu is shown.
+                if self.show_filter_menu {
+                    let index = self.selected_filter_index;
+                    self.filters.remove(index);
                 }
             }
             Event::Key(key) if key.code == KeyCode::Right && key.kind == KeyEventKind::Press => {
@@ -541,8 +548,7 @@ impl Output {
         {
             self.scroll_position = self
                 .num_lines_wrapping
-                .saturating_sub(self.console_height + 1)
-                .into();
+                .saturating_sub(self.console_height + 1);
         }
 
         Ok(false)
@@ -596,10 +602,7 @@ impl Output {
     }
 
     pub fn scroll_to_bottom(&mut self) {
-        self.scroll_position = self
-            .num_lines_wrapping
-            .saturating_sub(self.console_height)
-            .into();
+        self.scroll_position = self.num_lines_wrapping.saturating_sub(self.console_height);
     }
 
     pub fn push_log(&mut self, message: Message) {
@@ -697,9 +700,21 @@ impl Output {
                 // Render the decor first as some of it (such as backgrounds) may be rendered on top of.
                 layout.render_decor(frame, self.show_filter_menu);
 
+                // Get only the enabled filters.
+                let mut enabled_filters = self.filters.clone();
+                enabled_filters.retain(|f| f.1);
+                let enabled_filters = enabled_filters
+                    .iter()
+                    .map(|f| f.0.clone())
+                    .collect::<Vec<String>>();
+
                 // Render console, we need the number of wrapping lines for scroll.
-                self.num_lines_wrapping =
-                    layout.render_console(frame, self.scroll_position, &self.messages);
+                self.num_lines_wrapping = layout.render_console(
+                    frame,
+                    self.scroll_position,
+                    &self.messages,
+                    &enabled_filters,
+                );
 
                 layout.render_selection(
                     frame,

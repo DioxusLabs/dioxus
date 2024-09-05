@@ -1,13 +1,4 @@
 //! This module contains functions to render different elements on the TUI frame.
-//!
-//! The current TUI layout is:
-//! ------------
-//! -- CONSOLE--
-//! ------------
-//! ---BORDER---
-//! {OPT DRAWER}
-//! {OPT BORDER}
-//! -STATUS BAR-
 
 use super::{BuildProgress, Message, MessageSource};
 use ansi_to_tui::IntoText as _;
@@ -22,6 +13,7 @@ use ratatui::{
     },
     Frame,
 };
+use regex::Regex;
 use std::fmt::Write as _;
 use std::rc::Rc;
 use tracing::Level;
@@ -225,12 +217,11 @@ impl TuiLayout {
         frame: &mut Frame,
         scroll_position: u16,
         messages: &[Message],
+        enabled_filters: &[String],
     ) -> u16 {
-        // TODO: Fancy filtering support "show me only app logs from web"
         let console = self.console[0];
         let mut out_text = Text::default();
 
-        // Filter logs for current tab.
         // Display in order they were created.
         let msgs = messages.iter();
 
@@ -320,6 +311,48 @@ impl TuiLayout {
                 };
 
                 out_text.push_line(Line::from(out_line));
+            }
+        }
+
+        // Only show messages for filters that are enabled.
+        let mut included_line_ids = Vec::new();
+
+        for filter in enabled_filters {
+            let re = Regex::new(filter);
+            for (index, line) in out_text.lines.iter().enumerate() {
+                let line_str = line.to_string();
+                match re {
+                    Ok(ref re) => {
+                        // sort by provided regex
+                        if re.is_match(&line_str) {
+                            included_line_ids.push(index);
+                        }
+                    }
+                    Err(_) => {
+                        // default to basic string storing
+                        if line_str.contains(filter) {
+                            included_line_ids.push(index);
+                        }
+                    }
+                }
+            }
+        }
+
+        included_line_ids.sort_unstable();
+        included_line_ids.dedup();
+
+        let out_lines = out_text.lines;
+        let mut out_text = Text::default();
+
+        if enabled_filters.is_empty() {
+            for line in out_lines {
+                out_text.push_line(line.clone());
+            }
+        } else {
+            for id in included_line_ids {
+                if let Some(line) = out_lines.get(id) {
+                    out_text.push_line(line.clone());
+                }
             }
         }
 
@@ -477,7 +510,7 @@ impl TuiLayout {
             .constraints([
                 Constraint::Length(4),
                 Constraint::Fill(1),
-                Constraint::Length(5),
+                Constraint::Length(7),
             ])
             .direction(Direction::Vertical)
             .split(filter_drawer[1]);
@@ -535,8 +568,10 @@ impl TuiLayout {
         // Render the keybind list at the bottom.
         let keybinds = container[2];
         let lines = vec![
+            Line::from(""),
             Line::from("[↑] Up").white(),
             Line::from("[↓] Down").white(),
+            Line::from("[←] Remove").white(),
             Line::from("[→] Toggle").white(),
             Line::from("[enter] Type / Submit").white(),
         ];
