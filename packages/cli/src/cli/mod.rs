@@ -5,6 +5,7 @@ pub(crate) mod check;
 pub(crate) mod clean;
 pub(crate) mod config;
 pub(crate) mod create;
+pub(crate) mod doctor;
 pub(crate) mod httpserver;
 pub(crate) mod init;
 pub(crate) mod link;
@@ -89,6 +90,10 @@ pub(crate) enum Commands {
     #[clap(name = "run")]
     Run(run::RunArgs),
 
+    /// Ensure all the tooling is installed and configured correctly
+    #[clap(name = "doctor")]
+    Doctor(doctor::Doctor),
+
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
@@ -109,6 +114,7 @@ impl Display for Commands {
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::HttpServer(_) => write!(f, "http-server"),
             Commands::Run(_) => write!(f, "run"),
+            Commands::Doctor(_) => write!(f, "doctor"),
         }
     }
 }

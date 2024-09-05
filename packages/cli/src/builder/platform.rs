@@ -88,16 +88,6 @@ impl Display for Platform {
 }
 
 impl Platform {
-    /// All platforms the dioxus CLI supports
-    pub(crate) const ALL: &'static [Self] = &[
-        Platform::Web,
-        Platform::Desktop,
-        Platform::Ios,
-        Platform::Android,
-        Platform::Liveview,
-        Platform::Server,
-    ];
-
     /// Get the feature name for the platform in the dioxus crate
     pub(crate) fn feature_name(&self) -> &str {
         match self {

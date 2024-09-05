@@ -62,5 +62,7 @@ async fn main() -> anyhow::Result<()> {
         Run(opts) => opts.run().await.context("🚫 Running project failed:"),
 
         HttpServer(opts) => opts.serve().await.context("🚫 Serving project failed:"),
+
+        Doctor(opts) => opts.run().await.context("🚫 Checking project failed:"),
     }
 }
