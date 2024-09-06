@@ -11,10 +11,8 @@ use dioxus_core::{
     TemplateAttribute, VNode,
 };
 use dioxus_core_types::HotReloadingContext;
-use dioxus_rsx::{
-    hot_reload::{self, diff_rsx, ChangedRsx, HotReloadResult},
-    CallBody,
-};
+use dioxus_rsx::CallBody;
+use dioxus_rsx_hotreload::{self, diff_rsx, ChangedRsx, HotReloadResult};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, spanned::Spanned, token::Token, File};

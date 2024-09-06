@@ -1,9 +1,6 @@
 use crate::DesktopService;
 use dioxus_document::{Document, Eval, EvalError};
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 impl Document for DesktopService {
     fn set_title(&self, title: String) {

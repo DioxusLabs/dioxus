@@ -1,5 +1,5 @@
 [package]
-name = "rsx-rosetta"
+name = "dioxus-rsx-rosetta"
 version = { workspace = true }
 edition = "2021"
 authors = ["Jonathan Kelley"]

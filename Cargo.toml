@@ -102,7 +102,7 @@ dioxus-autofmt = { path = "packages/autofmt", version = "0.6.0-alpha.2" }
 dioxus-check = { path = "packages/check", version = "0.6.0-alpha.2" }
 dioxus-rsx = { path = "packages/rsx", version = "0.6.0-alpha.2" }
 dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.6.0-alpha.2" }
-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.2" }
+dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.2" }
 dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.2" }
@@ -182,6 +182,9 @@ chrono = { version = "0.4.34" }
 gloo = { version = "0.8.0" }
 gloo-utils = { version = "0.1.6" }
 rustversion = "1.0.17"
+rand = "0.8.5"
+longest-increasing-subsequence = "0.1.0"
+trybuild = "1.0"
 
 # desktop
 wry = { version = "0.42.0", default-features = false }

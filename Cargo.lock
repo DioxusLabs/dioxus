@@ -2413,6 +2413,7 @@ dependencies = [
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-rsx-hotreload",
+ "dioxus-rsx-rosetta",
  "dioxus-runtime-config",
  "dirs",
  "env_logger",
@@ -2437,7 +2438,6 @@ dependencies = [
  "ratatui",
  "rayon",
  "reqwest",
- "rsx-rosetta",
  "rustls 0.23.12",
  "serde",
  "serde_json",
@@ -2629,8 +2629,8 @@ name = "dioxus-ext"
 version = "0.6.0-alpha.2"
 dependencies = [
  "dioxus-autofmt",
+ "dioxus-rsx-rosetta",
  "html_parser",
- "rsx-rosetta",
  "syn 2.0.75",
  "wasm-bindgen",
 ]
@@ -2935,6 +2935,21 @@ dependencies = [
  "quote",
  "syn 2.0.75",
  "tracing",
+]
+
+[[package]]
+name = "dioxus-rsx-rosetta"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "convert_case 0.6.0",
+ "dioxus-autofmt",
+ "dioxus-html",
+ "dioxus-rsx",
+ "html_parser",
+ "pretty_assertions",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.75",
 ]
 
 [[package]]
@@ -8046,21 +8061,6 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "rsx-rosetta"
-version = "0.6.0-alpha.2"
-dependencies = [
- "convert_case 0.6.0",
- "dioxus-autofmt",
- "dioxus-html",
- "dioxus-rsx",
- "html_parser",
- "pretty_assertions",
- "proc-macro2",
- "quote",
- "syn 2.0.75",
 ]
 
 [[package]]
