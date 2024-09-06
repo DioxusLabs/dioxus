@@ -163,4 +163,8 @@ pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
     pub use dioxus_document as document;
+
+    #[cfg(feature = "liveview")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "liveview")))]
+    pub use dioxus_liveview as liveview;
 }

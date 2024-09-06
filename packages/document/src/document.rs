@@ -291,4 +291,12 @@ pub trait Document: 'static {
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
     fn updater(&self, callback: Arc<dyn Fn()>) {}
+
+    /// Whether the history provider is synchronous or asynchronous.
+    ///
+    /// Generally we only support synchronous history providers, but some platforms like liveview
+    /// may need to be asynchronous.
+    fn is_synchronous(&self) -> bool {
+        true
+    }
 }

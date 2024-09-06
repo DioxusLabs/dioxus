@@ -71,6 +71,7 @@ members = [
     "example-projects/tailwind",
     "example-projects/pwa",
     "example-projects/basic-liveview",
+    "example-projects/liveview-router",
 ]
 
 [workspace.package]

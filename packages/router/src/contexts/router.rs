@@ -1,4 +1,3 @@
-use core::panic;
 use std::{
     any::Any,
     collections::HashSet,
@@ -29,7 +28,7 @@ struct RouterContextInner {
 
     runtime: Rc<Runtime>,
 
-    history: DocumentContext,
+    document: DocumentContext,
 
     unresolved_error: Option<ExternalNavigationFailure>,
 
@@ -51,7 +50,7 @@ impl RouterContext {
             basepath: Default::default(),
             unresolved_error: None,
             subscribers: subscribers.clone(),
-            history: todo!(),
+            document: todo!(),
             // history: cfg.take_history(),
 
             // subscriber_update,
@@ -97,7 +96,7 @@ impl RouterContext {
         // set the updater
         {
             let rt = myself.runtime.clone();
-            myself.history.updater(Arc::new(move || {
+            myself.document.updater(Arc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {
                     rt.mark_dirty(id);
                 }
@@ -111,15 +110,8 @@ impl RouterContext {
 
     /// Check if the router is running in a liveview context
     /// We do some slightly weird things for liveview because of the network boundary
-    pub fn is_liveview(&self) -> bool {
-        #[cfg(feature = "liveview")]
-        {
-            self.inner.read().history.is_liveview()
-        }
-        #[cfg(not(feature = "liveview"))]
-        {
-            false
-        }
+    pub fn is_synchronous(&self) -> bool {
+        self.inner.read().document.is_synchronous()
     }
 
     pub(crate) fn route_from_str<R: Routable>(&self, route: &str) -> Result<R, String> {
@@ -130,13 +122,13 @@ impl RouterContext {
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
-        self.inner.read().history.can_go_back()
+        self.inner.read().document.can_go_back()
     }
 
     /// Check whether there is a future page to navigate forward to.
     #[must_use]
     pub fn can_go_forward(&self) -> bool {
-        self.inner.read().history.can_go_forward()
+        self.inner.read().document.can_go_forward()
     }
 
     /// Go back to the previous location.
@@ -144,7 +136,7 @@ impl RouterContext {
     /// Will fail silently if there is no previous location to go to.
     pub fn go_back(&self) {
         {
-            self.inner.write_unchecked().history.go_back();
+            self.inner.write_unchecked().document.go_back();
         }
 
         self.change_route();
@@ -155,7 +147,7 @@ impl RouterContext {
     /// Will fail silently if there is no next location to go to.
     pub fn go_forward(&self) {
         {
-            self.inner.write_unchecked().history.go_forward();
+            self.inner.write_unchecked().document.go_forward();
         }
 
         self.change_route();
@@ -169,7 +161,7 @@ impl RouterContext {
             NavigationTarget::Internal(p) => self
                 .inner
                 .write_unchecked()
-                .history
+                .document
                 .push_route(p.serialize()),
             NavigationTarget::External(e) => return self.navigate_external(e),
         }
@@ -225,7 +217,7 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current_route_string(&self) -> String {
-        self.inner.read_unchecked().history.current_route()
+        self.inner.read_unchecked().document.current_route()
     }
 
     pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
@@ -317,7 +309,7 @@ impl RouterContext {
     fn navigate_external(&self, external: String) -> Option<ExternalNavigationFailure> {
         let failure = {
             let mut myself = self.inner.write_unchecked();
-            match myself.history.navigate_external(external.clone()) {
+            match myself.document.navigate_external(external.clone()) {
                 true => None,
                 false => {
                     let failure = ExternalNavigationFailure(external);

@@ -5882,6 +5882,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "liveview-router"
+version = "0.1.0"
+dependencies = [
+ "axum 0.7.5",
+ "dioxus",
+ "tokio",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"

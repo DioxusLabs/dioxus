@@ -229,7 +229,7 @@ pub fn Link(props: LinkProps) -> Element {
     let liveview_prevent_default = {
         // If the event is a click with the left mouse button and no modifiers, prevent the default action
         // and navigate to the href with client side routing
-        router.is_liveview().then_some(
+        router.is_synchronous().then_some(
             "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"
         )
     };

@@ -1,13 +1,12 @@
 use dioxus::prelude::*;
 use std::str::FromStr;
 
-#[cfg(feature = "liveview")]
 #[tokio::main]
 async fn main() {
     use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
 
     let listen_address: std::net::SocketAddr = ([127, 0, 0, 1], 3030).into();
-    let view = dioxus_liveview::LiveViewPool::new();
+    let view = liveview::LiveViewPool::new();
     let app = Router::new()
         .fallback(get(move || async move {
             Html(format!(
@@ -19,14 +18,14 @@ async fn main() {
                         {glue}
                     </html>
                 "#,
-                glue = dioxus_liveview::interpreter_glue(&format!("ws://{listen_address}/ws"))
+                glue = liveview::interpreter_glue(&format!("ws://{listen_address}/ws"))
             ))
         }))
         .route(
             "/ws",
             get(move |ws: WebSocketUpgrade| async move {
                 ws.on_upgrade(move |socket| async move {
-                    _ = view.launch(dioxus_liveview::axum_socket(socket), app).await;
+                    _ = view.launch(liveview::axum_socket(socket), app).await;
                 })
             }),
         );
@@ -40,11 +39,6 @@ async fn main() {
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
-}
-
-#[cfg(not(feature = "liveview"))]
-fn main() {
-    dioxus::launch(app)
 }
 
 fn app() -> Element {
