@@ -180,15 +180,22 @@ impl LaunchBuilder {
     // #[cfg(any(feature = "static-generation", feature = "web"))]
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
+        #[cfg(feature = "web")]
+        {
+            dioxus_web::launch::launch(app, Default::default(), Default::default());
+        }
+
+        #[cfg(feature = "liveview")]
+        {
+            dioxus_liveview::launch::launch(app, Default::default(), Default::default());
+        }
+
         #[cfg(feature = "fullstack")]
         {
             dioxus_fullstack::launch::launch(app, Default::default(), Default::default());
         }
 
-        #[cfg(feature = "web")]
-        {
-            dioxus_web::launch::launch(app, Default::default(), Default::default());
-        }
+        panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, fullstack to use the launch API.")
     }
 }
 

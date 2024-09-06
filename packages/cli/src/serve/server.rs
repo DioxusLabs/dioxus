@@ -75,20 +75,20 @@ impl DevServer {
         let start_browser = args.open.unwrap_or_default();
 
         // If we're serving a fullstack app, we need to find a port to proxy to
-        let fullstack_port = if args.should_boot_default_server() {
+        let proxied_port = if args.should_proxy_build() {
             get_available_port(addr.ip())
         } else {
             None
         };
 
-        let fullstack_address = fullstack_port.map(|port| SocketAddr::new(addr.ip(), port));
+        let proxied_address = proxied_port.map(|port| SocketAddr::new(addr.ip(), port));
 
         let router = Self::setup_router(
             args,
             cfg,
             hot_reload_sockets_tx,
             build_status_sockets_tx,
-            fullstack_address,
+            proxied_address,
             build_status.clone(),
         )
         .unwrap();
@@ -100,6 +100,7 @@ impl DevServer {
 
         let listener = std::net::TcpListener::bind(addr).expect("Failed to bind port");
         _ = listener.set_nonblocking(true);
+
         let addr = listener.local_addr().unwrap();
 
         let _server_task = tokio::spawn(async move {
@@ -139,7 +140,7 @@ impl DevServer {
             new_build_status_sockets: build_status_sockets_rx,
             _server_task,
             ip: addr,
-            fullstack_port,
+            fullstack_port: proxied_port,
 
             build_status,
             application_name: cfg.dioxus_config.application.name.clone(),
@@ -327,36 +328,16 @@ impl DevServer {
         build_status: SharedStatus,
     ) -> Result<Router> {
         let mut router = Router::new();
-        let platform = args.build_arguments.platform();
 
         // Setup proxy for the endpoint specified in the config
         for proxy_config in krate.dioxus_config.web.proxy.iter() {
             router = super::proxy::add_proxy(router, proxy_config)?;
         }
 
-        // server the dir if it's web, otherwise let the fullstack server itself handle it
-        match platform {
-            Platform::Web => {
-                // Route file service to output the .wasm and assets if this is a web build
-                let base_path = format!(
-                    "/{}",
-                    krate
-                        .dioxus_config
-                        .web
-                        .app
-                        .base_path
-                        .as_deref()
-                        .unwrap_or_default()
-                        .trim_matches('/')
-                );
-
-                router = router.nest_service(&base_path, build_serve_dir(args, krate));
-            }
-            Platform::Liveview | Platform::Server => {
-                // For fullstack and static generation, forward all requests to the server
-                let address = fullstack_address.unwrap();
-
-                router = router.nest_service("/",super::proxy::proxy_to(
+        if args.should_proxy_build() {
+            // For fullstack, liveview, and server, forward all requests to the inner server
+            let address = fullstack_address.unwrap();
+            router = router.nest_service("/",super::proxy::proxy_to(
                 format!("http://{address}").parse().unwrap(),
                 true,
                 |error| {
@@ -369,8 +350,22 @@ impl DevServer {
                         .unwrap()
                 },
             ));
-            }
-            _ => {}
+        } else {
+            // Otherwise, just serve the dir ourselves
+            // Route file service to output the .wasm and assets if this is a web build
+            let base_path = format!(
+                "/{}",
+                krate
+                    .dioxus_config
+                    .web
+                    .app
+                    .base_path
+                    .as_deref()
+                    .unwrap_or_default()
+                    .trim_matches('/')
+            );
+
+            router = router.nest_service(&base_path, build_serve_dir(args, krate));
         }
 
         // Setup middleware to intercept html requests if the build status is "Building"
@@ -381,27 +376,27 @@ impl DevServer {
 
         // Setup websocket endpoint - and pass in the extension layer immediately after
         router = router.nest(
-        "/_dioxus",
-        Router::new()
-            .route(
-                "/",
-                get(
-                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
-                    },
-                ),
-            )
-            .layer(Extension(hot_reload_sockets))
-            .route(
-                "/build_status",
-                get(
-                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
-                    },
-                ),
-            )
-            .layer(Extension(build_status_sockets)),
-    );
+            "/_dioxus",
+            Router::new()
+                .route(
+                    "/",
+                    get(
+                        |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                            ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                        },
+                    ),
+                )
+                .layer(Extension(hot_reload_sockets))
+                .route(
+                    "/build_status",
+                    get(
+                        |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                            ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                        },
+                    ),
+                )
+                .layer(Extension(build_status_sockets)),
+        );
 
         // Setup cors
         router = router.layer(
@@ -433,7 +428,7 @@ fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::Method
         false => CORS_UNSAFE.clone(),
     };
 
-    let out_dir = cfg.out_dir();
+    let out_dir = cfg.workdir(Platform::Web);
     let index_on_404 = cfg.dioxus_config.web.watcher.index_on_404;
 
     get_service(

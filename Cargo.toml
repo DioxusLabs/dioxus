@@ -69,6 +69,8 @@ members = [
     "example-projects/fullstack-mobile",
     "example-projects/tailwind",
     "example-projects/PWA-example",
+    "example-projects/basic-liveview",
+    "packages/server",
 ]
 
 [workspace.package]
@@ -99,15 +101,16 @@ dioxus-check = { path = "packages/check", version = "0.6.0-alpha.2" }
 dioxus-rsx = { path = "packages/rsx", version = "0.6.0-alpha.2" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.2" }
 dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.2" }
-generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.2" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.2" }
+dioxus-server = { path = "packages/server", version = "0.6.0-alpha.2" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.2", default-features = false }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.2" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.2", default-features = false }
 dioxus-isrg = { path = "packages/isrg", version = "0.6.0-alpha.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.2" }
 dioxus-runtime-config = { path = "packages/runtime-config", version = "0.6.0-alpha.2" }
+generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.2" }
 
 manganis  = { path = "packages/manganis", version = "0.6.0-alpha.2" }
 manganis-macro  = { path = "packages/manganis-macro", version = "0.6.0-alpha.2" }
@@ -173,6 +176,9 @@ proc-macro2-diagnostics = { version = "0.10", default-features = false }
 env_logger = "0.11.0"
 tracing-subscriber = "0.3.17"
 chrono = { version = "0.4.34" }
+gloo = { version = "0.8.0" }
+gloo-utils = { version = "0.1.6" }
+rustversion = "1.0.17"
 
 # desktop
 wry = { version = "0.42.0", default-features = false }
@@ -200,14 +206,6 @@ criterion = { version = "0.5" }
 inherits = "release"
 opt-level = 1
 debug = true
-
-# [profile.cli-dev]
-# inherits = "dev"
-# opt-level = 1
-
-# # Enable high optimizations for dependencies (incl. Bevy), but not for our code:
-# [profile.cli-dev.package."*"]
-# opt-level = 3
 
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
 [profile.release-unoptimized]

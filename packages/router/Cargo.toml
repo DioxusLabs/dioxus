@@ -11,42 +11,43 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-lib = { workspace = true }
+dioxus-document = { workspace = true }
 dioxus-router-macro = { workspace = true }
-gloo = { version = "0.8.0", optional = true }
+gloo = { workspace = true, optional = true }
 tracing = { workspace = true }
-urlencoding = "2.1.3"
-serde = { version = "1", features = ["derive"], optional = true }
-serde_json = { version = "1.0.91", optional = true }
+urlencoding = { workspace = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_json = { workspace = true, optional = true }
 url = "2.3.1"
+
 wasm-bindgen = { workspace = true, optional = true }
-web-sys = { version = "0.3.60", optional = true, features = [
-    "ScrollRestoration",
-] }
+web-sys = { version = "0.3.60", optional = true, features = ["ScrollRestoration"] }
 js-sys = { version = "0.3.63", optional = true }
-gloo-utils = { version = "0.1.6", optional = true }
+gloo-utils = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["full"], optional = true }
-rustversion = "1.0.17"
+tokio = { workspace = true, optional = true, features = ["full"] }
+rustversion = { workspace = true }
 
 # you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
 # dev-dependncey crates
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-router = { workspace = true, features = ["web"] }
-# dioxus-web = { workspace = true }
-gloo = "0.8.0"
+gloo = { workspace = true }
 wasm-bindgen-test = "0.3.33"
+# dioxus-router = { workspace = true }
+# dioxus-router = { workspace = true, features = ["web"] }
+# dioxus-web = { workspace = true }
 
 [features]
 default = []
-ssr = []
-liveview = ["dioxus-liveview", "dep:tokio", "dep:serde", "dep:serde_json"]
-wasm_test = []
-web = ["dep:gloo", "dep:web-sys", "dep:wasm-bindgen", "dep:gloo-utils", "dep:js-sys", "dioxus-router-macro/web"]
-fullstack = ["dep:dioxus-fullstack"]
+# ssr = []
+# wasm_test = []
+# liveview = ["dioxus-liveview", "dep:tokio", "dep:serde", "dep:serde_json"]
+# web = ["dep:gloo", "dep:web-sys", "dep:wasm-bindgen", "dep:gloo-utils", "dep:js-sys", "dioxus-router-macro/web"]
+# fullstack = ["dep:dioxus-fullstack"]
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }

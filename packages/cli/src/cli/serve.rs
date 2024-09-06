@@ -115,7 +115,7 @@ impl ServeArgs {
         std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
     }
 
-    pub(crate) fn should_boot_default_server(&self) -> bool {
+    pub(crate) fn should_proxy_build(&self) -> bool {
         match self.build_arguments.platform() {
             Platform::Server => true,
             Platform::Liveview => true,

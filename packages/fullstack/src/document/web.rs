@@ -48,4 +48,24 @@ impl Document for FullstackWebDocument {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn current_route(&self) -> String {
+        todo!()
+    }
+
+    fn go_back(&mut self) {
+        todo!()
+    }
+
+    fn go_forward(&mut self) {
+        todo!()
+    }
+
+    fn push_route(&mut self, route: String) {
+        todo!()
+    }
+
+    fn replace(&mut self, path: String) {
+        todo!()
+    }
 }

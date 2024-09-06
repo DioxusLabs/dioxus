@@ -1,13 +1,18 @@
 {
-  "editor.formatOnSave": true,
+  // Disable toml formatting since everyone uses it differently
   "[toml]": {
     "editor.formatOnSave": false
   },
-  // "rust-analyzer.check.workspace": true,
-  // "rust-analyzer.check.workspace": false,
-  // "rust-analyzer.check.features": "all",
-  // "rust-analyzer.cargo.features": "all",
+  // // Make sure we turn on features so we actually get intellisense
+  // "rust-analyzer.cargo.features": [
+  //   "server",
+  //   "web",
+  //   "fullstack",
+  //   "desktop",
+  //   "mobile",
+  // ],
+  // don't check tests since that adds lots of comp time
   "rust-analyzer.check.allTargets": false,
-  // we don't want the formatter to kick in while we're working on dioxus itself
+  // don't format with dioxus since we want the autoformatting tests to take invalid inputs
   "dioxus.formatOnSave": "disabled",
 }

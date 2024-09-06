@@ -23,7 +23,7 @@ dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, default-features = false, optional = true }
 dioxus-mobile = { workspace = true, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
-dioxus-fullstack = { workspace = true, default-features = true, optional = true }
+dioxus-fullstack = { workspace = true, default-features = true, optional = true, features = ["base"] }
 dioxus-static-site-generation = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
@@ -61,37 +61,40 @@ asset = ["dep:manganis"]
 document = ["dioxus-web?/document"]
 
 launch = ["dep:dioxus-config-macro"]
-router = ["dep:dioxus-router"]
+router = [
+    "dep:dioxus-router"
+]
 
 # Platforms
 fullstack = [
     "dep:dioxus-fullstack",
     "dioxus-config-macro/fullstack",
     "dep:serde",
-    "dioxus-router?/fullstack",
+    # "dioxus-router?/fullstack",
 ]
 desktop = [
     "dep:dioxus-desktop",
-    "dioxus-fullstack?/desktop",
+    # "dioxus-fullstack?/desktop",
     "dioxus-config-macro/desktop",
 ]
 mobile = [
     "dep:dioxus-mobile",
-    "dioxus-fullstack?/mobile",
+    # "dioxus-fullstack?/mobile",
     "dioxus-config-macro/mobile",
 ]
 web = [
     "dep:dioxus-web",
-    "dioxus-fullstack?/web",
+    # "dioxus-fullstack?/web",
     "dioxus-static-site-generation?/web",
     "dioxus-config-macro/web",
-    "dioxus-router?/web",
+    # "dioxus-router?/web",
 ]
-ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
+ssr = ["dep:dioxus-ssr",  "dioxus-config-macro/ssr"]
+# ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = [
     "dep:dioxus-liveview",
     "dioxus-config-macro/liveview",
-    "dioxus-router?/liveview",
+    # "dioxus-router?/liveview",
 ]
 static-generation = [
     "dep:dioxus-static-site-generation",

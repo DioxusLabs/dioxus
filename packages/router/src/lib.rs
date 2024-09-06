@@ -2,37 +2,22 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 // cannot use forbid, because props derive macro generates #[allow(missing_docs)]
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 #![allow(non_snake_case)]
 
+pub mod components;
+pub mod into_routable;
 pub mod navigation;
 pub mod routable;
 
-/// Components interacting with the router.
-pub mod components {
-    mod default_errors;
-    pub use default_errors::*;
-
-    mod history_buttons;
-    pub use history_buttons::*;
-
-    mod link;
-    pub use link::*;
-
-    mod outlet;
-    pub use outlet::*;
-
-    mod router;
-    pub use router::*;
-}
-
 mod contexts {
+    pub(crate) mod generic_router;
     pub(crate) mod navigator;
     pub(crate) mod outlet;
     pub(crate) mod router;
     pub use navigator::*;
     pub(crate) use router::*;
-    pub use router::{root_router, RouterContext};
+    pub use router::*;
 }
 
 mod router_cfg;
@@ -59,6 +44,7 @@ pub mod prelude {
     pub use crate::contexts::*;
     pub use crate::history::*;
     pub use crate::hooks::*;
+    pub use crate::into_routable::*;
     pub use crate::navigation::*;
     pub use crate::routable::*;
     pub use crate::router_cfg::RouterConfig;

@@ -1,82 +1,11 @@
 #![allow(clippy::type_complexity)]
 
-use std::any::Any;
-use std::fmt::Debug;
-use std::rc::Rc;
-
-use dioxus_lib::prelude::*;
-
-use tracing::error;
-
-use crate::navigation::NavigationTarget;
 use crate::prelude::Routable;
 use crate::utils::use_router_internal::use_router_internal;
-
-use url::Url;
-
-/// Something that can be converted into a [`NavigationTarget`].
-#[derive(Clone)]
-pub enum IntoRoutable {
-    /// A raw string target.
-    FromStr(String),
-    /// A internal target.
-    Route(Rc<dyn Any>),
-}
-
-impl PartialEq for IntoRoutable {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (IntoRoutable::FromStr(a), IntoRoutable::FromStr(b)) => a == b,
-            (IntoRoutable::Route(a), IntoRoutable::Route(b)) => Rc::ptr_eq(a, b),
-            _ => false,
-        }
-    }
-}
-
-impl<R: Routable> From<R> for IntoRoutable {
-    fn from(value: R) -> Self {
-        IntoRoutable::Route(Rc::new(value) as Rc<dyn Any>)
-    }
-}
-
-impl<R: Routable> From<NavigationTarget<R>> for IntoRoutable {
-    fn from(value: NavigationTarget<R>) -> Self {
-        match value {
-            NavigationTarget::Internal(route) => IntoRoutable::Route(Rc::new(route) as Rc<dyn Any>),
-            NavigationTarget::External(url) => IntoRoutable::FromStr(url),
-        }
-    }
-}
-
-impl From<String> for IntoRoutable {
-    fn from(value: String) -> Self {
-        IntoRoutable::FromStr(value)
-    }
-}
-
-impl From<&String> for IntoRoutable {
-    fn from(value: &String) -> Self {
-        IntoRoutable::FromStr(value.to_string())
-    }
-}
-
-impl From<&str> for IntoRoutable {
-    fn from(value: &str) -> Self {
-        IntoRoutable::FromStr(value.to_string())
-    }
-}
-
-impl From<Url> for IntoRoutable {
-    fn from(url: Url) -> Self {
-        IntoRoutable::FromStr(url.to_string())
-    }
-}
-
-impl From<&Url> for IntoRoutable {
-    fn from(url: &Url) -> Self {
-        IntoRoutable::FromStr(url.to_string())
-    }
-}
+use crate::{navigation::NavigationTarget, prelude::IntoRoutable};
+use dioxus_lib::prelude::*;
+use std::fmt::Debug;
+use tracing::error;
 
 /// The properties for a [`Link`].
 #[derive(Props, Clone, PartialEq)]
@@ -228,11 +157,14 @@ pub fn Link(props: LinkProps) -> Element {
     };
 
     let current_url = router.current_route_string();
-    let href = match &to {
-        IntoRoutable::FromStr(url) => url.to_string(),
-        IntoRoutable::Route(route) => router.any_route_to_string(&**route),
-    };
-    let parsed_route: NavigationTarget<Rc<dyn Any>> = router.resolve_into_routable(to.clone());
+    let href: String = todo!();
+    // let parsed_route: NavigationTarget<_> = todo!();
+    // let href = router.any_route_to_string(&to);
+    // let href = match &to {
+    //     // IntoRoutable::FromStr(url) => url.to_string(),
+    //     // IntoRoutable::Route(route) => router.any_route_to_string(&**route),
+    // };
+    // let parsed_route: NavigationTarget<R> = router.resolve_into_routable(to.clone());
 
     let mut class_ = String::new();
     if let Some(c) = class {
@@ -257,7 +189,8 @@ pub fn Link(props: LinkProps) -> Element {
 
     let tag_target = new_tab.then_some("_blank");
 
-    let is_external = matches!(parsed_route, NavigationTarget::External(_));
+    let is_external = to.is_external();
+    // let is_external = matches!(parsed_route, NavigationTarget::External(_));
     let is_router_nav = !is_external && !new_tab;
     let rel = rel.or_else(|| is_external.then_some("noopener noreferrer".to_string()));
 
@@ -274,9 +207,10 @@ pub fn Link(props: LinkProps) -> Element {
         }
         event.prevent_default();
 
-        if do_default && is_router_nav {
-            router.push_any(router.resolve_into_routable(to.clone()));
-        }
+        todo!();
+        // if do_default && is_router_nav {
+        //     router.push_any(router.resolve_into_routable(to.clone()));
+        // }
 
         if let Some(handler) = onclick {
             handler.call(event);
@@ -296,7 +230,7 @@ pub fn Link(props: LinkProps) -> Element {
         // If the event is a click with the left mouse button and no modifiers, prevent the default action
         // and navigate to the href with client side routing
         router.is_liveview().then_some(
-            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"   
+            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"
         )
     };
 
@@ -305,7 +239,7 @@ pub fn Link(props: LinkProps) -> Element {
             onclick: action,
             "onclick": liveview_prevent_default,
             href,
-            onmounted: onmounted,
+            onmounted,
             class,
             rel,
             target: tag_target,

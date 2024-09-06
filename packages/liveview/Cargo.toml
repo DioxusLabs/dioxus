@@ -43,8 +43,11 @@ axum = { workspace = true, features = ["ws"] }
 tower = { workspace = true }
 dioxus = { workspace = true }
 
+[build-dependencies]
+lazy-js-bundle = { workspace = true }
+
 [features]
-default = ["devtools", "multi-thread"]
+default = ["devtools", "multi-thread", "axum"]
 axum = ["dep:axum"]
 multi-thread = ["tokio/rt-multi-thread"]
 devtools = ["dep:dioxus-devtools"]

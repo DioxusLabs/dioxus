@@ -323,7 +323,7 @@ fn is_backup_file(path: PathBuf) -> bool {
 
 /// Tests if the provided [`notify::Event`] is something we listen to so we can avoid unescessary hot reloads.
 fn is_allowed_notify_event(event: &notify::Event) -> bool {
-    match event.kind {
+    let allowed = match event.kind {
         EventKind::Modify(ModifyKind::Data(_)) => true,
         EventKind::Modify(ModifyKind::Name(_)) => true,
         EventKind::Create(_) => true,
@@ -334,7 +334,11 @@ fn is_allowed_notify_event(event: &notify::Event) -> bool {
         EventKind::Modify(ModifyKind::Any) => true,
         // Don't care about anything else.
         _ => false,
-    }
+    };
+
+    tracing::info!("is_allowed_notify_event:  {allowed:?} for {event:#?}");
+
+    allowed
 }
 
 #[test]

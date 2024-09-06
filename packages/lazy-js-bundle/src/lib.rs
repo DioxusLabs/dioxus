@@ -80,31 +80,38 @@ impl LazyTypeScriptBindings {
         let hashes = hash_files(watching_paths);
 
         // Try to find a common prefix for the output files and put the hash in there otherwise, write it to src/binding_hash.txt
-        let mut hash_location: Option<PathBuf> = None;
-        for path in &self.binding {
-            match hash_location {
-                Some(current_hash_location) => {
-                    let mut common_path = PathBuf::new();
-                    for component in path
-                        .output_path
-                        .components()
-                        .zip(current_hash_location.components())
-                    {
-                        if component.0 != component.1 {
-                            break;
-                        }
-                        common_path.push(component.0);
-                    }
-                    hash_location =
-                        (common_path.components().next().is_some()).then_some(common_path);
-                }
-                None => {
-                    hash_location = Some(path.output_path.clone());
-                }
-            };
-        }
-        let hash_location = hash_location.unwrap_or_else(|| PathBuf::from("./src/js"));
-        std::fs::create_dir_all(&hash_location).unwrap();
+        // let mut hash_location: Option<PathBuf> = None;
+        // for path in &self.binding {
+        //     match hash_location {
+        //         Some(current_hash_location) => {
+        //             let mut common_path = PathBuf::new();
+        //             for component in path
+        //                 .output_path
+        //                 .components()
+        //                 .zip(current_hash_location.components())
+        //             {
+        //                 if component.0 != component.1 {
+        //                     break;
+        //                 }
+        //                 common_path.push(component.0);
+        //             }
+        //             hash_location =
+        //                 (common_path.components().next().is_some()).then_some(common_path);
+        //         }
+        //         None => {
+        //             hash_location = Some(path.output_path.clone());
+        //         }
+        //     };
+        // }
+        let hash_location = None;
+        let hash_location = hash_location.unwrap_or_else(|| PathBuf::from("./src/js/"));
+        std::fs::create_dir_all(&hash_location).unwrap_or_else(|err| {
+            panic!(
+                "Failed to create directory for hash file: {} in {}",
+                err,
+                hash_location.display()
+            )
+        });
         let hash_location = hash_location.join("hash.txt");
 
         // If the hash matches the one on disk, we're good and don't need to update bindings

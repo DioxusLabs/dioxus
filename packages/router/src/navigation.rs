@@ -11,7 +11,7 @@ use crate::routable::Routable;
 
 /// A target for the router to navigate to.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum NavigationTarget<R> {
+pub enum NavigationTarget<R: Routable> {
     /// An internal path that the router can navigate to by itself.
     ///
     /// ```rust
@@ -32,6 +32,7 @@ pub enum NavigationTarget<R> {
     /// assert_eq!(explicit, implicit);
     /// ```
     Internal(R),
+
     /// An external target that the router doesn't control.
     ///
     /// ```rust
@@ -56,8 +57,8 @@ pub enum NavigationTarget<R> {
 
 impl<R: Routable> From<&str> for NavigationTarget<R> {
     fn from(value: &str) -> Self {
-        value
-            .parse()
+        R::deserialize(value)
+            .map(|route| Self::Internal(route))
             .unwrap_or_else(|_| Self::External(value.to_string()))
     }
 }
@@ -83,43 +84,44 @@ impl<R: Routable> From<R> for NavigationTarget<R> {
 impl<R: Routable> Display for NavigationTarget<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NavigationTarget::Internal(r) => write!(f, "{}", r),
+            NavigationTarget::Internal(r) => write!(f, "{}", r.serialize()),
             NavigationTarget::External(s) => write!(f, "{}", s),
         }
     }
 }
 
-/// An error that can occur when parsing a [`NavigationTarget`].
-pub enum NavigationTargetParseError<R: Routable> {
-    /// A URL that is not valid.
-    InvalidUrl(ParseError),
-    /// An internal URL that is not valid.
-    InvalidInternalURL(<R as FromStr>::Err),
-}
+// /// An error that can occur when parsing a [`NavigationTarget`].
+// pub enum NavigationTargetParseError<R: Routable> {
+//     /// A URL that is not valid.
+//     InvalidUrl(ParseError),
 
-impl<R: Routable> Debug for NavigationTargetParseError<R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NavigationTargetParseError::InvalidUrl(e) => write!(f, "Invalid URL: {}", e),
-            NavigationTargetParseError::InvalidInternalURL(_) => {
-                write!(f, "Invalid internal URL")
-            }
-        }
-    }
-}
+//     /// An internal URL that is not valid.
+//     InvalidInternalURL(<R as FromStr>::Err),
+// }
 
-impl<R: Routable> FromStr for NavigationTarget<R> {
-    type Err = NavigationTargetParseError<R>;
+// impl<R: Routable> Debug for NavigationTargetParseError<R> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             NavigationTargetParseError::InvalidUrl(e) => write!(f, "Invalid URL: {}", e),
+//             NavigationTargetParseError::InvalidInternalURL(_) => {
+//                 write!(f, "Invalid internal URL")
+//             }
+//         }
+//     }
+// }
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match Url::parse(s) {
-            Ok(_) => Ok(Self::External(s.to_string())),
-            Err(ParseError::RelativeUrlWithoutBase) => {
-                Ok(Self::Internal(R::from_str(s).map_err(|e| {
-                    NavigationTargetParseError::InvalidInternalURL(e)
-                })?))
-            }
-            Err(e) => Err(NavigationTargetParseError::InvalidUrl(e)),
-        }
-    }
-}
+// impl<R: Routable> FromStr for NavigationTarget<R> {
+//     type Err = NavigationTargetParseError<R>;
+
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         match Url::parse(s) {
+//             Ok(_) => Ok(Self::External(s.to_string())),
+//             Err(ParseError::RelativeUrlWithoutBase) => {
+//                 Ok(Self::Internal(R::from_str(s).map_err(|e| {
+//                     NavigationTargetParseError::InvalidInternalURL(e)
+//                 })?))
+//             }
+//             Err(e) => Err(NavigationTargetParseError::InvalidUrl(e)),
+//         }
+//     }
+// }

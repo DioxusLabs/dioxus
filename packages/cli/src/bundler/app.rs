@@ -19,7 +19,7 @@ impl AppBundle {
         executable: PathBuf,
     ) -> Result<Self> {
         let bundle = Self {
-            workdir: build.krate.out_dir(),
+            workdir: build.krate.workdir(build.build.platform()),
             build,
             executable,
             assets,
@@ -32,46 +32,6 @@ impl AppBundle {
         bundle.optimize().await?;
 
         Ok(bundle)
-    }
-
-    /// Take the workdir and copy it to the output location, returning the path to final bundle
-    ///
-    /// Perform any finishing steps here:
-    /// - Signing the bundle
-    pub(crate) async fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
-        // std::fs::create_dir_all(&destination.join(self.build.app_name()))?;
-
-        match self.build.platform() {
-            // Nothing special to do - just copy the workdir to the output location
-            Platform::Web => {
-                let output_location = destination.join(self.build.app_name());
-                Ok(output_location)
-            }
-
-            // Create a final .app/.exe/etc depending on the host platform, not dependent on the host
-            Platform::Desktop => {
-                // for now, until we have bundled hotreload, just copy the executable to the output location
-                // let output_location = destination.join(self.build.app_name());
-                Ok(self.executable.clone())
-                // Ok(output_location)
-            }
-
-            Platform::Server => {
-                std::fs::copy(
-                    self.executable.clone(),
-                    destination.join(self.build.app_name()),
-                )?;
-
-                Ok(destination.join(self.build.app_name()))
-            }
-            Platform::Liveview => Ok(self.executable.clone()),
-
-            // Create a .ipa, only from macOS
-            Platform::Ios => todo!(),
-
-            // Create a .exe, from linux/mac/windows
-            Platform::Android => todo!(),
-        }
     }
 
     // Create the workdir and then clean its contents, in case it already exists
@@ -134,14 +94,15 @@ impl AppBundle {
         Ok(())
     }
 
-    fn bindgen_dir(&self) -> PathBuf {
-        self.workdir.join("wasm")
-    }
-
     /// Copy the assets out of the manifest and into the target location
     ///
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
     async fn write_assets(&self) -> Result<()> {
+        // Server doesn't need assets - web will provide them
+        if self.build.platform() == Platform::Server {
+            return Ok(());
+        }
+
         let asset_dir = self.asset_dir();
         let assets = self.all_source_assets();
 
@@ -176,6 +137,51 @@ impl AppBundle {
         })?;
 
         Ok(())
+    }
+
+    /// Take the workdir and copy it to the output location, returning the path to final bundle
+    ///
+    /// Perform any finishing steps here:
+    /// - Signing the bundle
+    pub(crate) async fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
+        // std::fs::create_dir_all(&destination.join(self.build.app_name()))?;
+
+        match self.build.platform() {
+            // Nothing special to do - just copy the workdir to the output location
+            Platform::Web => {
+                std::fs::create_dir_all(&destination.join("web"))?;
+                crate::fastfs::copy_asset(&self.workdir, &destination.join("web"))?;
+                Ok(destination.join("web"))
+            }
+
+            // Create a final .app/.exe/etc depending on the host platform, not dependent on the host
+            Platform::Desktop => {
+                // for now, until we have bundled hotreload, just copy the executable to the output location
+                // let output_location = destination.join(self.build.app_name());
+                Ok(self.executable.clone())
+                // Ok(output_location)
+            }
+
+            Platform::Server => {
+                std::fs::copy(
+                    self.executable.clone(),
+                    destination.join(self.build.app_name()),
+                )?;
+
+                Ok(destination.join(self.build.app_name()))
+            }
+            Platform::Liveview => Ok(self.executable.clone()),
+
+            // Create a .ipa, only from macOS
+            Platform::Ios => todo!(),
+
+            // Create a .exe, from linux/mac/windows
+            Platform::Android => todo!(),
+        }
+    }
+
+    fn bindgen_dir(&self) -> PathBuf {
+        self.workdir.join("wasm")
     }
 
     pub(crate) fn all_source_assets(&self) -> Vec<PathBuf> {

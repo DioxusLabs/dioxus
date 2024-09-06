@@ -3,8 +3,9 @@ use crate::{assets::AssetManifest, link::LINK_OUTPUT_ENV_VAR};
 use crate::{builder::Platform, bundler::AppBundle};
 use crate::{link::InterceptedArgs, Result};
 use anyhow::Context;
-use std::process::Stdio;
-use tokio::process::Command;
+use serde::Deserialize;
+use std::{path::PathBuf, process::Stdio};
+use tokio::{io::AsyncBufReadExt, process::Command};
 
 impl BuildRequest {
     pub(crate) async fn build(self) -> Result<AppBundle> {
@@ -26,7 +27,7 @@ impl BuildRequest {
     pub(crate) async fn verify_tooling(&self) -> Result<()> {
         match self.platform() {
             // If this is a web, build make sure we have the web build tooling set up
-            Platform::Web => self.install_web_build_tooling().await?,
+            Platform::Web => {}
 
             // Make sure we have mobile tooling if need be
             Platform::Ios => {}
@@ -41,6 +42,106 @@ impl BuildRequest {
         }
 
         Ok(())
+    }
+
+    /// Run `cargo`, returning the location of the final exectuable
+    ///
+    /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
+    pub(crate) async fn build_cargo(&self) -> anyhow::Result<PathBuf> {
+        // Extract the unit count of the crate graph so build_cargo has more accurate data
+        let crate_count = self.get_unit_count_estimate().await;
+
+        self.status_starting_build();
+
+        let mut child = Command::new("cargo")
+            .arg("rustc")
+            .envs(
+                self.custom_target_dir
+                    .as_ref()
+                    .map(|dir| ("CARGO_TARGET_DIR", dir)),
+            )
+            .current_dir(self.krate.crate_dir())
+            .arg("--message-format")
+            .arg("json-diagnostic-rendered-ansi")
+            .args(&self.build_arguments())
+            .arg("--")
+            .args(self.rust_flags.clone())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Failed to spawn cargo build")?;
+
+        let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
+        let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
+
+        let mut output_location = None;
+        let mut stdout = stdout.lines();
+        let mut stderr = stderr.lines();
+        let mut units_compiled = 0;
+        let mut errors = Vec::new();
+
+        loop {
+            use cargo_metadata::Message;
+
+            let line = tokio::select! {
+                Ok(Some(line)) = stdout.next_line() => line,
+                Ok(Some(line)) = stderr.next_line() => line,
+                else => break,
+            };
+
+            let mut deserializer = serde_json::Deserializer::from_str(line.trim());
+            deserializer.disable_recursion_limit();
+
+            let message =
+                Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));
+
+            match message {
+                Message::BuildScriptExecuted(_) => units_compiled += 1,
+                Message::TextLine(line) => self.status_build_message(line),
+                Message::CompilerMessage(msg) => {
+                    let message = msg.message;
+                    self.status_build_diagnostic(&message);
+                    const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
+                        cargo_metadata::diagnostic::DiagnosticLevel::Help,
+                        cargo_metadata::diagnostic::DiagnosticLevel::Note,
+                        cargo_metadata::diagnostic::DiagnosticLevel::Warning,
+                        cargo_metadata::diagnostic::DiagnosticLevel::Error,
+                        cargo_metadata::diagnostic::DiagnosticLevel::FailureNote,
+                        cargo_metadata::diagnostic::DiagnosticLevel::Ice,
+                    ];
+                    const FATAL_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
+                        cargo_metadata::diagnostic::DiagnosticLevel::Error,
+                        cargo_metadata::diagnostic::DiagnosticLevel::FailureNote,
+                        cargo_metadata::diagnostic::DiagnosticLevel::Ice,
+                    ];
+                    if WARNING_LEVELS.contains(&message.level) {
+                        if let Some(rendered) = message.rendered {
+                            errors.push(rendered);
+                        }
+                    }
+                    if FATAL_LEVELS.contains(&message.level) {
+                        return Err(anyhow::anyhow!(errors.join("\n")));
+                    }
+                }
+                Message::CompilerArtifact(artifact) => {
+                    units_compiled += 1;
+                    match artifact.executable {
+                        Some(executable) => output_location = Some(executable.into()),
+                        None => {
+                            self.status_build_progress(units_compiled as f64 / crate_count as f64)
+                        }
+                    }
+                }
+                Message::BuildFinished(finished) => {
+                    if !finished.success {
+                        return Err(anyhow::anyhow!("Build failed"));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        output_location.context("Build did not return an executable")
     }
 
     /// Run the linker intercept and then fill in our AssetManifest from the incremental artifacts

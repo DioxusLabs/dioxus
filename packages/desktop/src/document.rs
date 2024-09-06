@@ -61,4 +61,24 @@ impl Document for DesktopService {
             "#,
         ));
     }
+
+    fn current_route(&self) -> String {
+        todo!()
+    }
+
+    fn go_back(&self) {
+        todo!()
+    }
+
+    fn go_forward(&self) {
+        todo!()
+    }
+
+    fn push_route(&self, route: String) {
+        todo!()
+    }
+
+    fn replace_route(&self, path: String) {
+        todo!()
+    }
 }

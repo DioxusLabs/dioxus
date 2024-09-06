@@ -91,7 +91,31 @@ impl DioxusCrate {
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
     pub(crate) fn out_dir(&self) -> PathBuf {
-        self.workspace_dir().join("target").join("dx-dist")
+        let dir = self.workspace_dir().join("target").join("dx-dist");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Create a workdir for the given platform
+    /// This can be used as a temporary directory for the build, but in an observable way such that
+    /// you can see the files in the directory via `target`
+    pub(crate) fn workdir(&self, platform: Platform) -> PathBuf {
+        let plat_name = match platform {
+            Platform::Web => "web",
+            Platform::Desktop => "desktop",
+            Platform::Ios => "ios",
+            Platform::Android => "android",
+            Platform::Server => "server",
+            Platform::Liveview => "liveview",
+        };
+        let dir = self
+            .workspace_dir()
+            .join("target")
+            .join("dx-workdir")
+            .join(self.dioxus_config.application.name.clone())
+            .join(plat_name);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     /// Get the workspace directory for the crate

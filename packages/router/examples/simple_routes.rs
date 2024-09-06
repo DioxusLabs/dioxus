@@ -67,9 +67,7 @@ fn UserFrame(user_id: usize) -> Element {
 #[component]
 fn Route1(user_id: usize, dynamic: usize, query: String) -> Element {
     rsx! {
-        pre {
-            "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query}\n}}"
-        }
+        pre { "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query}\n}}" }
         Link {
             to: Route::Route1 {
                 user_id,
@@ -92,7 +90,9 @@ fn Route1(user_id: usize, dynamic: usize, query: String) -> Element {
 fn Route2(user_id: usize) -> Element {
     rsx! {
         pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
-        {(0..user_id).map(|i| rsx! { p { "{i}" } })}
+        {(0..user_id).map(|i| rsx! {
+            p { "{i}" }
+        })}
         p { "Footer" }
         Link {
             to: Route::Route3 {
@@ -122,7 +122,7 @@ fn Route3(dynamic: String) -> Element {
             oninput: move |evt: FormEvent| {
                 *current_route_str.write() = evt.value();
             },
-            value: "{current_route_str}"
+            value: "{current_route_str}",
         }
         "dynamic: {dynamic}"
         Link { to: Route::Route2 { user_id: 8888 }, "hello world link" }
@@ -153,22 +153,15 @@ fn Route3(dynamic: String) -> Element {
             Ok(route) => {
                 if route != current_route {
                     rsx! {
-                        Link {
-                            to: route.clone(),
-                            "{route}"
-                        }
+                        Link { to: route.clone(), "{route}" }
                     }
-                }
-                else {
+                } else {
                     VNode::empty()
                 }
             }
             Err(err) => {
                 rsx! {
-                    pre {
-                        color: "red",
-                        "Invalid route:\n{err}"
-                    }
+                    pre { color: "red", "Invalid route:\n{err}" }
                 }
             }
         }
@@ -199,6 +192,7 @@ enum Route {
         #[end_nest]
     #[end_nest]
     #[redirect("/:id/user", |id: usize| Route::Route3 { dynamic: id.to_string()})]
+
     #[route("/:dynamic")]
     Route3 { dynamic: String },
 }

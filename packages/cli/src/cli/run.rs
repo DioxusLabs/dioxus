@@ -1,10 +1,7 @@
-use crate::{build::TargetArgs, builder::Builder, serve::ServeUpdate};
+use crate::DioxusCrate;
+use crate::{builder::Builder, serve::ServeUpdate};
 use anyhow::Context;
 use build::BuildArgs;
-use futures_util::{stream::FuturesUnordered, StreamExt};
-use std::{path::Path, process::exit};
-
-use crate::DioxusCrate;
 
 use super::*;
 

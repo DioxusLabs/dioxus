@@ -799,6 +799,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
+name = "basic-liveview"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "bcder"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2788,6 +2795,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
+ "lazy-js-bundle",
  "rustc-hash 1.1.0",
  "serde",
  "serde_json",
@@ -2865,10 +2873,10 @@ dependencies = [
  "console_error_panic_hook",
  "criterion",
  "dioxus",
+ "dioxus-document",
  "dioxus-fullstack",
  "dioxus-lib",
  "dioxus-liveview",
- "dioxus-router",
  "dioxus-router-macro",
  "dioxus-ssr",
  "gloo",
@@ -2916,6 +2924,10 @@ dependencies = [
 
 [[package]]
 name = "dioxus-runtime-config"
+version = "0.6.0-alpha.2"
+
+[[package]]
+name = "dioxus-server"
 version = "0.6.0-alpha.2"
 
 [[package]]

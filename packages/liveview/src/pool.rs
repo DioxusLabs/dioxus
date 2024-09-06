@@ -1,6 +1,6 @@
 use crate::{
+    document::init_eval,
     element::LiveviewElement,
-    eval::init_eval,
     events::SerializedHtmlEventConverter,
     query::{QueryEngine, QueryResult},
     LiveViewError,
@@ -235,9 +235,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             }
         }
 
-        // wait for suspense to resolve in a 10ms window
         tokio::select! {
-            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
             _ = vdom.wait_for_suspense() => {}
         }
 

@@ -12,7 +12,11 @@ resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
+server_fn = { version = "0.6.5", features = [
+    "json",
+    "url",
+    "browser",
+], default-features = false }
 dioxus_server_macro = { workspace = true }
 
 # axum
@@ -30,7 +34,9 @@ hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 
 # Web Integration
-dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
+dioxus-web = { workspace = true, features = [
+    "hydrate",
+], default-features = false, optional = true }
 dioxus-interpreter-js = { workspace = true, optional = true }
 
 # Desktop Integration
@@ -62,7 +68,14 @@ bytes = "1.4.0"
 tower = { workspace = true, features = ["util"], optional = true }
 tower-layer = { version = "0.3.2", optional = true }
 parking_lot = { version = "0.12.1", features = ["send_guard"], optional = true }
-web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
+web-sys = { version = "0.3.61", optional = true, features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlDocument",
+    "Storage",
+    "console",
+] }
 aws-lc-rs = { version = "1.8.1", optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 
@@ -70,23 +83,35 @@ dioxus-devtools = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
+tokio = { workspace = true, features = [
+    "rt",
+    "sync",
+    "rt-multi-thread",
+], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["panic_hook", "document", "mounted", "devtools"]
+default = ["base"]
+base = ["panic_hook", "document", "mounted", "devtools"]
 panic_hook = ["dioxus-web?/panic_hook"]
 mounted = ["dioxus-web?/mounted"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
 document = ["dioxus-web?/document"]
-web = ["dep:dioxus-web", "dep:web-sys"]
-desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest", "server_fn/browser"]
-mobile = ["dep:dioxus-mobile"]
+# web = ["dep:dioxus-web", "dep:web-sys"]
+# desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest", "server_fn/browser"]
+# mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
-axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
+axum = [
+    "dep:axum",
+    "dep:tower-http",
+    "server",
+    "server_fn/axum",
+    "dioxus_server_macro/axum",
+    "default-tls",
+]
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",

@@ -75,6 +75,9 @@ impl FromStr for Platform {
             "web" => Ok(Self::Web),
             "desktop" => Ok(Self::Desktop),
             "liveview" => Ok(Self::Liveview),
+            "server" => Ok(Self::Server),
+            "ios" => Ok(Self::Ios),
+            "android" => Ok(Self::Android),
             _ => Err(UnknownPlatformError),
         }
     }
