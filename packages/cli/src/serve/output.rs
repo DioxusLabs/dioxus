@@ -474,7 +474,7 @@ impl Output {
             }
             Event::Key(key) if key.code == KeyCode::Enter && key.kind == KeyEventKind::Press => {
                 // We only need to listen to the enter key when not in search mode
-                // as there is other logic that handles adding filters and disabling the mdoe.
+                // as there is other logic that handles adding filters and disabling the mode.
                 if self.show_filter_menu {
                     self.filter_search_mode = !self.filter_search_mode;
                 }
