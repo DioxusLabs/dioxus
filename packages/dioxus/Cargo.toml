@@ -27,6 +27,7 @@ dioxus-fullstack = { workspace = true, default-features = true, optional = true,
 dioxus-static-site-generation = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
+dioxus-isrg = { workspace = true, optional = true }
 manganis = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 

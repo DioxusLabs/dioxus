@@ -1,12 +1,11 @@
 use crate::DesktopService;
 use dioxus_document::{Document, Eval, EvalError};
-use std::sync::{Arc, Mutex};
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 impl Document for DesktopService {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn set_title(&self, title: String) {
         self.window.set_title(&title);
     }
@@ -19,9 +18,13 @@ impl Document for DesktopService {
         let tx = Arc::new(Mutex::new(Some(tx)));
         let callback = {
             let tx = tx.clone();
-            move |res| {
-                if let Some(tx) = tx.lock().unwrap().take() {
-                    let _ = tx.send(Ok(res));
+            move |res: String| {
+                if let Ok(res) = serde_json::from_str(&res) {
+                    if let Some(tx) = tx.lock().unwrap().take() {
+                        let _ = tx.send(Ok(res));
+                    }
+                } else {
+                    tracing::error!("Failed to deserialize eval result: {res:?}");
                 }
             }
         };

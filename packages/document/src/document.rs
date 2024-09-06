@@ -19,9 +19,6 @@ pub type DocumentContext = Arc<dyn Document>;
 /// The described behaviors are designed to mimic a web browser, which most users should already
 /// know. Deviations might confuse them.
 pub trait Document: 'static {
-    /// Get a reference to the document as `dyn Any`
-    fn as_any(&self) -> &dyn std::any::Any;
-
     /// Run `eval` against this document, returning an [`Eval`] that can be used to await the result.
     fn eval(&self, js: String) -> Eval;
 

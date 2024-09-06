@@ -2338,6 +2338,7 @@ dependencies = [
  "dioxus-fullstack",
  "dioxus-hooks",
  "dioxus-html",
+ "dioxus-isrg",
  "dioxus-liveview",
  "dioxus-mobile",
  "dioxus-router",

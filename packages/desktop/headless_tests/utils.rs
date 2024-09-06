@@ -16,7 +16,7 @@ pub fn check_app_exits(app: fn() -> Element) {
         }
     });
 
-    LaunchBuilder::new()
+    dioxus::launch::builder()
         .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(false)))
         .launch(app);
 

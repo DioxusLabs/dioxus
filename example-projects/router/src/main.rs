@@ -7,11 +7,15 @@
 use dioxus::prelude::*;
 
 fn main() {
+    todo!("isrg");
     dioxus::builder()
-        .with_cfg(server_only!(ServeConfig::builder().incremental(
-            IncrementalRendererConfig::default()
-                .invalidate_after(std::time::Duration::from_secs(120)),
-        )))
+        // .with_cfg(server_only!(
+        //     //
+        //     ServeConfig::builder().incremental(
+        //         IncrementalRendererConfig::default()
+        //             .invalidate_after(std::time::Duration::from_secs(120)),
+        //     )
+        // ))
         .launch(app);
 }
 

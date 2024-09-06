@@ -47,11 +47,12 @@ fn app() -> Element {
         "#,
         );
 
-        assert_eq!(
-            Vec::<i32>::deserialize(&eval.await.unwrap()).unwrap(),
-            vec![1, 2, 3]
-        );
-        EVALS_RETURNED.with_mut(|x| *x += 1);
+        todo!()
+        // assert_eq!(
+        //     Vec::<i32>::deserialize(&eval.await.unwrap()).unwrap(),
+        //     vec![1, 2, 3]
+        // );
+        // EVALS_RETURNED.with_mut(|x| *x += 1);
     });
 
     use_memo(|| {

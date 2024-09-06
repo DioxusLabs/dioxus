@@ -17,10 +17,6 @@ pub struct LiveviewDocument {
 }
 
 impl Document for LiveviewDocument {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn eval(&self, js: String) -> dioxus_document::Eval {
         todo!()
     }

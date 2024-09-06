@@ -46,10 +46,6 @@ impl Document for WebDocument {
         eval
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn set_title(&self, title: String) {
         self.document.set_title(&title);
     }

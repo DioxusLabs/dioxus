@@ -8,18 +8,20 @@ use std::{
 
 #[doc = include_str!("../docs/eval.md")]
 pub struct Eval {
-    rx: futures_channel::oneshot::Receiver<Result<String, EvalError>>,
+    rx: futures_channel::oneshot::Receiver<Result<serde_json::Value, EvalError>>,
 }
 
 impl Eval {
     /// Create this eval from a oneshot channel that, when resolved, will return the result of the eval
-    pub fn new(rx: futures_channel::oneshot::Receiver<Result<String, EvalError>>) -> Self {
+    pub fn new(
+        rx: futures_channel::oneshot::Receiver<Result<serde_json::Value, EvalError>>,
+    ) -> Self {
         Self { rx }
     }
 
     /// Create this eval and return the tx that will be used to resolve the eval
     pub fn from_parts() -> (
-        futures_channel::oneshot::Sender<Result<String, EvalError>>,
+        futures_channel::oneshot::Sender<Result<serde_json::Value, EvalError>>,
         Self,
     ) {
         let (tx, rx) = futures_channel::oneshot::channel();
@@ -27,7 +29,7 @@ impl Eval {
     }
 
     /// Poll this eval until it resolves
-    pub async fn recv(self) -> Result<String, EvalError> {
+    pub async fn recv(self) -> Result<serde_json::Value, EvalError> {
         self.rx
             .await
             .map_err(|_| EvalError::Communication("eval channel closed".to_string()))?
@@ -35,12 +37,12 @@ impl Eval {
 
     pub async fn recv_as<T: serde::de::DeserializeOwned>(self) -> Result<T, EvalError> {
         let res = self.recv().await?;
-        serde_json::from_str(&res).map_err(|e| EvalError::Deserialization(e))
+        serde_json::from_value(res).map_err(|e| EvalError::Deserialization(e))
     }
 }
 
 impl IntoFuture for Eval {
-    type Output = Result<String, EvalError>;
+    type Output = Result<serde_json::Value, EvalError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
 
     fn into_future(self) -> Self::IntoFuture {
