@@ -38,6 +38,7 @@ members = [
     "packages/devtools-types",
     "packages/isrg",
     "packages/manganis-core",
+    "packages/server",
 
     # Static generation examples
     "packages/static-generation/examples/simple",
@@ -70,7 +71,6 @@ members = [
     "example-projects/tailwind",
     "example-projects/PWA-example",
     "example-projects/basic-liveview",
-    "packages/server",
 ]
 
 [workspace.package]
