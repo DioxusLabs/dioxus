@@ -316,7 +316,7 @@ impl SuspenseBoundaryProps {
             // Store the (now mounted) children back into the scope state
             let scope_state = &mut dom.scopes[scope_id.0];
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
-            props.children = children.clone();
+            props.children.clone_from(&children);
 
             let scope_state = &mut dom.scopes[scope_id.0];
             let suspense_context = scope_state
@@ -435,7 +435,7 @@ impl SuspenseBoundaryProps {
             // Store the (now mounted) children back into the scope state
             let scope_state = &mut dom.scopes[scope_id.0];
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
-            props.children = children.clone();
+            props.children.clone_from(&children);
             scope_state.last_rendered_node = Some(children);
         })
     }

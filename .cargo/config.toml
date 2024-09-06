@@ -3,3 +3,13 @@
 DIOXUS_FRONT_ISSUER_URL  = ""
 DIOXUS_FRONT_CLIENT_ID = ""
 DIOXUS_FRONT_URL = ""
+
+[profile]
+
+[profile.dioxus-client]
+inherits = "dev"
+opt-level = 2
+
+[profile.dioxus-server]
+inherits = "dev"
+opt-level = 2

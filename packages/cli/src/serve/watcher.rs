@@ -58,7 +58,6 @@ impl Watcher {
             "target",
             "node_modules",
             "dist",
-            ".dioxus",
             &out_dir_str,
         ];
         for path in excluded_paths {

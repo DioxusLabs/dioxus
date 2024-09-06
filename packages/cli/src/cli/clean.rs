@@ -29,12 +29,6 @@ impl Clean {
             remove_dir_all(out_dir)?;
         }
 
-        let fullstack_out_dir = dioxus_crate.fullstack_out_dir();
-
-        if fullstack_out_dir.is_dir() {
-            remove_dir_all(fullstack_out_dir)?;
-        }
-
         Ok(())
     }
 }

@@ -59,7 +59,7 @@ pub async fn serve_all(
     let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
-    builder.build();
+    builder.build()?;
 
     let mut server = Server::start(&serve, &dioxus_crate);
     let mut watcher = Watcher::start(&serve, &dioxus_crate);
@@ -95,7 +95,7 @@ pub async fn serve_all(
                 } else {
                     // If the change is not binary patchable, rebuild the project
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    builder.build();
+                    builder.build()?;
 
                     // Clear the hot reload changes
                     watcher.clear_hot_reload_changes();
@@ -197,7 +197,7 @@ pub async fn serve_all(
                     Ok(false) => {}
                     // Request a rebuild.
                     Ok(true) => {
-                        builder.build();
+                        builder.build()?;
                         server.start_build().await
                     },
                     // Shutdown the server.

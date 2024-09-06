@@ -1,41 +1,12 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
-/// Run with `cargo run --features desktop`
-#[cfg(feature = "desktop")]
 fn main() {
     // Set the url of the server where server functions are hosted.
+    #[cfg(not(feature = "server"))]
     dioxus::fullstack::prelude::server_fn::client::set_server_url("http://127.0.0.1:8080");
-
-    // And then launch the app
-    dioxus::prelude::launch_desktop(app);
+    launch(app);
 }
-
-/// Run with `cargo run --features server`
-#[cfg(all(feature = "server", not(feature = "desktop")))]
-#[tokio::main]
-async fn main() {
-    use server_fn::axum::register_explicit;
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.01:8080")
-        .await
-        .unwrap();
-
-    register_explicit::<PostServerData>();
-    register_explicit::<GetServerData>();
-
-    axum::serve(
-        listener,
-        axum::Router::new()
-            .register_server_functions()
-            .into_make_service(),
-    )
-    .await
-    .unwrap();
-}
-
-#[cfg(all(not(feature = "desktop"), not(feature = "server")))]
-fn main() {}
 
 pub fn app() -> Element {
     let mut count = use_signal(|| 0);

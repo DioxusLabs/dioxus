@@ -174,7 +174,9 @@ impl Attribute {
         let element_name = self.el_name.as_ref().unwrap();
         let rust_name = match element_name {
             ElementName::Ident(i) => i.to_string(),
-            ElementName::Custom(s) => return (intern(s.value()), None),
+            // If this is a web component, just use the name of the elements instead of mapping the attribute
+            // through the hot reloading context
+            ElementName::Custom(_) => return (intern(attribute_name_rust.as_str()), None),
         };
 
         Ctx::map_attribute(&rust_name, &attribute_name_rust)
@@ -402,6 +404,10 @@ pub enum AttributeName {
 impl AttributeName {
     pub fn is_likely_event(&self) -> bool {
         matches!(self, Self::BuiltIn(ident) if ident.to_string().starts_with("on"))
+    }
+
+    pub fn is_likely_key(&self) -> bool {
+        matches!(self, Self::BuiltIn(ident) if ident == "key")
     }
 
     pub fn span(&self) -> proc_macro2::Span {
