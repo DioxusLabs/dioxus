@@ -1,6 +1,3 @@
-#[cfg(feature = "hot_reload")]
-use dioxus_core::TemplateNode;
-
 use crate::{literal::HotLiteral, location::DynIdx, HotReloadFormattedSegment, IfmtInput};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
