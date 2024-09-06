@@ -2412,6 +2412,7 @@ dependencies = [
  "dioxus-fullstack",
  "dioxus-html",
  "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-runtime-config",
  "dirs",
  "env_logger",
@@ -2710,6 +2711,7 @@ dependencies = [
  "dioxus-core-types",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-web",
  "enumset",
  "euclid",
@@ -2911,11 +2913,23 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.6.0-alpha.2"
 dependencies = [
- "dioxus-core",
- "dioxus-core-types",
- "internment",
  "prettier-please",
  "prettyplease",
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
+ "syn 2.0.75",
+ "tracing",
+]
+
+[[package]]
+name = "dioxus-rsx-hotreload"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-core-types",
+ "dioxus-rsx",
+ "internment",
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",

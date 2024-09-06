@@ -166,52 +166,6 @@ impl Attribute {
         self.as_static_str_literal().is_some()
     }
 
-    #[cfg(feature = "hot_reload")]
-    pub(crate) fn html_tag_and_namespace<Ctx: dioxus_core_types::HotReloadingContext>(
-        &self,
-    ) -> (&'static str, Option<&'static str>) {
-        let attribute_name_rust = self.name.to_string();
-        let element_name = self.el_name.as_ref().unwrap();
-        let rust_name = match element_name {
-            ElementName::Ident(i) => i.to_string(),
-            // If this is a web component, just use the name of the elements instead of mapping the attribute
-            // through the hot reloading context
-            ElementName::Custom(_) => return (intern(attribute_name_rust.as_str()), None),
-        };
-
-        Ctx::map_attribute(&rust_name, &attribute_name_rust)
-            .unwrap_or((intern(attribute_name_rust.as_str()), None))
-    }
-
-    #[cfg(feature = "hot_reload")]
-    pub fn to_template_attribute<Ctx: dioxus_core_types::HotReloadingContext>(
-        &self,
-    ) -> dioxus_core::TemplateAttribute {
-        use dioxus_core::TemplateAttribute;
-
-        // If it's a dynamic node, just return it
-        // For dynamic attributes, we need to check the mapping to see if that mapping exists
-        // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
-        // or something sufficiently serializable
-        //  (ie `checked`` being a bool and bools being interpretable)
-        //
-        // For now, just give up if that attribute doesn't exist in the mapping
-        if !self.is_static_str_literal() {
-            let id = self.dyn_idx.get();
-            return TemplateAttribute::Dynamic { id };
-        }
-
-        // Otherwise it's a static node and we can build it
-        let (_, value) = self.as_static_str_literal().unwrap();
-        let (name, namespace) = self.html_tag_and_namespace::<Ctx>();
-
-        TemplateAttribute::Static {
-            name,
-            namespace,
-            value: intern(value.to_static().unwrap().as_str()),
-        }
-    }
-
     pub fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
         // Shortcut out with spreads
         if let AttributeName::Spread(_) = self.name {

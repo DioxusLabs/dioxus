@@ -126,54 +126,6 @@ impl ToTokens for BodyNode {
 }
 
 impl BodyNode {
-    /// Convert this BodyNode into a TemplateNode.
-    ///
-    /// dioxus-core uses this to understand templates at compiletime
-    #[cfg(feature = "hot_reload")]
-    pub fn to_template_node<Ctx: dioxus_core_types::HotReloadingContext>(
-        &self,
-    ) -> dioxus_core::TemplateNode {
-        use dioxus_core::TemplateNode;
-        match self {
-            BodyNode::Element(el) => {
-                let rust_name = el.name.to_string();
-
-                let (tag, namespace) =
-                    Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
-
-                TemplateNode::Element {
-                    tag,
-                    namespace,
-                    children: intern(
-                        el.children
-                            .iter()
-                            .map(|c| c.to_template_node::<Ctx>())
-                            .collect::<Vec<_>>(),
-                    ),
-                    attrs: intern(
-                        el.merged_attributes
-                            .iter()
-                            .map(|attr| attr.to_template_attribute::<Ctx>())
-                            .collect::<Vec<_>>(),
-                    ),
-                }
-            }
-            BodyNode::Text(text) => text.to_template_node(),
-            BodyNode::RawExpr(exp) => TemplateNode::Dynamic {
-                id: exp.dyn_idx.get(),
-            },
-            BodyNode::Component(comp) => TemplateNode::Dynamic {
-                id: comp.dyn_idx.get(),
-            },
-            BodyNode::ForLoop(floop) => TemplateNode::Dynamic {
-                id: floop.dyn_idx.get(),
-            },
-            BodyNode::IfChain(chain) => TemplateNode::Dynamic {
-                id: chain.dyn_idx.get(),
-            },
-        }
-    }
-
     pub fn get_dyn_idx(&self) -> usize {
         match self {
             BodyNode::Text(text) => text.dyn_idx.get(),

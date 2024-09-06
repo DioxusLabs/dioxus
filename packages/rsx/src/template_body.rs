@@ -238,7 +238,7 @@ impl TemplateBody {
         self.roots.is_empty()
     }
 
-    pub(crate) fn implicit_key(&self) -> Option<&AttributeValue> {
+    pub fn implicit_key(&self) -> Option<&AttributeValue> {
         match self.roots.first() {
             Some(BodyNode::Element(el)) => el.key(),
             Some(BodyNode::Component(comp)) => comp.get_key(),
@@ -310,7 +310,7 @@ impl TemplateBody {
     }
 
     /// Iterate through the literal component properties of this rsx call in depth-first order
-    pub(crate) fn literal_component_properties(&self) -> impl Iterator<Item = &HotLiteral> + '_ {
+    pub fn literal_component_properties(&self) -> impl Iterator<Item = &HotLiteral> + '_ {
         self.dynamic_nodes()
             .filter_map(|node| {
                 if let BodyNode::Component(component) = node {

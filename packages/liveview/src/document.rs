@@ -1,19 +1,32 @@
+use crate::query::{Query, QueryEngine};
 use dioxus_core::ScopeId;
 use dioxus_document::{Document, EvalError};
-use std::rc::Rc;
-
-use crate::query::{Query, QueryEngine};
+use std::{
+    collections::BTreeMap,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 
 /// Provides the LiveviewDocument through [`ScopeId::provide_context`].
 pub fn init_eval() {
     let query = ScopeId::ROOT.consume_context::<QueryEngine>().unwrap();
-    let provider: Rc<dyn Document> = Rc::new(LiveviewDocument { query });
+    let provider: Rc<dyn Document> = Rc::new(LiveviewDocument {
+        query,
+        action_tx: todo!(),
+        updater_callback: todo!(),
+        current_index: todo!(),
+        routes: todo!(),
+    });
     ScopeId::ROOT.provide_context(provider);
 }
 
-/// Reprints the liveview-target's provider of evaluators.
+// The document impl for LiveView
 pub struct LiveviewDocument {
     query: QueryEngine,
+    action_tx: tokio::sync::mpsc::UnboundedSender<Action>,
+    updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>>,
+    current_index: usize,
+    routes: BTreeMap<usize, String>,
 }
 
 impl Document for LiveviewDocument {
@@ -34,23 +47,66 @@ impl Document for LiveviewDocument {
         todo!()
     }
 
-    fn current_route(&self) -> String {
-        todo!()
-    }
-
     fn go_back(&self) {
-        todo!()
+        let _ = self.action_tx.send(Action::GoBack);
     }
 
     fn go_forward(&self) {
-        todo!()
+        let _ = self.action_tx.send(Action::GoForward);
     }
 
     fn push_route(&self, route: String) {
-        todo!()
+        let _ = self.action_tx.send(Action::Push(route));
     }
 
-    fn replace_route(&self, path: String) {
-        todo!()
+    fn replace_route(&self, route: String) {
+        let _ = self.action_tx.send(Action::Replace(route));
     }
+
+    fn navigate_external(&self, url: String) -> bool {
+        let _ = self.action_tx.send(Action::External(url));
+        true
+    }
+
+    fn current_route(&self) -> String {
+        self.routes[&self.current_index].clone()
+    }
+
+    fn can_go_back(&self) -> bool {
+        // Check if the one before is contiguous (i.e., not an external page)
+        let visited_indices: Vec<usize> = self.routes.keys().cloned().collect();
+        visited_indices
+            .iter()
+            .position(|&rhs| self.current_index == rhs)
+            .map_or(false, |index| {
+                index > 0 && visited_indices[index - 1] == self.current_index - 1
+            })
+    }
+
+    fn can_go_forward(&self) -> bool {
+        // let timeline = self.timeline.lock().expect("unpoisoned mutex");
+        // Check if the one after is contiguous (i.e., not an external page)
+        let visited_indices: Vec<usize> = self.routes.keys().cloned().collect();
+        visited_indices
+            .iter()
+            .rposition(|&rhs| self.current_index == rhs)
+            .map_or(false, |index| {
+                index < visited_indices.len() - 1
+                    && visited_indices[index + 1] == self.current_index + 1
+            })
+    }
+
+    fn updater(&self, callback: Arc<dyn Fn()>) {
+        todo!()
+        // let mut updater_callback = self.updater_callback.write().unwrap();
+        // *updater_callback = callback;
+    }
+}
+
+enum Action {
+    GoBack,
+    GoForward,
+    Push(String),
+    Replace(String),
+    External(String),
 }

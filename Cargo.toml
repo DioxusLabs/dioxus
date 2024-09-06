@@ -39,6 +39,7 @@ members = [
     "packages/isrg",
     "packages/manganis-core",
     "packages/server",
+    "packages/rsx-hotreload",
 
     # Static generation examples
     "packages/static-generation/examples/simple",
@@ -100,6 +101,7 @@ dioxus-liveview = { path = "packages/liveview", version = "0.6.0-alpha.2" }
 dioxus-autofmt = { path = "packages/autofmt", version = "0.6.0-alpha.2" }
 dioxus-check = { path = "packages/check", version = "0.6.0-alpha.2" }
 dioxus-rsx = { path = "packages/rsx", version = "0.6.0-alpha.2" }
+dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.6.0-alpha.2" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.2" }
 dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.2" }

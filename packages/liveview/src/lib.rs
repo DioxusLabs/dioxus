@@ -7,15 +7,15 @@ mod config;
 mod document;
 mod element;
 mod events;
-pub mod pool;
+mod pool;
 mod query;
 
-#[allow(unused_imports)]
 pub use adapters::*;
 pub use config::*;
+pub use pool::*;
+
 use dioxus_interpreter_js::NATIVE_JS;
 use futures_util::{SinkExt, StreamExt};
-pub use pool::*;
 
 #[cfg(feature = "axum")]
 pub mod launch;

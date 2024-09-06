@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     collections::HashSet,
     rc::Rc,
     sync::{Arc, RwLock},
@@ -36,9 +35,8 @@ struct RouterContextInner {
 
     failure_external_navigation: fn() -> Element,
 
-    any_route_to_string: fn(&dyn Any) -> String,
-
     site_map: &'static [SiteMapSegment],
+    // any_route_to_string: fn(&dyn Any) -> String,
     // routing_callback: Option<AnyRoutingCallback>,
 }
 
@@ -51,6 +49,9 @@ impl RouterContext {
             unresolved_error: None,
             subscribers: subscribers.clone(),
             document: todo!(),
+            failure_external_navigation: cfg.failure_external_navigation,
+            site_map: todo!(),
+            runtime: todo!(),
             // history: cfg.take_history(),
 
             // subscriber_update,
@@ -70,26 +71,21 @@ impl RouterContext {
             //     })
             //         as Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>
             // }),
-            failure_external_navigation: cfg.failure_external_navigation,
-
-            any_route_to_string: |route| {
-                todo!()
-                // route
-                //     .downcast_ref::<R>()
-                //     .unwrap_or_else(|| {
-                //         panic!(
-                //             "Route is not of the expected type: {}\n found typeid: {:?}\n expected typeid: {:?}",
-                //             std::any::type_name::<R>(),
-                //             route.type_id(),
-                //             std::any::TypeId::of::<R>()
-                //         )
-                //     })
-                //     .to_string()
-            },
-
-            site_map: todo!(),
+            // any_route_to_string: |route| {
+            // todo!()
+            // route
+            //     .downcast_ref::<R>()
+            //     .unwrap_or_else(|| {
+            //         panic!(
+            //             "Route is not of the expected type: {}\n found typeid: {:?}\n expected typeid: {:?}",
+            //             std::any::type_name::<R>(),
+            //             route.type_id(),
+            //             std::any::TypeId::of::<R>()
+            //         )
+            //     })
+            //     .to_string()
+            // },
             // site_map: R::SITE_MAP,
-            runtime: todo!(),
             // routing_callback: todo!(),
         };
 
@@ -220,9 +216,9 @@ impl RouterContext {
         self.inner.read_unchecked().document.current_route()
     }
 
-    pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
-        (self.inner.read().any_route_to_string)(route)
-    }
+    // pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
+    //     (self.inner.read().any_route_to_string)(route)
+    // }
 
     pub(crate) fn resolve_into_routable<R: Routable>(
         &self,
