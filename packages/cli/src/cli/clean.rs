@@ -1,8 +1,10 @@
 use crate::DioxusCrate;
 use anyhow::Context;
 use build::TargetArgs;
+use std::{env, path::Path};
+use walkdir::WalkDir;
 
-use super::*;
+use super::*; // ?
 
 /// Clean build artifacts.
 #[derive(Clone, Debug, Parser)]
@@ -11,63 +13,62 @@ pub struct Clean {}
 
 impl Clean {
     pub fn clean(self) -> anyhow::Result<()> {
-        // Tries to access Internet when offline.
+        // Tries to access Internet when offline. Creates a new file every time.
         let dioxus_crate =
             DioxusCrate::new(&TargetArgs::default()).context("Failed to load Dioxus workspace")?;
 
         // TODO: remove dbg and unwraps
 
-        let output = Command::new("cargo")
-            .arg("clean")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()?;
+        let target_dir = &dioxus_crate.workspace_dir().join(
+            env::var_os("CARGO_BUILD_TARGET_DIR")
+                .or_else(|| env::var_os("CARGO_TARGET_DIR"))
+                .unwrap_or("target".into()),
+        );
 
-        if !output.status.success() {
-            return Err(anyhow::anyhow!("Cargo clean failed."));
-        }
+        dbg!(target_dir);
 
-        let error = "Failed to get cargo clean output";
-        let stderr = String::from_utf8(output.stderr).context(error)?;
-        let summary_line = stderr.lines().last().context(error)?;
-        dbg!(summary_line);
-        let total = summary_line
-            .split(' ')
-            .rev()
-            .nth(1)
-            .context("Failed to parse cargo clean's output")?;
-
-        let bytes1 = if total != "0" {
-            let bytes = iec_size_to_bytes({
-                let (a, b) =
-                    total.split_at(total.rfind(|ch: char| ch.is_ascii_digit()).unwrap() + 1);
-                &format!("{a} {b}")
-            });
-            eprintln!("Removed {bytes} bytes");
-            bytes
+        let (target_dir_file_count, target_dir_size) = if target_dir.is_dir() {
+            let files = count_files(target_dir);
+            let size = fs_extra::dir::get_size(target_dir).unwrap();
+            remove_dir_all(target_dir)?;
+            (files, size)
         } else {
-            0
+            (0, 0)
         };
+        dbg!(target_dir_file_count, target_dir_size);
 
         let out_dir = &dioxus_crate.out_dir();
         dbg!(&out_dir);
 
-        let bytes2 = if out_dir.is_dir() {
-            eprintln!("out_dir exists");
-            let size = fs_extra::dir::get_size(out_dir)
-                .context("Failed to get size of the Dioxus `out_dir`");
+        let (out_dir_file_count, out_dir_size) = if out_dir.is_dir() {
+            let files = count_files(out_dir);
+            let size = fs_extra::dir::get_size(out_dir).unwrap();
             remove_dir_all(out_dir)?;
-            let size = size?;
-            eprintln!("Removed {} (Dioxus-specific)", bytes_to_iec_size(size));
-            size
+            (files, size)
         } else {
-            0
+            (0, 0)
         };
+        dbg!(out_dir_file_count, out_dir_size);
 
-        eprintln!("Removed {} total", bytes_to_iec_size(bytes1 + bytes2));
+        eprintln!(
+            "Removed {} files, {} total",
+            target_dir_file_count + out_dir_file_count,
+            bytes_to_iec_size(target_dir_size + out_dir_size)
+        );
 
         Ok(())
     }
+}
+
+fn count_files<P>(root: P) -> usize
+where
+    P: AsRef<Path>,
+{
+    WalkDir::new(root)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file())
+        .count()
 }
 
 // Stolen from Typst.
@@ -123,32 +124,11 @@ fn bytes_to_iec_size(size: u64) -> String {
     format!("{value} {unit}")
 }
 
-/// Not needed if we can directly count the size of /target dir and if only **it** is
-/// deleted via `cargo crate`. Otherwise used for parsing output of `cargo clean`
-/// (not accurate) and then sum the 2 size values.
-fn iec_size_to_bytes(size: &str) -> u64 {
-    let (value, unit) = size
-        .split_once(' ')
-        .unwrap_or_else(|| panic!("tried splitting |{size}| on space"));
-    dbg!(value, unit);
-    let n = match unit {
-        "B" => 0,
-        "KiB" => 1,
-        "MiB" => 2,
-        "GiB" => 3,
-        "TiB" => 4,
-        "PiB" => 5,
-        "EiB" => 6,
-        "ZiB" => 7,
-        "YiB" => 8,
-        _ => unreachable!("Size is too large or invalid unit"),
-    };
-    (value.parse::<f64>().unwrap() * 1024_f64.powi(n)).round() as u64
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TODO: add test for the clean subcommand.
 
     #[test]
     fn test_bytes_to_iec_size() {
@@ -162,19 +142,5 @@ mod tests {
         assert_eq!("1 TiB", &bytes_to_iec_size(1024 * 1024 * 1024 * 1024));
         static GIB: u64 = 1024 * 1024 * 1024 * 1024;
         assert_eq!("1 PiB", &bytes_to_iec_size(GIB * 1024));
-    }
-
-    #[test]
-    fn test_iec_size_to_bytes() {
-        assert_eq!(0, iec_size_to_bytes("0 B"));
-        assert_eq!(1, iec_size_to_bytes("1 B"));
-        assert_eq!(1023, iec_size_to_bytes("1023 B"));
-        assert_eq!(1024, iec_size_to_bytes("1 KiB"));
-        assert_eq!(1500, iec_size_to_bytes("1.46 KiB"));
-        assert_eq!(1024 * 1024, iec_size_to_bytes("1 MiB"));
-        assert_eq!(1024 * 1024 * 1024, iec_size_to_bytes("1 GiB"));
-        assert_eq!(1024 * 1024 * 1024 * 1024, iec_size_to_bytes("1 TiB"));
-        static GIB: u64 = 1024 * 1024 * 1024 * 1024;
-        assert_eq!(GIB * 1024, iec_size_to_bytes("1 PiB"));
     }
 }
