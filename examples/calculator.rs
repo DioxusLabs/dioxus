@@ -15,7 +15,7 @@ use dioxus::prelude::*;
 const STYLE: Asset = asset!("/examples/assets/calculator.css");
 
 fn main() {
-    LaunchBuilder::desktop()
+    dioxus::launch::builder()
         .with_cfg(desktop!({
             use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
             Config::new().with_window(

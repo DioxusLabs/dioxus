@@ -15,7 +15,7 @@ enum Route {
 }
 
 fn main() {
-    dioxus::launch(app);
+    dioxus::launch(App);
 }
 
 #[component]

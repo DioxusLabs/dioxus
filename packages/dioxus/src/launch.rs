@@ -6,7 +6,7 @@ use std::any::Any;
 
 use crate::prelude::*;
 
-pub fn launch_builder() -> LaunchBuilder {
+pub fn builder() -> LaunchBuilder {
     LaunchBuilder::new()
 }
 
@@ -165,13 +165,15 @@ impl LaunchBuilder {
 pub trait TryIntoConfig {
     fn into_config<T>(self, config: &mut Option<T>);
 }
+
 impl TryIntoConfig for () {
     fn into_config<T>(self, config: &mut Option<T>) {}
 }
 
 impl LaunchBuilder {
     /// Provide a platform-specific config to the builder.
-    pub fn with_cfg(mut self, config: impl TryIntoConfig) -> Self {
+    pub fn with_cfg<F>(mut self, config: F) -> Self {
+        // pub fn with_cfg(mut self, config: impl TryIntoConfig) -> Self {
         // config.into_config(&mut self.platform_config);
         self
     }

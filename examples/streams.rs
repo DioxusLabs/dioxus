@@ -5,7 +5,7 @@ use futures_util::{future, stream, Stream, StreamExt};
 use std::time::Duration;
 
 fn main() {
-    launch_desktop(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

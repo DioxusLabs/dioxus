@@ -13,7 +13,7 @@ use dioxus::html::MouseEvent;
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::desktop()
+    dioxus::launch::builder()
         .with_cfg(
             Config::new().with_window(
                 WindowBuilder::new()

@@ -12,7 +12,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch_builder()
+    dioxus::builder()
         .with_cfg(desktop!({
             use dioxus::desktop::{LogicalSize, WindowBuilder};
             dioxus::desktop::Config::default()
@@ -22,7 +22,7 @@ fn main() {
             rsx! {
                 document::Link {
                     rel: "stylesheet",
-                    href: asset!("https://unpkg.com/purecss@2.0.6/build/pure-min.css"),
+                    href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css",
                     integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
                     crossorigin: "anonymous"
                 }

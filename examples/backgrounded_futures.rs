@@ -10,7 +10,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch_desktop(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

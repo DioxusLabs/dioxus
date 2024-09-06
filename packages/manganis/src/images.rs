@@ -3,7 +3,7 @@ use dioxus_core_types::DioxusFormattable;
 use crate::Asset;
 
 /// An image asset that is built by the [`asset!`] macro
-#[derive(Debug, PartialEq, PartialOrd, Clone, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Copy)]
 pub struct ImageAsset {
     /// The path to the image
     asset: Asset,
@@ -53,6 +53,11 @@ impl ImageAsset {
     /// Sets the caption of the image
     pub const fn with_caption(self, caption: Option<&'static str>) -> Self {
         Self { caption, ..self }
+    }
+
+    /// Sets the format of the image
+    pub const fn format(self, format: ImageType) -> Self {
+        Self { ..self }
     }
 }
 

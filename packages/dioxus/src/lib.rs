@@ -30,7 +30,7 @@ pub use dioxus_core::{CapturedError, Ok, Result};
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
-mod launch;
+pub mod launch;
 
 pub mod events {
     #[cfg(feature = "html")]
@@ -41,7 +41,7 @@ pub mod events {
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 #[allow(deprecated)]
-pub use launch::{launch, launch_builder};
+pub use launch::{builder, launch};
 
 #[cfg(feature = "hooks")]
 #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]

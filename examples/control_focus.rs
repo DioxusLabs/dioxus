@@ -9,7 +9,7 @@ use std::rc::Rc;
 const STYLE: Asset = asset!("/examples/assets/roulette.css");
 
 fn main() {
-    launch_desktop(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

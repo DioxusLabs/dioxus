@@ -7,8 +7,7 @@
 //!
 //! You can run this example with `cargo run --example assets` or `dx serve --example assets`.
 //! When manganis is not active, the asset!() macro will fallback to the path of the asset on
-//! your filesystem.
-
+//! your filesystem.a
 use dioxus::prelude::*;
 
 /// asset!() will mark this asset as a dependency of the app without actually including it in the
@@ -29,16 +28,10 @@ fn app() -> Element {
             h1 { "This should show an image:" }
             img { src: ASSET_PATH }
 
-            // keep support for these too
-            img {
-                src: "/Users/jonkelley/Development/dioxus/examples/assets/logo.png"
-            }
-            img {
-                src: "/examples/assets/logo.png"
-            }
-            img {
-                src: "examples/assets/logo.png"
-            }
+            // temporarily keep support for these too
+            img { src: "/Users/jonkelley/Development/dioxus/examples/assets/logo.png" }
+            img { src: "/examples/assets/logo.png" }
+            img { src: "examples/assets/logo.png" }
         }
     }
 }

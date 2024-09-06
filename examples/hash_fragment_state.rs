@@ -2,7 +2,7 @@
 //!
 //! You can set up two way data binding between the url hash and signals.
 //!
-//! Run this example on desktop with  
+//! Run this example on desktop with
 //! ```sh
 //! dx serve --example hash_fragment_state --features=ciborium,base64
 //! ```
@@ -19,7 +19,7 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
-    launch(|| {
+    dioxus::launch(|| {
         rsx! {
             Router::<Route> {}
         }
