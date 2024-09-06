@@ -16,7 +16,6 @@ enum FilterState {
     Completed,
 }
 
-#[derive(Debug, PartialEq, Eq)]
 struct TodoItem {
     checked: bool,
     contents: String,
