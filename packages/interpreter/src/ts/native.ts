@@ -450,7 +450,7 @@ function handleVirtualdomEventSync(
 }
 
 function getTargetId(target: EventTarget): NodeId | null {
-  // Ensure that the target is a node, sometimes it's nota
+  // Ensure that the target is a node, sometimes it's not
   if (!(target instanceof Node)) {
     return null;
   }

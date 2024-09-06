@@ -15,7 +15,7 @@ fn app() -> Element {
     let mut millis = use_signal(|| 0);
 
     use_future(move || async move {
-        // Save our initial timea
+        // Save our initial time
         let start = std::time::Instant::now();
 
         loop {

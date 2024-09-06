@@ -7,7 +7,7 @@
 //!
 //! You can run this example with `cargo run --example assets` or `dx serve --example assets`.
 //! When manganis is not active, the asset!() macro will fallback to the path of the asset on
-//! your filesystem.a
+//! your filesystem.
 use dioxus::prelude::*;
 
 /// asset!() will mark this asset as a dependency of the app without actually including it in the

@@ -148,7 +148,7 @@ struct GenericWebSysEvent {
     raw: Event,
     element: Element,
 }
-/// Converts our Synthetic wrapper into the trait objects dioxus is expectinga
+/// Converts our Synthetic wrapper into the trait objects dioxus is expecting
 trait Synthesize {
     fn synthesize<O: JsCast + 'static, F: From<Synthetic<O>>>(&self) -> F;
 }
