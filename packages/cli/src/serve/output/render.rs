@@ -1,4 +1,5 @@
 //! This module contains functions to render different elements on the TUI frame.
+// TODO: Cleanup console filtering / message building logic
 
 use super::{BuildProgress, Message, MessageSource};
 use ansi_to_tui::IntoText as _;

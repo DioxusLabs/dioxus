@@ -1,3 +1,10 @@
+// TODO: Move more message logic to message.rs (if multi-file impls are allowed)
+// TODO: Cleanup input logic and make it extensible.
+// TODO: Is there anything we can do about vscode integrated terminal support on windows?
+//       - Doesn't switch to alternate buffer
+//       - vscode captures the mouse causing our mouse events to never get called
+//       - broken mouse capture breaks our scrolling
+
 use super::{Builder, Server, Watcher};
 use crate::{
     builder::{BuildProgressUpdate, Stage, TargetPlatform},
@@ -195,7 +202,7 @@ impl Output {
             selected_lines: Vec::new(),
 
             // Filter
-            show_filter_menu: true,
+            show_filter_menu: false,
             filters: Vec::new(),
             selected_filter_index: 0,
             filter_search_input: None,
@@ -432,7 +439,7 @@ impl Output {
                 // Select filter list item if filter is showing, otherwise scroll console.
                 if self.show_filter_menu {
                     let list_len = self.filters.len();
-                    if self.selected_filter_index < list_len - 1 {
+                    if self.selected_filter_index + 1 < list_len {
                         self.selected_filter_index += 1;
                     }
                 } else {
@@ -449,7 +456,9 @@ impl Output {
                 // Remove selected filter if filter menu is shown.
                 if self.show_filter_menu {
                     let index = self.selected_filter_index;
-                    self.filters.remove(index);
+                    if self.filters.get(index).is_some() {
+                        self.filters.remove(index);
+                    }
                 }
             }
             Event::Key(key) if key.code == KeyCode::Right && key.kind == KeyEventKind::Press => {
