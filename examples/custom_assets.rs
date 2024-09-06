@@ -16,7 +16,7 @@ use dioxus::prelude::*;
 ///
 /// When used with web apps, manganis will detect the import of the image, optimize it, and put it
 /// in the output dist folder in the right location, ensuring no two images have the same name.
-static ASSET_PATH: ImageAsset = asset!("/examples/assets/logo.png".image().format(ImageType::Avif));
+static IMAGE: ImageAsset = asset!("/examples/assets/logo.png".image().format(ImageType::Avif));
 
 fn main() {
     dioxus::launch(app);
@@ -26,7 +26,7 @@ fn app() -> Element {
     rsx! {
         div {
             h1 { "This should show an image:" }
-            img { src: ASSET_PATH }
+            img { src: IMAGE }
 
             // temporarily keep support for these too
             img { src: "/Users/jonkelley/Development/dioxus/examples/assets/logo.png" }

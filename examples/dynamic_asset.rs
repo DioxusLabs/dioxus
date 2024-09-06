@@ -7,8 +7,6 @@
 use dioxus::desktop::{use_asset_handler, wry::http::Response};
 use dioxus::prelude::*;
 
-const STYLE: Asset = asset!("/examples/assets/custom_assets.css");
-
 fn main() {
     dioxus::launch(app);
 }
@@ -24,7 +22,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        document::Stylesheet { href: STYLE }
+        document::Stylesheet { href: asset!("/examples/assets/custom_assets.css") }
         h1 { "Dynamic Assets" }
         img { src: "/logos/logo.png" }
     }

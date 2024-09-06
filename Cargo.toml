@@ -69,7 +69,7 @@ members = [
     "example-projects/hackernews",
     "example-projects/fullstack-mobile",
     "example-projects/tailwind",
-    "example-projects/PWA-example",
+    "example-projects/pwa",
     "example-projects/basic-liveview",
 ]
 

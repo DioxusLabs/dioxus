@@ -6,8 +6,6 @@
 use dioxus::prelude::*;
 use std::{collections::VecDeque, fmt::Debug, rc::Rc};
 
-const STYLE: Asset = asset!("/examples/assets/events.css");
-
 fn main() {
     dioxus::launch(app);
 }
@@ -26,7 +24,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        document::Stylesheet { href: STYLE }
+        document::Stylesheet { href: asset!("/examples/assets/events.css") }
         div { id: "container",
             // focusing is necessary to catch keyboard events
             div { id: "receiver", tabindex: 0,
