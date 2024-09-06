@@ -8,7 +8,7 @@
 //! fn main() {
 //!     #[cfg(feature = "web")]
 //!     // Hydrate the application on the client
-//!     launch(app);
+//!     dioxus::launch(app);
 //!     #[cfg(feature = "server")]
 //!     {
 //!         tokio::runtime::Runtime::new()

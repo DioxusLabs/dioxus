@@ -100,9 +100,9 @@ pub use manganis as assets;
 pub use manganis;
 
 pub mod prelude {
-    #[cfg(feature = "launch")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
-    pub use crate::launch::*;
+    // #[cfg(feature = "launch")]
+    // #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
+    // pub use crate::launch::*;
 
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]

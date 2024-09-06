@@ -8,7 +8,7 @@ use dioxus::prelude::*;
 const STYLE: Asset = asset!("/examples/assets/clock.css");
 
 fn main() {
-    launch_desktop(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

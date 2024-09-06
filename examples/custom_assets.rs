@@ -20,7 +20,7 @@ use dioxus::prelude::*;
 static ASSET_PATH: ImageAsset = asset!("/examples/assets/logo.png".image().format(ImageType::Avif));
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
