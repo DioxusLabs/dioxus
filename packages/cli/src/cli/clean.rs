@@ -1,8 +1,6 @@
 use crate::DioxusCrate;
 use anyhow::Context;
 use build::TargetArgs;
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
 
 use super::*;
 
@@ -11,38 +9,13 @@ use super::*;
 #[clap(name = "clean")]
 pub struct Clean {}
 
-static N_TO_IEC_UNIT_MAP: Lazy<HashMap<i32, &str>> = Lazy::new(|| {
-    HashMap::<i32, &str>::from([
-        (1, "K"),
-        (2, "M"),
-        (3, "G"),
-        (4, "T"),
-        (5, "P"),
-        (6, "E"),
-        (7, "Z"),
-        (8, "Y"),
-    ])
-});
-
-static IEC_UNIT_TO_N_MAP: Lazy<HashMap<&str, i32>> = Lazy::new(|| {
-    HashMap::<&str, i32>::from([
-        ("B", 0),
-        ("KiB", 1),
-        ("MiB", 2),
-        ("GiB", 3),
-        ("TiB", 4),
-        ("PiB", 5),
-        ("EiB", 6),
-        ("ZiB", 7),
-        ("YiB", 8),
-    ])
-});
-
 impl Clean {
     pub fn clean(self) -> anyhow::Result<()> {
         // Tries to access Internet when offline.
         let dioxus_crate =
             DioxusCrate::new(&TargetArgs::default()).context("Failed to load Dioxus workspace")?;
+
+        // TODO: remove dbg and unwraps
 
         let output = Command::new("cargo")
             .arg("clean")
@@ -133,16 +106,21 @@ pub fn round_with_precision(value: f64, precision: u8) -> f64 {
 }
 
 fn bytes_to_iec_size(size: u64) -> String {
-    if size < 1024 {
-        format!("{size} B")
-    } else {
-        let n = (size.ilog2() / 10) as i32;
-        format!(
-            "{} {}iB",
-            round_with_precision(size as f64 / 1024_f64.powi(n), 2),
-            N_TO_IEC_UNIT_MAP.get(&n).expect("Size is too large")
-        )
-    }
+    let n = (size.ilog2() / 10) as i32;
+    let value = round_with_precision(size as f64 / 1024_f64.powi(n), 2);
+    let unit = match n {
+        0 => "B",
+        1 => "KiB",
+        2 => "MiB",
+        3 => "GiB",
+        4 => "TiB",
+        5 => "PiB",
+        6 => "EiB",
+        7 => "ZiB",
+        8 => "YiB",
+        _ => unreachable!("Size is too large"),
+    };
+    format!("{value} {unit}")
 }
 
 /// Not needed if we can directly count the size of /target dir and if only **it** is
@@ -153,10 +131,19 @@ fn iec_size_to_bytes(size: &str) -> u64 {
         .split_once(' ')
         .unwrap_or_else(|| panic!("tried splitting |{size}| on space"));
     dbg!(value, unit);
-    let n = IEC_UNIT_TO_N_MAP
-        .get(unit)
-        .expect("Size is too large or invalid unit");
-    (value.parse::<f64>().unwrap() * 1024_f64.powi(*n)).round() as u64
+    let n = match unit {
+        "B" => 0,
+        "KiB" => 1,
+        "MiB" => 2,
+        "GiB" => 3,
+        "TiB" => 4,
+        "PiB" => 5,
+        "EiB" => 6,
+        "ZiB" => 7,
+        "YiB" => 8,
+        _ => unreachable!("Size is too large or invalid unit"),
+    };
+    (value.parse::<f64>().unwrap() * 1024_f64.powi(n)).round() as u64
 }
 
 #[cfg(test)]
