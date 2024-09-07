@@ -5,8 +5,8 @@ use syn::{spanned::Spanned, visit::Visit, Pat};
 use crate::{
     issues::{Issue, IssueReport},
     metadata::{
-        AnyLoopInfo, ClosureInfo, ComponentInfo, ConditionalInfo, FnInfo, ForInfo, HookInfo,
-        IfInfo, LoopInfo, MatchInfo, Span, WhileInfo,
+        AnyLoopInfo, AsyncInfo, ClosureInfo, ComponentInfo, ConditionalInfo, FnInfo, ForInfo,
+        HookInfo, IfInfo, LoopInfo, MatchInfo, Span, WhileInfo,
     },
 };
 
@@ -46,6 +46,7 @@ enum Node {
     While(WhileInfo),
     Loop(LoopInfo),
     Closure(ClosureInfo),
+    Async(AsyncInfo),
     ComponentFn(ComponentInfo),
     HookFn(HookInfo),
     OtherFn(FnInfo),
@@ -107,7 +108,7 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
                     );
                     let mut container_fn: Option<Node> = None;
                     for node in self.context.iter().rev() {
-                        match node {
+                        match &node {
                             Node::If(if_info) => {
                                 let issue = Issue::HookInsideConditional(
                                     hook_info.clone(),
@@ -150,6 +151,11 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
                                 );
                                 self.issues.push(issue);
                             }
+                            Node::Async(async_info) => {
+                                let issue =
+                                    Issue::HookInsideAsync(hook_info.clone(), async_info.clone());
+                                self.issues.push(issue);
+                            }
                             Node::ComponentFn(_) | Node::HookFn(_) | Node::OtherFn(_) => {
                                 container_fn = Some(node.clone());
                                 break;
@@ -164,6 +170,7 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
                 }
             }
         }
+        syn::visit::visit_expr_call(self, i);
     }
 
     fn visit_item_fn(&mut self, i: &'ast syn::ItemFn) {
@@ -208,7 +215,11 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
                 .unwrap_or_else(|| i.span())
                 .into(),
         )));
-        syn::visit::visit_expr_if(self, i);
+        // only visit the body and else branch, calling hooks inside the expression is not conditional
+        self.visit_block(&i.then_branch);
+        if let Some(it) = &i.else_branch {
+            self.visit_expr(&(it).1);
+        }
         self.context.pop();
     }
 
@@ -221,7 +232,10 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
                 .unwrap_or_else(|| i.span())
                 .into(),
         )));
-        syn::visit::visit_expr_match(self, i);
+        // only visit the arms, calling hooks inside the expression is not conditional
+        for it in &i.arms {
+            self.visit_arm(it);
+        }
         self.context.pop();
     }
 
@@ -262,6 +276,13 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
         self.context
             .push(Node::Closure(ClosureInfo::new(i.span().into())));
         syn::visit::visit_expr_closure(self, i);
+        self.context.pop();
+    }
+
+    fn visit_expr_async(&mut self, i: &'ast syn::ExprAsync) {
+        self.context
+            .push(Node::Async(AsyncInfo::new(i.span().into())));
+        syn::visit::visit_expr_async(self, i);
         self.context.pop();
     }
 }
@@ -417,6 +438,22 @@ mod tests {
     }
 
     #[test]
+    fn test_use_in_match_expr() {
+        let contents = indoc! {r#"
+            fn use_thing() {
+                match use_resource(|| async {}) {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
     fn test_for_loop_hook() {
         let contents = indoc! {r#"
             fn App() -> Element {
@@ -550,6 +587,21 @@ mod tests {
     }
 
     #[test]
+    fn test_conditional_expr_okay() {
+        let contents = indoc! {r#"
+            fn App() -> Element {
+                if use_signal(|| true) {
+                    println!("clap your {something}")
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
     fn test_closure_hook() {
         let contents = indoc! {r#"
             fn App() -> Element {
@@ -636,5 +688,156 @@ mod tests {
         let report = check_file("app.rs".into(), contents);
 
         assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
+    fn test_hook_inside_hook_initialization() {
+        let contents = indoc! {r#"
+            fn use_thing() {
+                let _a = use_signal(|| use_signal(|| 0));
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookInsideClosure(
+                HookInfo::new(
+                    Span::new_from_str(
+                        "use_signal(|| 0)",
+                        LineColumn {
+                            line: 2,
+                            column: 27,
+                        },
+                    ),
+                    Span::new_from_str(
+                        "use_signal",
+                        LineColumn {
+                            line: 2,
+                            column: 27,
+                        },
+                    ),
+                    "use_signal".to_string()
+                ),
+                ClosureInfo::new(Span::new_from_str(
+                    "|| use_signal(|| 0)",
+                    LineColumn {
+                        line: 2,
+                        column: 24,
+                    },
+                ))
+            ),]
+        );
+    }
+
+    #[test]
+    fn test_hook_inside_hook_async_initialization() {
+        let contents = indoc! {r#"
+            fn use_thing() {
+                let _a = use_future(|| async move { use_signal(|| 0) });
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![
+                Issue::HookInsideAsync(
+                    HookInfo::new(
+                        Span::new_from_str(
+                            "use_signal(|| 0)",
+                            LineColumn {
+                                line: 2,
+                                column: 40,
+                            },
+                        ),
+                        Span::new_from_str(
+                            "use_signal",
+                            LineColumn {
+                                line: 2,
+                                column: 40,
+                            },
+                        ),
+                        "use_signal".to_string()
+                    ),
+                    AsyncInfo::new(Span::new_from_str(
+                        "async move { use_signal(|| 0) }",
+                        LineColumn {
+                            line: 2,
+                            column: 27,
+                        },
+                    ))
+                ),
+                Issue::HookInsideClosure(
+                    HookInfo::new(
+                        Span::new_from_str(
+                            "use_signal(|| 0)",
+                            LineColumn {
+                                line: 2,
+                                column: 40,
+                            },
+                        ),
+                        Span::new_from_str(
+                            "use_signal",
+                            LineColumn {
+                                line: 2,
+                                column: 40,
+                            },
+                        ),
+                        "use_signal".to_string()
+                    ),
+                    ClosureInfo::new(Span::new_from_str(
+                        "|| async move { use_signal(|| 0) }",
+                        LineColumn {
+                            line: 2,
+                            column: 24,
+                        },
+                    ))
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_hook_inside_spawn() {
+        let contents = indoc! {r#"
+            fn use_thing() {
+                let _a = spawn(async move { use_signal(|| 0) });
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookInsideAsync(
+                HookInfo::new(
+                    Span::new_from_str(
+                        "use_signal(|| 0)",
+                        LineColumn {
+                            line: 2,
+                            column: 32,
+                        },
+                    ),
+                    Span::new_from_str(
+                        "use_signal",
+                        LineColumn {
+                            line: 2,
+                            column: 32,
+                        },
+                    ),
+                    "use_signal".to_string()
+                ),
+                AsyncInfo::new(Span::new_from_str(
+                    "async move { use_signal(|| 0) }",
+                    LineColumn {
+                        line: 2,
+                        column: 19,
+                    },
+                ))
+            ),]
+        );
     }
 }
