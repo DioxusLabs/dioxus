@@ -26,6 +26,8 @@ mod scopes;
 mod suspense;
 mod tasks;
 mod virtual_dom;
+
+/// Visitor for VNodes.
 pub mod visit;
 
 mod hotreload_utils;
@@ -63,6 +65,7 @@ pub(crate) mod innerlude {
     pub use crate::suspense::*;
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
+    pub use crate::visit::{self, Visit};
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///
@@ -92,13 +95,13 @@ pub mod prelude {
         provide_context, provide_error_boundary, provide_root_context, queue_effect, remove_future,
         schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
         throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
-        use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, Component,
+        use_hook_with_cleanup, visit, with_owner, AnyValue, Attribute, Callback, Component,
         ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
         Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker,
         Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard, ScopeId, ScopeState,
         SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
         SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
-        VNodeInner, VirtualDom,
+        VNodeInner, VirtualDom, Visit,
     };
 }
 
