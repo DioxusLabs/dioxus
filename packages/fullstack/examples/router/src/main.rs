@@ -24,7 +24,7 @@ enum Route {
     #[route("/")]
     Home {},
 
-    #[route("/blog/:id")]
+    #[route("/blog/:id/")]
     Blog { id: i32 },
 }
 
