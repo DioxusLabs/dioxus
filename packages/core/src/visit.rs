@@ -126,9 +126,11 @@ pub fn visit_dynamic<V: Visit + ?Sized>(
 ) {
     match node {
         DynamicNode::Component(component) => {
-            let scope = component.mounted_scope(index, vnode, vdom).unwrap();
-            let root_node = scope.root_node();
-            visitor.visit_vnode(vdom, root_node)
+            if let Some(scope) = component.mounted_scope(index, vnode, vdom) {
+                if let Some(root_node) = scope.try_root_node() {
+                    visitor.visit_vnode(vdom, root_node)
+                }
+            }
         }
         DynamicNode::Text(text) => visitor.visit_text(vdom, vnode, &text.value),
         DynamicNode::Placeholder(_) => visitor.visit_placeholder(vdom, vnode, index),
