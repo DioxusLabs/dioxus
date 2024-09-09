@@ -1,4 +1,4 @@
-use dioxus_rsx::HotReloadedTemplate;
+use dioxus_core::internal::HotReloadTemplateWithLocation;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -16,7 +16,6 @@ pub use ws_receiver::*;
 
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(bound(deserialize = "'de: 'static"))]
 pub enum DevserverMsg {
     /// Attempt a hotreload
     /// This includes all the templates/literals/assets/binary patches that have changed in one shot
@@ -47,9 +46,8 @@ pub enum ClientMsg {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(bound(deserialize = "'de: 'static"))]
 pub struct HotReloadMsg {
-    pub templates: Vec<HotReloadedTemplate>,
+    pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
 
     /// A file changed that's not an asset or a rust file - best of luck!

@@ -36,7 +36,7 @@ fn App() -> Element {
                             "hi!!"
                             "womh"
                         }
-                    };
+                    }
                     println!("hi")
                 },
                 "hi"
@@ -83,7 +83,7 @@ fn App() -> Element {
                                                                 "so22mething nested?"
                                                             }
                                                         }
-                                                    }
+                                                    },
                                                 }
                                             }
                                         };
@@ -93,11 +93,11 @@ fn App() -> Element {
                                                 "something nested?"
                                             }
                                         }
-                                    }
+                                    },
                                 }
-                            }
+                            },
                         }
-                    }
+                    },
                 }
             },
             onrender: move |_| {
@@ -121,12 +121,14 @@ fn App() -> Element {
                                 }
                             }
                         },
-                        {rsx! {
-                            div2 {
-                                h12 { "hi" }
-                                "so22mething nested?"
+                        {
+                            rsx! {
+                                div2 {
+                                    h12 { "hi" }
+                                    "so22mething nested?"
+                                }
                             }
-                        }}
+                        }
                     }
                 }
             },
@@ -138,7 +140,7 @@ fn App() -> Element {
                             "something nested?"
                         }
                     };
-                }
+                },
             }
         }
     }

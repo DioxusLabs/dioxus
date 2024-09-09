@@ -29,6 +29,7 @@ tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true, features = ["async-await-macro"], optional = true }
 tokio = { workspace = true, features = ["sync", "rt-multi-thread"], optional = true }
 tracing = { workspace = true }
+warnings.workspace = true
 
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]

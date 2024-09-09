@@ -1,5 +1,6 @@
 use crate::{
     settings::{self},
+    tracer::CLILogControl,
     DioxusCrate,
 };
 use anyhow::Context;
@@ -36,6 +37,10 @@ pub struct ServeArguments {
     /// Additional arguments to pass to the executable
     #[clap(long)]
     pub args: Vec<String>,
+
+    /// Sets the interval in seconds that the CLI will poll for file changes on WSL.
+    #[clap(long, default_missing_value = "2")]
+    pub wsl_file_poll_interval: Option<u16>,
 }
 
 /// Run the WASM project on dev-server
@@ -59,15 +64,26 @@ pub struct Serve {
 impl Serve {
     /// Resolve the serve arguments from the arguments or the config
     fn resolve(&mut self, crate_config: &mut DioxusCrate) -> Result<()> {
-        // Set config settings
+        // Set config settings.
         let settings = settings::CliSettings::load();
 
+        // Enable hot reload.
         if self.server_arguments.hot_reload.is_none() {
             self.server_arguments.hot_reload = Some(settings.always_hot_reload.unwrap_or(true));
         }
+
+        // Open browser.
         if self.server_arguments.open.is_none() {
             self.server_arguments.open = Some(settings.always_open_browser.unwrap_or_default());
         }
+
+        // Set WSL file poll interval.
+        if self.server_arguments.wsl_file_poll_interval.is_none() {
+            self.server_arguments.wsl_file_poll_interval =
+                Some(settings.wsl_file_poll_interval.unwrap_or(2));
+        }
+
+        // Set always-on-top for desktop.
         if self.server_arguments.always_on_top.is_none() {
             self.server_arguments.always_on_top = Some(settings.always_on_top.unwrap_or(true))
         }
@@ -90,13 +106,13 @@ impl Serve {
         Ok(())
     }
 
-    pub async fn serve(mut self) -> anyhow::Result<()> {
+    pub async fn serve(mut self, log_control: CLILogControl) -> anyhow::Result<()> {
         let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
         self.resolve(&mut dioxus_crate)?;
 
-        crate::serve::serve_all(self, dioxus_crate).await?;
+        crate::serve::serve_all(self, dioxus_crate, log_control).await?;
         Ok(())
     }
 }

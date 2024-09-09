@@ -1,5 +1,5 @@
 use crate::dioxus_crate::DioxusCrate;
-use crate::serve::Serve;
+use crate::serve::{next_or_pending, Serve};
 use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
@@ -43,6 +43,11 @@ use tower_http::{
     services::fs::{ServeDir, ServeFileSystemResponseBody},
     ServiceBuilderExt,
 };
+
+pub enum ServerUpdate {
+    NewConnection,
+    Message(Message),
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -109,7 +114,7 @@ impl Server {
         // If we're serving a fullstack app, we need to find a port to proxy to
         let fullstack_port = if matches!(
             serve.build_arguments.platform(),
-            Platform::Fullstack | Platform::StaticGeneration
+            Platform::Liveview | Platform::Fullstack | Platform::StaticGeneration
         ) {
             get_available_port(addr.ip())
         } else {
@@ -231,7 +236,7 @@ impl Server {
     }
 
     /// Wait for new clients to be connected and then save them
-    pub async fn wait(&mut self) -> Option<Message> {
+    pub async fn wait(&mut self) -> Option<ServerUpdate> {
         let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
         let mut new_build_status_socket = self.new_build_status_sockets.next();
         let mut new_message = self
@@ -240,13 +245,14 @@ impl Server {
             .enumerate()
             .map(|(idx, socket)| async move { (idx, socket.next().await) })
             .collect::<FuturesUnordered<_>>();
+        let next_new_message = next_or_pending(new_message.next());
 
         tokio::select! {
             new_hot_reload_socket = &mut new_hot_reload_socket => {
                 if let Some(new_socket) = new_hot_reload_socket {
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
-                    return None;
+                    return Some(ServerUpdate::NewConnection);
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
@@ -266,9 +272,9 @@ impl Server {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
             }
-            Some((idx, message)) = new_message.next() => {
+            (idx, message) = next_new_message => {
                 match message {
-                    Some(Ok(message)) => return Some(message),
+                    Some(Ok(message)) => return Some(ServerUpdate::Message(message)),
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
@@ -360,23 +366,25 @@ fn setup_router(
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
-    // Setup base path redirection
-    if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
-        let base_path = format!("/{}", base_path.trim_matches('/'));
-        router = Router::new()
-            .nest(&base_path, router)
-            .fallback(get(move || async move {
-                format!("Outside of the base path: {}", base_path)
-            }));
-    }
-
     // server the dir if it's web, otherwise let the fullstack server itself handle it
     match platform {
         Platform::Web => {
             // Route file service to output the .wasm and assets if this is a web build
-            router = router.nest_service("/", build_serve_dir(serve, config));
+            let base_path = format!(
+                "/{}",
+                config
+                    .dioxus_config
+                    .web
+                    .app
+                    .base_path
+                    .as_deref()
+                    .unwrap_or_default()
+                    .trim_matches('/')
+            );
+
+            router = router.nest_service(&base_path, build_serve_dir(serve, config));
         }
-        Platform::Fullstack | Platform::StaticGeneration => {
+        Platform::Liveview | Platform::Fullstack | Platform::StaticGeneration => {
             // For fullstack and static generation, forward all requests to the server
             let address = fullstack_address.unwrap();
 

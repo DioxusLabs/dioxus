@@ -1,8 +1,12 @@
-use crate::builder::{Stage, UpdateBuildProgress, UpdateStage};
+use std::future::{poll_fn, Future, IntoFuture};
+use std::task::Poll;
+
+use crate::builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
+use crate::tracer::CLILogControl;
 use crate::Result;
-use dioxus_cli_config::Platform;
+use futures_util::FutureExt;
 use tokio::task::yield_now;
 
 mod builder;
@@ -45,15 +49,21 @@ use watcher::*;
 /// - Consume logs from the wasm for web/fullstack
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
+pub async fn serve_all(
+    serve: Serve,
+    dioxus_crate: DioxusCrate,
+    log_control: CLILogControl,
+) -> Result<()> {
     let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
-    builder.build();
+    builder.build()?;
 
     let mut server = Server::start(&serve, &dioxus_crate);
-    let mut watcher = Watcher::start(&dioxus_crate);
-    let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
+    let mut watcher = Watcher::start(&serve, &dioxus_crate);
+    let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
+
+    let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
@@ -65,7 +75,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
         // And then wait for any updates before redrawing
         tokio::select! {
             // rebuild the project or hotreload it
-            _ = watcher.wait() => {
+            _ = watcher.wait(), if is_hot_reload => {
                 if !watcher.pending_changes() {
                     continue
                 }
@@ -84,7 +94,10 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 } else {
                     // If the change is not binary patchable, rebuild the project
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    builder.build();
+                    builder.build()?;
+
+                    // Clear the hot reload changes
+                    watcher.clear_hot_reload_changes();
 
                     // Tell the server to show a loading page for any new requests
                     server.start_build().await;
@@ -95,8 +108,16 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
             msg = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
-                if let Some(msg) = msg {
-                    screen.new_ws_message(Platform::Web, msg);
+                match msg {
+                    Some(ServerUpdate::NewConnection) => {
+                        if let Some(msg) = watcher.applied_hot_reload_changes() {
+                            server.send_hotreload(msg).await;
+                        }
+                    }
+                    Some(ServerUpdate::Message(msg)) => {
+                        screen.new_ws_message(TargetPlatform::Web, msg);
+                    }
+                    None => {}
                 }
             }
 
@@ -128,8 +149,11 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                         for build_result in results.iter() {
                             let child = build_result.open(&serve.server_arguments, server.fullstack_address(), &dioxus_crate.workspace_dir());
                             match child {
-                                Ok(Some(child_proc)) => builder.children.push((build_result.platform,child_proc)),
-                                Err(_e) => break,
+                                Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
+                                Err(e) => {
+                                    tracing::error!("Failed to open build result: {e}");
+                                    break;
+                                },
                                 _ => {}
                             }
                         }
@@ -141,6 +165,25 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                         // And then finally tell the server to reload
                         server.send_reload_command().await;
                     },
+
+                    // If the process exited *cleanly*, we can exit
+                    Ok(BuilderUpdate::ProcessExited { status, target_platform }) => {
+                        // Then remove the child process
+                        builder.children.retain(|(platform, _)| *platform != target_platform);
+                        match status {
+                            Ok(status) => {
+                                if status.success() {
+                                    break;
+                                }
+                                else {
+                                    tracing::error!("Application exited with status: {status}");
+                                }
+                            },
+                            Err(e) => {
+                                tracing::error!("Application exited with error: {e}");
+                            }
+                        }
+                    }
                     Err(err) => {
                         server.send_build_error(err).await;
                     }
@@ -153,7 +196,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                     Ok(false) => {}
                     // Request a rebuild.
                     Ok(true) => {
-                        builder.build();
+                        builder.build()?;
                         server.start_build().await
                     },
                     // Shutdown the server.
@@ -170,4 +213,21 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     builder.shutdown();
 
     Ok(())
+}
+
+// Grab the output of a future that returns an option or wait forever
+pub(crate) fn next_or_pending<F, T>(f: F) -> impl Future<Output = T>
+where
+    F: IntoFuture<Output = Option<T>>,
+{
+    let pinned = f.into_future().fuse();
+    let mut pinned = Box::pin(pinned);
+    poll_fn(move |cx| {
+        let next = pinned.as_mut().poll(cx);
+        match next {
+            Poll::Ready(Some(next)) => Poll::Ready(next),
+            _ => Poll::Pending,
+        }
+    })
+    .fuse()
 }

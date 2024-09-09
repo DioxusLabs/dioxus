@@ -1,3 +1,6 @@
+#![allow(clippy::unnecessary_operation)]
+#![allow(clippy::no_effect)]
+
 use generational_box::UnsyncStorage;
 use generational_box::{BorrowResult, GenerationalBoxId};
 use std::ops::Deref;
@@ -18,7 +21,7 @@ use crate::{default_impl, write_impls};
 /// It is internally backed by [`generational_box::GenerationalBox`].
 pub struct CopyValue<T: 'static, S: Storage<T> = UnsyncStorage> {
     pub(crate) value: GenerationalBox<T, S>,
-    origin_scope: ScopeId,
+    pub(crate) origin_scope: ScopeId,
 }
 
 #[cfg(feature = "serialize")]
@@ -65,12 +68,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     /// Once the component this value is created in is dropped, the value will be dropped.
     #[track_caller]
     pub fn new_maybe_sync(value: T) -> Self {
-        let owner = current_owner();
-
-        Self {
-            value: owner.insert(value),
-            origin_scope: current_scope_id().expect("in a virtual dom"),
-        }
+        Self::new_with_caller(value, std::panic::Location::caller())
     }
 
     pub(crate) fn new_with_caller(
@@ -88,10 +86,20 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
     #[track_caller]
     pub fn new_maybe_sync_in_scope(value: T, scope: ScopeId) -> Self {
+        Self::new_maybe_sync_in_scope_with_caller(value, scope, std::panic::Location::caller())
+    }
+
+    /// Create a new CopyValue with a custom caller. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
+    #[track_caller]
+    pub fn new_maybe_sync_in_scope_with_caller(
+        value: T,
+        scope: ScopeId,
+        caller: &'static std::panic::Location<'static>,
+    ) -> Self {
         let owner = scope.owner();
 
         Self {
-            value: owner.insert(value),
+            value: owner.insert_with_caller(value, caller),
             origin_scope: scope,
         }
     }
@@ -125,11 +133,13 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
     fn try_read_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
         self.value.try_read()
     }
 
     #[track_caller]
     fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+        crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
         self.value.try_read()
     }
 }
@@ -161,11 +171,13 @@ impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
     fn try_write_unchecked(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+        crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
         self.value.try_write()
     }
 
     #[track_caller]
     fn set(&mut self, value: T) {
+        crate::warnings::copy_value_hoisted(self, std::panic::Location::caller());
         self.value.set(value);
     }
 }
@@ -181,7 +193,7 @@ impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        Readable::deref_impl(self)
+        unsafe { Readable::deref_impl(self) }
     }
 }
 

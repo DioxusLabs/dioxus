@@ -12,6 +12,6 @@ rsx! {
         width: r#"10px"#,
         height: r##"{10}px"##,
         "raw-attr": r###"raw-attr"###,
-        "raw-attr2": r###"{100}"###
+        "raw-attr2": r###"{100}"###,
     }
 }

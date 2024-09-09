@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, Type};
+use syn::{parse_quote, GenericArgument, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -213,6 +213,9 @@ mod field_info {
                 {
                     builder_attr.from_displayable = true;
                     // ToString is both more general and provides a more useful error message than From<String>. If the user tries to use `#[into]`, use ToString instead.
+                    if builder_attr.auto_into {
+                        builder_attr.auto_to_string = true;
+                    }
                     builder_attr.auto_into = false;
                 }
 
@@ -225,8 +228,7 @@ mod field_info {
 
                 // auto detect optional
                 let strip_option_auto = builder_attr.strip_option
-                    || !builder_attr.ignore_option
-                        && type_from_inside_option(&field.ty, true).is_some();
+                    || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
                 if !builder_attr.strip_option && strip_option_auto {
                     builder_attr.strip_option = true;
                     builder_attr.default = Some(
@@ -275,6 +277,7 @@ mod field_info {
         pub docs: Vec<syn::Attribute>,
         pub skip: bool,
         pub auto_into: bool,
+        pub auto_to_string: bool,
         pub from_displayable: bool,
         pub strip_option: bool,
         pub ignore_option: bool,
@@ -478,31 +481,55 @@ mod field_info {
     }
 }
 
-fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&syn::Type> {
-    let path = if let syn::Type::Path(type_path) = ty {
-        if type_path.qself.is_some() {
-            return None;
-        } else {
-            &type_path.path
-        }
-    } else {
+fn type_from_inside_option(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else {
         return None;
     };
-    let segment = path.segments.last()?;
-    if check_option_name && segment.ident != "Option" {
+
+    if type_path.qself.is_some() {
         return None;
     }
-    let generic_params =
-        if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
-            generic_params
-        } else {
+
+    let path = &type_path.path;
+    let seg = path.segments.last()?;
+
+    // If the segment is a supported optional type, provide the inner type.
+    // Return the inner type if the pattern is `Option<T>` or `ReadOnlySignal<Option<T>>``
+    if seg.ident == "ReadOnlySignal" {
+        // Get the inner type. E.g. the `u16` in `ReadOnlySignal<u16>` or `Option` in `ReadOnlySignal<Option<bool>>`
+        let inner_type = extract_inner_type_from_segment(seg)?;
+        let Type::Path(inner_path) = inner_type else {
+            // If it isn't a path, the inner type isn't option
             return None;
         };
-    if let syn::GenericArgument::Type(ty) = generic_params.args.first()? {
-        Some(ty)
-    } else {
-        None
+
+        // If we're entering an `Option`, we must get the innermost type
+        let inner_seg = inner_path.path.segments.last()?;
+        if inner_seg.ident == "Option" {
+            // Get the innermost type.
+            let innermost_type = extract_inner_type_from_segment(inner_seg)?;
+            return Some(innermost_type);
+        }
+    } else if seg.ident == "Option" {
+        // Grab the inner time. E.g. Option<u16>
+        let inner_type = extract_inner_type_from_segment(seg)?;
+        return Some(inner_type);
     }
+
+    None
+}
+
+// Extract the inner type from a path segment.
+fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&Type> {
+    let PathArguments::AngleBracketed(generic_args) = &segment.arguments else {
+        return None;
+    };
+
+    let GenericArgument::Type(final_type) = generic_args.args.first()? else {
+        return None;
+    };
+
+    Some(final_type)
 }
 
 mod struct_info {
@@ -512,7 +539,7 @@ mod struct_info {
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
-    use syn::{Expr, Ident};
+    use syn::{parse_quote, Expr, Ident};
 
     use crate::props::strip_option;
 
@@ -1368,10 +1395,24 @@ Finally, call `.build()` to create the instance of `{name}`.
                 if !field.builder_attr.extends.is_empty() {
                     quote!(let #name = self.#name;)
                 } else if let Some(ref default) = field.builder_attr.default {
+
+                    // If field has `into`, apply it to the default value.
+                    // Ignore any blank defaults as it causes type inference errors.
+                    let is_default = *default == parse_quote!(::core::default::Default::default());
+                    let mut into = quote!{};
+
+                    if !is_default {
+                        if field.builder_attr.auto_into {
+                            into = quote!{ .into() }
+                        } else if field.builder_attr.auto_to_string {
+                            into = quote!{ .to_string() }
+                        }
+                    }
+
                     if field.builder_attr.skip {
-                        quote!(let #name = #default;)
+                        quote!(let #name = #default #into;)
                     } else {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || #default);)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || #default #into);)
                     }
                 } else {
                     quote!(let #name = #name.0;)
@@ -1420,9 +1461,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                         pub fn into_vcomponent<M: 'static>(
                             self,
                             render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
-                            component_name: &'static str,
                         ) -> dioxus_core::VComponent {
                             use dioxus_core::prelude::ComponentFunction;
+                            let component_name = ::std::any::type_name_of_val(&render_fn);
                             dioxus_core::VComponent::new(move |wrapper: Self| render_fn.rebuild(wrapper.inner), self, component_name)
                         }
                     }

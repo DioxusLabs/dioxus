@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, UseCallback};
+use crate::{use_callback, use_signal};
 use dioxus_core::prelude::*;
 use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
@@ -28,7 +28,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let cb = use_callback(move || {
+    let cb = use_callback(move |_| {
         // Create the user's task
         let fut = rc.reset_and_run_in(&mut future);
 
@@ -54,7 +54,7 @@ where
         })
     });
 
-    let mut task = use_hook(|| Signal::new(cb()));
+    let mut task = use_hook(|| Signal::new(cb(())));
 
     use_hook(|| {
         let mut changed = changed.take().unwrap();
@@ -67,7 +67,7 @@ where
                 task.write().cancel();
 
                 // Start a new task
-                task.set(cb());
+                task.set(cb(()));
             }
         })
     });
@@ -110,7 +110,7 @@ pub struct Resource<T: 'static> {
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
-    callback: UseCallback<Task>,
+    callback: Callback<(), Task>,
 }
 
 impl<T> PartialEq for Resource<T> {
@@ -174,7 +174,7 @@ impl<T> Resource<T> {
     /// ```
     pub fn restart(&mut self) {
         self.task.write().cancel();
-        let new_task = self.callback.call();
+        let new_task = self.callback.call(());
         self.task.set(new_task);
     }
 
@@ -473,6 +473,6 @@ impl<T: Clone> Deref for Resource<T> {
     type Target = dyn Fn() -> Option<T>;
 
     fn deref(&self) -> &Self::Target {
-        Readable::deref_impl(self)
+        unsafe { Readable::deref_impl(self) }
     }
 }

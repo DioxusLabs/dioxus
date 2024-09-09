@@ -40,8 +40,11 @@ impl Display for CapturedPanic {
 impl Error for CapturedPanic {}
 
 /// Provide an error boundary to catch errors from child components
-pub fn use_error_boundary() -> ErrorContext {
-    use_hook(|| provide_context(ErrorContext::new(Vec::new(), current_scope_id().unwrap())))
+pub fn provide_error_boundary() -> ErrorContext {
+    provide_context(ErrorContext::new(
+        Vec::new(),
+        current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
+    ))
 }
 
 /// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.
@@ -448,17 +451,6 @@ impl CapturedError {
         self
     }
 
-    /// Clone the error while retaining the mounted information of the error
-    pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            error: self.error.clone(),
-            backtrace: self.backtrace.clone(),
-            scope: self.scope,
-            render: self.render.clone_mounted(),
-            context: self.context.clone(),
-        }
-    }
-
     /// Get a VNode representation of the error if the error provides one
     pub fn show(&self) -> Option<Element> {
         if self.render == VNode::placeholder() {
@@ -524,7 +516,6 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 
 fn default_handler(errors: ErrorContext) -> Element {
     static TEMPLATE: Template = Template {
-        name: "error_handle.rs:42:5:884",
         roots: &[TemplateNode::Element {
             tag: "div",
             namespace: None,
@@ -546,7 +537,6 @@ fn default_handler(errors: ErrorContext) -> Element {
             .iter()
             .map(|e| {
                 static TEMPLATE: Template = Template {
-                    name: "error_handle.rs:43:5:884",
                     roots: &[TemplateNode::Element {
                         tag: "pre",
                         namespace: None,
@@ -745,12 +735,11 @@ impl<
 /// Error boundaries are quick to implement, but it can be useful to individually handle errors in your components to provide a better user experience when you know that an error is likely to occur.
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
-    let error_boundary = use_error_boundary();
+    let error_boundary = use_hook(provide_error_boundary);
     let errors = error_boundary.errors();
     if errors.is_empty() {
         std::result::Result::Ok({
             static TEMPLATE: Template = Template {
-                name: "examples/error_handle.rs:81:17:2342",
                 roots: &[TemplateNode::Dynamic { id: 0usize }],
                 node_paths: &[&[0u8]],
                 attr_paths: &[],
@@ -763,6 +752,8 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
             )
         })
     } else {
+        tracing::trace!("scope id: {:?}", current_scope_id());
+        tracing::trace!("handling errors: {:?}", errors);
         (props.handle_error.0)(error_boundary.clone())
     }
 }

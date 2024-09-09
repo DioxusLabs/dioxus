@@ -26,7 +26,6 @@ enumset = "1.1.2"
 keyboard-types = { version = "0.7", default-features = false }
 async-trait = { version = "0.1.58", optional = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
-rfd = { version = "0.14", optional = true }
 futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
@@ -51,6 +50,9 @@ features = [
     "PointerEvent",
     "FocusEvent",
     "CompositionEvent",
+    "CustomEvent",
+    "ResizeObserverEntry",
+    "ResizeObserverSize"
 ]
 
 [build-dependencies]

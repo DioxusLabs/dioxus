@@ -1,8 +1,5 @@
 //! The output buffer that supports some helpful methods
 //! These are separate from the input so we can lend references between the two
-//!
-//!
-//!
 
 use std::fmt::{Result, Write};
 

@@ -5,7 +5,6 @@ use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
-use dioxus_cli_config::WasmOptLevel;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use std::path::Path;
@@ -125,43 +124,50 @@ impl BuildRequest {
         let input_path = output_location.with_extension("wasm");
 
         // Create the directory where the bindgen output will be placed
-        let bindgen_outdir = self.dioxus_crate.out_dir().join("assets").join("dioxus");
+        let bindgen_outdir = self.target_out_dir().join("assets").join("dioxus");
 
         // Run wasm-bindgen
         self.run_wasm_bindgen(&input_path, &bindgen_outdir).await?;
 
-        // Run wasm-opt if this is a release build
-        if self.build_arguments.release {
-            tracing::info!("Running optimization with wasm-opt...");
-            let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {
-                WasmOptLevel::Z => {
-                    wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
-                }
-                WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
-                WasmOptLevel::Zero => wasm_opt::OptimizationOptions::new_opt_level_0(),
-                WasmOptLevel::One => wasm_opt::OptimizationOptions::new_opt_level_1(),
-                WasmOptLevel::Two => wasm_opt::OptimizationOptions::new_opt_level_2(),
-                WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
-                WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
-            };
-            let wasm_file = bindgen_outdir.join(format!(
-                "{}_bg.wasm",
-                self.dioxus_crate.dioxus_config.application.name
-            ));
-            let old_size = wasm_file.metadata()?.len();
-            options
-                // WASM bindgen relies on reference types
-                .enable_feature(wasm_opt::Feature::ReferenceTypes)
-                .debug_info(self.dioxus_crate.dioxus_config.web.wasm_opt.debug)
-                .run(&wasm_file, &wasm_file)
-                .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
-            let new_size = wasm_file.metadata()?.len();
-            tracing::info!(
-                "wasm-opt reduced WASM size from {} to {} ({:2}%)",
-                old_size,
-                new_size,
-                (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
-            );
+        // Only run wasm-opt if the feature is enabled
+        // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
+        #[cfg(feature = "wasm-opt")]
+        {
+            // Run wasm-opt if this is a release build
+            if self.build_arguments.release {
+                use dioxus_cli_config::WasmOptLevel;
+
+                tracing::info!("Running optimization with wasm-opt...");
+                let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {
+                    WasmOptLevel::Z => {
+                        wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
+                    }
+                    WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
+                    WasmOptLevel::Zero => wasm_opt::OptimizationOptions::new_opt_level_0(),
+                    WasmOptLevel::One => wasm_opt::OptimizationOptions::new_opt_level_1(),
+                    WasmOptLevel::Two => wasm_opt::OptimizationOptions::new_opt_level_2(),
+                    WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
+                    WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
+                };
+                let wasm_file = bindgen_outdir.join(format!(
+                    "{}_bg.wasm",
+                    self.dioxus_crate.dioxus_config.application.name
+                ));
+                let old_size = wasm_file.metadata()?.len();
+                options
+                    // WASM bindgen relies on reference types
+                    .enable_feature(wasm_opt::Feature::ReferenceTypes)
+                    .debug_info(self.dioxus_crate.dioxus_config.web.wasm_opt.debug)
+                    .run(&wasm_file, &wasm_file)
+                    .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
+                let new_size = wasm_file.metadata()?.len();
+                tracing::info!(
+                    "wasm-opt reduced WASM size from {} to {} ({:2}%)",
+                    old_size,
+                    new_size,
+                    (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
+                );
+            }
         }
 
         // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
@@ -177,7 +183,7 @@ impl BuildRequest {
         // If we do this too early, the wasm won't be ready but the index.html will be served, leading
         // to test failures and broken pages.
         let html = self.prepare_html(assets, progress)?;
-        let html_path = self.dioxus_crate.out_dir().join("index.html");
+        let html_path = self.target_out_dir().join("index.html");
         std::fs::write(html_path, html)?;
 
         Ok(())

@@ -1,9 +1,17 @@
 #![allow(unused)]
 
-use dioxus_core::{prelude::Template, VNode};
+use std::collections::HashMap;
+
+use dioxus_core::{
+    internal::{
+        FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
+        HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
+    },
+    prelude::{Template, TemplateNode},
+    TemplateAttribute, VNode,
+};
 use dioxus_rsx::{
-    hot_reload::{diff_rsx, ChangedRsx},
-    hotreload::HotReloadedTemplate,
+    hot_reload::{self, diff_rsx, ChangedRsx, HotReloadResult},
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
@@ -36,38 +44,34 @@ impl HotReloadingContext for Mock {
     }
 }
 
-fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
+fn hot_reload_from_tokens(
+    old: TokenStream,
+    new: TokenStream,
+) -> Option<HashMap<usize, HotReloadedTemplate>> {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
 
-    let location = "file:line:col:0";
-    hotreload_callbody::<Mock>(&old, &new, location)
+    hotreload_callbody::<Mock>(&old, &new)
 }
 
-fn can_hotreload(old: TokenStream, new: TokenStream) -> Option<HotReloadedTemplate> {
-    let old: CallBody = syn::parse2(old).unwrap();
-    let new: CallBody = syn::parse2(new).unwrap();
-
-    let location = "file:line:col:0";
-    let results = HotReloadedTemplate::new::<Mock>(&old, &new, location, Default::default())?;
-    Some(results)
+fn can_hotreload(old: TokenStream, new: TokenStream) -> bool {
+    hot_reload_from_tokens(old, new).is_some()
 }
 
 fn hotreload_callbody<Ctx: HotReloadingContext>(
     old: &CallBody,
     new: &CallBody,
-    location: &'static str,
-) -> Option<Vec<Template>> {
-    let results = HotReloadedTemplate::new::<Ctx>(old, new, location, Default::default())?;
+) -> Option<HashMap<usize, HotReloadedTemplate>> {
+    let results = HotReloadResult::new::<Ctx>(&old.body, &new.body, Default::default())?;
     Some(results.templates)
 }
 
 fn callbody_to_template<Ctx: HotReloadingContext>(
     old: &CallBody,
     location: &'static str,
-) -> Option<Template> {
-    let results = HotReloadedTemplate::new::<Ctx>(old, old, location, Default::default())?;
-    Some(*results.templates.first().unwrap())
+) -> Option<HotReloadedTemplate> {
+    let mut results = HotReloadResult::new::<Ctx>(&old.body, &old.body, Default::default())?;
+    Some(results.templates.remove(&0).unwrap())
 }
 
 fn base_stream() -> TokenStream {
@@ -120,8 +124,8 @@ fn simple_for_loop() {
     let new_valid: CallBody = syn::parse2(new_valid).unwrap();
     let new_invalid: CallBody = syn::parse2(new_invalid).unwrap();
 
-    assert!(hotreload_callbody::<Mock>(&old, &new_valid, location).is_some());
-    assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
+    assert!(hotreload_callbody::<Mock>(&old, &new_valid).is_some());
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid).is_none());
 }
 
 #[test]
@@ -140,23 +144,234 @@ fn valid_reorder() {
         }
     };
 
-    let location = "file:line:col:0";
     let new: CallBody = syn::parse2(new_valid).unwrap();
 
-    let valid = hotreload_callbody::<Mock>(&old, &new, location);
+    let valid = hotreload_callbody::<Mock>(&old, &new);
     assert!(valid.is_some());
     let templates = valid.unwrap();
 
     // Currently we return all the templates, even if they didn't change
     assert_eq!(templates.len(), 3);
 
-    let template = &templates[2];
+    let template = &templates[&0];
 
     // It's an inversion, so we should get them in reverse
-    assert_eq!(template.node_paths, &[&[0, 1], &[0, 0]]);
+    assert_eq!(
+        template.roots,
+        &[TemplateNode::Element {
+            tag: "div",
+            namespace: None,
+            attrs: &[],
+            children: &[
+                TemplateNode::Dynamic { id: 0 },
+                TemplateNode::Dynamic { id: 1 }
+            ]
+        }]
+    );
+    assert_eq!(
+        template.dynamic_nodes,
+        &[
+            HotReloadDynamicNode::Dynamic(1),
+            HotReloadDynamicNode::Dynamic(0)
+        ]
+    );
+}
 
-    // And the byte index should be the original template
-    assert_eq!(template.name, "file:line:col:0");
+#[test]
+fn valid_new_node() {
+    // Adding a new dynamic node should be hot reloadable as long as the text was present in the old version
+    // of the rsx block
+    let old = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "item is {item}" }
+            }
+        }
+    };
+    let new = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "item is {item}" }
+                div { "item is also {item}" }
+            }
+        }
+    };
+
+    let templates = hot_reload_from_tokens(old, new).unwrap();
+
+    // Currently we return all the templates, even if they didn't change
+    assert_eq!(templates.len(), 2);
+
+    let template = &templates[&1];
+
+    // The new dynamic node should be created from the formatted segments pool
+    assert_eq!(
+        template.dynamic_nodes,
+        &[
+            HotReloadDynamicNode::Formatted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "item is " },
+                FmtSegment::Dynamic { id: 0 }
+            ],)),
+            HotReloadDynamicNode::Formatted(FmtedSegments::new(vec![
+                FmtSegment::Literal {
+                    value: "item is also "
+                },
+                FmtSegment::Dynamic { id: 0 }
+            ],)),
+        ]
+    );
+}
+
+#[test]
+fn valid_new_dynamic_attribute() {
+    // Adding a new dynamic attribute should be hot reloadable as long as the text was present in the old version
+    // of the rsx block
+    let old = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div {
+                    class: "item is {item}"
+                }
+            }
+        }
+    };
+    let new = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div {
+                    class: "item is {item}"
+                }
+                div {
+                    class: "item is also {item}"
+                }
+            }
+        }
+    };
+
+    let templates = hot_reload_from_tokens(old, new).unwrap();
+
+    // Currently we return all the templates, even if they didn't change
+    assert_eq!(templates.len(), 2);
+
+    let template = &templates[&1];
+
+    // We should have a new dynamic attribute
+    assert_eq!(
+        template.roots,
+        &[
+            TemplateNode::Element {
+                tag: "div",
+                namespace: None,
+                attrs: &[TemplateAttribute::Dynamic { id: 0 }],
+                children: &[]
+            },
+            TemplateNode::Element {
+                tag: "div",
+                namespace: None,
+                attrs: &[TemplateAttribute::Dynamic { id: 1 }],
+                children: &[]
+            }
+        ]
+    );
+
+    // The new dynamic attribute should be created from the formatted segments pool
+    assert_eq!(
+        template.dynamic_attributes,
+        &[
+            HotReloadDynamicAttribute::Named(NamedAttribute::new(
+                "class",
+                None,
+                HotReloadAttributeValue::Literal(HotReloadLiteral::Fmted(FmtedSegments::new(
+                    vec![
+                        FmtSegment::Literal { value: "item is " },
+                        FmtSegment::Dynamic { id: 0 }
+                    ],
+                )))
+            )),
+            HotReloadDynamicAttribute::Named(NamedAttribute::new(
+                "class",
+                None,
+                HotReloadAttributeValue::Literal(HotReloadLiteral::Fmted(FmtedSegments::new(
+                    vec![
+                        FmtSegment::Literal {
+                            value: "item is also "
+                        },
+                        FmtSegment::Dynamic { id: 0 }
+                    ],
+                )))
+            )),
+        ]
+    );
+}
+
+#[test]
+fn valid_move_dynamic_segment_between_nodes() {
+    // Hot reloading should let you move around a dynamic formatted segment between nodes
+    let old = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div {
+                    class: "item is {item}"
+                }
+            }
+        }
+    };
+    let new = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                "item is {item}"
+            }
+        }
+    };
+
+    let templates = hot_reload_from_tokens(old, new).unwrap();
+
+    // Currently we return all the templates, even if they didn't change
+    assert_eq!(templates.len(), 2);
+
+    let template = &templates[&1];
+
+    // We should have a new dynamic node and no attributes
+    assert_eq!(template.roots, &[TemplateNode::Dynamic { id: 0 }]);
+
+    // The new dynamic node should be created from the formatted segments pool
+    assert_eq!(
+        template.dynamic_nodes,
+        &[HotReloadDynamicNode::Formatted(FmtedSegments::new(vec![
+            FmtSegment::Literal { value: "item is " },
+            FmtSegment::Dynamic { id: 0 }
+        ])),]
+    );
+}
+
+#[test]
+fn valid_keys() {
+    let a = quote! {
+        div {
+            key: "{value}",
+        }
+    };
+
+    // we can clone dynamic nodes to hot reload them
+    let b = quote! {
+        div {
+            key: "{value}-1234",
+        }
+    };
+
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+
+    assert_eq!(hot_reload.len(), 1);
+
+    let template = &hot_reload[&0];
+
+    assert_eq!(
+        template.key,
+        Some(FmtedSegments::new(vec![
+            FmtSegment::Dynamic { id: 0 },
+            FmtSegment::Literal { value: "-1234" }
+        ]))
+    );
 }
 
 #[test]
@@ -227,61 +442,30 @@ fn invalid_cases() {
         syn::parse2(new_invalid_new_dynamic_internal).unwrap();
     let new_invalid_added: CallBody = syn::parse2(new_invalid_added).unwrap();
 
-    assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
-    assert!(
-        hotreload_callbody::<Mock>(&old, &new_invalid_new_dynamic_internal, location).is_none()
-    );
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid).is_none());
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid_new_dynamic_internal).is_none());
 
-    let removed = hotreload_callbody::<Mock>(&old, &new_valid_removed, location);
-    assert!(removed.is_some());
-    let templates = removed.unwrap();
+    let templates = hotreload_callbody::<Mock>(&old, &new_valid_removed).unwrap();
 
     // we don't get the removed template back
     assert_eq!(templates.len(), 2);
-    let template = &templates[1];
+    let template = &templates.get(&0).unwrap();
 
     // We just completely removed the dynamic node, so it should be a "dud" path and then the placement
-    assert_eq!(template.node_paths, &[&[], &[0u8, 0] as &[u8]]);
+    assert_eq!(
+        template.roots,
+        &[TemplateNode::Element {
+            tag: "div",
+            namespace: None,
+            attrs: &[],
+            children: &[TemplateNode::Dynamic { id: 0 }]
+        }]
+    );
+    assert_eq!(template.dynamic_nodes, &[HotReloadDynamicNode::Dynamic(1)]);
 
     // Adding a new dynamic node should not be hot reloadable
-    let added = hotreload_callbody::<Mock>(&old, &new_invalid_added, location);
+    let added = hotreload_callbody::<Mock>(&old, &new_invalid_added);
     assert!(added.is_none());
-}
-
-#[test]
-fn new_names() {
-    let old = quote! {
-        div {
-            for item in vec![1, 2, 3] {
-                div { "asasddasdasd" }
-                div { "123" }
-            }
-        }
-    };
-
-    // Same order, just different contents
-    let new_valid_internal = quote! {
-        div {
-            for item in vec![1, 2, 3] {
-                div { "asasddasdasd" }
-                div { "456" }
-            }
-        }
-    };
-
-    let templates = boilerplate(old, new_valid_internal).unwrap();
-
-    // Getting back all the templates even though some might not have changed
-    // This is currently just a symptom of us not checking if anything has changed, but has no bearing
-    // on output really.
-    assert_eq!(templates.len(), 2);
-
-    // The ordering is going to be inverse since its a depth-first traversal
-    let external = &templates[1];
-    assert_eq!(external.name, "file:line:col:0");
-
-    let internal = &templates[0];
-    assert_eq!(internal.name, "file:line:col:1");
 }
 
 #[test]
@@ -303,7 +487,7 @@ fn attributes_reload() {
         }
     };
 
-    let templates = boilerplate(old, new_valid_internal).unwrap();
+    let templates = hot_reload_from_tokens(old, new_valid_internal).unwrap();
 
     dbg!(templates);
 }
@@ -377,13 +561,12 @@ fn diffs_complex() {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
 
-    let location = "file:line:col:0";
-    let templates = hotreload_callbody::<Mock>(&old, &new, location).unwrap();
+    let templates = hotreload_callbody::<Mock>(&old, &new).unwrap();
 }
 
 #[test]
 fn remove_node() {
-    let changed = boilerplate(
+    let valid = hot_reload_from_tokens(
         quote! {
             svg {
                 Comp {}
@@ -398,12 +581,12 @@ fn remove_node() {
     )
     .unwrap();
 
-    dbg!(changed);
+    dbg!(valid);
 }
 
 #[test]
 fn if_chains() {
-    let changed = boilerplate(
+    let valid = hot_reload_from_tokens(
         quote! {
             if cond {
                 "foo"
@@ -417,7 +600,7 @@ fn if_chains() {
     )
     .unwrap();
 
-    let very_complex_chain = boilerplate(
+    let very_complex_chain = hot_reload_from_tokens(
         quote! {
             if cond {
                 if second_cond {
@@ -448,7 +631,7 @@ fn if_chains() {
 
 #[test]
 fn component_bodies() {
-    let changed = boilerplate(
+    let valid = can_hotreload(
         quote! {
             Comp {
                 "foo"
@@ -459,16 +642,36 @@ fn component_bodies() {
                 "baz"
             }
         },
-    )
-    .unwrap();
+    );
 
-    dbg!(changed);
+    assert!(valid);
+}
+
+// We currently don't track aliasing which means we can't allow dynamic nodes/formatted segments to be moved between scopes
+#[test]
+fn moving_between_scopes() {
+    let valid = can_hotreload(
+        quote! {
+            for x in 0..10 {
+                for y in 0..10 {
+                    div { "x is {x}" }
+                }
+            }
+        },
+        quote! {
+            for x in 0..10 {
+                div { "x is {x}" }
+            }
+        },
+    );
+
+    assert!(!valid);
 }
 
 /// Everything reloads!
 #[test]
 fn kitch_sink_of_reloadability() {
-    let changed = boilerplate(
+    let valid = hot_reload_from_tokens(
         quote! {
             div {
                 for i in 0..10 {
@@ -497,14 +700,14 @@ fn kitch_sink_of_reloadability() {
     )
     .unwrap();
 
-    dbg!(changed);
+    dbg!(valid);
 }
 
 /// Moving nodes inbetween multiple rsx! calls currently doesn't work
 /// Sad. Needs changes to core to work, and is technically flawed?
 #[test]
 fn entire_kitchen_sink() {
-    let changed = boilerplate(
+    let valid = hot_reload_from_tokens(
         quote! {
             div {
                 for i in 0..10 {
@@ -534,12 +737,12 @@ fn entire_kitchen_sink() {
         },
     );
 
-    assert!(changed.is_none());
+    assert!(valid.is_none());
 }
 
 #[test]
 fn tokenstreams_and_locations() {
-    let changed = boilerplate(
+    let valid = hot_reload_from_tokens(
         quote! {
             div { "hhi" }
             div {
@@ -589,12 +792,12 @@ fn tokenstreams_and_locations() {
         },
     );
 
-    dbg!(changed);
+    dbg!(valid);
 }
 
 #[test]
 fn ide_testcase() {
-    let changed = boilerplate(
+    let valid = hot_reload_from_tokens(
         quote! {
             div {
                 div { "hi!!!123 in!stant relo123a1123dasasdasdasdasd" }
@@ -613,7 +816,7 @@ fn ide_testcase() {
         },
     );
 
-    dbg!(changed);
+    dbg!(valid);
 }
 
 #[test]
@@ -635,7 +838,7 @@ fn assigns_ids() {
 
 #[test]
 fn simple_start() {
-    let changed = boilerplate(
+    let valid = can_hotreload(
         //
         quote! {
             div {
@@ -653,12 +856,12 @@ fn simple_start() {
         },
     );
 
-    dbg!(changed.unwrap());
+    assert!(valid);
 }
 
 #[test]
 fn complex_cases() {
-    let changed = can_hotreload(
+    let valid = can_hotreload(
         quote! {
             div {
                 class: "Some {one}",
@@ -675,12 +878,12 @@ fn complex_cases() {
         },
     );
 
-    dbg!(changed.unwrap());
+    assert!(valid);
 }
 
 #[test]
 fn attribute_cases() {
-    let changed = can_hotreload(
+    let valid = can_hotreload(
         quote! {
             div {
                 class: "Some {one}",
@@ -695,52 +898,59 @@ fn attribute_cases() {
             }
         },
     );
-    dbg!(changed.unwrap());
+    assert!(valid);
 
-    let changed = can_hotreload(
+    let valid = can_hotreload(
         //
         quote! { div { class: 123 } },
         quote! { div { class: 456 } },
     );
-    dbg!(changed.unwrap());
+    assert!(valid);
 
-    let changed = can_hotreload(
+    let valid = can_hotreload(
         //
         quote! { div { class: 123.0 } },
         quote! { div { class: 456.0 } },
     );
-    dbg!(changed.unwrap());
+    assert!(valid);
 
-    let changed = can_hotreload(
+    let valid = can_hotreload(
         //
         quote! { div { class: "asd {123}", } },
         quote! { div { class: "def", } },
     );
-    dbg!(changed.unwrap());
+    assert!(valid);
 }
 
 #[test]
 fn text_node_cases() {
-    let changed = can_hotreload(
+    let valid = can_hotreload(
         //
         quote! { div { "hello {world}" } },
         quote! { div { "world {world}" } },
     );
-    dbg!(changed.unwrap());
+    assert!(valid);
 
-    let changed = can_hotreload(
+    let valid = can_hotreload(
         //
         quote! { div { "hello {world}" } },
         quote! { div { "world" } },
     );
-    dbg!(changed.unwrap());
+    assert!(valid);
 
-    let changed = can_hotreload(
+    let valid = can_hotreload(
+        //
+        quote! { div { "hello {world}" } },
+        quote! { div { "world {world} {world}" } },
+    );
+    assert!(valid);
+
+    let valid = can_hotreload(
         //
         quote! { div { "hello" } },
         quote! { div { "world {world}" } },
     );
-    assert!(changed.is_none());
+    assert!(!valid);
 }
 
 #[test]
@@ -759,8 +969,8 @@ fn simple_carry() {
         "thing {hij}"
     };
 
-    let changed = can_hotreload(a, b);
-    dbg!(changed.unwrap());
+    let valid = can_hotreload(a, b);
+    assert!(valid);
 }
 
 #[test]
@@ -778,8 +988,8 @@ fn complex_carry_text() {
         "thing {hij}"
     };
 
-    let changed = can_hotreload(a, b);
-    dbg!(changed.unwrap());
+    let valid = can_hotreload(a, b);
+    assert!(valid);
 }
 
 #[test]
@@ -807,8 +1017,8 @@ fn complex_carry() {
         }
     };
 
-    let changed = can_hotreload(a, b);
-    dbg!(changed.unwrap());
+    let valid = can_hotreload(a, b);
+    assert!(valid);
 }
 
 #[test]
@@ -832,8 +1042,8 @@ fn component_with_lits() {
         }
     };
 
-    let changed = can_hotreload(a, b);
-    dbg!(changed.unwrap());
+    let valid = can_hotreload(a, b);
+    assert!(valid);
 }
 
 #[test]
@@ -859,6 +1069,196 @@ fn component_with_handlers() {
         }
     };
 
-    let changed = can_hotreload(a, b);
-    dbg!(changed.unwrap());
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = hot_reload.get(&0).unwrap();
+    assert_eq!(
+        template.component_values,
+        &[
+            HotReloadLiteral::Int(456),
+            HotReloadLiteral::Float(789.456),
+            HotReloadLiteral::Bool(false),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "goodbye " },
+                FmtSegment::Dynamic { id: 0 }
+            ])),
+        ]
+    );
+}
+
+#[test]
+fn component_remove_key() {
+    let a = quote! {
+        Component {
+            key: "{key}",
+            class: 123,
+            id: 456.789,
+            other: true,
+            dynamic1,
+            dynamic2,
+            blah: "hello {world}",
+            onclick: |e| { println!("clicked") },
+        }
+    };
+
+    // changing lit values
+    let b = quote! {
+        Component {
+            class: 456,
+            id: 789.456,
+            other: false,
+            dynamic1,
+            dynamic2,
+            blah: "goodbye {world}",
+            onclick: |e| { println!("clicked") },
+        }
+    };
+
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = hot_reload.get(&0).unwrap();
+    assert_eq!(
+        template.component_values,
+        &[
+            HotReloadLiteral::Int(456),
+            HotReloadLiteral::Float(789.456),
+            HotReloadLiteral::Bool(false),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "goodbye " },
+                FmtSegment::Dynamic { id: 1 }
+            ]))
+        ]
+    );
+}
+
+#[test]
+fn component_modify_key() {
+    let a = quote! {
+        Component {
+            key: "{key}",
+            class: 123,
+            id: 456.789,
+            other: true,
+            dynamic1,
+            dynamic2,
+            blah1: "hello {world123}",
+            blah2: "hello {world}",
+            onclick: |e| { println!("clicked") },
+        }
+    };
+
+    // changing lit values
+    let b = quote! {
+        Component {
+            key: "{key}-{world}",
+            class: 456,
+            id: 789.456,
+            other: false,
+            dynamic1,
+            dynamic2,
+            blah1: "hello {world123}",
+            blah2: "hello {world}",
+            onclick: |e| { println!("clicked") },
+        }
+    };
+
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = hot_reload.get(&0).unwrap();
+    assert_eq!(
+        template.key,
+        Some(FmtedSegments::new(vec![
+            FmtSegment::Dynamic { id: 0 },
+            FmtSegment::Literal { value: "-" },
+            FmtSegment::Dynamic { id: 2 },
+        ]))
+    );
+    assert_eq!(
+        template.component_values,
+        &[
+            HotReloadLiteral::Int(456),
+            HotReloadLiteral::Float(789.456),
+            HotReloadLiteral::Bool(false),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "hello " },
+                FmtSegment::Dynamic { id: 1 }
+            ])),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "hello " },
+                FmtSegment::Dynamic { id: 2 }
+            ]))
+        ]
+    );
+}
+
+#[test]
+fn duplicating_dynamic_nodes() {
+    let a = quote! {
+        div {
+            {some_expr}
+        }
+    };
+
+    // we can clone dynamic nodes to hot reload them
+    let b = quote! {
+        div {
+            {some_expr}
+            {some_expr}
+        }
+    };
+
+    let valid = can_hotreload(a, b);
+    assert!(valid);
+}
+
+#[test]
+fn duplicating_dynamic_attributes() {
+    let a = quote! {
+        div {
+            width: value,
+        }
+    };
+
+    // we can clone dynamic nodes to hot reload them
+    let b = quote! {
+        div {
+            width: value,
+            height: value,
+        }
+    };
+
+    let valid = can_hotreload(a, b);
+    assert!(valid);
+}
+
+// We should be able to fill in empty nodes
+#[test]
+fn valid_fill_empty() {
+    let valid = can_hotreload(
+        quote! {},
+        quote! {
+            div { "x is 123" }
+        },
+    );
+
+    assert!(valid);
+}
+
+// We should be able to hot reload spreads
+#[test]
+fn valid_spread() {
+    let valid = can_hotreload(
+        quote! {
+            div {
+                ..spread
+            }
+        },
+        quote! {
+            div {
+                "hello world"
+            }
+            h1 {
+                ..spread
+            }
+        },
+    );
+
+    assert!(valid);
 }

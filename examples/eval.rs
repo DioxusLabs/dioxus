@@ -3,6 +3,7 @@
 //! Eval will only work with renderers that support javascript - so currently only the web and desktop/mobile renderers
 //! that use a webview. Native renderers will throw "unsupported" errors when calling `eval`.
 
+use async_std::task::sleep;
 use dioxus::prelude::*;
 
 fn main() {
@@ -13,7 +14,7 @@ fn app() -> Element {
     // Create a future that will resolve once the javascript has been successfully executed.
     let future = use_resource(move || async move {
         // Wait a little bit just to give the appearance of a loading screen
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        sleep(std::time::Duration::from_secs(1)).await;
 
         // The `eval` is available in the prelude - and simply takes a block of JS.
         // Dioxus' eval is interesting since it allows sending messages to and from the JS code using the `await dioxus.recv()`

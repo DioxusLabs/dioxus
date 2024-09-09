@@ -43,7 +43,7 @@ hooks = ["dep:dioxus-hooks"]
 hot-reload = ["dep:dioxus-hot-reload", "dioxus-web?/hot_reload", "dioxus-fullstack?/hot-reload"]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
-asset = ["dep:manganis"]
+asset = ["dep:manganis", "dioxus-core/manganis"]
 document = ["dioxus-web?/document", "dioxus-html?/document"]
 
 launch = ["dep:dioxus-config-macro"]
@@ -57,7 +57,8 @@ web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation
 ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
 static-generation = ["dep:dioxus-static-site-generation", "dioxus-config-macro/static-generation"]
-axum = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
+axum = ["server"]
+server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []
@@ -66,7 +67,7 @@ third-party-renderer = []
 futures-util = { workspace = true }
 tracing = { workspace = true }
 rand = { version = "0.8.4", features = ["small_rng"] }
-criterion = "0.3.5"
+criterion = { workspace = true }
 thiserror = { workspace = true }
 env_logger = "0.10.0"
 tokio = { workspace = true, features = ["full"] }
@@ -78,3 +79,15 @@ harness = false
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+features = [
+    "router",
+    "ssr",
+    "web",
+    "fullstack",
+    "signals",
+    "hooks",
+    "html",
+    "liveview",
+    "static-generation",
+    "server"
+]

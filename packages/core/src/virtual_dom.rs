@@ -7,18 +7,13 @@ use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     arena::ElementId,
-    innerlude::{
-        ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, VProps,
-        WriteMutations,
-    },
-    nodes::{Template, TemplateId},
+    innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, ComponentFunction, Element, Event, Mutations,
+    ComponentFunction, Element, Mutations,
 };
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
-use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
@@ -99,15 +94,16 @@ use tracing::instrument;
 /// let edits = vdom.rebuild_to_vec();
 /// ```
 ///
-/// To call listeners inside the VirtualDom, call [`VirtualDom::handle_event`] with the appropriate event data.
+/// To call listeners inside the VirtualDom, call [`Runtime::handle_event`] with the appropriate event data.
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 /// # let mut vdom = VirtualDom::new(app);
-/// let event = std::rc::Rc::new(0);
-/// vdom.handle_event("onclick", event, ElementId(0), true);
+/// # let runtime = vdom.runtime();
+/// let event = Event::new(std::rc::Rc::new(0) as std::rc::Rc<dyn std::any::Any>, true);
+/// runtime.handle_event("onclick", event, ElementId(0));
 /// ```
 ///
 /// While no events are ready, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
@@ -176,7 +172,10 @@ use tracing::instrument;
 /// loop {
 ///     tokio::select! {
 ///         _ = dom.wait_for_work() => {}
-///         evt = real_dom.wait_for_event() => dom.handle_event("onclick", evt, ElementId(0), true),
+///         evt = real_dom.wait_for_event() => {
+///             let evt = dioxus_core::Event::new(evt, true);
+///             dom.runtime().handle_event("onclick", evt, ElementId(0))
+///         },
 ///     }
 ///
 ///     dom.render_immediate(&mut real_dom.apply());
@@ -207,21 +206,6 @@ pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
-
-    // A map of overridden templates?
-    pub(crate) templates: FxHashMap<TemplateId, Template>,
-
-    // Templates changes that are queued for the next render
-    pub(crate) queued_templates: Vec<Template>,
-
-    // The element ids that are used in the renderer
-    // These mark a specific place in a whole rsx block
-    pub(crate) elements: Slab<Option<ElementRef>>,
-
-    // Once nodes are mounted, the information about where they are mounted is stored here
-    // We need to store this information on the virtual dom so that we know what nodes are mounted where when we bubble events
-    // Each mount is associated with a whole rsx block. [`VirtualDom::elements`] link to a specific node in the block
-    pub(crate) mounts: Slab<VNodeMount>,
 
     pub(crate) runtime: Rc<Runtime>,
 
@@ -336,10 +320,6 @@ impl VirtualDom {
             runtime: Runtime::new(tx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
-            templates: Default::default(),
-            queued_templates: Default::default(),
-            elements: Default::default(),
-            mounts: Default::default(),
             resolved_scopes: Default::default(),
         };
 
@@ -350,9 +330,6 @@ impl VirtualDom {
             "RootWrapper",
         );
         dom.new_scope(Box::new(root), "app");
-
-        // the root element is always given element ID 0 since it's the container for the entire tree
-        dom.elements.insert(None);
 
         dom
     }
@@ -431,34 +408,6 @@ impl VirtualDom {
         let order = ScopeOrder::new(scope.height(), scope.id);
         drop(scope);
         self.queue_task(task, order);
-    }
-
-    /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
-    ///
-    /// This method will identify the appropriate element. The data must match up with the listener declared. Note that
-    /// this method does not give any indication as to the success of the listener call. If the listener is not found,
-    /// nothing will happen.
-    ///
-    /// It is up to the listeners themselves to mark nodes as dirty.
-    ///
-    /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
-    #[instrument(skip(self), level = "trace", name = "VirtualDom::handle_event")]
-    pub fn handle_event(
-        &mut self,
-        name: &str,
-        data: Rc<dyn Any>,
-        element: ElementId,
-        bubbles: bool,
-    ) {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
-        if let Some(Some(parent_path)) = self.elements.get(element.0).copied() {
-            if bubbles {
-                self.handle_bubbling_event(parent_path, name, Event::new(data, bubbles));
-            } else {
-                self.handle_non_bubbling_event(parent_path, name, Event::new(data, bubbles));
-            }
-        }
     }
 
     /// Wait for the scheduler to have any work.
@@ -572,60 +521,6 @@ impl VirtualDom {
         }
     }
 
-    /// Replace a template at runtime. This will re-render all components that use this template.
-    /// This is the primitive that enables hot-reloading.
-    ///
-    /// The caller must ensure that the template references the same dynamic attributes and nodes as the original template.
-    ///
-    /// This will only replace the parent template, not any nested templates.
-    #[instrument(skip(self), level = "trace", name = "VirtualDom::replace_template")]
-    pub fn replace_template(&mut self, template: Template) {
-        // we only replace templates if hot reloading is enabled
-        #[cfg(debug_assertions)]
-        {
-            // Save the template ID
-            self.templates.insert(template.name, template);
-
-            // Only queue the template to be written if its not completely dynamic
-            if !template.is_completely_dynamic() {
-                self.queued_templates.push(template);
-            }
-
-            // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
-            let mut dirty = Vec::new();
-            for (id, scope) in self.scopes.iter() {
-                // Recurse into the dynamic nodes of the existing mounted node to see if the template is alive in the tree
-                fn check_node_for_templates(node: &crate::VNode, template: Template) -> bool {
-                    if node.template.get().name == template.name {
-                        return true;
-                    }
-
-                    for dynamic in node.dynamic_nodes.iter() {
-                        if let crate::DynamicNode::Fragment(nodes) = dynamic {
-                            for node in nodes {
-                                if check_node_for_templates(node, template) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-
-                    false
-                }
-
-                if let Some(sync) = scope.try_root_node() {
-                    if check_node_for_templates(sync, template) {
-                        dirty.push(ScopeId(id));
-                    }
-                }
-            }
-
-            for dirty in dirty {
-                self.mark_dirty(dirty);
-            }
-        }
-    }
-
     /// Rebuild the virtualdom without handling any of the mutations
     ///
     /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
@@ -666,7 +561,6 @@ impl VirtualDom {
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
-        self.flush_templates(to);
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
@@ -682,8 +576,6 @@ impl VirtualDom {
     /// suspended subtrees.
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
     pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
-        self.flush_templates(to);
-
         // Process any events that might be pending in the queue
         // Signals marked with .write() need a chance to be handled by the effect driver
         // This also processes futures which might progress into immediately rerunning a scope
@@ -839,129 +731,11 @@ impl VirtualDom {
         self.runtime.clone()
     }
 
-    /// Flush any queued template changes
-    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::flush_templates")]
-    fn flush_templates(&mut self, to: &mut impl WriteMutations) {
-        for template in self.queued_templates.drain(..) {
-            to.register_template(template);
-        }
-    }
-
-    /*
-    ------------------------
-    The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
-    we find the target path.
-
-    With the target path, we try and move up to the parent until there is no parent.
-    Due to how bubbling works, we call the listeners before walking to the parent.
-
-    If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
-    ----------------------
-
-    For a visual demonstration, here we present a tree on the left and whether or not a listener is collected on the
-    right.
-
-    |           <-- yes (is ascendant)
-    | | |       <-- no  (is not direct ascendant)
-    | |         <-- yes (is ascendant)
-    | | | | |   <--- target element, break early, don't check other listeners
-    | | |       <-- no, broke early
-    |           <-- no, broke early
-    */
-    #[instrument(
-        skip(self, uievent),
-        level = "trace",
-        name = "VirtualDom::handle_bubbling_event"
-    )]
-    fn handle_bubbling_event(&mut self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        // If the event bubbles, we traverse through the tree until we find the target element.
-        // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-        let mut parent = Some(parent);
-        while let Some(path) = parent {
-            let mut listeners = vec![];
-
-            let Some(mount) = self.mounts.get(path.mount.0) else {
-                // If the node is suspended and not mounted, we can just ignore the event
-                return;
-            };
-            let el_ref = &mount.node;
-            let node_template = el_ref.template.get();
-            let target_path = path.path;
-
-            // Accumulate listeners into the listener list bottom to top
-            for (idx, this_path) in node_template.breadth_first_attribute_paths() {
-                let attrs = &*el_ref.dynamic_attrs[idx];
-
-                for attr in attrs.iter() {
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path) {
-                        listeners.push(&attr.value);
-
-                        // Break if this is the exact target element.
-                        // This means we won't call two listeners with the same name on the same element. This should be
-                        // documented, or be rejected from the rsx! macro outright
-                        if target_path == this_path {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
-            // We check the bubble state between each call to see if the event has been stopped from bubbling
-            tracing::event!(
-                tracing::Level::TRACE,
-                "Calling {} listeners",
-                listeners.len()
-            );
-            for listener in listeners.into_iter().rev() {
-                if let AttributeValue::Listener(listener) = listener {
-                    self.runtime.rendering.set(false);
-                    listener.call(uievent.clone());
-                    self.runtime.rendering.set(true);
-
-                    if !uievent.propagates.get() {
-                        return;
-                    }
-                }
-            }
-
-            let mount = el_ref.mount.get().as_usize();
-            parent = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
-        }
-    }
-
-    /// Call an event listener in the simplest way possible without bubbling upwards
-    #[instrument(
-        skip(self, uievent),
-        level = "trace",
-        name = "VirtualDom::handle_non_bubbling_event"
-    )]
-    fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let Some(mount) = self.mounts.get(node.mount.0) else {
-            // If the node is suspended and not mounted, we can just ignore the event
-            return;
-        };
-        let el_ref = &mount.node;
-        let node_template = el_ref.template.get();
-        let target_path = node.path;
-
-        for (idx, this_path) in node_template.breadth_first_attribute_paths() {
-            let attrs = &*el_ref.dynamic_attrs[idx];
-
-            for attr in attrs.iter() {
-                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                // Only call the listener if this is the exact target element.
-                if attr.name.get(2..) == Some(name) && target_path == this_path {
-                    if let AttributeValue::Listener(listener) = &attr.value {
-                        self.runtime.rendering.set(false);
-                        listener.call(uievent.clone());
-                        self.runtime.rendering.set(true);
-                        break;
-                    }
-                }
-            }
-        }
+    /// Handle an event with the Virtual Dom. This method is deprecated in favor of [VirtualDom::runtime().handle_event] and will be removed in a future release.
+    #[deprecated = "Use [VirtualDom::runtime().handle_event] instead"]
+    pub fn handle_event(&self, name: &str, event: Rc<dyn Any>, element: ElementId, bubbling: bool) {
+        let event = crate::Event::new(event, bubbling);
+        self.runtime().handle_event(name, event, element);
     }
 }
 

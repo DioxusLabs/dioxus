@@ -20,11 +20,11 @@ use crate::innerlude::*;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::collections::HashSet;
+use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
+    token, AngleBracketedGenericArguments, Expr, PathArguments, Result,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -32,8 +32,9 @@ pub struct Component {
     pub name: syn::Path,
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
+    pub component_literal_dyn_idx: Vec<DynIdx>,
     pub spreads: Vec<Spread>,
-    pub brace: token::Brace,
+    pub brace: Option<token::Brace>,
     pub children: TemplateBody,
     pub dyn_idx: DynIdx,
     pub diagnostics: Diagnostics,
@@ -56,13 +57,20 @@ impl Parse for Component {
             diagnostics,
         } = input.parse::<RsxBlock>()?;
 
+        let literal_properties_count = fields
+            .iter()
+            .filter(|attr| matches!(attr.value, AttributeValue::AttrLiteral(_)))
+            .count();
+        let component_literal_dyn_idx = vec![DynIdx::default(); literal_properties_count];
+
         let mut component = Self {
             dyn_idx: DynIdx::default(),
             children: TemplateBody::new(children),
             name,
             generics,
             fields,
-            brace,
+            brace: Some(brace),
+            component_literal_dyn_idx,
             spreads,
             diagnostics,
         };
@@ -71,7 +79,6 @@ impl Parse for Component {
         // validating it will dump diagnostics into the output
         component.validate_component_path();
         component.validate_fields();
-        component.validate_key();
         component.validate_component_spread();
 
         Ok(component)
@@ -84,9 +91,6 @@ impl ToTokens for Component {
 
         // Create props either from manual props or from the builder approach
         let props = self.create_props();
-
-        // Make sure we stringify the component name
-        let fn_name = self.fn_name().to_string();
 
         // Make sure we emit any errors
         let diagnostics = &self.diagnostics;
@@ -102,7 +106,6 @@ impl ToTokens for Component {
                     #props
                 }).into_vcomponent(
                     #name #generics,
-                    #fn_name
                 );
                 #diagnostics
                 __comp
@@ -167,38 +170,17 @@ impl Component {
         }
     }
 
-    /// Ensure only one key and that the key is not a static str
-    ///
-    /// todo: we want to allow arbitrary exprs for keys provided they impl hash / eq
-    fn validate_key(&mut self) {
-        let key = self.get_key();
-
-        if let Some(attr) = key {
-            let diagnostic = match &attr.value {
-                AttributeValue::AttrLiteral(ifmt) if ifmt.is_static() => {
-                    ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
-                }
-                AttributeValue::AttrLiteral(_) => return,
-                _ => attr
-                    .value
-                    .span()
-                    .error("Key must be in the form of a formatted string like `key: \"{value}\""),
-            };
-
-            self.diagnostics.push(diagnostic);
-        }
-    }
-
-    pub fn get_key(&self) -> Option<&Attribute> {
+    pub fn get_key(&self) -> Option<&AttributeValue> {
         self.fields
             .iter()
-            .find(|attr| matches!(&attr.name, AttributeName::BuiltIn(key) if key == "key"))
+            .find(|attr| attr.name.is_likely_key())
+            .map(|attr| &attr.value)
     }
 
     /// Ensure there's no duplicate props - this will be a compile error but we can move it to a
     /// diagnostic, thankfully
     ///
-    /// Also ensure there's no stringly typed propsa
+    /// Also ensure there's no stringly typed props
     fn validate_fields(&mut self) {
         let mut seen = HashSet::new();
 
@@ -270,30 +252,43 @@ impl Component {
         self.spreads.first().map(|spread| &spread.expr)
     }
 
-    fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
+    // Iterate over the props of the component (without spreads, key, and custom attributes)
+    pub(crate) fn component_props(&self) -> impl Iterator<Item = &Attribute> {
         self.fields
             .iter()
-            .filter_map(|attr| {
-                let Attribute { name, value, .. } = attr;
-
-                let attr = match name {
-                    AttributeName::BuiltIn(k) => {
-                        if k == "key" {
-                            return None;
-                        }
-                        quote! { #k }
-                    }
-                    AttributeName::Custom(_) => return None,
-                    AttributeName::Spread(_) => return None,
-                };
-
-                Some((attr, value.to_token_stream()))
-            })
-            .collect()
+            .filter(move |attr| !attr.name.is_likely_key())
     }
 
-    fn fn_name(&self) -> Ident {
-        self.name.segments.last().unwrap().ident.clone()
+    fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
+        let mut dynamic_literal_index = 0;
+        self.component_props()
+            .map(|attribute| {
+                let release_value = attribute.value.to_token_stream();
+
+            // In debug mode, we try to grab the value from the dynamic literal pool if possible
+            let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
+                let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
+                dynamic_literal_index += 1;
+                let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
+                quote! {
+                    {
+                        #[cfg(debug_assertions)]
+                        {
+                            #debug_value
+                        }
+                        #[cfg(not(debug_assertions))]
+                        {
+                            #release_value
+                        }
+                    }
+                }
+            } else {
+                release_value
+            };
+
+                (attribute.name.to_token_stream(), value)
+            })
+            .collect()
     }
 
     fn empty(name: syn::Path, generics: Option<AngleBracketedGenericArguments>) -> Self {
@@ -306,10 +301,11 @@ impl Component {
         Component {
             name,
             generics,
-            brace: token::Brace::default(),
+            brace: None,
             fields: vec![],
             spreads: vec![],
             children: TemplateBody::new(vec![]),
+            component_literal_dyn_idx: vec![],
             dyn_idx: DynIdx::default(),
             diagnostics,
         }
@@ -338,139 +334,165 @@ fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments
     generics
 }
 
-/// Ensure we can parse a component
-#[test]
-fn parses() {
-    let input = quote! {
-        MyComponent {
-            key: "value {something}",
-            prop: "value",
-            ..props,
-            div {
-                "Hello, world!"
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prettier_please::PrettyUnparse;
+    use syn::parse_quote;
+
+    /// Ensure we can parse a component
+    #[test]
+    fn parses() {
+        let input = quote! {
+            MyComponent {
+                key: "value {something}",
+                prop: "value",
+                ..props,
+                div {
+                    "Hello, world!"
+                }
             }
-        }
-    };
+        };
 
-    let component: Component = syn::parse2(input).unwrap();
+        let component: Component = syn::parse2(input).unwrap();
 
-    dbg!(component);
+        dbg!(component);
 
-    let input_without_manual_props = quote! {
-        MyComponent {
-            key: "value {something}",
-            prop: "value",
-            div { "Hello, world!" }
-        }
-    };
-
-    let component: Component = syn::parse2(input_without_manual_props).unwrap();
-    dbg!(component);
-}
-
-/// Ensure we reject invalid forms
-///
-/// Maybe want to snapshot the errors?
-#[test]
-fn rejects() {
-    let input = quote! {
-        myComponent {
-            key: "value",
-            prop: "value",
-            prop: "other",
-            ..props,
-            ..other_props,
-            div {
-                "Hello, world!"
+        let input_without_manual_props = quote! {
+            MyComponent {
+                key: "value {something}",
+                prop: "value",
+                div { "Hello, world!" }
             }
-        }
-    };
+        };
 
-    let component: Component = syn::parse2(input).unwrap();
-    dbg!(component.diagnostics);
-}
+        let component: Component = syn::parse2(input_without_manual_props).unwrap();
+        dbg!(component);
+    }
 
-#[test]
-fn to_tokens_properly() {
-    let input = quote! {
-        MyComponent {
-            key: "value {something}",
-            prop: "value",
-            prop: "value",
-            prop: "value",
-            prop: "value",
-            prop: 123,
-            ..props,
-            div { "Hello, world!" }
-        }
-    };
+    /// Ensure we reject invalid forms
+    ///
+    /// Maybe want to snapshot the errors?
+    #[test]
+    fn rejects() {
+        let input = quote! {
+            myComponent {
+                key: "value",
+                prop: "value",
+                prop: "other",
+                ..props,
+                ..other_props,
+                div {
+                    "Hello, world!"
+                }
+            }
+        };
 
-    let component: Component = syn::parse2(input).unwrap();
-    println!("{}", component.to_token_stream());
-}
+        let component: Component = syn::parse2(input).unwrap();
+        dbg!(component.diagnostics);
+    }
 
-#[test]
-fn to_tokens_no_manual_props() {
-    let input_without_manual_props = quote! {
-        MyComponent {
-            key: "value {something}",
-            named: "value {something}",
-            prop: "value",
-            count: 1,
-            div { "Hello, world!" }
-        }
-    };
-    let component: Component = syn::parse2(input_without_manual_props).unwrap();
-    println!("{}", component.to_token_stream().pretty_unparse());
-}
+    #[test]
+    fn to_tokens_properly() {
+        let input = quote! {
+            MyComponent {
+                key: "value {something}",
+                prop: "value",
+                prop: "value",
+                prop: "value",
+                prop: "value",
+                prop: 123,
+                ..props,
+                div { "Hello, world!" }
+            }
+        };
 
-#[test]
-fn generics_params() {
-    let input_without_children = quote! {
-         Outlet::<R> {}
-    };
-    let component: CallBody = syn::parse2(input_without_children).unwrap();
-    println!("{}", component.to_token_stream().pretty_unparse());
-}
+        let component: Component = syn::parse2(input).unwrap();
+        println!("{}", component.to_token_stream());
+    }
 
-#[test]
-fn generics_no_fish() {
-    let name = quote! { Outlet<R> };
-    let mut p = syn::parse2::<syn::Path>(name).unwrap();
-    let generics = normalize_path(&mut p);
-    assert!(generics.is_some());
+    #[test]
+    fn to_tokens_no_manual_props() {
+        let input_without_manual_props = quote! {
+            MyComponent {
+                key: "value {something}",
+                named: "value {something}",
+                prop: "value",
+                count: 1,
+                div { "Hello, world!" }
+            }
+        };
+        let component: Component = syn::parse2(input_without_manual_props).unwrap();
+        println!("{}", component.to_token_stream().pretty_unparse());
+    }
 
-    let input_without_children = quote! {
-        div {
-            Component<Generic> {}
-        }
-    };
-    let component: BodyNode = syn::parse2(input_without_children).unwrap();
-    println!("{}", component.to_token_stream().pretty_unparse());
-}
+    #[test]
+    fn generics_params() {
+        let input_without_children = quote! {
+             Outlet::<R> {}
+        };
+        let component: crate::CallBody = syn::parse2(input_without_children).unwrap();
+        println!("{}", component.to_token_stream().pretty_unparse());
+    }
 
-#[test]
-fn fmt_passes_properly() {
-    let input = quote! {
-        Link { to: Route::List, class: "pure-button", "Go back" }
-    };
+    #[test]
+    fn generics_no_fish() {
+        let name = quote! { Outlet<R> };
+        let mut p = syn::parse2::<syn::Path>(name).unwrap();
+        let generics = normalize_path(&mut p);
+        assert!(generics.is_some());
 
-    let component: Component = syn::parse2(input).unwrap();
+        let input_without_children = quote! {
+            div {
+                Component<Generic> {}
+            }
+        };
+        let component: BodyNode = syn::parse2(input_without_children).unwrap();
+        println!("{}", component.to_token_stream().pretty_unparse());
+    }
 
-    println!("{}", component.to_token_stream().pretty_unparse());
-}
+    #[test]
+    fn fmt_passes_properly() {
+        let input = quote! {
+            Link { to: Route::List, class: "pure-button", "Go back" }
+        };
 
-#[test]
-fn incomplete_components() {
-    let input = quote::quote! {
-        some::cool::Component
-    };
+        let component: Component = syn::parse2(input).unwrap();
 
-    let _parsed: Component = syn::parse2(input).unwrap();
+        println!("{}", component.to_token_stream().pretty_unparse());
+    }
 
-    let input = quote::quote! {
-        some::cool::C
-    };
+    #[test]
+    fn incomplete_components() {
+        let input = quote::quote! {
+            some::cool::Component
+        };
 
-    let _parsed: syn::Path = syn::parse2(input).unwrap();
+        let _parsed: Component = syn::parse2(input).unwrap();
+
+        let input = quote::quote! {
+            some::cool::C
+        };
+
+        let _parsed: syn::Path = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn identifies_key() {
+        let input = quote! {
+            Link { key: "{value}", to: Route::List, class: "pure-button", "Go back" }
+        };
+
+        let component: Component = syn::parse2(input).unwrap();
+
+        // The key should exist
+        assert_eq!(component.get_key(), Some(&parse_quote!("{value}")));
+
+        // The key should not be included in the properties
+        let properties = component
+            .component_props()
+            .map(|attr| attr.name.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(properties, ["to", "class"]);
+    }
 }

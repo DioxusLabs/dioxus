@@ -52,6 +52,7 @@ impl DragData {
     }
 
     /// Downcast this event data to a specific type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         HasDragData::as_any(&*self.inner).downcast_ref::<T>()
     }

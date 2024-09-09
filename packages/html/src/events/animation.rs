@@ -30,6 +30,7 @@ impl AnimationData {
     }
 
     /// Downcast this event to a concrete event type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_ref().as_any().downcast_ref::<T>()
     }

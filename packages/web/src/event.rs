@@ -113,6 +113,14 @@ impl HtmlEventConverter for WebEventConverter {
     }
 
     #[inline(always)]
+    fn convert_resize_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::ResizeData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    #[inline(always)]
     fn convert_scroll_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -157,135 +165,157 @@ impl HtmlEventConverter for WebEventConverter {
 
 /// A extension trait for web-sys events that provides a way to get the event as a web-sys event.
 pub trait WebEventExt<E> {
-    /// Get the event as a web-sys event.
-    fn web_event(&self) -> &E;
+    /// Try to downcast this event as a `web-sys` event.
+    fn try_as_web_event(&self) -> Option<E>;
+
+    /// Downcast this event as a `web-sys` event.
+    #[inline(always)]
+    fn as_web_event(&self) -> E
+    where
+        E: 'static,
+    {
+        self.try_as_web_event().unwrap_or_else(|| {
+            panic!(
+                "Error downcasting to `web-sys`, event should be a {}.",
+                std::any::type_name::<E>()
+            )
+        })
+    }
 }
 
 impl WebEventExt<web_sys::AnimationEvent> for dioxus_html::AnimationData {
-    fn web_event(&self) -> &web_sys::AnimationEvent {
-        self.downcast::<web_sys::AnimationEvent>()
-            .expect("event should be a WebAnimationEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::AnimationEvent> {
+        self.downcast::<web_sys::AnimationEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::ClipboardData {
-    fn web_event(&self) -> &web_sys::Event {
-        self.downcast::<web_sys::Event>()
-            .expect("event should be a web_sys::Event")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::Event> {
+        self.downcast::<web_sys::Event>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::CompositionEvent> for dioxus_html::CompositionData {
-    fn web_event(&self) -> &web_sys::CompositionEvent {
-        self.downcast::<web_sys::CompositionEvent>()
-            .expect("event should be a WebCompositionEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::CompositionEvent> {
+        self.downcast::<web_sys::CompositionEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::MouseEvent> for dioxus_html::DragData {
-    fn web_event(&self) -> &web_sys::MouseEvent {
-        &self
-            .downcast::<WebDragData>()
-            .expect("event should be a WebMouseEvent")
-            .raw
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::MouseEvent> {
+        self.downcast::<WebDragData>()
+            .map(|data| &data.raw)
+            .cloned()
     }
 }
 
 impl WebEventExt<web_sys::FocusEvent> for dioxus_html::FocusData {
-    fn web_event(&self) -> &web_sys::FocusEvent {
-        self.downcast::<web_sys::FocusEvent>()
-            .expect("event should be a WebFocusEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::FocusEvent> {
+        self.downcast::<web_sys::FocusEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::FormData {
-    fn web_event(&self) -> &web_sys::Event {
-        self.downcast::<web_sys::Event>()
-            .expect("event should be a WebFormData")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::Event> {
+        self.downcast::<web_sys::Event>().cloned()
     }
 }
 
 impl WebEventExt<WebImageEvent> for dioxus_html::ImageData {
-    fn web_event(&self) -> &WebImageEvent {
-        self.downcast::<WebImageEvent>()
-            .expect("event should be a WebImageEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<WebImageEvent> {
+        self.downcast::<WebImageEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::KeyboardEvent> for dioxus_html::KeyboardData {
-    fn web_event(&self) -> &web_sys::KeyboardEvent {
-        self.downcast::<web_sys::KeyboardEvent>()
-            .expect("event should be a WebKeyboardEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::KeyboardEvent> {
+        self.downcast::<web_sys::KeyboardEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::MediaData {
-    fn web_event(&self) -> &web_sys::Event {
-        self.downcast::<web_sys::Event>()
-            .expect("event should be a WebMediaEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::Event> {
+        self.downcast::<web_sys::Event>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::Element> for MountedData {
-    fn web_event(&self) -> &web_sys::Element {
-        self.downcast::<web_sys::Element>()
-            .expect("event should be a web_sys::Element")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::Element> {
+        self.downcast::<web_sys::Element>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::MouseEvent> for dioxus_html::MouseData {
-    fn web_event(&self) -> &web_sys::MouseEvent {
-        self.downcast::<web_sys::MouseEvent>()
-            .expect("event should be a WebMouseEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::MouseEvent> {
+        self.downcast::<web_sys::MouseEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::PointerEvent> for dioxus_html::PointerData {
-    fn web_event(&self) -> &web_sys::PointerEvent {
-        self.downcast::<web_sys::PointerEvent>()
-            .expect("event should be a WebPointerEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::PointerEvent> {
+        self.downcast::<web_sys::PointerEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::Event> for ScrollData {
-    fn web_event(&self) -> &web_sys::Event {
-        self.downcast::<web_sys::Event>()
-            .expect("event should be a WebScrollEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::Event> {
+        self.downcast::<web_sys::Event>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::SelectionData {
-    fn web_event(&self) -> &web_sys::Event {
-        self.downcast::<web_sys::Event>()
-            .expect("event should be a WebSelectionEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::Event> {
+        self.downcast::<web_sys::Event>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::ToggleData {
-    fn web_event(&self) -> &web_sys::Event {
-        self.downcast::<web_sys::Event>()
-            .expect("event should be a WebToggleEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::Event> {
+        self.downcast::<web_sys::Event>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::TouchEvent> for dioxus_html::TouchData {
-    fn web_event(&self) -> &web_sys::TouchEvent {
-        self.downcast::<web_sys::TouchEvent>()
-            .expect("event should be a WebTouchEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::TouchEvent> {
+        self.downcast::<web_sys::TouchEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::TransitionEvent> for dioxus_html::TransitionData {
-    fn web_event(&self) -> &web_sys::TransitionEvent {
-        self.downcast::<web_sys::TransitionEvent>()
-            .expect("event should be a WebTransitionEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::TransitionEvent> {
+        self.downcast::<web_sys::TransitionEvent>().cloned()
     }
 }
 
 impl WebEventExt<web_sys::WheelEvent> for dioxus_html::WheelData {
-    fn web_event(&self) -> &web_sys::WheelEvent {
-        self.downcast::<web_sys::WheelEvent>()
-            .expect("event should be a WebWheelEvent")
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::WheelEvent> {
+        self.downcast::<web_sys::WheelEvent>().cloned()
+    }
+}
+
+impl WebEventExt<web_sys::ResizeObserverEntry> for dioxus_html::ResizeData {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::ResizeObserverEntry> {
+        self.downcast::<web_sys::CustomEvent>()
+            .and_then(|e| e.detail().dyn_into::<web_sys::ResizeObserverEntry>().ok())
     }
 }
 
@@ -313,6 +343,7 @@ pub(crate) fn load_document() -> Document {
         .expect("should have access to the Document")
 }
 
+#[derive(Clone)]
 struct WebImageEvent {
     raw: Event,
     error: bool,

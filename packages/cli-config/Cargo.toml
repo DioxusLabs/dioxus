@@ -24,7 +24,7 @@ tauri-utils = { workspace = true, optional = true }
 dirs = { workspace = true, optional = true }
 
 [build-dependencies]
-built = { version = "=0.7.3", features = ["git2"] }
+built = { version = "=0.7.4", features = ["git2"] }
 
 [features]
 default = ["read-config"]

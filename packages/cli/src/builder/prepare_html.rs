@@ -1,6 +1,7 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
 use super::{BuildRequest, UpdateBuildProgress};
+use crate::builder::progress::MessageSource;
 use crate::builder::Stage;
 use crate::Result;
 use futures_channel::mpsc::UnboundedSender;
@@ -191,7 +192,7 @@ impl BuildRequest {
             update: super::UpdateStage::AddMessage(super::BuildMessage {
                 level: Level::WARN,
                 message: super::MessageType::Text(message),
-                source: None,
+                source: MessageSource::Build,
             }),
         });
     }

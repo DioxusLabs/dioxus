@@ -180,7 +180,7 @@ impl DioxusCrate {
     /// Compose an asset directory. Represents the typical "public" directory
     /// with publicly available resources (configurable in the `Dioxus.toml`).
     pub fn asset_dir(&self) -> PathBuf {
-        self.workspace_dir()
+        self.crate_dir()
             .join(&self.dioxus_config.application.asset_dir)
     }
 
@@ -190,22 +190,6 @@ impl DioxusCrate {
     pub fn out_dir(&self) -> PathBuf {
         self.workspace_dir()
             .join(&self.dioxus_config.application.out_dir)
-    }
-
-    /// Compose an out directory for the fullstack platform. See `out_dir()`
-    /// method.
-    pub fn fullstack_out_dir(&self) -> PathBuf {
-        self.workspace_dir().join(".dioxus")
-    }
-
-    /// Compose a target directory for the server (fullstack-only?).
-    pub fn server_target_dir(&self) -> PathBuf {
-        self.fullstack_out_dir().join("ssr")
-    }
-
-    /// Compose a target directory for the client (fullstack-only?).
-    pub fn client_target_dir(&self) -> PathBuf {
-        self.fullstack_out_dir().join("web")
     }
 
     /// Get the workspace directory for the crate

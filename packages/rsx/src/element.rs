@@ -76,7 +76,7 @@ impl Parse for Element {
         // Assemble the new element from the contents of the block
         let mut element = Element {
             brace,
-            name,
+            name: name.clone(),
             raw_attributes: block.attributes,
             children: block.children,
             diagnostics: block.diagnostics,
@@ -98,7 +98,7 @@ impl Parse for Element {
                 value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
                 comma: spread.comma,
                 dyn_idx: spread.dyn_idx.clone(),
-                el_name: None,
+                el_name: Some(name.clone()),
             });
         }
 
@@ -237,7 +237,7 @@ impl Element {
         }
 
         for attr in attrs {
-            if attr.name.to_string() == "key" {
+            if attr.name.is_likely_key() {
                 continue;
             }
 
@@ -270,11 +270,9 @@ impl Element {
                 }
 
                 // Merge raw literals into the output
-                if let AttributeValue::AttrLiteral(lit) = &matching_attr.value {
-                    if let HotLiteralType::Fmted(new) = &lit.value {
-                        out.push_ifmt(new.clone());
-                        continue;
-                    }
+                if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &matching_attr.value {
+                    out.push_ifmt(lit.formatted_input.clone());
+                    continue;
                 }
 
                 // Merge `if cond { "abc" } else if ...` into the output
@@ -289,10 +287,7 @@ impl Element {
                 );
             }
 
-            let out_lit = HotLiteral {
-                value: HotLiteralType::Fmted(out),
-                hr_idx: Default::default(),
-            };
+            let out_lit = HotLiteral::Fmted(out.into());
 
             self.merged_attributes.push(Attribute {
                 name: attr.name.clone(),
@@ -305,16 +300,11 @@ impl Element {
         }
     }
 
-    pub(crate) fn key(&self) -> Option<&IfmtInput> {
-        for attr in &self.raw_attributes {
-            if let AttributeName::BuiltIn(name) = &attr.name {
-                if name == "key" {
-                    return attr.ifmt();
-                }
-            }
-        }
-
-        None
+    pub(crate) fn key(&self) -> Option<&AttributeValue> {
+        self.raw_attributes
+            .iter()
+            .find(|attr| attr.name.is_likely_key())
+            .map(|attr| &attr.value)
     }
 
     fn completion_hints(&self) -> TokenStream2 {
@@ -409,216 +399,222 @@ impl Display for ElementName {
     }
 }
 
-#[test]
-fn parses_name() {
-    let _parsed: ElementName = syn::parse2(quote::quote! { div }).unwrap();
-    let _parsed: ElementName = syn::parse2(quote::quote! { some-cool-element }).unwrap();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prettier_please::PrettyUnparse;
 
-    let _parsed: Element = syn::parse2(quote::quote! { div {} }).unwrap();
-    let _parsed: Element = syn::parse2(quote::quote! { some-cool-element {} }).unwrap();
+    #[test]
+    fn parses_name() {
+        let _parsed: ElementName = syn::parse2(quote::quote! { div }).unwrap();
+        let _parsed: ElementName = syn::parse2(quote::quote! { some-cool-element }).unwrap();
 
-    let parsed: Element = syn::parse2(quote::quote! {
-        some-cool-div {
-            id: "hi",
-            id: "hi {abc}",
-            id: "hi {def}",
-            class: 123,
-            something: bool,
-            data_attr: "data",
-            data_attr: "data2",
-            data_attr: "data3",
-            exp: { some_expr },
-            something: {cool},
-            something: bool,
-            something: 123,
-            onclick: move |_| {
-                println!("hello world");
-            },
-            "some-attr": "hello world",
-            onclick: move |_| {},
-            class: "hello world",
-            id: "my-id",
-            data_attr: "data",
-            data_attr: "data2",
-            data_attr: "data3",
-            "somte_attr3": "hello world",
-            something: {cool},
-            something: bool,
-            something: 123,
-            onclick: move |_| {
-                println!("hello world");
-            },
-            ..attrs1,
-            ..attrs2,
-            ..attrs3
-        }
-    })
-    .unwrap();
+        let _parsed: Element = syn::parse2(quote::quote! { div {} }).unwrap();
+        let _parsed: Element = syn::parse2(quote::quote! { some-cool-element {} }).unwrap();
 
-    dbg!(parsed);
-}
-
-#[test]
-fn parses_variety() {
-    let input = quote::quote! {
-        div {
-            class: "hello world",
-            id: "my-id",
-            data_attr: "data",
-            data_attr: "data2",
-            data_attr: "data3",
-            "somte_attr3": "hello world",
-            something: {cool},
-            something: bool,
-            something: 123,
-            onclick: move |_| {
-                println!("hello world");
-            },
-            ..attrs,
-            ..attrs2,
-            ..attrs3
-        }
-    };
-
-    let parsed: Element = syn::parse2(input).unwrap();
-    dbg!(parsed);
-}
-
-#[test]
-fn to_tokens_properly() {
-    let input = quote::quote! {
-        div {
-            class: "hello world",
-            class2: "hello {world}",
-            class3: "goodbye {world}",
-            class4: "goodbye world",
-            "something": "cool {blah}",
-            "something2": "cooler",
-            div {
-                div {
-                    h1 { class: "h1 col" }
-                    h2 { class: "h2 col" }
-                    h3 { class: "h3 col" }
-                    div {}
-                }
-            }
-        }
-    };
-
-    let parsed: Element = syn::parse2(input).unwrap();
-    println!("{}", parsed.to_token_stream().pretty_unparse());
-}
-
-#[test]
-fn to_tokens_with_diagnostic() {
-    let input = quote::quote! {
-        div {
-            class: "hello world",
-            id: "my-id",
-            ..attrs,
-            div {
-                ..attrs,
+        let parsed: Element = syn::parse2(quote::quote! {
+            some-cool-div {
+                id: "hi",
+                id: "hi {abc}",
+                id: "hi {def}",
+                class: 123,
+                something: bool,
+                data_attr: "data",
+                data_attr: "data2",
+                data_attr: "data3",
+                exp: { some_expr },
+                something: {cool},
+                something: bool,
+                something: 123,
+                onclick: move |_| {
+                    println!("hello world");
+                },
+                "some-attr": "hello world",
+                onclick: move |_| {},
                 class: "hello world",
                 id: "my-id",
+                data_attr: "data",
+                data_attr: "data2",
+                data_attr: "data3",
+                "somte_attr3": "hello world",
+                something: {cool},
+                something: bool,
+                something: 123,
+                onclick: move |_| {
+                    println!("hello world");
+                },
+                ..attrs1,
+                ..attrs2,
+                ..attrs3
             }
-        }
-    };
+        })
+        .unwrap();
 
-    let parsed: Element = syn::parse2(input).unwrap();
-    println!("{}", parsed.to_token_stream().pretty_unparse());
-}
+        dbg!(parsed);
+    }
 
-#[test]
-fn merges_attributes() {
-    let input = quote::quote! {
-        div {
-            class: "hello world",
-            class: if count > 3 { "abc {def}" },
-            class: if count < 50 { "small" } else { "big" }
-        }
-    };
+    #[test]
+    fn parses_variety() {
+        let input = quote::quote! {
+            div {
+                class: "hello world",
+                id: "my-id",
+                data_attr: "data",
+                data_attr: "data2",
+                data_attr: "data3",
+                "somte_attr3": "hello world",
+                something: {cool},
+                something: bool,
+                something: 123,
+                onclick: move |_| {
+                    println!("hello world");
+                },
+                ..attrs,
+                ..attrs2,
+                ..attrs3
+            }
+        };
 
-    let parsed: Element = syn::parse2(input).unwrap();
-    assert_eq!(parsed.diagnostics.len(), 0);
-    assert_eq!(parsed.merged_attributes.len(), 1);
-    assert_eq!(
-        parsed.merged_attributes[0].name.to_string(),
-        "class".to_string()
-    );
+        let parsed: Element = syn::parse2(input).unwrap();
+        dbg!(parsed);
+    }
 
-    let attr = &parsed.merged_attributes[0].value;
+    #[test]
+    fn to_tokens_properly() {
+        let input = quote::quote! {
+            div {
+                class: "hello world",
+                class2: "hello {world}",
+                class3: "goodbye {world}",
+                class4: "goodbye world",
+                "something": "cool {blah}",
+                "something2": "cooler",
+                div {
+                    div {
+                        h1 { class: "h1 col" }
+                        h2 { class: "h2 col" }
+                        h3 { class: "h3 col" }
+                        div {}
+                    }
+                }
+            }
+        };
 
-    println!("{}", attr.to_token_stream().pretty_unparse());
+        let parsed: Element = syn::parse2(input).unwrap();
+        println!("{}", parsed.to_token_stream().pretty_unparse());
+    }
 
-    let _attr = match attr {
-        AttributeValue::AttrLiteral(lit) => lit,
-        _ => panic!("expected literal"),
-    };
-}
+    #[test]
+    fn to_tokens_with_diagnostic() {
+        let input = quote::quote! {
+            div {
+                class: "hello world",
+                id: "my-id",
+                ..attrs,
+                div {
+                    ..attrs,
+                    class: "hello world",
+                    id: "my-id",
+                }
+            }
+        };
 
-/// There are a number of cases where merging attributes doesn't make sense
-/// - merging two expressions together
-/// - merging two literals together
-/// - merging a literal and an expression together
-///
-/// etc
-///
-/// We really only want to merge formatted things together
-///
-/// IE
-/// class: "hello world ",
-/// class: if some_expr { "abc" }
-///
-/// Some open questions - should the delimiter be explicit?
-#[test]
-fn merging_weird_fails() {
-    let input = quote::quote! {
-        div {
-            class: "hello world",
-            class: if some_expr { 123 },
+        let parsed: Element = syn::parse2(input).unwrap();
+        println!("{}", parsed.to_token_stream().pretty_unparse());
+    }
 
-            style: "color: red;",
-            style: "color: blue;",
+    #[test]
+    fn merges_attributes() {
+        let input = quote::quote! {
+            div {
+                class: "hello world",
+                class: if count > 3 { "abc {def}" },
+                class: if count < 50 { "small" } else { "big" }
+            }
+        };
 
-            width: "1px",
-            width: 1,
-            width: false,
-            contenteditable: true,
-        }
-    };
+        let parsed: Element = syn::parse2(input).unwrap();
+        assert_eq!(parsed.diagnostics.len(), 0);
+        assert_eq!(parsed.merged_attributes.len(), 1);
+        assert_eq!(
+            parsed.merged_attributes[0].name.to_string(),
+            "class".to_string()
+        );
 
-    let parsed: Element = syn::parse2(input).unwrap();
+        let attr = &parsed.merged_attributes[0].value;
 
-    assert_eq!(parsed.merged_attributes.len(), 4);
-    assert_eq!(parsed.diagnostics.len(), 3);
+        println!("{}", attr.to_token_stream().pretty_unparse());
 
-    // style should not generate a diagnostic
-    assert!(!parsed
-        .diagnostics
-        .diagnostics
-        .into_iter()
-        .any(|f| f.emit_as_item_tokens().to_string().contains("style")));
-}
+        let _attr = match attr {
+            AttributeValue::AttrLiteral(lit) => lit,
+            _ => panic!("expected literal"),
+        };
+    }
 
-#[test]
-fn diagnostics() {
-    let input = quote::quote! {
-        p {
-            class: "foo bar"
-            "Hello world"
-        }
-    };
+    /// There are a number of cases where merging attributes doesn't make sense
+    /// - merging two expressions together
+    /// - merging two literals together
+    /// - merging a literal and an expression together
+    ///
+    /// etc
+    ///
+    /// We really only want to merge formatted things together
+    ///
+    /// IE
+    /// class: "hello world ",
+    /// class: if some_expr { "abc" }
+    ///
+    /// Some open questions - should the delimiter be explicit?
+    #[test]
+    fn merging_weird_fails() {
+        let input = quote::quote! {
+            div {
+                class: "hello world",
+                class: if some_expr { 123 },
 
-    let _parsed: Element = syn::parse2(input).unwrap();
-}
+                style: "color: red;",
+                style: "color: blue;",
 
-#[test]
-fn parses_raw_elements() {
-    let input = quote::quote! {
-        use {
-            "hello"
-        }
-    };
+                width: "1px",
+                width: 1,
+                width: false,
+                contenteditable: true,
+            }
+        };
 
-    let _parsed: Element = syn::parse2(input).unwrap();
+        let parsed: Element = syn::parse2(input).unwrap();
+
+        assert_eq!(parsed.merged_attributes.len(), 4);
+        assert_eq!(parsed.diagnostics.len(), 3);
+
+        // style should not generate a diagnostic
+        assert!(!parsed
+            .diagnostics
+            .diagnostics
+            .into_iter()
+            .any(|f| f.emit_as_item_tokens().to_string().contains("style")));
+    }
+
+    #[test]
+    fn diagnostics() {
+        let input = quote::quote! {
+            p {
+                class: "foo bar"
+                "Hello world"
+            }
+        };
+
+        let _parsed: Element = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn parses_raw_elements() {
+        let input = quote::quote! {
+            use {
+                "hello"
+            }
+        };
+
+        let _parsed: Element = syn::parse2(input).unwrap();
+    }
 }

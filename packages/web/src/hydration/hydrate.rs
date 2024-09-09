@@ -138,7 +138,12 @@ impl WebsysDom {
             self.interpreter.base().push_root(node);
         }
 
-        with_server_data(HTMLDataCursor::from_serialized(&data), || {
+        let server_data = HTMLDataCursor::from_serialized(&data);
+        // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
+        if let Some(error) = server_data.error() {
+            dom.in_runtime(|| id.throw_error(error));
+        }
+        with_server_data(server_data, || {
             // rerun the scope with the new data
             SuspenseBoundaryProps::resolve_suspense(
                 id,
@@ -146,11 +151,11 @@ impl WebsysDom {
                 self,
                 |to| {
                     // Switch to only writing templates
-                    to.only_write_templates = true;
+                    to.skip_mutations = true;
                 },
                 children.len(),
             );
-            self.only_write_templates = false;
+            self.skip_mutations = false;
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes
@@ -245,7 +250,7 @@ impl WebsysDom {
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        for (i, root) in vnode.template.get().roots.iter().enumerate() {
+        for (i, root) in vnode.template.roots.iter().enumerate() {
             self.rehydrate_template_node(
                 dom,
                 vnode,

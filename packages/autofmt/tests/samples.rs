@@ -1,11 +1,13 @@
+#![allow(deprecated)]
+
 macro_rules! twoway {
     (
         $(
 
             // doc attrs
             $( #[doc = $doc:expr] )*
-            $name:ident
-        ),*
+            $name:ident,
+        )*
     ) => {
         $(
             $( #[doc = $doc] )*
@@ -22,35 +24,41 @@ macro_rules! twoway {
         )*
     };
 }
-
 twoway![
     attributes,
+    basic_expr,
     collapse_expr,
     comments,
     commentshard,
     complex,
+    docsite,
     emoji,
+    fat_exprs,
     ifchain_forloop,
     immediate_expr,
     key,
+    letsome,
     long_exprs,
     long,
     manual_props,
+    many_exprs,
     messy_indent,
+    misplaced,
     multirsx,
+    nested,
     raw_strings,
     reallylong,
+    shorthand,
     simple,
+    skip,
+    spaces,
+    staged,
     t2,
     tiny,
     tinynoopt,
     trailing_expr,
-    many_exprs,
-    shorthand,
-    docsite,
-    letsome,
-    fat_exprs,
-    nested,
-    staged,
-    misplaced
+    oneline,
+    prop_rsx,
+    asset,
+    collapse,
 ];

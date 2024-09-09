@@ -3,6 +3,7 @@ use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
+use std::fmt::Display;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -83,13 +84,41 @@ pub enum UpdateStage {
 pub struct BuildMessage {
     pub level: Level,
     pub message: MessageType,
-    pub source: Option<String>,
+    pub source: MessageSource,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MessageType {
     Cargo(Diagnostic),
     Text(String),
+}
+
+/// Represents the source of where a message came from.
+///
+/// The CLI will render a prefix according to the message type
+/// but this prefix, [`MessageSource::to_string()`] shouldn't be used if a strict message source is required.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MessageSource {
+    /// Represents any message from the running application. Renders `[app]`
+    App,
+    /// Represents any generic message from the CLI. Renders `[dev]`
+    ///
+    /// Usage of Tracing inside of the CLI will be routed to this type.
+    Dev,
+    /// Represents a message from the build process. Renders `[bld]`
+    ///
+    /// This is anything emitted from a build process such as cargo and optimizations.
+    Build,
+}
+
+impl Display for MessageSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::App => write!(f, "app"),
+            Self::Dev => write!(f, "dev"),
+            Self::Build => write!(f, "bld"),
+        }
+    }
 }
 
 impl From<Diagnostic> for BuildMessage {
@@ -104,7 +133,7 @@ impl From<Diagnostic> for BuildMessage {
                 cargo_metadata::diagnostic::DiagnosticLevel::Help => Level::DEBUG,
                 _ => Level::DEBUG,
             },
-            source: Some("cargo".to_string()),
+            source: MessageSource::Build,
             message: MessageType::Cargo(message),
         }
     }
@@ -206,7 +235,7 @@ pub(crate) async fn build_cargo(
                     update: UpdateStage::AddMessage(BuildMessage {
                         level: Level::DEBUG,
                         message: MessageType::Text(line),
-                        source: None,
+                        source: MessageSource::Build,
                     }),
                 });
             }

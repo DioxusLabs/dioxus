@@ -10,11 +10,11 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
-    arena::ElementId,
-    innerlude::{ElementRef, MountId, WriteMutations},
+    arena::MountId,
+    innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
     virtual_dom::VirtualDom,
-    Template, TemplateNode,
+    ElementId, TemplateNode,
 };
 
 mod component;
@@ -34,51 +34,44 @@ impl VirtualDom {
             .sum()
     }
 
-    /// Simply replace a placeholder with a list of nodes
-    fn replace_placeholder(
-        &mut self,
-        mut to: Option<&mut impl WriteMutations>,
-        placeholder_id: ElementId,
-        r: &[VNode],
-        parent: Option<ElementRef>,
-    ) {
-        let m = self.create_children(to.as_deref_mut(), r, parent);
-        if let Some(to) = to {
-            to.replace_node_with(placeholder_id, m);
-            self.reclaim(placeholder_id);
-        }
+    pub(crate) fn get_mounted_parent(&self, mount: MountId) -> Option<ElementRef> {
+        let mounts = self.runtime.mounts.borrow();
+        mounts[mount.0].parent
     }
 
-    fn nodes_to_placeholder(
-        &mut self,
-        mut to: Option<&mut impl WriteMutations>,
+    pub(crate) fn get_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize) -> usize {
+        let mounts = self.runtime.mounts.borrow();
+        mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx]
+    }
+
+    pub(crate) fn set_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize, value: usize) {
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx] = value;
+    }
+
+    pub(crate) fn get_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize) -> ElementId {
+        let mounts = self.runtime.mounts.borrow();
+        mounts[mount.0].mounted_attributes[dyn_attr_idx]
+    }
+
+    pub(crate) fn set_mounted_dyn_attr(
+        &self,
         mount: MountId,
-        dyn_node_idx: usize,
-        old_nodes: &[VNode],
+        dyn_attr_idx: usize,
+        value: ElementId,
     ) {
-        // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
-        let placeholder = self.next_element();
-
-        // Set the id of the placeholder
-        self.mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx] = placeholder.0;
-
-        if let Some(to) = to.as_deref_mut() {
-            to.create_placeholder(placeholder);
-        }
-
-        self.replace_nodes(to, old_nodes, 1);
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        mounts[mount.0].mounted_attributes[dyn_attr_idx] = value;
     }
 
-    /// Replace many nodes with a number of nodes on the stack
-    fn replace_nodes(&mut self, to: Option<&mut impl WriteMutations>, nodes: &[VNode], m: usize) {
-        debug_assert!(
-            !nodes.is_empty(),
-            "replace_nodes must have at least one node"
-        );
+    pub(crate) fn get_mounted_root_node(&self, mount: MountId, root_idx: usize) -> ElementId {
+        let mounts = self.runtime.mounts.borrow();
+        mounts[mount.0].root_ids[root_idx]
+    }
 
-        // We want to optimize the replace case to use one less mutation if possible
-        // Instead of *just* removing it, we can use the replace mutation
-        self.remove_nodes(to, nodes, Some(m));
+    pub(crate) fn set_mounted_root_node(&self, mount: MountId, root_idx: usize, value: ElementId) {
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        mounts[mount.0].root_ids[root_idx] = value;
     }
 
     /// Remove these nodes from the dom
@@ -94,26 +87,6 @@ impl VirtualDom {
             node.remove_node(self, to.as_deref_mut(), replace_with.filter(|_| last_node));
         }
     }
-
-    /// Insert a new template into the VirtualDom's template registry
-    // used in conditional compilation
-    #[allow(unused_mut)]
-    pub(crate) fn register_template(
-        &mut self,
-        to: &mut impl WriteMutations,
-        mut template: Template,
-    ) {
-        if self.templates.contains_key(template.name) {
-            return;
-        }
-
-        _ = self.templates.insert(template.name, template);
-
-        // If it's all dynamic nodes, then we don't need to register it
-        if !template.is_completely_dynamic() {
-            to.register_template(template)
-        }
-    }
 }
 
 /// We can apply various optimizations to dynamic nodes that are the single child of their parent.
@@ -124,7 +97,7 @@ impl VirtualDom {
 ///  - for appending children we can use AppendChildren
 #[allow(dead_code)]
 fn is_dyn_node_only_child(node: &VNode, idx: usize) -> bool {
-    let template = node.template.get();
+    let template = node.template;
     let path = template.node_paths[idx];
 
     // use a loop to index every static node's children until the path has run out

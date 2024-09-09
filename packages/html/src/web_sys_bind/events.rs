@@ -4,15 +4,17 @@ use crate::events::{
     TransitionData, WheelData,
 };
 use crate::file_data::HasFileData;
+use crate::geometry::PixelsSize;
 use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::prelude::*;
 use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
 use wasm_bindgen::JsCast;
+use web_sys::{js_sys, ResizeObserverEntry};
 use web_sys::{
-    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, Touch,
-    TouchEvent, TransitionEvent, WheelEvent,
+    AnimationEvent, CompositionEvent, CustomEvent, Event, KeyboardEvent, MouseEvent, PointerEvent,
+    Touch, TouchEvent, TransitionEvent, WheelEvent,
 };
 
 macro_rules! uncheck_convert {
@@ -50,6 +52,22 @@ uncheck_convert![
     web_sys::MouseEvent       => DragData,
     web_sys::FocusEvent       => FocusData,
 ];
+
+impl From<Event> for ResizeData {
+    #[inline]
+    fn from(e: Event) -> Self {
+        <ResizeData as From<&Event>>::from(&e)
+    }
+}
+
+impl From<&Event> for ResizeData {
+    #[inline]
+    fn from(e: &Event) -> Self {
+        let e: &CustomEvent = e.unchecked_ref();
+        let value = e.detail();
+        Self::from(value.unchecked_into::<ResizeObserverEntry>())
+    }
+}
 
 impl HasCompositionData for CompositionEvent {
     fn data(&self) -> std::string::String {
@@ -378,6 +396,63 @@ impl HasWheelData for WheelEvent {
     }
 }
 
+impl HasMouseData for WheelEvent {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl InteractionLocation for WheelEvent {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.client_x().into(), self.client_y().into())
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.screen_x().into(), self.screen_y().into())
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.page_x().into(), self.page_y().into())
+    }
+}
+
+impl InteractionElementOffset for WheelEvent {
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.offset_x().into(), self.offset_y().into())
+    }
+}
+
+impl ModifiersInteraction for WheelEvent {
+    fn modifiers(&self) -> Modifiers {
+        let mut modifiers = Modifiers::empty();
+
+        if self.alt_key() {
+            modifiers.insert(Modifiers::ALT);
+        }
+        if self.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if self.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if self.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        modifiers
+    }
+}
+
+impl PointerInteraction for WheelEvent {
+    fn held_buttons(&self) -> crate::input_data::MouseButtonSet {
+        decode_mouse_button_set(self.buttons())
+    }
+
+    fn trigger_button(&self) -> Option<MouseButton> {
+        Some(MouseButton::from_web_code(self.button()))
+    }
+}
+
 impl HasAnimationData for AnimationEvent {
     fn animation_name(&self) -> String {
         self.animation_name()
@@ -474,14 +549,16 @@ impl crate::RenderedElementBacking for web_sys::Element {
         &self,
         behavior: crate::ScrollBehavior,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<()>>>> {
+        let options = web_sys::ScrollIntoViewOptions::new();
         match behavior {
-            crate::ScrollBehavior::Instant => self.scroll_into_view_with_scroll_into_view_options(
-                web_sys::ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Instant),
-            ),
-            crate::ScrollBehavior::Smooth => self.scroll_into_view_with_scroll_into_view_options(
-                web_sys::ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Smooth),
-            ),
+            crate::ScrollBehavior::Instant => {
+                options.set_behavior(web_sys::ScrollBehavior::Instant);
+            }
+            crate::ScrollBehavior::Smooth => {
+                options.set_behavior(web_sys::ScrollBehavior::Smooth);
+            }
         }
+        self.scroll_into_view_with_scroll_into_view_options(&options);
 
         Box::pin(async { Ok(()) })
     }
@@ -509,6 +586,32 @@ impl crate::RenderedElementBacking for web_sys::Element {
                     .map_err(|err| crate::MountedError::OperationFailed(Box::new(FocusError(err))))
             });
         Box::pin(async { result })
+    }
+}
+
+fn extract_first_size(resize_observer_output: js_sys::Array) -> ResizeResult<PixelsSize> {
+    let first = resize_observer_output.get(0);
+    let size = first.unchecked_into::<web_sys::ResizeObserverSize>();
+
+    // inline_size matches the width of the element if its writing-mode is horizontal, the height otherwise
+    let inline_size = size.inline_size();
+    // block_size matches the height of the element if its writing-mode is horizontal, the width otherwise
+    let block_size = size.block_size();
+
+    Ok(PixelsSize::new(inline_size, block_size))
+}
+
+impl HasResizeData for ResizeObserverEntry {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
+        extract_first_size(self.border_box_size())
+    }
+
+    fn get_content_box_size(&self) -> ResizeResult<PixelsSize> {
+        extract_first_size(self.content_box_size())
     }
 }
 

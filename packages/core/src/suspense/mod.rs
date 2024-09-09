@@ -46,7 +46,7 @@ impl SuspendedFuture {
     pub fn new(task: Task) -> Self {
         Self {
             task,
-            origin: current_scope_id().unwrap(),
+            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
             placeholder: VNode::placeholder(),
         }
     }
@@ -69,15 +69,6 @@ impl SuspendedFuture {
     /// Get the task that was suspended
     pub fn task(&self) -> Task {
         self.task
-    }
-
-    /// Clone the future while retaining the mounted information of the future
-    pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            task: self.task,
-            origin: self.origin,
-            placeholder: self.placeholder.clone_mounted(),
-        }
     }
 }
 
@@ -117,7 +108,7 @@ impl SuspenseContext {
             .suspended_nodes
             .borrow()
             .as_ref()
-            .map(|node| node.clone_mounted())
+            .map(|node| node.clone())
     }
 
     /// Set the suspense boundary's suspended nodes
@@ -146,6 +137,11 @@ impl SuspenseContext {
     /// Check if there are any suspended tasks
     pub fn has_suspended_tasks(&self) -> bool {
         !self.inner.suspended_tasks.borrow().is_empty()
+    }
+
+    /// Check if the suspense boundary is currently rendered as suspended
+    pub fn is_suspended(&self) -> bool {
+        self.inner.suspended_nodes.borrow().is_some()
     }
 
     /// Add a suspended task

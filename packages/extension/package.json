@@ -2,7 +2,7 @@
     "name": "dioxus",
     "displayName": "Dioxus",
     "description": "Useful tools for working with Dioxus",
-    "version": "0.5.1",
+    "version": "0.6.0-alpha.2",
     "publisher": "DioxusLabs",
     "private": true,
     "license": "MIT",
@@ -102,7 +102,7 @@
         "tslib": "^2.3.0",
         "typescript": "^4.7.4",
         "vsce": "^2.7.0",
-        "webpack": "^5.88.1",
+        "webpack": "^5.94.0",
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {

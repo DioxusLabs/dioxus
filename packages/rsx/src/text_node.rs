@@ -1,11 +1,7 @@
 #[cfg(feature = "hot_reload")]
 use dioxus_core::TemplateNode;
 
-use crate::{
-    literal::{HotLiteral, HotLiteralType},
-    location::DynIdx,
-    IfmtInput,
-};
+use crate::{literal::HotLiteral, location::DynIdx, HotReloadFormattedSegment, IfmtInput};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
@@ -17,8 +13,7 @@ use syn::{
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
-    pub input: IfmtInput,
-    pub hr_idx: DynIdx,
+    pub input: HotReloadFormattedSegment,
     pub dyn_idx: DynIdx,
 }
 
@@ -26,7 +21,6 @@ impl Parse for TextNode {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self {
             input: input.parse()?,
-            hr_idx: DynIdx::default(),
             dyn_idx: DynIdx::default(),
         })
     }
@@ -44,10 +38,7 @@ impl ToTokens for TextNode {
             // todo:
             // Use the RsxLiteral implementation to spit out a hotreloadable variant of this string
             // This is not super efficient since we're doing a bit of cloning
-            let as_lit = HotLiteral {
-                hr_idx: self.hr_idx.clone(),
-                value: HotLiteralType::Fmted(txt.clone()),
-            };
+            let as_lit = HotLiteral::Fmted(txt.clone());
 
             tokens.append_all(quote! {
                 dioxus_core::DynamicNode::Text(dioxus_core::VText::new( #as_lit ))
@@ -63,9 +54,8 @@ impl TextNode {
             segments: vec![],
         };
         Self {
-            input: ifmt,
+            input: ifmt.into(),
             dyn_idx: Default::default(),
-            hr_idx: Default::default(),
         }
     }
 
@@ -76,13 +66,11 @@ impl TextNode {
     #[cfg(feature = "hot_reload")]
     pub fn to_template_node(&self) -> TemplateNode {
         use crate::intern;
-        match self.is_static() {
-            true => {
-                let text = self.input.source.clone();
-                let text = intern(text.value().as_str());
-                TemplateNode::Text { text }
-            }
-            false => TemplateNode::Dynamic {
+        match self.input.to_static() {
+            Some(text) => TemplateNode::Text {
+                text: intern(text.as_str()),
+            },
+            None => TemplateNode::Dynamic {
                 id: self.dyn_idx.get(),
             },
         }
@@ -92,7 +80,7 @@ impl TextNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PrettyUnparse;
+    use prettier_please::PrettyUnparse;
 
     #[test]
     fn parses() {

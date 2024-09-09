@@ -35,7 +35,9 @@ pub fn vdom_is_rendering() -> bool {
 /// }
 /// ```
 pub fn throw_error(error: impl Into<CapturedError> + 'static) {
-    current_scope_id().unwrap().throw_error(error)
+    current_scope_id()
+        .unwrap_or_else(|e| panic!("{}", e))
+        .throw_error(error)
 }
 
 /// Consume context from the current scope
@@ -289,8 +291,9 @@ pub fn needs_update_any(id: ScopeId) {
 /// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
 ///
 /// You should prefer [`schedule_update_any`] if you need to update multiple components.
+#[track_caller]
 pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
-    Runtime::with_current_scope(|cx| cx.schedule_update()).unwrap()
+    Runtime::with_current_scope(|cx| cx.schedule_update()).unwrap_or_else(|e| panic!("{}", e))
 }
 
 /// Schedule an update for any component given its [`ScopeId`].
@@ -298,8 +301,9 @@ pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
 /// A component's [`ScopeId`] can be obtained from the [`current_scope_id`] method.
 ///
 /// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
+#[track_caller]
 pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
-    Runtime::with_current_scope(|cx| cx.schedule_update_any()).unwrap()
+    Runtime::with_current_scope(|cx| cx.schedule_update_any()).unwrap_or_else(|e| panic!("{}", e))
 }
 
 /// Creates a callback that will be run before the component is removed.

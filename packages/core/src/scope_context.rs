@@ -97,7 +97,7 @@ impl Scope {
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        Runtime::with(|rt| rt.sender.clone()).unwrap()
+        Runtime::with(|rt| rt.sender.clone()).unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Mount the scope and queue any pending effects if it is not already mounted
@@ -190,10 +190,10 @@ impl Scope {
     /// Clones the state if it exists.
     pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
         tracing::trace!(
-            "looking for context {} ({:?}) in {}",
+            "looking for context {} ({:?}) in {:?}",
             std::any::type_name::<T>(),
             std::any::TypeId::of::<T>(),
-            self.name
+            self.id
         );
         if let Some(this_ctx) = self.has_context() {
             return Some(this_ctx);
@@ -207,10 +207,10 @@ impl Scope {
                     return None;
                 };
                 tracing::trace!(
-                    "looking for context {} ({:?}) in {}",
+                    "looking for context {} ({:?}) in {:?}",
                     std::any::type_name::<T>(),
                     std::any::TypeId::of::<T>(),
-                    parent.name
+                    parent.id
                 );
                 if let Some(shared) = parent.has_context() {
                     return Some(shared);
@@ -277,10 +277,10 @@ impl Scope {
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
         tracing::trace!(
-            "providing context {} ({:?}) in {}",
+            "providing context {} ({:?}) in {:?}",
             std::any::type_name::<T>(),
             std::any::TypeId::of::<T>(),
-            self.name
+            self.id
         );
         let mut contexts = self.shared_contexts.borrow_mut();
 
@@ -424,6 +424,8 @@ impl Scope {
 
                 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
                 Functions prefixed with "use" should never be called conditionally.
+
+                Help: Run `dx check` to look for check for some common hook errors.
                 "#,
             )
     }
@@ -511,6 +513,18 @@ impl ScopeId {
             .flatten()
     }
 
+    /// Check if the current scope is a descendant of the given scope
+    pub fn is_descendant_of(self, other: ScopeId) -> bool {
+        let mut current = self;
+        while let Some(parent) = current.parent_scope() {
+            if parent == other {
+                return true;
+            }
+            current = parent;
+        }
+        false
+    }
+
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(self) {
         Runtime::with_scope(self, |cx| cx.needs_update()).unwrap();
@@ -531,7 +545,9 @@ impl ScopeId {
     /// Run a closure inside of scope's runtime
     #[track_caller]
     pub fn in_runtime<T>(self, f: impl FnOnce() -> T) -> T {
-        Runtime::current().unwrap().on_scope(self, f)
+        Runtime::current()
+            .unwrap_or_else(|e| panic!("{}", e))
+            .on_scope(self, f)
     }
 
     /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.
