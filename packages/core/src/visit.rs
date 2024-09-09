@@ -2,6 +2,11 @@ use crate::innerlude::*;
 
 /// Visitor for a [`VNode`].
 pub trait Visit {
+    /// Visit a [`VNode`].
+    fn visit_vnode(&mut self, vdom: &VirtualDom, vnode: &VNode) {
+        visit_vnode(self, vdom, vnode)
+    }
+
     /// Visit a template node.
     fn visit_node(&mut self, vdom: &VirtualDom, vnode: &VNode, node: TemplateNode) {
         visit_node(self, vdom, vnode, node)
@@ -53,6 +58,13 @@ pub trait Visit {
         let _ = vdom;
         let _ = vnode;
         let _ = text;
+    }
+}
+
+/// Default method to visit a [`VNode`].
+pub fn visit_vnode<V: Visit + ?Sized>(visitor: &mut V, vdom: &VirtualDom, vnode: &VNode) {
+    for root in vnode.template.roots {
+        visitor.visit_node(vdom, vnode, *root);
     }
 }
 
@@ -116,10 +128,7 @@ pub fn visit_dynamic<V: Visit + ?Sized>(
         DynamicNode::Component(component) => {
             let scope = component.mounted_scope(index, vnode, vdom).unwrap();
             let root_node = scope.root_node();
-
-            for root in root_node.template.roots {
-                visitor.visit_node(vdom, vnode, *root)
-            }
+            visitor.visit_vnode(vdom, root_node)
         }
         DynamicNode::Text(text) => visitor.visit_text(vdom, vnode, &text.value),
         DynamicNode::Placeholder(_) => visitor.visit_placeholder(vdom, vnode, index),
