@@ -20,6 +20,8 @@ members = [
     "packages/mobile",
     "packages/interpreter",
     "packages/liveview",
+    "packages/lookbook",
+    "packages/lookbook-macros",
     "packages/autofmt",
     "packages/check",
     "packages/rsx",
