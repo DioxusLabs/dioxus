@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 
+use crate::instant::Instant;
+
 pub struct VisibleData {
     inner: Box<dyn HasVisibleData>,
 }
@@ -49,8 +51,11 @@ impl VisibleData {
     }
 
     /// Get a timestamp indicating the time at which the intersection was recorded
-    pub fn get_time(&self) -> VisibleResult<f64> {
-        self.inner.get_time()
+    pub fn get_time(&self) -> VisibleResult<Instant> {
+        match self.inner.get_time() {
+            Ok(ms) => Ok(Instant::new(ms)),
+            Err(err) => Err(err),
+        }
     }
 
     /// Downcast this event to a concrete event type
@@ -173,7 +178,7 @@ impl From<&VisibleData> for SerializedVisibleData {
             data.is_intersecting().unwrap(),
             data.get_root_bounds().unwrap().into(),
             data.get_target().ok(),
-            data.get_time().unwrap(),
+            data.get_time().unwrap().into(),
         )
     }
 }
