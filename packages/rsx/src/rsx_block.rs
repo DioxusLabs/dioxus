@@ -224,16 +224,30 @@ impl RsxBlock {
     // Parse a body node with diagnostics for unnecessary trailing commas
     fn parse_body_node_with_comma_diagnostics(
         content: &ParseBuffer,
-        diagnostics: &mut Diagnostics,
+        _diagnostics: &mut Diagnostics,
     ) -> syn::Result<BodyNode> {
         let body_node = content.parse::<BodyNode>()?;
         if !content.is_empty() && content.peek(Token![,]) {
-            let comma = content.parse::<Token![,]>()?;
-            diagnostics.push(
-                comma
-                    .span()
-                    .warning("Elements and text nodes do not need to be separated by commas."),
-            );
+            let _comma = content.parse::<Token![,]>()?;
+
+            // todo: we would've pushed a warning here but proc-macro-2 emits them as errors, which we
+            // dont' want. There's no built-in cfg way for checking if we're on nightly, and adding
+            // that would require a build script, so for the interest of compile times, we won't throw
+            // any warning at all.
+            //
+            // Whenever the user formats their code with `dx fmt`, the comma will be removed, so active
+            // projects will implicitly be fixed.
+            //
+            // Whenever the issue is resolved or diagnostics are added, we can re-add this warning.
+            //
+            // - https://github.com/SergioBenitez/proc-macro2-diagnostics/issues/9
+            // - https://github.com/DioxusLabs/dioxus/issues/2807
+            //
+            // diagnostics.push(
+            //     comma
+            //         .span()
+            //         .warning("Elements and text nodes do not need to be separated by commas."),
+            // );
         }
         Ok(body_node)
     }

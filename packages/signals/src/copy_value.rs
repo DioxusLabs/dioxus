@@ -206,7 +206,7 @@ impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        Readable::deref_impl(self)
+        unsafe { Readable::deref_impl(self) }
     }
 }
 

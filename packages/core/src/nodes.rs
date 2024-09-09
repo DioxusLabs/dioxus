@@ -1,4 +1,5 @@
-use crate::innerlude::{RenderError, VProps};
+use crate::innerlude::VProps;
+use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
@@ -6,7 +7,7 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
 use std::{
@@ -14,79 +15,6 @@ use std::{
     cell::Cell,
     fmt::{Arguments, Debug},
 };
-
-pub type TemplateId = &'static str;
-
-/// The actual state of the component's most recent computation
-///
-/// If the component returned early (e.g. `return None`), this will be Aborted(None)
-#[derive(Debug)]
-pub struct RenderReturn {
-    /// The node that was rendered
-    pub(crate) node: Element,
-}
-
-impl From<RenderReturn> for VNode {
-    fn from(val: RenderReturn) -> Self {
-        match val.node {
-            Ok(node) => node,
-            Err(RenderError::Aborted(e)) => e.render,
-            Err(RenderError::Suspended(fut)) => fut.placeholder,
-        }
-    }
-}
-
-impl From<Element> for RenderReturn {
-    fn from(node: Element) -> Self {
-        RenderReturn { node }
-    }
-}
-
-impl Clone for RenderReturn {
-    fn clone(&self) -> Self {
-        match &self.node {
-            Ok(node) => RenderReturn {
-                node: Ok(node.clone_mounted()),
-            },
-            Err(RenderError::Aborted(err)) => RenderReturn {
-                node: Err(RenderError::Aborted(err.clone_mounted())),
-            },
-            Err(RenderError::Suspended(fut)) => RenderReturn {
-                node: Err(RenderError::Suspended(fut.clone_mounted())),
-            },
-        }
-    }
-}
-
-impl Default for RenderReturn {
-    fn default() -> Self {
-        RenderReturn {
-            node: Ok(VNode::placeholder()),
-        }
-    }
-}
-
-impl Deref for RenderReturn {
-    type Target = VNode;
-
-    fn deref(&self) -> &Self::Target {
-        match &self.node {
-            Ok(node) => node,
-            Err(RenderError::Aborted(err)) => &err.render,
-            Err(RenderError::Suspended(fut)) => &fut.placeholder,
-        }
-    }
-}
-
-impl DerefMut for RenderReturn {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        match &mut self.node {
-            Ok(node) => node,
-            Err(RenderError::Aborted(err)) => &mut err.render,
-            Err(RenderError::Suspended(fut)) => &mut fut.placeholder,
-        }
-    }
-}
 
 /// The information about the
 #[derive(Debug)]
@@ -164,7 +92,7 @@ pub struct VNodeInner {
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VNode {
     vnode: Rc<VNodeInner>,
 
@@ -172,12 +100,41 @@ pub struct VNode {
     pub(crate) mount: Cell<MountId>,
 }
 
-impl Clone for VNode {
-    fn clone(&self) -> Self {
-        Self {
-            vnode: self.vnode.clone(),
-            mount: Default::default(),
+impl AsRef<VNode> for Element {
+    fn as_ref(&self) -> &VNode {
+        match self {
+            Element::Ok(node) => node,
+            Element::Err(RenderError::Aborted(err)) => &err.render,
+            Element::Err(RenderError::Suspended(fut)) => &fut.placeholder,
         }
+    }
+}
+
+impl From<&Element> for VNode {
+    fn from(val: &Element) -> Self {
+        AsRef::as_ref(val).clone()
+    }
+}
+
+impl From<Element> for VNode {
+    fn from(val: Element) -> Self {
+        match val {
+            Element::Ok(node) => node,
+            Element::Err(RenderError::Aborted(err)) => err.render,
+            Element::Err(RenderError::Suspended(fut)) => fut.placeholder,
+        }
+    }
+}
+
+/// A tiny helper trait to get the vnode for a Element
+pub(crate) trait AsVNode {
+    /// Get the vnode for this element
+    fn as_vnode(&self) -> &VNode;
+}
+
+impl AsVNode for Element {
+    fn as_vnode(&self) -> &VNode {
+        AsRef::as_ref(self)
     }
 }
 
@@ -225,14 +182,6 @@ impl Deref for VNode {
 }
 
 impl VNode {
-    /// Clone the element while retaining the mount information of the node
-    pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            vnode: self.vnode.clone(),
-            mount: self.mount.clone(),
-        }
-    }
-
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
         Ok(Self::default())
@@ -252,7 +201,6 @@ impl VNode {
                     dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
                     dynamic_attrs: Box::new([]),
                     template: Template {
-                        name: "packages/core/nodes.rs:198:0:0",
                         roots: &[TemplateNode::Dynamic { id: 0 }],
                         node_paths: &[&[0]],
                         attr_paths: &[],
@@ -303,12 +251,14 @@ impl VNode {
         let mount = self.mount.get().as_usize()?;
 
         match &self.dynamic_nodes[dynamic_node_idx] {
-            DynamicNode::Text(_) | DynamicNode::Placeholder(_) => dom
-                .mounts
-                .get(mount)?
-                .mounted_dynamic_nodes
-                .get(dynamic_node_idx)
-                .map(|id| ElementId(*id)),
+            DynamicNode::Text(_) | DynamicNode::Placeholder(_) => {
+                let mounts = dom.runtime.mounts.borrow();
+                mounts
+                    .get(mount)?
+                    .mounted_dynamic_nodes
+                    .get(dynamic_node_idx)
+                    .map(|id| ElementId(*id))
+            }
             _ => None,
         }
     }
@@ -317,7 +267,8 @@ impl VNode {
     pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
         let mount = self.mount.get().as_usize()?;
 
-        dom.mounts.get(mount)?.root_ids.get(root_idx).copied()
+        let mounts = dom.runtime.mounts.borrow();
+        mounts.get(mount)?.root_ids.get(root_idx).copied()
     }
 
     /// Get the mounted id for a dynamic attribute index
@@ -328,13 +279,19 @@ impl VNode {
     ) -> Option<ElementId> {
         let mount = self.mount.get().as_usize()?;
 
-        dom.mounts
+        let mounts = dom.runtime.mounts.borrow();
+        mounts
             .get(mount)?
             .mounted_attributes
             .get(dynamic_attribute_idx)
             .copied()
     }
 }
+
+type StaticStr = &'static str;
+type StaticPathArray = &'static [&'static [u8]];
+type StaticTemplateArray = &'static [TemplateNode];
+type StaticTemplateAttributeArray = &'static [TemplateAttribute];
 
 /// A static layout of a UI tree that describes a set of dynamic and static nodes.
 ///
@@ -345,22 +302,13 @@ impl VNode {
 /// For this to work properly, the [`Template::name`] *must* be unique across your entire project. This can be done via variety of
 /// ways, with the suggested approach being the unique code location (file, line, col, etc).
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub struct Template {
-    /// The name of the template. This must be unique across your entire program for template diffing to work properly
-    ///
-    /// If two templates have the same name, it's likely that Dioxus will panic when diffing.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_string_leaky")
-    )]
-    pub name: &'static str,
-
     /// The list of template nodes that make up the template
     ///
     /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    pub roots: &'static [TemplateNode],
+    pub roots: StaticTemplateArray,
 
     /// The paths of each node relative to the root of the template.
     ///
@@ -370,7 +318,7 @@ pub struct Template {
         feature = "serialize",
         serde(deserialize_with = "deserialize_bytes_leaky")
     )]
-    pub node_paths: &'static [&'static [u8]],
+    pub node_paths: StaticPathArray,
 
     /// The paths of each dynamic attribute relative to the root of the template
     ///
@@ -378,13 +326,31 @@ pub struct Template {
     /// topmost element, not the `roots` field.
     #[cfg_attr(
         feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky")
+        serde(deserialize_with = "deserialize_bytes_leaky", bound = "")
     )]
-    pub attr_paths: &'static [&'static [u8]],
+    pub attr_paths: StaticPathArray,
+}
+
+impl std::hash::Hash for Template {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self.roots as *const _, state);
+        std::ptr::hash(self.node_paths as *const _, state);
+        std::ptr::hash(self.attr_paths as *const _, state);
+    }
+}
+
+impl PartialEq for Template {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.roots as *const _, other.roots as *const _)
+            && std::ptr::eq(self.node_paths as *const _, other.node_paths as *const _)
+            && std::ptr::eq(self.attr_paths as *const _, other.attr_paths as *const _)
+    }
 }
 
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
+pub(crate) fn deserialize_string_leaky<'a, 'de, D>(
+    deserializer: D,
+) -> Result<&'static str, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -395,7 +361,9 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_bytes_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a [&'a [u8]], D::Error>
+fn deserialize_bytes_leaky<'a, 'de, D>(
+    deserializer: D,
+) -> Result<&'static [&'static [u8]], D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -410,7 +378,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
+pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'static [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
@@ -442,13 +410,6 @@ impl Template {
         use TemplateNode::*;
         self.roots.iter().all(|root| matches!(root, Dynamic { .. }))
     }
-
-    /// Get a unique id for this template. If the id between two templates are different, the contents of the template may be different.
-    pub fn id(&self) -> usize {
-        // We compare the template name by pointer so that the id is different after hot reloading even if the name is the same
-        let ptr: *const str = self.name;
-        ptr as *const () as usize
-    }
 }
 
 /// A statically known node in a layout.
@@ -468,7 +429,11 @@ pub enum TemplateNode {
         /// The name of the element
         ///
         /// IE for a div, it would be the string "div"
-        tag: &'static str,
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky")
+        )]
+        tag: StaticStr,
 
         /// The namespace of the element
         ///
@@ -478,17 +443,20 @@ pub enum TemplateNode {
             feature = "serialize",
             serde(deserialize_with = "deserialize_option_leaky")
         )]
-        namespace: Option<&'static str>,
+        namespace: Option<StaticStr>,
 
         /// A list of possibly dynamic attributes for this element
         ///
         /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`.
-        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-        attrs: &'static [TemplateAttribute],
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_leaky", bound = "")
+        )]
+        attrs: StaticTemplateAttributeArray,
 
         /// A list of template nodes that define another set of template nodes
         #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-        children: &'static [TemplateNode],
+        children: StaticTemplateArray,
     },
 
     /// This template node is just a piece of static text
@@ -496,9 +464,9 @@ pub enum TemplateNode {
         /// The actual text
         #[cfg_attr(
             feature = "serialize",
-            serde(deserialize_with = "deserialize_string_leaky")
+            serde(deserialize_with = "deserialize_string_leaky", bound = "")
         )]
-        text: &'static str,
+        text: StaticStr,
     },
 
     /// This template node is unknown, and needs to be created at runtime.
@@ -625,7 +593,8 @@ impl VComponent {
     ) -> Option<ScopeId> {
         let mount = vnode.mount.get().as_usize()?;
 
-        let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
+        let mounts = dom.runtime.mounts.borrow();
+        let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
         Some(ScopeId(scope_id))
     }
@@ -643,7 +612,8 @@ impl VComponent {
     ) -> Option<&'a ScopeState> {
         let mount = vnode.mount.get().as_usize()?;
 
-        let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
+        let mounts = dom.runtime.mounts.borrow();
+        let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
         dom.scopes.get(scope_id)
     }
@@ -697,15 +667,27 @@ pub enum TemplateAttribute {
         /// The name of this attribute.
         ///
         /// For example, the `href` attribute in `href="https://example.com"`, would have the name "href"
-        name: &'static str,
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky", bound = "")
+        )]
+        name: StaticStr,
 
         /// The value of this attribute, known at compile time
         ///
         /// Currently this only accepts &str, so values, even if they're known at compile time, are not known
-        value: &'static str,
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky", bound = "")
+        )]
+        value: StaticStr,
 
         /// The namespace of this attribute. Does not exist in the HTML spec
-        namespace: Option<&'static str>,
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_option_leaky", bound = "")
+        )]
+        namespace: Option<StaticStr>,
     },
 
     /// The attribute in this position is actually determined dynamically at runtime
@@ -793,7 +775,7 @@ impl AttributeValue {
         AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
             callback(Event {
-                propagates: event.propagates,
+                metadata: event.metadata.clone(),
                 data,
             });
         }))

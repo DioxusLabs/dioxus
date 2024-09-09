@@ -1069,8 +1069,123 @@ fn component_with_handlers() {
         }
     };
 
-    let valid = can_hotreload(a, b);
-    assert!(valid);
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = hot_reload.get(&0).unwrap();
+    assert_eq!(
+        template.component_values,
+        &[
+            HotReloadLiteral::Int(456),
+            HotReloadLiteral::Float(789.456),
+            HotReloadLiteral::Bool(false),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "goodbye " },
+                FmtSegment::Dynamic { id: 0 }
+            ])),
+        ]
+    );
+}
+
+#[test]
+fn component_remove_key() {
+    let a = quote! {
+        Component {
+            key: "{key}",
+            class: 123,
+            id: 456.789,
+            other: true,
+            dynamic1,
+            dynamic2,
+            blah: "hello {world}",
+            onclick: |e| { println!("clicked") },
+        }
+    };
+
+    // changing lit values
+    let b = quote! {
+        Component {
+            class: 456,
+            id: 789.456,
+            other: false,
+            dynamic1,
+            dynamic2,
+            blah: "goodbye {world}",
+            onclick: |e| { println!("clicked") },
+        }
+    };
+
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = hot_reload.get(&0).unwrap();
+    assert_eq!(
+        template.component_values,
+        &[
+            HotReloadLiteral::Int(456),
+            HotReloadLiteral::Float(789.456),
+            HotReloadLiteral::Bool(false),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "goodbye " },
+                FmtSegment::Dynamic { id: 1 }
+            ]))
+        ]
+    );
+}
+
+#[test]
+fn component_modify_key() {
+    let a = quote! {
+        Component {
+            key: "{key}",
+            class: 123,
+            id: 456.789,
+            other: true,
+            dynamic1,
+            dynamic2,
+            blah1: "hello {world123}",
+            blah2: "hello {world}",
+            onclick: |e| { println!("clicked") },
+        }
+    };
+
+    // changing lit values
+    let b = quote! {
+        Component {
+            key: "{key}-{world}",
+            class: 456,
+            id: 789.456,
+            other: false,
+            dynamic1,
+            dynamic2,
+            blah1: "hello {world123}",
+            blah2: "hello {world}",
+            onclick: |e| { println!("clicked") },
+        }
+    };
+
+    let hot_reload = hot_reload_from_tokens(a, b).unwrap();
+    let template = hot_reload.get(&0).unwrap();
+    assert_eq!(
+        template.key,
+        Some(FmtedSegments::new(vec![
+            FmtSegment::Dynamic { id: 0 },
+            FmtSegment::Literal { value: "-" },
+            FmtSegment::Dynamic { id: 2 },
+        ]))
+    );
+    assert_eq!(
+        template.component_values,
+        &[
+            HotReloadLiteral::Int(456),
+            HotReloadLiteral::Float(789.456),
+            HotReloadLiteral::Bool(false),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "hello " },
+                FmtSegment::Dynamic { id: 1 }
+            ])),
+            HotReloadLiteral::Fmted(FmtedSegments::new(vec![
+                FmtSegment::Literal { value: "hello " },
+                FmtSegment::Dynamic { id: 2 }
+            ]))
+        ]
+    );
 }
 
 #[test]

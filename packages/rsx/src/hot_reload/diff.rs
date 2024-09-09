@@ -70,9 +70,6 @@ use dioxus_core::internal::{
     HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
 };
 use std::collections::HashMap;
-use std::hash::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 
 use super::last_build_state::LastBuildState;
 
@@ -200,23 +197,7 @@ impl HotReloadResult {
             .collect();
         let roots: &[dioxus_core::TemplateNode] = intern(&*roots);
 
-        // Add the template name, the dyn index and the hash of the template to get a unique name
-        let name = {
-            let mut hasher = DefaultHasher::new();
-            key.hash(&mut hasher);
-            new_dynamic_attributes.hash(&mut hasher);
-            new_dynamic_nodes.hash(&mut hasher);
-            literal_component_properties.hash(&mut hasher);
-            roots.hash(&mut hasher);
-            let hash = hasher.finish();
-            let name = &self.full_rebuild_state.name;
-
-            format!("{}:{}-{}", name, hash, new.template_idx.get())
-        };
-        let name = Box::leak(name.into_boxed_str());
-
         let template = HotReloadedTemplate::new(
-            name,
             key,
             new_dynamic_nodes,
             new_dynamic_attributes,
@@ -425,18 +406,21 @@ impl HotReloadResult {
         }
 
         // Then check if the fields are the same
-        if new_component.fields.len() != old_component.fields.len() {
+        let new_non_key_fields: Vec<_> = new_component.component_props().collect();
+        let old_non_key_fields: Vec<_> = old_component.component_props().collect();
+        if new_non_key_fields.len() != old_non_key_fields.len() {
             return None;
         }
 
-        let mut new_fields = new_component.fields.clone();
-        new_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
-        let mut old_fields = old_component.fields.clone();
-        old_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+        let mut new_fields = new_non_key_fields.clone();
+        new_fields.sort_by_key(|attribute| attribute.name.to_string());
+        let mut old_fields = old_non_key_fields.iter().enumerate().collect::<Vec<_>>();
+        old_fields.sort_by_key(|(_, attribute)| attribute.name.to_string());
 
-        let mut literal_component_properties = Vec::new();
+        // The literal component properties for the component in same the order as the original component property literals
+        let mut literal_component_properties = vec![None; old_fields.len()];
 
-        for (new_field, old_field) in new_fields.iter().zip(old_fields.iter()) {
+        for (new_field, (index, old_field)) in new_fields.iter().zip(old_fields.iter()) {
             // Verify the names match
             if new_field.name != old_field.name {
                 return None;
@@ -454,7 +438,7 @@ impl HotReloadResult {
                         return None;
                     }
                     let literal = self.full_rebuild_state.hotreload_hot_literal(new_value)?;
-                    literal_component_properties.push(literal);
+                    literal_component_properties[*index] = Some(literal);
                 }
                 _ => {
                     if new_field.value != old_field.value {
@@ -464,7 +448,7 @@ impl HotReloadResult {
             }
         }
 
-        Some(literal_component_properties)
+        Some(literal_component_properties.into_iter().flatten().collect())
     }
 
     /// Hot reload an if chain

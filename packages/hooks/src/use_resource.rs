@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, UseCallback};
+use crate::{use_callback, use_signal};
 use dioxus_core::prelude::*;
 use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
@@ -110,7 +110,7 @@ pub struct Resource<T: 'static> {
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
-    callback: UseCallback<(), Task>,
+    callback: Callback<(), Task>,
 }
 
 impl<T> PartialEq for Resource<T> {
@@ -473,6 +473,6 @@ impl<T: Clone> Deref for Resource<T> {
     type Target = dyn Fn() -> Option<T>;
 
     fn deref(&self) -> &Self::Target {
-        Readable::deref_impl(self)
+        unsafe { Readable::deref_impl(self) }
     }
 }

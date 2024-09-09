@@ -165,6 +165,19 @@ impl RouterContext {
         }
     }
 
+    /// Check if the router is running in a liveview context
+    /// We do some slightly weird things for liveview because of the network boundary
+    pub fn is_liveview(&self) -> bool {
+        #[cfg(feature = "liveview")]
+        {
+            self.inner.read().history.is_liveview()
+        }
+        #[cfg(not(feature = "liveview"))]
+        {
+            false
+        }
+    }
+
     pub(crate) fn route_from_str(&self, route: &str) -> Result<Rc<dyn Any>, String> {
         self.inner.read().history.parse_route(route)
     }

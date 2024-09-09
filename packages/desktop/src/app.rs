@@ -1,17 +1,16 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    element::DesktopElement,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileDragEvent, DesktopFileUploadForm, FileDialogRequest},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
-use dioxus_core::ElementId;
-use dioxus_core::VirtualDom;
-use dioxus_html::{native_bind::NativeFileEngine, HasFileData, HtmlEvent, PlatformEventData};
+use dioxus_core::{ElementId, VirtualDom};
+use dioxus_html::{native_bind::NativeFileEngine, PlatformEventData};
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
@@ -244,9 +243,9 @@ impl App {
         let view = self.webviews.get_mut(&id).unwrap();
 
         view.dom
-            .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
+            .rebuild(&mut *view.edits.wry_queue.mutation_state_mut());
 
-        view.desktop_context.send_edits();
+        view.edits.wry_queue.send_edits();
 
         view.desktop_context
             .window
@@ -275,55 +274,6 @@ impl App {
         };
 
         view.desktop_context.query.send(result);
-    }
-
-    pub fn handle_user_event_msg(&mut self, msg: IpcMessage, id: WindowId) {
-        let parsed_params = serde_json::from_value(msg.params())
-            .map_err(|err| tracing::error!("Error parsing user_event: {:?}", err));
-
-        let Ok(evt) = parsed_params else { return };
-
-        let HtmlEvent {
-            element,
-            name,
-            bubbles,
-            data,
-        } = evt;
-
-        let view = self.webviews.get_mut(&id).unwrap();
-        let query = view.desktop_context.query.clone();
-        let recent_file = view.desktop_context.file_hover.clone();
-
-        // check for a mounted event placeholder and replace it with a desktop specific element
-        let as_any = match data {
-            dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, view.desktop_context.clone(), query);
-                Rc::new(PlatformEventData::new(Box::new(element)))
-            }
-            dioxus_html::EventData::Drag(ref drag) => {
-                // we want to override this with a native file engine, provided by the most recent drag event
-                if drag.files().is_some() {
-                    let file_event = recent_file.current().unwrap();
-                    let paths = match file_event {
-                        wry::DragDropEvent::Enter { paths, .. } => paths,
-                        wry::DragDropEvent::Drop { paths, .. } => paths,
-                        _ => vec![],
-                    };
-                    Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
-                        mouse: drag.mouse.clone(),
-                        files: Arc::new(NativeFileEngine::new(paths)),
-                    })))
-                } else {
-                    data.into_any()
-                }
-            }
-            _ => data.into_any(),
-        };
-
-        view.dom.handle_event(&name, as_any, element, bubbles);
-        view.dom
-            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
-        view.desktop_context.send_edits();
     }
 
     #[cfg(all(
@@ -378,17 +328,13 @@ impl App {
 
         let view = self.webviews.get_mut(&window).unwrap();
 
+        let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
         if event_name == "change&input" {
-            view.dom
-                .handle_event("input", data.clone(), id, event_bubbles);
-            view.dom.handle_event("change", data, id, event_bubbles);
+            view.dom.runtime().handle_event("input", event.clone(), id);
+            view.dom.runtime().handle_event("change", event, id);
         } else {
-            view.dom.handle_event(event_name, data, id, event_bubbles);
+            view.dom.runtime().handle_event(event_name, event, id);
         }
-
-        view.dom
-            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
-        view.desktop_context.send_edits();
     }
 
     /// Poll the virtualdom until it's pending

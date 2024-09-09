@@ -57,9 +57,9 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
 
             // The devserver messages have some &'static strs in them, so we need to leak the source string
             let string: String = text.into();
-            let leaked: &'static str = Box::leak(Box::new(string));
+            // let leaked: &'static str = Box::leak(Box::new(string));
 
-            match serde_json::from_str::<DevserverMsg>(leaked) {
+            match serde_json::from_str::<DevserverMsg>(&string) {
                 Ok(DevserverMsg::HotReload(hr)) => _ = tx_.unbounded_send(hr),
 
                 // todo: we want to throw a screen here that shows the user that the devserver has disconnected

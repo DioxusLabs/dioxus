@@ -151,11 +151,11 @@ impl WebsysDom {
                 self,
                 |to| {
                     // Switch to only writing templates
-                    to.only_write_templates = true;
+                    to.skip_mutations = true;
                 },
                 children.len(),
             );
-            self.only_write_templates = false;
+            self.skip_mutations = false;
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes

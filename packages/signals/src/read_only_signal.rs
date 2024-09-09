@@ -124,7 +124,7 @@ impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, 
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        Readable::deref_impl(self)
+        unsafe { Readable::deref_impl(self) }
     }
 }
 

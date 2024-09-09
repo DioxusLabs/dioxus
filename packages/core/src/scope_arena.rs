@@ -1,4 +1,4 @@
-use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder};
+use crate::innerlude::{throw_error, RenderError, ScopeOrder};
 use crate::prelude::ReactiveContext;
 use crate::scope_context::SuspenseLocation;
 use crate::{
@@ -48,7 +48,7 @@ impl VirtualDom {
     /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
-    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
         // Ensure we are currently inside a `Runtime`.
         crate::Runtime::current().unwrap_or_else(|e| panic!("{}", e));
 
@@ -70,11 +70,7 @@ impl VirtualDom {
                 span.in_scope(|| {
                     scope.reactive_context.reset_and_run_in(|| {
                         let mut render_return = props.render();
-                        self.handle_element_return(
-                            &mut render_return.node,
-                            scope_id,
-                            &scope.state(),
-                        );
+                        self.handle_element_return(&mut render_return, scope_id, &scope.state());
                         render_return
                     })
                 })
@@ -102,7 +98,7 @@ impl VirtualDom {
                     "Error while rendering component `{}`:\n{e}",
                     scope_state.name
                 );
-                throw_error(e.clone_mounted());
+                throw_error(e.clone());
                 e.render = VNode::placeholder();
             }
             Err(RenderError::Suspended(e)) => {

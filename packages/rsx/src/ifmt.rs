@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 use syn::{
     parse::{Parse, ParseStream},
     *,
@@ -25,9 +25,9 @@ impl IfmtInput {
         }
     }
 
-    pub fn new_litstr(source: LitStr) -> Self {
-        let segments = Self::from_raw(&source.value()).unwrap();
-        Self { segments, source }
+    pub fn new_litstr(source: LitStr) -> Result<Self> {
+        let segments = IfmtInput::from_raw(&source.value())?;
+        Ok(Self { segments, source })
     }
 
     pub fn span(&self) -> Span {
@@ -335,23 +335,10 @@ impl ToTokens for FormattedSegmentType {
     }
 }
 
-impl FromStr for IfmtInput {
-    type Err = syn::Error;
-
-    fn from_str(input: &str) -> Result<Self> {
-        let segments = IfmtInput::from_raw(input)?;
-        Ok(Self {
-            source: LitStr::new(input, Span::call_site()),
-            segments,
-        })
-    }
-}
-
 impl Parse for IfmtInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let source: LitStr = input.parse()?;
-        let segments = IfmtInput::from_raw(&source.value())?;
-        Ok(Self { source, segments })
+        Self::new_litstr(source)
     }
 }
 
@@ -370,7 +357,7 @@ mod tests {
 
     #[test]
     fn segments_parse() {
-        let input = "blah {abc} {def}".parse::<IfmtInput>().unwrap();
+        let input: IfmtInput = parse_quote! { "blah {abc} {def}" };
         assert_eq!(
             input.segments,
             vec![

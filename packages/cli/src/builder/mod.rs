@@ -6,6 +6,7 @@ use dioxus_cli_config::{Platform, RuntimeCLIArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::{path::PathBuf, process::Stdio};
 use tokio::process::{Child, Command};
 
@@ -27,6 +28,20 @@ pub enum TargetPlatform {
     Desktop,
     Server,
     Liveview,
+}
+
+impl FromStr for TargetPlatform {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "web" => Ok(Self::Web),
+            "desktop" => Ok(Self::Desktop),
+            "axum" | "server" => Ok(Self::Server),
+            "liveview" => Ok(Self::Liveview),
+            _ => Err(()),
+        }
+    }
 }
 
 impl std::fmt::Display for TargetPlatform {
@@ -62,7 +77,7 @@ impl BuildRequest {
         serve: bool,
         dioxus_crate: &DioxusCrate,
         build_arguments: impl Into<Build>,
-    ) -> Vec<Self> {
+    ) -> crate::Result<Vec<Self>> {
         let build_arguments = build_arguments.into();
         let platform = build_arguments.platform();
         let single_platform = |platform| {
@@ -76,15 +91,15 @@ impl BuildRequest {
                 target_dir: Default::default(),
             }]
         };
-        match platform {
-            Platform::Web => single_platform(TargetPlatform::Web),
+        Ok(match platform {
             Platform::Liveview => single_platform(TargetPlatform::Liveview),
+            Platform::Web => single_platform(TargetPlatform::Web),
             Platform::Desktop => single_platform(TargetPlatform::Desktop),
             Platform::StaticGeneration | Platform::Fullstack => {
-                Self::new_fullstack(dioxus_crate.clone(), build_arguments, serve)
+                Self::new_fullstack(dioxus_crate.clone(), build_arguments, serve)?
             }
             _ => unimplemented!("Unknown platform: {platform:?}"),
-        }
+        })
     }
 
     pub(crate) async fn build_all_parallel(

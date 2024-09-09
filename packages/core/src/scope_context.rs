@@ -424,6 +424,8 @@ impl Scope {
 
                 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
                 Functions prefixed with "use" should never be called conditionally.
+
+                Help: Run `dx check` to look for check for some common hook errors.
                 "#,
             )
     }

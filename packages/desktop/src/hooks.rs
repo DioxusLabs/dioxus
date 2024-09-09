@@ -5,8 +5,8 @@ use crate::{
     ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
 use dioxus_core::{
-    prelude::{consume_context, current_scope_id, use_hook_with_cleanup},
-    use_hook,
+    prelude::{consume_context, current_scope_id, use_hook_with_cleanup, RuntimeGuard},
+    use_hook, Runtime,
 };
 
 use dioxus_hooks::use_callback;
@@ -20,10 +20,18 @@ pub fn use_window() -> DesktopContext {
 
 /// Register an event handler that runs when a wry event is processed.
 pub fn use_wry_event_handler(
-    handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+    mut handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
 ) -> WryEventHandler {
+    // move the runtime into the event handler closure
+    let runtime = Runtime::current().unwrap();
+
     use_hook_with_cleanup(
-        move || window().create_wry_event_handler(handler),
+        move || {
+            window().create_wry_event_handler(move |event, target| {
+                let _runtime_guard = RuntimeGuard::new(runtime.clone());
+                handler(event, target)
+            })
+        },
         move |handler| handler.remove(),
     )
 }
@@ -37,7 +45,11 @@ pub fn use_wry_event_handler(
 pub fn use_muda_event_handler(
     mut handler: impl FnMut(&muda::MenuEvent) + 'static,
 ) -> WryEventHandler {
+    // move the runtime into the event handler closure
+    let runtime = Runtime::current().unwrap();
+
     use_wry_event_handler(move |event, _| {
+        let _runtime_guard = dioxus_core::prelude::RuntimeGuard::new(runtime.clone());
         if let Event::UserEvent(UserWindowEvent::MudaMenuEvent(event)) = event {
             handler(event);
         }
@@ -50,13 +62,16 @@ pub fn use_muda_event_handler(
 /// if you want to load the asset, and `None` if you want to fallback on the default behavior.
 pub fn use_asset_handler(
     name: &str,
-    handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
+    mut handler: impl FnMut(AssetRequest, RequestAsyncResponder) + 'static,
 ) {
+    // wrap the user's handler in something that keeps it up to date
+    let cb = use_callback(move |(asset, responder)| handler(asset, responder));
+
     use_hook_with_cleanup(
         || {
             crate::window().asset_handlers.register_handler(
                 name.to_string(),
-                Box::new(handler),
+                Box::new(move |asset, responder| cb((asset, responder))),
                 current_scope_id().unwrap(),
             );
 
@@ -73,11 +88,11 @@ pub fn use_global_shortcut(
     accelerator: impl IntoAccelerator,
     mut handler: impl FnMut() + 'static,
 ) -> Result<ShortcutHandle, ShortcutRegistryError> {
-    // wrap the user's handler in something that will carry the scope/runtime with it
+    // wrap the user's handler in something that keeps it up to date
     let cb = use_callback(move |_| handler());
 
     use_hook_with_cleanup(
-        move || window().create_shortcut(accelerator.accelerator(), move || cb.call(())),
+        move || window().create_shortcut(accelerator.accelerator(), move || cb(())),
         |handle| {
             if let Ok(handle) = handle {
                 handle.remove();
