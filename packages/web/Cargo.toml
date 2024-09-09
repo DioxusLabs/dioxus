@@ -65,8 +65,9 @@ mounted = ["web-sys/Element", "dioxus-html/mounted"]
 file_engine = [
     "dioxus-html/file-engine",
 ]
-hot_reload = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "dep:serde_json", "dep:serde", "dioxus-core/serialize"]
+hot_reload = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "dep:serde_json", "serialize"]
 document = ["dioxus-html/document", "dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
+serialize = ["dep:serde", "dioxus-core/serialize", "dioxus-html/serialize"]
 
 [dev-dependencies]
 dioxus = { workspace = true, default-features = true }

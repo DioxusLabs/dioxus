@@ -45,6 +45,7 @@ mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis", "dioxus-core/manganis"]
 document = ["dioxus-web?/document", "dioxus-html?/document"]
+serialize = ["dioxus-core/serialize", "dioxus-html?/serialize", "dioxus-web?/serialize", "dep:serde"]
 
 launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]
