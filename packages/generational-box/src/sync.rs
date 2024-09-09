@@ -319,46 +319,48 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         Self::create_new(RwLockStorageEntryData::Reference(data), caller)
     }
 
-    fn new_reference(location: GenerationalPointer<Self>) -> GenerationalPointer<Self> {
+    fn new_reference(
+        location: GenerationalPointer<Self>,
+    ) -> BorrowResult<GenerationalPointer<Self>> {
         // Chase the reference to get the final location
-        let (location, mut value) = Self::get_split_mut(location).unwrap();
-        if let RwLockStorageEntryData::Rc(data) = &mut value.data {
+        let (location, value) = Self::get_split_ref(location)?;
+        if let RwLockStorageEntryData::Rc(data) = &value.data {
             data.add_ref();
         } else {
             unreachable!()
         }
-        Self::create_new(
+        Ok(Self::create_new(
             RwLockStorageEntryData::Reference(location),
             location
                 .location
                 .created_at()
                 .unwrap_or(std::panic::Location::caller()),
-        )
+        ))
     }
 
     fn change_reference(
         location: GenerationalPointer<Self>,
         other: GenerationalPointer<Self>,
-    ) -> Result<(), BorrowMutError> {
+    ) -> BorrowResult {
         if location == other {
             return Ok(());
         }
 
-        let (other_final, mut other_write) = Self::get_split_mut(other)?;
+        let (other_final, other_write) = Self::get_split_ref(other)?;
 
         let mut write = location.storage.data.write();
         // First check if the generation is still valid
         if !write.valid(&location.location) {
-            return Err(BorrowMutError::Dropped(
-                ValueDroppedError::new_for_location(location.location),
-            ));
+            return Err(BorrowError::Dropped(ValueDroppedError::new_for_location(
+                location.location,
+            )));
         }
 
         if let RwLockStorageEntryData::Reference(reference) = &mut write.data {
             drop_ref(*reference);
             *reference = other_final;
         }
-        if let RwLockStorageEntryData::Rc(data) = &mut other_write.data {
+        if let RwLockStorageEntryData::Rc(data) = &other_write.data {
             data.add_ref();
         } else {
             unreachable!()

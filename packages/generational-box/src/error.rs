@@ -5,10 +5,10 @@ use std::fmt::Display;
 use crate::GenerationalLocation;
 
 /// A result that can be returned from a borrow operation.
-pub type BorrowResult<T> = std::result::Result<T, BorrowError>;
+pub type BorrowResult<T = ()> = std::result::Result<T, BorrowError>;
 
 /// A result that can be returned from a borrow mut operation.
-pub type BorrowMutResult<T> = std::result::Result<T, BorrowMutError>;
+pub type BorrowMutResult<T = ()> = std::result::Result<T, BorrowMutError>;
 
 #[derive(Debug, Clone, PartialEq)]
 /// An error that can occur when trying to borrow a value.

@@ -126,16 +126,16 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Get a reference to the value
     #[track_caller]
-    pub fn leak_reference(&self) -> GenerationalBox<T, S> {
-        Self {
-            raw: S::new_reference(self.raw),
+    pub fn leak_reference(&self) -> BorrowResult<GenerationalBox<T, S>> {
+        Ok(Self {
+            raw: S::new_reference(self.raw)?,
             _marker: std::marker::PhantomData,
-        }
+        })
     }
 
     /// Change this box to point to another generational box
-    pub fn point_to(&mut self, other: GenerationalBox<T, S>) {
-        S::change_reference(self.raw, other.raw).unwrap();
+    pub fn point_to(&mut self, other: GenerationalBox<T, S>) -> BorrowResult {
+        S::change_reference(self.raw, other.raw)
     }
 }
 
@@ -150,14 +150,10 @@ impl<T, S> Clone for GenerationalBox<T, S> {
 /// A trait for a storage backing type. (RefCell, RwLock, etc.)
 pub trait Storage<Data = ()>: AnyStorage + 'static {
     /// Try to read the value. Returns None if the value is no longer valid.
-    fn try_read(
-        location: GenerationalPointer<Self>,
-    ) -> Result<Self::Ref<'static, Data>, BorrowError>;
+    fn try_read(pointer: GenerationalPointer<Self>) -> BorrowResult<Self::Ref<'static, Data>>;
 
     /// Try to write the value. Returns None if the value is no longer valid.
-    fn try_write(
-        location: GenerationalPointer<Self>,
-    ) -> Result<Self::Mut<'static, Data>, BorrowMutError>;
+    fn try_write(pointer: GenerationalPointer<Self>) -> BorrowMutResult<Self::Mut<'static, Data>>;
 
     /// Create a new memory location. This will either create a new memory location or recycle an old one.
     fn new(
@@ -172,13 +168,17 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
     ) -> GenerationalPointer<Self>;
 
     /// Reference another location if the location is valid
-    fn new_reference(location: GenerationalPointer<Self>) -> GenerationalPointer<Self>;
+    ///
+    /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
+    fn new_reference(inner: GenerationalPointer<Self>) -> BorrowResult<GenerationalPointer<Self>>;
 
     /// Change the reference a signal is pointing to
+    ///
+    /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
     fn change_reference(
-        location: GenerationalPointer<Self>,
-        other: GenerationalPointer<Self>,
-    ) -> Result<(), BorrowMutError>;
+        pointer: GenerationalPointer<Self>,
+        rc_pointer: GenerationalPointer<Self>,
+    ) -> BorrowResult;
 }
 
 /// A trait for any storage backing type.
@@ -414,13 +414,18 @@ impl<S: AnyStorage> Owner<S> {
     }
 
     /// Create a new reference to an existing box. The reference will be dropped when the owner is dropped.
+    ///
+    /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
     #[track_caller]
-    pub fn reference<T: 'static>(&self, other: GenerationalBox<T, S>) -> GenerationalBox<T, S>
+    pub fn reference<T: 'static>(
+        &self,
+        other: GenerationalBox<T, S>,
+    ) -> BorrowResult<GenerationalBox<T, S>>
     where
         S: Storage<T>,
     {
-        let location = other.leak_reference();
+        let location = other.leak_reference()?;
         self.0.lock().owned.push(location.raw);
-        location
+        Ok(location)
     }
 }

@@ -2,34 +2,31 @@ use crate::{
     BorrowError, BorrowMutError, GenerationalLocation, GenerationalRefBorrowGuard,
     GenerationalRefBorrowMutGuard,
 };
-use std::num::NonZeroU64;
+use std::{
+    num::NonZeroU64,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 pub(crate) struct RcStorageEntry<T> {
-    ref_count: NonZeroU64,
+    ref_count: AtomicU64,
     pub data: T,
 }
 
 impl<T> RcStorageEntry<T> {
     pub const fn new(data: T) -> Self {
         Self {
-            ref_count: NonZeroU64::MIN,
+            ref_count: AtomicU64::new(0),
             data,
         }
     }
 
-    pub fn add_ref(&mut self) {
-        self.ref_count = self.ref_count.checked_add(1).unwrap();
+    pub fn add_ref(&self) {
+        self.ref_count.fetch_add(1, Ordering::SeqCst);
     }
 
-    pub fn drop_ref(&mut self) -> bool {
-        let ref_count = self.ref_count.get();
-        match NonZeroU64::new(ref_count - 1) {
-            Some(ref_count) => {
-                self.ref_count = ref_count;
-                false
-            }
-            None => true,
-        }
+    pub fn drop_ref(&self) -> bool {
+        let new_ref_count = self.ref_count.fetch_sub(1, Ordering::SeqCst);
+        new_ref_count == 0
     }
 }
 

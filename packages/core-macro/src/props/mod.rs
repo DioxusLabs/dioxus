@@ -649,8 +649,8 @@ mod struct_info {
                         let new_value: &_ = &*new.#signal_fields.peek();
                         (&old_value).compare(&&new_value)
                     };
-                    // Make the old field equal to the new field
-                    #signal_fields.point_to(new.#signal_fields);
+                    // Make the old fields point to the new fields
+                    #signal_fields.point_to(new.#signal_fields).unwrap();
                     if !field_eq {
                         // If the fields are not equal, mark the signal as dirty to rerun any subscribers
                         (#signal_fields).mark_dirty();

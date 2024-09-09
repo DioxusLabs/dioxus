@@ -80,8 +80,8 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 
     /// Point to another copy value
-    pub fn point_to(&mut self, other: Self) {
-        self.value.point_to(other.value);
+    pub fn point_to(&mut self, other: Self) -> BorrowResult {
+        self.value.point_to(other.value)
     }
 
     pub(crate) fn new_with_caller(

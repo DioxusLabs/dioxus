@@ -43,8 +43,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     }
 
     /// Point to another signal
-    pub fn point_to(&mut self, other: Self) {
-        self.inner.point_to(other.inner);
+    pub fn point_to(&mut self, other: Self) -> BorrowResult {
+        self.inner.point_to(other.inner)
     }
 
     #[doc(hidden)]
