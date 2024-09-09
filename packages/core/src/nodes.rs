@@ -1096,3 +1096,152 @@ pub trait HasAttributes {
         volatile: bool,
     ) -> Self;
 }
+
+#[derive(Clone)]
+pub struct NodeCursor<'a> {
+    // The position in the inner node, represented as a list of child offsets
+    position: Vec<u8>,
+    // The inner node we are moving in. This is a block of static nodes with references to any dynamic children
+    inner: &'a VNode,
+    // An optional reference to the virtual dom, for accessing children that are rendered
+    vdom: Option<&'a VirtualDom>,
+}
+
+impl<'a> NodeCursor<'a> {
+    /// Creates a new NodeCursor on the root node
+    pub fn new(inner: &'a VNode) -> NodeCursor<'a> {
+        NodeCursor {
+            position: vec![0],
+            vdom: None,
+            inner,
+        }
+    }
+
+    /// Allows the NodeCursor to access any dynamic nodes through the VirtualDom
+    pub fn with_virtualdom(mut self: NodeCursor<'a>, vdom: &'a VirtualDom) -> NodeCursor<'a> {
+        self.vdom = Some(vdom);
+        self
+    }
+
+    /// The current node the cursor is on
+    pub fn current_node(&self) -> TemplateNode {
+        self.try_current_node().unwrap()
+    }
+
+    fn try_current_node(&self) -> Option<TemplateNode> {
+        let mut child_index_iter = self.position.iter().copied();
+        let mut current = self
+            .inner
+            .template
+            .roots
+            .get(child_index_iter.next().unwrap() as usize)?;
+
+        for child_index in child_index_iter {
+            match current {
+                TemplateNode::Element { children, .. } => {
+                    current = children.get(child_index as usize)?
+                }
+                TemplateNode::Dynamic { id } => match &self.inner.dynamic_nodes[*id] {
+                    DynamicNode::Fragment(children) => {
+                        current = &children.get(child_index as usize)?.template.roots[0]
+                    }
+                    DynamicNode::Component(component) => {
+                        // No clue what the idx is supposed to be
+                        let scope = component.mounted_scope(0, self.inner, self.vdom?);
+                        current = scope?
+                            .try_root_node()?
+                            .template
+                            .roots
+                            .get(child_index as usize)?;
+                    }
+                    _ => return None,
+                },
+                _ => return None,
+            }
+        }
+
+        Some(*current)
+    }
+
+    /// Returns the current node as text if possible
+    pub fn as_text(&self) -> Option<&str> {
+        match self.current_node() {
+            TemplateNode::Element { .. } => None,
+            TemplateNode::Text { text } => Some(text),
+            TemplateNode::Dynamic { .. } => None,
+        }
+    }
+
+    /// Returns the first node under the current node if possible
+    pub fn first_child(&'a self) -> Option<NodeCursor<'a>> {
+        let mut position = self.position.clone();
+        position.push(0);
+        self.try_current_node()?;
+
+        Some(NodeCursor {
+            inner: self.inner,
+            vdom: self.vdom,
+            position,
+        })
+
+        // match self.current_node() {
+        //     TemplateNode::Element { children, .. } => children.get(0).map(|_| ),
+        //     TemplateNode::Dynamic { id } => {
+        //         match &self.inner.dynamic_nodes[id] {
+        //             DynamicNode::Fragment(children) => children.get(0).map(|_| NodeCursor {
+        //                 inner: self.inner,
+        //                 vdom: self.vdom,
+        //                 position,
+        //             }),
+        //             DynamicNode::Text(_) => None,
+        //             DynamicNode::Placeholder(_) => None,
+        //             DynamicNode::Component(component) => {
+        //                 self.vdom.templates[]
+        //             },
+        //         }
+        //     }
+        //     TemplateNode::Text { .. } => None,
+    }
+
+    /// Returns an iterable version of the NodeCursor's children
+    pub fn children(&self) -> NodeCursor {
+        let mut new_position = self.position.clone();
+        new_position.push(0);
+
+        NodeCursor {
+            inner: self.inner,
+            vdom: self.vdom,
+            position: new_position,
+        }
+    }
+
+    /// Returns the next sibling of the current node
+    pub fn next_sibling(&self) -> Option<NodeCursor> {
+        let mut position = self.position.clone();
+        *position.last_mut()? += 1;
+        let sibling = NodeCursor {
+            inner: self.inner,
+            vdom: self.vdom,
+            position,
+        };
+        sibling.try_current_node()?;
+        Some(sibling)
+    }
+}
+
+impl Iterator for NodeCursor<'_> {
+    type Item = Self;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.try_current_node()?;
+        let item = self.clone();
+        *self.position.last_mut()? += 1;
+        Some(item)
+    }
+}
+
+impl IntoDynNode for NodeCursor<'_> {
+    fn into_dyn_node(self) -> DynamicNode {
+        self.inner.into_dyn_node()
+    }
+}
