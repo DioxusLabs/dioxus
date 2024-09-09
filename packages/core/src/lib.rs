@@ -26,6 +26,7 @@ mod scopes;
 mod suspense;
 mod tasks;
 mod virtual_dom;
+pub mod visit;
 
 mod hotreload_utils;
 
