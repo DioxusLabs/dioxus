@@ -1097,6 +1097,7 @@ pub trait HasAttributes {
     ) -> Self;
 }
 
+/// Cursor for a node.
 #[derive(Clone)]
 pub struct NodeCursor<'a> {
     // The position in the inner node, represented as a list of child offsets
@@ -1130,11 +1131,8 @@ impl<'a> NodeCursor<'a> {
 
     fn try_current_node(&self) -> Option<TemplateNode> {
         let mut child_index_iter = self.position.iter().copied();
-        let mut current = self
-            .inner
-            .template
-            .roots
-            .get(child_index_iter.next().unwrap() as usize)?;
+        let idx = child_index_iter.next()?;
+        let mut current = self.inner.template.roots.get(idx as usize)?;
 
         for child_index in child_index_iter {
             match current {
@@ -1146,8 +1144,7 @@ impl<'a> NodeCursor<'a> {
                         current = &children.get(child_index as usize)?.template.roots[0]
                     }
                     DynamicNode::Component(component) => {
-                        // No clue what the idx is supposed to be
-                        let scope = component.mounted_scope(0, self.inner, self.vdom?);
+                        let scope = component.mounted_scope(*id, self.inner, self.vdom?);
                         current = scope?
                             .try_root_node()?
                             .template
