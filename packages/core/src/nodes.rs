@@ -1227,13 +1227,13 @@ impl<'a> NodeCursor<'a> {
 }
 
 impl Iterator for NodeCursor<'_> {
-    type Item = Self;
+    type Item = TemplateNode;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.try_current_node()?;
         let item = self.clone();
         *self.position.last_mut()? += 1;
-        Some(item)
+        item.try_current_node()
     }
 }
 
