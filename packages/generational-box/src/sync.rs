@@ -3,6 +3,7 @@ use parking_lot::{
 };
 use std::{
     any::Any,
+    fmt::Debug,
     num::NonZeroU64,
     sync::{Arc, OnceLock},
 };
@@ -28,6 +29,17 @@ pub(crate) enum RwLockStorageEntryData {
 impl Default for RwLockStorageEntryData {
     fn default() -> Self {
         Self::Empty
+    }
+}
+
+impl Debug for RwLockStorageEntryData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Reference(location) => write!(f, "Reference({:?})", location),
+            Self::Rc(_) => write!(f, "Rc"),
+            Self::Data(_) => write!(f, "Data"),
+            Self::Empty => write!(f, "Empty"),
+        }
     }
 }
 
@@ -356,14 +368,23 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
             )));
         }
 
-        if let RwLockStorageEntryData::Reference(reference) = &mut write.data {
+        if let (RwLockStorageEntryData::Reference(reference), RwLockStorageEntryData::Rc(data)) =
+            (&mut write.data, &other_write.data)
+        {
+            if reference == &other_final {
+                return Ok(());
+            }
             drop_ref(*reference);
             *reference = other_final;
-        }
-        if let RwLockStorageEntryData::Rc(data) = &other_write.data {
             data.add_ref();
         } else {
-            unreachable!()
+            tracing::trace!(
+                "References should always point to a data entry directly found {:?} instead",
+                other_write.data
+            );
+            return Err(BorrowError::Dropped(ValueDroppedError::new_for_location(
+                other_final.location,
+            )));
         }
 
         Ok(())

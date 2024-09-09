@@ -365,20 +365,23 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
             )));
         }
 
-        if let RefCellStorageEntryData::Reference(reference) = &mut write.data {
+        if let (RefCellStorageEntryData::Reference(reference), RefCellStorageEntryData::Rc(data)) =
+            (&mut write.data, &other_write.data)
+        {
             if reference == &other_final {
                 return Ok(());
             }
             drop_ref(*reference);
             *reference = other_final;
-        }
-        if let RefCellStorageEntryData::Rc(data) = &other_write.data {
             data.add_ref();
         } else {
-            unreachable!(
+            tracing::trace!(
                 "References should always point to a data entry directly found {:?} instead",
                 other_write.data
             );
+            return Err(BorrowError::Dropped(ValueDroppedError::new_for_location(
+                other_final.location,
+            )));
         }
 
         Ok(())

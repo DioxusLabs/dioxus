@@ -686,13 +686,13 @@ mod struct_info {
                     quote! {
                         // If the event handler is None, we don't need to update it
                         if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
-                            old_handler.__set(new_handler.__take());
+                            old_handler.__point_to(new_handler);
                         }
                     }
                 } else {
                     quote! {
                         // Update the event handlers
-                        self.#name.__set(new.#name.__take());
+                        self.#name.__point_to(&new.#name);
                     }
                 }
             }).collect();

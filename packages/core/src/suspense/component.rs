@@ -50,7 +50,7 @@ where
     }
     fn memoize(&mut self, new: &Self) -> bool {
         let equal = self == new;
-        self.fallback.__set(new.fallback.__take());
+        self.fallback.__point_to(&new.fallback);
         if !equal {
             let new_clone = new.clone();
             self.children = new_clone.children;

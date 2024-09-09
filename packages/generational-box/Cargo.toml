@@ -11,6 +11,7 @@ keywords = ["generational", "box", "memory", "allocator"]
 
 [dependencies]
 parking_lot = "0.12.1"
+tracing.workspace = true
 
 [dev-dependencies]
 rand = "0.8.5"

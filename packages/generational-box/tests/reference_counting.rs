@@ -12,7 +12,7 @@ fn reference_counting() {
                 let owner = S::owner();
                 // insert data into the store
                 let original = owner.insert_rc(data);
-                reference = outer_owner.reference(original);
+                reference = outer_owner.insert_reference(original).unwrap();
                 // The reference should point to the value immediately
                 assert_eq!(&*reference.read(), "hello world");
                 // Original is dropped
@@ -38,14 +38,14 @@ fn move_reference_in_place() {
         let original_owner = S::owner();
         // insert data into the store
         let original = original_owner.insert_rc(data1.clone());
-        let mut reference = original_owner.reference(original);
+        let mut reference = original_owner.insert_reference(original).unwrap();
         // The reference should point to the original value
         assert_eq!(&*reference.read(), &data1);
 
         let new_owner = S::owner();
         // Move the reference in place
         let new = new_owner.insert_rc(data2.clone());
-        reference.point_to(new);
+        reference.point_to(new).unwrap();
         // The reference should point to the new value
         assert_eq!(&*reference.read(), &data2);
 

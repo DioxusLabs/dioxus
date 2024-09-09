@@ -3958,6 +3958,7 @@ dependencies = [
  "criterion",
  "parking_lot",
  "rand 0.8.5",
+ "tracing",
 ]
 
 [[package]]

@@ -56,6 +56,17 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     /// a box that needs to be manually dropped with no owners.
     #[track_caller]
     pub fn leak(value: T, location: &'static std::panic::Location<'static>) -> Self {
+        let location = S::new(value, location);
+        Self {
+            raw: location,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Create a new reference counted generational box by leaking a value into the storage. This is useful for creating
+    /// a box that needs to be manually dropped with no owners.
+    #[track_caller]
+    pub fn leak_rc(value: T, location: &'static std::panic::Location<'static>) -> Self {
         let location = S::new_rc(value, location);
         Self {
             raw: location,
@@ -417,7 +428,7 @@ impl<S: AnyStorage> Owner<S> {
     ///
     /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
     #[track_caller]
-    pub fn reference<T: 'static>(
+    pub fn insert_reference<T: 'static>(
         &self,
         other: GenerationalBox<T, S>,
     ) -> BorrowResult<GenerationalBox<T, S>>
