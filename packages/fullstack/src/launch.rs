@@ -137,11 +137,6 @@ async fn launch_server(
         .unwrap_or_else(dioxus_cli_config::AddressArguments::parse)
         .address();
 
-    // Point the user to the CLI address if the CLI is running or the fullstack address if not
-    let serve_address = cli_args
-        .map(|args| args.cli_address())
-        .unwrap_or_else(|| address);
-
     #[cfg(feature = "axum")]
     {
         use crate::axum_adapter::DioxusRouterExt;
