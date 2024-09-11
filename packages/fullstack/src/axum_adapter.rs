@@ -343,7 +343,7 @@ impl RenderHandleState {
 ///         // to inject the context into server functions running outside
 ///         // of an SSR render context.
 ///         .fallback(get(render_handler)
-///             .with_state(RenderHandleState::new(app))
+///             .with_state(RenderHandleState::new(ServeConfig::new().unwrap(), app))
 ///         )
 ///         .into_make_service();
 ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
