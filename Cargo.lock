@@ -2525,6 +2525,8 @@ dependencies = [
  "rustls 0.23.12",
  "serde",
  "serde_json",
+ "signal-hook",
+ "signal-hook-tokio",
  "subprocess",
  "syn 2.0.74",
  "tar",
@@ -8980,6 +8982,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9e9e0b4211b72e7b8b6e85c807d36c212bdb33ea8587f7569562a84df5465b1"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "signal-hook-tokio"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213241f76fb1e37e27de3b6aa1b068a2c333233b59cca6634f634b80a27ecf1e"
+dependencies = [
+ "futures-core",
+ "libc",
+ "signal-hook",
+ "tokio",
 ]
 
 [[package]]
