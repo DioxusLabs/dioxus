@@ -30,7 +30,8 @@ Steps to reproduce the behavior:
  - App platform:    <!-- e.g. `web`, `desktop` -->
 
 **Questionnaire**
-<!-- If you feel up to the challenge, please check one of the boxes below: -->
-- [ ] I'm interested in fixing this myself but don't know where to start
-- [ ] I would like to fix and I have a solution
-- [ ] I don't have time to fix this right now, but maybe later
+<!-- If you feel up to the challenge, please uncomment one of the lines below: -->
+
+<!-- I'm interested in fixing this myself but don't know where to start -->
+<!-- I would like to fix and I have a solution -->
+<!-- I don't have time to fix this right now, but maybe later -->
