@@ -1,7 +1,7 @@
 use dioxus_core::ElementId;
 use dioxus_html::{
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
-    MountedResult, RenderedElementBacking, ScrollBehavior,
+    MountedElement, MountedResult, ScrollBehavior,
 };
 
 use crate::desktop_context::DesktopContext;
@@ -20,7 +20,7 @@ impl DesktopElement {
 }
 
 #[async_trait::async_trait(?Send)]
-impl RenderedElementBacking for DesktopElement {
+impl MountedElement for DesktopElement {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

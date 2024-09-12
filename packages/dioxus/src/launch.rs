@@ -197,6 +197,11 @@ impl LaunchBuilder {
             dioxus_fullstack::launch::launch(app, Default::default(), Default::default());
         }
 
+        #[cfg(feature = "desktop")]
+        {
+            dioxus_desktop::launch::launch(app, Default::default(), Default::default());
+        }
+
         panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, fullstack to use the launch API.")
     }
 }

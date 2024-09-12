@@ -446,7 +446,7 @@ impl HasTransitionData for Synthetic<TransitionEvent> {
 }
 
 #[cfg(feature = "mounted")]
-impl RenderedElementBacking for Synthetic<web_sys::Element> {
+impl MountedElement for Synthetic<web_sys::Element> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

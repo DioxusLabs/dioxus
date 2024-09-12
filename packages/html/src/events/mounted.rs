@@ -6,7 +6,7 @@ use std::fmt::{Display, Formatter};
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 // we can not use async_trait here because it does not create a trait that is object safe
 // #[async_trait::async_trait(?Send)]
-pub trait RenderedElementBacking: std::any::Any {
+pub trait MountedElement: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 
@@ -43,7 +43,7 @@ pub trait RenderedElementBacking: std::any::Any {
     }
 }
 
-impl RenderedElementBacking for () {
+impl MountedElement for () {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -65,10 +65,10 @@ pub enum ScrollBehavior {
 ///
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 pub struct MountedData {
-    inner: Box<dyn RenderedElementBacking>,
+    inner: Box<dyn MountedElement>,
 }
 
-impl<E: RenderedElementBacking> From<E> for MountedData {
+impl<E: MountedElement> From<E> for MountedData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
@@ -76,7 +76,7 @@ impl<E: RenderedElementBacking> From<E> for MountedData {
 
 impl MountedData {
     /// Create a new MountedData
-    pub fn new(registry: impl RenderedElementBacking + 'static) -> Self {
+    pub fn new(registry: impl MountedElement + 'static) -> Self {
         Self {
             inner: Box::new(registry),
         }

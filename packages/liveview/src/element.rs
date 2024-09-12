@@ -1,7 +1,7 @@
 use dioxus_core::ElementId;
 use dioxus_html::{
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
-    MountedResult, RenderedElementBacking,
+    MountedResult, MountedElement,
 };
 
 use crate::query::QueryEngine;
@@ -47,7 +47,7 @@ macro_rules! scripted_getter {
     };
 }
 
-impl RenderedElementBacking for LiveviewElement {
+impl MountedElement for LiveviewElement {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
