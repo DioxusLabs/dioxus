@@ -27,14 +27,6 @@ tracing.workspace = true
 
 futures-channel = { workspace = true }
 
-# dioxus-core = { workspace = true }
-# generational-box = { workspace = true }
-# todo: we shouldn't have any wasm-bindgen dependencies in the html crate
-# [target.'cfg(target_arch = "wasm32")'.dependencies]
-# wasm-bindgen = { workspace = true, optional = true }
-# js-sys = { version = "0.3.56", optional = true }
-# wasm-bindgen-futures = { workspace = true, optional = true }
-
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
 

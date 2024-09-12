@@ -520,13 +520,6 @@ pub enum DynamicNode {
     Fragment(Vec<VNode>),
 }
 
-impl DynamicNode {
-    /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`]
-    pub fn make_node<'c, I>(into: impl IntoDynNode<I> + 'c) -> DynamicNode {
-        into.into_dyn_node()
-    }
-}
-
 impl Default for DynamicNode {
     fn default() -> Self {
         Self::Placeholder(Default::default())

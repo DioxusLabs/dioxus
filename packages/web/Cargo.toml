@@ -17,25 +17,21 @@ dioxus-html = { workspace = true }
 dioxus-document = { workspace = true }
 dioxus-devtools = { workspace = true }
 dioxus-signals = { workspace = true }
-dioxus-interpreter-js = { workspace = true, features = [
-    "minimal_bindings",
-    "webonly",
-] }
+dioxus-interpreter-js = { workspace = true, features = ["minimal_bindings", "webonly"] }
 generational-box = { workspace = true }
-
 async-trait = { workspace = true }
 ciborium = { workspace = true, optional = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true, features = [ "async-await", "async-await-macro" ] }
-js-sys = "0.3.56"
+js-sys = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 serde-wasm-bindgen = { version = "0.6.5", optional = true }
 tracing = { workspace = true }
 wasm-bindgen = { workspace = true }
-wasm-bindgen-futures = "0.4.29"
+wasm-bindgen-futures = { workspace = true }
 
 [dependencies.web-sys]
 version = "0.3.56"

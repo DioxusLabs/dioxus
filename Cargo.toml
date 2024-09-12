@@ -185,6 +185,8 @@ rustversion = "1.0.17"
 rand = "0.8.5"
 longest-increasing-subsequence = "0.1.0"
 trybuild = "1.0"
+js-sys = "0.3.56"
+web-sys = { version = "0.3.56", default-features = false }
 
 # desktop
 wry = { version = "0.42.0", default-features = false }

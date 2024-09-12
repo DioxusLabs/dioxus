@@ -113,23 +113,23 @@ pub enum FmtSegment {
     },
 }
 
-// let __pool = DynamicValuePool::new(
-//     vec![...],
-//     vec![...],
-//     vec![...],
-// );
-// VNode::new(
-//     None,
-//     Template {
-//         name: "...",
-//         roots: &[...],
-//         node_paths: &[..],
-//         attr_paths: &[...],
-//     },
-//     Box::new([...]),
-//     Box::new([...]),
-// )
-
+/// let __pool = DynamicValuePool::new(
+///     vec![...],
+///     vec![...],
+///     vec![...],
+/// );
+/// VNode::new(
+///     None,
+///     Template {
+///         name: "...",
+///         roots: &[...],
+///         node_paths: &[..],
+///         attr_paths: &[...],
+///     },
+///     Box::new([...]),
+///     Box::new([...]),
+/// )
+///
 // Open questions:
 // - How do we handle type coercion for different sized component property integers?
 // - Should non-string hot literals go through the centralized pool?
