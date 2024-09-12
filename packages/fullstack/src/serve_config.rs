@@ -15,7 +15,7 @@ pub struct ServeConfigBuilder {
 }
 
 impl ServeConfigBuilder {
-    /// Create a new ServeConfigBuilder with the root component and props to render on the server.
+    /// Create a new ServeConfigBuilder with incremental static generation disabled and the default index.html settings
     pub fn new() -> Self {
         Self {
             root_id: None,
@@ -25,7 +25,25 @@ impl ServeConfigBuilder {
         }
     }
 
-    /// Enable incremental static generation
+    /// Enable incremental static generation. Incremental static generation caches the
+    /// rendered html in memory and/or the file system. It can be used to improve performance of heavy routes.
+    ///
+    /// ```rust, no_run
+    /// # fn app() -> Element { todo!() }
+    /// use dioxus::prelude::*;
+    ///
+    /// let mut cfg = dioxus::fullstack::Config::new();
+    ///
+    /// // Only set the server config if the server feature is enabled
+    /// server_only! {
+    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default().incremental(IncrementalRendererConfig::default()));
+    /// }
+    ///
+    /// // Finally, launch the app with the config
+    /// LaunchBuilder::new()
+    ///     .with_cfg(cfg)
+    ///     .launch(app);
+    /// ```
     pub fn incremental(mut self, cfg: dioxus_ssr::incremental::IncrementalRendererConfig) -> Self {
         self.incremental = Some(cfg);
         self
@@ -44,12 +62,56 @@ impl ServeConfigBuilder {
     }
 
     /// Set the id of the root element in the index.html file to place the prerendered content into. (defaults to main)
+    ///
+    /// # Example
+    ///
+    /// If your index.html file looks like this:
+    /// ```html
+    /// <!DOCTYPE html>
+    /// <html>
+    ///     <head>
+    ///         <title>My App</title>
+    ///     </head>
+    ///     <body>
+    ///         <div id="my-custom-root"></div>
+    ///     </body>
+    /// </html>
+    /// ```
+    ///
+    /// You can set the root id to `"my-custom-root"` to render the app into that element:
+    ///
+    /// ```rust, no_run
+    /// # fn app() -> Element { todo!() }
+    /// use dioxus::prelude::*;
+    ///
+    /// let mut cfg = dioxus::fullstack::Config::new();
+    ///
+    /// // Only set the server config if the server feature is enabled
+    /// server_only! {
+    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default().root_id("app"));
+    /// }
+    ///
+    /// // You also need to set the root id in your web config
+    /// web! {
+    ///     cfg = cfg.with_web_config(dioxus::web::Config::default().rootname("app"));
+    /// }
+    ///
+    /// // And desktop config
+    /// desktop! {
+    ///     cfg = cfg.with_desktop_config(dioxus::desktop::Config::default().with_root_name("app"));
+    /// }
+    ///
+    /// // Finally, launch the app with the config
+    /// LaunchBuilder::new()
+    ///     .with_cfg(cfg)
+    ///     .launch(app);
+    /// ```
     pub fn root_id(mut self, root_id: &'static str) -> Self {
         self.root_id = Some(root_id);
         self
     }
 
-    /// Build the ServeConfig
+    /// Build the ServeConfig. This may fail if the index.html file is not found.
     pub fn build(self) -> Result<ServeConfig, UnableToLoadIndex> {
         // The CLI always bundles static assets into the exe/public directory
         let public_path = public_path();
