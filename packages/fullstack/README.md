@@ -97,11 +97,10 @@ fn main() {
         .unwrap_or_else(SocketAddr::from(([127, 0, 0, 1], 8080)));
 
     // Set up the axum router
-    let serve_config = ServeConfig::new().unwrap();
     let router = axum::Router::new()
         // You can add a dioxus application to the router with the `serve_dioxus_application` method
         // This will add a fallback route to the router that will serve your component and server functions
-        .serve_dioxus_application(serve_config, App);
+        .serve_dioxus_application(ServeConfigBuilder::default(), App);
 
     // Finally, we can launch the server
     let router = router.into_make_service();

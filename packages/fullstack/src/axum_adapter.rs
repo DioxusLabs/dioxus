@@ -21,7 +21,7 @@
 //!                         listener,
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
-//!                             .serve_dioxus_application(ServeConfig::new().unwrap(), app)
+//!                             .serve_dioxus_application(ServeConfigBuilder::default(), app)
 //!                             .into_make_service(),
 //!                     )
 //!                     .await
@@ -160,8 +160,10 @@ pub trait DioxusRouterExt<S> {
     ///     rsx! { "Hello World" }
     /// }
     /// ```
-    fn serve_dioxus_application(self, cfg: impl Into<ServeConfig>, app: fn() -> Element) -> Self
+    fn serve_dioxus_application<Cfg, Error>(self, cfg: Cfg, app: fn() -> Element) -> Self
     where
+        Cfg: TryInto<ServeConfig, Error = Error>,
+        Error: std::error::Error,
         Self: Sized;
 }
 
@@ -243,18 +245,27 @@ where
         self
     }
 
-    fn serve_dioxus_application(self, cfg: impl Into<ServeConfig>, app: fn() -> Element) -> Self {
-        let cfg = cfg.into();
-
-        let ssr_state = SSRState::new(&cfg);
-
+    fn serve_dioxus_application<Cfg, Error>(self, cfg: Cfg, app: fn() -> Element) -> Self
+    where
+        Cfg: TryInto<ServeConfig, Error = Error>,
+        Error: std::error::Error,
+    {
         // Add server functions and render index.html
         let server = self.serve_static_assets().register_server_functions();
 
-        server.fallback(
-            get(render_handler)
-                .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
-        )
+        match cfg.try_into() {
+            Ok(cfg) => {
+                let ssr_state = SSRState::new(&cfg);
+                server.fallback(
+                    get(render_handler)
+                        .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
+                )
+            }
+            Err(err) => {
+                tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
+                server
+            }
+        }
     }
 }
 

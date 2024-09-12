@@ -75,6 +75,14 @@ impl ServeConfigBuilder {
     }
 }
 
+impl TryInto<ServeConfig> for ServeConfigBuilder {
+    type Error = UnableToLoadIndex;
+
+    fn try_into(self) -> Result<ServeConfig, Self::Error> {
+        self.build()
+    }
+}
+
 /// Get the path to the public assets directory to serve static files from
 pub(crate) fn public_path() -> PathBuf {
     // The CLI always bundles static assets into the exe/public directory
