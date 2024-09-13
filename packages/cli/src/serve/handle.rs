@@ -52,13 +52,13 @@ impl AppHandle {
         };
 
         match platform {
-            TargetPlatform::Web => {
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", serve.address.address());
+            Platform::Web => {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", ip);
             }
-            TargetPlatform::Desktop => {
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app at {} 🎉", self.executable.display());
+            Platform::Desktop => {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app at {} 🎉", handle.executable.display());
             }
-            TargetPlatform::Server => {
+            Platform::Server => {
                 if let Some(fullstack_address) = fullstack_address {
                     tracing::info!(
                         dx_src = ?TraceSrc::Dev,
@@ -67,7 +67,9 @@ impl AppHandle {
                     );
                 }
             }
-            TargetPlatform::Liveview => {
+            Platform::Ios => {}
+            Platform::Android => {}
+            Platform::Liveview => {
                 if let Some(fullstack_address) = fullstack_address {
                     tracing::info!(
                         dx_src = ?TraceSrc::Dev,

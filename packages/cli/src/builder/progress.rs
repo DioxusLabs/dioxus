@@ -13,23 +13,23 @@ use tracing::Level;
 
 impl BuildRequest {
     pub(crate) fn status_build_diagnostic(&self, message: &Diagnostic) {
-        _ = self.progress.unbounded_send(BuildUpdateProgress {
-            stage: Stage::Compiling,
-            update: UpdateStage::AddMessage(message.clone().into()),
-            platform: self.platform(),
-        });
+        // _ = self.progress.unbounded_send(BuildUpdateProgress {
+        //     stage: Stage::Compiling,
+        //     update: UpdateStage::AddMessage(message.clone().into()),
+        //     platform: self.platform(),
+        // });
     }
 
     pub(crate) fn status_build_message(&self, line: String) {
-        _ = self.progress.unbounded_send(BuildUpdateProgress {
-            platform: self.platform(),
-            stage: Stage::Compiling,
-            update: UpdateStage::AddMessage(BuildMessage {
-                level: Level::DEBUG,
-                message: MessageType::Text(line),
-                source: MessageSource::Build,
-            }),
-        });
+        // _ = self.progress.unbounded_send(BuildUpdateProgress {
+        //     platform: self.platform(),
+        //     stage: Stage::Compiling,
+        //     update: UpdateStage::AddMessage(BuildMessage {
+        //         level: Level::DEBUG,
+        //         message: MessageType::Text(line),
+        //         source: MessageSource::Build,
+        //     }),
+        // });
     }
 
     pub(crate) fn status_build_progress(&self, build_progress: f64) {

@@ -268,15 +268,15 @@ impl BuildRequest {
             "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
         );
 
-        _ = self.progress.unbounded_send(BuildUpdateProgress {
-            platform: self.platform(),
-            stage: Stage::OptimizingWasm,
-            update: UpdateStage::AddMessage(BuildMessage {
-                level: Level::WARN,
-                message: MessageType::Text(message),
-                source: MessageSource::Build,
-            }),
-        });
+        // _ = self.progress.unbounded_send(BuildUpdateProgress {
+        //     platform: self.platform(),
+        //     stage: Stage::OptimizingWasm,
+        //     update: UpdateStage::AddMessage(BuildMessage {
+        //         level: Level::WARN,
+        //         message: MessageType::Text(message),
+        //         source: MessageSource::Build,
+        //     }),
+        // });
     }
 
     /// Check if the build is targeting the web platform

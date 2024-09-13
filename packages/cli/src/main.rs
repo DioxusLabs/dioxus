@@ -18,6 +18,7 @@ pub(crate) mod settings;
 pub(crate) mod tooling;
 pub(crate) mod tracer;
 
+pub(crate) use builder::Platform;
 pub(crate) use cli::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;

@@ -1,10 +1,8 @@
 use crate::{
-    builder::{BuildResult, UpdateStage},
-    builder::{Stage, TargetPlatform, UpdateBuildProgress},
+    builder::{BuildMessage, Platform, Stage, UpdateStage},
+    cli::serve::ServeArgs,
     dioxus_crate::DioxusCrate,
-    serve::next_or_pending,
-    serve::Serve,
-    serve::{Builder, Server, Watcher},
+    serve::{Builder, Watcher},
     tracer::CLILogControl,
     TraceMsg, TraceSrc,
 };
@@ -18,19 +16,30 @@ use crossterm::{
     tty::IsTty,
     ExecutableCommand,
 };
-use dioxus_cli_config::{AddressArguments, Platform};
-use dioxus_hot_reload::ClientMsg;
-use futures_util::{future::select_all, Future, FutureExt, StreamExt};
-use ratatui::{prelude::*, TerminalOptions, Viewport};
+use dioxus_devtools_types::ClientMsg;
+// use dioxus_cli_config::{AddressArguments, Platform};
+// use dioxus_hot_reload::ClientMsg;
+use futures_util::{
+    future::{select_all, OptionFuture},
+    Future, FutureExt, StreamExt,
+};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, Borders, Paragraph},
+    TerminalOptions, Viewport,
+};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    fmt::Display,
     io::{self, stdout},
     rc::Rc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use tracing::Level;
+
+use super::{AppHandle, DevServer, ServeUpdate};
 
 mod render;
 
@@ -41,26 +50,6 @@ const SCROLL_MODIFIER: u16 = 4;
 // Scroll modifier key.
 const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
 
-#[derive(Default)]
-pub struct BuildProgress {
-    current_builds: HashMap<TargetPlatform, ActiveBuild>,
-}
-
-impl BuildProgress {
-    pub fn progress(&self) -> f64 {
-        self.current_builds
-            .values()
-            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|build| match build.stage {
-                Stage::Initializing => 0.0,
-                Stage::InstallingWasmTooling => 0.0,
-                Stage::Compiling => build.progress,
-                Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
-            })
-            .unwrap_or_default()
-    }
-}
-
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
 
@@ -68,7 +57,7 @@ pub struct Output {
     events: Option<EventStream>,
 
     pub(crate) build_progress: BuildProgress,
-    running_apps: HashMap<TargetPlatform, RunningApp>,
+    // running_apps: HashMap<Platform, RunningApp>,
 
     // A list of all messages from build, dev, app, and more.
     messages: Vec<TraceMsg>,
@@ -84,7 +73,7 @@ pub struct Output {
     interactive: bool,
     _is_cli_release: bool,
     platform: Platform,
-    addr: AddressArguments,
+    // addr: AddressArguments,
 
     // Filters
     show_filter_menu: bool,
@@ -164,13 +153,13 @@ impl Output {
             messages: Vec::new(),
             more_modal_open: false,
             build_progress: Default::default(),
-            running_apps: HashMap::new(),
+            // running_apps: HashMap::new(),
             scroll_position: 0,
             num_lines_wrapping: 0,
             console_width: 0,
             console_height: 0,
             anim_start: Instant::now(),
-            addr: cfg.server_arguments.address.clone(),
+            // addr: cfg.address.clone(),
 
             // Filter
             show_filter_menu: false,
@@ -182,15 +171,15 @@ impl Output {
     }
 
     /// Add a message from stderr to the logs
-    fn push_stderr(&mut self, platform: TargetPlatform, stderr: String) {
-        self.running_apps
-            .get_mut(&platform)
-            .unwrap()
-            .output
-            .as_mut()
-            .unwrap()
-            .stderr_line
-            .push_str(&stderr);
+    pub fn push_stderr(&mut self, platform: Platform, stderr: String) {
+        // self.running_apps
+        //     .get_mut(&platform)
+        //     .unwrap()
+        //     .output
+        //     .as_mut()
+        //     .unwrap()
+        //     .stderr_line
+        //     .push_str(&stderr);
 
         self.messages.push(TraceMsg {
             source: TraceSrc::App(platform),
@@ -204,15 +193,15 @@ impl Output {
     }
 
     /// Add a message from stdout to the logs
-    fn push_stdout(&mut self, platform: TargetPlatform, stdout: String) {
-        self.running_apps
-            .get_mut(&platform)
-            .unwrap()
-            .output
-            .as_mut()
-            .unwrap()
-            .stdout_line
-            .push_str(&stdout);
+    pub fn push_stdout(&mut self, platform: Platform, stdout: String) {
+        // self.running_apps
+        //     .get_mut(&platform)
+        //     .unwrap()
+        //     .output
+        //     .as_mut()
+        //     .unwrap()
+        //     .stdout_line
+        //     .push_str(&stdout);
 
         self.messages.push(TraceMsg {
             source: TraceSrc::App(platform),
@@ -386,7 +375,7 @@ impl Output {
                 if key.code == KeyCode::Char('o') && key.kind == KeyEventKind::Press =>
             {
                 // Open the running app.
-                open::that(format!("http://{}:{}", self.addr.addr, self.addr.port))?;
+                // open::that(format!("http://{}:{}", self.addr, self.port))?;
             }
 
             Event::Key(key)
@@ -450,262 +439,250 @@ impl Output {
         }
     }
 
-    pub(crate) fn scroll_to_bottom(&mut self) {
-        self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
-    }
+    // pub(crate) fn scroll_to_bottom(&mut self) {
+    //     self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+    // }
 
     pub(crate) fn push_inner_log(&mut self, msg: String) {
-        self.push_log(
-            LogSource::Internal,
-            crate::builder::BuildMessage {
-                level: tracing::Level::INFO,
-                message: crate::builder::MessageType::Text(msg),
-                source: crate::builder::MessageSource::Dev,
-            },
-        );
+        // self.push_log(
+        //     LogSource::Internal,
+        //     crate::builder::BuildMessage {
+        //         level: tracing::Level::INFO,
+        //         message: crate::builder::MessageType::Text(msg),
+        //         source: crate::builder::MessageSource::Dev,
+        //     },
+        // );
+    }
+    //     pub(crate) fn new_build_logs(&mut self, platform: Platform, update: BuildUpdateProgress) {
+    //         let snapped = self.is_snapped(LogSource::Target(platform));
+
+    //         // when the build is finished, switch to the console
+    //         if update.stage == Stage::Finished {
+    //             self.tab = Tab::Console;
+    //         }
+    // }
+    fn is_snapped(&self) -> bool {
+        true
     }
 
-    pub(crate) fn new_build_logs(&mut self, platform: Platform, update: BuildUpdateProgress) {
-        let snapped = self.is_snapped(LogSource::Target(platform));
-
-        // when the build is finished, switch to the console
-        if update.stage == Stage::Finished {
-            self.tab = Tab::Console;
-        }
-
-        fn is_snapped(&self) -> bool {
-            true
-        }
-
-        pub fn scroll_to_bottom(&mut self) {
-            self.scroll_position = self.num_lines_wrapping.saturating_sub(self.console_height);
-        }
-
-        pub fn push_log(&mut self, message: TraceMsg) {
-            self.messages.push(message);
-
-            if self.is_snapped() {
-                self.scroll_to_bottom();
-            }
-        }
-
-        pub fn new_build_progress(
-            &mut self,
-            platform: TargetPlatform,
-            update: UpdateBuildProgress,
-        ) {
-            self.build_progress
-                .current_builds
-                .entry(platform)
-                .or_default()
-                .update(update);
-
-            if self.is_snapped() {
-                self.scroll_to_bottom();
-            }
-        }
-
-        pub(crate) fn new_ready_app(&mut self, handle: &AppHandle) {
-            // Finish the build progress for the platform that just finished building
-            if let Some(build) = self
-                .build_progress
-                .build_logs
-                .get_mut(&handle.app.build.platform())
-            {
-                build.stage = Stage::Finished;
-            }
-        }
-
-        pub(crate) fn render(
-            &mut self,
-            _args: &ServeArgs,
-            _krate: &DioxusCrate,
-            _builder: &Builder,
-            server: &DevServer,
-            _watcher: &Watcher,
-        ) {
-            // just drain the build logs
-            if !self.interactive {
-                self.drain_print_logs();
-                return;
-            }
-
-            // Keep the animation track in terms of 100ms frames - the frame should be a number between 0 and 10
-            // todo: we want to use this somehow to animate things...
-            let elapsed = self.anim_start.elapsed().as_millis() as f32;
-            let num_frames = elapsed / 100.0;
-            let _frame_step = (num_frames % 10.0) as usize;
-
-            _ = self
-                .term
-                .clone()
-                .borrow_mut()
-                .as_mut()
-                .unwrap()
-                .draw(|frame| {
-                    let mut layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
-                    let (console_width, console_height) = layout.get_console_size();
-                    self.console_width = console_width;
-                    self.console_height = console_height;
-
-                    // Render the decor first as some of it (such as backgrounds) may be rendered on top of.
-                    layout.render_decor(frame, self.show_filter_menu);
-
-                    // Get only the enabled filters.
-                    let mut enabled_filters = self.filters.clone();
-                    enabled_filters.retain(|f| f.1);
-                    let enabled_filters = enabled_filters
-                        .iter()
-                        .map(|f| f.0.clone())
-                        .collect::<Vec<String>>();
-
-                    // Render console, we need the number of wrapping lines for scroll.
-                    self.num_lines_wrapping = layout.render_console(
-                        frame,
-                        self.scroll_position,
-                        &self.messages,
-                        &enabled_filters,
-                    );
-
-                    // // Render a border for the header
-                    // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
-
-                    // Render the metadata
-                    let mut spans: Vec<Span> = vec![
-                        Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
-                        Span::from(" ").green(),
-                        Span::from("serve").green(),
-                        Span::from(" | ").white(),
-                        Span::from(self.platform.to_string()).green(),
-                        Span::from(" | ").white(),
-                    ];
-
-                    // If there is build progress, display that next to the platform
-                    if !self.build_progress.build_logs.is_empty() {
-                        if self
-                            .build_progress
-                            .build_logs
-                            .values()
-                            .any(|b| b.failed.is_some())
-                        {
-                            spans.push(Span::from("build failed ❌").red());
-                        } else {
-                            spans.push(Span::from("status: ").green());
-                            let build = self
-                                .build_progress
-                                .build_logs
-                                .values()
-                                .min_by(|a, b| {
-                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                                })
-                                .unwrap();
-                            spans.extend_from_slice(&build.spans(Rect::new(
-                                0,
-                                0,
-                                build.max_layout_size(),
-                                1,
-                            )));
-                        }
-                    }
-
-                    frame
-                        .render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
-
-                    // Split apart the body into a center and a right side
-                    // We only want to show the sidebar if there's enough space
-                    if listening_len > 0 {
-                        frame.render_widget(
-                            Paragraph::new(Line::from(vec![
-                                Span::from("listening at ").dark_gray(),
-                                Span::from(format!("http://{}", server.ip).as_str()).gray(),
-                            ])),
-                            header[1],
-                        )
-                    }
-
-                    if self.show_filter_menu {
-                        layout.render_filter_menu(
-                            frame,
-                            &self.filters,
-                            self.selected_filter_index,
-                            self.filter_search_mode,
-                            self.filter_search_input.as_ref(),
-                        );
-                    }
-
-                    layout.render_status_bar(
-                        frame,
-                        self.platform,
-                        &self.build_progress,
-                        self.more_modal_open,
-                        self.show_filter_menu,
-                        &self._dx_version,
-                    );
-
-                    if self.more_modal_open {
-                        layout.render_more_modal(frame);
-                    }
-
-                    layout.render_current_scroll(
-                        self.scroll_position,
-                        self.num_lines_wrapping,
-                        self.console_height,
-                        frame,
-                    );
-                });
-        }
+    pub fn scroll_to_bottom(&mut self) {
+        self.scroll_position = self.num_lines_wrapping.saturating_sub(self.console_height);
     }
 
-    fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {
-        if !self.fly_modal_open {
-            return;
-        }
+    pub fn push_log(&mut self, message: TraceMsg) {
+        self.messages.push(message);
 
-        // Create a frame slightly smaller than the area
-        let panel = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1)].as_ref())
-            .split(area)[0];
-
-        // Wipe the panel
-        frame.render_widget(Clear, panel);
-        frame.render_widget(Block::default().borders(Borders::ALL), panel);
-
-        let modal = Paragraph::new("Under construction, please check back at a later date!\n")
-            .alignment(Alignment::Center);
-        frame.render_widget(modal, panel);
-    }
-
-    fn set_tab(&mut self, tab: Tab) {
-        self.tab = tab;
-        self.scroll = 0;
-    }
-
-    fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
-        let source = platform.into();
-        let snapped = self.is_snapped(source);
-
-        match source {
-            LogSource::Internal => self.build_progress.internal_logs.push(message),
-            LogSource::Target(platform) => self
-                .build_progress
-                .build_logs
-                .entry(platform)
-                .or_default()
-                .stdout_logs
-                .push(message),
-        }
-
-        if snapped {
+        if self.is_snapped() {
             self.scroll_to_bottom();
         }
     }
 
-    // todo: re-enable
-    #[allow(unused)]
-    fn is_snapped(&self, _platform: LogSource) -> bool {
-        true
+    // pub fn new_build_progress(&mut self, platform: Platform, update: BuildProgress) {
+    //     self.build_progress
+    //         .current_builds
+    //         .entry(platform)
+    //         .or_default()
+    //         .update(update);
+
+    //     if self.is_snapped() {
+    //         self.scroll_to_bottom();
+    //     }
+    // }
+
+    pub(crate) fn new_ready_app(&mut self, handle: &AppHandle) {
+        // Finish the build progress for the platform that just finished building
+        if let Some(build) = self
+            .build_progress
+            .current_builds
+            .get_mut(&handle.app.build.platform())
+        {
+            build.stage = Stage::Finished;
+        }
     }
+
+    // pub(crate) fn render(
+    //     &mut self,
+    //     _args: &ServeArgs,
+    //     _krate: &DioxusCrate,
+    //     _builder: &Builder,
+    //     server: &DevServer,
+    //     _watcher: &Watcher,
+    // ) {
+    //     // just drain the build logs
+    //     if !self.interactive {
+    //         self.drain_print_logs();
+    //         return;
+    //     }
+
+    //     // Keep the animation track in terms of 100ms frames - the frame should be a number between 0 and 10
+    //     // todo: we want to use this somehow to animate things...
+    //     let elapsed = self.anim_start.elapsed().as_millis() as f32;
+    //     let num_frames = elapsed / 100.0;
+    //     let _frame_step = (num_frames % 10.0) as usize;
+
+    //     _ = self
+    //         .term
+    //         .clone()
+    //         .borrow_mut()
+    //         .as_mut()
+    //         .unwrap()
+    //         .draw(|frame| {
+    //             let mut layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
+    //             let (console_width, console_height) = layout.get_console_size();
+    //             self.console_width = console_width;
+    //             self.console_height = console_height;
+
+    //             // Render the decor first as some of it (such as backgrounds) may be rendered on top of.
+    //             layout.render_decor(frame, self.show_filter_menu);
+
+    //             // Get only the enabled filters.
+    //             let mut enabled_filters = self.filters.clone();
+    //             enabled_filters.retain(|f| f.1);
+    //             let enabled_filters = enabled_filters
+    //                 .iter()
+    //                 .map(|f| f.0.clone())
+    //                 .collect::<Vec<String>>();
+
+    //             // Render console, we need the number of wrapping lines for scroll.
+    //             self.num_lines_wrapping = layout.render_console(
+    //                 frame,
+    //                 self.scroll_position,
+    //                 &self.messages,
+    //                 &enabled_filters,
+    //             );
+
+    //             // // Render a border for the header
+    //             // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
+
+    //             // Render the metadata
+    //             let mut spans: Vec<Span> = vec![
+    //                 Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
+    //                 Span::from(" ").green(),
+    //                 Span::from("serve").green(),
+    //                 Span::from(" | ").white(),
+    //                 Span::from(self.platform.to_string()).green(),
+    //                 Span::from(" | ").white(),
+    //             ];
+
+    //             // If there is build progress, display that next to the platform
+    //             if !self.build_progress.current_builds.is_empty() {
+    //                 if self
+    //                     .build_progress
+    //                     .current_builds
+    //                     .values()
+    //                     .any(|b| b.failed.is_some())
+    //                 {
+    //                     spans.push(Span::from("build failed ❌").red());
+    //                 } else {
+    //                     spans.push(Span::from("status: ").green());
+    //                     let build = self
+    //                         .build_progress
+    //                         .current_builds
+    //                         .values()
+    //                         .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+    //                         .unwrap();
+
+    //                     spans.extend_from_slice(&build.spans(Rect::new(
+    //                         0,
+    //                         0,
+    //                         build.max_layout_size(),
+    //                         1,
+    //                     )));
+    //                 }
+    //             }
+
+    //             frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
+
+    //             // Split apart the body into a center and a right side
+    //             // We only want to show the sidebar if there's enough space
+    //             if listening_len > 0 {
+    //                 frame.render_widget(
+    //                     Paragraph::new(Line::from(vec![
+    //                         Span::from("listening at ").dark_gray(),
+    //                         Span::from(format!("http://{}", server.ip).as_str()).gray(),
+    //                     ])),
+    //                     header[1],
+    //                 )
+    //             }
+
+    //             if self.show_filter_menu {
+    //                 layout.render_filter_menu(
+    //                     frame,
+    //                     &self.filters,
+    //                     self.selected_filter_index,
+    //                     self.filter_search_mode,
+    //                     self.filter_search_input.as_ref(),
+    //                 );
+    //             }
+
+    //             layout.render_status_bar(
+    //                 frame,
+    //                 self.platform,
+    //                 &self.build_progress,
+    //                 self.more_modal_open,
+    //                 self.show_filter_menu,
+    //                 &self._dx_version,
+    //             );
+
+    //             if self.more_modal_open {
+    //                 layout.render_more_modal(frame);
+    //             }
+
+    //             layout.render_current_scroll(
+    //                 self.scroll_position,
+    //                 self.num_lines_wrapping,
+    //                 self.console_height,
+    //                 frame,
+    //             );
+    //         });
+    // }
+
+    // fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {
+    //     if !self.fly_modal_open {
+    //         return;
+    //     }
+
+    //     // Create a frame slightly smaller than the area
+    //     let panel = Layout::default()
+    //         .direction(Direction::Vertical)
+    //         .constraints([Constraint::Fill(1)].as_ref())
+    //         .split(area)[0];
+
+    //     // Wipe the panel
+    //     frame.render_widget(Clear, panel);
+    //     frame.render_widget(Block::default().borders(Borders::ALL), panel);
+
+    //     let modal = Paragraph::new("Under construction, please check back at a later date!\n")
+    //         .alignment(Alignment::Center);
+    //     frame.render_widget(modal, panel);
+    // }
+
+    // fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
+    //     let source = platform.into();
+    //     let snapped = self.is_snapped();
+
+    //     match source {
+    //         LogSource::Internal => self.build_progress.internal_logs.push(message),
+    //         LogSource::Target(platform) => self
+    //             .build_progress
+    //             .current_builds
+    //             .entry(platform)
+    //             .or_default()
+    //             .stdout_logs
+    //             .push(message),
+    //     }
+
+    //     if snapped {
+    //         self.scroll_to_bottom();
+    //     }
+    // }
+
+    // // todo: re-enable
+    // #[allow(unused)]
+    // fn is_snapped(&self) -> bool {
+    //     true
+    // }
+
     async fn handle_events(&mut self, event: Event) -> io::Result<bool> {
         let mut events = vec![event];
 
@@ -747,26 +724,26 @@ pub(crate) struct ActiveBuild {
 }
 
 impl ActiveBuild {
-    fn update(&mut self, update: BuildUpdateProgress) {
-        match update.update {
-            UpdateStage::Start => {
-                // If we are already past the stage, don't roll back, but allow a fresh build to update.
-                if self.stage > update.stage && self.stage < Stage::Finished {
-                    return;
-                }
-                self.stage = update.stage;
-                self.progress = 0.0;
-                self.failed = None;
-            }
-            UpdateStage::SetProgress(progress) => {
-                self.progress = progress;
-            }
-            UpdateStage::Failed(failed) => {
-                self.stage = Stage::Finished;
-                self.failed = Some(failed.clone());
-            }
-        }
-    }
+    // fn update(&mut self, update: BuildUpdateProgress) {
+    //     match update.update {
+    //         UpdateStage::Start => {
+    //             // If we are already past the stage, don't roll back, but allow a fresh build to update.
+    //             if self.stage > update.stage && self.stage < Stage::Finished {
+    //                 return;
+    //             }
+    //             self.stage = update.stage;
+    //             self.progress = 0.0;
+    //             self.failed = None;
+    //         }
+    //         UpdateStage::SetProgress(progress) => {
+    //             self.progress = progress;
+    //         }
+    //         UpdateStage::Failed(failed) => {
+    //             self.stage = Stage::Finished;
+    //             self.failed = Some(failed.clone());
+    //         }
+    //     }
+    // }
 
     fn make_spans(&self, area: Rect) -> Vec<Span> {
         let mut spans = Vec::new();
@@ -874,12 +851,32 @@ impl From<Platform> for LogSource {
 #[derive(Default)]
 pub(crate) struct BuildProgress {
     internal_logs: Vec<BuildMessage>,
-    build_logs: HashMap<Platform, ActiveBuild>,
+    current_builds: HashMap<Platform, ActiveBuild>,
 }
 
+// impl BuildProgress {
+//     pub(crate) fn progress(&self) -> f64 {
+//         self.build_logs
+//             .values()
+//             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+//             .map(|build| match build.stage {
+//                 Stage::Initializing => 0.0,
+//                 Stage::InstallingWasmTooling => 0.0,
+//                 Stage::Compiling => build.progress,
+//                 Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
+//             })
+//             .unwrap_or_default()
+//     }
+// }
+
+// #[derive(Default)]
+// pub struct BuildProgress {
+//     current_builds: HashMap<Platform, ActiveBuild>,
+// }
+
 impl BuildProgress {
-    pub(crate) fn progress(&self) -> f64 {
-        self.build_logs
+    pub fn progress(&self) -> f64 {
+        self.current_builds
             .values()
             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .map(|build| match build.stage {

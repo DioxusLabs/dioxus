@@ -14,7 +14,7 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::builder::TargetPlatform;
+use crate::Platform as TargetPlatform;
 use console::strip_ansi_codes;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::fmt::Display;
@@ -404,6 +404,8 @@ impl Display for TraceSrc {
                 TargetPlatform::Desktop => write!(f, "desktop"),
                 TargetPlatform::Server => write!(f, "server"),
                 TargetPlatform::Liveview => write!(f, "server"),
+                TargetPlatform::Ios => write!(f, "ios"),
+                TargetPlatform::Android => write!(f, "android"),
             },
             Self::Dev => write!(f, "dev"),
             Self::Build => write!(f, "build"),
