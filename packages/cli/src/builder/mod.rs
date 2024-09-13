@@ -1,7 +1,7 @@
-use crate::build::Build;
 use crate::cli::serve::ServeArguments;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
+use crate::{build::Build, TraceSrc};
 use dioxus_cli_config::{Platform, RuntimeCLIArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
@@ -15,9 +15,7 @@ mod fullstack;
 mod prepare_html;
 mod progress;
 mod web;
-pub use progress::{
-    BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
-};
+pub use progress::{Stage, UpdateBuildProgress, UpdateStage};
 
 /// The target platform for the build
 /// This is very similar to the Platform enum, but we need to be able to differentiate between the
@@ -167,12 +165,35 @@ impl BuildResult {
         fullstack_address: Option<SocketAddr>,
         workspace: &std::path::Path,
     ) -> std::io::Result<Option<Child>> {
-        if self.target_platform == TargetPlatform::Web {
-            return Ok(None);
+        match self.target_platform {
+            TargetPlatform::Web => {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", serve.address.address());
+                return Ok(None);
+            }
+            TargetPlatform::Desktop => {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app at {} 🎉", self.executable.display());
+            }
+            TargetPlatform::Server => {
+                if let Some(fullstack_address) = fullstack_address {
+                    tracing::info!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Launching fullstack server on http://{:?} 🎉",
+                        fullstack_address
+                    );
+                }
+            }
+            TargetPlatform::Liveview => {
+                if let Some(fullstack_address) = fullstack_address {
+                    tracing::info!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Launching liveview server on http://{:?} 🎉",
+                        fullstack_address
+                    );
+                }
+            }
         }
-        if self.target_platform == TargetPlatform::Server {
-            tracing::trace!("Proxying fullstack server from port {fullstack_address:?}");
-        }
+
+        tracing::info!(dx_src = ?TraceSrc::Dev, "Press [o] to open the app manually.");
 
         let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
         let executable = self.executable.canonicalize()?;

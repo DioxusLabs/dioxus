@@ -1,7 +1,6 @@
-use crate::builder::{
-    BuildMessage, BuildRequest, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
-};
+use crate::builder::{BuildRequest, Stage, UpdateBuildProgress, UpdateStage};
 use crate::Result;
+use crate::TraceSrc;
 use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
 use futures_channel::mpsc::UnboundedSender;
@@ -13,19 +12,18 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::{ffi::OsString, path::PathBuf};
 use std::{fs::File, io::Write};
-use tracing::Level;
 use walkdir::WalkDir;
 
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";
 
-pub fn asset_manifest(build: &BuildRequest) -> AssetManifest {
+pub fn asset_manifest(build: &BuildRequest) -> Option<AssetManifest> {
     let file_path = build.target_out_dir().join(MG_JSON_OUT);
-    let read = fs::read_to_string(&file_path).unwrap();
+    let read = fs::read_to_string(&file_path).ok()?;
     _ = fs::remove_file(file_path);
     let json: Vec<String> = serde_json::from_str(&read).unwrap();
 
-    AssetManifest::load(json)
+    Some(AssetManifest::load(json))
 }
 
 /// Create a head file that contains all of the imports for assets that the user project uses
@@ -58,17 +56,7 @@ pub(crate) fn process_assets(
                 match process_file(file_asset, &static_asset_output_dir) {
                     Ok(_) => {
                         // Update the progress
-                        _ = progress.start_send(UpdateBuildProgress {
-                            stage: Stage::OptimizingAssets,
-                            update: UpdateStage::AddMessage(BuildMessage {
-                                level: Level::INFO,
-                                message: MessageType::Text(format!(
-                                    "Optimized static asset {}",
-                                    file_asset
-                                )),
-                                source: MessageSource::Build,
-                            }),
-                        });
+                        tracing::info!(dx_src = ?TraceSrc::Build, "Optimized static asset {file_asset}");
                         let assets_finished =
                             assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         _ = progress.start_send(UpdateBuildProgress {
@@ -79,7 +67,7 @@ pub(crate) fn process_assets(
                         });
                     }
                     Err(err) => {
-                        tracing::error!("Failed to copy static asset: {}", err);
+                        tracing::error!(dx_src = ?TraceSrc::Build, "Failed to copy static asset: {}", err);
                         return Err(err);
                     }
                 }
@@ -134,6 +122,7 @@ pub(crate) fn copy_dir_to(
                     copy_dir_to(entry_path.clone(), output_file_location, pre_compress)
                 {
                     tracing::error!(
+                        dx_src = ?TraceSrc::Build,
                         "Failed to pre-compress directory {}: {}",
                         entry_path.display(),
                         err
@@ -149,6 +138,7 @@ pub(crate) fn copy_dir_to(
                 if pre_compress {
                     if let Err(err) = pre_compress_file(&output_file_location) {
                         tracing::error!(
+                            dx_src = ?TraceSrc::Build,
                             "Failed to pre-compress static assets {}: {}",
                             output_file_location.display(),
                             err
@@ -206,7 +196,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
         if entry_path.is_file() {
             if pre_compress {
                 if let Err(err) = pre_compress_file(entry_path) {
-                    tracing::error!("Failed to pre-compress file {entry_path:?}: {err}");
+                    tracing::error!(dx_src = ?TraceSrc::Build, "Failed to pre-compress file {entry_path:?}: {err}");
                 }
             }
             // If pre-compression isn't enabled, we should remove the old compressed file if it exists
