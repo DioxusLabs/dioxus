@@ -156,9 +156,9 @@ pub fn visit_fragment<V: Visit + ?Sized>(
     vnode: &VNode,
     roots: &[VNode],
 ) {
+    let _ = vnode;
+
     for root_vnode in roots {
-        for root_node in root_vnode.template.roots {
-            visitor.visit_node(vdom, vnode, *root_node)
-        }
+        visitor.visit_vnode(vdom, root_vnode);
     }
 }
