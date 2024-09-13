@@ -1,4 +1,4 @@
-use crate::serve::TraceSrc;
+use crate::TraceSrc;
 use crate::{Error, Result};
 use dioxus_cli_config::WebProxyConfig;
 

@@ -1,7 +1,7 @@
 //! This module contains functions to render different elements on the TUI frame.
 // TODO: Cleanup console filtering / message building logic
 
-use super::{BuildProgress, Message, TraceSrc};
+use super::{BuildProgress, TraceMsg, TraceSrc};
 use ansi_to_tui::IntoText as _;
 use dioxus_cli_config::Platform;
 use ratatui::{
@@ -120,7 +120,7 @@ impl TuiLayout {
         &self,
         frame: &mut Frame,
         scroll_position: u16,
-        messages: &[Message],
+        messages: &[TraceMsg],
         enabled_filters: &[String],
     ) -> u16 {
         let console = self.console[0];

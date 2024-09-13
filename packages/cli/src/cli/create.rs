@@ -1,5 +1,5 @@
 use super::*;
-use crate::serve::output::TraceSrc;
+use crate::TraceSrc;
 use cargo_generate::{GenerateArgs, TemplatePath};
 use cargo_metadata::Metadata;
 use std::path::Path;

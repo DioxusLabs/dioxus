@@ -1,8 +1,8 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
 use super::{BuildRequest, UpdateBuildProgress};
-use crate::serve::output::TraceSrc;
 use crate::Result;
+use crate::TraceSrc;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use std::fmt::Write;

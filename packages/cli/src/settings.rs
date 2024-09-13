@@ -6,7 +6,7 @@ use std::{
 };
 use tracing::{debug, error, warn};
 
-use crate::{serve::output::TraceSrc, CrateConfigError};
+use crate::{CrateConfigError, TraceSrc};
 
 const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
 

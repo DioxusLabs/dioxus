@@ -1,5 +1,5 @@
-use crate::dioxus_crate::DioxusCrate;
-use crate::serve::{next_or_pending, Serve, TraceSrc};
+use crate::serve::{next_or_pending, Serve};
+use crate::{dioxus_crate::DioxusCrate, TraceSrc};
 use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};

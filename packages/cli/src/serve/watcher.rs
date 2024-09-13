@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf, time::Duration};
 
 use super::hot_reloading_file_map::HotreloadError;
 use crate::serve::hot_reloading_file_map::FileMap;
-use crate::serve::TraceSrc;
+use crate::TraceSrc;
 use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;

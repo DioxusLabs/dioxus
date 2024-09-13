@@ -1,5 +1,5 @@
 use crate::build::TargetArgs;
-use crate::serve::output::TraceSrc;
+use crate::TraceSrc;
 use crate::{metadata::crate_root, CliSettings};
 
 use super::*;

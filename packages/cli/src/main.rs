@@ -3,26 +3,22 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub mod assets;
+pub mod builder;
+pub mod cli;
+pub mod dioxus_crate;
 pub mod dx_build_info;
+pub mod error;
+pub mod metadata;
 pub mod serve;
+pub mod settings;
 pub mod tools;
 pub mod tracer;
 
-pub mod cli;
-pub use cli::*;
-
-pub mod error;
-pub use error::*;
-
-pub(crate) mod builder;
-
-mod dioxus_crate;
-pub use dioxus_crate::*;
-
-mod settings;
+pub(crate) use cli::*;
+pub(crate) use dioxus_crate::*;
+pub(crate) use error::*;
 pub(crate) use settings::*;
-
-pub(crate) mod metadata;
+pub(crate) use tracer::{TraceMsg, TraceSrc};
 
 use anyhow::Context;
 use clap::Parser;

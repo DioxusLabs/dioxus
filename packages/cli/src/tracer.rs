@@ -14,9 +14,10 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::serve::output::{Message, TraceSrc};
+use crate::builder::TargetPlatform;
 use console::strip_ansi_codes;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use std::fmt::Display;
 use std::{
     collections::HashMap,
     env,
@@ -29,6 +30,7 @@ use std::{
         Arc, Mutex,
     },
 };
+use tracing::Level;
 use tracing::{field::Visit, Subscriber};
 use tracing_subscriber::{
     filter::filter_fn, fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer,
@@ -183,13 +185,13 @@ where
 /// This is our "subscriber" (layer) that records structured data for the tui output.
 struct CLILayer {
     internal_output_enabled: Arc<AtomicBool>,
-    output_tx: UnboundedSender<Message>,
+    output_tx: UnboundedSender<TraceMsg>,
 }
 
 impl CLILayer {
     pub fn new(
         internal_output_enabled: Arc<AtomicBool>,
-        output_tx: UnboundedSender<Message>,
+        output_tx: UnboundedSender<TraceMsg>,
     ) -> Self {
         Self {
             internal_output_enabled,
@@ -243,7 +245,7 @@ where
         }
 
         self.output_tx
-            .unbounded_send(Message::new(visitor.source, *level, final_msg))
+            .unbounded_send(TraceMsg::new(visitor.source, *level, final_msg))
             .unwrap();
     }
 
@@ -293,7 +295,7 @@ impl Visit for CollectVisitor {
 
 // Contains the sync primitives to control the CLIWriter.
 pub struct CLILogControl {
-    pub output_rx: UnboundedReceiver<Message>,
+    pub output_rx: UnboundedReceiver<TraceMsg>,
     pub output_enabled: Arc<AtomicBool>,
 }
 
@@ -342,4 +344,71 @@ fn format_field(field_name: &str, value: &dyn Debug) -> String {
     .unwrap();
 
     out
+}
+
+#[derive(Clone, PartialEq)]
+pub struct TraceMsg {
+    pub source: TraceSrc,
+    pub level: Level,
+    pub content: String,
+}
+
+impl TraceMsg {
+    pub fn new(source: TraceSrc, level: Level, content: String) -> Self {
+        Self {
+            source,
+            level,
+            content,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub enum TraceSrc {
+    App(TargetPlatform),
+    Dev,
+    Build,
+    /// Provides no formatting.
+    Cargo,
+    /// Avoid using this
+    Unknown,
+}
+
+impl std::fmt::Debug for TraceSrc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let as_string = self.to_string();
+        write!(f, "{as_string}")
+    }
+}
+
+impl From<String> for TraceSrc {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "dev" => Self::Dev,
+            "build" => Self::Build,
+            "cargo" => Self::Cargo,
+            "web" => Self::App(TargetPlatform::Web),
+            "desktop" => Self::App(TargetPlatform::Desktop),
+            "server" => Self::App(TargetPlatform::Server),
+            "liveview" => Self::App(TargetPlatform::Liveview),
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl Display for TraceSrc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::App(platform) => match platform {
+                TargetPlatform::Web => write!(f, "web"),
+                TargetPlatform::Desktop => write!(f, "desktop"),
+                TargetPlatform::Server => write!(f, "server"),
+                TargetPlatform::Liveview => write!(f, "server"),
+            },
+            Self::Dev => write!(f, "dev"),
+            Self::Build => write!(f, "build"),
+            Self::Cargo => write!(f, "cargo"),
+            Self::Unknown => write!(f, "n/a"),
+        }
+    }
 }

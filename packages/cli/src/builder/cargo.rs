@@ -11,7 +11,7 @@ use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
-use crate::serve::output::TraceSrc;
+use crate::TraceSrc;
 use crate::Result;
 use anyhow::Context;
 use dioxus_cli_config::Platform;

@@ -1,18 +1,21 @@
 use std::future::{poll_fn, Future, IntoFuture};
 use std::task::Poll;
 
-use crate::builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
 use crate::tracer::CLILogControl;
 use crate::Result;
+use crate::{
+    builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage},
+    TraceSrc,
+};
 use futures_util::FutureExt;
 use tokio::task::yield_now;
 
 mod builder;
 mod hot_reloading_file_map;
 mod logs_tab;
-pub(crate) mod output;
+mod output;
 mod proxy;
 mod server;
 mod watcher;

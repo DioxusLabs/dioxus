@@ -1,5 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use crate::serve::output::TraceSrc;
+use crate::TraceSrc;
 
 use super::BuildRequest;
 use anyhow::Context;

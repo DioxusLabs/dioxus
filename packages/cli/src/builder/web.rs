@@ -5,7 +5,7 @@ use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
-use crate::serve::output::TraceSrc;
+use crate::TraceSrc;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use std::path::Path;

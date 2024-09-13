@@ -9,6 +9,7 @@ use super::{Builder, Server, Watcher};
 use crate::{
     builder::{BuildResult, UpdateStage},
     serve::Serve,
+    TraceMsg, TraceSrc,
 };
 use crate::{
     builder::{Stage, TargetPlatform, UpdateBuildProgress},
@@ -46,10 +47,7 @@ use tokio::{
 };
 use tracing::Level;
 
-mod message;
 mod render;
-
-pub use message::*;
 
 // How many lines should be scroll on each mouse scroll or arrow key input.
 const SCROLL_SPEED: u16 = 2;
@@ -89,7 +87,7 @@ pub struct Output {
     running_apps: HashMap<TargetPlatform, RunningApp>,
 
     // A list of all messages from build, dev, app, and more.
-    messages: Vec<Message>,
+    messages: Vec<TraceMsg>,
 
     num_lines_wrapping: u16,
     scroll_position: u16,
@@ -212,7 +210,7 @@ impl Output {
             .stderr_line
             .push_str(&stderr);
 
-        self.messages.push(Message {
+        self.messages.push(TraceMsg {
             source: TraceSrc::App(platform),
             level: Level::ERROR,
             content: stderr,
@@ -234,7 +232,7 @@ impl Output {
             .stdout_line
             .push_str(&stdout);
 
-        self.messages.push(Message {
+        self.messages.push(TraceMsg {
             source: TraceSrc::App(platform),
             level: Level::INFO,
             content: stdout,
@@ -520,7 +518,7 @@ impl Output {
                     let content = messages.first().unwrap_or(&String::new()).clone();
 
                     // We don't care about logging the app's message so we directly push it instead of using tracing.
-                    self.push_log(Message::new(TraceSrc::App(platform), level, content));
+                    self.push_log(TraceMsg::new(TraceSrc::App(platform), level, content));
                 }
                 Err(err) => {
                     tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
@@ -537,7 +535,7 @@ impl Output {
         self.scroll_position = self.num_lines_wrapping.saturating_sub(self.console_height);
     }
 
-    pub fn push_log(&mut self, message: Message) {
+    pub fn push_log(&mut self, message: TraceMsg) {
         self.messages.push(message);
 
         if self.is_snapped() {

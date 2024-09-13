@@ -1,6 +1,6 @@
 use crate::builder::{BuildRequest, Stage, UpdateBuildProgress, UpdateStage};
-use crate::serve::output::TraceSrc;
 use crate::Result;
+use crate::TraceSrc;
 use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
 use futures_channel::mpsc::UnboundedSender;
