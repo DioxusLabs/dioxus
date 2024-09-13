@@ -71,7 +71,6 @@ members = [
     "example-projects/fullstack-mobile",
     "example-projects/tailwind",
     "example-projects/pwa",
-    "example-projects/basic-liveview",
     "example-projects/liveview-router",
 ]
 
