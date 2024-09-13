@@ -1,0 +1,23 @@
+name: "Nix CI"
+on:
+  # Run only when pushing to mainline, and making PRs
+  push:
+    branches:
+      - main
+  pull_request:
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Install omnix
+        run: nix --accept-flake-config profile install "github:juspay/omnix"
+      - name: Build all flake outputs
+        run: om ci
+      - name: Ensure devShell has all build deps
+        run: nix develop -c cargo build -p dioxus-cli
