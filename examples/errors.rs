@@ -77,8 +77,8 @@ fn ParseNumberWithShow() -> Element {
         button {
             onclick: move |_| {
                 let request_data = "0.5";
-                let data: i32 = request_data
-                    .parse()
+                let data: i32 = request_data.parse()
+                    // You can attach rsx to results that can be displayed in the Error Boundary
                     .show(|_| rsx! {
                         div {
                             background_color: "red",
