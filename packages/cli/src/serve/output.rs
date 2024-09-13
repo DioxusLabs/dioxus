@@ -500,6 +500,89 @@ impl Output {
         }
     }
 
+    pub fn render(
+        &mut self,
+        _opts: &ServeArgs,
+        _config: &DioxusCrate,
+        _build_engine: &Builder,
+        _server: &DevServer,
+        _watcher: &Watcher,
+    ) {
+        // just drain the build logs
+        if !self.interactive {
+            self.drain_print_logs();
+            return;
+        }
+
+        // Keep the animation track in terms of 100ms frames - the frame should be a number between 0 and 10
+        // todo: we want to use this somehow to animate things...
+        let elapsed = self.anim_start.elapsed().as_millis() as f32;
+        let num_frames = elapsed / 100.0;
+        let _frame_step = (num_frames % 10.0) as usize;
+
+        _ = self
+            .term
+            .clone()
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .draw(|frame| {
+                let mut layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
+                let (console_width, console_height) = layout.get_console_size();
+                self.console_width = console_width;
+                self.console_height = console_height;
+
+                // Render the decor first as some of it (such as backgrounds) may be rendered on top of.
+                layout.render_decor(frame, self.show_filter_menu);
+
+                // Get only the enabled filters.
+                let mut enabled_filters = self.filters.clone();
+                enabled_filters.retain(|f| f.1);
+                let enabled_filters = enabled_filters
+                    .iter()
+                    .map(|f| f.0.clone())
+                    .collect::<Vec<String>>();
+
+                // Render console, we need the number of wrapping lines for scroll.
+                self.num_lines_wrapping = layout.render_console(
+                    frame,
+                    self.scroll_position,
+                    &self.messages,
+                    &enabled_filters,
+                );
+
+                if self.show_filter_menu {
+                    layout.render_filter_menu(
+                        frame,
+                        &self.filters,
+                        self.selected_filter_index,
+                        self.filter_search_mode,
+                        self.filter_search_input.as_ref(),
+                    );
+                }
+
+                layout.render_status_bar(
+                    frame,
+                    self.platform,
+                    &self.build_progress,
+                    self.more_modal_open,
+                    self.show_filter_menu,
+                    &self._dx_version,
+                );
+
+                if self.more_modal_open {
+                    layout.render_more_modal(frame);
+                }
+
+                layout.render_current_scroll(
+                    self.scroll_position,
+                    self.num_lines_wrapping,
+                    self.console_height,
+                    frame,
+                );
+            });
+    }
+
     // pub(crate) fn render(
     //     &mut self,
     //     _args: &ServeArgs,

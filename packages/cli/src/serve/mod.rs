@@ -156,7 +156,7 @@ async fn handle_msg(
         // We also can check the status of the builds here in case we have multiple ongoing builds
         ServeUpdate::BuildUpdate(BuildUpdate::Progress(update)) => {
             let update_clone = update.clone();
-            screen.new_build_logs(update.platform, update_clone);
+            // screen.new_build_logs(update.platform, update_clone);
             devserver
                 .update_build_status(screen.build_progress.progress(), update.stage.to_string())
                 .await;
