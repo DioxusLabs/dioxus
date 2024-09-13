@@ -1,7 +1,7 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
 use super::{BuildRequest, UpdateBuildProgress};
-use crate::serve::output::MessageSource;
+use crate::serve::output::TraceSrc;
 use crate::Result;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
@@ -175,7 +175,7 @@ impl BuildRequest {
         "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
     );
 
-        tracing::warn!(dx_src = ?MessageSource::Build, "{}", message);
+        tracing::warn!(dx_src = ?TraceSrc::Build, "{}", message);
     }
 }
 

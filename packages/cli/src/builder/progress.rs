@@ -1,5 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use crate::serve::output::MessageSource;
+use crate::serve::output::TraceSrc;
 
 use super::BuildRequest;
 use anyhow::Context;
@@ -114,7 +114,7 @@ pub(crate) async fn build_cargo(
         match message {
             Message::CompilerMessage(msg) => {
                 let message = msg.message;
-                tracing::info!(dx_src = ?MessageSource::Cargo, dx_no_fmt = true, "{}", message.to_string());
+                tracing::info!(dx_src = ?TraceSrc::Cargo, dx_no_fmt = true, "{}", message.to_string());
 
                 const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
                     cargo_metadata::diagnostic::DiagnosticLevel::Help,
@@ -159,7 +159,7 @@ pub(crate) async fn build_cargo(
                 }
             }
             Message::TextLine(line) => {
-                tracing::info!(dx_src = ?MessageSource::Cargo, dx_no_fmt = true, "{}", line);
+                tracing::info!(dx_src = ?TraceSrc::Cargo, dx_no_fmt = true, "{}", line);
             }
             _ => {
                 // Unknown message

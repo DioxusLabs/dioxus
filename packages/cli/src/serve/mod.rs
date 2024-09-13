@@ -84,7 +84,6 @@ pub async fn serve_all(
                 let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
                 let changed = changed_files.get(0).cloned();
 
-
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watcher.attempt_hot_reload(&dioxus_crate, changed_files) {
@@ -95,7 +94,7 @@ pub async fn serve_all(
 
                     if let Some(changed_path) = changed {
                         let path_relative = changed_path.strip_prefix(&dioxus_crate.crate_dir()).map(|p| p.display().to_string()).unwrap_or_else(|_| changed_path.display().to_string());
-                        tracing::info!(dx_src = ?MessageSource::Dev, "Hotreloaded {}", path_relative);
+                        tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloaded {}", path_relative);
                     }
 
                     server.send_hotreload(hr).await;
@@ -159,7 +158,7 @@ pub async fn serve_all(
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
                                 Err(e) => {
-                                    tracing::error!(dx_src = ?MessageSource::Build, "Failed to open build result: {e}");
+                                    tracing::error!(dx_src = ?TraceSrc::Build, "Failed to open build result: {e}");
                                     break;
                                 },
                                 _ => {}
@@ -184,11 +183,11 @@ pub async fn serve_all(
                                     break;
                                 }
                                 else {
-                                    tracing::error!(dx_src = ?MessageSource::Dev, "Application exited with status: {status}");
+                                    tracing::error!(dx_src = ?TraceSrc::Dev, "Application exited with status: {status}");
                                 }
                             },
                             Err(e) => {
-                                tracing::error!(dx_src = ?MessageSource::Dev, "Application exited with error: {e}");
+                                tracing::error!(dx_src = ?TraceSrc::Dev, "Application exited with error: {e}");
                             }
                         }
                     }

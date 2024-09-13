@@ -14,7 +14,7 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::serve::output::{Message, MessageSource};
+use crate::serve::output::{Message, TraceSrc};
 use console::strip_ansi_codes;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::{
@@ -57,7 +57,7 @@ pub fn build_tracing() -> CLILogControl {
     let file_append_layer = match FileAppendLayer::new(log_path) {
         Ok(f) => Some(f),
         Err(e) => {
-            tracing::error!(dx_src = ?MessageSource::Dev, err = ?e, "failed to init log file");
+            tracing::error!(dx_src = ?TraceSrc::Dev, err = ?e, "failed to init log file");
             None
         }
     };
@@ -146,7 +146,7 @@ where
         let mut visitor = CollectVisitor::new();
         event.record(&mut visitor);
 
-        let new_line = if visitor.source == MessageSource::Cargo
+        let new_line = if visitor.source == TraceSrc::Cargo
             || event.fields().any(|f| f.name() == DX_NO_FMT_FLAG)
         {
             visitor.message
@@ -220,7 +220,7 @@ where
         // If the TUI output is disabled we let fmt subscriber handle the logs
         // EXCEPT for cargo logs which we just print.
         if !self.internal_output_enabled.load(Ordering::SeqCst) {
-            if visitor.source == MessageSource::Cargo
+            if visitor.source == TraceSrc::Cargo
                 || event.fields().any(|f| f.name() == DX_NO_FMT_FLAG)
             {
                 println!("{}", visitor.message);
@@ -238,8 +238,8 @@ where
             write!(final_msg, "{} ", format_field(field, value)).unwrap();
         }
 
-        if visitor.source == MessageSource::Unknown {
-            visitor.source = MessageSource::Dev;
+        if visitor.source == TraceSrc::Unknown {
+            visitor.source = TraceSrc::Dev;
         }
 
         self.output_tx
@@ -252,17 +252,17 @@ where
 
 /// A record visitor that collects dx-specific info and user-provided fields for logging consumption.
 struct CollectVisitor {
-    pub message: String,
-    pub source: MessageSource,
-    pub dx_user_msg: bool,
-    pub fields: HashMap<String, String>,
+    message: String,
+    source: TraceSrc,
+    dx_user_msg: bool,
+    fields: HashMap<String, String>,
 }
 
 impl CollectVisitor {
     pub fn new() -> Self {
         Self {
             message: String::new(),
-            source: MessageSource::Unknown,
+            source: TraceSrc::Unknown,
             dx_user_msg: false,
             fields: HashMap::new(),
         }
@@ -282,7 +282,7 @@ impl Visit for CollectVisitor {
         }
 
         if name == DX_SRC_FLAG {
-            self.source = MessageSource::from(value_string);
+            self.source = TraceSrc::from(value_string);
             self.dx_user_msg = true;
             return;
         }

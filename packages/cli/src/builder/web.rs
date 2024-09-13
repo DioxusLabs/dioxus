@@ -5,7 +5,7 @@ use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
-use crate::serve::output::MessageSource;
+use crate::serve::output::TraceSrc;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use std::path::Path;
@@ -15,7 +15,7 @@ use wasm_bindgen_cli_support::Bindgen;
 // Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
 async fn update_wasm_bindgen_version() -> Result<()> {
     let cli_bindgen_version = wasm_bindgen_shared::version();
-    tracing::info!(dx_src = ?MessageSource::Build, "Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
+    tracing::info!(dx_src = ?TraceSrc::Build, "Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
 
     let output = Command::new("cargo")
         .args([
@@ -30,7 +30,7 @@ async fn update_wasm_bindgen_version() -> Result<()> {
     let mut error_message = None;
     if let Ok(output) = output {
         if output.status.success() {
-            tracing::info!(dx_src = ?MessageSource::Dev, "Successfully updated wasm-bindgen to {cli_bindgen_version}");
+            tracing::info!(dx_src = ?TraceSrc::Dev, "Successfully updated wasm-bindgen to {cli_bindgen_version}");
             return Ok(());
         } else {
             error_message = Some(output);
@@ -38,7 +38,7 @@ async fn update_wasm_bindgen_version() -> Result<()> {
     }
 
     if let Some(output) = error_message {
-        tracing::error!(dx_src = ?MessageSource::Dev, "Failed to update wasm-bindgen: {:#?}", output);
+        tracing::error!(dx_src = ?TraceSrc::Dev, "Failed to update wasm-bindgen: {:#?}", output);
     }
 
     Err(Error::BuildFailed(format!("WASM bindgen build failed!\nThis is probably due to the Bindgen version, dioxus-cli is using `{cli_bindgen_version}` which is not compatible with your crate.\nPlease reinstall the dioxus cli to fix this issue.\nYou can reinstall the dioxus cli by running `cargo install dioxus-cli --force` and then rebuild your project")))
@@ -58,7 +58,7 @@ pub(crate) async fn install_web_build_tooling(
                 stage: Stage::InstallingWasmTooling,
                 update: UpdateStage::Start,
             });
-            tracing::info!(dx_src = ?MessageSource::Build, "`wasm32-unknown-unknown` target not detected, installing..");
+            tracing::info!(dx_src = ?TraceSrc::Build, "`wasm32-unknown-unknown` target not detected, installing..");
             let _ = Command::new("rustup")
                 .args(["target", "add", "wasm32-unknown-unknown"])
                 .output()
@@ -71,7 +71,7 @@ pub(crate) async fn install_web_build_tooling(
 
 impl BuildRequest {
     async fn run_wasm_bindgen(&self, input_path: &Path, bindgen_outdir: &Path) -> Result<()> {
-        tracing::info!(dx_src = ?MessageSource::Build, "Running wasm-bindgen");
+        tracing::info!(dx_src = ?TraceSrc::Build, "Running wasm-bindgen");
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
         let keep_debug =
@@ -100,7 +100,7 @@ impl BuildRequest {
         // WASM bindgen requires the exact version of the bindgen schema to match the version the CLI was built with
         // If we get an error, we can try to recover by pinning the user's wasm-bindgen version to the version we used
         if let Err(err) = bindgen_result {
-            tracing::error!(dx_src = ?MessageSource::Build, "Bindgen build failed: {:?}", err);
+            tracing::error!(dx_src = ?TraceSrc::Build, "Bindgen build failed: {:?}", err);
             update_wasm_bindgen_version().await?;
             run_wasm_bindgen();
         }
@@ -138,7 +138,7 @@ impl BuildRequest {
             if self.build_arguments.release {
                 use dioxus_cli_config::WasmOptLevel;
 
-                tracing::info!(dx_src = ?MessageSource::Build, "Running optimization with wasm-opt...");
+                tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
                 let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {
                     WasmOptLevel::Z => {
                         wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
@@ -163,7 +163,7 @@ impl BuildRequest {
                     .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
                 let new_size = wasm_file.metadata()?.len();
                 tracing::info!(
-                    dx_src = ?MessageSource::Build,
+                    dx_src = ?TraceSrc::Build,
                     "wasm-opt reduced WASM size from {} to {} ({:2}%)",
                     old_size,
                     new_size,

@@ -1,7 +1,7 @@
 //! This module contains functions to render different elements on the TUI frame.
 // TODO: Cleanup console filtering / message building logic
 
-use super::{BuildProgress, Message, MessageSource};
+use super::{BuildProgress, Message, TraceSrc};
 use ansi_to_tui::IntoText as _;
 use dioxus_cli_config::Platform;
 use ratatui::{
@@ -138,10 +138,10 @@ impl TuiLayout {
 
             for (idx, line) in text.lines.into_iter().enumerate() {
                 // Don't add any formatting for cargo messages.
-                let out_line = if msg.source != MessageSource::Cargo {
+                let out_line = if msg.source != TraceSrc::Cargo {
                     if idx == 0 {
                         match msg.source {
-                            MessageSource::Dev => {
+                            TraceSrc::Dev => {
                                 let mut spans =
                                     vec![Span::from(format!("  DEV: ",)).light_magenta()];
 
@@ -150,7 +150,7 @@ impl TuiLayout {
                                 }
                                 spans
                             }
-                            MessageSource::Build => {
+                            TraceSrc::Build => {
                                 let mut spans = vec![Span::from(format!("BUILD: ",)).light_blue()];
 
                                 for span in line.spans {
@@ -197,7 +197,7 @@ impl TuiLayout {
                     line.spans
                 };
 
-                if msg.source != MessageSource::Cargo {
+                if msg.source != TraceSrc::Cargo {
                     out_text.push_line(Line::from(out_line));
                 }
 

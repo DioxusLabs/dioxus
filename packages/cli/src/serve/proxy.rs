@@ -1,4 +1,4 @@
-use crate::serve::MessageSource;
+use crate::serve::TraceSrc;
 use crate::{Error, Result};
 use dioxus_cli_config::WebProxyConfig;
 
@@ -124,7 +124,7 @@ pub(crate) fn proxy_to(
 }
 
 fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::Body> {
-    tracing::error!(dx_src = ?MessageSource::Dev, "Proxy error: {}", e);
+    tracing::error!(dx_src = ?TraceSrc::Dev, "Proxy error: {}", e);
     axum::http::Response::builder()
         .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
         .body(axum::body::Body::from(format!(

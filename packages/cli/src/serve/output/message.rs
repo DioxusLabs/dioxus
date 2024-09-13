@@ -4,13 +4,13 @@ use tracing::Level;
 
 #[derive(Clone, PartialEq)]
 pub struct Message {
-    pub source: MessageSource,
+    pub source: TraceSrc,
     pub level: Level,
     pub content: String,
 }
 
 impl Message {
-    pub fn new(source: MessageSource, level: Level, content: String) -> Self {
+    pub fn new(source: TraceSrc, level: Level, content: String) -> Self {
         Self {
             source,
             level,
@@ -20,7 +20,7 @@ impl Message {
 }
 
 #[derive(Clone, PartialEq)]
-pub enum MessageSource {
+pub enum TraceSrc {
     App(TargetPlatform),
     Dev,
     Build,
@@ -30,14 +30,14 @@ pub enum MessageSource {
     Unknown,
 }
 
-impl std::fmt::Debug for MessageSource {
+impl std::fmt::Debug for TraceSrc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let as_string = self.to_string();
         write!(f, "{as_string}")
     }
 }
 
-impl From<String> for MessageSource {
+impl From<String> for TraceSrc {
     fn from(value: String) -> Self {
         match value.as_str() {
             "dev" => Self::Dev,
@@ -52,7 +52,7 @@ impl From<String> for MessageSource {
     }
 }
 
-impl Display for MessageSource {
+impl Display for TraceSrc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::App(platform) => match platform {

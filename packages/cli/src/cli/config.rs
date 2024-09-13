@@ -1,5 +1,5 @@
 use crate::build::TargetArgs;
-use crate::serve::output::MessageSource;
+use crate::serve::output::TraceSrc;
 use crate::{metadata::crate_root, CliSettings};
 
 use super::*;
@@ -96,7 +96,7 @@ impl Config {
                     .replace("{{project-name}}", &name)
                     .replace("{{default-platform}}", &platform);
                 file.write_all(content.as_bytes())?;
-                tracing::info!(dx_src = ?MessageSource::Dev, "🚩 Init config file completed.");
+                tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Init config file completed.");
             }
             Config::FormatPrint {} => {
                 println!(
@@ -109,11 +109,11 @@ impl Config {
                 let mut file = File::create(html_path)?;
                 let content = include_str!("../../assets/index.html");
                 file.write_all(content.as_bytes())?;
-                tracing::info!(dx_src = ?MessageSource::Dev, "🚩 Create custom html file done.");
+                tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }
             Config::LogFile {} => {
                 let log_path = crate::tracer::log_path();
-                tracing::info!(dx_src = ?MessageSource::Dev, "Log file is located at {}", log_path.display());
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Log file is located at {}", log_path.display());
             }
             // Handle CLI settings.
             Config::Set(setting) => {
@@ -129,7 +129,7 @@ impl Config {
                         settings.wsl_file_poll_interval = Some(value)
                     }
                 })?;
-                tracing::info!(dx_src = ?MessageSource::Dev, "🚩 CLI setting `{setting}` has been set.");
+                tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");
             }
         }
         Ok(())

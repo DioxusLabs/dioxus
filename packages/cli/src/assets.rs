@@ -1,5 +1,5 @@
 use crate::builder::{BuildRequest, Stage, UpdateBuildProgress, UpdateStage};
-use crate::serve::output::MessageSource;
+use crate::serve::output::TraceSrc;
 use crate::Result;
 use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
@@ -49,7 +49,6 @@ pub(crate) fn process_assets(
     let assets_finished = Arc::new(AtomicUsize::new(0));
     let assets = manifest.assets();
     let asset_count = assets.len();
-
     assets.par_iter().try_for_each_init(
         || progress.clone(),
         move |progress, asset| {
@@ -57,7 +56,7 @@ pub(crate) fn process_assets(
                 match process_file(file_asset, &static_asset_output_dir) {
                     Ok(_) => {
                         // Update the progress
-                        tracing::info!(dx_src = ?MessageSource::Build, "Optimized static asset {file_asset}");
+                        tracing::info!(dx_src = ?TraceSrc::Build, "Optimized static asset {file_asset}");
                         let assets_finished =
                             assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         _ = progress.start_send(UpdateBuildProgress {
@@ -68,7 +67,7 @@ pub(crate) fn process_assets(
                         });
                     }
                     Err(err) => {
-                        tracing::error!(dx_src = ?MessageSource::Build, "Failed to copy static asset: {}", err);
+                        tracing::error!(dx_src = ?TraceSrc::Build, "Failed to copy static asset: {}", err);
                         return Err(err);
                     }
                 }
@@ -123,7 +122,7 @@ pub(crate) fn copy_dir_to(
                     copy_dir_to(entry_path.clone(), output_file_location, pre_compress)
                 {
                     tracing::error!(
-                        dx_src = ?MessageSource::Build,
+                        dx_src = ?TraceSrc::Build,
                         "Failed to pre-compress directory {}: {}",
                         entry_path.display(),
                         err
@@ -139,7 +138,7 @@ pub(crate) fn copy_dir_to(
                 if pre_compress {
                     if let Err(err) = pre_compress_file(&output_file_location) {
                         tracing::error!(
-                            dx_src = ?MessageSource::Build,
+                            dx_src = ?TraceSrc::Build,
                             "Failed to pre-compress static assets {}: {}",
                             output_file_location.display(),
                             err
@@ -197,7 +196,7 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
         if entry_path.is_file() {
             if pre_compress {
                 if let Err(err) = pre_compress_file(entry_path) {
-                    tracing::error!(dx_src = ?MessageSource::Build, "Failed to pre-compress file {entry_path:?}: {err}");
+                    tracing::error!(dx_src = ?TraceSrc::Build, "Failed to pre-compress file {entry_path:?}: {err}");
                 }
             }
             // If pre-compression isn't enabled, we should remove the old compressed file if it exists

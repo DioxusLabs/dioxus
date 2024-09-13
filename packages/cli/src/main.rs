@@ -34,7 +34,6 @@ async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
     let log_control = tracer::build_tracing();
-    tracing::info!("cli start");
 
     match args.action {
         Translate(opts) => opts

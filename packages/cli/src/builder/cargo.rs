@@ -11,7 +11,7 @@ use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
-use crate::serve::output::MessageSource;
+use crate::serve::output::TraceSrc;
 use crate::Result;
 use anyhow::Context;
 use dioxus_cli_config::Platform;
@@ -104,7 +104,7 @@ impl BuildRequest {
         mut progress: UnboundedSender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
         tracing::info!(
-            dx_src = ?MessageSource::Build,
+            dx_src = ?TraceSrc::Build,
             "Running build [{}] command...",
             self.target_platform,
         );
@@ -142,7 +142,7 @@ impl BuildRequest {
             .context("Failed to post process build")?;
 
         tracing::info!(
-            dx_src = ?MessageSource::Build,
+            dx_src = ?TraceSrc::Build,
             "Build completed: [{}]",
             self.dioxus_crate.out_dir().display(),
         );
@@ -230,7 +230,7 @@ impl BuildRequest {
                 Some(linker_args),
             )?;
             let Some(assets) = asset_manifest(&build) else {
-                error!(dx_src = ?MessageSource::Build, "the asset manifest was not provided by manganis and we were not able to collect assets");
+                error!(dx_src = ?TraceSrc::Build, "the asset manifest was not provided by manganis and we were not able to collect assets");
                 return Err(anyhow::anyhow!("asset manifest was not provided by manganis"));
             };
             // Collect assets from the asset manifest the linker intercept created
@@ -245,7 +245,7 @@ impl BuildRequest {
     }
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
-        tracing::info!(dx_src = ?MessageSource::Build, "Copying public assets to the output directory...");
+        tracing::info!(dx_src = ?TraceSrc::Build, "Copying public assets to the output directory...");
         let out_dir = self.target_out_dir();
         let asset_dir = self.dioxus_crate.asset_dir();
 

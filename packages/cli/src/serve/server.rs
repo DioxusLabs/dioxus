@@ -1,5 +1,5 @@
 use crate::dioxus_crate::DioxusCrate;
-use crate::serve::{next_or_pending, MessageSource, Serve};
+use crate::serve::{next_or_pending, Serve, TraceSrc};
 use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
@@ -110,8 +110,6 @@ impl Server {
 
         let addr = serve.server_arguments.address.address();
         let start_browser = serve.server_arguments.open.unwrap_or_default();
-
-        tracing::debug!(dx_src = ?MessageSource::Dev, "Development server listening at http://{}", addr);
 
         // If we're serving a fullstack app, we need to find a port to proxy to
         let fullstack_port = if matches!(
@@ -572,10 +570,10 @@ pub fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, St
         Err(e) => {
             match e.kind() {
                 io::ErrorKind::NotFound => {
-                    tracing::error!(dx_src = ?MessageSource::Dev, "`mkcert` is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions.")
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "`mkcert` is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions.")
                 }
                 e => {
-                    tracing::error!(dx_src = ?MessageSource::Dev, "An error occurred while generating mkcert certificates: {}", e.to_string())
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "An error occurred while generating mkcert certificates: {}", e.to_string())
                 }
             };
             return Err("failed to generate mkcert certificates".into());

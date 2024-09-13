@@ -213,7 +213,7 @@ impl Output {
             .push_str(&stderr);
 
         self.messages.push(Message {
-            source: MessageSource::App(platform),
+            source: TraceSrc::App(platform),
             level: Level::ERROR,
             content: stderr,
         });
@@ -235,7 +235,7 @@ impl Output {
             .push_str(&stdout);
 
         self.messages.push(Message {
-            source: MessageSource::App(platform),
+            source: TraceSrc::App(platform),
             level: Level::INFO,
             content: stdout,
         });
@@ -342,7 +342,7 @@ impl Output {
 
         for msg in messages {
             // TODO: Better formatting for different content lengths.
-            if msg.source != MessageSource::Cargo {
+            if msg.source != TraceSrc::Cargo {
                 println!("[{}] {}: {}", msg.source, msg.level, msg.content);
             } else {
                 println!("{}", msg.content);
@@ -520,10 +520,10 @@ impl Output {
                     let content = messages.first().unwrap_or(&String::new()).clone();
 
                     // We don't care about logging the app's message so we directly push it instead of using tracing.
-                    self.push_log(Message::new(MessageSource::App(platform), level, content));
+                    self.push_log(Message::new(TraceSrc::App(platform), level, content));
                 }
                 Err(err) => {
-                    tracing::error!(dx_src = ?MessageSource::Dev, "Error parsing message from {}: {}", platform, err);
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
                 }
             }
         }
