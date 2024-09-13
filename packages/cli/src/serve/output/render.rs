@@ -142,8 +142,7 @@ impl TuiLayout {
                     if idx == 0 {
                         match msg.source {
                             TraceSrc::Dev => {
-                                let mut spans =
-                                    vec![Span::from(format!("  DEV: ",)).light_magenta()];
+                                let mut spans = vec![Span::from("  DEV: ").light_magenta()];
 
                                 for span in line.spans {
                                     spans.push(span);
@@ -151,7 +150,7 @@ impl TuiLayout {
                                 spans
                             }
                             TraceSrc::Build => {
-                                let mut spans = vec![Span::from(format!("BUILD: ",)).light_blue()];
+                                let mut spans = vec![Span::from("BUILD: ").light_blue()];
 
                                 for span in line.spans {
                                     spans.push(span);
@@ -263,7 +262,6 @@ impl TuiLayout {
     pub fn render_status_bar(
         &self,
         frame: &mut Frame,
-        _is_cli_release: bool,
         _platform: Platform,
         build_progress: &BuildProgress,
         more_modal_open: bool,
@@ -274,7 +272,7 @@ impl TuiLayout {
         let mut spans = vec![
             Span::from("🧬 dx").white(),
             Span::from(" ").white(),
-            Span::from(format!("{}", dx_version)).white(),
+            Span::from(dx_version).white(),
             Span::from(" | ").dark_gray(),
         ];
 
@@ -474,10 +472,8 @@ impl TuiLayout {
 
         let remaining_ines = max_scroll.saturating_sub(scroll_position);
 
-        // row.x -= (3 - remaining_ines.to_string().len()) as u16;
-
         if remaining_ines != 0 {
-            let text = vec![Span::from(format!(" {remaining_ines}⬇ ").dark_gray())];
+            let text = vec![Span::from(" {remaining_ines}⬇ ").dark_gray()];
 
             let msg = Paragraph::new(Line::from(text))
                 .alignment(Alignment::Right)

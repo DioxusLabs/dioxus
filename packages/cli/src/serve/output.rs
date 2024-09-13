@@ -1,23 +1,13 @@
-// TODO: Move more message logic to message.rs (if multi-file impls are allowed)
-// TODO: Cleanup input logic and make it extensible.
-// TODO: Is there anything we can do about vscode integrated terminal support on windows?
-//       - Doesn't switch to alternate buffer
-//       - vscode captures the mouse causing our mouse events to never get called
-//       - broken mouse capture breaks our scrolling
-
-use super::{Builder, Server, Watcher};
 use crate::{
     builder::{BuildResult, UpdateStage},
-    serve::Serve,
-    TraceMsg, TraceSrc,
-};
-use crate::{
     builder::{Stage, TargetPlatform, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
     serve::next_or_pending,
+    serve::Serve,
+    serve::{Builder, Server, Watcher},
     tracer::CLILogControl,
+    TraceMsg, TraceSrc,
 };
-use core::panic;
 use crossterm::{
     cursor::{Hide, Show},
     event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers},
@@ -28,7 +18,6 @@ use crossterm::{
     tty::IsTty,
     ExecutableCommand,
 };
-
 use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
@@ -98,7 +87,7 @@ pub struct Output {
     anim_start: Instant,
 
     interactive: bool,
-    is_cli_release: bool,
+    _is_cli_release: bool,
     platform: Platform,
     addr: AddressArguments,
 
@@ -177,7 +166,7 @@ impl Output {
             _rustc_nightly,
             _dx_version: dx_version,
             interactive,
-            is_cli_release,
+            _is_cli_release: is_cli_release,
             platform,
             messages: Vec::new(),
             more_modal_open: false,
@@ -490,7 +479,7 @@ impl Output {
         }
 
         if self.scroll_position > self.num_lines_wrapping.saturating_sub(self.console_height) {
-            self.scroll_position = self.num_lines_wrapping.saturating_sub(self.console_height);
+            self.scroll_to_bottom();
         }
 
         Ok(false)
@@ -656,7 +645,6 @@ impl Output {
 
                 layout.render_status_bar(
                     frame,
-                    self.is_cli_release,
                     self.platform,
                     &self.build_progress,
                     self.more_modal_open,

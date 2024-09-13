@@ -85,7 +85,7 @@ pub async fn serve_all(
                 }
 
                 let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
-                let changed = changed_files.get(0).cloned();
+                let changed = changed_files.first().cloned();
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
