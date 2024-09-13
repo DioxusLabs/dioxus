@@ -106,7 +106,7 @@ pub trait Context<T, E>: private::Sealed {
     ///             "Error parsing number: {error}"
     ///         }
     ///     })?;
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn show(self, display_error: impl FnOnce(&E) -> Element) -> Result<T>;
@@ -120,7 +120,7 @@ pub trait Context<T, E>: private::Sealed {
     ///     // You can bubble up errors with `?` inside components, and event handlers
     ///     // Along with the error itself, you can provide a way to display the error by calling `context`
     ///     let number = "-1234".parse::<usize>().context("Parsing number inside of the NumberParser")?;
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn context<C: Display + 'static>(self, context: C) -> Result<T>;
@@ -134,7 +134,7 @@ pub trait Context<T, E>: private::Sealed {
     ///     // You can bubble up errors with `?` inside components, and event handlers
     ///     // Along with the error itself, you can provide a way to display the error by calling `context`
     ///     let number = "-1234".parse::<usize>().with_context(|| format!("Timestamp: {:?}", std::time::Instant::now()))?;
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn with_context<C: Display + 'static>(self, context: impl FnOnce() -> C) -> Result<T>;
