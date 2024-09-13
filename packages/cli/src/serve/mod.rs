@@ -96,7 +96,7 @@ pub async fn serve_all(
                     }
 
                     if let Some(changed_path) = changed {
-                        let path_relative = changed_path.strip_prefix(&dioxus_crate.crate_dir()).map(|p| p.display().to_string()).unwrap_or_else(|_| changed_path.display().to_string());
+                        let path_relative = changed_path.strip_prefix(dioxus_crate.crate_dir()).map(|p| p.display().to_string()).unwrap_or_else(|_| changed_path.display().to_string());
                         tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloaded {}", path_relative);
                     }
 
