@@ -1,6 +1,3 @@
-//! This module contains functions to render different elements on the TUI frame.
-// TODO: Cleanup console filtering / message building logic
-
 use super::{BuildProgress, TraceMsg, TraceSrc};
 use ansi_to_tui::IntoText as _;
 use dioxus_cli_config::Platform;
@@ -27,7 +24,7 @@ pub struct TuiLayout {
     // The border that separates the console and info bars.
     border_sep: Rect,
 
-    //. The status bar that displays build status, platform, versions, etc.
+    // The status bar that displays build status, platform, versions, etc.
     status_bar: Rc<[Rect]>,
 
     // Misc
@@ -196,11 +193,7 @@ impl TuiLayout {
                     line.spans
                 };
 
-                if msg.source != TraceSrc::Cargo {
-                    out_text.push_line(Line::from(out_line));
-                }
-
-                // out_text.push_line(Line::from(out_line));
+                out_text.push_line(Line::from(out_line));
             }
         }
 

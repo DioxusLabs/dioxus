@@ -1,8 +1,4 @@
-use crate::{
-    settings::{self},
-    tracer::CLILogControl,
-    DioxusCrate,
-};
+use crate::{settings, tracer::CLILogControl, DioxusCrate};
 use anyhow::Context;
 use build::Build;
 use dioxus_cli_config::AddressArguments;
