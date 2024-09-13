@@ -1,6 +1,7 @@
 use crate::build::TargetArgs;
 use dioxus_cli_config::{DioxusConfig, Platform};
 use krates::cm::Target;
+use krates::LockOptions;
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -139,10 +140,18 @@ pub struct DioxusCrate {
 }
 
 impl DioxusCrate {
+    // Maybe add optional LockOptions argument?
     pub fn new(target: &TargetArgs) -> Result<Self, CrateConfigError> {
+        // Use this struct in new/init subcommands?
         let mut cmd = Cmd::new();
+        cmd.lock_opts(LockOptions {
+            offline: true, // Don't access Internet when `dx clean` is run.
+            frozen: false,
+            locked: false,
+        });
         cmd.features(target.features.clone());
         let builder = krates::Builder::new();
+        // Tries to access Internet when offline.
         let krates = builder.build(cmd, |_| {})?;
         let package = find_main_package(target.package.clone(), &krates)?;
 

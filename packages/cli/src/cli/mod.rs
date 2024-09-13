@@ -20,7 +20,7 @@ use std::{
     fs::{remove_dir_all, File},
     io::{Read, Write},
     path::PathBuf,
-    process::{Command, Stdio},
+    process::Command,
 };
 
 pub static VERSION: Lazy<String> = Lazy::new(|| {
