@@ -6,8 +6,8 @@
 //! Most signals implement Into<ReadOnlySignal<T>>, making ReadOnlySignal a good default type when building new
 //! library components that don't need to modify their values.
 
+use async_std::task::sleep;
 use dioxus::prelude::*;
-use std::time::Duration;
 
 fn main() {
     dioxus::launch(app);
@@ -39,13 +39,13 @@ fn app() -> Element {
             if running() {
                 count += 1;
             }
-            tokio::time::sleep(Duration::from_millis(400)).await;
+            sleep(std::time::Duration::from_millis(400)).await;
         }
     });
 
     // use_resource will spawn a future that resolves to a value
     let _slow_count = use_resource(move || async move {
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        sleep(std::time::Duration::from_millis(200)).await;
         count() * 2
     });
 

@@ -1,4 +1,5 @@
 use crate::dioxus_crate::DioxusCrate;
+use crate::TraceSrc;
 use crate::{builder::Platform, serve::ServeArgs};
 use crate::{config::WebHttpsConfig, serve::update::ServeUpdate};
 use crate::{Error, Result};
@@ -6,7 +7,7 @@ use axum::{
     body::Body,
     extract::{
         ws::{Message, WebSocket},
-        Extension, WebSocketUpgrade,
+        WebSocketUpgrade,
     },
     extract::{Request, State},
     http::{
@@ -16,7 +17,7 @@ use axum::{
     middleware::{self, Next},
     response::IntoResponse,
     routing::{get, get_service},
-    Router,
+    Extension, Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
@@ -535,8 +536,12 @@ pub(crate) async fn get_rustls_with_mkcert(
     match cmd {
         Err(e) => {
             match e.kind() {
-                io::ErrorKind::NotFound => tracing::error!("mkcert is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
-                e => tracing::error!("an error occurred while generating mkcert certificates: {}", e.to_string()),
+                io::ErrorKind::NotFound => {
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "`mkcert` is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions.")
+                }
+                e => {
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "An error occurred while generating mkcert certificates: {}", e.to_string())
+                }
             };
             return Err("failed to generate mkcert certificates".into());
         }

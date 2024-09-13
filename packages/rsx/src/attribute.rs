@@ -360,6 +360,10 @@ impl AttributeName {
         matches!(self, Self::BuiltIn(ident) if ident.to_string().starts_with("on"))
     }
 
+    pub fn is_likely_key(&self) -> bool {
+        matches!(self, Self::BuiltIn(ident) if ident == "key")
+    }
+
     pub fn span(&self) -> proc_macro2::Span {
         match self {
             Self::Custom(lit) => lit.span(),

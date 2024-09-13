@@ -6,7 +6,7 @@ use std::{
 };
 use tracing::{debug, error, warn};
 
-use crate::CrateConfigError;
+use crate::{CrateConfigError, TraceSrc};
 
 const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
 
@@ -65,7 +65,7 @@ impl CliSettings {
     /// This does not save to project-level settings.
     pub(crate) fn save(self) -> Result<Self, CrateConfigError> {
         let path = Self::get_settings_path().ok_or_else(|| {
-            error!("failed to get settings path");
+            error!(dx_src = ?TraceSrc::Dev, "failed to get settings path");
             CrateConfigError::Io(Error::new(
                 ErrorKind::NotFound,
                 "failed to get settings path",
@@ -73,7 +73,7 @@ impl CliSettings {
         })?;
 
         let data = toml::to_string_pretty(&self).map_err(|e| {
-            error!(?self, "failed to parse config into toml");
+            error!(dx_src = ?TraceSrc::Dev, ?self, "failed to parse config into toml");
             CrateConfigError::Io(Error::new(ErrorKind::Other, e.to_string()))
         })?;
 
@@ -81,6 +81,7 @@ impl CliSettings {
         let parent_path = path.parent().unwrap();
         if let Err(e) = fs::create_dir_all(parent_path) {
             error!(
+                dx_src = ?TraceSrc::Dev,
                 ?data,
                 ?path,
                 "failed to create directories for settings file"

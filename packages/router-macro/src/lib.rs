@@ -14,7 +14,7 @@ use syn::{parse::ParseStream, parse_macro_input, Ident, Token, Type};
 
 use proc_macro2::TokenStream as TokenStream2;
 
-use crate::{layout::LayoutId, route_tree::RouteTree};
+use crate::{layout::LayoutId, route_tree::ParseRouteTree};
 
 mod hash;
 mod layout;
@@ -574,7 +574,7 @@ impl RouteEnum {
     }
 
     fn parse_impl(&self) -> TokenStream2 {
-        let tree = RouteTree::new(&self.endpoints, &self.nests);
+        let tree = ParseRouteTree::new(&self.endpoints, &self.nests);
         let name = &self.name;
 
         let error_name = format_ident!("{}MatchError", self.name);
@@ -599,14 +599,16 @@ impl RouteEnum {
                     let route = s;
                     let (route, hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
+                    // Remove any trailing slashes. We parse /route/ and /route in the same way
+                    // Note: we don't use trim because it includes more code
+                    let route = route.strip_suffix('/').unwrap_or(route);
                     let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
                     let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
                     let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
                     // skip the first empty segment
                     if s.starts_with('/') {
                         let _ = segments.next();
-                    }
-                    else {
+                    } else {
                         // if this route does not start with a slash, it is not a valid route
                         return Err(dioxus_router::routable::RouteParseError {
                             attempted_routes: Vec::new(),
@@ -642,8 +644,17 @@ impl RouteEnum {
 
                     let error_name = route.error_ident();
                     let route_str = &route.route;
+                    let comment = format!(
+                        " An error that can occur when trying to parse the route [`{}::{}`] ('{}').",
+                        self.name,
+                        route_name,
+                        route_str
+                    );
 
-                    error_variants.push(quote! { #route_name(#error_name) });
+                    error_variants.push(quote! {
+                        #[doc = #comment]
+                        #route_name(#error_name)
+                    });
                     display_match.push(quote! { Self::#route_name(err) => write!(f, "Route '{}' ('{}') did not match:\n{}", stringify!(#route_name), #route_str, err)? });
                     type_defs.push(route.error_type());
                 }
@@ -651,8 +662,15 @@ impl RouteEnum {
                     let error_variant = redirect.error_variant();
                     let error_name = redirect.error_ident();
                     let route_str = &redirect.route;
+                    let comment = format!(
+                        " An error that can occur when trying to parse the redirect '{}'.",
+                        route_str.value()
+                    );
 
-                    error_variants.push(quote! { #error_variant(#error_name) });
+                    error_variants.push(quote! {
+                        #[doc = #comment]
+                        #error_variant(#error_name)
+                    });
                     display_match.push(quote! { Self::#error_variant(err) => write!(f, "Redirect '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
                     type_defs.push(redirect.error_type());
                 }
@@ -663,15 +681,28 @@ impl RouteEnum {
             let error_variant = nest.error_variant();
             let error_name = nest.error_ident();
             let route_str = &nest.route;
+            let comment = format!(
+                " An error that can occur when trying to parse the nested segment {} ('{}').",
+                error_name, route_str
+            );
 
-            error_variants.push(quote! { #error_variant(#error_name) });
+            error_variants.push(quote! {
+                #[doc = #comment]
+                #error_variant(#error_name)
+            });
             display_match.push(quote! { Self::#error_variant(err) => write!(f, "Nest '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
             type_defs.push(nest.error_type());
         }
 
+        let comment = format!(
+            " An error that can occur when trying to parse the route enum [`{}`].",
+            self.name
+        );
+
         quote! {
             #(#type_defs)*
 
+            #[doc = #comment]
             #[allow(non_camel_case_types)]
             #[allow(clippy::derive_partial_eq_without_eq)]
             pub enum #match_error_name {

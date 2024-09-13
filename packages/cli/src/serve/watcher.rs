@@ -252,7 +252,7 @@ impl Watcher {
 
                 // Otherwise just log the error
                 Err(err) => {
-                    tracing::error!("Error hotreloading file {rust_file:?}: {err}")
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "Error hotreloading file {rust_file:?}: {err}")
                 }
             }
         }

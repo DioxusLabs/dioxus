@@ -57,7 +57,7 @@ serde_json = { workspace = true }
 signal-hook = "0.3.17"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-wry = { version = "0.41.0", features = [
+wry = { version = "0.43.0", features = [
     "os-webview",
     "protocol",
     "drag-drop",

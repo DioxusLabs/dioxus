@@ -16,11 +16,13 @@ pub(crate) mod metadata;
 pub(crate) mod serve;
 pub(crate) mod settings;
 pub(crate) mod tooling;
+pub(crate) mod tracer;
 
 pub(crate) use cli::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
 pub(crate) use settings::*;
+pub(crate) use tracer::{TraceMsg, TraceSrc};
 
 use anyhow::Context;
 use clap::Parser;

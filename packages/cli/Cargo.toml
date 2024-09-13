@@ -43,6 +43,7 @@ ctrlc = "3.2.3"
 futures-channel = { workspace = true }
 krates = { version = "0.17.0" }
 cargo-config2 = { workspace = true, optional = true }
+regex = "1.10.6"
 
 axum = { workspace = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls"] }

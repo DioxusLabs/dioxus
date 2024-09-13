@@ -1,8 +1,11 @@
 use super::{BuildRequest, Platform};
-use crate::builder::progress::{
-    BuildMessage, BuildUpdateProgress, MessageSource, MessageType, Stage, UpdateStage,
-};
 use crate::error::{Error, Result};
+use crate::{
+    builder::progress::{
+        BuildMessage, BuildUpdateProgress, MessageSource, MessageType, Stage, UpdateStage,
+    },
+    TraceSrc,
+};
 use anyhow::Context;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -45,7 +48,7 @@ impl BuildRequest {
         .context("Wasm-bindgen crashed while optimizing the wasm binary")?
         .context("Failed to generate wasm-bindgen bindings")?;
 
-        tracing::info!("wasm-bindgen complete in {:?}", start.elapsed());
+        tracing::info!(dx_src = ?TraceSrc::Build, "wasm-bindgen complete in {:?}", start.elapsed());
 
         Ok(())
     }
@@ -60,7 +63,7 @@ impl BuildRequest {
         {
             use crate::config::WasmOptLevel;
 
-            tracing::info!("Running optimization with wasm-opt...");
+            tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
 
             let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {
                 WasmOptLevel::Z => {
@@ -87,6 +90,7 @@ impl BuildRequest {
 
             let new_size = wasm_file.metadata()?.len();
             tracing::info!(
+                dx_src = ?TraceSrc::Build,
                 "wasm-opt reduced WASM size from {} to {} ({:2}%)",
                 old_size,
                 new_size,

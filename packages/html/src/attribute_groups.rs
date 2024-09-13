@@ -416,6 +416,9 @@ mod_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timing-function>
     animation_timing_function: "animation-timing-function" in "style";
 
+    /// <https://developer.mozilla.org/en-US/docs/Web/CSS/aspect-ratio>
+    aspect_ratio: "aspect-ratio" in "style";
+
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/azimuth>
     azimuth in "style";
 

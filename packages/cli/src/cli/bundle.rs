@@ -11,16 +11,16 @@ use super::*;
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "bundle")]
-pub(crate) struct Bundle {
+pub struct Bundle {
+    /// The package types to bundle
     #[clap(long)]
-    pub(crate) package: Option<Vec<String>>,
-
+    pub packages: Option<Vec<PackageType>>,
     /// The arguments for the dioxus build
     #[clap(flatten)]
     pub(crate) build_arguments: BuildArgs,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum PackageType {
     MacOsBundle,
     IosBundle,
@@ -156,6 +156,15 @@ impl Bundle {
             }
         }
 
+        // Drain any resources set in the config into the resources map. Tauri bundle doesn't let you set both resources and resources_map https://github.com/DioxusLabs/dioxus/issues/2941
+        for resource_path in bundle_settings.resources.take().into_iter().flatten() {
+            if let Some(resources) = &mut bundle_settings.resources_map {
+                resources.insert(resource_path, "".to_string());
+            } else {
+                bundle_settings.resources_map = Some([(resource_path, "".to_string())].into());
+            }
+        }
+
         let mut settings = SettingsBuilder::new()
             .project_out_directory(dioxus_crate.out_dir())
             .package_settings(PackageSettings {
@@ -168,13 +177,8 @@ impl Bundle {
             })
             .binaries(binaries)
             .bundle_settings(bundle_settings);
-        if let Some(packages) = &self.package {
-            settings = settings.package_types(
-                packages
-                    .iter()
-                    .map(|p| p.parse::<PackageType>().unwrap().into())
-                    .collect(),
-            );
+        if let Some(packages) = &self.packages {
+            settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
         }
 
         if let Some(target) = &self.build_arguments.target_args.target {

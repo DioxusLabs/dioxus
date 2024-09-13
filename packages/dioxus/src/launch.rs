@@ -124,6 +124,42 @@ impl LaunchBuilder {
     //         platform_config: None,
     //     }
     // }
+    /// Provide a custom launch function for your application.
+    ///
+    /// Useful for third party renderers to tap into the launch builder API without having to reimplement it.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// use std::any::Any;
+    ///
+    /// #[derive(Default)]
+    /// struct Config;
+    ///
+    /// fn my_custom_launcher(root: fn() -> Element, contexts: Vec<Box<dyn Any>>, cfg: Config) {
+    ///     println!("launching with root: {:?}", root());
+    ///     loop {
+    ///         println!("running...");
+    ///     }
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! {
+    ///         div { "Hello, world!" }
+    ///     }
+    /// }
+    ///
+    /// LaunchBuilder::custom(my_custom_launcher).launch(app);
+    /// ```
+    pub fn custom<Config, Context: ?Sized>(
+        launch_fn: LaunchFn<Config, Context>,
+    ) -> LaunchBuilder<Config, Context> {
+        LaunchBuilder {
+            // launch_fn,
+            // contexts: vec![],
+            // platform_config: None,
+        }
+    }
 }
 
 // // Fullstack platform builder

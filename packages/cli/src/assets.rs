@@ -1,4 +1,5 @@
 use crate::Result;
+use crate::TraceSrc;
 use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
 use manganis_core::{LinkSection, ResourceAsset};
@@ -10,7 +11,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::{collections::HashMap, path::PathBuf};
 use std::{fs::File, io::Write};
-use tracing::Level;
 use walkdir::WalkDir;
 // use manganis_common::{FileOptions, FolderAsset};
 // use image::{DynamicImage, EncodableLayout};

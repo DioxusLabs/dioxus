@@ -1,4 +1,5 @@
 use super::*;
+use crate::TraceSrc;
 use cargo_generate::{GenerateArgs, TemplatePath};
 use cargo_metadata::Metadata;
 use std::path::Path;
@@ -134,9 +135,9 @@ pub(crate) fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()>
     let cmd = cmd.arg("fmt").current_dir(path);
     let output = cmd.output().expect("failed to execute process");
     if !output.status.success() {
-        tracing::error!("cargo fmt failed");
-        tracing::error!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-        tracing::error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        tracing::error!(dx_src = ?TraceSrc::Dev, "cargo fmt failed");
+        tracing::error!(dx_src = ?TraceSrc::Build, "stdout: {}", String::from_utf8_lossy(&output.stdout));
+        tracing::error!(dx_src = ?TraceSrc::Build, "stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     // 3. Format the `Cargo.toml` and `Dioxus.toml` files.
@@ -166,7 +167,7 @@ pub(crate) fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()>
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
-    tracing::info!("Generated project at {}", path.display());
+    tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}", path.display());
 
     Ok(())
 }

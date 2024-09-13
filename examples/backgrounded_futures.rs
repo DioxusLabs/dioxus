@@ -7,6 +7,7 @@
 //!
 //! This example is more of a demonstration of the behavior than a practical use case, but it's still interesting to see.
 
+use async_std::task::sleep;
 use dioxus::prelude::*;
 
 fn main() {
@@ -48,7 +49,7 @@ fn Child(count: Signal<i32>) -> Element {
 
     use_future(move || async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
             println!("Child")
         }
     });

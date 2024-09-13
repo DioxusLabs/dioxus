@@ -3,7 +3,6 @@
 //! This example shows how to manage focus in a Dioxus application. We implement a "roulette" that focuses on each input
 //! in the grid every few milliseconds until the user interacts with the inputs.
 
-use dioxus::prelude::*;
 use std::rc::Rc;
 
 fn main() {
@@ -19,7 +18,7 @@ fn app() -> Element {
         let mut focused = 0;
 
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            sleep(std::time::Duration::from_millis(50)).await;
 
             if !running() {
                 continue;

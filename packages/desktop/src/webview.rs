@@ -319,10 +319,11 @@ impl WebviewInstance {
         let webview = webview.build().unwrap();
 
         let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
-            if let Some(menu) = &cfg.menu {
+            let menu_option = cfg.menu.into();
+            if let Some(menu) = &menu_option {
                 crate::menubar::init_menu_bar(menu, &window);
             }
-            cfg.menu
+            menu_option
         } else {
             None
         };

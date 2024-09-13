@@ -3,8 +3,8 @@
 //! use_future won't return a value, analogous to use_effect.
 //! If you want to return a value from a future, use use_resource instead.
 
+use async_std::task::sleep;
 use dioxus::prelude::*;
-use std::time::Duration;
 
 fn main() {
     dioxus::launch(app);
@@ -16,7 +16,7 @@ fn app() -> Element {
     // use_future will run the future
     use_future(move || async move {
         loop {
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            sleep(std::time::Duration::from_millis(200)).await;
             count += 1;
         }
     });
@@ -24,7 +24,7 @@ fn app() -> Element {
     // We can also spawn futures from effects, handlers, or other futures
     use_effect(move || {
         spawn(async move {
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            sleep(std::time::Duration::from_secs(5)).await;
             count.set(100);
         });
     });

@@ -171,10 +171,10 @@ impl Component {
     }
 
     pub fn get_key(&self) -> Option<&AttributeValue> {
-        self.fields.iter().find_map(|attr| match &attr.name {
-            AttributeName::BuiltIn(key) if key == "key" => Some(&attr.value),
-            _ => None,
-        })
+        self.fields
+            .iter()
+            .find(|attr| attr.name.is_likely_key())
+            .map(|attr| &attr.value)
     }
 
     /// Ensure there's no duplicate props - this will be a compile error but we can move it to a
@@ -252,48 +252,41 @@ impl Component {
         self.spreads.first().map(|spread| &spread.expr)
     }
 
-    fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
-        let mut dynamic_literal_index = 0;
+    // Iterate over the props of the component (without spreads, key, and custom attributes)
+    pub(crate) fn component_props(&self) -> impl Iterator<Item = &Attribute> {
         self.fields
             .iter()
-            .filter_map(move |attr| {
-                let Attribute { name, value, .. } = attr;
+            .filter(move |attr| !attr.name.is_likely_key())
+    }
 
-                let attr = match name {
-                    AttributeName::BuiltIn(k) => {
-                        if k == "key" {
-                            return None;
-                        }
-                        quote! { #k }
-                    }
-                    AttributeName::Custom(_) => return None,
-                    AttributeName::Spread(_) => return None,
-                };
+    fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
+        let mut dynamic_literal_index = 0;
+        self.component_props()
+            .map(|attribute| {
+                let release_value = attribute.value.to_token_stream();
 
-                let release_value = value.to_token_stream();
-
-                // In debug mode, we try to grab the value from the dynamic literal pool if possible
-                let value = if let AttributeValue::AttrLiteral(literal) = &value {
-                    let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
-                    dynamic_literal_index += 1;
-                    let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
-                    quote! {
+            // In debug mode, we try to grab the value from the dynamic literal pool if possible
+            let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
+                let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
+                dynamic_literal_index += 1;
+                let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
+                quote! {
+                    {
+                        #[cfg(debug_assertions)]
                         {
-                            #[cfg(debug_assertions)]
-                            {
-                                #debug_value
-                            }
-                            #[cfg(not(debug_assertions))]
-                            {
-                                #release_value
-                            }
+                            #debug_value
+                        }
+                        #[cfg(not(debug_assertions))]
+                        {
+                            #release_value
                         }
                     }
-                } else {
-                    release_value
-                };
+                }
+            } else {
+                release_value
+            };
 
-                Some((attr, value))
+                (attribute.name.to_token_stream(), value)
             })
             .collect()
     }
@@ -345,6 +338,7 @@ fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments
 mod tests {
     use super::*;
     use prettier_please::PrettyUnparse;
+    use syn::parse_quote;
 
     /// Ensure we can parse a component
     #[test]
@@ -481,5 +475,24 @@ mod tests {
         };
 
         let _parsed: syn::Path = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn identifies_key() {
+        let input = quote! {
+            Link { key: "{value}", to: Route::List, class: "pure-button", "Go back" }
+        };
+
+        let component: Component = syn::parse2(input).unwrap();
+
+        // The key should exist
+        assert_eq!(component.get_key(), Some(&parse_quote!("{value}")));
+
+        // The key should not be included in the properties
+        let properties = component
+            .component_props()
+            .map(|attr| attr.name.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(properties, ["to", "class"]);
     }
 }

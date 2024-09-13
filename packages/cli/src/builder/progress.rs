@@ -177,14 +177,6 @@ impl BuildUpdateProgress {
     pub(crate) fn to_std_out(&self) {
         match &self.update {
             UpdateStage::Start => println!("--- {} ---", self.stage),
-            UpdateStage::AddMessage(message) => match &message.message {
-                MessageType::Cargo(message) => {
-                    println!("{}", message.rendered.clone().unwrap_or_default());
-                }
-                MessageType::Text(message) => {
-                    println!("{}", message);
-                }
-            },
             UpdateStage::SetProgress(progress) => {
                 println!("Build progress {:0.0}%", progress * 100.0);
             }
@@ -198,7 +190,6 @@ impl BuildUpdateProgress {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum UpdateStage {
     Start,
-    AddMessage(BuildMessage),
     SetProgress(f64),
     Failed(String),
 }
