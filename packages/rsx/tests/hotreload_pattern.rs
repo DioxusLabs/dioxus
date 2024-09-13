@@ -501,7 +501,7 @@ fn template_generates() {
             "width2": 100,
             "height2": "100px",
             p { "hello world" }
-            {(0..10).map(|i| rsx!{"{i}"})}
+            {(0..10).map(|i| rsx! {"{i}"})}
         }
         div {
             width: 120,
@@ -536,9 +536,9 @@ fn diffs_complex() {
             "width2": 100,
             "height2": "100px",
             p { "hello world" }
-            {(0..10).map(|i| rsx!{"{i}"})},
-            {(0..10).map(|i| rsx!{"{i}"})},
-            {(0..11).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx! {"{i}"})},
+            {(0..10).map(|i| rsx! {"{i}"})},
+            {(0..11).map(|i| rsx! {"{i}"})},
             Comp {}
         }
     };
@@ -552,9 +552,9 @@ fn diffs_complex() {
             "height2": "100px",
             p { "hello world" }
             Comp {}
-            {(0..10).map(|i| rsx!{"{i}"})},
-            {(0..10).map(|i| rsx!{"{i}"})},
-            {(0..11).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx! {"{i}"})},
+            {(0..10).map(|i| rsx! {"{i}"})},
+            {(0..11).map(|i| rsx! {"{i}"})},
         }
     };
 
@@ -570,12 +570,12 @@ fn remove_node() {
         quote! {
             svg {
                 Comp {}
-                {(0..10).map(|i| rsx!{"{i}"})},
+                {(0..10).map(|i| rsx! {"{i}"})},
             }
         },
         quote! {
             div {
-                {(0..10).map(|i| rsx!{"{i}"})},
+                {(0..10).map(|i| rsx! {"{i}"})},
             }
         },
     )

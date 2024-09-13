@@ -61,7 +61,7 @@ use std::future::Future;
 /// });
 ///
 ///
-/// rsx!{
+/// rsx! {
 ///     button {
 ///         onclick: move |_| chat_client.send(Action::Start),
 ///         "Start Chat Service"

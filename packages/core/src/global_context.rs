@@ -351,7 +351,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///         window.scroll_with_x_and_y(original_scroll_position(), 0.0);
 ///     });
 ///
-///     rsx!{
+///     rsx! {
 ///         div {
 ///             id: "my_element",
 ///             "hello"
