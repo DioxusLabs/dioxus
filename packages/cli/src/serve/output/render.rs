@@ -473,7 +473,7 @@ impl TuiLayout {
         let remaining_ines = max_scroll.saturating_sub(scroll_position);
 
         if remaining_ines != 0 {
-            let text = vec![Span::from(" {remaining_ines}⬇ ").dark_gray()];
+            let text = vec![Span::from(format!(" {remaining_ines}⬇ ")).dark_gray()];
 
             let msg = Paragraph::new(Line::from(text))
                 .alignment(Alignment::Right)
