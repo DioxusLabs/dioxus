@@ -1,5 +1,5 @@
 use crate::{
-    builder::{BuildMessage, Platform, Stage, UpdateStage},
+    builder::{BuildMessage, BuildUpdateProgress, Platform, Stage, UpdateStage},
     cli::serve::ServeArgs,
     dioxus_crate::DioxusCrate,
     serve::{Builder, Watcher},
@@ -453,14 +453,16 @@ impl Output {
         //     },
         // );
     }
-    //     pub(crate) fn new_build_logs(&mut self, platform: Platform, update: BuildUpdateProgress) {
-    //         let snapped = self.is_snapped(LogSource::Target(platform));
 
-    //         // when the build is finished, switch to the console
-    //         if update.stage == Stage::Finished {
-    //             self.tab = Tab::Console;
-    //         }
-    // }
+    pub(crate) fn new_build_logs(&mut self, platform: Platform, update: BuildUpdateProgress) {
+        //         let snapped = self.is_snapped(LogSource::Target(platform));
+
+        //         // when the build is finished, switch to the console
+        //         if update.stage == Stage::Finished {
+        //             self.tab = Tab::Console;
+        //         }
+    }
+
     fn is_snapped(&self) -> bool {
         true
     }

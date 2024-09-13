@@ -56,9 +56,6 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     let mut runner = AppRunner::start();
 
     loop {
-        // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor if we're not careful
-        tokio::task::yield_now().await;
-
         // Draw the state of the server to the screen
         screen.render(&args, &krate, &builder, &devserver, &watcher);
 
@@ -72,7 +69,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
             msg = tracer.wait() => msg,
         };
 
-        match handle_msg(
+        let res = handle_it(
             msg,
             &args,
             &mut devserver,
@@ -80,19 +77,17 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
             &mut builder,
             &mut runner,
             &mut watcher,
-        )
-        .await
-        {
-            Ok(ControlFlow::Break(())) => break,
-            Ok(ControlFlow::Continue(())) => {}
-            Err(e) => {
-                tracing::error!("Error handling message: {}", e);
-                break;
-            }
+        );
+
+        match res.await {
+            Ok(ControlFlow::Continue(())) => continue,
+            Ok(ControlFlow::Break(())) => {}
+            Err(e) => tracing::error!("Error in TUI: {}", e),
         }
+
+        break;
     }
 
-    // Kill the clients first
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
     _ = builder.abort_all();
@@ -101,7 +96,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     Ok(())
 }
 
-async fn handle_msg(
+async fn handle_it(
     msg: ServeUpdate,
     args: &ServeArgs,
     devserver: &mut DevServer,
@@ -156,7 +151,7 @@ async fn handle_msg(
         // We also can check the status of the builds here in case we have multiple ongoing builds
         ServeUpdate::BuildUpdate(BuildUpdate::Progress(update)) => {
             let update_clone = update.clone();
-            // screen.new_build_logs(update.platform, update_clone);
+            screen.new_build_logs(update.platform, update_clone);
             devserver
                 .update_build_status(screen.build_progress.progress(), update.stage.to_string())
                 .await;
