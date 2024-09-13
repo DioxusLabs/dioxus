@@ -120,15 +120,12 @@ impl TuiLayout {
         messages: &[TraceMsg],
         enabled_filters: &[String],
     ) -> u16 {
-        let console = self.console[0];
+        const LEVEL_MAX: usize = "BUILD: ".len();
+
         let mut out_text = Text::default();
 
-        let level_len = "BUILD: ".len();
-        let (console_width, _console_height) = self.get_console_size();
-        let msgs = messages.iter();
-
         // Assemble the messages
-        for msg in msgs {
+        for msg in messages.iter() {
             let mut sub_line_padding = 0;
 
             let text = msg.content.trim_end().into_text().unwrap_or_default();
@@ -158,7 +155,7 @@ impl TuiLayout {
                                 // Build level tag: `INFO:``
                                 // We don't subtract 1 here for `:` because we still want at least 1 padding.
                                 let padding =
-                                    build_msg_padding(level_len - msg.level.to_string().len() - 2);
+                                    build_msg_padding(LEVEL_MAX - msg.level.to_string().len() - 2);
                                 let level = format!("{padding}{}: ", msg.level);
                                 sub_line_padding += level.len();
 
@@ -239,14 +236,17 @@ impl TuiLayout {
             }
         }
 
+        let (console_width, _console_height) = self.get_console_size();
+
         let paragraph = Paragraph::new(out_text)
             .left_aligned()
             .wrap(Wrap { trim: false });
 
         let num_lines_wrapping = paragraph.line_count(console_width) as u16;
 
-        let paragraph = paragraph.scroll((scroll_position, 0));
-        paragraph.render(console, frame.buffer_mut());
+        paragraph
+            .scroll((scroll_position, 0))
+            .render(self.console[0], frame.buffer_mut());
 
         num_lines_wrapping
     }
@@ -335,19 +335,20 @@ impl TuiLayout {
 
     /// Renders the "more" modal to show extra info/keybinds accessible via the more keybind.
     pub fn render_more_modal(&self, frame: &mut Frame) {
-        let area = self.console[0];
         let modal = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Fill(1), Constraint::Length(5)])
-            .split(area)[1];
+            .split(self.console[0])[1];
 
         frame.render_widget(Clear, modal);
         frame.render_widget(Block::default().borders(Borders::ALL), modal);
 
         // Render under construction message
-        let msg = Paragraph::new("Under construction, please check back at a later date!")
-            .alignment(Alignment::Center);
-        frame.render_widget(msg, modal);
+        frame.render_widget(
+            Paragraph::new("Under construction, please check back at a later date!")
+                .alignment(Alignment::Center),
+            modal,
+        );
     }
 
     /// Render the filter drawer menu.
@@ -450,12 +451,12 @@ impl TuiLayout {
         console_height: u16,
         frame: &mut Frame<'_>,
     ) {
-        let area = self.console[0];
         let mut row = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(1)])
-            .split(area)[0];
+            .split(self.console[0])[0];
 
+        // Hack: shove upwards the text to overlap with the border so text selection doesn't accidentally capture the number
         row.y -= 1;
 
         let max_scroll = lines.saturating_sub(console_height);
@@ -463,16 +464,15 @@ impl TuiLayout {
             return;
         }
 
-        let remaining_ines = max_scroll.saturating_sub(scroll_position);
-
-        if remaining_ines != 0 {
-            let text = vec![Span::from(format!(" {remaining_ines}⬇ ")).dark_gray()];
-
-            let msg = Paragraph::new(Line::from(text))
-                .alignment(Alignment::Right)
-                .block(Block::default());
-
-            frame.render_widget(msg, row);
+        let remaining_lines = max_scroll.saturating_sub(scroll_position);
+        if remaining_lines != 0 {
+            let text = vec![Span::from(format!(" {remaining_lines}⬇ ")).dark_gray()];
+            frame.render_widget(
+                Paragraph::new(Line::from(text))
+                    .alignment(Alignment::Right)
+                    .block(Block::default()),
+                row,
+            );
         }
     }
 }
