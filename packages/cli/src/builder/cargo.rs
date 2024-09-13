@@ -6,9 +6,9 @@ use crate::assets::copy_dir_to;
 use crate::assets::create_assets_head;
 use crate::assets::{asset_manifest, process_assets, AssetConfigDropGuard};
 use crate::builder::progress::build_cargo;
-use crate::builder::progress::BuildProgressUpdate;
 use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
+use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
 use crate::serve::output::MessageSource;
@@ -101,7 +101,7 @@ impl BuildRequest {
 
     pub(crate) async fn build(
         &self,
-        mut progress: UnboundedSender<BuildProgressUpdate>,
+        mut progress: UnboundedSender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
         tracing::info!(
             dx_src = ?MessageSource::Build,
@@ -147,7 +147,7 @@ impl BuildRequest {
             self.dioxus_crate.out_dir().display(),
         );
 
-        _ = progress.start_send(BuildProgressUpdate {
+        _ = progress.start_send(UpdateBuildProgress {
             stage: Stage::Finished,
             update: UpdateStage::Start,
         });
@@ -159,9 +159,9 @@ impl BuildRequest {
         &self,
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
-        progress: &mut UnboundedSender<BuildProgressUpdate>,
+        progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
-        _ = progress.start_send(BuildProgressUpdate {
+        _ = progress.start_send(UpdateBuildProgress {
             stage: Stage::OptimizingAssets,
             update: UpdateStage::Start,
         });
@@ -205,7 +205,7 @@ impl BuildRequest {
     async fn collect_assets(
         &self,
         cargo_args: Vec<String>,
-        progress: &mut UnboundedSender<BuildProgressUpdate>,
+        progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> anyhow::Result<Option<AssetManifest>> {
         // If this is the server build, the client build already copied any assets we need
         if self.target_platform == TargetPlatform::Server {

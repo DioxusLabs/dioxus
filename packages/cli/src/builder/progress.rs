@@ -44,12 +44,12 @@ impl std::fmt::Display for Stage {
 }
 
 #[derive(Debug, Clone)]
-pub struct BuildProgressUpdate {
+pub struct UpdateBuildProgress {
     pub stage: Stage,
     pub update: UpdateStage,
 }
 
-impl BuildProgressUpdate {
+impl UpdateBuildProgress {
     pub fn to_std_out(&self) {
         match &self.update {
             UpdateStage::Start => println!("--- {} ---", self.stage),
@@ -73,9 +73,9 @@ pub enum UpdateStage {
 pub(crate) async fn build_cargo(
     crate_count: usize,
     mut cmd: tokio::process::Command,
-    progress: &mut UnboundedSender<BuildProgressUpdate>,
+    progress: &mut UnboundedSender<UpdateBuildProgress>,
 ) -> anyhow::Result<CargoBuildResult> {
-    _ = progress.start_send(BuildProgressUpdate {
+    _ = progress.start_send(UpdateBuildProgress {
         stage: Stage::Compiling,
         update: UpdateStage::Start,
     });
@@ -144,7 +144,7 @@ pub(crate) async fn build_cargo(
                     output_location = Some(executable.into());
                 } else {
                     let build_progress = units_compiled as f64 / crate_count as f64;
-                    _ = progress.start_send(BuildProgressUpdate {
+                    _ = progress.start_send(UpdateBuildProgress {
                         stage: Stage::Compiling,
                         update: UpdateStage::SetProgress((build_progress).clamp(0.0, 1.00)),
                     });

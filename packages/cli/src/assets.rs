@@ -1,4 +1,4 @@
-use crate::builder::{BuildProgressUpdate, BuildRequest, Stage, UpdateStage};
+use crate::builder::{BuildRequest, Stage, UpdateBuildProgress, UpdateStage};
 use crate::serve::output::MessageSource;
 use crate::Result;
 use anyhow::Context;
@@ -39,7 +39,7 @@ pub fn create_assets_head(build: &BuildRequest, manifest: &AssetManifest) -> Res
 pub(crate) fn process_assets(
     build: &BuildRequest,
     manifest: &AssetManifest,
-    progress: &mut UnboundedSender<BuildProgressUpdate>,
+    progress: &mut UnboundedSender<UpdateBuildProgress>,
 ) -> anyhow::Result<()> {
     let static_asset_output_dir = build.target_out_dir();
 
@@ -60,7 +60,7 @@ pub(crate) fn process_assets(
                         tracing::info!(dx_src = ?MessageSource::Build, "Optimized static asset {file_asset}");
                         let assets_finished =
                             assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        _ = progress.start_send(BuildProgressUpdate {
+                        _ = progress.start_send(UpdateBuildProgress {
                             stage: Stage::OptimizingAssets,
                             update: UpdateStage::SetProgress(
                                 assets_finished as f64 / asset_count as f64,

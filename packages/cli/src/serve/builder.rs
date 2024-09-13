@@ -1,4 +1,4 @@
-use crate::builder::BuildProgressUpdate;
+use crate::builder::UpdateBuildProgress;
 use crate::builder::BuildRequest;
 use crate::builder::BuildResult;
 use crate::builder::TargetPlatform;
@@ -22,7 +22,7 @@ pub struct Builder {
     build_results: Option<JoinHandle<Result<Vec<BuildResult>>>>,
 
     /// The progress of the builds
-    build_progress: Vec<(TargetPlatform, UnboundedReceiver<BuildProgressUpdate>)>,
+    build_progress: Vec<(TargetPlatform, UnboundedReceiver<UpdateBuildProgress>)>,
 
     /// The application we are building
     config: DioxusCrate,
@@ -64,7 +64,7 @@ impl Builder {
                 let res = build_request.build(tx.clone()).await;
 
                 if let Err(err) = &res {
-                    let _ = tx.start_send(BuildProgressUpdate {
+                    let _ = tx.start_send(UpdateBuildProgress {
                         stage: crate::builder::Stage::Finished,
                         update: crate::builder::UpdateStage::Failed(format!("{err}")),
                     });
@@ -177,7 +177,7 @@ impl Builder {
 pub enum BuilderUpdate {
     Progress {
         platform: TargetPlatform,
-        update: BuildProgressUpdate,
+        update: UpdateBuildProgress,
     },
     Ready {
         results: Vec<BuildResult>,

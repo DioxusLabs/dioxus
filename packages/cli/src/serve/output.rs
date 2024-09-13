@@ -7,7 +7,7 @@
 
 use super::{Builder, Server, Watcher};
 use crate::{
-    builder::{BuildProgressUpdate, Stage, TargetPlatform},
+    builder::{UpdateBuildProgress, Stage, TargetPlatform},
     dioxus_crate::DioxusCrate,
     serve::next_or_pending,
     tracer::CLILogControl,
@@ -545,7 +545,7 @@ impl Output {
         }
     }
 
-    pub fn new_build_progress(&mut self, platform: TargetPlatform, update: BuildProgressUpdate) {
+    pub fn new_build_progress(&mut self, platform: TargetPlatform, update: UpdateBuildProgress) {
         self.build_progress
             .current_builds
             .entry(platform)
@@ -720,7 +720,7 @@ pub struct ActiveBuild {
 }
 
 impl ActiveBuild {
-    fn update(&mut self, update: BuildProgressUpdate) {
+    fn update(&mut self, update: UpdateBuildProgress) {
         match update.update {
             UpdateStage::Start => {
                 // If we are already past the stage, don't roll back, but allow a fresh build to update.

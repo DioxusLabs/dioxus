@@ -1,7 +1,7 @@
 use std::future::{poll_fn, Future, IntoFuture};
 use std::task::Poll;
 
-use crate::builder::{BuildProgressUpdate, Stage, TargetPlatform, UpdateStage};
+use crate::builder::{UpdateBuildProgress, Stage, TargetPlatform, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
 use crate::tracer::CLILogControl;
@@ -142,9 +142,9 @@ pub async fn serve_all(
 
                         match update {
                             // Send rebuild start message.
-                            BuildProgressUpdate { stage: Stage::Compiling, update: UpdateStage::Start } => server.send_reload_start().await,
+                            UpdateBuildProgress { stage: Stage::Compiling, update: UpdateStage::Start } => server.send_reload_start().await,
                             // Send rebuild failed message.
-                            BuildProgressUpdate { stage: Stage::Finished, update: UpdateStage::Failed(_) } => server.send_reload_failed().await,
+                            UpdateBuildProgress { stage: Stage::Finished, update: UpdateStage::Failed(_) } => server.send_reload_failed().await,
                             _ => {},
                         }
                     }
