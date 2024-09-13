@@ -19,14 +19,15 @@ use crate::{
 use core::panic;
 use crossterm::{
     cursor::{Hide, Show},
-    event::{
-        DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyEventKind,
-        KeyModifiers, MouseButton, MouseEventKind,
+    event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
+        LeaveAlternateScreen,
     },
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
     ExecutableCommand,
 };
+
 use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
@@ -47,12 +48,11 @@ use tracing::Level;
 
 mod message;
 mod render;
-mod selection;
 
 pub use message::*;
 
 // How many lines should be scroll on each mouse scroll or arrow key input.
-const SCROLL_SPEED: u16 = 1;
+const SCROLL_SPEED: u16 = 2;
 // Speed added to `SCROLL_SPEED` when the modifier key is held during scroll.
 const SCROLL_MODIFIER: u16 = 4;
 // Scroll modifier key.
@@ -104,10 +104,6 @@ pub struct Output {
     platform: Platform,
     addr: AddressArguments,
 
-    drag_start: Option<(u16, u16)>,
-    drag_end: Option<(u16, u16)>,
-    selected_lines: Vec<String>,
-
     // Filters
     show_filter_menu: bool,
     filters: Vec<(String, bool)>,
@@ -131,10 +127,7 @@ impl Output {
         if interactive {
             log_control.output_enabled.store(true, Ordering::SeqCst);
             enable_raw_mode()?;
-            stdout()
-                .execute(EnterAlternateScreen)?
-                .execute(EnableMouseCapture)?
-                .execute(Hide)?;
+            stdout().execute(EnterAlternateScreen)?.execute(Hide)?;
 
             // workaround for ci where the terminal is not fully initialized
             // this stupid bug
@@ -144,6 +137,9 @@ impl Output {
 
         // set the panic hook to fix the terminal
         set_fix_term_hook();
+
+        // Fix the vscode scrollback issue
+        fix_xtermjs_scrollback();
 
         let term: Option<TerminalBackend> = Terminal::with_options(
             CrosstermBackend::new(stdout()),
@@ -163,8 +159,8 @@ impl Output {
 
         dx_version.push_str(env!("CARGO_PKG_VERSION"));
 
+        // todo: we want the binstalls / cargo installs to be exempt, but installs from git are not
         let is_cli_release = crate::dx_build_info::PROFILE == "release";
-
         if !is_cli_release {
             if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
                 let hash = &hash.trim_start_matches('g')[..4];
@@ -196,11 +192,6 @@ impl Output {
             anim_start: Instant::now(),
             addr: cfg.server_arguments.address.clone(),
 
-            // Text selection
-            drag_start: None,
-            drag_end: None,
-            selected_lines: Vec::new(),
-
             // Filter
             show_filter_menu: false,
             filters: Vec::new(),
@@ -226,6 +217,10 @@ impl Output {
             level: Level::ERROR,
             content: stderr,
         });
+
+        if self.is_snapped() {
+            self.scroll_to_bottom();
+        }
     }
 
     /// Add a message from stdout to the logs
@@ -244,6 +239,10 @@ impl Output {
             level: Level::INFO,
             content: stdout,
         });
+
+        if self.is_snapped() {
+            self.scroll_to_bottom();
+        }
     }
 
     /// Wait for either the ctrl_c handler or the next event
@@ -326,10 +325,7 @@ impl Output {
                 .output_enabled
                 .store(false, Ordering::SeqCst);
             disable_raw_mode()?;
-            stdout()
-                .execute(DisableMouseCapture)?
-                .execute(LeaveAlternateScreen)?
-                .execute(Show)?;
+            stdout().execute(LeaveAlternateScreen)?.execute(Show)?;
             self.drain_print_logs();
         }
 
@@ -403,24 +399,6 @@ impl Output {
         }
 
         match input {
-            Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollUp => {
-                // Scroll up
-                let mut scroll_speed = SCROLL_SPEED;
-                if mouse.modifiers.contains(SCROLL_MODIFIER_KEY) {
-                    scroll_speed += SCROLL_MODIFIER;
-                }
-                self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
-                self.reset_drag();
-            }
-            Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollDown => {
-                // Scroll down
-                let mut scroll_speed = SCROLL_SPEED;
-                if mouse.modifiers.contains(SCROLL_MODIFIER_KEY) {
-                    scroll_speed += SCROLL_MODIFIER;
-                }
-                self.scroll_position += scroll_speed;
-                self.reset_drag()
-            }
             Event::Key(key) if key.code == KeyCode::Up && key.kind == KeyEventKind::Press => {
                 // Select filter list item if filter is showing, otherwise scroll console.
                 if self.show_filter_menu {
@@ -432,7 +410,6 @@ impl Output {
                         scroll_speed += SCROLL_MODIFIER;
                     }
                     self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
-                    self.reset_drag();
                 }
             }
             Event::Key(key) if key.code == KeyCode::Down && key.kind == KeyEventKind::Press => {
@@ -449,7 +426,6 @@ impl Output {
                         scroll_speed += SCROLL_MODIFIER;
                     }
                     self.scroll_position += scroll_speed;
-                    self.reset_drag();
                 }
             }
             Event::Key(key) if key.code == KeyCode::Left && key.kind == KeyEventKind::Press => {
@@ -479,21 +455,6 @@ impl Output {
                     self.filter_search_mode = !self.filter_search_mode;
                 }
             }
-            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
-                self.reset_drag();
-            }
-            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Drag(MouseButton::Left) => {
-                // Start mouse drag
-                let x = mouse.column;
-                let y = mouse.row;
-
-                if self.drag_start.is_some() {
-                    self.drag_end = Some((x, y));
-                } else {
-                    self.drag_start = Some((x, y));
-                    self.drag_end = self.drag_start;
-                }
-            }
             Event::Key(key)
                 if key.code == KeyCode::Char('r') && key.kind == KeyEventKind::Press =>
             {
@@ -506,27 +467,7 @@ impl Output {
                 // Open the running app.
                 open::that(format!("http://{}:{}", self.addr.addr, self.addr.port))?;
             }
-            Event::Key(key)
-                if key.code == KeyCode::Char('C') && key.kind == KeyEventKind::Press =>
-            {
-                // Copy any selected lines to the clipboard.
-                let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
 
-                if is_shift && !self.selected_lines.is_empty() {
-                    let text = selection::process_selection(&mut self.selected_lines);
-                    selection::set_clipboard(text);
-                }
-            }
-            Event::Key(key)
-                if key.code == KeyCode::Char('a') && key.kind == KeyEventKind::Press =>
-            {
-                // Select all visible lines in the console.
-                let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-                if is_ctrl {
-                    self.drag_start = Some((0, 0));
-                    self.drag_end = Some((self.console_width - 1, self.console_height - 1));
-                }
-            }
             Event::Key(key)
                 if key.code == KeyCode::Char('f') && key.kind == KeyEventKind::Press =>
             {
@@ -550,23 +491,11 @@ impl Output {
             _ => {}
         }
 
-        if self.scroll_position
-            > self
-                .num_lines_wrapping
-                .saturating_sub(self.console_height + 1)
-        {
-            self.scroll_position = self
-                .num_lines_wrapping
-                .saturating_sub(self.console_height + 1);
+        if self.scroll_position > self.num_lines_wrapping.saturating_sub(self.console_height) {
+            self.scroll_position = self.num_lines_wrapping.saturating_sub(self.console_height);
         }
 
         Ok(false)
-    }
-
-    fn reset_drag(&mut self) {
-        self.drag_start = None;
-        self.drag_end = None;
-        self.selected_lines.clear();
     }
 
     pub fn new_ws_message(
@@ -600,14 +529,8 @@ impl Output {
         }
     }
 
-    // todo: re-enable
-    #[allow(unused)]
     fn is_snapped(&self) -> bool {
         true
-        // let prev_scrol = self
-        //     .num_lines_with_wrapping
-        //     .saturating_sub(self.term_height);
-        // prev_scrol == self.scroll
     }
 
     pub fn scroll_to_bottom(&mut self) {
@@ -617,8 +540,7 @@ impl Output {
     pub fn push_log(&mut self, message: Message) {
         self.messages.push(message);
 
-        let snapped = self.is_snapped();
-        if snapped {
+        if self.is_snapped() {
             self.scroll_to_bottom();
         }
     }
@@ -630,8 +552,7 @@ impl Output {
             .or_default()
             .update(update);
 
-        let snapped = self.is_snapped();
-        if snapped {
+        if self.is_snapped() {
             self.scroll_to_bottom();
         }
     }
@@ -725,13 +646,6 @@ impl Output {
                     &enabled_filters,
                 );
 
-                layout.render_selection(
-                    frame,
-                    self.drag_start,
-                    self.drag_end,
-                    &mut self.selected_lines,
-                );
-
                 if self.show_filter_menu {
                     layout.render_filter_menu(
                         frame,
@@ -754,6 +668,13 @@ impl Output {
                 if self.more_modal_open {
                     layout.render_more_modal(frame);
                 }
+
+                layout.render_current_scroll(
+                    self.scroll_position,
+                    self.num_lines_wrapping,
+                    self.console_height,
+                    frame,
+                );
             });
     }
 
@@ -819,21 +740,25 @@ impl ActiveBuild {
         }
     }
 
-    fn spans(&self, area: Rect) -> Vec<Span> {
+    fn make_spans(&self, area: Rect) -> Vec<Span> {
         let mut spans = Vec::new();
 
         let message = match self.stage {
-            Stage::Initializing => "initializing... ",
-            Stage::InstallingWasmTooling => "installing wasm tools... ",
-            Stage::Compiling => "compiling... ",
-            Stage::OptimizingWasm => "optimizing wasm... ",
-            Stage::OptimizingAssets => "optimizing assets... ",
-            Stage::Finished => "finished! √ ",
+            Stage::Initializing => "Initializing...",
+            Stage::InstallingWasmTooling => "Configuring...",
+            Stage::Compiling => "Compiling...",
+            Stage::OptimizingWasm => "Optimizing...",
+            Stage::OptimizingAssets => "Copying Assets...",
+            Stage::Finished => "Build finished! 🎉 ",
         };
-        let progress = format!("{}%", (self.progress * 100.0) as u8);
+
+        let progress = format!(" {}%", (self.progress * 100.0) as u8);
 
         if area.width >= self.max_layout_size() {
-            spans.push(Span::from(message).light_yellow());
+            match self.stage {
+                Stage::Finished => spans.push(Span::from(message).light_yellow()),
+                _ => spans.push(Span::from(message).light_green()),
+            }
 
             if self.stage != Stage::Finished {
                 spans.push(Span::from(progress).white());
@@ -870,10 +795,15 @@ fn set_fix_term_hook() {
         _ = disable_raw_mode();
         let mut stdout = stdout();
         _ = stdout.execute(LeaveAlternateScreen);
-        _ = stdout.execute(DisableMouseCapture);
         _ = stdout.execute(Show);
         original_hook(info);
     }));
+}
+
+/// clearing and writing a new line fixes the xtermjs scrollback issue
+fn fix_xtermjs_scrollback() {
+    _ = crossterm::execute!(std::io::stdout(), Clear(ClearType::All));
+    println!();
 }
 
 // todo: re-enable

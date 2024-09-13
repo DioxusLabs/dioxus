@@ -26,8 +26,10 @@ pub struct TuiLayout {
     console: Rc<[Rect]>,
     // The filter drawer if the drawer is open.
     filter_drawer: Option<Rc<[Rect]>>,
+
     // The border that separates the console and info bars.
     border_sep: Rect,
+
     //. The status bar that displays build status, platform, versions, etc.
     status_bar: Rc<[Rect]>,
 
@@ -41,14 +43,14 @@ impl TuiLayout {
         let body = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                // Console
-                Constraint::Fill(1),
-                // Border Separator
-                Constraint::Length(1),
                 // Footer Status
                 Constraint::Length(1),
-                // Padding
+                // Border Separator
                 Constraint::Length(1),
+                // Console
+                Constraint::Fill(1),
+                // Padding
+                Constraint::Length(0),
             ])
             .split(frame_size);
 
@@ -62,7 +64,7 @@ impl TuiLayout {
         let console = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(console_constraints)
-            .split(body[0]);
+            .split(body[2]);
 
         let filter_drawer = match filter_open {
             false => None,
@@ -82,7 +84,7 @@ impl TuiLayout {
         let status_bar = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-            .split(body[2]);
+            .split(body[0]);
 
         // Specify borders
         let border_sep_top = body[1];
@@ -116,102 +118,6 @@ impl TuiLayout {
         }
     }
 
-    /// Render the user's text selection and compile it into a list of lines.
-    pub fn render_selection(
-        &self,
-        frame: &mut Frame,
-        drag_start: Option<(u16, u16)>,
-        drag_end: Option<(u16, u16)>,
-        selected_lines: &mut Vec<String>,
-    ) {
-        let console = self.console[0];
-
-        let Some(start) = drag_start else {
-            return;
-        };
-        let Some(end) = drag_end else {
-            return;
-        };
-
-        let buffer = frame.buffer_mut();
-
-        let start_index = buffer.index_of(start.0, start.1);
-        let end_index = buffer.index_of(end.0, end.1);
-
-        let console_size = console.as_size();
-        let console_x_end = console_size.width;
-        let console_y_end = console_size.height;
-
-        let mut new_selected_lines = Vec::new();
-        let direction_forward = start_index < end_index;
-
-        // The drag was started out of console area.
-        if start.0 > console_x_end || start.1 > console_y_end {
-            return;
-        }
-
-        let mut i = start_index;
-        loop {
-            if i == end_index {
-                break;
-            }
-
-            let (x, y) = buffer.pos_of(i);
-
-            // Skip any cells outside of console area.
-            // This looping logic is a bit duplicated.
-            if y >= console_y_end || x >= console_x_end {
-                match direction_forward {
-                    true => i = i.saturating_add(1),
-                    false => i = i.saturating_sub(1),
-                }
-                if i == end_index {
-                    break;
-                }
-                continue;
-            }
-
-            let cell = buffer.get_mut(x, y);
-            cell.set_bg(Color::DarkGray);
-
-            // Add each symbol to it's correct line.
-            let symbol = cell.symbol();
-            let line_index = match direction_forward {
-                true => y - start.1,
-                false => start.1 - y,
-            } as usize;
-
-            // Add the symbol to it's correct line, creating it if null.
-            if let Some(line) = new_selected_lines.get_mut(line_index) {
-                *line += symbol;
-            } else {
-                let line = String::from(symbol);
-                new_selected_lines.push(line);
-            }
-
-            // Determine which direction we need to iterate through in the buffer.
-            match direction_forward {
-                true => i = i.saturating_add(1),
-                false => i = i.saturating_sub(1),
-            }
-        }
-
-        if !direction_forward {
-            new_selected_lines.reverse();
-        }
-
-        // Replace current selected lines with new ones.
-        selected_lines.clear();
-        for line in new_selected_lines.iter_mut() {
-            // Reverse lines if needed.
-            if !direction_forward {
-                *line = line.chars().rev().collect::<String>();
-            }
-
-            selected_lines.push(line.clone());
-        }
-    }
-
     /// Render the console and it's logs, returning the number of lines required to render the entire log output.
     pub fn render_console(
         &self,
@@ -223,80 +129,63 @@ impl TuiLayout {
         let console = self.console[0];
         let mut out_text = Text::default();
 
-        // Display in order they were created.
-        let msgs = messages.iter();
-
-        // Find the largest prefix sizes before assembly the messages.
-        let mut source_len = 0;
-        let mut level_len = 0;
-        for msg in msgs {
-            let source = format!("[{}]", msg.source);
-            let len = source.len();
-            if len > source_len {
-                source_len = len;
-            }
-
-            let level = format!("{}:", msg.level);
-            let len = level.len();
-            if len > level_len {
-                level_len = len;
-            }
-        }
-
+        let level_len = "BUILD: ".len();
         let (console_width, console_height) = self.get_console_size();
         let msgs = messages.iter();
 
         // Assemble the messages
         for msg in msgs {
             let mut sub_line_padding = 0;
-            let mut first_line = true;
 
-            let text = msg.content.into_text().unwrap_or_default();
+            let text = msg.content.trim_end().into_text().unwrap_or_default();
 
-            for line in text.lines {
+            for (idx, line) in text.lines.into_iter().enumerate() {
                 // Don't add any formatting for cargo messages.
                 let out_line = if msg.source != MessageSource::Cargo {
-                    if first_line {
-                        first_line = false;
+                    if idx == 0 {
+                        match msg.source {
+                            MessageSource::Dev => {
+                                let mut spans =
+                                    vec![Span::from(format!("  DEV: ",)).light_magenta()];
 
-                        // Build source tag: `[dev]`
-                        // We subtract 2 here to account for the `[]`
-                        let padding =
-                            build_msg_padding(source_len - msg.source.to_string().len() - 2);
-                        let source = format!("{}[{}]", padding, msg.source);
-                        sub_line_padding += source.len();
-
-                        let source_span = Span::from(source);
-                        let source_span = match msg.source {
-                            MessageSource::App(_) => source_span.light_cyan(),
-                            MessageSource::Dev => source_span.dark_gray(),
-                            MessageSource::Build => source_span.light_yellow(),
-                            MessageSource::Unknown => source_span.black(),
-                            MessageSource::Cargo => {
-                                unimplemented!("this shouldn't be reached")
+                                for span in line.spans {
+                                    spans.push(span);
+                                }
+                                spans
                             }
-                        };
+                            MessageSource::Build => {
+                                let mut spans = vec![Span::from(format!("BUILD: ",)).light_blue()];
 
-                        // Build level tag: `INFO:``
-                        // We don't subtract 1 here for `:` because we still want at least 1 padding.
-                        let padding = build_msg_padding(level_len - msg.level.to_string().len());
-                        let level = format!("{}{}: ", padding, msg.level);
-                        sub_line_padding += level.len();
+                                for span in line.spans {
+                                    spans.push(span);
+                                }
+                                spans
+                            }
+                            _ => {
+                                // Build level tag: `INFO:``
+                                // We don't subtract 1 here for `:` because we still want at least 1 padding.
+                                let padding =
+                                    build_msg_padding(level_len - msg.level.to_string().len() - 2);
+                                let level = format!("{padding}{}: ", msg.level);
+                                sub_line_padding += level.len();
 
-                        let level_span = Span::from(level);
-                        let level_span = match msg.level {
-                            Level::TRACE => level_span.black(),
-                            Level::DEBUG => level_span.light_magenta(),
-                            Level::INFO => level_span.light_blue(),
-                            Level::WARN => level_span.light_yellow(),
-                            Level::ERROR => level_span.light_red(),
-                        };
+                                let level_span = Span::from(level);
+                                let level_span = match msg.level {
+                                    Level::TRACE => level_span.black(),
+                                    Level::DEBUG => level_span.light_magenta(),
+                                    Level::INFO => level_span.light_green(),
+                                    Level::WARN => level_span.light_yellow(),
+                                    Level::ERROR => level_span.light_red(),
+                                };
 
-                        let mut out_line = vec![source_span, level_span];
-                        for span in line.spans {
-                            out_line.push(span);
+                                let mut out_line = vec![level_span];
+                                for span in line.spans {
+                                    out_line.push(span);
+                                }
+
+                                out_line
+                            }
                         }
-                        out_line
                     } else {
                         // Not the first line. Append the padding and merge into list.
                         let padding = build_msg_padding(sub_line_padding);
@@ -311,7 +200,11 @@ impl TuiLayout {
                     line.spans
                 };
 
-                out_text.push_line(Line::from(out_line));
+                if msg.source != MessageSource::Cargo {
+                    out_text.push_line(Line::from(out_line));
+                }
+
+                // out_text.push_line(Line::from(out_line));
             }
         }
 
@@ -357,42 +250,14 @@ impl TuiLayout {
             }
         }
 
-        // Add an extra line since scroll can't hit last line for some reason.
-        out_text.push_line(Line::from(""));
-
         let paragraph = Paragraph::new(out_text)
             .left_aligned()
             .wrap(Wrap { trim: false });
 
         let num_lines_wrapping = paragraph.line_count(console_width) as u16;
 
-        // Render scrollbar
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(None)
-            .end_symbol(None)
-            .track_symbol(None)
-            .thumb_symbol("▐");
-
-        let mut scrollbar_state =
-            ScrollbarState::new(num_lines_wrapping.saturating_sub(console_height) as usize)
-                .position(scroll_position as usize);
-
         let paragraph = paragraph.scroll((scroll_position, 0));
-        paragraph
-            .block(Block::new())
-            .render(console, frame.buffer_mut());
-
-        // and the scrollbar, those are separate widgets
-        frame.render_stateful_widget(
-            scrollbar,
-            console.inner(Margin {
-                // todo: dont use margin - just push down the body based on its top border
-                // using an inner vertical margin of 1 unit makes the scrollbar inside the block
-                vertical: 1,
-                horizontal: 0,
-            }),
-            &mut scrollbar_state,
-        );
+        paragraph.render(console, frame.buffer_mut());
 
         num_lines_wrapping
     }
@@ -409,12 +274,10 @@ impl TuiLayout {
     ) {
         // left aligned text
         let mut spans = vec![
-            Span::from(if is_cli_release { "dx" } else { "dx-dev" }).green(),
-            Span::from(" ").green(),
-            Span::from("serve").green(),
-            Span::from(" | ").white(),
-            Span::from(platform.to_string()).green(),
-            Span::from(" | ").white(),
+            Span::from("🧬 dx").white(),
+            Span::from(" ").white(),
+            Span::from("0.6.1").white(),
+            Span::from(" | ").dark_gray(),
         ];
 
         // If there is build progress, render the current status.
@@ -428,15 +291,20 @@ impl TuiLayout {
                 .any(|b| b.failed.is_some());
 
             if build_failed {
-                spans.push(Span::from("build failed ❌").red());
+                spans.push(Span::from("Build failed ❌").red());
             } else {
-                spans.push(Span::from("status: ").green());
+                // spans.push(Span::from("status: ").gray());
                 let build = build_progress
                     .current_builds
                     .values()
                     .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                     .unwrap();
-                spans.extend_from_slice(&build.spans(Rect::new(0, 0, build.max_layout_size(), 1)));
+                spans.extend_from_slice(&build.make_spans(Rect::new(
+                    0,
+                    0,
+                    build.max_layout_size(),
+                    1,
+                )));
             }
         }
 
@@ -454,15 +322,7 @@ impl TuiLayout {
         };
 
         // Right-aligned text
-        let right_line = Line::from(vec![
-            more_span,
-            Span::from(" | ").gray(),
-            Span::from("[r] rebuild").gray(),
-            Span::from(" | ").gray(),
-            filter_span,
-            Span::from(" | ").gray(),
-            Span::from("[o] open").gray(),
-        ]);
+        let right_line = Line::from(vec![filter_span, Span::from(" | ").dark_gray(), more_span]);
 
         frame.render_widget(
             Paragraph::new(Line::from(spans)).left_aligned(),
@@ -479,10 +339,13 @@ impl TuiLayout {
     /// Renders the "more" modal to show extra info/keybinds accessible via the more keybind.
     pub fn render_more_modal(&self, frame: &mut Frame) {
         let area = self.console[0];
-        let modal = Layout::default()
+        let mut modal = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1)])
-            .split(area)[0];
+            .constraints([Constraint::Fill(1), Constraint::Length(5)])
+            .split(area)[1];
+
+        // // hack to overwrite the divider line
+        // modal.height += 1;
 
         frame.render_widget(Clear, modal);
         frame.render_widget(Block::default().borders(Borders::ALL), modal);
@@ -583,6 +446,42 @@ impl TuiLayout {
     /// Returns the height of the console TUI area in number of lines.
     pub fn get_console_size(&self) -> (u16, u16) {
         (self.console[0].width, self.console[0].height)
+    }
+
+    /// Render the current scroll position at the top right corner of the frame
+    pub(crate) fn render_current_scroll(
+        &self,
+        scroll_position: u16,
+        lines: u16,
+        console_height: u16,
+        frame: &mut Frame<'_>,
+    ) {
+        let area = self.console[0];
+        let mut row = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1)])
+            .split(area)[0];
+
+        row.y -= 1;
+
+        let max_scroll = lines.saturating_sub(console_height);
+        if max_scroll == 0 {
+            return;
+        }
+
+        let remaining_ines = max_scroll.saturating_sub(scroll_position);
+
+        // row.x -= (3 - remaining_ines.to_string().len()) as u16;
+
+        if remaining_ines != 0 {
+            let text = vec![Span::from(format!(" {remaining_ines}⬇ ").dark_gray())];
+
+            let msg = Paragraph::new(Line::from(text))
+                .alignment(Alignment::Right)
+                .block(Block::default());
+
+            frame.render_widget(msg, row);
+        }
     }
 }
 

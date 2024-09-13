@@ -105,7 +105,7 @@ impl BuildRequest {
     ) -> Result<BuildResult> {
         tracing::info!(
             dx_src = ?MessageSource::Build,
-            "→ Running build [{}] command...",
+            "Running build [{}] command...",
             self.target_platform,
         );
 
@@ -143,7 +143,7 @@ impl BuildRequest {
 
         tracing::info!(
             dx_src = ?MessageSource::Build,
-            "→ Build completed: [{}]",
+            "Build completed: [{}]",
             self.dioxus_crate.out_dir().display(),
         );
 
