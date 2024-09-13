@@ -7,14 +7,14 @@
 
 use super::{Builder, Server, Watcher};
 use crate::{
-    builder::{UpdateBuildProgress, Stage, TargetPlatform},
+    builder::{BuildResult, UpdateStage},
+    serve::Serve,
+};
+use crate::{
+    builder::{Stage, TargetPlatform, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
     serve::next_or_pending,
     tracer::CLILogControl,
-};
-use crate::{
-    builder::{BuildResult, UpdateStage},
-    serve::Serve,
 };
 use core::panic;
 use crossterm::{

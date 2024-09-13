@@ -1,8 +1,8 @@
 use super::BuildRequest;
 use super::BuildResult;
 use crate::assets::pre_compress_folder;
-use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::Stage;
+use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
 use crate::serve::output::MessageSource;

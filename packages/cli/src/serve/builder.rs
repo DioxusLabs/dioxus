@@ -1,7 +1,7 @@
-use crate::builder::UpdateBuildProgress;
 use crate::builder::BuildRequest;
 use crate::builder::BuildResult;
 use crate::builder::TargetPlatform;
+use crate::builder::UpdateBuildProgress;
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::next_or_pending;
 use crate::serve::Serve;

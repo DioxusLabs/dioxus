@@ -1,7 +1,7 @@
 use std::future::{poll_fn, Future, IntoFuture};
 use std::task::Poll;
 
-use crate::builder::{UpdateBuildProgress, Stage, TargetPlatform, UpdateStage};
+use crate::builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
 use crate::tracer::CLILogControl;
