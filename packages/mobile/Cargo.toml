@@ -14,8 +14,8 @@ dioxus-desktop = { workspace = true }
 
 [lib]
 doctest = false
-test = false
 # tests suspended until package ready
+test = false
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
