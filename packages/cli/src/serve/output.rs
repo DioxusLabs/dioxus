@@ -663,6 +663,7 @@ impl Output {
                     &self.build_progress,
                     self.more_modal_open,
                     self.show_filter_menu,
+                    &self._dx_version,
                 );
 
                 if self.more_modal_open {
@@ -757,7 +758,7 @@ impl ActiveBuild {
         if area.width >= self.max_layout_size() {
             match self.stage {
                 Stage::Finished => spans.push(Span::from(message).light_yellow()),
-                _ => spans.push(Span::from(message).light_green()),
+                _ => spans.push(Span::from(message).light_yellow()),
             }
 
             if self.stage != Stage::Finished {

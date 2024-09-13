@@ -1595,7 +1595,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c718c0784ab208e35cc764e8b3f864caf5cd82a65d793fb99ddb3565ae028726"
 dependencies = [
  "clipboard-win",
- "cocoa",
+ "cocoa 0.25.0",
  "image 0.25.2",
  "x11rb",
 ]

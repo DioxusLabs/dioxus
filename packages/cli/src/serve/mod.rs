@@ -1,8 +1,5 @@
+use std::future::{poll_fn, Future, IntoFuture};
 use std::task::Poll;
-use std::{
-    future::{poll_fn, Future, IntoFuture},
-    time::Instant,
-};
 
 use crate::builder::{BuildProgressUpdate, Stage, TargetPlatform, UpdateStage};
 use crate::cli::serve::Serve;
@@ -85,23 +82,20 @@ pub async fn serve_all(
                 }
 
                 let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
-                let started = Instant::now();
                 let changed = changed_files.get(0).cloned();
 
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(mut hr) = watcher.attempt_hot_reload(&dioxus_crate, changed_files) {
+                if let Some(hr) = watcher.attempt_hot_reload(&dioxus_crate, changed_files) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty() && hr.assets.is_empty() && hr.unknown_files.is_empty() {
                         continue
                     }
 
                     if let Some(changed_path) = changed {
-                        let elasped = started.elapsed().as_millis();
-
                         let path_relative = changed_path.strip_prefix(&dioxus_crate.crate_dir()).map(|p| p.display().to_string()).unwrap_or_else(|_| changed_path.display().to_string());
-                        tracing::info!(dx_src = ?MessageSource::Dev, "Hotreloaded {} in {}ms", path_relative, elasped);
+                        tracing::info!(dx_src = ?MessageSource::Dev, "Hotreloaded {}", path_relative);
                     }
 
                     server.send_hotreload(hr).await;

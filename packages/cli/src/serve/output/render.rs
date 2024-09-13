@@ -5,13 +5,10 @@ use super::{BuildProgress, Message, MessageSource};
 use ansi_to_tui::IntoText as _;
 use dioxus_cli_config::Platform;
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{
-        Block, Borders, Clear, List, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Widget, Wrap,
-    },
+    widgets::{Block, Borders, Clear, List, ListState, Paragraph, Widget, Wrap},
     Frame,
 };
 use regex::Regex;
@@ -50,7 +47,7 @@ impl TuiLayout {
                 // Console
                 Constraint::Fill(1),
                 // Padding
-                Constraint::Length(0),
+                Constraint::Length(1),
             ])
             .split(frame_size);
 
@@ -130,7 +127,7 @@ impl TuiLayout {
         let mut out_text = Text::default();
 
         let level_len = "BUILD: ".len();
-        let (console_width, console_height) = self.get_console_size();
+        let (console_width, _console_height) = self.get_console_size();
         let msgs = messages.iter();
 
         // Assemble the messages
@@ -266,17 +263,18 @@ impl TuiLayout {
     pub fn render_status_bar(
         &self,
         frame: &mut Frame,
-        is_cli_release: bool,
-        platform: Platform,
+        _is_cli_release: bool,
+        _platform: Platform,
         build_progress: &BuildProgress,
         more_modal_open: bool,
         filter_menu_open: bool,
+        dx_version: &str,
     ) {
         // left aligned text
         let mut spans = vec![
             Span::from("🧬 dx").white(),
             Span::from(" ").white(),
-            Span::from("0.6.1").white(),
+            Span::from(format!("{}", dx_version)).white(),
             Span::from(" | ").dark_gray(),
         ];
 
@@ -322,7 +320,15 @@ impl TuiLayout {
         };
 
         // Right-aligned text
-        let right_line = Line::from(vec![filter_span, Span::from(" | ").dark_gray(), more_span]);
+        let right_line = Line::from(vec![
+            Span::from("[o] open").gray(),
+            Span::from(" | ").gray(),
+            Span::from("[r] rebuild").gray(),
+            Span::from(" | ").gray(),
+            filter_span,
+            Span::from(" | ").dark_gray(),
+            more_span,
+        ]);
 
         frame.render_widget(
             Paragraph::new(Line::from(spans)).left_aligned(),
@@ -339,13 +345,10 @@ impl TuiLayout {
     /// Renders the "more" modal to show extra info/keybinds accessible via the more keybind.
     pub fn render_more_modal(&self, frame: &mut Frame) {
         let area = self.console[0];
-        let mut modal = Layout::default()
+        let modal = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Fill(1), Constraint::Length(5)])
             .split(area)[1];
-
-        // // hack to overwrite the divider line
-        // modal.height += 1;
 
         frame.render_widget(Clear, modal);
         frame.render_widget(Block::default().borders(Borders::ALL), modal);
