@@ -1,5 +1,5 @@
-use crate::Result;
 use crate::{builder::Platform, bundler::AppBundle};
+use crate::{Result, TraceSrc};
 use std::{net::SocketAddr, path::PathBuf, process::Stdio};
 use tokio::{
     io::AsyncBufReadExt,
@@ -50,6 +50,33 @@ impl AppHandle {
             stderr: None,
             stdout: None,
         };
+
+        match platform {
+            TargetPlatform::Web => {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", serve.address.address());
+            }
+            TargetPlatform::Desktop => {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app at {} 🎉", self.executable.display());
+            }
+            TargetPlatform::Server => {
+                if let Some(fullstack_address) = fullstack_address {
+                    tracing::info!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Launching fullstack server on http://{:?} 🎉",
+                        fullstack_address
+                    );
+                }
+            }
+            TargetPlatform::Liveview => {
+                if let Some(fullstack_address) = fullstack_address {
+                    tracing::info!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Launching liveview server on http://{:?} 🎉",
+                        fullstack_address
+                    );
+                }
+            }
+        }
 
         // open the exe with some arguments/envvars/etc
         // we're going to try and configure this binary from the environment, if we can
