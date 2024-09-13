@@ -81,15 +81,22 @@ impl VirtualDom {
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
         let height = {
-            let scope = self.scopes.remove(id.0);
-            let context = scope.state();
+            let scope = self.runtime.scopes.borrow_mut().remove(id.0);
+            let scope_ref = scope.borrow();
+            let context = scope_ref.state();
             context.height
         };
 
-        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
+        self.runtime
+            .dirty_scopes
+            .borrow_mut()
+            .remove(&ScopeOrder::new(height, id));
 
         // If this scope was a suspense boundary, remove it from the resolved scopes
-        self.resolved_scopes.retain(|s| s != &id);
+        self.runtime
+            .resolved_scopes
+            .borrow_mut()
+            .retain(|s| s != &id);
     }
 }
 

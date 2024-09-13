@@ -496,8 +496,10 @@ impl VNode {
                         accumulated
                     }
                     Some((idx, DynamicNode::Component(_))) => {
-                        let scope = ScopeId(mount.mounted_dynamic_nodes[idx]);
-                        let node = dom.get_scope(scope).unwrap().root_node();
+                        let scope_id = ScopeId(mount.mounted_dynamic_nodes[idx]);
+                        let scope = dom.get_scope(scope_id).unwrap();
+                        let scope_ref = scope.borrow();
+                        let node = scope_ref.root_node();
                         node.push_all_root_nodes(dom, to)
                     }
                     // This is a static root node or a single dynamic node, just push it

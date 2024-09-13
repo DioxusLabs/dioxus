@@ -22,7 +22,9 @@ impl VirtualDom {
         to: Option<&mut M>,
         scope_id: ScopeId,
     ) {
-        let scope = &mut self.scopes[scope_id.0];
+        let rt = self.runtime.clone();
+        let scopes = rt.scopes.borrow_mut();
+        let mut scope = scopes[scope_id.0].borrow_mut();
         if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
             SuspenseBoundaryProps::diff(scope_id, self, to)
         } else {
@@ -43,9 +45,9 @@ impl VirtualDom {
             let Ok(new_real_nodes) = &new_nodes else {
                 return;
             };
-            let scope_state = &mut self.scopes[scope.0];
+            let scope_state = self.runtime.scopes.borrow()[scope.0].clone();
             // Load the old and new rendered nodes
-            let old = scope_state.last_rendered_node.take().unwrap();
+            let old = scope_state.borrow_mut().last_rendered_node.take().unwrap();
 
             // If there are suspended scopes, we need to check if the scope is suspended before we diff it
             // If it is suspended, we need to diff it but write the mutations nothing
@@ -54,7 +56,9 @@ impl VirtualDom {
             old.as_vnode()
                 .diff_node(new_real_nodes, self, render_to.as_deref_mut());
 
-            self.scopes[scope.0].last_rendered_node = Some(new_nodes);
+            self.runtime.scopes.borrow()[scope.0]
+                .borrow_mut()
+                .last_rendered_node = Some(new_nodes);
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).unwrap().mount(&self.runtime);
@@ -85,7 +89,9 @@ impl VirtualDom {
                 .create(self, parent, render_to.as_deref_mut());
 
             // Then set the new node as the last rendered node
-            self.scopes[scope.0].last_rendered_node = Some(new_nodes);
+            self.runtime.scopes.borrow()[scope.0]
+                .borrow_mut()
+                .last_rendered_node = Some(new_nodes);
 
             if render_to.is_some() {
                 self.runtime.get_state(scope).unwrap().mount(&self.runtime);
@@ -106,7 +112,11 @@ impl VirtualDom {
         SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, destroy_component_state);
 
         // Remove the component from the dom
-        if let Some(node) = self.scopes[scope_id.0].last_rendered_node.as_ref() {
+        if let Some(node) = self.runtime.clone().scopes.borrow()[scope_id.0]
+            .borrow()
+            .last_rendered_node
+            .as_ref()
+        {
             node.clone().as_vnode().remove_node_inner(
                 self,
                 to,
@@ -140,7 +150,9 @@ impl VNode {
         }
 
         // copy out the box for both
-        let old_scope = &mut dom.scopes[scope_id.0];
+        let rt = dom.runtime.clone();
+        let scopes = rt.scopes.borrow();
+        let mut old_scope = scopes[scope_id.0].borrow_mut();
         let old_props: &mut dyn AnyProps = old_scope.props.deref_mut();
         let new_props: &dyn AnyProps = new.props.deref();
 
@@ -156,7 +168,10 @@ impl VNode {
         dom.run_and_diff_scope(to, scope_id);
 
         let height = dom.runtime.get_state(scope_id).unwrap().height;
-        dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
+        dom.runtime
+            .dirty_scopes
+            .borrow_mut()
+            .remove(&ScopeOrder::new(height, scope_id));
     }
 
     fn replace_vcomponent(
@@ -201,6 +216,7 @@ impl VNode {
         if scope_id.is_placeholder() {
             scope_id = dom
                 .new_scope(component.props.duplicate(), component.name)
+                .borrow()
                 .state()
                 .id;
 
@@ -211,12 +227,15 @@ impl VNode {
             let new = dom.run_scope(scope_id);
 
             // Then set the new node as the last rendered node
-            dom.scopes[scope_id.0].last_rendered_node = Some(new);
+            dom.runtime.scopes.borrow()[scope_id.0]
+                .borrow_mut()
+                .last_rendered_node = Some(new);
         }
 
         let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
 
-        let new_node = dom.scopes[scope.0]
+        let new_node = dom.runtime.scopes.borrow()[scope.0]
+            .borrow()
             .last_rendered_node
             .as_ref()
             .expect("Component to be mounted")

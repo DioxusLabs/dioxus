@@ -15,6 +15,7 @@ use crate::{
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
+use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
@@ -203,14 +204,7 @@ use tracing::instrument;
 /// // Render the virtual dom
 /// ```
 pub struct VirtualDom {
-    pub(crate) scopes: Slab<ScopeState>,
-
-    pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
-
     pub(crate) runtime: Rc<Runtime>,
-
-    // The scopes that have been resolved since the last render
-    pub(crate) resolved_scopes: Vec<ScopeId>,
 
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
@@ -318,9 +312,6 @@ impl VirtualDom {
         let mut dom = Self {
             rx,
             runtime: Runtime::new(tx),
-            scopes: Default::default(),
-            dirty_scopes: Default::default(),
-            resolved_scopes: Default::default(),
         };
 
         let root = VProps::new(
@@ -337,14 +328,14 @@ impl VirtualDom {
     /// Get the state for any scope given its ID
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
-    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0)
+    pub fn get_scope(&self, id: ScopeId) -> Option<Rc<RefCell<ScopeState>>> {
+        self.runtime.scopes.borrow().get(id.0).cloned()
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
-    pub fn base_scope(&self) -> &ScopeState {
+    pub fn base_scope(&self) -> Rc<RefCell<ScopeState>> {
         self.get_scope(ScopeId::ROOT).unwrap()
     }
 
@@ -359,20 +350,23 @@ impl VirtualDom {
     ///
     /// This is useful for what is essentially dependency injection when building the app
     pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
-        self.base_scope().state().provide_context(context);
+        self.base_scope().borrow().state().provide_context(context);
         self
     }
 
     /// Provide a context to the root scope
     pub fn provide_root_context<T: Clone + 'static>(&self, context: T) {
-        self.base_scope().state().provide_context(context);
+        self.base_scope().borrow().state().provide_context(context);
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
     ///
     /// This method is useful for when you want to provide a context in your app without knowing its type
     pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
-        self.base_scope().state().provide_any_context(context);
+        self.base_scope()
+            .borrow()
+            .state()
+            .provide_any_context(context);
     }
 
     /// Manually mark a scope as requiring a re-render
@@ -564,7 +558,9 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
-        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
+        self.runtime.scopes.borrow_mut()[ScopeId::ROOT.0]
+            .borrow_mut()
+            .last_rendered_node = Some(new_nodes.clone());
 
         // Rebuilding implies we append the created elements to the root
         let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
@@ -721,9 +717,11 @@ impl VirtualDom {
             }
         }
 
-        self.resolved_scopes
+        self.runtime
+            .resolved_scopes
+            .borrow_mut()
             .sort_by_key(|&id| self.runtime.get_state(id).unwrap().height);
-        std::mem::take(&mut self.resolved_scopes)
+        std::mem::take(&mut self.runtime.resolved_scopes.borrow_mut())
     }
 
     /// Get the current runtime
@@ -742,8 +740,8 @@ impl VirtualDom {
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Drop all scopes in order of height
-        let mut scopes = self.scopes.drain().collect::<Vec<_>>();
-        scopes.sort_by_key(|scope| scope.state().height);
+        let mut scopes = self.runtime.scopes.borrow_mut().drain().collect::<Vec<_>>();
+        scopes.sort_by_key(|scope| scope.borrow().state().height);
         for scope in scopes.into_iter().rev() {
             drop(scope);
         }

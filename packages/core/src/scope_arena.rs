@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::innerlude::{throw_error, RenderError, ScopeOrder};
 use crate::prelude::ReactiveContext;
 use crate::scope_context::SuspenseLocation;
@@ -8,14 +11,14 @@ use crate::{
     scopes::ScopeId,
     virtual_dom::VirtualDom,
 };
-use crate::{Element, VNode};
+use crate::{Element, Runtime, VNode};
 
 impl VirtualDom {
     pub(super) fn new_scope(
         &mut self,
         props: BoxedAnyProps,
         name: &'static str,
-    ) -> &mut ScopeState {
+    ) -> Rc<RefCell<ScopeState>> {
         let parent_id = self.runtime.current_scope_id().ok();
         let height = match parent_id.and_then(|id| self.runtime.get_state(id)) {
             Some(parent) => parent.height() + 1,
@@ -25,24 +28,25 @@ impl VirtualDom {
             .runtime
             .current_suspense_location()
             .unwrap_or(SuspenseLocation::NotSuspended);
-        let entry = self.scopes.vacant_entry();
+        let mut scopes = self.runtime.scopes.borrow_mut();
+        let entry = scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
         let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
         let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
 
-        let scope = entry.insert(ScopeState {
+        let scope = entry.insert(Rc::new(RefCell::new(ScopeState {
             runtime: self.runtime.clone(),
             context_id: id,
             props,
             last_rendered_node: Default::default(),
             reactive_context,
-        });
+        })));
 
         self.runtime.create_scope(scope_runtime);
         tracing::trace!("created scope {id:?} with parent {parent_id:?}");
 
-        scope
+        scope.clone()
     }
 
     /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
@@ -53,7 +57,8 @@ impl VirtualDom {
         crate::Runtime::current().unwrap_or_else(|e| panic!("{}", e));
 
         self.runtime.clone().with_scope_on_stack(scope_id, || {
-            let scope = &self.scopes[scope_id.0];
+            let scopes = self.runtime.scopes.borrow();
+            let scope = &scopes[scope_id.0].borrow();
             let output = {
                 let scope_state = scope.state();
 
@@ -84,7 +89,9 @@ impl VirtualDom {
             }
 
             // remove this scope from dirty scopes
-            self.dirty_scopes
+            self.runtime
+                .dirty_scopes
+                .borrow_mut()
                 .remove(&ScopeOrder::new(scope_state.height, scope_id));
             output
         })

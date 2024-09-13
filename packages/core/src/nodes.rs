@@ -6,7 +6,8 @@ use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
     properties::ComponentFunction,
 };
-use crate::{Properties, ScopeId, VirtualDom};
+use crate::{Properties, Runtime, ScopeId, VirtualDom};
+use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -609,13 +610,18 @@ impl VComponent {
         dynamic_node_index: usize,
         vnode: &VNode,
         dom: &'a VirtualDom,
-    ) -> Option<&'a ScopeState> {
+    ) -> Option<Rc<RefCell<ScopeState>>> {
         let mount = vnode.mount.get().as_usize()?;
 
         let mounts = dom.runtime.mounts.borrow();
         let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
-        dom.scopes.get(scope_id)
+        Runtime::current()
+            .unwrap()
+            .scopes
+            .borrow()
+            .get(scope_id)
+            .cloned()
     }
 }
 

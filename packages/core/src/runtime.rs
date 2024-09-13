@@ -1,6 +1,7 @@
 use crate::arena::ElementRef;
 use crate::innerlude::{DirtyTasks, Effect};
 use crate::nodes::VNodeMount;
+use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
@@ -8,7 +9,7 @@ use crate::{
     scopes::ScopeId,
     Task,
 };
-use crate::{AttributeValue, ElementId, Event};
+use crate::{AttributeValue, ElementId, Event, ScopeState};
 use slab::Slab;
 use slotmap::DefaultKey;
 use std::any::Any;
@@ -26,6 +27,14 @@ thread_local! {
 
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
 pub struct Runtime {
+    // TODO (Matt): Combine the below scope-related fields into a single RefCell?
+    pub(crate) scopes: RefCell<Slab<Rc<RefCell<ScopeState>>>>,
+
+    pub(crate) dirty_scopes: RefCell<BTreeSet<ScopeOrder>>,
+
+    // The scopes that have been resolved since the last render
+    pub(crate) resolved_scopes: RefCell<Vec<ScopeId>>,
+
     pub(crate) scope_states: RefCell<Vec<Option<Scope>>>,
 
     // We use this to track the current scope
@@ -76,6 +85,9 @@ impl Runtime {
             rendering: Cell::new(true),
             scope_states: Default::default(),
             scope_stack: Default::default(),
+            scopes: Default::default(),
+            resolved_scopes: Default::default(),
+            dirty_scopes: Default::default(),
             suspense_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
