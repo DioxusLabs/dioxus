@@ -33,17 +33,23 @@ members = [
     "packages/lazy-js-bundle",
 
     # Full project examples
-    "example-projects/tailwind",
-    "example-projects/pwa",
-    "example-projects/fullstack-hello-world",
-    "example-projects/fullstack-router",
-    "example-projects/fullstack-streaming",
-    "example-projects/fullstack-desktop",
-    "example-projects/fullstack-auth",
     "example-projects/fullstack-hackernews",
-    "example-projects/ssg-simple",
-    "example-projects/ssg-router",
-    "example-projects/ssg-github-pages",
+    "example-projects/ecommerce-site",
+    "example-projects/wifi-scanner",
+    "example-projects/file-explorer",
+    "example-projects/llm-chatbot",
+
+    # Simple examples that require a crate
+    "examples/tailwind",
+    "examples/pwa",
+    "examples/fullstack-hello-world",
+    "examples/fullstack-router",
+    "examples/fullstack-streaming",
+    "examples/fullstack-desktop",
+    "examples/fullstack-auth",
+    "examples/ssg-simple",
+    "examples/ssg-router",
+    "examples/ssg-github-pages",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -304,11 +310,6 @@ doc-scrape-examples = true
 
 [[example]]
 name = "errors"
-required-features = ["desktop"]
-doc-scrape-examples = true
-
-[[example]]
-name = "file_explorer"
 required-features = ["desktop"]
 doc-scrape-examples = true
 
