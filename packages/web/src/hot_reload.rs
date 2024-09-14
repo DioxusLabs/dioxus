@@ -232,7 +232,8 @@ pub(crate) fn invalidate_browser_asset_cache() {
     for x in 0..links.length() {
         use wasm_bindgen::JsCast;
         let link: web_sys::Element = links.get(x).unwrap().unchecked_into();
-        let href = link.get_attribute("href").unwrap();
-        _ = link.set_attribute("href", &format!("{}?{}", href, noise));
+        if let Some(href) = link.get_attribute("href") {
+            _ = link.set_attribute("href", &format!("{}?{}", href, noise));
+        }
     }
 }

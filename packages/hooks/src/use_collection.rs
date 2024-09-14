@@ -40,7 +40,7 @@ static TodoList: Component = |cx| {
     let todos = use_map(|| HashMap::new());
     let input = use_signal(|| None);
 
-    rsx!{
+    rsx! {
         div {
             button {
                 "Add todo"
