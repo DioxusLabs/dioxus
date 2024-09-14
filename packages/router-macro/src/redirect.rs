@@ -1,6 +1,6 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::LitStr;
+use syn::{ExprClosure, ExprPath, ExprStruct, Ident, LitStr, Type};
 
 use crate::{
     hash::HashFragment,
@@ -16,8 +16,15 @@ pub(crate) struct Redirect {
     pub segments: Vec<RouteSegment>,
     pub query: Option<QuerySegment>,
     pub hash: Option<HashFragment>,
-    pub function: syn::ExprClosure,
+    pub function: RedirectExpr,
     pub index: usize,
+}
+
+#[derive(Debug)]
+pub(crate) enum RedirectExpr {
+    Closure(ExprClosure),
+    Struct(ExprStruct),
+    Path(ExprPath),
 }
 
 impl Redirect {
@@ -55,12 +62,53 @@ impl Redirect {
         index: usize,
     ) -> syn::Result<Self> {
         let path = input.parse::<syn::LitStr>()?;
-
         let _ = input.parse::<syn::Token![,]>();
-        let function = input.parse::<syn::ExprClosure>()?;
 
+        let input_fork = input.fork();
+
+        // Allow closures `|id: u32| BlogPost { id }`
+        // Route variants `Route::Home`
+        // And paths to functions `Route::default`
+        // The macro already verifies that the supplied value is of the correct type.
+        let function = match input.parse::<syn::ExprClosure>() {
+            Ok(c) => RedirectExpr::Closure(c),
+            Err(_) => match input.parse::<syn::ExprStruct>() {
+                Ok(s) => RedirectExpr::Struct(s),
+                Err(_) => RedirectExpr::Path(
+                    input_fork
+                        .parse::<syn::ExprPath>()
+                        .expect("redirect function must be a closure or a route variant"),
+                ),
+            },
+        };
+
+        let (segments, query, hash) = match function {
+            RedirectExpr::Closure(ref fun) => Self::parse_expr_closure(&path, fun)?,
+            RedirectExpr::Struct(_) => Self::parse_blank_path(&path)?,
+            RedirectExpr::Path(_) => Self::parse_blank_path(&path)?,
+        };
+
+        Ok(Redirect {
+            route: path,
+            nests: active_nests,
+            segments,
+            query,
+            hash,
+            function,
+            index,
+        })
+    }
+
+    fn parse_expr_closure(
+        path: &LitStr,
+        closure: &ExprClosure,
+    ) -> syn::Result<(
+        Vec<RouteSegment>,
+        Option<QuerySegment>,
+        Option<HashFragment>,
+    )> {
         let mut closure_arguments = Vec::new();
-        for arg in function.inputs.iter() {
+        for arg in closure.inputs.iter() {
             match arg {
                 syn::Pat::Type(pat) => match &*pat.pat {
                     syn::Pat::Ident(ident) => {
@@ -82,21 +130,26 @@ impl Redirect {
             }
         }
 
-        let (segments, query, hash) = parse_route_segments(
+        parse_route_segments(
             path.span(),
             #[allow(clippy::map_identity)]
             closure_arguments.iter().map(|(name, ty)| (name, ty)),
             &path.value(),
-        )?;
+        )
+    }
 
-        Ok(Redirect {
-            route: path,
-            nests: active_nests,
-            segments,
-            query,
-            hash,
-            function,
-            index,
-        })
+    /// Parses a path url without any url parameters.
+    fn parse_blank_path(
+        path: &LitStr,
+    ) -> syn::Result<(
+        Vec<RouteSegment>,
+        Option<QuerySegment>,
+        Option<HashFragment>,
+    )> {
+        parse_route_segments(
+            path.span(),
+            std::iter::empty::<(&Ident, &Type)>(),
+            &path.value(),
+        )
     }
 }

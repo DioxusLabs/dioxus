@@ -5,7 +5,7 @@ use syn::Ident;
 
 use crate::{
     nest::{Nest, NestId},
-    redirect::Redirect,
+    redirect::{Redirect, RedirectExpr},
     route::{Route, RouteType},
     segment::{static_segment_idx, RouteSegment},
     RouteEndpoint,
@@ -437,16 +437,21 @@ impl<'a> RouteTreeSegmentData<'a> {
                     .map(|seg| !matches!(seg, RouteSegment::CatchAll(_, _)))
                     .unwrap_or(true);
 
-                let redirect_function = &redirect.function;
-                let args = redirect_function.inputs.iter().map(|pat| match pat {
-                    syn::Pat::Type(ident) => {
-                        let name = &ident.pat;
-                        quote! {#name}
+                let return_redirect = match &redirect.function {
+                    RedirectExpr::Struct(fun) => quote!(#fun),
+                    RedirectExpr::Path(fun) => quote!(#fun ()),
+                    RedirectExpr::Closure(fun) => {
+                        let args = fun.inputs.iter().map(|pat| match pat {
+                            syn::Pat::Type(ident) => {
+                                let name = &ident.pat;
+                                quote! {#name}
+                            }
+                            _ => panic!("Expected closure argument to be a typed pattern"),
+                        });
+                        quote! {
+                            (#fun)(#(#args,)*)
+                        }
                     }
-                    _ => panic!("Expected closure argument to be a typed pattern"),
-                });
-                let return_redirect = quote! {
-                    (#redirect_function)(#(#args,)*)
                 };
 
                 print_route_segment(
