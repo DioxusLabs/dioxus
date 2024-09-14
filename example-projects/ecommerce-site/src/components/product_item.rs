@@ -2,8 +2,8 @@ use dioxus::prelude::*;
 
 use crate::api::Product;
 
-#[inline_props]
-pub(crate) fn product_item(cx: Scope, product: Product) -> Element {
+#[component]
+pub(crate) fn product_item(product: Product) -> Element {
     let Product {
         id,
         title,
@@ -14,7 +14,7 @@ pub(crate) fn product_item(cx: Scope, product: Product) -> Element {
         ..
     } = product;
 
-    render! {
+    rsx! {
         section { class: "h-40 p-2 m-2 shadow-lg ring-1 rounded-lg flex flex-row place-items-center hover:ring-4 hover:shadow-2xl transition-all duration-200",
             img {
                 class: "object-scale-down w-1/6 h-full",

@@ -2,31 +2,23 @@
 
 use crate::{
     api::{fetch_products, Sort},
-    block_on,
     components::nav,
     components::product_item::product_item,
 };
 use dioxus::prelude::*;
 
-pub(crate) fn Home(cx: Scope) -> Element {
-    let products = cx.use_hook(|| block_on(fetch_products(10, Sort::Ascending)));
+pub(crate) fn Home() -> Element {
+    let products = use_server_future(|| fetch_products(10, Sort::Ascending))?;
+    let products = products().unwrap()?;
 
-    cx.render(rsx!(
-        head {
-            link {
-                rel: "stylesheet",
-                href: "/public/tailwind.css"
+    rsx! {
+        nav::nav {}
+        section { class: "p-10",
+            for product in products {
+                product_item {
+                    product
+                }
             }
         }
-        body {
-            nav::nav {}
-            section { class: "p-10",
-                products.iter().flatten().map(|product| rsx!{
-                    product_item {
-                        product: product.clone()
-                    }
-                })
-            }
-        }
-    ))
+    }
 }
