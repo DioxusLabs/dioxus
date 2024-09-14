@@ -1,10 +1,30 @@
 name: "Nix CI"
+
 on:
-  # Run only when pushing to mainline, and making PRs
   push:
     branches:
       - main
+    paths:
+      - packages/**
+      - examples/**
+      - docs/guide/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
+      - Makefile.toml
+
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
 jobs:
   build:
     runs-on: ${{ matrix.os }}
