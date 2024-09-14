@@ -22,8 +22,10 @@ pub(crate) enum Config {
         #[clap(long, default_value = "web")]
         platform: String,
     },
+
     /// Format print Dioxus config.
     FormatPrint {},
+
     /// Create a custom html file.
     CustomHtml {},
 

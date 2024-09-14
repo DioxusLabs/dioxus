@@ -69,8 +69,6 @@ global-hotkey = { workspace = true }
 rfd = { workspace = true, default-features = false, features = ["xdg-portal", "tokio"] }
 muda = { workspace = true }
 
-
-
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cocoa = { workspace = true }
 core-foundation = { workspace = true }

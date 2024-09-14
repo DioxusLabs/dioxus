@@ -31,12 +31,14 @@ impl Init {
         let name = std::env::current_dir()?
             .file_name()
             .map(|f| f.to_str().unwrap().to_string());
+
         // https://github.com/console-rs/dialoguer/issues/294
         ctrlc::set_handler(move || {
             let _ = console::Term::stdout().show_cursor();
             std::process::exit(0);
         })
         .expect("ctrlc::set_handler");
+
         let args = GenerateArgs {
             define: self.option,
             init: true,

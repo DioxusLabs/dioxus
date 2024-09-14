@@ -15,6 +15,7 @@ pub struct Bundle {
     /// The package types to bundle
     #[clap(long)]
     pub packages: Option<Vec<PackageType>>,
+
     /// The arguments for the dioxus build
     #[clap(flatten)]
     pub(crate) build_arguments: BuildArgs,
@@ -44,6 +45,7 @@ impl FromStr for PackageType {
             "rpm" => Ok(PackageType::Rpm),
             "appimage" => Ok(PackageType::AppImage),
             "dmg" => Ok(PackageType::Dmg),
+            "updater" => Ok(PackageType::Updater),
             _ => Err(format!("{} is not a valid package type", s)),
         }
     }
@@ -122,6 +124,7 @@ impl Bundle {
 
         // Copy the assets in the dist directory to the bundle
         let static_asset_output_dir = &dioxus_crate.dioxus_config.application.out_dir;
+
         // Make sure the dist directory is relative to the crate directory
         let static_asset_output_dir = static_asset_output_dir
             .strip_prefix(dioxus_crate.workspace_dir())

@@ -39,8 +39,7 @@ async fn main() -> anyhow::Result<()> {
     // Start the tracer so it captures logs from the build engine before we start the builder
     crate::serve::TraceController::initialize();
 
-    let args = Cli::parse();
-    match args.action {
+    match Cli::parse().action {
         Translate(opts) => opts
             .translate()
             .context("⛔️ Translation of HTML into RSX failed:"),

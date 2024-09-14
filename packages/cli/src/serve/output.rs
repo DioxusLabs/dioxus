@@ -17,8 +17,6 @@ use crossterm::{
     ExecutableCommand,
 };
 use dioxus_devtools_types::ClientMsg;
-// use dioxus_cli_config::{AddressArguments, Platform};
-// use dioxus_hot_reload::ClientMsg;
 use futures_util::{
     future::{select_all, OptionFuture},
     Future, FutureExt, StreamExt,
@@ -52,15 +50,12 @@ const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
 
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
-
-    // optional since when there's no tty there's no eventstream to read from - just stdin
     events: Option<EventStream>,
 
     pub(crate) build_progress: BuildProgress,
-    // running_apps: HashMap<Platform, RunningApp>,
 
     // A list of all messages from build, dev, app, and more.
-    messages: Vec<TraceMsg>,
+    messages: Vec<ConsoleMessage>,
 
     num_lines_wrapping: u16,
     scroll_position: u16,
@@ -71,9 +66,7 @@ pub struct Output {
     anim_start: Instant,
 
     interactive: bool,
-    _is_cli_release: bool,
     platform: Platform,
-    // addr: AddressArguments,
 
     // Filters
     show_filter_menu: bool,
@@ -82,9 +75,7 @@ pub struct Output {
     filter_search_mode: bool,
     filter_search_input: Option<String>,
 
-    _rustc_version: String,
-    _rustc_nightly: bool,
-    _dx_version: String,
+    dx_version: String,
 }
 
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
@@ -93,7 +84,6 @@ impl Output {
     pub(crate) fn start(cfg: &ServeArgs) -> io::Result<Self> {
         let interactive = cfg.interactive_tty();
         let mut events = None;
-
         if interactive {
             // log_control.output_enabled.store(true, Ordering::SeqCst);
             enable_raw_mode()?;
@@ -119,19 +109,8 @@ impl Output {
         )
         .ok();
 
-        // todo: re-enable rustc version
-        // let rustc_version = rustc_version().await;
-        // let rustc_nightly = rustc_version.contains("nightly") || cfg.target_args.nightly;
-        let _rustc_version = String::from("1.0.0");
-        let _rustc_nightly = false;
-
-        let mut dx_version = String::new();
-
-        dx_version.push_str(env!("CARGO_PKG_VERSION"));
-
-        let is_cli_release = crate::build_info::PROFILE == "release";
-
-        if !is_cli_release {
+        let mut dx_version = format!("{}", env!("CARGO_PKG_VERSION"));
+        if crate::build_info::PROFILE != "release" {
             if let Some(hash) = crate::build_info::GIT_COMMIT_HASH_SHORT {
                 let hash = &hash.trim_start_matches('g')[..4];
                 dx_version.push('-');
@@ -144,22 +123,18 @@ impl Output {
         Ok(Self {
             term: Rc::new(RefCell::new(term)),
             events,
-            _rustc_version,
-            _rustc_nightly,
-            _dx_version: dx_version,
+
+            dx_version,
             interactive,
-            _is_cli_release: is_cli_release,
             platform,
             messages: Vec::new(),
             more_modal_open: false,
             build_progress: Default::default(),
-            // running_apps: HashMap::new(),
             scroll_position: 0,
             num_lines_wrapping: 0,
             console_width: 0,
             console_height: 0,
             anim_start: Instant::now(),
-            // addr: cfg.address.clone(),
 
             // Filter
             show_filter_menu: false,
@@ -172,20 +147,11 @@ impl Output {
 
     /// Add a message from stderr to the logs
     pub fn push_stderr(&mut self, platform: Platform, stderr: String) {
-        // self.running_apps
-        //     .get_mut(&platform)
-        //     .unwrap()
-        //     .output
-        //     .as_mut()
-        //     .unwrap()
-        //     .stderr_line
-        //     .push_str(&stderr);
-
-        self.messages.push(TraceMsg {
+        self.messages.push(ConsoleMessage::Log(TraceMsg {
             source: TraceSrc::App(platform),
             level: Level::ERROR,
             content: stderr,
-        });
+        }));
 
         if self.is_snapped() {
             self.scroll_to_bottom();
@@ -194,20 +160,11 @@ impl Output {
 
     /// Add a message from stdout to the logs
     pub fn push_stdout(&mut self, platform: Platform, stdout: String) {
-        // self.running_apps
-        //     .get_mut(&platform)
-        //     .unwrap()
-        //     .output
-        //     .as_mut()
-        //     .unwrap()
-        //     .stdout_line
-        //     .push_str(&stdout);
-
-        self.messages.push(TraceMsg {
+        self.messages.push(ConsoleMessage::Log(TraceMsg {
             source: TraceSrc::App(platform),
             level: Level::INFO,
             content: stdout,
-        });
+        }));
 
         if self.is_snapped() {
             self.scroll_to_bottom();
@@ -251,11 +208,19 @@ impl Output {
         let messages = self.messages.drain(..);
 
         for msg in messages {
-            // TODO: Better formatting for different content lengths.
-            if msg.source != TraceSrc::Cargo {
-                println!("[{}] {}: {}", msg.source, msg.level, msg.content);
-            } else {
-                println!("{}", msg.content);
+            match msg {
+                ConsoleMessage::Log(msg) => {
+                    if msg.source != TraceSrc::Cargo {
+                        println!("[{}] {}: {}", msg.source, msg.level, msg.content);
+                    } else {
+                        println!("{}", msg.content);
+                    }
+                }
+
+                ConsoleMessage::BuildReady => {
+                    // TODO: Better formatting for different content lengths.
+                }
+                ConsoleMessage::OnngoingBuild { stage, progress } => todo!(),
             }
         }
     }
@@ -444,23 +409,22 @@ impl Output {
     // }
 
     pub(crate) fn push_inner_log(&mut self, msg: String) {
-        // self.push_log(
-        //     LogSource::Internal,
-        //     crate::builder::BuildMessage {
-        //         level: tracing::Level::INFO,
-        //         message: crate::builder::MessageType::Text(msg),
-        //         source: crate::builder::MessageSource::Dev,
-        //     },
-        // );
+        self.push_log(
+            TraceMsg::new(TraceSrc::Build, Level::INFO, msg),
+            // crate::builder::BuildMessage {
+            //     level: tracing::Level::INFO,
+            //     message: crate::builder::MessageType::Text(msg),
+            //     source: crate::builder::MessageSource::Dev,
+            // },
+        );
     }
 
     pub(crate) fn new_build_logs(&mut self, platform: Platform, update: BuildUpdateProgress) {
-        //         let snapped = self.is_snapped(LogSource::Target(platform));
-
-        //         // when the build is finished, switch to the console
-        //         if update.stage == Stage::Finished {
-        //             self.tab = Tab::Console;
-        //         }
+        self.push_log(TraceMsg::new(
+            TraceSrc::Build,
+            Level::INFO,
+            format!("Build progress for {platform:?}: {update:?}"),
+        ))
     }
 
     fn is_snapped(&self) -> bool {
@@ -472,24 +436,12 @@ impl Output {
     }
 
     pub fn push_log(&mut self, message: TraceMsg) {
-        self.messages.push(message);
+        self.messages.push(ConsoleMessage::Log(message));
 
         if self.is_snapped() {
             self.scroll_to_bottom();
         }
     }
-
-    // pub fn new_build_progress(&mut self, platform: Platform, update: BuildProgress) {
-    //     self.build_progress
-    //         .current_builds
-    //         .entry(platform)
-    //         .or_default()
-    //         .update(update);
-
-    //     if self.is_snapped() {
-    //         self.scroll_to_bottom();
-    //     }
-    // }
 
     pub(crate) fn new_ready_app(&mut self, handle: &AppHandle) {
         // Finish the build progress for the platform that just finished building
@@ -569,7 +521,7 @@ impl Output {
                     &self.build_progress,
                     self.more_modal_open,
                     self.show_filter_menu,
-                    &self._dx_version,
+                    &self.dx_version,
                 );
 
                 if self.more_modal_open {
@@ -584,221 +536,15 @@ impl Output {
                 );
             });
     }
+}
 
-    // pub(crate) fn render(
-    //     &mut self,
-    //     _args: &ServeArgs,
-    //     _krate: &DioxusCrate,
-    //     _builder: &Builder,
-    //     server: &DevServer,
-    //     _watcher: &Watcher,
-    // ) {
-    //     // just drain the build logs
-    //     if !self.interactive {
-    //         self.drain_print_logs();
-    //         return;
-    //     }
-
-    //     // Keep the animation track in terms of 100ms frames - the frame should be a number between 0 and 10
-    //     // todo: we want to use this somehow to animate things...
-    //     let elapsed = self.anim_start.elapsed().as_millis() as f32;
-    //     let num_frames = elapsed / 100.0;
-    //     let _frame_step = (num_frames % 10.0) as usize;
-
-    //     _ = self
-    //         .term
-    //         .clone()
-    //         .borrow_mut()
-    //         .as_mut()
-    //         .unwrap()
-    //         .draw(|frame| {
-    //             let mut layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
-    //             let (console_width, console_height) = layout.get_console_size();
-    //             self.console_width = console_width;
-    //             self.console_height = console_height;
-
-    //             // Render the decor first as some of it (such as backgrounds) may be rendered on top of.
-    //             layout.render_decor(frame, self.show_filter_menu);
-
-    //             // Get only the enabled filters.
-    //             let mut enabled_filters = self.filters.clone();
-    //             enabled_filters.retain(|f| f.1);
-    //             let enabled_filters = enabled_filters
-    //                 .iter()
-    //                 .map(|f| f.0.clone())
-    //                 .collect::<Vec<String>>();
-
-    //             // Render console, we need the number of wrapping lines for scroll.
-    //             self.num_lines_wrapping = layout.render_console(
-    //                 frame,
-    //                 self.scroll_position,
-    //                 &self.messages,
-    //                 &enabled_filters,
-    //             );
-
-    //             // // Render a border for the header
-    //             // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
-
-    //             // Render the metadata
-    //             let mut spans: Vec<Span> = vec![
-    //                 Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
-    //                 Span::from(" ").green(),
-    //                 Span::from("serve").green(),
-    //                 Span::from(" | ").white(),
-    //                 Span::from(self.platform.to_string()).green(),
-    //                 Span::from(" | ").white(),
-    //             ];
-
-    //             // If there is build progress, display that next to the platform
-    //             if !self.build_progress.current_builds.is_empty() {
-    //                 if self
-    //                     .build_progress
-    //                     .current_builds
-    //                     .values()
-    //                     .any(|b| b.failed.is_some())
-    //                 {
-    //                     spans.push(Span::from("build failed ❌").red());
-    //                 } else {
-    //                     spans.push(Span::from("status: ").green());
-    //                     let build = self
-    //                         .build_progress
-    //                         .current_builds
-    //                         .values()
-    //                         .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-    //                         .unwrap();
-
-    //                     spans.extend_from_slice(&build.spans(Rect::new(
-    //                         0,
-    //                         0,
-    //                         build.max_layout_size(),
-    //                         1,
-    //                     )));
-    //                 }
-    //             }
-
-    //             frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
-
-    //             // Split apart the body into a center and a right side
-    //             // We only want to show the sidebar if there's enough space
-    //             if listening_len > 0 {
-    //                 frame.render_widget(
-    //                     Paragraph::new(Line::from(vec![
-    //                         Span::from("listening at ").dark_gray(),
-    //                         Span::from(format!("http://{}", server.ip).as_str()).gray(),
-    //                     ])),
-    //                     header[1],
-    //                 )
-    //             }
-
-    //             if self.show_filter_menu {
-    //                 layout.render_filter_menu(
-    //                     frame,
-    //                     &self.filters,
-    //                     self.selected_filter_index,
-    //                     self.filter_search_mode,
-    //                     self.filter_search_input.as_ref(),
-    //                 );
-    //             }
-
-    //             layout.render_status_bar(
-    //                 frame,
-    //                 self.platform,
-    //                 &self.build_progress,
-    //                 self.more_modal_open,
-    //                 self.show_filter_menu,
-    //                 &self._dx_version,
-    //             );
-
-    //             if self.more_modal_open {
-    //                 layout.render_more_modal(frame);
-    //             }
-
-    //             layout.render_current_scroll(
-    //                 self.scroll_position,
-    //                 self.num_lines_wrapping,
-    //                 self.console_height,
-    //                 frame,
-    //             );
-    //         });
-    // }
-
-    // fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {
-    //     if !self.fly_modal_open {
-    //         return;
-    //     }
-
-    //     // Create a frame slightly smaller than the area
-    //     let panel = Layout::default()
-    //         .direction(Direction::Vertical)
-    //         .constraints([Constraint::Fill(1)].as_ref())
-    //         .split(area)[0];
-
-    //     // Wipe the panel
-    //     frame.render_widget(Clear, panel);
-    //     frame.render_widget(Block::default().borders(Borders::ALL), panel);
-
-    //     let modal = Paragraph::new("Under construction, please check back at a later date!\n")
-    //         .alignment(Alignment::Center);
-    //     frame.render_widget(modal, panel);
-    // }
-
-    // fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
-    //     let source = platform.into();
-    //     let snapped = self.is_snapped();
-
-    //     match source {
-    //         LogSource::Internal => self.build_progress.internal_logs.push(message),
-    //         LogSource::Target(platform) => self
-    //             .build_progress
-    //             .current_builds
-    //             .entry(platform)
-    //             .or_default()
-    //             .stdout_logs
-    //             .push(message),
-    //     }
-
-    //     if snapped {
-    //         self.scroll_to_bottom();
-    //     }
-    // }
-
-    // // todo: re-enable
-    // #[allow(unused)]
-    // fn is_snapped(&self) -> bool {
-    //     true
-    // }
-
-    async fn handle_events(&mut self, event: Event) -> io::Result<bool> {
-        let mut events = vec![event];
-
-        // Collect all the events within the next 10ms in one stream
-        let collect_events = async {
-            loop {
-                let Some(Ok(next)) = self.events.as_mut().unwrap().next().await else {
-                    break;
-                };
-                events.push(next);
-            }
-        };
-        tokio::select! {
-            _ = collect_events => {},
-            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
-        }
-
-        // Debounce events within the same frame
-        let mut handled = HashSet::new();
-        for event in events {
-            if !handled.contains(&event) {
-                if self.handle_input(event.clone())? {
-                    // Restart the running app.
-                    return Ok(true);
-                }
-                handled.insert(event);
-            }
-        }
-
-        Ok(false)
-    }
+/// Our console has "special" messages that get better rendering.
+///
+/// We want to display them differently since they have their own state and are rendered differently.
+enum ConsoleMessage {
+    Log(TraceMsg),
+    OnngoingBuild { stage: Stage, progress: f64 },
+    BuildReady,
 }
 
 #[derive(Default, Debug, PartialEq)]

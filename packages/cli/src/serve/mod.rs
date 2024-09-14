@@ -2,8 +2,10 @@ use crate::builder::{BuildUpdate, BuildUpdateProgress, Builder, Platform, Stage,
 use crate::cli::serve::ServeArgs;
 use crate::DioxusCrate;
 use crate::Result;
+use crate::TraceSrc;
 use std::ops::ControlFlow;
 
+mod console_widget;
 mod detect;
 mod handle;
 mod hot_reloading_file_map;
@@ -69,7 +71,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
             msg = tracer.wait() => msg,
         };
 
-        let res = handle_it(
+        let res = handle_update(
             msg,
             &args,
             &mut devserver,
@@ -96,7 +98,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     Ok(())
 }
 
-async fn handle_it(
+async fn handle_update(
     msg: ServeUpdate,
     args: &ServeArgs,
     devserver: &mut DevServer,
@@ -180,7 +182,7 @@ async fn handle_it(
         }
 
         ServeUpdate::BuildUpdate(BuildUpdate::BuildReady { target, result }) => {
-            tracing::info!("Opening app for [{}]", target);
+            tracing::info!(dx_src = ?TraceSrc::Dev, "Opening app for [{}]", target);
 
             let handle = runner
                 .open(result, devserver.ip, devserver.fullstack_address())
@@ -208,7 +210,7 @@ async fn handle_it(
         // If the process exited *cleanly*, we can exit
         ServeUpdate::ProcessExited { status, platform } => {
             if !status.success() {
-                tracing::error!("Application [{platform}] exited with status: {status}");
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Application [{platform}] exited with status: {status}");
                 return Ok(ControlFlow::Break(()));
             }
 
