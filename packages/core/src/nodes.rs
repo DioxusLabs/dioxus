@@ -900,7 +900,7 @@ impl<'a> IntoDynNode for Arguments<'a> {
 }
 
 /// Blanket impl for references of types that are already [IntoDynNode]
-impl<'a, T> IntoDynNode for &T
+impl<'a, T> IntoDynNode for &'a T
 where
     T: ToOwned,
     T::Owned: IntoDynNode,
@@ -948,7 +948,7 @@ impl IntoVNode for Option<Element> {
 }
 
 /// Blanket impl for references of types that are already [IntoVNode]
-impl<'a, T> IntoVNode for &T
+impl<'a, T> IntoVNode for &'a T
 where
     T: ToOwned,
     T::Owned: IntoVNode,
@@ -960,6 +960,7 @@ where
 
 // Note that we're using the E as a generic but this is never crafted anyways.
 pub struct FromNodeIterator;
+
 impl<T, I> IntoDynNode<FromNodeIterator> for T
 where
     T: Iterator<Item = I>,
