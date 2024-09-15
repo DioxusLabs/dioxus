@@ -7,6 +7,7 @@ members = [
     "packages/cli",
     "packages/cli-config",
     "packages/core-macro",
+    "packages/core-types",
     "packages/config-macro",
     "packages/router-macro",
     "packages/extension",
@@ -24,9 +25,12 @@ members = [
     "packages/check",
     "packages/rsx",
     "packages/rsx-rosetta",
+    "packages/rsx-hotreload",
     "packages/generational-box",
     "packages/signals",
     "packages/hot-reload",
+    "packages/devtools",
+    "packages/devtools-types",
     "packages/fullstack",
     "packages/server-macro",
     "packages/static-generation",
@@ -66,6 +70,7 @@ version = "0.6.0-alpha.2"
 dioxus = { path = "packages/dioxus", version = "0.6.0-alpha.0" }
 dioxus-lib = { path = "packages/dioxus-lib", version = "0.6.0-alpha.0" }
 dioxus-core = { path = "packages/core", version = "0.6.0-alpha.0" }
+dioxus-core-types = { path = "packages/core-types", version = "0.6.0-alpha.0" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.6.0-alpha.0" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.6.0-alpha.0" }
 dioxus-router = { path = "packages/router", version = "0.6.0-alpha.0" }

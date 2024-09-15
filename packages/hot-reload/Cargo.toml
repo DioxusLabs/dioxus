@@ -10,7 +10,7 @@ description = "Hot reloading utilities for Dioxus"
 keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 
 [dependencies]
-dioxus-rsx = { workspace = true, features = ["serde"] }
+dioxus-rsx = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }

@@ -4,7 +4,7 @@ use dioxus_core::prelude::IntoAttributeValue;
 use dioxus_core::HasAttributes;
 use dioxus_html_internal_macro::impl_extension_attributes;
 #[cfg(feature = "hot-reload-context")]
-use dioxus_rsx::HotReloadingContext;
+use dioxus_core_types::HotReloadingContext;
 
 #[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};

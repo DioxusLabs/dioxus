@@ -2494,9 +2494,12 @@ dependencies = [
  "dioxus-check",
  "dioxus-cli-config",
  "dioxus-core",
+ "dioxus-core-types",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-rsx",
+ "dioxus-rsx-hotreload",
+ "dioxus-rsx-rosetta",
  "dirs",
  "env_logger 0.11.5",
  "fern",
@@ -2522,7 +2525,6 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest",
- "rsx-rosetta",
  "rustls 0.23.12",
  "serde",
  "serde_json",
@@ -2609,7 +2611,6 @@ dependencies = [
  "dioxus",
  "dioxus-html",
  "dioxus-rsx",
- "prettyplease",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -2617,6 +2618,10 @@ dependencies = [
  "tokio",
  "trybuild",
 ]
+
+[[package]]
+name = "dioxus-core-types"
+version = "0.6.0-alpha.2"
 
 [[package]]
 name = "dioxus-desktop"
@@ -2665,6 +2670,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-devtools"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-devtools-types",
+ "dioxus-signals",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tungstenite 0.23.0",
+ "warnings",
+]
+
+[[package]]
+name = "dioxus-devtools-types"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "serde",
+]
+
+[[package]]
 name = "dioxus-examples"
 version = "0.6.0-alpha.2"
 dependencies = [
@@ -2693,8 +2721,8 @@ name = "dioxus-ext"
 version = "0.6.0-alpha.2"
 dependencies = [
  "dioxus-autofmt",
+ "dioxus-rsx-rosetta",
  "html_parser",
- "rsx-rosetta",
  "syn 2.0.74",
  "wasm-bindgen",
 ]
@@ -2795,9 +2823,11 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-core-types",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-web",
  "enumset",
  "euclid",
@@ -2990,16 +3020,43 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.6.0-alpha.2"
 dependencies = [
- "dioxus-core",
- "internment",
  "prettier-please",
  "prettyplease",
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
- "serde",
  "syn 2.0.74",
  "tracing",
+]
+
+[[package]]
+name = "dioxus-rsx-hotreload"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-core-types",
+ "dioxus-rsx",
+ "internment",
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
+ "syn 2.0.74",
+ "tracing",
+]
+
+[[package]]
+name = "dioxus-rsx-rosetta"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "convert_case 0.6.0",
+ "dioxus-autofmt",
+ "dioxus-html",
+ "dioxus-rsx",
+ "html_parser",
+ "pretty_assertions",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.74",
 ]
 
 [[package]]
@@ -3117,7 +3174,6 @@ dependencies = [
 name = "dioxus_server_macro"
 version = "0.6.0-alpha.2"
 dependencies = [
- "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "server_fn_macro",
@@ -8344,21 +8400,6 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "rsx-rosetta"
-version = "0.6.0-alpha.2"
-dependencies = [
- "convert_case 0.6.0",
- "dioxus-autofmt",
- "dioxus-html",
- "dioxus-rsx",
- "html_parser",
- "pretty_assertions",
- "proc-macro2",
- "quote",
- "syn 2.0.74",
 ]
 
 [[package]]

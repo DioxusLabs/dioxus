@@ -11,6 +11,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true }
+dioxus-core-types = { workspace = true }
 dioxus-core-macro = { workspace = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
@@ -30,6 +31,7 @@ futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
 rustversion = "1.0.17"
+dioxus-rsx-hotreload = { workspace = true, optional = true }
 
 [dependencies.web-sys]
 optional = true

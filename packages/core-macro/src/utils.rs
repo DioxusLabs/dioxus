@@ -3,8 +3,6 @@ use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{parse_quote, Expr, Lit, Meta, Token, Type};
 
-const FORMATTED_TYPE_START: &str = "static TY_AFTER_HERE:";
-const FORMATTED_TYPE_END: &str = "= unreachable!();";
 
 /// Attempts to convert the given literal to a string.
 /// Converts ints and floats to their base 10 counterparts.
@@ -29,20 +27,8 @@ pub fn format_type_string(ty: &Type) -> String {
     let ty_unformatted = ty.into_token_stream().to_string();
     let ty_unformatted = ty_unformatted.trim();
 
-    // This should always be valid syntax.
-    // Not Rust code, but syntax, which is the only thing that `syn` cares about.
-    let Ok(file_unformatted) = syn::parse_file(&format!(
-        "{FORMATTED_TYPE_START}{ty_unformatted}{FORMATTED_TYPE_END}"
-    )) else {
-        return ty_unformatted.to_string();
-    };
-
-    let file_formatted = prettyplease::unparse(&file_unformatted);
-
-    let file_trimmed = file_formatted.trim();
-    let start_removed = file_trimmed.trim_start_matches(FORMATTED_TYPE_START);
-    let end_removed = start_removed.trim_end_matches(FORMATTED_TYPE_END);
-    let ty_formatted = end_removed.trim();
+    // simply remove all whitespace
+    let ty_formatted = ty_unformatted.replace(" ", "");
 
     ty_formatted.to_string()
 }
