@@ -1,0 +1,31 @@
+[package]
+name = "dioxus-devtools"
+authors = ["Jonathan Kelley", "Evan Almloff"]
+version = { workspace = true }
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com/learn/0.4/migration/hot_reload"
+description = "Hot reloading utilities for Dioxus"
+keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
+
+[dependencies]
+dioxus-signals = { workspace = true }
+dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-devtools-types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# hot reloading serve
+tracing = { workspace = true }
+warnings.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tungstenite = { version = "0.23.0" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+serde_json = "1.0.91"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
