@@ -27,7 +27,7 @@ rustc-hash = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"] }
-dioxus-cli-config = { workspace = true, features = ["read-config", "read-from-args"] }
+dioxus-rutime-config = { workspace = true }
 generational-box = { workspace = true }
 
 # axum

@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["document"]}
-dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
+dioxus-rutime-config = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true }
 generational-box = { workspace = true }
 askama_escape = "0.10.3"
@@ -45,7 +45,7 @@ fs_extra = "1.2.0"
 
 [features]
 default = []
-incremental = ["dep:tokio", "dep:chrono", "dep:dioxus-cli-config"]
+incremental = ["dep:tokio", "dep:chrono", "dep:dioxus-rutime-config"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

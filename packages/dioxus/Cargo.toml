@@ -34,7 +34,7 @@ axum = { workspace = true, optional = true }
 dioxus-hot-reload = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
+default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted", "file_engine", "document"]
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]

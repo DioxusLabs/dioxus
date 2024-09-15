@@ -3026,7 +3026,6 @@ dependencies = [
  "proc-macro2-diagnostics",
  "quote",
  "syn 2.0.74",
- "tracing",
 ]
 
 [[package]]
