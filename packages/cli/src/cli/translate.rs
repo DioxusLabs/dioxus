@@ -50,7 +50,7 @@ impl Translate {
 }
 
 pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
-    let callbody = rsx_rosetta::rsx_from_html(dom);
+    let callbody = dioxus_rsx_rosetta::rsx_from_html(dom);
 
     match component {
         true => write_callbody_with_icon_section(callbody),
@@ -61,7 +61,7 @@ pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
 fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
     let mut svgs = vec![];
 
-    rsx_rosetta::collect_svgs(&mut callbody.body.roots, &mut svgs);
+    dioxus_rsx_rosetta::collect_svgs(&mut callbody.body.roots, &mut svgs);
 
     let mut out = write_component_body(dioxus_autofmt::write_block_out(&callbody).unwrap());
 

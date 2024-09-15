@@ -94,7 +94,7 @@ pub fn translate_rsx(contents: String, _component: bool) -> String {
     // Ensure we're loading valid HTML
     let dom = html_parser::Dom::parse(&contents).unwrap();
 
-    let callbody = rsx_rosetta::rsx_from_html(&dom);
+    let callbody = dioxus_rsx_rosetta::rsx_from_html(&dom);
 
     // Convert the HTML to RSX
     dioxus_autofmt::write_block_out(&callbody).unwrap()

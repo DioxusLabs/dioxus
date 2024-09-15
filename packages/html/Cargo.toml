@@ -96,7 +96,7 @@ file-engine = [
 ]
 wasm-bind = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 native-bind = ["dep:tokio", "file-engine"]
-hot-reload-context = ["dep:dioxus-rsx", "dioxus-rsx/hot_reload_traits"]
+hot-reload-context = ["dep:dioxus-rsx", "dep:dioxus-rsx-hotreload"]
 html-to-rsx = []
 
 [package.metadata.docs.rs]
