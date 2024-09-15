@@ -2492,7 +2492,6 @@ dependencies = [
  "ctrlc",
  "dioxus-autofmt",
  "dioxus-check",
- "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-hot-reload",
@@ -2500,6 +2499,7 @@ dependencies = [
  "dioxus-rsx",
  "dioxus-rsx-hotreload",
  "dioxus-rsx-rosetta",
+ "dioxus-runtime-config",
  "dirs",
  "env_logger 0.11.5",
  "fern",
@@ -2547,23 +2547,6 @@ dependencies = [
  "wasm-bindgen-shared",
  "wasm-opt",
  "zip",
-]
-
-[[package]]
-name = "dioxus-cli-config"
-version = "0.6.0-alpha.2"
-dependencies = [
- "built",
- "cargo_toml",
- "clap",
- "dirs",
- "once_cell",
- "serde",
- "serde_json",
- "tauri-bundler",
- "tauri-utils",
- "toml 0.8.19",
- "tracing",
 ]
 
 [[package]]
@@ -2631,12 +2614,12 @@ dependencies = [
  "cocoa 0.25.0",
  "core-foundation 0.9.4",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-core",
  "dioxus-hooks",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
+ "dioxus-runtime-config",
  "dioxus-signals",
  "dioxus-ssr",
  "dunce",
@@ -2739,12 +2722,12 @@ dependencies = [
  "ciborium",
  "clap",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-desktop",
  "dioxus-hot-reload",
  "dioxus-interpreter-js",
  "dioxus-lib",
  "dioxus-mobile",
+ "dioxus-runtime-config",
  "dioxus-ssr",
  "dioxus-web",
  "dioxus_server_macro",
@@ -2796,10 +2779,10 @@ name = "dioxus-hot-reload"
 version = "0.6.0-alpha.2"
 dependencies = [
  "chrono",
- "dioxus-cli-config",
  "dioxus-core",
  "dioxus-html",
  "dioxus-rsx",
+ "dioxus-runtime-config",
  "dioxus-signals",
  "execute",
  "futures-util",
@@ -2896,11 +2879,11 @@ version = "0.6.0-alpha.2"
 dependencies = [
  "axum 0.7.5",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-core",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
+ "dioxus-runtime-config",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -2982,12 +2965,12 @@ dependencies = [
  "console_error_panic_hook",
  "criterion",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-fullstack",
  "dioxus-lib",
  "dioxus-liveview",
  "dioxus-router",
  "dioxus-router-macro",
+ "dioxus-runtime-config",
  "dioxus-ssr",
  "gloo",
  "gloo-utils 0.1.7",
@@ -3059,6 +3042,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-runtime-config"
+version = "0.6.0-alpha.2"
+
+[[package]]
 name = "dioxus-signals"
 version = "0.6.0-alpha.2"
 dependencies = [
@@ -3090,10 +3077,10 @@ dependencies = [
  "async-trait",
  "chrono",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-core",
  "dioxus-html",
  "dioxus-interpreter-js",
+ "dioxus-runtime-config",
  "dioxus-signals",
  "fern",
  "fs_extra",
@@ -3115,11 +3102,11 @@ dependencies = [
  "axum 0.7.5",
  "criterion",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-fullstack",
  "dioxus-hot-reload",
  "dioxus-lib",
  "dioxus-router",
+ "dioxus-runtime-config",
  "dioxus-ssr",
  "dioxus-web",
  "http 1.1.0",

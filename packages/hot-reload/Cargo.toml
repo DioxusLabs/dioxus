@@ -45,7 +45,7 @@ tokio = { workspace = true, features = ["full"] }
 [features]
 default = ["dioxus-html"]
 client = ["dep:dioxus-signals"]
-serve = ["dep:tokio-stream", "dep:futures-util", "dep:tokio", "dep:tokio-tungstenite", "dep:dioxus-rutime-config"]
+serve = ["dep:tokio-stream", "dep:futures-util", "dep:tokio", "dep:tokio-tungstenite", "dep:dioxus-runtime-config"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
