@@ -5,18 +5,18 @@ use async_std::task::sleep;
 use dioxus::prelude::*;
 use web_time::Instant;
 
-const STYLE: Asset = asset!("/examples/assets/clock.css");
+const STYLE: &str = asset!("./examples/assets/clock.css");
 
 fn main() {
-    dioxus::launch(app);
+    launch(app);
 }
 
 fn app() -> Element {
     let mut millis = use_signal(|| 0);
 
     use_future(move || async move {
-        // Save our initial time
-        let start = std::time::Instant::now();
+        // Save our initial timea
+        let start = Instant::now();
 
         loop {
             sleep(std::time::Duration::from_millis(27)).await;
@@ -36,7 +36,7 @@ fn app() -> Element {
     );
 
     rsx! {
-        document::Stylesheet { href: STYLE }
+        head::Link { rel: "stylesheet", href: STYLE }
         div { id: "app",
             div { id: "title", "Carpe diem 🎉" }
             div { id: "clock-display", "{time}" }

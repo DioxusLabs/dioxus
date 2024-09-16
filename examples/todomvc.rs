@@ -3,10 +3,10 @@
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
-const STYLE: Asset = asset!("/examples/assets/todomvc.css");
+const STYLE: &str = asset!("./examples/assets/todomvc.css");
 
 fn main() {
-    dioxus::launch(app);
+    launch(app);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -63,7 +63,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        document::Stylesheet { href: STYLE }
+        head::Link { rel: "stylesheet", href: STYLE }
         section { class: "todoapp",
             TodoHeader { todos }
             section { class: "main",

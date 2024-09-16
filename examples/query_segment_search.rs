@@ -2,7 +2,7 @@
 //!
 //! The enum router makes it easy to use your route as state in your app. This example shows how to use the router to encode search text into the url and decode it back into a string.
 //!
-//! Run this example on desktop with
+//! Run this example on desktop with  
 //! ```sh
 //! dx serve --example query_segment_search
 //! ```
@@ -14,7 +14,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(|| {
+    launch(|| {
         rsx! {
             Router::<Route> {}
         }
@@ -29,7 +29,7 @@ enum Route {
 
     // The each query segment must implement <https://docs.rs/dioxus-router/latest/dioxus_router/routable/trait.FromQueryArgument.html> and Display.
     // You can use multiple query segments separated by `&`s.
-    #[route("/search?:query&:word_count")]
+    #[route("/search?:query&:word_count")] 
     Search {
         query: String,
         word_count: usize,

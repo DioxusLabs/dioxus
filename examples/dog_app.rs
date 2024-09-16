@@ -11,7 +11,7 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 fn main() {
-    dioxus::launch(app);
+    launch(app);
 }
 
 fn app() -> Element {

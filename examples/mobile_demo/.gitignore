@@ -1,0 +1,10 @@
+# Rust
+target/
+**/*.rs.bk
+
+# cargo-mobile2
+.cargo/
+/gen
+
+# macOS
+.DS_Store
