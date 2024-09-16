@@ -1,7 +1,6 @@
 use super::cache::Segment;
 use crate::cache::StringCache;
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
-use dioxus_core_types::event_bubbles;
 use rustc_hash::FxHashMap;
 use std::fmt::Write;
 use std::sync::Arc;
