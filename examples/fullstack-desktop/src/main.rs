@@ -5,7 +5,7 @@ fn main() {
     // Set the url of the server where server functions are hosted.
     #[cfg(not(feature = "server"))]
     dioxus::fullstack::prelude::server_fn::client::set_server_url("http://127.0.0.1:8080");
-    launch(app);
+   dioxus::launch(app);
 }
 
 pub fn app() -> Element {

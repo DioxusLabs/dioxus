@@ -43,7 +43,7 @@ fn app() -> Element {
 }
 ```
 
-To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
+To configure the webview, menubar, and other important desktop-specific features, checkout out some of thedioxus::launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
 
 ## Future Steps
 

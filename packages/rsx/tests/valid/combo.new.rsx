@@ -64,5 +64,5 @@ fn main() {
     //         .set_max_level(tracing::Level::TRACE)
     //         .build(),
     // );
-    launch(app);
+   dioxus::launch(app);
 }

@@ -36,7 +36,7 @@ impl ToTokens for ComponentBody {
 
         // If there's no props declared, we simply omit the props argument
         // This is basically so you can annotate the App component with #[component] and still be compatible with the
-        // launch signatures that take fn() -> Element
+        //dioxus::launch signatures that take fn() -> Element
         let props_struct = match self.item_fn.sig.inputs.is_empty() {
             // No props declared, so we don't need to generate a props struct
             true => quote! {},

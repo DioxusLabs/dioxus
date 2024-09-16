@@ -64,7 +64,7 @@ pub fn launch(
     #[allow(unused_mut)] mut contexts: Vec<
         Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>,
     >,
-    platform_config: Config,
+    platform_config: dioxus_web::Config,
 ) {
     let contexts = Arc::new(contexts);
     let mut factory = virtual_dom_factory(root, contexts);

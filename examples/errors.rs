@@ -11,7 +11,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch(|| rsx! { Router::<Route> {} });
+   dioxus::launch(|| rsx! { Router::<Route> {} });
 }
 
 /// You can use an ErrorBoundary to catch errors in children and display a warning

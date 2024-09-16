@@ -164,7 +164,7 @@ impl DesktopService {
         }
     }
 
-    /// launch print modal
+    ///dioxus::launch print modal
     pub fn print(&self) {
         if let Err(e) = self.webview.print() {
             tracing::warn!("Open print modal failed: {e}");

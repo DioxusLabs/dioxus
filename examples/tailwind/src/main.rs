@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 const _STYLE: &str = asset!("public/tailwind.css");
 
 fn main() {
-    launch(app);
+   dioxus::launch(app);
 }
 
 pub fn app() -> Element {

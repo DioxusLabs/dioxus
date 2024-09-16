@@ -37,7 +37,7 @@ Full stack Dioxus in under 30 lines of code
 use dioxus::prelude::*;
 
 fn main() {
-    launch(App);
+   dioxus::launch(App);
 }
 
 #[component]

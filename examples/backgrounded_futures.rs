@@ -11,7 +11,7 @@ use async_std::task::sleep;
 use dioxus::prelude::*;
 
 fn main() {
-    launch(app);
+   dioxus::launch(app);
 }
 
 fn app() -> Element {

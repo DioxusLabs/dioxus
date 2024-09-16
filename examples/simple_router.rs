@@ -3,9 +3,9 @@
 use dioxus::prelude::*;
 
 fn main() {
-    // Launch the router, using our `Route` component as the generic type
+    //dioxus::launch the router, using our `Route` component as the generic type
     // This will automatically boot the app to "/" unless otherwise specified
-    launch(|| rsx! { Router::<Route> {} });
+   dioxus::launch(|| rsx! { Router::<Route> {} });
 }
 
 /// By default, the Routable derive will use the name of the variant as the route

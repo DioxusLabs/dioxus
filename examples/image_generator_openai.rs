@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Error};
 
 fn main() {
-    launch(app)
+   dioxus::launch(app)
 }
 
 fn app() -> Element {

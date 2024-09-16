@@ -19,7 +19,7 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
-    launch(|| {
+   dioxus::launch(|| {
         rsx! {
             Router::<Route> {}
         }

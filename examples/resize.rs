@@ -8,7 +8,7 @@ use dioxus::prelude::*;
 use dioxus_elements::geometry::euclid::Size2D;
 
 fn main() {
-    launch(app);
+   dioxus::launch(app);
 }
 
 fn app() -> Element {

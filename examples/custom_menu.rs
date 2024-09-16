@@ -27,8 +27,8 @@ fn main() {
     // Create a desktop config that overrides the default menu with the custom menu
     let config = dioxus::desktop::Config::new().with_menu(menu);
 
-    // Launch the app with the custom menu
-    LaunchBuilder::new().with_cfg(config).launch(app)
+    //dioxus::launch the app with the custom menu
+   dioxus::LaunchBuilder::new().with_cfg(config).launch(app)
 }
 
 fn app() -> Element {

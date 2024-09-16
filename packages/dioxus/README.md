@@ -36,13 +36,13 @@ Remember: Dioxus is a library for declaring interactive user interfaces—it is 
 
 All Dioxus apps are built by composing functions that start with a capital letter and return an `Element`.
 
-To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
+Todioxus::launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In thedioxus::launch function, we pass the app's root `Component`.
 
 ```rust, no_run
 use dioxus::prelude::*;
 
 fn main() {
-    launch(App);
+   dioxus::launch(App);
 }
 
 // The #[component] attribute streamlines component creation.
@@ -184,7 +184,7 @@ Using components, rsx, and hooks, we can build a simple app.
 use dioxus::prelude::*;
 
 fn main() {
-    launch(App);
+   dioxus::launch(App);
 }
 
 #[component]

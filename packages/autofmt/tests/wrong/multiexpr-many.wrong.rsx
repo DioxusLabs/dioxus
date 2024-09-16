@@ -8,7 +8,7 @@ use std::{
 use tokio::time::sleep;
 
 fn main() {
-    LaunchBuilder::desktop().launch(app);
+   dioxus::LaunchBuilder::desktop().launch(app);
 }
 
 struct WindowPreferences {

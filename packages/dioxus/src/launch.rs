@@ -149,7 +149,7 @@ impl LaunchBuilder {
     ///
     /// LaunchBuilder::custom(my_custom_launcher).launch(app);
     /// ```
-    pub fn custom<Config, Context: ?Sized>(launch_fn: LaunchFn) -> LaunchBuilder {
+    pub fn custom(launch_fn: LaunchFn) -> LaunchBuilder {
         LaunchBuilder {
             launch_fn,
             contexts: vec![],

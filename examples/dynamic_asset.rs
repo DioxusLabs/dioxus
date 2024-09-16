@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/custom_assets.css");
 
 fn main() {
-    LaunchBuilder::desktop().launch(app);
+   dioxus::LaunchBuilder::desktop().launch(app);
 }
 
 fn app() -> Element {

@@ -29,7 +29,7 @@ This requires that webview is installed on the target system. WebView is install
 
 ## Features
 
-- Simple, one-line launch for desktop apps
+- Simple, one-linedioxus::launch for desktop apps
 - Dioxus VirtualDom running on a native thread
 - Full HTML/CSS support via `wry` and `tao`
 - Exposed `window` and `Proxy` types from tao for direct window manipulation
