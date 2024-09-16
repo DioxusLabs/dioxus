@@ -5,6 +5,9 @@
 //! This example is interesting because it's mixing filesystem operations and GUI, which is typically hard for UI to do.
 //! We store the state entirely in a single signal, making the explorer logic fairly easy to reason about.
 
+use std::env::current_dir;
+use std::path::PathBuf;
+
 use dioxus::desktop::{Config, WindowBuilder};
 use dioxus::prelude::*;
 
@@ -20,7 +23,7 @@ fn app() -> Element {
     rsx! {
         head::Link {
             rel: "stylesheet",
-            href: asset!("./examples/assets/fileexplorer.css")
+            href: asset!("./assets/fileexplorer.css")
         }
         div {
             head::Link { href: "https://fonts.googleapis.com/icon?family=Material+Icons", rel: "stylesheet" }
@@ -33,7 +36,8 @@ fn app() -> Element {
             main {
                 for (dir_id, path) in files.read().path_names.iter().enumerate() {
                     {
-                        let path_end = path.split('/').last().unwrap_or(path.as_str());
+                        let path_end = path.components().last().map(|p|p.as_os_str()).unwrap_or(path.as_os_str()).to_string_lossy();
+                        let path = path.display();
                         rsx! {
                             div { class: "folder", key: "{path}",
                                 i { class: "material-icons",
@@ -66,15 +70,15 @@ fn app() -> Element {
 /// We don't use any fancy signals or memoization here - Dioxus is so fast that even a file explorer can be done with a
 /// single signal.
 struct Files {
-    path_stack: Vec<String>,
-    path_names: Vec<String>,
+    current_path: PathBuf,
+    path_names: Vec<PathBuf>,
     err: Option<String>,
 }
 
 impl Files {
     fn new() -> Self {
         let mut files = Self {
-            path_stack: vec!["./".to_string()],
+            current_path: std::path::absolute(current_dir().unwrap()).unwrap(),
             path_names: vec![],
             err: None,
         };
@@ -85,13 +89,11 @@ impl Files {
     }
 
     fn reload_path_list(&mut self) {
-        let cur_path = self.path_stack.last().unwrap();
-        let paths = match std::fs::read_dir(cur_path) {
+        let paths = match std::fs::read_dir(&self.current_path) {
             Ok(e) => e,
             Err(err) => {
                 let err = format!("An error occurred: {err:?}");
                 self.err = Some(err);
-                self.path_stack.pop();
                 return;
             }
         };
@@ -102,27 +104,31 @@ impl Files {
         self.path_names.clear();
 
         for path in collected {
-            self.path_names
-                .push(path.unwrap().path().display().to_string());
+            self.path_names.push(path.unwrap().path().to_path_buf());
         }
     }
 
     fn go_up(&mut self) {
-        if self.path_stack.len() > 1 {
-            self.path_stack.pop();
-        }
+        self.current_path = match self.current_path.parent() {
+            Some(path) => path.to_path_buf(),
+            None => {
+                self.err = Some("Cannot go up from the root directory".to_string());
+                return;
+            }
+        };
         self.reload_path_list();
     }
 
     fn enter_dir(&mut self, dir_id: usize) {
         let path = &self.path_names[dir_id];
-        self.path_stack.push(path.clone());
+        self.current_path = path.clone();
         self.reload_path_list();
     }
 
-    fn current(&self) -> &str {
-        self.path_stack.last().unwrap()
+    fn current(&self) -> String {
+        self.current_path.display().to_string()
     }
+
     fn clear_err(&mut self) {
         self.err = None;
     }
