@@ -12,7 +12,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(app);
+    launch(app);
 }
 
 fn app() -> Element {

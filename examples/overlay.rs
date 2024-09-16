@@ -11,9 +11,7 @@ use dioxus::desktop::{
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch::builder()
-        .with_cfg(make_config())
-        .launch(app);
+    LaunchBuilder::desktop().with_cfg(make_config()).launch(app);
 }
 
 fn app() -> Element {
@@ -22,9 +20,9 @@ fn app() -> Element {
     _ = use_global_shortcut("cmd+g", move || show_overlay.toggle());
 
     rsx! {
-        document::Link {
+        head::Link {
             rel: "stylesheet",
-            href: asset!("/examples/assets/overlay.css"),
+            href: asset!("./examples/assets/overlay.css"),
         }
         if show_overlay() {
             div {

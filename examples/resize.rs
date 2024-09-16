@@ -8,14 +8,14 @@ use dioxus::prelude::*;
 use dioxus_elements::geometry::euclid::Size2D;
 
 fn main() {
-    dioxus::launch(app);
+    launch(app);
 }
 
 fn app() -> Element {
     let mut dimensions = use_signal(Size2D::zero);
 
     rsx!(
-        document::Stylesheet { href: asset!("/examples/assets/read_size.css") }
+        head::Link { rel: "stylesheet", href: asset!("./examples/assets/read_size.css") }
         div {
             width: "50%",
             height: "50%",

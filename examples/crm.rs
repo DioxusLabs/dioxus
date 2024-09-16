@@ -12,7 +12,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::builder()
+    LaunchBuilder::new()
         .with_cfg(desktop!({
             use dioxus::desktop::{LogicalSize, WindowBuilder};
             dioxus::desktop::Config::default()
@@ -20,8 +20,13 @@ fn main() {
         }))
         .launch(|| {
             rsx! {
-                document::Stylesheet { href: asset!("/examples/assets/crm.css") }
-                document::Link { href: asset!("/examples/assets/purecss.css") }
+                head::Link {
+                    rel: "stylesheet",
+                    href: asset!("https://unpkg.com/purecss@2.0.6/build/pure-min.css"), 
+                    integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
+                    crossorigin: "anonymous"
+                }
+                head::Link { rel: "stylesheet", href: asset!("./examples/assets/crm.css") }
                 h1 { "Dioxus CRM Example" }
                 Router::<Route> {}
             }
