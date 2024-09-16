@@ -65,7 +65,7 @@ async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
 
 ## Getting Started
 
-To get started with full stack Dioxus, check out our [getting started guide](https://dioxuslabs.com/learn/0.5/getting_started), or the [full stack examples](https://github.com/DioxusLabs/dioxus/tree/master/packages/fullstack/examples).
+To get started with full stack Dioxus, check out our [getting started guide](https://dioxuslabs.com/learn/0.5/getting_started), or the [examples examples](https://github.com/DioxusLabs/dioxus/tree/master/examples).
 
 ## Contributing
 
