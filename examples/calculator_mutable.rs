@@ -13,7 +13,7 @@ use dioxus::html::MouseEvent;
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::desktop()
+    dioxus::launch::builder()
         .with_cfg(
             Config::new().with_window(
                 WindowBuilder::new()
@@ -29,7 +29,7 @@ fn app() -> Element {
     let mut state = use_signal(Calculator::new);
 
     rsx! {
-        head::Link { rel: "stylesheet", href: asset!("./examples/assets/calculator.css") }
+        document::Stylesheet { href: asset!("/examples/assets/calculator.css") }
         div { id: "wrapper",
             div { class: "app",
                 div {

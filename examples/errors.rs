@@ -11,7 +11,11 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch(|| rsx! { Router::<Route> {} });
+    dioxus::launch(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    });
 }
 
 /// You can use an ErrorBoundary to catch errors in children and display a warning
@@ -34,11 +38,8 @@ fn ParseNumber() -> Element {
         h1 { "Error handler demo" }
         button {
             onclick: move |_| {
-                // You can return a result from an event handler which lets you easily quit rendering early if something fails
                 let data: i32 = "0.5".parse()?;
-
                 println!("parsed {data}");
-
                 Ok(())
             },
             "Click to throw an error"
@@ -58,10 +59,7 @@ fn Show() -> Element {
                             if let Some(error) = error.show() {
                                 {error}
                             } else {
-                                pre {
-                                    color: "red",
-                                    "{error}"
-                                }
+                                pre { color: "red", "{error}" }
                             }
                         }
                     }
@@ -88,15 +86,10 @@ fn ParseNumberWithShow() -> Element {
                             border_width: "2px",
                             border_radius: "5px",
                             p { "Failed to parse data" }
-                            Link {
-                                to: Route::Home {},
-                                "Go back to the homepage"
-                            }
+                            Link { to: Route::Home {}, "Go back to the homepage" }
                         }
                     })?;
-
                 println!("parsed {data}");
-
                 Ok(())
             },
             "Click to throw an error"
@@ -139,22 +132,13 @@ fn Home() -> Element {
     rsx! {
         ul {
             li {
-                Link {
-                    to: Route::Simple {},
-                    "Simple errors"
-                }
+                Link { to: Route::Simple {}, "Simple errors" }
             }
             li {
-                Link {
-                    to: Route::Panic {},
-                    "Capture panics"
-                }
+                Link { to: Route::Panic {}, "Capture panics" }
             }
             li {
-                Link {
-                    to: Route::Show {},
-                    "Show errors"
-                }
+                Link { to: Route::Show {}, "Show errors" }
             }
         }
     }
