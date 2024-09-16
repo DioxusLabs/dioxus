@@ -89,7 +89,7 @@ brotli = "6.0.0"
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
-rsx-rosetta = { workspace = true }
+dioxus-rsx-rosetta = { workspace = true }
 dioxus-rsx = { workspace = true, features = ["serde"]}
 dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
