@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::incremental::IncrementalRenderer;
+use crate::IncrementalRenderer;
 
 use std::{
     path::{Path, PathBuf},
@@ -82,7 +82,7 @@ impl IncrementalRendererConfig {
     pub fn build(self) -> IncrementalRenderer {
         let mut renderer = IncrementalRenderer {
             #[cfg(not(target_arch = "wasm32"))]
-            file_system_cache: crate::incremental::fs_cache::FileSystemCache::new(
+            file_system_cache: crate::fs_cache::FileSystemCache::new(
                 self.static_dir.clone(),
                 self.map_path,
                 self.invalidate_after,

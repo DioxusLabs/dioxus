@@ -1,0 +1,12 @@
+[package]
+name = "dioxus-isrg"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+http = { workspace = true }
+thiserror = { workspace = true }
+rustc-hash = { workspace = true }
+lru  = { workspace = true }
+tracing = { workspace = true }

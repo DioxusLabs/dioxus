@@ -1,6 +1,6 @@
+use dioxus_isrg::*;
 use dioxus_lib::prelude::*;
 use dioxus_router::prelude::*;
-use dioxus_ssr::incremental::*;
 use dioxus_ssr::renderer;
 use std::collections::HashSet;
 use std::fs;
@@ -105,9 +105,9 @@ async fn prerender_route(
     app: fn() -> Element,
     route: String,
     renderer: &mut renderer::Renderer,
-    cache: &mut dioxus_ssr::incremental::IncrementalRenderer,
+    cache: &mut dioxus_isrg::IncrementalRenderer,
     config: &Config,
-) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
+) -> Result<RenderFreshness, dioxus_isrg::IncrementalRendererError> {
     use dioxus_fullstack::prelude::*;
 
     let context = server_context_for_route(&route);
