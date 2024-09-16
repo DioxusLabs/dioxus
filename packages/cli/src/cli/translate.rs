@@ -130,12 +130,3 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
 
     Ok(buffer.trim().to_string())
 }
-
-#[test]
-fn generates_svgs() {
-    let st = include_str!("../../tests/svg.html");
-
-    let out = convert_html_to_formatted_rsx(&html_parser::Dom::parse(st).unwrap(), true);
-
-    println!("{}", out);
-}
