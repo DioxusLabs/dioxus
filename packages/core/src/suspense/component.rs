@@ -289,10 +289,10 @@ impl SuspenseBoundaryProps {
                     .clone()
                     .with_suspense_location(suspense_boundary_location, || {
                         let scope = dom.new_scope(component.props.duplicate(), component.name);
-                        let scope_ref = scope.borrow();
-                        let scope_state = scope_ref.state();
-                        suspense_context.mount(scope_state.id);
-                        scope_id = scope_state.id;
+                        scope.with_state(|scope_state| {
+                            suspense_context.mount(scope_state.id);
+                            scope_id = scope_state.id;
+                        })
                     });
             }
 
@@ -303,7 +303,7 @@ impl SuspenseBoundaryProps {
         let rt = dom.runtime.clone();
         rt.with_scope_on_stack(scope_id, || {
             let scopes = rt.scopes.borrow();
-            let mut scope_state = scopes[scope_id.0].borrow_mut();
+            let mut scope_state = scopes[scope_id.0].inner.borrow_mut();
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
             let suspense_context =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
@@ -317,21 +317,23 @@ impl SuspenseBoundaryProps {
             });
 
             // Store the (now mounted) children back into the scope state
-            let mut scope_state = scopes[scope_id.0].borrow_mut();
-            let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
+            let scope_state = &scopes[scope_id.0];
+            let mut scope_data = scope_state.inner.borrow_mut();
+            let props = Self::downcast_from_props(&mut *scope_data.props).unwrap();
             props.children.clone_from(&children);
 
-            let suspense_context = scope_state
-                .state()
-                .suspense_location()
-                .suspense_context()
-                .unwrap()
-                .clone();
+            let suspense_context = scope_state.with_state(|state| {
+                state
+                    .suspense_location()
+                    .suspense_context()
+                    .unwrap()
+                    .clone()
+            });
             // If there are suspended futures, render the fallback
             let nodes_created = if !suspense_context.suspended_futures().is_empty() {
                 let (node, nodes_created) =
                     suspense_context.in_suspense_placeholder(&dom.runtime(), || {
-                        let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
+                        let props = Self::downcast_from_props(&mut *scope_data.props).unwrap();
                         let suspense_context =
                             SuspenseContext::downcast_suspense_boundary_from_scope(
                                 &dom.runtime,
@@ -344,7 +346,7 @@ impl SuspenseBoundaryProps {
                         (suspense_placeholder, nodes_created)
                     });
 
-                scope_state.last_rendered_node = Some(node);
+                scope_data.last_rendered_node = Some(node);
                 nodes_created
             } else {
                 // Otherwise just render the children in the real dom
@@ -353,7 +355,7 @@ impl SuspenseBoundaryProps {
                     .under_suspense_boundary(&dom.runtime(), || {
                         children.as_vnode().create(dom, parent, to)
                     });
-                scope_state.last_rendered_node = Some(children);
+                scope_data.last_rendered_node = Some(children);
                 let suspense_context =
                     SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
                         .unwrap();
@@ -386,17 +388,19 @@ impl SuspenseBoundaryProps {
             };
 
             // Reset the suspense context
-            let suspense_context = scope_state
-                .borrow()
-                .state()
-                .suspense_location()
-                .suspense_context()
-                .unwrap()
-                .clone();
+            let suspense_context = scope_state.with_state(|state| {
+                state
+                    .suspense_location()
+                    .suspense_context()
+                    .unwrap()
+                    .clone()
+            });
+
             suspense_context.inner.suspended_tasks.borrow_mut().clear();
 
             // Get the parent of the suspense boundary to later create children with the right parent
             let currently_rendered = scope_state
+                .inner
                 .borrow_mut()
                 .last_rendered_node
                 .as_ref()
@@ -411,7 +415,7 @@ impl SuspenseBoundaryProps {
                     .parent
             };
 
-            let mut scope_state_ref = scope_state.borrow_mut();
+            let mut scope_state_ref = scope_state.inner.borrow_mut();
             let props = Self::downcast_from_props(&mut *scope_state_ref.props).unwrap();
 
             // Unmount any children to reset any scopes under this suspense boundary
@@ -442,7 +446,7 @@ impl SuspenseBoundaryProps {
             });
 
             // Store the (now mounted) children back into the scope state
-            let mut scope_state = scopes[scope_id.0].borrow_mut();
+            let mut scope_state = scopes[scope_id.0].inner.borrow_mut();
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
             props.children.clone_from(&children);
             scope_state.last_rendered_node = Some(children);
@@ -457,18 +461,21 @@ impl SuspenseBoundaryProps {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             let rt = dom.runtime.clone();
             let scopes = rt.scopes.borrow();
-            let mut scope = scopes[scope_id.0].borrow_mut();
-            let myself = Self::downcast_from_props(&mut *scope.props)
+            let scope = &scopes[scope_id.0];
+            let mut scope_data = scope.inner.borrow_mut();
+
+            let myself = Self::downcast_from_props(&mut *scope_data.props)
                 .unwrap()
                 .clone();
 
-            let last_rendered_node = scope.last_rendered_node.as_ref().unwrap().clone();
+            let last_rendered_node = scope_data.last_rendered_node.as_ref().unwrap().clone();
 
             let Self {
                 fallback, children, ..
             } = myself;
 
-            let suspense_context = scope.state().suspense_boundary().unwrap().clone();
+            let suspense_context =
+                scope.with_state(|state| state.suspense_boundary().unwrap().clone());
             let suspended_nodes = suspense_context.suspended_nodes();
             let suspended = !suspense_context.suspended_futures().is_empty();
             match (suspended_nodes, suspended) {
@@ -493,6 +500,7 @@ impl SuspenseBoundaryProps {
 
                     // Set the last rendered node to the placeholder
                     dom.runtime.scopes.borrow()[scope_id.0]
+                        .inner
                         .borrow_mut()
                         .last_rendered_node = Some(new_placeholder);
 
@@ -521,6 +529,7 @@ impl SuspenseBoundaryProps {
 
                     // Set the last rendered node to the new children
                     dom.runtime.scopes.borrow()[scope_id.0]
+                        .inner
                         .borrow_mut()
                         .last_rendered_node = Some(new_children);
                 }
@@ -551,6 +560,7 @@ impl SuspenseBoundaryProps {
 
                     // Set the last rendered node to the new suspense placeholder
                     dom.runtime.scopes.borrow()[scope_id.0]
+                        .inner
                         .borrow_mut()
                         .last_rendered_node = Some(new_placeholder);
 
@@ -587,6 +597,7 @@ impl SuspenseBoundaryProps {
 
                     // Set the last rendered node to the new children
                     dom.runtime.scopes.borrow()[scope_id.0]
+                        .inner
                         .borrow_mut()
                         .last_rendered_node = Some(new_children);
 

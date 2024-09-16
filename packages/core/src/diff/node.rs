@@ -167,7 +167,6 @@ impl VNode {
                 let scope = ScopeId(dom.get_mounted_dyn_node(mount_id, id));
                 dom.get_scope(scope)
                     .unwrap()
-                    .borrow()
                     .root_node()
                     .find_first_element(dom)
             }
@@ -199,7 +198,6 @@ impl VNode {
                 let scope = ScopeId(dom.get_mounted_dyn_node(mount_id, id));
                 dom.get_scope(scope)
                     .unwrap()
-                    .borrow()
                     .root_node()
                     .find_last_element(dom)
             }
