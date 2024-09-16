@@ -16,7 +16,6 @@ description = "Server function macros for Dioxus"
 proc-macro2 = "^1.0.63"
 quote = "^1.0.26"
 syn = { workspace = true, features = ["full"] }
-convert_case = { workspace = true }
 server_fn_macro = "0.6.11"
 
 [lib]

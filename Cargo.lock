@@ -3116,7 +3116,6 @@ dependencies = [
 name = "dioxus_server_macro"
 version = "0.6.0-alpha.2"
 dependencies = [
- "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "server_fn_macro",
