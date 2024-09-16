@@ -1,6 +1,6 @@
 use crate::unified_bindings::Interpreter as Channel;
 use dioxus_core::{Template, TemplateAttribute, TemplateNode, WriteMutations};
-use dioxus_html::event_bubbles;
+use dioxus_core_types::event_bubbles;
 use rustc_hash::FxHashMap;
 
 /// The state needed to apply mutations to a channel. This state should be kept across all mutations for the app

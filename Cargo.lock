@@ -280,37 +280,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "argh"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7af5ba06967ff7214ce4c7419c7d185be7ecd6cc4965a8f6e1d8ce0398aad219"
-dependencies = [
- "argh_derive",
- "argh_shared",
-]
-
-[[package]]
-name = "argh_derive"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56df0aeedf6b7a2fc67d06db35b09684c3e8da0c95f8f27685cb17e08413d87a"
-dependencies = [
- "argh_shared",
- "proc-macro2",
- "quote",
- "syn 2.0.77",
-]
-
-[[package]]
-name = "argh_shared"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5693f39141bda5760ecc4111ab08da40565d1771038c4a0250f03457ec707531"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2665,6 +2634,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-core-types"
+version = "0.6.0-alpha.2"
+
+[[package]]
 name = "dioxus-desktop"
 version = "0.6.0-alpha.2"
 dependencies = [
@@ -2761,6 +2734,7 @@ dependencies = [
  "dioxus-desktop",
  "dioxus-hot-reload",
  "dioxus-interpreter-js",
+ "dioxus-isrg",
  "dioxus-lib",
  "dioxus-mobile",
  "dioxus-ssr",
@@ -2880,6 +2854,7 @@ name = "dioxus-interpreter-js"
 version = "0.6.0-alpha.2"
 dependencies = [
  "dioxus-core",
+ "dioxus-core-types",
  "dioxus-html",
  "js-sys",
  "lazy-js-bundle",
@@ -2890,6 +2865,18 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "dioxus-isrg"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "chrono",
+ "http 1.1.0",
+ "lru 0.12.4",
+ "rustc-hash 1.1.0",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -3099,28 +3086,11 @@ dependencies = [
 name = "dioxus-ssr"
 version = "0.6.0-alpha.2"
 dependencies = [
- "anyhow",
- "argh",
  "askama_escape",
- "async-trait",
- "chrono",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-core",
- "dioxus-html",
- "dioxus-interpreter-js",
- "dioxus-signals",
- "fern",
- "fs_extra",
- "generational-box",
- "http 1.1.0",
- "lru 0.12.4",
+ "dioxus-core-types",
  "rustc-hash 1.1.0",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -3133,6 +3103,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-fullstack",
  "dioxus-hot-reload",
+ "dioxus-isrg",
  "dioxus-lib",
  "dioxus-router",
  "dioxus-ssr",
@@ -3160,6 +3131,7 @@ dependencies = [
  "console_error_panic_hook",
  "dioxus",
  "dioxus-core",
+ "dioxus-core-types",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",

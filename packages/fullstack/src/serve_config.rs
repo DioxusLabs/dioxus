@@ -11,7 +11,7 @@ pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
-    pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
+    pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
 }
 
 impl ServeConfigBuilder {
@@ -26,7 +26,7 @@ impl ServeConfigBuilder {
     }
 
     /// Enable incremental static generation
-    pub fn incremental(mut self, cfg: dioxus_ssr::incremental::IncrementalRendererConfig) -> Self {
+    pub fn incremental(mut self, cfg: dioxus_isrg::IncrementalRendererConfig) -> Self {
         self.incremental = Some(cfg);
         self
     }
@@ -77,12 +77,12 @@ impl ServeConfigBuilder {
 
 /// Get the path to the public assets directory to serve static files from
 pub(crate) fn public_path() -> PathBuf {
-    // The CLI always bundles static assets into the exe/public directory
+    // The CLI always bundles static assets into the exe/web directory
     std::env::current_exe()
         .expect("Failed to get current executable path")
         .parent()
         .unwrap()
-        .join("public")
+        .join("web")
 }
 
 /// An error that can occur when loading the index.html file
@@ -166,7 +166,7 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
-    pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
+    pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
 }
 
 impl ServeConfig {

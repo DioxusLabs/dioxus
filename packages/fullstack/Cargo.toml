@@ -24,6 +24,7 @@ generational-box = { workspace = true }
 
 # Dioxus + SSR
 dioxus-ssr = { workspace = true, optional = true }
+dioxus-isrg = { workspace = true, optional = true }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 
@@ -95,7 +96,7 @@ server = [
     "dep:tokio-util",
     "dep:tokio-stream",
     "dep:dioxus-ssr",
-    "dioxus-ssr/incremental",
+    "dep:dioxus-isrg",
     "dep:tower",
     "dep:hyper",
     "dep:http",
