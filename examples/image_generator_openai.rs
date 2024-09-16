@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Error};
 
 fn main() {
-    launch(app)
+    dioxus::launch(app)
 }
 
 fn app() -> Element {
@@ -36,7 +36,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        head::Link { rel: "stylesheet", href: "https://unpkg.com/bulma@0.9.0/css/bulma.min.css" }
+        document::Stylesheet { href: "https://unpkg.com/bulma@0.9.0/css/bulma.min.css" }
         div { class: "container",
             div { class: "columns",
                 div { class: "column",

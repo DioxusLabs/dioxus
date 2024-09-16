@@ -9,7 +9,7 @@ use std::rc::Rc;
 use dioxus::{html::geometry::euclid::Rect, prelude::*};
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -28,7 +28,7 @@ fn app() -> Element {
     };
 
     rsx!(
-        head::Link { rel: "stylesheet", href: asset!("./examples/assets/read_size.css") }
+        document::Stylesheet { href: asset!("/examples/assets/read_size.css") }
         div {
             width: "50%",
             height: "50%",
