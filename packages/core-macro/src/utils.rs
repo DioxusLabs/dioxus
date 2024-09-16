@@ -27,7 +27,7 @@ pub fn format_type_string(ty: &Type) -> String {
     let ty_unformatted = ty_unformatted.trim();
 
     // simply remove all whitespace
-    let ty_formatted = ty_unformatted.replace(" ", "");
+    let ty_formatted = ty_unformatted.replace(' ', "");
 
     ty_formatted.to_string()
 }
