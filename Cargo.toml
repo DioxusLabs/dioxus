@@ -42,9 +42,9 @@ members = [
     "packages/rsx-hotreload",
 
     # Static generation examples
-    "packages/static-generation/examples/simple",
-    "packages/static-generation/examples/router",
-    "packages/static-generation/examples/github-pages",
+    # "packages/static-generation/examples/simple",
+    # "packages/static-generation/examples/router",
+    # "packages/static-generation/examples/github-pages",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -58,13 +58,31 @@ members = [
     "packages/manganis",
     "packages/manganis-macro",
 
-    # Fullstack examples
-    "packages/fullstack/examples/hello-world",
-    "packages/fullstack/examples/router",
-    "packages/fullstack/examples/streaming",
-    "packages/fullstack/examples/desktop",
-    "packages/fullstack/examples/auth",
-    "packages/fullstack/examples/hackernews",
+    # Full project examples
+    "example-projects/fullstack-hackernews",
+    "example-projects/ecommerce-site",
+    "example-projects/wifi-scanner",
+    "example-projects/file-explorer",
+
+    # Simple examples that require a crate
+    "examples/tailwind",
+    "examples/pwa",
+    "examples/fullstack-hello-world",
+    "examples/fullstack-router",
+    "examples/fullstack-streaming",
+    "examples/fullstack-desktop",
+    "examples/fullstack-auth",
+    "examples/ssg-simple",
+    "examples/ssg-router",
+    "examples/ssg-github-pages",
+
+    # Playwright tests
+    "packages/playwright-tests/liveview",
+    "packages/playwright-tests/web",
+    "packages/playwright-tests/static-generation",
+    "packages/playwright-tests/fullstack",
+    "packages/playwright-tests/suspense-carousel",
+    "packages/playwright-tests/nested-suspense",
 ]
 
 [workspace.package]
@@ -347,11 +365,6 @@ doc-scrape-examples = true
 
 [[example]]
 name = "errors"
-required-features = ["desktop"]
-doc-scrape-examples = true
-
-[[example]]
-name = "file_explorer"
 required-features = ["desktop"]
 doc-scrape-examples = true
 
