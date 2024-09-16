@@ -10,7 +10,6 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true }
 dioxus-core-types = { workspace = true }
 askama_escape = { workspace = true }
 rustc-hash = { workspace = true }

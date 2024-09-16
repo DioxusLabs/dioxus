@@ -4,6 +4,7 @@ members = [
     "packages/dioxus",
     "packages/dioxus-lib",
     "packages/core",
+    "packages/core-types",
     "packages/cli",
     "packages/core-types",
     "packages/core-macro",

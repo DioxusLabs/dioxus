@@ -3031,7 +3031,6 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-types",
- "dioxus-html",
  "rustc-hash 1.1.0",
 ]
 

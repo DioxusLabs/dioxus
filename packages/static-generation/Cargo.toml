@@ -48,10 +48,5 @@ web = ["dep:dioxus-web"]
 # web = ["dioxus-fullstack/web", "dep:dioxus-web"]
 # web = ["dioxus-fullstack/web", "dioxus-router/web", "dep:dioxus-web"]
 
-# [[bench]]
-# name = "incremental"
-# required-features = ["server"]
-# harness = false
-
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
