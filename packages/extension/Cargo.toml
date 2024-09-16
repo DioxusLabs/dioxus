@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 wasm-bindgen = { workspace = true }
 dioxus-autofmt = { workspace = true }
-rsx-rosetta = { workspace = true }
+dioxus-rsx-rosetta = { workspace = true }
 html_parser = { workspace = true }
 syn ={ workspace = true }
 
