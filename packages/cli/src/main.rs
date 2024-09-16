@@ -11,7 +11,6 @@ pub mod error;
 pub mod metadata;
 pub mod serve;
 pub mod settings;
-pub mod tools;
 pub mod tracer;
 
 pub(crate) use cli::*;
