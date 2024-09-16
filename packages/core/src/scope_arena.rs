@@ -66,7 +66,7 @@ impl VirtualDom {
                     span.in_scope(|| {
                         scope.inner.borrow().reactive_context.reset_and_run_in(|| {
                             let mut render_return = props.render();
-                            self.handle_element_return(&mut render_return, scope_id, &scope_state);
+                            self.handle_element_return(&mut render_return, scope_id, scope_state);
                             render_return
                         })
                     })

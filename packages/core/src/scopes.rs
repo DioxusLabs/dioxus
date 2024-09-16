@@ -139,6 +139,6 @@ impl ScopeState {
     pub(crate) fn with_state<O>(&self, f: impl FnOnce(&Scope) -> O) -> O {
         let inner = self.inner.borrow();
         let state = inner.runtime.get_state(inner.context_id).unwrap();
-        f(&*state)
+        f(&state)
     }
 }

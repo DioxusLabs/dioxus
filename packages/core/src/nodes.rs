@@ -604,11 +604,7 @@ impl VComponent {
     /// This is useful for rendering nodes outside of the VirtualDom, such as in SSR
     ///
     /// Returns [`None`] if the node is not mounted
-    pub fn mounted_scope<'a>(
-        &self,
-        dynamic_node_index: usize,
-        vnode: &VNode,
-    ) -> Option<ScopeState> {
+    pub fn mounted_scope(&self, dynamic_node_index: usize, vnode: &VNode) -> Option<ScopeState> {
         let mount = vnode.mount.get().as_usize()?;
 
         let rt = Runtime::current().unwrap();
