@@ -37,7 +37,6 @@ members = [
     "example-projects/ecommerce-site",
     "example-projects/wifi-scanner",
     "example-projects/file-explorer",
-    "example-projects/llm-chatbot",
 
     # Simple examples that require a crate
     "examples/tailwind",
