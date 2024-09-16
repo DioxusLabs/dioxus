@@ -20,7 +20,7 @@ convert_case = { workspace = true }
 server_fn_macro = "0.6.11"
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["fullstack", "server"] }
+dioxus = { workspace = true, features = ["fullstack"] }
 serde = { workspace = true, features = ["derive"] }
 tower-http = { workspace = true, features = ["timeout"]}
 axum = { workspace = true }

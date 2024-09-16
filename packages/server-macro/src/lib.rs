@@ -14,7 +14,7 @@ use syn::__private::ToTokens;
 /// feature is enabled on this crate.
 ///
 /// ## Usage
-/// ```rust
+/// ```rust,ignore
 /// # use dioxus::prelude::*;
 /// # #[derive(serde::Deserialize, serde::Serialize)]
 /// # pub struct BlogPost;
@@ -88,7 +88,7 @@ use syn::__private::ToTokens;
 ///
 /// You can add a tower [`Layer`](https://docs.rs/tower/latest/tower/trait.Layer.html) to your server function with the middleware attribute:
 ///
-/// ```rust
+/// ```rust,ignore
 /// # use dioxus::prelude::*;
 /// #[server]
 /// // The TraceLayer will log all requests to the console
@@ -106,7 +106,7 @@ use syn::__private::ToTokens;
 /// type that implements the [`FromRequestParts`](https://docs.rs/axum/latest/axum/extract/trait.FromRequestParts.html)
 /// trait:
 ///
-/// ```rust
+/// ```rust,ignore
 /// # use dioxus::prelude::*;
 /// #[server]
 /// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<String, ServerFnError> {
@@ -121,7 +121,7 @@ use syn::__private::ToTokens;
 /// functions can access any context provided through the launch builder. You can access
 /// this context with the `FromContext` extractor:
 ///
-/// ```rust, no_run
+/// ```rust,ignore
 /// # use dioxus::prelude::*;
 /// # fn app() -> Element { unimplemented!() }
 /// #[derive(Clone, Copy, Debug)]

@@ -81,7 +81,7 @@ web = ["dioxus/web"]
 
 Then we can set up dioxus with the axum server:
 
-```rust
+```rust, no_run
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 

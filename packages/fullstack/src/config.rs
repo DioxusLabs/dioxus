@@ -15,17 +15,17 @@ use std::sync::Arc;
 ///
 /// // Only set the server config if the server feature is enabled
 /// server_only! {
-///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default());
+///     cfg = cfg.with_server_config(ServeConfigBuilder::default());
 /// }
 ///
 /// // Only set the web config if the web feature is enabled
 /// web! {
-///     cfg = cfg.with_web_cfg(dioxus::web::Config::default());
+///     cfg = cfg.with_web_config(dioxus::web::Config::default());
 /// }
 ///
 /// // Only set the desktop config if the desktop feature is enabled
 /// desktop! {
-///     cfg = cfg.with_desktop_cfg(dioxus::desktop::Config::default());
+///     cfg = cfg.with_desktop_config(dioxus::desktop::Config::default());
 /// }
 ///
 /// // Finally, launch the app with the config
@@ -106,7 +106,7 @@ impl Config {
     ///
     /// // Only set the server config if the server feature is enabled
     /// server_only! {
-    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default());
+    ///     cfg = cfg.with_server_config(ServeConfigBuilder::default());
     /// }
     ///
     /// // Finally, launch the app with the config
@@ -116,7 +116,7 @@ impl Config {
     /// ```
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub fn with_server_cfg(self, server_cfg: ServeConfigBuilder) -> Self {
+    pub fn with_server_config(self, server_cfg: ServeConfigBuilder) -> Self {
         Self { server_cfg, ..self }
     }
 
@@ -130,7 +130,7 @@ impl Config {
     ///
     /// // Only set the server config if the server feature is enabled
     /// server_only! {
-    ///     cfg.set_server_cfg(ServeConfigBuilder::default());
+    ///     cfg.set_server_config(ServeConfigBuilder::default());
     /// }
     ///
     /// // Finally, launch the app with the config
@@ -140,7 +140,7 @@ impl Config {
     /// ```
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub fn set_server_cfg(&mut self, server_cfg: ServeConfigBuilder) {
+    pub fn set_server_config(&mut self, server_cfg: ServeConfigBuilder) {
         self.server_cfg = server_cfg;
     }
 
