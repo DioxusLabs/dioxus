@@ -253,10 +253,11 @@ mod current_platform {
     {
         fn into_config(self, config: &mut Option<crate::launch::current_platform::Config>) {
             match config {
-                Some(config) => config.set_server_cfg(self),
+                Some(config) => config.set_server_config(self),
                 None => {
-                    *config =
-                        Some(crate::launch::current_platform::Config::new().with_server_cfg(self))
+                    *config = Some(
+                        crate::launch::current_platform::Config::new().with_server_config(self),
+                    )
                 }
             }
         }
