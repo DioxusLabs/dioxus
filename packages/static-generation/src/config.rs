@@ -176,8 +176,8 @@ impl Config {
     }
 
     pub(crate) fn create_cache(&mut self) -> dioxus_isrg::IncrementalRenderer {
-        let mut builder = dioxus_isrg::IncrementalRenderer::builder()
-            .static_dir(self.output_dir.clone());
+        let mut builder =
+            dioxus_isrg::IncrementalRenderer::builder().static_dir(self.output_dir.clone());
         if let Some(map_path) = self.map_path.take() {
             builder = builder.map_path(map_path);
         }
