@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use std::rc::Rc;
 
 fn main() {
-    dioxus::launch(app);
+    launch_desktop(app);
 }
 
 fn app() -> Element {

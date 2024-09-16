@@ -9,7 +9,7 @@ use dioxus::desktop::{Config, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch::builder()
+    LaunchBuilder::desktop()
         .with_cfg(Config::new().with_window(WindowBuilder::new().with_resizable(true)))
         .launch(app)
 }
@@ -18,12 +18,12 @@ fn app() -> Element {
     let mut files = use_signal(Files::new);
 
     rsx! {
-        document::Link {
+        head::Link {
             rel: "stylesheet",
-            href: asset!("/examples/assets/fileexplorer.css")
+            href: asset!("./examples/assets/fileexplorer.css")
         }
         div {
-            document::Link { href: "https://fonts.googleapis.com/icon?family=Material+Icons", rel: "stylesheet" }
+            head::Link { href: "https://fonts.googleapis.com/icon?family=Material+Icons", rel: "stylesheet" }
             header {
                 i { class: "material-icons icon-menu", "menu" }
                 h1 { "Files: " {files.read().current()} }

@@ -7,18 +7,18 @@
 
 use dioxus::prelude::*;
 
-const STYLE: Asset = asset!("/examples/assets/counter.css");
+const STYLE: &str = asset!("./examples/assets/counter.css");
 
 static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
 static DOUBLED_COUNT: GlobalMemo<i32> = Memo::global(|| COUNT() * 2);
 
 fn main() {
-    dioxus::launch(app);
+    launch(app);
 }
 
 fn app() -> Element {
     rsx! {
-        document::Stylesheet { href: STYLE }
+        head::Link { rel: "stylesheet", href: STYLE }
         Increment {}
         Decrement {}
         Reset {}

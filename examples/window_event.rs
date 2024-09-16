@@ -13,7 +13,7 @@ use dioxus::desktop::{window, Config, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch::builder()
+    LaunchBuilder::desktop()
         .with_cfg(
             Config::new().with_window(
                 WindowBuilder::new()
@@ -26,7 +26,7 @@ fn main() {
 
 fn app() -> Element {
     rsx!(
-        document::Link { href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel: "stylesheet" }
+        head::Link { href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel: "stylesheet" }
         Header {}
         div { class: "container mx-auto",
             div { class: "grid grid-cols-5",

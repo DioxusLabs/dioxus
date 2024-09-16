@@ -5,8 +5,13 @@
 
 use std::rc::Rc;
 
+use async_std::task::sleep;
+use dioxus::prelude::*;
+
+const STYLE: &str = asset!("./examples/assets/roulette.css");
+
 fn main() {
-    dioxus::launch(app);
+    launch(app);
 }
 
 fn app() -> Element {
@@ -35,7 +40,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        document::Stylesheet { href: asset!("/examples/assets/roulette.css") }
+        head::Link { rel: "stylesheet", href: STYLE }
         h1 { "Input Roulette" }
         button { onclick: move |_| running.toggle(), "Toggle roulette" }
         div { id: "roulette-grid",
