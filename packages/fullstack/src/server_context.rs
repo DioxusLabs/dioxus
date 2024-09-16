@@ -3,8 +3,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-type SendSyncAnyMap =
-    std::collections::HashMap<std::any::TypeId, Box<dyn Any + Send + Sync + 'static>>;
+type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
 
 /// A shared context for server functions that contains information about the request and middleware state.
 /// This allows you to pass data between your server framework and the server functions. This can be used to pass request information or information about the state of the server. For example, you could pass authentication data though this context to your server functions.
@@ -15,6 +14,20 @@ pub struct DioxusServerContext {
     shared_context: std::sync::Arc<RwLock<SendSyncAnyMap>>,
     response_parts: std::sync::Arc<RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
+}
+
+enum ContextType {
+    Factory(Box<dyn Fn() -> Box<dyn Any> + Send + Sync>),
+    Value(Box<dyn Any + Send + Sync>),
+}
+
+impl ContextType {
+    fn downcast<T: Clone + 'static>(&self) -> Option<T> {
+        match self {
+            ContextType::Value(value) => value.downcast_ref::<T>().cloned(),
+            ContextType::Factory(factory) => factory().downcast::<T>().ok().map(|v| *v),
+        }
+    }
 }
 
 #[allow(clippy::derivable_impls)]
@@ -60,25 +73,44 @@ mod server_fn_impl {
         }
 
         /// Clone a value from the shared server context
-        pub fn get<T: Any + Send + Sync + Clone + 'static>(&self) -> Option<T> {
+        pub fn get<T: Clone + 'static>(&self) -> Option<T> {
             self.shared_context
                 .read()
                 .get(&TypeId::of::<T>())
-                .map(|v| v.downcast_ref::<T>().unwrap().clone())
+                .map(|v| v.downcast::<T>().unwrap())
         }
 
         /// Insert a value into the shared server context
-        pub fn insert<T: Any + Send + Sync + 'static>(&self, value: T) {
+        pub fn insert<T: Send + Sync + 'static>(&self, value: T) {
             self.shared_context
                 .write()
-                .insert(TypeId::of::<T>(), Box::new(value));
+                .insert(TypeId::of::<T>(), ContextType::Value(Box::new(value)));
         }
 
-        /// Insert a Boxed `Any` value into the shared server context
-        pub fn insert_any(&self, value: Box<dyn Any + Send + Sync>) {
+        /// Insert a boxed `Any` value into the shared server context
+        pub fn insert_any(&self, value: Box<dyn Any + Send + Sync + 'static>) {
             self.shared_context
                 .write()
-                .insert((*value).type_id(), value);
+                .insert((*value).type_id(), ContextType::Value(value));
+        }
+
+        /// Insert a factory that creates a non-sync value for the shared server context
+        pub fn insert_factory<F, T>(&self, value: F)
+        where
+            F: Fn() -> T + Send + Sync + 'static,
+            T: 'static,
+        {
+            self.shared_context.write().insert(
+                TypeId::of::<T>(),
+                ContextType::Factory(Box::new(move || Box::new(value()))),
+            );
+        }
+
+        /// Insert a boxed factory that creates a non-sync value for the shared server context
+        pub fn insert_boxed_factory(&self, value: Box<dyn Fn() -> Box<dyn Any> + Send + Sync>) {
+            self.shared_context
+                .write()
+                .insert((*value()).type_id(), ContextType::Factory(value));
         }
 
         /// Get the response parts from the server context

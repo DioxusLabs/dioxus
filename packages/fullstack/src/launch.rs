@@ -4,12 +4,9 @@ use std::{any::Any, sync::Arc};
 
 use dioxus_lib::prelude::{Element, VirtualDom};
 
-pub use crate::Config;
-
 #[allow(unused)]
-pub(crate) type ContextProviders = Arc<
-    Vec<Box<dyn Fn() -> Box<dyn std::any::Any + Send + Sync + 'static> + Send + Sync + 'static>>,
->;
+pub(crate) type ContextProviders =
+    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
 #[allow(unused)]
 fn virtual_dom_factory(
@@ -30,15 +27,29 @@ fn virtual_dom_factory(
 #[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
-    platform_config: Config,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    platform_config: Vec<Box<dyn Any>>,
 ) -> ! {
+    use crate::{ServeConfig, ServeConfigBuilder};
+
     let contexts = Arc::new(contexts);
     let factory = virtual_dom_factory(root, contexts.clone());
     #[cfg(all(feature = "server", not(target_arch = "wasm32")))]
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
+            let platform_config = platform_config
+                .into_iter()
+                .find_map(|cfg| {
+                    cfg.downcast::<ServeConfig>()
+                        .map(|cfg| Result::Ok(*cfg))
+                        .or_else(|cfg| {
+                            cfg.downcast::<ServeConfigBuilder>()
+                                .map(|builder| builder.build())
+                        })
+                        .ok()
+                })
+                .unwrap_or_else(ServeConfig::new);
             launch_server(platform_config, factory, contexts).await;
         });
 
@@ -122,7 +133,7 @@ pub fn launch(
 #[allow(unused)]
 /// Launch a server application
 async fn launch_server(
-    platform_config: Config,
+    platform_config: Result<crate::ServeConfig, crate::UnableToLoadIndex>,
     build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     context_providers: ContextProviders,
 ) {
@@ -150,7 +161,7 @@ async fn launch_server(
             use crate::prelude::RenderHandleState;
             use crate::prelude::SSRState;
 
-            match platform_config.server_cfg.build() {
+            match platform_config.build() {
                 Ok(cfg) => {
                     router = router.serve_static_assets();
 

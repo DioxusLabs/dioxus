@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use dioxus_lib::prelude::dioxus_core::launch::LaunchConfig;
+
 /// Settings for a statically generated site that may be hydrated in the browser
 pub struct Config {
     #[cfg(feature = "server")]
@@ -30,6 +32,8 @@ pub struct Config {
     #[allow(unused)]
     pub(crate) web_cfg: dioxus_web::Config,
 }
+
+impl LaunchConfig for Config {}
 
 #[allow(clippy::derivable_impls)]
 impl Default for Config {

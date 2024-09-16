@@ -175,8 +175,6 @@ where
     ) -> Self {
         use http::method::Method;
 
-        let context_providers = Arc::new(context_providers);
-
         for (path, method) in server_fn::axum::server_fn_paths() {
             tracing::trace!("Registering server function: {} {}", method, path);
             let context_providers = context_providers.clone();
@@ -184,9 +182,10 @@ where
                 handle_server_fns_inner(
                     path,
                     move |server_context| {
-                        for context_provider in context_providers.iter() {
-                            let context = context_provider();
-                            server_context.insert_any(context);
+                        for index in 0..context_providers.len() {
+                            let context_providers = context_providers.clone();
+                            server_context
+                                .insert_boxed_factory(Box::new(move || context_providers[index]()));
                         }
                     },
                     req,

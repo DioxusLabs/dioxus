@@ -4,8 +4,6 @@ use std::any::Any;
 
 use dioxus_lib::prelude::{Element, VirtualDom};
 
-pub use crate::Config;
-
 /// Launch a fullstack app with the given root component, contexts, and config.
 #[allow(unused)]
 pub fn launch(

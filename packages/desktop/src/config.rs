@@ -1,3 +1,4 @@
+use dioxus_core::launch::LaunchConfig;
 use std::borrow::Cow;
 use std::path::PathBuf;
 use tao::window::{Icon, WindowBuilder};
@@ -50,6 +51,8 @@ pub struct Config {
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behavior: WindowCloseBehaviour,
 }
+
+impl LaunchConfig for Config {}
 
 pub(crate) type WryProtocol = (
     String,

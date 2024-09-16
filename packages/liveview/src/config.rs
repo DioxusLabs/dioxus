@@ -1,5 +1,5 @@
 use dioxus_cli_config::{RuntimeCLIArguments, CURRENT_CONFIG};
-use dioxus_core::VirtualDom;
+use dioxus_core::{launch::LaunchConfig, VirtualDom};
 
 use crate::LiveviewRouter;
 
@@ -16,6 +16,8 @@ pub struct Config<R: LiveviewRouter> {
     address: std::net::SocketAddr,
     route: String,
 }
+
+impl<R: LiveviewRouter + 'static> LaunchConfig for Config<R> {}
 
 impl<R: LiveviewRouter> Default for Config<R> {
     fn default() -> Self {

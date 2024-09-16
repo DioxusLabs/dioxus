@@ -9,7 +9,7 @@ use dioxus::desktop::use_global_shortcut;
 use dioxus::prelude::*;
 
 fn main() {
-    launch_desktop(app);
+    LaunchBuilder::desktop().launch(app);
 }
 
 fn app() -> Element {

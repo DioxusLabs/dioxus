@@ -12,11 +12,8 @@ mod html_storage;
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 mod axum_adapter;
 
-mod config;
 mod hooks;
 pub mod launch;
-
-pub use config::*;
 
 pub mod document;
 #[cfg(feature = "server")]

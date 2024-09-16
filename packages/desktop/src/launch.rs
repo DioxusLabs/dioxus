@@ -1,4 +1,4 @@
-pub use crate::Config;
+use crate::Config;
 use crate::{
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
@@ -85,14 +85,19 @@ pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! 
 /// Launches the WebView and runs the event loop, with configuration and root props.
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
-    platform_config: Config,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    platform_config: Vec<Box<dyn Any>>,
 ) -> ! {
     let mut virtual_dom = VirtualDom::new(root);
 
     for context in contexts {
         virtual_dom.insert_any_root_context(context());
     }
+
+    let platform_config = *platform_config
+        .into_iter()
+        .find_map(|cfg| cfg.downcast::<Config>().ok())
+        .unwrap_or_default();
 
     launch_virtual_dom(virtual_dom, platform_config)
 }

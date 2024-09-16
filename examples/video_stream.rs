@@ -16,7 +16,7 @@ fn main() {
     // For the sake of this example, we will download the video file if it doesn't exist
     ensure_video_is_loaded();
 
-    launch_desktop(app);
+    LaunchBuilder::desktop().launch(app);
 }
 
 fn app() -> Element {

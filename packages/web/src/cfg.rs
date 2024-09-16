@@ -1,3 +1,5 @@
+use dioxus_core::launch::LaunchConfig;
+
 ///  Configuration for the WebSys renderer for the Dioxus VirtualDOM.
 ///
 /// This struct helps configure the specifics of hydration and render destination for WebSys.
@@ -12,6 +14,8 @@ pub struct Config {
     pub(crate) root: ConfigRoot,
     pub(crate) default_panic_hook: bool,
 }
+
+impl LaunchConfig for Config {}
 
 pub(crate) enum ConfigRoot {
     RootName(String),
