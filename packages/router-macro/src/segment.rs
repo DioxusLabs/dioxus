@@ -65,18 +65,10 @@ impl RouteSegment {
                         let mut segments = segments.clone();
                         let segment = segments.next();
                         let segment = segment.as_deref();
-                        let parsed = if let Some(#segment) = segment {
-                            Ok(())
+                        if let Some(#segment) = segment {
+                            #parse_children
                         } else {
-                            Err(#error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(segment.map(|s|s.to_string()).unwrap_or_default())))
-                        };
-                        match parsed {
-                            Ok(_) => {
-                                #parse_children
-                            }
-                            Err(err) => {
-                                errors.push(err);
-                            }
+                            errors.push(#error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(segment.map(|s|s.to_string()).unwrap_or_default())));
                         }
                     }
                 }

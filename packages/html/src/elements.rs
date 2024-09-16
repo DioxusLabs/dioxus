@@ -1391,7 +1391,11 @@ builder_constructors! {
     /// Build a
     /// [`<fieldset>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset)
     /// element.
-    fieldset None {};
+    fieldset None {
+        disabled: Bool DEFAULT,
+        form: Id DEFAULT,
+        name: Id DEFAULT,
+    };
 
     /// Build a
     /// [`<form>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form)

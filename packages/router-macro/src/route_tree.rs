@@ -12,12 +12,12 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct RouteTree<'a> {
+pub(crate) struct ParseRouteTree<'a> {
     pub roots: Vec<usize>,
     entries: Slab<RouteTreeSegmentData<'a>>,
 }
 
-impl<'a> RouteTree<'a> {
+impl<'a> ParseRouteTree<'a> {
     pub fn get(&self, index: usize) -> Option<&RouteTreeSegmentData<'a>> {
         self.entries.get(index)
     }
@@ -278,7 +278,7 @@ impl<'a> RouteTreeSegmentData<'a> {
     pub fn to_tokens(
         &self,
         nests: &[Nest],
-        tree: &RouteTree,
+        tree: &ParseRouteTree,
         enum_name: syn::Ident,
         error_enum_name: syn::Ident,
     ) -> TokenStream {
@@ -315,8 +315,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                         if let Some(segment) = segment.as_deref() {
                             if #segment == segment {
                                 #(#children)*
-                            }
-                            else {
+                            } else {
                                 errors.push(#error_enum_name::#enum_variant(#variant_parse_error::#error_ident(segment.to_string())))
                             }
                         }
@@ -332,7 +331,11 @@ impl<'a> RouteTreeSegmentData<'a> {
                     .segments
                     .iter()
                     .enumerate()
-                    .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)));
+                    .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)))
+                    .filter(|(i, _)| {
+                        // Don't add any trailing static segments. We strip them during parsing so that routes can accept either `/route/` and `/route`
+                        !is_trailing_static_segment(&route.segments, *i)
+                    });
 
                 let construct_variant = route.construct(nests, enum_name);
                 let parse_query = route.parse_query();
@@ -374,7 +377,6 @@ impl<'a> RouteTreeSegmentData<'a> {
                                 trailing += &*seg;
                                 trailing += "/";
                             }
-                            trailing.pop();
                             match #ty::from_str(&trailing).map_err(|err| #error_enum_name::#enum_variant(#variant_parse_error::ChildRoute(err))) {
                                 Ok(#child_name) => {
                                     #print_route_segment
@@ -511,25 +513,19 @@ fn return_constructed(
             let remaining_segments = segments.clone();
             let mut segments_clone = segments.clone();
             let next_segment = segments_clone.next();
-            let next_segment = next_segment.as_deref();
-            let segment_after_next = segments_clone.next();
-            let segment_after_next = segment_after_next.as_deref();
-            match (next_segment, segment_after_next) {
-                // This is the last segment, return the parsed route
-                (None, _) | (Some(""), None) => {
-                    #parse_query
-                    #parse_hash
-                    return Ok(#construct_variant);
+            // This is the last segment, return the parsed route
+            if next_segment.is_none() {
+                #parse_query
+                #parse_hash
+                return Ok(#construct_variant);
+            } else {
+                let mut trailing = String::new();
+                for seg in remaining_segments {
+                    trailing += &*seg;
+                    trailing += "/";
                 }
-                _ => {
-                    let mut trailing = String::new();
-                    for seg in remaining_segments {
-                        trailing += &*seg;
-                        trailing += "/";
-                    }
-                    trailing.pop();
-                    errors.push(#error_enum_name::#enum_variant(#variant_parse_error::ExtraSegments(trailing)))
-                }
+                trailing.pop();
+                errors.push(#error_enum_name::#enum_variant(#variant_parse_error::ExtraSegments(trailing)))
             }
         }
     } else {
@@ -590,6 +586,10 @@ impl<'a> PathIter<'a> {
     fn next_static_segment(&mut self) -> Option<(usize, &'a str)> {
         let idx = self.static_segment_index;
         let segment = self.segments.get(idx)?;
+        // Don't add any trailing static segments. We strip them during parsing so that routes can accept either `/route/` and `/route`
+        if is_trailing_static_segment(self.segments, idx) {
+            return None;
+        }
         match segment {
             RouteSegment::Static(segment) => {
                 self.static_segment_index += 1;
@@ -605,4 +605,10 @@ impl<'a> PathIter<'a> {
             enum_variant: self.error_variant.clone(),
         }
     }
+}
+
+// If this is the last segment and it is an empty trailing segment, skip parsing it. The parsing code handles parsing /path/ and /path
+pub(crate) fn is_trailing_static_segment(segments: &[RouteSegment], index: usize) -> bool {
+    // This can only be a trailing segment if we have more than one segment and this is the last segment
+    matches!(segments.get(index), Some(RouteSegment::Static(segment)) if segment.is_empty() && index == segments.len() - 1 && segments.len() > 1)
 }

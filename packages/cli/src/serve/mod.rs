@@ -1,11 +1,14 @@
 use std::future::{poll_fn, Future, IntoFuture};
 use std::task::Poll;
 
-use crate::builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
 use crate::tracer::CLILogControl;
 use crate::Result;
+use crate::{
+    builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage},
+    TraceSrc,
+};
 use futures_util::FutureExt;
 use tokio::task::yield_now;
 
@@ -54,6 +57,8 @@ pub async fn serve_all(
     dioxus_crate: DioxusCrate,
     log_control: CLILogControl,
 ) -> Result<()> {
+    // Start the screen first so we collect build logs.
+    let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
     let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
@@ -61,7 +66,6 @@ pub async fn serve_all(
 
     let mut server = Server::start(&serve, &dioxus_crate);
     let mut watcher = Watcher::start(&serve, &dioxus_crate);
-    let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
 
     let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
 
@@ -81,13 +85,19 @@ pub async fn serve_all(
                 }
 
                 let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
+                let changed = changed_files.first().cloned();
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watcher.attempt_hot_reload(&dioxus_crate, changed_files) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                    if hr.templates.is_empty() && hr.assets.is_empty() {
+                    if hr.templates.is_empty() && hr.assets.is_empty() && hr.unknown_files.is_empty() {
                         continue
+                    }
+
+                    if let Some(changed_path) = changed {
+                        let path_relative = changed_path.strip_prefix(dioxus_crate.crate_dir()).map(|p| p.display().to_string()).unwrap_or_else(|_| changed_path.display().to_string());
+                        tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloaded {}", path_relative);
                     }
 
                     server.send_hotreload(hr).await;
@@ -129,7 +139,7 @@ pub async fn serve_all(
                 match application {
                     Ok(BuilderUpdate::Progress { platform, update }) => {
                         let update_clone = update.clone();
-                        screen.new_build_logs(platform, update_clone);
+                        screen.new_build_progress(platform, update_clone);
                         server.update_build_status(screen.build_progress.progress(), update.stage.to_string()).await;
 
                         match update {
@@ -151,7 +161,7 @@ pub async fn serve_all(
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
                                 Err(e) => {
-                                    tracing::error!("Failed to open build result: {e}");
+                                    tracing::error!(dx_src = ?TraceSrc::Build, "Failed to open build result: {e}");
                                     break;
                                 },
                                 _ => {}
@@ -176,11 +186,11 @@ pub async fn serve_all(
                                     break;
                                 }
                                 else {
-                                    tracing::error!("Application exited with status: {status}");
+                                    tracing::error!(dx_src = ?TraceSrc::Dev, "Application exited with status: {status}");
                                 }
                             },
                             Err(e) => {
-                                tracing::error!("Application exited with error: {e}");
+                                tracing::error!(dx_src = ?TraceSrc::Dev, "Application exited with error: {e}");
                             }
                         }
                     }

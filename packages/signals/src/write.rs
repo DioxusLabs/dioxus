@@ -17,7 +17,7 @@ pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> = T::Mut<'a, 
 /// }
 ///
 /// fn MyComponent(mut count: Signal<MyEnum>) -> Element {
-///     rsx!{
+///     rsx! {
 ///         button {
 ///             onclick: move |_| {
 ///                 // You can use any methods from the Writable trait on Signals

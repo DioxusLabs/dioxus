@@ -201,7 +201,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// rsx!{
+/// rsx! {
 ///     MyComponent { onclick: move |evt| tracing::debug!("clicked") }
 /// };
 ///
@@ -211,7 +211,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// fn MyComponent(cx: MyProps) -> Element {
-///     rsx!{
+///     rsx! {
 ///         button {
 ///             onclick: move |evt| cx.onclick.call(evt),
 ///         }
@@ -228,7 +228,7 @@ pub type EventHandler<T = ()> = Callback<T>;
 /// # Example
 ///
 /// ```rust, ignore
-/// rsx!{
+/// rsx! {
 ///     MyComponent { onclick: move |evt| {
 ///         tracing::debug!("clicked");
 ///         42
@@ -241,7 +241,7 @@ pub type EventHandler<T = ()> = Callback<T>;
 /// }
 ///
 /// fn MyComponent(cx: MyProps) -> Element {
-///     rsx!{
+///     rsx! {
 ///         button {
 ///             onclick: move |evt| println!("number: {}", cx.onclick.call(evt)),
 ///         }
@@ -256,7 +256,7 @@ pub struct Callback<Args = (), Ret = ()> {
     /// # use dioxus::prelude::*;
     /// #[component]
     /// fn Child(onclick: EventHandler<MouseEvent>) -> Element {
-    ///     rsx!{
+    ///     rsx! {
     ///         button {
     ///             // Diffing Child will not rerun this component, it will just update the callback in place so that if this callback is called, it will run the latest version of the callback
     ///             onclick: move |evt| onclick(evt),

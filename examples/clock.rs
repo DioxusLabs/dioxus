@@ -1,8 +1,8 @@
 //! A simple little clock that updates the time every few milliseconds.
 //!
 
+use async_std::task::sleep;
 use dioxus::prelude::*;
-use tokio::time::sleep;
 use web_time::Instant;
 
 const STYLE: &str = asset!("./examples/assets/clock.css");
