@@ -11,7 +11,7 @@ wasm-bindgen = { workspace = true }
 dioxus-autofmt = { workspace = true }
 dioxus-rsx-rosetta = { workspace = true }
 html_parser = { workspace = true }
-syn ={ workspace = true }
+syn = { workspace = true }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
