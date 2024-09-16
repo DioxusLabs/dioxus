@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 
 // Generate all routes and output them to the static path
 fn main() {
-    dioxus::builder()
+    LaunchBuilder::new()
         .with_cfg(dioxus::static_site_generation::Config::new().github_pages())
         .launch(|| {
             rsx! {
