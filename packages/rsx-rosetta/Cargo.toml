@@ -22,11 +22,6 @@ quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
 convert_case = { workspace = true }
 
-# [features]
-# default = ["html"]
-
-# eventually more output options
-
 [dev-dependencies]
 pretty_assertions = "1.2.1"
 

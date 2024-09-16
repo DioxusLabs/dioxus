@@ -128,6 +128,34 @@ generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.
 manganis  = { path = "packages/manganis", version = "0.6.0-alpha.2" }
 manganis-macro  = { path = "packages/manganis-macro", version = "0.6.0-alpha.2" }
 manganis-core  = { path = "packages/manganis-core", version = "0.6.0-alpha.2" }
+# dioxus = { path = "packages/dioxus", version = "0.6.0-alpha.0" }
+# dioxus-lib = { path = "packages/dioxus-lib", version = "0.6.0-alpha.0" }
+# dioxus-core = { path = "packages/core", version = "0.6.0-alpha.0" }
+# dioxus-core-macro = { path = "packages/core-macro", version = "0.6.0-alpha.0" }
+# dioxus-config-macro = { path = "packages/config-macro", version = "0.6.0-alpha.0" }
+# dioxus-router = { path = "packages/router", version = "0.6.0-alpha.0" }
+# dioxus-router-macro = { path = "packages/router-macro", version = "0.6.0-alpha.0" }
+# dioxus-html = { path = "packages/html", version = "0.6.0-alpha.0", default-features = false }
+# dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.6.0-alpha.0" }
+# dioxus-hooks = { path = "packages/hooks", version = "0.6.0-alpha.0" }
+# dioxus-web = { path = "packages/web", version = "0.6.0-alpha.0", default-features = false }
+# dioxus-ssr = { path = "packages/ssr", version = "0.6.0-alpha.0", default-features = false }
+# dioxus-desktop = { path = "packages/desktop", version = "0.6.0-alpha.0", default-features = false }
+# dioxus-mobile = { path = "packages/mobile", version = "0.6.0-alpha.0" }
+# dioxus-interpreter-js = { path = "packages/interpreter", version = "0.6.0-alpha.0" }
+# dioxus-liveview = { path = "packages/liveview", version = "0.6.0-alpha.0" }
+# dioxus-autofmt = { path = "packages/autofmt", version = "0.6.0-alpha.0" }
+# dioxus-check = { path = "packages/check", version = "0.6.0-alpha.0" }
+# dioxus-rsx = { path = "packages/rsx", version = "0.6.0-alpha.0" }
+# dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.0" }
+# dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.0" }
+# dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.0", default-features = false}
+# generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.0" }
+# dioxus-hot-reload = { path = "packages/hot-reload", version = "0.6.0-alpha.0" }
+# dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.1" }
+# dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.0" }
+# dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.0", default-features = false }
+# lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.0" }
 
 warnings = { version = "0.2.0" }
 
@@ -218,6 +246,28 @@ dirs = "5.0.1"
 cargo-config2 = "0.1.26"
 
 criterion = { version = "0.5" }
+
+# dirs = "5.0.1"
+# cargo-config2 = "0.1.26"
+# criterion = { version = "0.5" }
+
+# # desktop
+# wry = { version = "0.43.0", default-features = false }
+# tao = { version = "0.30.0", features = ["rwh_05"] }
+# webbrowser = "1.0.1"
+# infer = "0.16.0"
+# dunce = "1.0.2"
+# urlencoding = "2.1.2"
+# global-hotkey = "0.6.0"
+# rfd = { version = "0.14", default-features = false }
+# muda = "0.14.0"
+# cocoa = "0.26"
+# core-foundation = "0.10.0"
+# objc = { version = "0.2.7", features = ["exception"] }
+# objc_id = "0.1.1"
+
+# [profile.dev.package.dioxus-core-macro]
+# opt-level = 3
 
 # Enable a small amount of optimization in debug mode
 [profile.cli-dev]

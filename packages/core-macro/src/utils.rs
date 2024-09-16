@@ -3,7 +3,6 @@ use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::{parse_quote, Expr, Lit, Meta, Token, Type};
 
-
 /// Attempts to convert the given literal to a string.
 /// Converts ints and floats to their base 10 counterparts.
 ///
@@ -28,7 +27,7 @@ pub fn format_type_string(ty: &Type) -> String {
     let ty_unformatted = ty_unformatted.trim();
 
     // simply remove all whitespace
-    let ty_formatted = ty_unformatted.replace(" ", "");
+    let ty_formatted = ty_unformatted.replace(' ', "");
 
     ty_formatted.to_string()
 }

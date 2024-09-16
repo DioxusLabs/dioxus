@@ -49,7 +49,7 @@ impl Translate {
     }
 }
 
-pub(crate) fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
+pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
     let callbody = dioxus_rsx_rosetta::rsx_from_html(dom);
 
     match component {
@@ -129,13 +129,4 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
     std::io::stdin().read_to_string(&mut buffer).unwrap();
 
     Ok(buffer.trim().to_string())
-}
-
-#[test]
-fn generates_svgs() {
-    let st = include_str!("../../tests/svg.html");
-
-    let out = convert_html_to_formatted_rsx(&html_parser::Dom::parse(st).unwrap(), true);
-
-    println!("{}", out);
 }
