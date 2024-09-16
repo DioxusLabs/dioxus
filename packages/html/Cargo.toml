@@ -30,6 +30,7 @@ futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
 rustversion = "1.0.17"
+web-time = "1.1.0"
 
 [dependencies.web-sys]
 optional = true
@@ -50,9 +51,9 @@ features = [
     "PointerEvent",
     "FocusEvent",
     "CompositionEvent",
-    "CustomEvent",
     "ResizeObserverEntry",
-    "ResizeObserverSize"
+    "ResizeObserverSize",
+    "IntersectionObserverEntry"
 ]
 
 [build-dependencies]

@@ -158,6 +158,14 @@ impl HtmlEventConverter for WebEventConverter {
     }
 
     #[inline(always)]
+    fn convert_visible_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::VisibleData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    #[inline(always)]
     fn convert_wheel_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::WheelData {
         downcast_event(event).raw.clone().into()
     }
@@ -316,6 +324,17 @@ impl WebEventExt<web_sys::ResizeObserverEntry> for dioxus_html::ResizeData {
     fn try_as_web_event(&self) -> Option<web_sys::ResizeObserverEntry> {
         self.downcast::<web_sys::CustomEvent>()
             .and_then(|e| e.detail().dyn_into::<web_sys::ResizeObserverEntry>().ok())
+    }
+}
+
+impl WebEventExt<web_sys::IntersectionObserverEntry> for dioxus_html::VisibleData {
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<web_sys::IntersectionObserverEntry> {
+        self.downcast::<web_sys::CustomEvent>().and_then(|e| {
+            e.detail()
+                .dyn_into::<web_sys::IntersectionObserverEntry>()
+                .ok()
+        })
     }
 }
 

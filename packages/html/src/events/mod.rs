@@ -146,6 +146,8 @@ pub trait HtmlEventConverter: Send + Sync {
     fn convert_touch_data(&self, event: &PlatformEventData) -> TouchData;
     /// Convert a general event to a transition data event
     fn convert_transition_data(&self, event: &PlatformEventData) -> TransitionData;
+    /// Convert a general event to a visible data event
+    fn convert_visible_data(&self, event: &PlatformEventData) -> VisibleData;
     /// Convert a general event to a wheel data event
     fn convert_wheel_data(&self, event: &PlatformEventData) -> WheelData;
 }
@@ -258,6 +260,12 @@ impl From<&PlatformEventData> for TransitionData {
     }
 }
 
+impl From<&PlatformEventData> for VisibleData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_visible_data(val))
+    }
+}
+
 impl From<&PlatformEventData> for WheelData {
     fn from(val: &PlatformEventData) -> Self {
         with_event_converter(|c| c.convert_wheel_data(val))
@@ -282,6 +290,7 @@ mod selection;
 mod toggle;
 mod touch;
 mod transition;
+mod visible;
 mod wheel;
 
 pub use animation::*;
@@ -302,6 +311,7 @@ pub use selection::*;
 pub use toggle::*;
 pub use touch::*;
 pub use transition::*;
+pub use visible::*;
 pub use wheel::*;
 
 pub fn event_bubbles(evt: &str) -> bool {
@@ -383,6 +393,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "stalled" => false,
         "suspend" => false,
         "timeupdate" => false,
+        "visible" => false,
         "volumechange" => false,
         "waiting" => false,
         "animationstart" => true,

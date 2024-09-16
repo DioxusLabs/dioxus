@@ -105,6 +105,9 @@ fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, se
         // Scroll
         "scroll" => Scroll(de(data)?),
 
+        // Visible
+        "visible" => Visible(de(data)?),
+
         // Wheel
         "wheel" => Wheel(de(data)?),
 
@@ -163,6 +166,7 @@ pub enum EventData {
     Touch(SerializedTouchData),
     Resize(SerializedResizeData),
     Scroll(SerializedScrollData),
+    Visible(SerializedVisibleData),
     Wheel(SerializedWheelData),
     Media(SerializedMediaData),
     Animation(SerializedAnimationData),
@@ -205,6 +209,9 @@ impl EventData {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
             EventData::Scroll(data) => {
+                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
+            }
+            EventData::Visible(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
             EventData::Wheel(data) => {
@@ -410,6 +417,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     fn convert_transition_data(&self, event: &PlatformEventData) -> TransitionData {
         event
             .downcast::<SerializedTransitionData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
+    fn convert_visible_data(&self, event: &PlatformEventData) -> VisibleData {
+        event
+            .downcast::<SerializedVisibleData>()
             .cloned()
             .unwrap()
             .into()
