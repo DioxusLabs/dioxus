@@ -3,7 +3,7 @@ use std::num::ParseIntError;
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(|| {
+    launch(|| {
         rsx! {
             Router::<Route> {}
         }

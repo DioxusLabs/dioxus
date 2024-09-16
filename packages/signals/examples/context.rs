@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(app)
+    launch(app)
 }
 
 // Because signal is never read in this component, this component will not rerun when the signal changes

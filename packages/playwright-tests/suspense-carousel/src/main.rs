@@ -115,5 +115,5 @@ async fn sleep(millis: u64) {
 }
 
 fn main() {
-    dioxus::launch(app);
+    launch(app);
 }
