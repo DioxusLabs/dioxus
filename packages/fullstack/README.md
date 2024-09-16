@@ -65,7 +65,7 @@ async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
 
 ## Axum Integration
 
-If you have an existing Axum router or you need more control over the server, you can use the [`AxumRouterExt`](https://docs.rs/dioxus-fullstack/latest/dioxus_fullstack/prelude/trait.DioxusRouterExt.html) trait to integrate with your existing Axum router.
+If you have an existing Axum router or you need more control over the server, you can use the [`DioxusRouterExt`](https://docs.rs/dioxus-fullstack/0.6.0-alpha.2/dioxus_fullstack/prelude/trait.DioxusRouterExt.html) trait to integrate with your existing Axum router.
 
 First, make sure your `axum` dependency is optional and enabled by the server feature flag. Axum cannot be compiled to wasm, so if it is enabled by default, it will cause a compile error:
 
