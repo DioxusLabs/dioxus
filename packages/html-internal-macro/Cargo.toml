@@ -12,9 +12,9 @@ description = "HTML function macros for Dioxus"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-proc-macro2 = "1.0.66"
+proc-macro2 = { workspace = true }
 syn = { workspace = true, features = ["full"] }
-quote = "^1.0.26"
+quote = { workspace = true }
 convert_case = { workspace = true }
 
 [lib]
@@ -25,4 +25,4 @@ name = "tests"
 path = "tests/progress.rs"
 
 [dev-dependencies]
-trybuild = { version = "1.0.82", features = ["diff"] }
+trybuild = { workspace = true, features = ["diff"] }
