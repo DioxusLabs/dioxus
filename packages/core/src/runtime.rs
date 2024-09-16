@@ -28,7 +28,7 @@ thread_local! {
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
 pub struct Runtime {
     // TODO (Matt): Combine the below scope-related fields into a single RefCell?
-    pub(crate) scopes: RefCell<Slab<Rc<RefCell<ScopeState>>>>,
+    pub(crate) scopes: RefCell<Slab<ScopeState>>,
 
     pub(crate) dirty_scopes: RefCell<BTreeSet<ScopeOrder>>,
 

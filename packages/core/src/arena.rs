@@ -82,9 +82,7 @@ impl VirtualDom {
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
         let height = {
             let scope = self.runtime.scopes.borrow_mut().remove(id.0);
-            let scope_ref = scope.borrow();
-            let context = scope_ref.state();
-            context.height
+            scope.with_state(|state| state.height)
         };
 
         self.runtime

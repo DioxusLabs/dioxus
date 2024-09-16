@@ -7,7 +7,6 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, Runtime, ScopeId, VirtualDom};
-use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -609,19 +608,15 @@ impl VComponent {
         &self,
         dynamic_node_index: usize,
         vnode: &VNode,
-        dom: &'a VirtualDom,
-    ) -> Option<Rc<RefCell<ScopeState>>> {
+    ) -> Option<ScopeState> {
         let mount = vnode.mount.get().as_usize()?;
 
-        let mounts = dom.runtime.mounts.borrow();
+        let rt = Runtime::current().unwrap();
+        let mounts = rt.mounts.borrow();
         let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
-        Runtime::current()
-            .unwrap()
-            .scopes
-            .borrow()
-            .get(scope_id)
-            .cloned()
+        let scopes = rt.scopes.borrow();
+        scopes.get(scope_id).cloned()
     }
 }
 

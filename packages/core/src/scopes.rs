@@ -2,7 +2,7 @@ use crate::{
     any_props::BoxedAnyProps, nodes::AsVNode, reactive_context::ReactiveContext,
     scope_context::Scope, Element, Runtime, VNode,
 };
-use std::{cell::Ref, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 /// A component's unique identifier.
 ///
@@ -62,10 +62,7 @@ impl ScopeId {
     }
 }
 
-/// A component's rendered state.
-///
-/// This state erases the type of the component's props. It is used to store the state of a component in the runtime.
-pub struct ScopeState {
+pub(crate) struct Inner {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
     /// The last node that has been rendered for this component. This node may not ben mounted
@@ -75,9 +72,37 @@ pub struct ScopeState {
     pub(crate) reactive_context: ReactiveContext,
 }
 
+/// A component's rendered state.
+///
+/// This state erases the type of the component's props. It is used to store the state of a component in the runtime.
+#[derive(Clone)]
+pub struct ScopeState {
+    pub(crate) inner: Rc<RefCell<Inner>>,
+}
+
+impl ScopeState {
+    pub(crate) fn new(
+        runtime: Rc<Runtime>,
+        context_id: ScopeId,
+        props: BoxedAnyProps,
+        reactive_context: ReactiveContext,
+    ) -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(Inner {
+                runtime,
+                context_id,
+                last_rendered_node: None,
+                props,
+                reactive_context,
+            })),
+        }
+    }
+}
+
 impl Drop for ScopeState {
     fn drop(&mut self) {
-        self.runtime.remove_scope(self.context_id);
+        let inner = self.inner.borrow();
+        inner.runtime.remove_scope(inner.context_id);
     }
 }
 
@@ -87,7 +112,7 @@ impl ScopeState {
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
     ///
     /// Panics if the tree has not been built yet.
-    pub fn root_node(&self) -> &VNode {
+    pub fn root_node(&self) -> VNode {
         self.try_root_node()
             .expect("The tree has not been built yet. Make sure to call rebuild on the tree before accessing its nodes.")
     }
@@ -97,16 +122,23 @@ impl ScopeState {
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
     ///
     /// Returns [`None`] if the tree has not been built yet.
-    pub fn try_root_node(&self) -> Option<&VNode> {
-        self.last_rendered_node.as_ref().map(AsVNode::as_vnode)
+    pub fn try_root_node(&self) -> Option<VNode> {
+        self.inner
+            .borrow()
+            .last_rendered_node
+            .as_ref()
+            .map(AsVNode::as_vnode)
+            .cloned()
     }
 
     /// Returns the scope id of this [`ScopeState`].
     pub fn id(&self) -> ScopeId {
-        self.context_id
+        self.inner.borrow().context_id
     }
 
-    pub(crate) fn state(&self) -> Ref<'_, Scope> {
-        self.runtime.get_state(self.context_id).unwrap()
+    pub(crate) fn with_state<O>(&self, f: impl FnOnce(&Scope) -> O) -> O {
+        let inner = self.inner.borrow();
+        let state = inner.runtime.get_state(inner.context_id).unwrap();
+        f(&*state)
     }
 }

@@ -11,14 +11,10 @@ use crate::{
     scopes::ScopeId,
     virtual_dom::VirtualDom,
 };
-use crate::{Element, Runtime, VNode};
+use crate::{Element, VNode};
 
 impl VirtualDom {
-    pub(super) fn new_scope(
-        &mut self,
-        props: BoxedAnyProps,
-        name: &'static str,
-    ) -> Rc<RefCell<ScopeState>> {
+    pub(super) fn new_scope(&mut self, props: BoxedAnyProps, name: &'static str) -> ScopeState {
         let parent_id = self.runtime.current_scope_id().ok();
         let height = match parent_id.and_then(|id| self.runtime.get_state(id)) {
             Some(parent) => parent.height() + 1,
@@ -35,13 +31,12 @@ impl VirtualDom {
         let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
         let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
 
-        let scope = entry.insert(Rc::new(RefCell::new(ScopeState {
-            runtime: self.runtime.clone(),
-            context_id: id,
+        let scope = entry.insert(ScopeState::new(
+            self.runtime.clone(),
+            id,
             props,
-            last_rendered_node: Default::default(),
             reactive_context,
-        })));
+        ));
 
         self.runtime.create_scope(scope_runtime);
         tracing::trace!("created scope {id:?} with parent {parent_id:?}");
@@ -58,42 +53,42 @@ impl VirtualDom {
 
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scopes = self.runtime.scopes.borrow();
-            let scope = &scopes[scope_id.0].borrow();
+            let scope = &scopes[scope_id.0];
             let output = {
-                let scope_state = scope.state();
+                scope.with_state(|scope_state| {
+                    scope_state.hook_index.set(0);
 
-                scope_state.hook_index.set(0);
+                    // Run all pre-render hooks
+                    for pre_run in scope_state.before_render.borrow_mut().iter_mut() {
+                        pre_run();
+                    }
 
-                // Run all pre-render hooks
-                for pre_run in scope_state.before_render.borrow_mut().iter_mut() {
-                    pre_run();
-                }
+                    let props: &dyn AnyProps = &*scope.inner.borrow().props;
 
-                let props: &dyn AnyProps = &*scope.props;
-
-                let span = tracing::trace_span!("render", scope = %scope.state().name);
-                span.in_scope(|| {
-                    scope.reactive_context.reset_and_run_in(|| {
-                        let mut render_return = props.render();
-                        self.handle_element_return(&mut render_return, scope_id, &scope.state());
-                        render_return
+                    let span = tracing::trace_span!("render", scope = %scope_state.name);
+                    span.in_scope(|| {
+                        scope.inner.borrow().reactive_context.reset_and_run_in(|| {
+                            let mut render_return = props.render();
+                            self.handle_element_return(&mut render_return, scope_id, &scope_state);
+                            render_return
+                        })
                     })
                 })
             };
 
-            let scope_state = scope.state();
+            scope.with_state(|scope_state| {
+                // Run all post-render hooks
+                for post_run in scope_state.after_render.borrow_mut().iter_mut() {
+                    post_run();
+                }
 
-            // Run all post-render hooks
-            for post_run in scope_state.after_render.borrow_mut().iter_mut() {
-                post_run();
-            }
-
-            // remove this scope from dirty scopes
-            self.runtime
-                .dirty_scopes
-                .borrow_mut()
-                .remove(&ScopeOrder::new(scope_state.height, scope_id));
-            output
+                // remove this scope from dirty scopes
+                self.runtime
+                    .dirty_scopes
+                    .borrow_mut()
+                    .remove(&ScopeOrder::new(scope_state.height, scope_id));
+                output
+            })
         })
     }
 

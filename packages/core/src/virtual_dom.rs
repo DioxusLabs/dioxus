@@ -328,14 +328,14 @@ impl VirtualDom {
     /// Get the state for any scope given its ID
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
-    pub fn get_scope(&self, id: ScopeId) -> Option<Rc<RefCell<ScopeState>>> {
+    pub fn get_scope(&self, id: ScopeId) -> Option<ScopeState> {
         self.runtime.scopes.borrow().get(id.0).cloned()
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
-    pub fn base_scope(&self) -> Rc<RefCell<ScopeState>> {
+    pub fn base_scope(&self) -> ScopeState {
         self.get_scope(ScopeId::ROOT).unwrap()
     }
 
@@ -350,13 +350,14 @@ impl VirtualDom {
     ///
     /// This is useful for what is essentially dependency injection when building the app
     pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
-        self.base_scope().borrow().state().provide_context(context);
+        self.provide_root_context(context);
         self
     }
 
     /// Provide a context to the root scope
     pub fn provide_root_context<T: Clone + 'static>(&self, context: T) {
-        self.base_scope().borrow().state().provide_context(context);
+        self.base_scope()
+            .with_state(|state| state.provide_context(context));
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -364,9 +365,7 @@ impl VirtualDom {
     /// This method is useful for when you want to provide a context in your app without knowing its type
     pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
         self.base_scope()
-            .borrow()
-            .state()
-            .provide_any_context(context);
+            .with_state(|state| state.provide_any_context(context));
     }
 
     /// Manually mark a scope as requiring a re-render
@@ -559,6 +558,7 @@ impl VirtualDom {
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
         self.runtime.scopes.borrow_mut()[ScopeId::ROOT.0]
+            .inner
             .borrow_mut()
             .last_rendered_node = Some(new_nodes.clone());
 
@@ -741,7 +741,7 @@ impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Drop all scopes in order of height
         let mut scopes = self.runtime.scopes.borrow_mut().drain().collect::<Vec<_>>();
-        scopes.sort_by_key(|scope| scope.borrow().state().height);
+        scopes.sort_by_key(|scope| scope.with_state(|state| state.height));
         for scope in scopes.into_iter().rev() {
             drop(scope);
         }
