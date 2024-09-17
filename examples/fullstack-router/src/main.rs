@@ -7,7 +7,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-   dioxus::LaunchBuilder::fullstack()
+    dioxus::LaunchBuilder::fullstack()
         .with_cfg(server_only!(ServeConfig::builder().incremental(
             IncrementalRendererConfig::default()
                 .invalidate_after(std::time::Duration::from_secs(120)),

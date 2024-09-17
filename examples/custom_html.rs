@@ -4,7 +4,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-   dioxus::LaunchBuilder::new()
+    dioxus::LaunchBuilder::new()
         .with_cfg(
             dioxus::desktop::Config::new().with_custom_index(
                 r#"

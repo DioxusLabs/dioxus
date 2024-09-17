@@ -12,7 +12,7 @@ use dioxus::desktop::{Config, WindowCloseBehaviour};
 use dioxus::prelude::*;
 
 fn main() {
-   dioxus::LaunchBuilder::desktop()
+    dioxus::LaunchBuilder::desktop()
         .with_cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::CloseWindow))
         .launch(app)
 }

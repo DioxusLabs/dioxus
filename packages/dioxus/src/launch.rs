@@ -212,7 +212,7 @@ impl LaunchBuilder {
 /// - `web`
 /// - `liveview`
 mod current_platform {
-    #[cfg(feature = "fullstack")]
+    #[cfg(all(feature = "fullstack", feature = "server"))]
     pub use dioxus_fullstack::launch::*;
 
     #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
@@ -240,6 +240,38 @@ mod current_platform {
         not(feature = "mobile"),
         not(feature = "static-generation"),
     ))]
+    pub fn launch(
+        root: fn() -> dioxus_core::Element,
+        contexts: Vec<super::ContextFn>,
+        platform_config: Vec<Box<dyn std::any::Any>>,
+    ) {
+        // If the server feature is enabled, launch the client with hydration enabled
+        #[cfg(feature = "server")]
+        {
+            let contexts = Arc::new(contexts);
+            let mut factory = virtual_dom_factory(root, contexts);
+            let platform_config = *platform_config
+                .into_iter()
+                .find_map(|cfg| cfg.downcast::<Config>().ok())
+                .unwrap_or_default();
+
+            let factory = move || {
+                let mut vdom = factory();
+                #[cfg(feature = "document")]
+                {
+                    let document =
+                        std::rc::Rc::new(dioxus_fullstack::document::web::FullstackWebDocument)
+                            as std::rc::Rc<dyn crate::prelude::Document>;
+                    vdom.provide_root_context(document);
+                }
+                vdom
+            };
+
+            dioxus_web::launch::launch_virtual_dom(factory(), cfg)
+        }
+        #[cfg(not(feature = "server"))]
+        dioxus_web::launch::launch(root, contexts, platform_config);
+    }
     pub use dioxus_web::launch::*;
 
     #[cfg(all(

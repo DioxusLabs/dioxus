@@ -14,7 +14,7 @@ static ASSET_PATH: &str = "examples/assets/logo.png";
 static ASSET_PATH: &str = asset!("examples/assets/logo.png".format(ImageType::Avif));
 
 fn main() {
-   dioxus::launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

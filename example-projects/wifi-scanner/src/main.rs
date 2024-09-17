@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use wifiscanner::Wifi;
 
 fn main() {
-   dioxus::launch(app)
+    dioxus::launch(app)
 }
 
 fn perform_scan() -> Status {

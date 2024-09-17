@@ -11,7 +11,7 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/router.css");
 
 fn main() {
-   dioxus::launch(|| {
+    dioxus::launch(|| {
         rsx! {
             head::Link { rel: "stylesheet", href: STYLE }
             Router::<Route> {}

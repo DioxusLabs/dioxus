@@ -12,7 +12,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-   dioxus::LaunchBuilder::new()
+    dioxus::LaunchBuilder::new()
         .with_cfg(desktop!({
             use dioxus::desktop::{LogicalSize, WindowBuilder};
             dioxus::desktop::Config::default()

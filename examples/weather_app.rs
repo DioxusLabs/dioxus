@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
-   dioxus::launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

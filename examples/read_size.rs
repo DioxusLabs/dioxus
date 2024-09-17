@@ -9,7 +9,7 @@ use std::rc::Rc;
 use dioxus::{html::geometry::euclid::Rect, prelude::*};
 
 fn main() {
-   dioxus::launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

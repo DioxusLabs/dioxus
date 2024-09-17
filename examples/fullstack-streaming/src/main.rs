@@ -37,5 +37,5 @@ pub async fn test_stream() -> Result<TextStream, ServerFnError> {
 }
 
 fn main() {
-   dioxus::launch(app)
+    dioxus::launch(app)
 }

@@ -28,7 +28,7 @@ fn main() {
     let config = dioxus::desktop::Config::new().with_menu(menu);
 
     //dioxus::launch the app with the custom menu
-   dioxus::LaunchBuilder::new().with_cfg(config).launch(app)
+    dioxus::LaunchBuilder::new().with_cfg(config).launch(app)
 }
 
 fn app() -> Element {

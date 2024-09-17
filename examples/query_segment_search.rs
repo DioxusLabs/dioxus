@@ -14,7 +14,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-   dioxus::launch(|| {
+    dioxus::launch(|| {
         rsx! {
             Router::<Route> {}
         }

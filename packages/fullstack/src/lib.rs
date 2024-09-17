@@ -13,7 +13,6 @@ mod html_storage;
 mod axum_adapter;
 
 mod hooks;
-pub mod launch;
 
 pub mod document;
 #[cfg(feature = "server")]

@@ -9,7 +9,7 @@ use std::{collections::VecDeque, fmt::Debug, rc::Rc};
 const STYLE: &str = asset!("./examples/assets/events.css");
 
 fn main() {
-   dioxus::launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

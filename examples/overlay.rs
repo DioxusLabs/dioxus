@@ -11,7 +11,9 @@ use dioxus::desktop::{
 use dioxus::prelude::*;
 
 fn main() {
-   dioxus::LaunchBuilder::desktop().with_cfg(make_config()).launch(app);
+    dioxus::LaunchBuilder::desktop()
+        .with_cfg(make_config())
+        .launch(app);
 }
 
 fn app() -> Element {

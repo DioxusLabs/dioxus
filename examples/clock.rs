@@ -8,7 +8,7 @@ use web_time::Instant;
 const STYLE: &str = asset!("./examples/assets/clock.css");
 
 fn main() {
-   dioxus::launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

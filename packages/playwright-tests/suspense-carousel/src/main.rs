@@ -107,5 +107,5 @@ fn NestedSuspendedComponent(id: i32) -> Element {
 }
 
 fn main() {
-   dioxus::launch(app);
+    dioxus::launch(app);
 }

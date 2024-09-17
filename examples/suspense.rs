@@ -15,7 +15,7 @@ use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
-   dioxus::LaunchBuilder::new()
+    dioxus::LaunchBuilder::new()
         .with_cfg(desktop! {
             Config::new().with_window(
                 WindowBuilder::new()
