@@ -207,7 +207,7 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
 
-    pub(crate) runtime: Rc<Runtime>,
+    pub(crate) runtime: Runtime,
 
     // The scopes that have been resolved since the last render
     pub(crate) resolved_scopes: Vec<ScopeId>,
@@ -494,8 +494,8 @@ impl VirtualDom {
 
         // Keep polling tasks until there are no more effects or tasks to run
         // Or until we have no more dirty scopes
-        while !self.runtime.dirty_tasks.borrow().is_empty()
-            || !self.runtime.pending_effects.borrow().is_empty()
+        while !self.runtime.state.dirty_tasks.borrow().is_empty()
+            || !self.runtime.state.pending_effects.borrow().is_empty()
         {
             // Next, run any queued tasks
             // We choose not to poll the deadline since we complete pretty quickly anyways
@@ -629,7 +629,7 @@ impl VirtualDom {
 
     /// Check if there are any suspended tasks remaining
     pub fn suspended_tasks_remaining(&self) -> bool {
-        self.runtime.suspended_tasks.get() > 0
+        self.runtime.state.suspended_tasks.get() > 0
     }
 
     /// Wait for the scheduler to have any work that should be run during suspense.
@@ -727,7 +727,7 @@ impl VirtualDom {
     }
 
     /// Get the current runtime
-    pub fn runtime(&self) -> Rc<Runtime> {
+    pub fn runtime(&self) -> Runtime {
         self.runtime.clone()
     }
 

@@ -30,12 +30,12 @@ impl Effect {
     }
 
     pub(crate) fn run(&self, runtime: &Runtime) {
-        runtime.rendering.set(false);
+        runtime.state.rendering.set(false);
         let mut effect = self.effect.borrow_mut();
         while let Some(f) = effect.pop_front() {
             f();
         }
-        runtime.rendering.set(true);
+        runtime.state.rendering.set(true);
     }
 }
 

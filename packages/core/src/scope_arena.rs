@@ -111,6 +111,7 @@ impl VirtualDom {
                     .suspense_location();
                 let already_suspended = self
                     .runtime
+                    .state
                     .tasks
                     .borrow()
                     .get(task.id)
@@ -123,8 +124,9 @@ impl VirtualDom {
                         boundary.add_suspended_task(e.clone());
                     }
                     self.runtime
+                        .state
                         .suspended_tasks
-                        .set(self.runtime.suspended_tasks.get() + 1);
+                        .set(self.runtime.state.suspended_tasks.get() + 1);
                 }
                 e.placeholder = VNode::placeholder();
             }

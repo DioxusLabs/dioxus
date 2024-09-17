@@ -25,7 +25,7 @@ pub struct WebsysDom {
     pub(crate) interpreter: Interpreter,
 
     #[cfg(feature = "mounted")]
-    pub(crate) runtime: Rc<Runtime>,
+    pub(crate) runtime: Runtime,
 
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
@@ -51,7 +51,7 @@ pub struct WebsysDom {
 }
 
 impl WebsysDom {
-    pub fn new(cfg: Config, runtime: Rc<Runtime>) -> Self {
+    pub fn new(cfg: Config, runtime: Runtime) -> Self {
         let (document, root) = match cfg.root {
             crate::cfg::ConfigRoot::RootName(rootname) => {
                 // eventually, we just want to let the interpreter do all the work of decoding events into our event type

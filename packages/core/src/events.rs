@@ -1,4 +1,8 @@
-use crate::{properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
+use crate::{
+    properties::SuperFrom,
+    runtime::{RuntimeGuard, RuntimeState},
+    Runtime, ScopeId,
+};
 use generational_box::GenerationalBox;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
@@ -432,7 +436,7 @@ impl<Args: 'static, Ret: 'static> PartialEq for Callback<Args, Ret> {
 
 pub(super) struct ExternalListenerCallback<Args, Ret> {
     callback: Rc<RefCell<dyn FnMut(Args) -> Ret>>,
-    runtime: std::rc::Weak<Runtime>,
+    runtime: std::rc::Weak<RuntimeState>,
 }
 
 impl<Args, Ret> Clone for ExternalListenerCallback<Args, Ret> {
@@ -459,7 +463,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         let callback = owner.insert(Some(ExternalListenerCallback {
             callback: Rc::new(RefCell::new(move |event: Args| f(event).spawn()))
                 as Rc<RefCell<dyn FnMut(Args) -> Ret>>,
-            runtime: Rc::downgrade(&runtime),
+            runtime: Rc::downgrade(&runtime.state),
         }));
         Self { callback, origin }
     }
@@ -474,7 +478,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         let callback = GenerationalBox::leak(Some(ExternalListenerCallback {
             callback: Rc::new(RefCell::new(move |event: Args| f(event).spawn()))
                 as Rc<RefCell<dyn FnMut(Args) -> Ret>>,
-            runtime: Rc::downgrade(&runtime),
+            runtime: Rc::downgrade(&runtime.state),
         }));
         Self { callback, origin }
     }
@@ -485,12 +489,15 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     #[track_caller]
     pub fn call(&self, arguments: Args) -> Ret {
         if let Some(callback) = self.callback.read().as_ref() {
-            let runtime = callback
+            let rt_state = callback
                 .runtime
                 .upgrade()
                 .expect("Callback was called after the runtime was dropped");
-            let _guard = RuntimeGuard::new(runtime.clone());
-            runtime.with_scope_on_stack(self.origin, || {
+            let rt = Runtime {
+                state: rt_state.clone(),
+            };
+            let _guard = RuntimeGuard::new(rt.clone());
+            rt.with_scope_on_stack(self.origin, || {
                 let mut callback = callback.callback.borrow_mut();
                 callback(arguments)
             })
@@ -516,7 +523,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     pub fn __set(&mut self, value: Rc<RefCell<dyn FnMut(Args) -> Ret>>) {
         self.callback.set(Some(ExternalListenerCallback {
             callback: value,
-            runtime: Rc::downgrade(&Runtime::current().unwrap()),
+            runtime: Rc::downgrade(&Runtime::current().unwrap().state),
         }));
     }
 

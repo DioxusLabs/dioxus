@@ -13,12 +13,12 @@ pub struct AssetHandler {
 
 #[derive(Clone)]
 pub struct AssetHandlerRegistry {
-    dom_rt: Rc<Runtime>,
+    dom_rt: Runtime,
     handlers: Rc<RefCell<FxHashMap<String, AssetHandler>>>,
 }
 
 impl AssetHandlerRegistry {
-    pub fn new(dom_rt: Rc<Runtime>) -> Self {
+    pub fn new(dom_rt: Runtime) -> Self {
         AssetHandlerRegistry {
             dom_rt,
             handlers: Default::default(),

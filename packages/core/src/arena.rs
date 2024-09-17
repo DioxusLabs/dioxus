@@ -56,7 +56,7 @@ pub struct ElementPath {
 
 impl VirtualDom {
     pub(crate) fn next_element(&mut self) -> ElementId {
-        let mut elements = self.runtime.elements.borrow_mut();
+        let mut elements = self.runtime.state.elements.borrow_mut();
         ElementId(elements.insert(None))
     }
 
@@ -72,7 +72,7 @@ impl VirtualDom {
             return true;
         }
 
-        let mut elements = self.runtime.elements.borrow_mut();
+        let mut elements = self.runtime.state.elements.borrow_mut();
         elements.try_remove(el.0).is_some()
     }
 

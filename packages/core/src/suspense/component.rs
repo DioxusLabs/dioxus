@@ -398,7 +398,7 @@ impl SuspenseBoundaryProps {
             let currently_rendered = scope_state.last_rendered_node.as_ref().unwrap().clone();
             let mount = currently_rendered.as_vnode().mount.get();
             let parent = {
-                let mounts = dom.runtime.mounts.borrow();
+                let mounts = dom.runtime.state.mounts.borrow();
                 mounts
                     .get(mount.0)
                     .expect("suspense placeholder is not mounted")
