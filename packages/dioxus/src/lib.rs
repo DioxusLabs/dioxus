@@ -96,7 +96,7 @@ pub mod prelude {
         feature = "hot-reload"
     ))]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reload")))]
-    pub use dioxus_hot_reload;
+    pub use dioxus_devtools;
 
     pub use dioxus_core;
 

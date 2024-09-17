@@ -2437,9 +2437,9 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-macro",
  "dioxus-desktop",
+ "dioxus-devtools",
  "dioxus-fullstack",
  "dioxus-hooks",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-liveview",
  "dioxus-mobile",
@@ -2511,7 +2511,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-types",
- "dioxus-hot-reload",
+ "dioxus-devtools",
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-rsx-hotreload",
@@ -2568,19 +2568,6 @@ dependencies = [
 [[package]]
 name = "dioxus-cli-config"
 version = "0.6.0-alpha.2"
-dependencies = [
- "built",
- "cargo_toml",
- "clap",
- "dirs",
- "once_cell",
- "serde",
- "serde_json",
- "tauri-bundler",
- "tauri-utils",
- "toml 0.8.19",
- "tracing",
-]
 
 [[package]]
 name = "dioxus-config-macro"
@@ -2649,8 +2636,8 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
+ "dioxus-devtools",
  "dioxus-hooks",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",
@@ -2683,6 +2670,29 @@ dependencies = [
  "urlencoding",
  "webbrowser",
  "wry",
+]
+
+[[package]]
+name = "dioxus-devtools"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-devtools-types",
+ "dioxus-signals",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tungstenite 0.23.0",
+ "warnings",
+]
+
+[[package]]
+name = "dioxus-devtools-types"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "serde",
 ]
 
 [[package]]
@@ -2734,7 +2744,7 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-desktop",
- "dioxus-hot-reload",
+ "dioxus-devtools",
  "dioxus-interpreter-js",
  "dioxus-isrg",
  "dioxus-lib",
@@ -2783,31 +2793,6 @@ dependencies = [
  "tracing",
  "warnings",
  "web-sys",
-]
-
-[[package]]
-name = "dioxus-hot-reload"
-version = "0.6.0-alpha.2"
-dependencies = [
- "chrono",
- "dioxus-cli-config",
- "dioxus-core",
- "dioxus-html",
- "dioxus-rsx",
- "dioxus-rsx-hotreload",
- "dioxus-signals",
- "execute",
- "futures-util",
- "ignore",
- "notify",
- "once_cell",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite 0.23.1",
- "tracing",
- "warnings",
 ]
 
 [[package]]
@@ -2905,7 +2890,7 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
- "dioxus-hot-reload",
+ "dioxus-devtools",
  "dioxus-html",
  "dioxus-interpreter-js",
  "futures-channel",
@@ -3116,8 +3101,8 @@ dependencies = [
  "criterion",
  "dioxus",
  "dioxus-cli-config",
+ "dioxus-devtools",
  "dioxus-fullstack",
- "dioxus-hot-reload",
  "dioxus-isrg",
  "dioxus-lib",
  "dioxus-router",
@@ -3147,7 +3132,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-types",
- "dioxus-hot-reload",
+ "dioxus-devtools",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",

@@ -19,7 +19,7 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::{Platform, WebHttpsConfig};
-use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
+use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::stream;
 use futures_util::{stream::FuturesUnordered, StreamExt};

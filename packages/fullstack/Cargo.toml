@@ -64,13 +64,13 @@ web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document
 dioxus-cli-config = { workspace = true, optional = true }
 clap = { version = "4.5.7", optional = true, features = ["derive"] }
 
+dioxus-devtools = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.8.1", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dioxus-hot-reload = { workspace = true, features = ["serve"] }
 tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
 
 [dev-dependencies]
@@ -79,7 +79,7 @@ dioxus = { workspace = true, features = ["fullstack"] }
 [features]
 default = ["hot-reload", "panic_hook", "document", "file_engine", "mounted"]
 panic_hook = ["dioxus-web?/panic_hook"]
-hot-reload = ["dioxus-web?/hot_reload", "dioxus-hot-reload/serve"]
+hot-reload = ["dioxus-web?/hot_reload", "dep:dioxus-devtools"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]

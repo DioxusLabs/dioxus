@@ -6,7 +6,7 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::prelude::*;
-use dioxus_hot_reload::DevserverMsg;
+use dioxus_devtools::DevserverMsg;
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
@@ -120,7 +120,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        dioxus_hot_reload::connect(move |template| _ = tx.send(template));
+        dioxus_devtools::connect(move |template| _ = tx.send(template));
         rx
     };
 
@@ -216,7 +216,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                 #[cfg(all(feature = "hot-reload", debug_assertions))]
                 match msg{
                     DevserverMsg::HotReload(msg)=> {
-                        dioxus_hot_reload::apply_changes(&mut vdom, &msg);
+                        dioxus_devtools::apply_changes(&mut vdom, &msg);
                     }
                     DevserverMsg::Shutdown => {
                         std::process::exit(0);

@@ -28,7 +28,8 @@ members = [
     "packages/rsx-rosetta",
     "packages/generational-box",
     "packages/signals",
-    "packages/hot-reload",
+    "packages/devtools",
+    "packages/devtools-types",
     "packages/fullstack",
     "packages/server-macro",
     "packages/static-generation",
@@ -93,7 +94,8 @@ dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.0" 
 dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.0" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.0" }
 generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.0" }
-dioxus-hot-reload = { path = "packages/hot-reload", version = "0.6.0-alpha.0" }
+dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.0" }
+dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.1" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.0" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.0", default-features = false }

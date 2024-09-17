@@ -150,7 +150,7 @@ impl App {
         let proxy = self.shared.proxy.clone();
 
         tokio::task::spawn(async move {
-            let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
+            let Some(Ok(mut receiver)) = dioxus_devtools::NativeReceiver::create_from_cli().await
             else {
                 return;
             };
@@ -282,13 +282,13 @@ impl App {
         not(target_os = "android"),
         not(target_os = "ios")
     ))]
-    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
-        use dioxus_hot_reload::DevserverMsg;
+    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+        use dioxus_devtools::DevserverMsg;
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
+                    dioxus_devtools::apply_changes(&mut webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
 

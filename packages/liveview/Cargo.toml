@@ -26,8 +26,8 @@ dioxus-html = { workspace = true, features = ["serialize", "document", "mounted"
 rustc-hash = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"] }
-dioxus-cli-config = { workspace = true, features = ["read-config", "read-from-args"] }
+dioxus-devtools = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true }
 generational-box = { workspace = true }
 
 # axum
@@ -44,7 +44,7 @@ dioxus = { workspace = true }
 default = ["hot-reload", "multi-thread"]
 axum = ["dep:axum"]
 multi-thread = ["tokio/rt-multi-thread"]
-hot-reload = ["dep:dioxus-hot-reload"]
+hot-reload = ["dep:dioxus-devtools"]
 
 [[example]]
 name = "axum"

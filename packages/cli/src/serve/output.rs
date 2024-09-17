@@ -19,7 +19,7 @@ use crossterm::{
     ExecutableCommand,
 };
 use dioxus_cli_config::{AddressArguments, Platform};
-use dioxus_hot_reload::ClientMsg;
+use dioxus_devtools::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, TerminalOptions, Viewport};
 use std::{

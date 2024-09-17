@@ -31,7 +31,7 @@ serde = { version = "1.0.136", optional = true }
 axum = { workspace = true, optional = true }
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
-dioxus-hot-reload = { workspace = true, optional = true }
+dioxus-devtools = { workspace = true, optional = true }
 
 [features]
 default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
@@ -40,7 +40,7 @@ signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
-hot-reload = ["dep:dioxus-hot-reload", "dioxus-web?/hot_reload", "dioxus-fullstack?/hot-reload"]
+hot-reload = ["dep:dioxus-devtools", "dioxus-web?/hot_reload", "dioxus-fullstack?/hot-reload"]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis", "dioxus-core/manganis"]
