@@ -21,7 +21,7 @@ use std::{
 use tracing::instrument;
 
 thread_local! {
-    static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
+    static CURRENT: RefCell<Option<Rc<Runtime>>> = RefCell::new(None);
 }
 
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
@@ -89,9 +89,16 @@ impl Runtime {
 
     /// Get the current runtime
     pub fn current() -> Result<Rc<Self>, RuntimeError> {
-        RUNTIMES
-            .with(|stack| stack.borrow().last().cloned())
+        CURRENT
+            .try_with(|rt| rt.borrow().as_ref().cloned())
+            .ok()
+            .flatten()
             .ok_or(RuntimeError::new())
+    }
+
+    /// Leave and return the current runtime.
+    pub fn take() -> Option<Rc<Self>> {
+        CURRENT.with(|rt| rt.borrow_mut().take())
     }
 
     /// Wrap a closure so that it always runs in the runtime that is currently active
@@ -218,16 +225,6 @@ impl Runtime {
             contexts.get(id.0).and_then(|f| f.as_ref())
         })
         .ok()
-    }
-
-    /// Pushes a new scope onto the stack
-    pub(crate) fn push(runtime: Rc<Runtime>) {
-        RUNTIMES.with(|stack| stack.borrow_mut().push(runtime));
-    }
-
-    /// Pops a scope off the stack
-    pub(crate) fn pop() {
-        RUNTIMES.with(|stack| stack.borrow_mut().pop());
     }
 
     /// Runs a function with the current runtime
@@ -463,14 +460,16 @@ pub struct RuntimeGuard(());
 impl RuntimeGuard {
     /// Create a new runtime guard that sets the current Dioxus runtime. The runtime will be reset when the guard is dropped
     pub fn new(runtime: Rc<Runtime>) -> Self {
-        Runtime::push(runtime);
+        CURRENT.with(|rt| {
+            *rt.borrow_mut() = Some(runtime);
+        });
         Self(())
     }
 }
 
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
-        Runtime::pop();
+        Runtime::take();
     }
 }
 
