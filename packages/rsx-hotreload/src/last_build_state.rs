@@ -1,5 +1,5 @@
-use crate::innerlude::*;
 use dioxus_core::internal::{FmtSegment, FmtedSegments, HotReloadLiteral};
+use dioxus_rsx::*;
 use std::cell::Cell;
 
 /// A pool of items we can grab from during hot reloading.

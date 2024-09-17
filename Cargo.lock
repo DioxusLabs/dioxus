@@ -2510,9 +2510,11 @@ dependencies = [
  "dioxus-check",
  "dioxus-cli-config",
  "dioxus-core",
+ "dioxus-core-types",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-rsx-rosetta",
  "dirs",
  "env_logger 0.11.5",
@@ -2792,6 +2794,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-html",
  "dioxus-rsx",
+ "dioxus-rsx-hotreload",
  "dioxus-signals",
  "execute",
  "futures-util",
@@ -2815,6 +2818,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-core-types",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
@@ -3033,14 +3037,26 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.6.0-alpha.2"
 dependencies = [
- "dioxus-core",
- "internment",
  "prettier-please",
  "prettyplease",
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
- "serde",
+ "syn 2.0.77",
+ "tracing",
+]
+
+[[package]]
+name = "dioxus-rsx-hotreload"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-core-types",
+ "dioxus-rsx",
+ "internment",
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
  "syn 2.0.77",
  "tracing",
 ]
