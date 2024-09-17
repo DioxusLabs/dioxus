@@ -21,7 +21,7 @@ use std::{
 use tracing::instrument;
 
 thread_local! {
-    static CURRENT: RefCell<Option<Runtime>> = RefCell::new(None);
+    static CURRENT: RefCell<Option<Runtime>> = const { RefCell::new(None) };
 }
 
 /// State of a [`Runtime`].

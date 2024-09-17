@@ -2,7 +2,7 @@ use crate::{
     any_props::BoxedAnyProps, nodes::AsVNode, reactive_context::ReactiveContext,
     scope_context::Scope, Element, Runtime, VNode,
 };
-use std::{cell::Ref, rc::Rc};
+use std::cell::Ref;
 
 /// A component's unique identifier.
 ///
