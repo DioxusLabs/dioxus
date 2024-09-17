@@ -6,7 +6,6 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::prelude::*;
-use dioxus_devtools::DevserverMsg;
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
@@ -117,7 +116,7 @@ impl<S> LiveViewSocket for S where
 ///
 /// You might need to transform the error types of the web backend into the LiveView error type.
 pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveViewError> {
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
@@ -159,9 +158,9 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     }
 
     loop {
-        #[cfg(all(feature = "hot-reload", debug_assertions))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         let hot_reload_wait = hot_reload_rx.recv();
-        #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+        #[cfg(not(all(feature = "devtools", debug_assertions)))]
         let hot_reload_wait: std::future::Pending<Option<()>> = std::future::pending();
 
         tokio::select! {
@@ -215,22 +214,22 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             }
 
             Some(msg) = hot_reload_wait => {
-                #[cfg(all(feature = "hot-reload", debug_assertions))]
+                #[cfg(all(feature = "devtools", debug_assertions))]
                 match msg{
-                    DevserverMsg::HotReload(msg)=> {
+                    dioxus_devtools::DevserverMsg::HotReload(msg)=> {
                         dioxus_devtools::apply_changes(&vdom, &msg);
                     }
-                    DevserverMsg::Shutdown => {
+                    dioxus_devtools::DevserverMsg::Shutdown => {
                         std::process::exit(0);
                     },
-                    DevserverMsg::FullReloadCommand
-                    | DevserverMsg::FullReloadStart
-                    | DevserverMsg::FullReloadFailed => {
+                    dioxus_devtools::DevserverMsg::FullReloadCommand
+                    | dioxus_devtools::DevserverMsg::FullReloadStart
+                    | dioxus_devtools::DevserverMsg::FullReloadFailed => {
                         // usually only web gets this message - what are we supposed to do?
                         // Maybe we could just binary patch ourselves in place without losing window state?
                     },
                 }
-                #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+                #[cfg(not(all(feature = "devtools", debug_assertions)))]
                 let () = msg;
             }
         }

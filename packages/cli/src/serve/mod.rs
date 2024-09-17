@@ -171,6 +171,7 @@ pub async fn serve_all(
                                 &asset_dir,
                                 server.ip,
                                 dioxus_crate.dioxus_config.application.name.clone(),
+                                dioxus_crate.out_dir()
                             );
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),

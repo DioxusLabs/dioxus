@@ -86,12 +86,7 @@ impl App {
         app.set_menubar_receiver();
 
         // Allow hotreloading to work - but only in debug mode
-        #[cfg(all(
-            feature = "hot-reload",
-            debug_assertions,
-            not(target_os = "android"),
-            not(target_os = "ios")
-        ))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         app.connect_hotreload();
 
         #[cfg(debug_assertions)]
@@ -140,12 +135,7 @@ impl App {
         }
     }
 
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn connect_hotreload(&self) {
         if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
             let proxy = self.shared.proxy.clone();
@@ -270,12 +260,7 @@ impl App {
         view.desktop_context.query.send(result);
     }
 
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
         use dioxus_devtools::DevserverMsg;
 

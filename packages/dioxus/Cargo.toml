@@ -34,13 +34,13 @@ axum = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
+default = ["macro", "html", "devtools", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
-hot-reload = ["dep:dioxus-devtools", "dioxus-web?/hot_reload", "dioxus-fullstack?/hot-reload"]
+devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools", "dioxus-fullstack?/devtools"]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis", "dioxus-core/manganis"]

@@ -10,6 +10,7 @@ pub const DEVSERVER_RAW_ADDR_ENV: &str = "DIOXUS_DEVSERVER_ADDR";
 pub const ALWAYS_ON_TOP_ENV: &str = "DIOXUS_ALWAYS_ON_TOP";
 pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
 pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
+pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
 
 /// todo: this is not implemented but we're going to reserve this
 ///
@@ -65,4 +66,8 @@ pub fn is_cli_enabled() -> bool {
 
 pub fn base_path() -> Option<PathBuf> {
     std::env::var("DIOXUS_ASSET_ROOT").ok().map(PathBuf::from)
+}
+
+pub fn out_dir() -> Option<PathBuf> {
+    std::env::var(OUT_DIR).ok().map(PathBuf::from)
 }

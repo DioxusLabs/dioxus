@@ -166,6 +166,7 @@ impl BuildResult {
         asset_root: &std::path::Path,
         devserver_addr: SocketAddr,
         app_title: String,
+        out_dir: PathBuf,
     ) -> std::io::Result<Option<Child>> {
         match self.target_platform {
             TargetPlatform::Web => {
@@ -214,6 +215,7 @@ impl BuildResult {
             devserver_addr.to_string(),
         );
         cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
+        cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
 
         cmd.stderr(Stdio::piped())
             .stdout(Stdio::piped())

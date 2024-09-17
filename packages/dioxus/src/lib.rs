@@ -93,9 +93,9 @@ pub mod prelude {
 
     #[cfg(all(
         not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")),
-        feature = "hot-reload"
+        feature = "devtools"
     ))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "hot-reload")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
     pub use dioxus_devtools;
 
     pub use dioxus_core;
