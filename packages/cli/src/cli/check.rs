@@ -11,19 +11,19 @@ use super::*;
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct Check {
+pub struct Check {
     /// Input file
     #[clap(short, long)]
-    pub(crate) file: Option<PathBuf>,
+    pub file: Option<PathBuf>,
 
     /// Information about the target to check
     #[clap(flatten)]
-    pub(crate) target_args: TargetArgs,
+    pub target_args: TargetArgs,
 }
 
 impl Check {
     // Todo: check the entire crate
-    pub(crate) async fn check(self) -> Result<()> {
+    pub async fn check(self) -> Result<()> {
         match self.file {
             // Default to checking the project
             None => {

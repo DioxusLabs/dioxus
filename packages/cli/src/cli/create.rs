@@ -8,7 +8,7 @@ pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
-pub(crate) struct Create {
+pub struct Create {
     /// Project name (required when `--yes` is used)
     name: Option<String>,
 
@@ -39,7 +39,7 @@ pub(crate) struct Create {
 }
 
 impl Create {
-    pub(crate) fn create(mut self) -> Result<()> {
+    pub fn create(mut self) -> Result<()> {
         let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
 
         // If we're getting pass a `.` name, that's actually a path
@@ -112,7 +112,7 @@ impl Create {
 
 /// Post-creation actions for newly setup crates.
 // Also used by `init`.
-pub(crate) fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
+pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     // 1. Add the new project to the workspace, if it exists.
     //    This must be executed first in order to run `cargo fmt` on the new project.
     metadata.and_then(|metadata| {

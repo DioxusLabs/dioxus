@@ -1,6 +1,6 @@
-use crate::config::WebProxyConfig;
 use crate::TraceSrc;
 use crate::{Error, Result};
+use dioxus_cli_config::WebProxyConfig;
 
 use anyhow::{anyhow, Context};
 use axum::body::Body as MyBody;
@@ -56,7 +56,7 @@ impl ProxyClient {
 /// - the exact path of the proxy config's backend URL, e.g. /api
 /// - the exact path with a trailing slash, e.g. /api/
 /// - any subpath of the backend URL, e.g. /api/foo/bar
-pub(crate) fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
+pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     let url: Uri = proxy.backend.parse()?;
     let path = url.path().to_string();
     let trimmed_path = path.trim_start_matches('/');

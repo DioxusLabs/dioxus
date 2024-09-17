@@ -1,17 +1,14 @@
-pub(crate) mod autoformat;
-pub(crate) mod build;
-pub(crate) mod bundle;
-pub(crate) mod check;
-pub(crate) mod clean;
-pub(crate) mod config;
-pub(crate) mod create;
-pub(crate) mod doctor;
-pub(crate) mod httpserver;
-pub(crate) mod init;
-pub(crate) mod link;
-pub(crate) mod run;
-pub(crate) mod serve;
-pub(crate) mod translate;
+pub mod autoformat;
+pub mod build;
+pub mod bundle;
+pub mod check;
+pub mod clean;
+pub mod config;
+pub mod create;
+pub mod init;
+pub mod link;
+pub mod serve;
+pub mod translate;
 
 use crate::{custom_error, error::Result, Error};
 use clap::{Parser, Subcommand};
@@ -26,32 +23,40 @@ use std::{
     process::{Command, Stdio},
 };
 
+pub static VERSION: Lazy<String> = Lazy::new(|| {
+    format!(
+        "{} ({})",
+        crate::dx_build_info::PKG_VERSION,
+        crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("was built without git repository")
+    )
+});
+
 /// Build, Bundle & Ship Dioxus Apps.
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
-pub(crate) struct Cli {
+pub struct Cli {
     #[clap(subcommand)]
-    pub(crate) action: Commands,
+    pub action: Commands,
 
     /// Enable verbose logging.
     #[clap(short)]
-    pub(crate) v: bool,
+    pub v: bool,
 
     /// Specify a binary target.
     #[clap(global = true, long)]
-    pub(crate) bin: Option<String>,
+    pub bin: Option<String>,
 }
 
 #[derive(Parser)]
-pub(crate) enum Commands {
+pub enum Commands {
     /// Build the Dioxus project and all of its assets.
-    Build(build::BuildArgs),
+    Build(build::Build),
 
     /// Translate a source file into Dioxus code.
     Translate(translate::Translate),
 
     /// Build, watch & serve the Dioxus project and all of its assets.
-    Serve(serve::ServeArgs),
+    Serve(serve::Serve),
 
     /// Create a new project for Dioxus.
     New(create::Create),
@@ -74,21 +79,13 @@ pub(crate) enum Commands {
     #[clap(name = "check")]
     Check(check::Check),
 
-    /// Start a local http server, akin to a default fullstack app
-    #[clap(name = "http-server")]
-    HttpServer(httpserver::Httpserver),
-
-    /// Run the project without any hotreloading
-    #[clap(name = "run")]
-    Run(run::RunArgs),
-
-    /// Ensure all the tooling is installed and configured correctly
-    #[clap(name = "doctor")]
-    Doctor(doctor::Doctor),
-
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
+
+    /// Handles parsing of linker arguments for linker-based systems
+    /// such as Manganis and binary patching.
+    Link(link::LinkCommand),
 }
 
 impl Display for Commands {
@@ -104,17 +101,7 @@ impl Display for Commands {
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
-            Commands::HttpServer(_) => write!(f, "http-server"),
-            Commands::Run(_) => write!(f, "run"),
-            Commands::Doctor(_) => write!(f, "doctor"),
+            Commands::Link(_) => write!(f, "link"),
         }
     }
 }
-
-pub(crate) static VERSION: Lazy<String> = Lazy::new(|| {
-    format!(
-        "{} ({})",
-        crate::build_info::PKG_VERSION,
-        crate::build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("was built without git repository")
-    )
-});

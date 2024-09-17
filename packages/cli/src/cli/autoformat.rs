@@ -10,35 +10,35 @@ use std::{borrow::Cow, fs, path::Path, process::exit};
 
 /// Format some rsx
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct Autoformat {
+pub struct Autoformat {
     /// Format rust code before the formatting the rsx macros
     #[clap(long)]
-    pub(crate) all_code: bool,
+    pub all_code: bool,
 
     /// Run in 'check' mode. Exits with 0 if input is formatted correctly. Exits
     /// with 1 and prints a diff if formatting is required.
     #[clap(short, long)]
-    pub(crate) check: bool,
+    pub check: bool,
 
     /// Input rsx (selection)
     #[clap(short, long)]
-    pub(crate) raw: Option<String>,
+    pub raw: Option<String>,
 
     /// Input file
     #[clap(short, long)]
-    pub(crate) file: Option<String>,
+    pub file: Option<String>,
 
     /// Split attributes in lines or not
     #[clap(short, long, default_value = "false")]
-    pub(crate) split_line_attributes: bool,
+    pub split_line_attributes: bool,
 
     /// The package to build
     #[clap(short, long)]
-    pub(crate) package: Option<String>,
+    pub package: Option<String>,
 }
 
 impl Autoformat {
-    pub(crate) fn autoformat(self) -> Result<()> {
+    pub fn autoformat(self) -> Result<()> {
         let Autoformat {
             check,
             raw,

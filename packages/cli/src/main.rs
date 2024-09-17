@@ -2,23 +2,17 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-pub(crate) mod assets;
-pub(crate) mod build_info;
-pub(crate) mod builder;
-pub(crate) mod bundle_utils;
-pub(crate) mod bundler;
-pub(crate) mod cli;
-pub(crate) mod config;
-pub(crate) mod dioxus_crate;
-pub(crate) mod error;
-pub(crate) mod fastfs;
-pub(crate) mod metadata;
-pub(crate) mod serve;
-pub(crate) mod settings;
-pub(crate) mod tooling;
-pub(crate) mod tracer;
+pub mod assets;
+pub mod builder;
+pub mod cli;
+pub mod dioxus_crate;
+pub mod dx_build_info;
+pub mod error;
+pub mod metadata;
+pub mod serve;
+pub mod settings;
+pub mod tracer;
 
-pub(crate) use builder::Platform;
 pub(crate) use cli::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
@@ -27,45 +21,67 @@ pub(crate) use tracer::{TraceMsg, TraceSrc};
 
 use anyhow::Context;
 use clap::Parser;
+
 use Commands::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // If we have a magic env var set, we want to operate as a linker instead.
-    if link::should_link() {
-        return link::dump_link_args();
-    }
+    let args = Cli::parse();
 
-    // Start the tracer so it captures logs from the build engine before we start the builder
-    crate::serve::TraceController::initialize();
+    let log_control = tracer::build_tracing();
 
-    match Cli::parse().action {
+    match args.action {
         Translate(opts) => opts
             .translate()
-            .context("⛔️ Translation of HTML into RSX failed:"),
+            .context(error_wrapper("Translation of HTML into RSX failed")),
 
-        New(opts) => opts.create().context("🚫 Creating new project failed:"),
+        New(opts) => opts
+            .create()
+            .context(error_wrapper("Creating new project failed")),
 
-        Init(opts) => opts.init().context("🚫 Initializing a new project failed:"),
+        Init(opts) => opts
+            .init()
+            .context(error_wrapper("Initializing a new project failed")),
 
-        Config(opts) => opts.config().context("🚫 Configuring new project failed:"),
+        Config(opts) => opts
+            .config()
+            .context(error_wrapper("Configuring new project failed")),
 
-        Autoformat(opts) => opts.autoformat().context("🚫 Error autoformatting RSX:"),
+        Autoformat(opts) => opts
+            .autoformat()
+            .context(error_wrapper("Error autoformatting RSX")),
 
-        Check(opts) => opts.check().await.context("🚫 Error checking RSX:"),
+        Check(opts) => opts
+            .check()
+            .await
+            .context(error_wrapper("Error checking RSX")),
 
-        Clean(opts) => opts.clean().context("🚫 Cleaning project failed:"),
+        Link(opts) => opts
+            .link()
+            .context(error_wrapper("Error with linker passthrough")),
 
-        Build(opts) => opts.run().await.context("🚫 Building project failed:"),
+        Build(mut opts) => opts
+            .run()
+            .await
+            .context(error_wrapper("Building project failed")),
 
-        Serve(opts) => opts.serve().await.context("🚫 Serving project failed:"),
+        Clean(opts) => opts
+            .clean()
+            .context(error_wrapper("Cleaning project failed")),
 
-        Bundle(opts) => opts.bundle().await.context("🚫 Bundling project failed:"),
+        Serve(opts) => opts
+            .serve(log_control)
+            .await
+            .context(error_wrapper("Serving project failed")),
 
-        Run(opts) => opts.run().await.context("🚫 Running project failed:"),
-
-        HttpServer(opts) => opts.serve().await.context("🚫 Serving project failed:"),
-
-        Doctor(opts) => opts.run().await.context("🚫 Checking project failed:"),
+        Bundle(opts) => opts
+            .bundle()
+            .await
+            .context(error_wrapper("Bundling project failed")),
     }
+}
+
+/// Simplifies error messages that use the same pattern.
+fn error_wrapper(message: &str) -> String {
+    format!("🚫 {message}:")
 }

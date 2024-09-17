@@ -1,8 +1,11 @@
-use super::{detect::is_wsl, AppRunner};
-use super::{hot_reloading_file_map::HotreloadError, update::ServeUpdate};
-use crate::{cli::serve::ServeArgs, dioxus_crate::DioxusCrate};
-use crate::{serve::hot_reloading_file_map::FileMap, TraceSrc};
-use dioxus_devtools_types::HotReloadMsg;
+use std::collections::{HashMap, HashSet};
+use std::{fs, path::PathBuf, time::Duration};
+
+use super::hot_reloading_file_map::HotreloadError;
+use crate::serve::hot_reloading_file_map::FileMap;
+use crate::TraceSrc;
+use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
+use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
@@ -11,44 +14,41 @@ use notify::{
     event::{MetadataKind, ModifyKind},
     Config, EventKind,
 };
-use std::collections::{HashMap, HashSet};
-use std::{path::PathBuf, time::Duration};
 
 /// This struct stores the file watcher and the filemap for the project.
 ///
 /// This is where we do workspace discovery and recursively listen for changes in Rust files and asset
 /// directories.
-pub(crate) struct Watcher {
+pub struct Watcher {
+    _tx: UnboundedSender<notify::Event>,
     rx: UnboundedReceiver<notify::Event>,
-    krate: DioxusCrate,
+    _last_update_time: i64,
+    _watcher: Box<dyn notify::Watcher>,
+    queued_events: Vec<notify::Event>,
     file_map: FileMap,
     ignore: Gitignore,
     applied_hot_reload_message: Option<HotReloadMsg>,
-    _tx: UnboundedSender<notify::Event>,
-    _last_update_time: i64,
-    _watcher: Box<dyn notify::Watcher>,
 }
 
 impl Watcher {
-    pub(crate) fn start(serve: &ServeArgs, krate: &DioxusCrate) -> Self {
+    pub fn start(serve: &Serve, config: &DioxusCrate) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         // Extend the watch path to include:
         // - the assets directory - this is so we can hotreload CSS and other assets by default
         // - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
         // - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
-        let mut allow_watch_path = krate.dioxus_config.web.watcher.watch_path.clone();
-        allow_watch_path.push(krate.dioxus_config.application.asset_dir.clone());
+        let mut allow_watch_path = config.dioxus_config.web.watcher.watch_path.clone();
+        allow_watch_path.push(config.dioxus_config.application.asset_dir.clone());
         allow_watch_path.push("Cargo.toml".to_string().into());
         allow_watch_path.push("Dioxus.toml".to_string().into());
-        allow_watch_path.push("assets".to_string().into());
         allow_watch_path.dedup();
 
-        let crate_dir = krate.crate_dir();
+        let crate_dir = config.crate_dir();
         let mut builder = ignore::gitignore::GitignoreBuilder::new(&crate_dir);
         builder.add(crate_dir.join(".gitignore"));
 
-        let out_dir = krate.out_dir();
+        let out_dir = config.out_dir();
         let out_dir_str = out_dir.display().to_string();
 
         let excluded_paths = vec![
@@ -86,8 +86,9 @@ impl Watcher {
         // Create the file watcher.
         let mut watcher: Box<dyn notify::Watcher> = match is_wsl {
             true => {
-                let poll_interval =
-                    Duration::from_secs(serve.wsl_file_poll_interval.unwrap_or(2) as u64);
+                let poll_interval = Duration::from_secs(
+                    serve.server_arguments.wsl_file_poll_interval.unwrap_or(2) as u64,
+                );
 
                 Box::new(
                     notify::PollWatcher::new(
@@ -105,7 +106,7 @@ impl Watcher {
         // Watch the specified paths
         // todo: make sure we don't double-watch paths if they're nested
         for sub_path in allow_watch_path {
-            let path = &krate.crate_dir().join(sub_path);
+            let path = &config.crate_dir().join(sub_path);
 
             // If the path is ignored, don't watch it
             if ignore.matched(path, path.is_dir()).is_ignore() {
@@ -121,38 +122,48 @@ impl Watcher {
 
         // Probe the entire project looking for our rsx calls
         // Whenever we get an update from the file watcher, we'll try to hotreload against this file map
-        let file_map = FileMap::create_with_filter::<HtmlCtx>(krate.crate_dir(), |path| {
+        let file_map = FileMap::create_with_filter::<HtmlCtx>(config.crate_dir(), |path| {
             ignore.matched(path, path.is_dir()).is_ignore()
         })
         .unwrap();
 
         Self {
             _tx: tx,
-            krate: krate.clone(),
             rx,
             _watcher: watcher,
             file_map,
             ignore,
+            queued_events: Vec::new(),
             _last_update_time: chrono::Local::now().timestamp(),
             applied_hot_reload_message: None,
         }
     }
 
-    /// Wait for changed files to be detected
-    pub(crate) async fn wait(&mut self) -> ServeUpdate {
-        // Wait for the next file to change
-        let mut changes: Vec<_> = self.rx.next().await.into_iter().collect();
-
-        // Dequeue in bulk if we can, we might've received a lot of events in one go
-        while let Some(event) = self.rx.try_next().ok().flatten() {
-            changes.push(event);
+    /// A cancel safe handle to the file watcher
+    ///
+    /// todo: this should be simpler logic?
+    pub async fn wait(&mut self) {
+        // Pull off any queued events in succession
+        while let Ok(Some(event)) = self.rx.try_next() {
+            self.queued_events.push(event);
         }
 
-        // Filter the changes
+        if !self.queued_events.is_empty() {
+            return;
+        }
+
+        // If there are no queued events, wait for the next event
+        if let Some(event) = self.rx.next().await {
+            self.queued_events.push(event);
+        }
+    }
+
+    /// Deques changed files from the event queue, doing the proper intelligent filtering
+    pub fn dequeue_changed_files(&mut self, config: &DioxusCrate) -> Vec<PathBuf> {
         let mut all_mods: Vec<PathBuf> = vec![];
 
         // Decompose the events into a list of all the files that have changed
-        for event in changes.drain(..) {
+        for event in self.queued_events.drain(..) {
             // We only care about certain events.
             if !is_allowed_notify_event(&event) {
                 continue;
@@ -163,8 +174,18 @@ impl Watcher {
             }
         }
 
-        // Collect the files that have changed
-        let mut files = vec![];
+        let mut modified_files = vec![];
+
+        // For the non-rust files, we want to check if it's an asset file
+        // This would mean the asset lives somewhere under the /assets directory or is referenced by magnanis in the linker
+        // todo: mg integration here
+        let _asset_dir = config
+            .dioxus_config
+            .application
+            .asset_dir
+            .canonicalize()
+            .ok();
+
         for path in all_mods.iter() {
             if path.extension().is_none() {
                 continue;
@@ -182,35 +203,34 @@ impl Watcher {
 
             // If the extension is a backup file, or a hidden file, ignore it completely (no rebuilds)
             if is_backup_file(path.to_path_buf()) {
+                tracing::trace!("Ignoring backup file: {:?}", path);
                 continue;
             }
 
             // If the path is ignored, don't watch it
             if self.ignore.matched(path, path.is_dir()).is_ignore() {
-                tracing::info!("Ignoring update to file: {:?}", path);
                 continue;
             }
 
-            tracing::info!("Enqueuing hotreload update to file: {:?}", path);
-
-            files.push(path.clone());
+            modified_files.push(path.clone());
         }
 
-        ServeUpdate::FilesChanged { files }
+        modified_files
     }
 
-    pub(crate) fn attempt_hot_reload(
+    pub fn attempt_hot_reload(
         &mut self,
+        config: &DioxusCrate,
         modified_files: Vec<PathBuf>,
-        runner: &AppRunner,
     ) -> Option<HotReloadMsg> {
         // If we have any changes to the rust files, we need to update the file map
-        let crate_dir = self.krate.crate_dir();
+        let crate_dir = config.crate_dir();
         let mut templates = vec![];
 
         // Prepare the hotreload message we need to send
         let mut edited_rust_files = Vec::new();
         let mut assets = Vec::new();
+        let mut unknown_files = Vec::new();
 
         for path in modified_files {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
@@ -221,35 +241,22 @@ impl Watcher {
 
             match ext {
                 "rs" => edited_rust_files.push(path),
-
-                // Look through the runners to see if any of them have an asset that matches the path
-                _ => {
-                    for runner in runner.running.values() {
-                        if let Some(bundled_name) = runner.hotreload_asset(&path) {
-                            assets.push(bundled_name);
-                        }
-                    }
-                }
+                _ if path.starts_with("assets") => assets.push(path),
+                _ => unknown_files.push(path),
             }
         }
 
-        assets.dedup();
-
-        // Process the rust files
         for rust_file in edited_rust_files {
             match self.file_map.update_rsx::<HtmlCtx>(&rust_file, &crate_dir) {
                 Ok(hotreloaded_templates) => {
                     templates.extend(hotreloaded_templates);
                 }
-
                 // If the file is not reloadable, we need to rebuild
                 Err(HotreloadError::Notreloadable) => return None,
-
                 // The rust file may have failed to parse, but that is most likely
                 // because the user is in the middle of adding new code
                 // We just ignore the error and let Rust analyzer warn about the problem
                 Err(HotreloadError::Parse) => {}
-
                 // Otherwise just log the error
                 Err(err) => {
                     tracing::error!(dx_src = ?TraceSrc::Dev, "Error hotreloading file {rust_file:?}: {err}")
@@ -257,7 +264,11 @@ impl Watcher {
             }
         }
 
-        let msg = HotReloadMsg { templates, assets };
+        let msg = HotReloadMsg {
+            templates,
+            assets,
+            unknown_files,
+        };
 
         self.add_hot_reload_message(&msg);
 
@@ -265,37 +276,50 @@ impl Watcher {
     }
 
     /// Get any hot reload changes that have been applied since the last full rebuild
-    pub(crate) fn applied_hot_reload_changes(&mut self) -> Option<HotReloadMsg> {
+    pub fn applied_hot_reload_changes(&mut self) -> Option<HotReloadMsg> {
         self.applied_hot_reload_message.clone()
     }
 
     /// Clear the hot reload changes. This should be called any time a new build is starting
-    pub(crate) fn clear_hot_reload_changes(&mut self) {
+    pub fn clear_hot_reload_changes(&mut self) {
         self.applied_hot_reload_message.take();
     }
 
     /// Store the hot reload changes for any future clients that connect
     fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
-        let Some(applied) = &mut self.applied_hot_reload_message else {
-            self.applied_hot_reload_message = Some(msg.clone());
-            return;
-        };
-
-        // Merge the assets, unknown files, and templates
-        // We keep the newer change if there is both a old and new change
-        let mut templates: HashMap<String, _> = std::mem::take(&mut applied.templates)
-            .into_iter()
-            .map(|template| (template.location.clone(), template))
-            .collect();
-        let mut assets: HashSet<PathBuf> =
-            std::mem::take(&mut applied.assets).into_iter().collect();
-        for template in &msg.templates {
-            templates.insert(template.location.clone(), template.clone());
+        match &mut self.applied_hot_reload_message {
+            Some(applied) => {
+                // Merge the assets, unknown files, and templates
+                // We keep the newer change if there is both a old and new change
+                let mut templates: HashMap<String, _> = std::mem::take(&mut applied.templates)
+                    .into_iter()
+                    .map(|template| (template.location.clone(), template))
+                    .collect();
+                let mut assets: HashSet<PathBuf> =
+                    std::mem::take(&mut applied.assets).into_iter().collect();
+                let mut unknown_files: HashSet<PathBuf> =
+                    std::mem::take(&mut applied.unknown_files)
+                        .into_iter()
+                        .collect();
+                for template in &msg.templates {
+                    templates.insert(template.location.clone(), template.clone());
+                }
+                assets.extend(msg.assets.iter().cloned());
+                unknown_files.extend(msg.unknown_files.iter().cloned());
+                applied.templates = templates.into_values().collect();
+                applied.assets = assets.into_iter().collect();
+                applied.unknown_files = unknown_files.into_iter().collect();
+            }
+            None => {
+                self.applied_hot_reload_message = Some(msg.clone());
+            }
         }
+    }
 
-        assets.extend(msg.assets.iter().cloned());
-        applied.templates = templates.into_values().collect();
-        applied.assets = assets.into_iter().collect();
+    /// Ensure the changes we've received from the queue are actually legit changes to either assets or
+    /// rust code. We don't care about changes otherwise, unless we get a signal elsewhere to do a full rebuild
+    pub fn pending_changes(&mut self) -> bool {
+        !self.queued_events.is_empty()
     }
 }
 
@@ -323,7 +347,7 @@ fn is_backup_file(path: PathBuf) -> bool {
 
 /// Tests if the provided [`notify::Event`] is something we listen to so we can avoid unescessary hot reloads.
 fn is_allowed_notify_event(event: &notify::Event) -> bool {
-    let allowed = match event.kind {
+    match event.kind {
         EventKind::Modify(ModifyKind::Data(_)) => true,
         EventKind::Modify(ModifyKind::Name(_)) => true,
         EventKind::Create(_) => true,
@@ -334,11 +358,40 @@ fn is_allowed_notify_event(event: &notify::Event) -> bool {
         EventKind::Modify(ModifyKind::Any) => true,
         // Don't care about anything else.
         _ => false,
-    };
+    }
+}
 
-    tracing::info!("is_allowed_notify_event:  {allowed:?} for {event:#?}");
+const WSL_1: &str = "/proc/sys/kernel/osrelease";
+const WSL_2: &str = "/proc/version";
+const WSL_KEYWORDS: [&str; 2] = ["microsoft", "wsl"];
 
-    allowed
+/// Detects if `dx` is being ran in a WSL environment.
+///
+/// We determine this based on whether the keyword `microsoft` or `wsl` is contained within the [`WSL_1`] or [`WSL_2`] files.
+/// This may fail in the future as it isn't guaranteed by Microsoft.
+/// See https://github.com/microsoft/WSL/issues/423#issuecomment-221627364
+fn is_wsl() -> bool {
+    // Test 1st File
+    if let Ok(content) = fs::read_to_string(WSL_1) {
+        let lowercase = content.to_lowercase();
+        for keyword in WSL_KEYWORDS {
+            if lowercase.contains(keyword) {
+                return true;
+            }
+        }
+    }
+
+    // Test 2nd File
+    if let Ok(content) = fs::read_to_string(WSL_2) {
+        let lowercase = content.to_lowercase();
+        for keyword in WSL_KEYWORDS {
+            if lowercase.contains(keyword) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 #[test]

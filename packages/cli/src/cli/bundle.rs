@@ -1,10 +1,11 @@
+use crate::build::Build;
 use crate::DioxusCrate;
-use crate::{build::BuildArgs, bundle_utils::make_tauri_bundler_settings};
 use anyhow::Context;
 use std::env::current_dir;
 use std::fs::create_dir_all;
+use std::ops::Deref;
 use std::str::FromStr;
-use tauri_bundler::{PackageSettings, SettingsBuilder};
+use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
 use super::*;
 
@@ -15,14 +16,21 @@ pub struct Bundle {
     /// The package types to bundle
     #[clap(long)]
     pub packages: Option<Vec<PackageType>>,
-
     /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub(crate) build_arguments: BuildArgs,
+    pub build_arguments: Build,
+}
+
+impl Deref for Bundle {
+    type Target = Build;
+
+    fn deref(&self) -> &Self::Target {
+        &self.build_arguments
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum PackageType {
+pub enum PackageType {
     MacOsBundle,
     IosBundle,
     WindowsMsi,
@@ -45,7 +53,6 @@ impl FromStr for PackageType {
             "rpm" => Ok(PackageType::Rpm),
             "appimage" => Ok(PackageType::AppImage),
             "dmg" => Ok(PackageType::Dmg),
-            "updater" => Ok(PackageType::Updater),
             _ => Err(format!("{} is not a valid package type", s)),
         }
     }
@@ -67,7 +74,7 @@ impl From<PackageType> for tauri_bundler::PackageType {
 }
 
 impl Bundle {
-    pub(crate) async fn bundle(mut self) -> anyhow::Result<()> {
+    pub async fn bundle(mut self) -> anyhow::Result<()> {
         let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
@@ -90,9 +97,7 @@ impl Bundle {
                 .set_src_path(Some(dioxus_crate.workspace_dir().display().to_string())),
         ];
 
-        let bundle_config = dioxus_crate.dioxus_config.bundle.clone();
-        let mut bundle_settings = make_tauri_bundler_settings(bundle_config);
-
+        let mut bundle_settings: BundleSettings = dioxus_crate.dioxus_config.bundle.clone().into();
         if cfg!(windows) {
             let windows_icon_override = dioxus_crate
                 .dioxus_config
@@ -124,7 +129,6 @@ impl Bundle {
 
         // Copy the assets in the dist directory to the bundle
         let static_asset_output_dir = &dioxus_crate.dioxus_config.application.out_dir;
-
         // Make sure the dist directory is relative to the crate directory
         let static_asset_output_dir = static_asset_output_dir
             .strip_prefix(dioxus_crate.workspace_dir())
@@ -184,7 +188,7 @@ impl Bundle {
             settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
         }
 
-        if let Some(target) = &self.build_arguments.target_args.target {
+        if let Some(target) = &self.target_args.target {
             settings = settings.target(target.to_string());
         }
 
@@ -194,7 +198,7 @@ impl Bundle {
         #[cfg(target_os = "macos")]
         std::env::set_var("CI", "true");
 
-        tauri_bundler::bundle::bundle_project(&settings.unwrap()).unwrap_or_else(|err|{
+        tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
             #[cfg(target_os = "macos")]
             panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
             #[cfg(not(target_os = "macos"))]

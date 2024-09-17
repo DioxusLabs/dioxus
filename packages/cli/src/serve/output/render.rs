@@ -1,9 +1,8 @@
-use super::{BuildProgress, ConsoleMessage, TraceMsg, TraceSrc};
-use crate::Platform;
+use super::{BuildProgress, TraceMsg, TraceSrc};
 use ansi_to_tui::IntoText as _;
+use dioxus_cli_config::Platform;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    prelude::Buffer,
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, List, ListState, Paragraph, Widget, Wrap},
@@ -118,7 +117,7 @@ impl TuiLayout {
         &self,
         frame: &mut Frame,
         scroll_position: u16,
-        messages: &[ConsoleMessage],
+        messages: &[TraceMsg],
         enabled_filters: &[String],
     ) -> u16 {
         const LEVEL_MAX: usize = "BUILD: ".len();
@@ -129,82 +128,75 @@ impl TuiLayout {
         for msg in messages.iter() {
             let mut sub_line_padding = 0;
 
-            match msg {
-                ConsoleMessage::BuildReady => {}
-                ConsoleMessage::OnngoingBuild { stage, progress } => {}
+            let text = msg.content.trim_end().into_text().unwrap_or_default();
 
-                ConsoleMessage::Log(msg) => {
-                    let text = msg.content.trim_end().into_text().unwrap_or_default();
+            for (idx, line) in text.lines.into_iter().enumerate() {
+                // Don't add any formatting for cargo messages.
+                let out_line = if msg.source != TraceSrc::Cargo {
+                    if idx == 0 {
+                        match msg.source {
+                            TraceSrc::Dev => {
+                                let mut spans = vec![Span::from("  DEV: ").light_magenta()];
 
-                    for (idx, line) in text.lines.into_iter().enumerate() {
-                        // Don't add any formatting for cargo messages.
-                        let out_line = if msg.source != TraceSrc::Cargo {
-                            if idx == 0 {
-                                match msg.source {
-                                    TraceSrc::Dev => {
-                                        let mut spans = vec![Span::from("  DEV: ").light_magenta()];
-
-                                        for span in line.spans {
-                                            spans.push(span);
-                                        }
-                                        spans
-                                    }
-                                    TraceSrc::Build => {
-                                        let mut spans = vec![Span::from("BUILD: ").light_blue()];
-
-                                        for span in line.spans {
-                                            spans.push(span);
-                                        }
-                                        spans
-                                    }
-                                    _ => {
-                                        // Build level tag: `INFO:``
-                                        // We don't subtract 1 here for `:` because we still want at least 1 padding.
-                                        let padding = build_msg_padding(
-                                            LEVEL_MAX - msg.level.to_string().len() - 2,
-                                        );
-                                        let level = format!("{padding}{}: ", msg.level);
-                                        sub_line_padding += level.len();
-
-                                        let level_span = Span::from(level);
-                                        let level_span = match msg.level {
-                                            Level::TRACE => level_span.black(),
-                                            Level::DEBUG => level_span.light_magenta(),
-                                            Level::INFO => level_span.light_green(),
-                                            Level::WARN => level_span.light_yellow(),
-                                            Level::ERROR => level_span.light_red(),
-                                        };
-
-                                        let mut out_line = vec![level_span];
-                                        for span in line.spans {
-                                            out_line.push(span);
-                                        }
-
-                                        out_line
-                                    }
+                                for span in line.spans {
+                                    spans.push(span);
                                 }
-                            } else {
-                                // Not the first line. Append the padding and merge into list.
-                                let padding = build_msg_padding(sub_line_padding);
+                                spans
+                            }
+                            TraceSrc::Build => {
+                                let mut spans = vec![Span::from("BUILD: ").light_blue()];
 
-                                let mut out_line = vec![Span::from(padding)];
+                                for span in line.spans {
+                                    spans.push(span);
+                                }
+                                spans
+                            }
+                            _ => {
+                                // Build level tag: `INFO:``
+                                // We don't subtract 1 here for `:` because we still want at least 1 padding.
+                                let padding =
+                                    build_msg_padding(LEVEL_MAX - msg.level.to_string().len() - 2);
+                                let level = format!("{padding}{}: ", msg.level);
+                                sub_line_padding += level.len();
+
+                                let level_span = Span::from(level);
+                                let level_span = match msg.level {
+                                    Level::TRACE => level_span.black(),
+                                    Level::DEBUG => level_span.light_magenta(),
+                                    Level::INFO => level_span.light_green(),
+                                    Level::WARN => level_span.light_yellow(),
+                                    Level::ERROR => level_span.light_red(),
+                                };
+
+                                let mut out_line = vec![level_span];
                                 for span in line.spans {
                                     out_line.push(span);
                                 }
+
                                 out_line
                             }
-                        } else {
-                            line.spans
-                        };
+                        }
+                    } else {
+                        // Not the first line. Append the padding and merge into list.
+                        let padding = build_msg_padding(sub_line_padding);
 
-                        out_text.push_line(Line::from(out_line));
+                        let mut out_line = vec![Span::from(padding)];
+                        for span in line.spans {
+                            out_line.push(span);
+                        }
+                        out_line
                     }
-                }
+                } else {
+                    line.spans
+                };
+
+                out_text.push_line(Line::from(out_line));
             }
         }
 
         // Only show messages for filters that are enabled.
         let mut included_line_ids = Vec::new();
+
         for filter in enabled_filters {
             let re = Regex::new(filter);
             for (index, line) in out_text.lines.iter().enumerate() {
@@ -243,9 +235,6 @@ impl TuiLayout {
                 }
             }
         }
-
-        // out_text.push_line(line);
-        // let lines: Buffer = Paragraph::new(out_text).try_into().unwrap();
 
         let (console_width, _console_height) = self.get_console_size();
 

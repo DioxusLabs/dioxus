@@ -1,37 +1,37 @@
 use dioxus_core::internal::{HotReloadTemplateWithLocation, HotReloadedTemplate};
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::CallBody;
-use dioxus_rsx_hotreload::{diff_rsx, ChangedRsx, HotReloadResult};
+use dioxus_rsx_hotreload::{diff_rsx, ChangedRsx};
 use krates::cm::MetadataCommand;
 use krates::Cmd;
-pub(crate) use std::collections::HashMap;
+pub use std::collections::HashMap;
 use std::{ffi::OsStr, path::PathBuf};
-pub(crate) use std::{fs, io, path::Path};
-pub(crate) use std::{fs::File, io::Read};
+pub use std::{fs, io, path::Path};
+pub use std::{fs::File, io::Read};
 use syn::spanned::Spanned;
 
-pub(crate) struct FileMap {
-    pub(crate) map: HashMap<PathBuf, CachedSynFile>,
+pub struct FileMap {
+    pub map: HashMap<PathBuf, CachedSynFile>,
 
     /// Any errors that occurred while building the FileMap that were not fatal
-    pub(crate) errors: Vec<io::Error>,
+    pub errors: Vec<io::Error>,
 
-    pub(crate) in_workspace: HashMap<PathBuf, Option<PathBuf>>,
+    pub in_workspace: HashMap<PathBuf, Option<PathBuf>>,
 }
 
 /// A cached file that has been parsed
 ///
 /// We store the templates found in this file
-pub(crate) struct CachedSynFile {
-    pub(crate) raw: String,
-    pub(crate) templates: HashMap<String, HotReloadedTemplate>,
+pub struct CachedSynFile {
+    pub raw: String,
+    pub templates: HashMap<String, HotReloadedTemplate>,
 }
 
 impl FileMap {
     /// Create a new FileMap from a crate directory
     ///
     /// TODO: this should be created with a gitignore filter
-    pub(crate) fn create<Ctx: HotReloadingContext>(path: PathBuf) -> io::Result<FileMap> {
+    pub fn create<Ctx: HotReloadingContext>(path: PathBuf) -> io::Result<FileMap> {
         Self::create_with_filter::<Ctx>(path, |p| {
             // skip some stuff we know is large by default
             p.file_name() == Some(OsStr::new("target"))
@@ -43,7 +43,7 @@ impl FileMap {
     ///
     /// Takes a filter that when returns true, the file will be filtered out (ie not tracked)
     /// Note that this is inverted from a typical .filter() method.
-    pub(crate) fn create_with_filter<Ctx: HotReloadingContext>(
+    pub fn create_with_filter<Ctx: HotReloadingContext>(
         crate_dir: PathBuf,
         mut filter: impl FnMut(&Path) -> bool,
     ) -> io::Result<FileMap> {
@@ -63,7 +63,7 @@ impl FileMap {
     /// Start watching assets for changes
     ///
     /// This just diffs every file against itself and populates the tracked assets as it goes
-    pub(crate) fn load_assets<Ctx: HotReloadingContext>(&mut self, crate_dir: &Path) {
+    pub fn load_assets<Ctx: HotReloadingContext>(&mut self, crate_dir: &Path) {
         let keys = self.map.keys().cloned().collect::<Vec<_>>();
         for file in keys {
             _ = self.update_rsx::<Ctx>(file.as_path(), crate_dir);
@@ -82,7 +82,7 @@ impl FileMap {
     }
 
     /// Try to update the rsx in a file
-    pub(crate) fn update_rsx<Ctx: HotReloadingContext>(
+    pub fn update_rsx<Ctx: HotReloadingContext>(
         &mut self,
         file_path: &Path,
         crate_dir: &Path,
@@ -154,7 +154,7 @@ impl FileMap {
             let template_location = template_location(old_start, file);
 
             // Returns a list of templates that are hotreloadable
-            let hotreload_result = HotReloadResult::new::<Ctx>(
+            let hotreload_result = dioxus_rsx_hotreload::HotReloadResult::new::<Ctx>(
                 &old_call_body.body,
                 &new_call_body.body,
                 template_location.clone(),
@@ -219,7 +219,7 @@ impl FileMap {
     }
 }
 
-pub(crate) fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> String {
+pub fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> String {
     let line = old_start.line;
     let column = old_start.column + 1;
 
@@ -233,7 +233,7 @@ pub(crate) fn template_location(old_start: proc_macro2::LineColumn, file: &Path)
     path + ":" + line.to_string().as_str() + ":" + column.to_string().as_str()
 }
 
-pub(crate) fn format_template_name(name: &str, index: usize) -> String {
+pub fn format_template_name(name: &str, index: usize) -> String {
     format!("{}:{}", name, index)
 }
 
@@ -290,7 +290,7 @@ fn find_rs_files(root: PathBuf, filter: &mut impl FnMut(&Path) -> bool) -> FileM
 }
 
 #[derive(Debug)]
-pub(crate) enum HotreloadError {
+pub enum HotreloadError {
     Failure(io::Error),
     Parse,
     Notreloadable,
