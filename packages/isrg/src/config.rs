@@ -1,15 +1,16 @@
 #![allow(non_snake_case)]
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::fs_cache::PathMapFn;
+
 use crate::IncrementalRenderer;
+use crate::memory_cache::InMemoryCache;
 
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
     time::Duration,
 };
 
-use super::fs_cache::PathMapFn;
-use super::memory_cache::InMemoryCache;
 
 /// A configuration for the incremental renderer.
 #[derive(Clone)]
@@ -17,9 +18,11 @@ pub struct IncrementalRendererConfig {
     static_dir: PathBuf,
     memory_cache_limit: usize,
     invalidate_after: Option<Duration>,
-    map_path: Option<PathMapFn>,
     clear_cache: bool,
     pre_render: bool,
+
+    #[cfg(not(target_arch = "wasm32"))]
+    map_path: Option<PathMapFn>,
 }
 
 impl Default for IncrementalRendererConfig {
@@ -35,9 +38,10 @@ impl IncrementalRendererConfig {
             static_dir: PathBuf::from("./static"),
             memory_cache_limit: 10000,
             invalidate_after: None,
-            map_path: None,
             clear_cache: true,
             pre_render: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            map_path: None,
         }
     }
 
@@ -49,8 +53,9 @@ impl IncrementalRendererConfig {
 
     /// Set a mapping from the route to the file path. This will override the default mapping configured with `static_dir`.
     /// The function should return the path to the folder to store the index.html file in.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn map_path<F: Fn(&str) -> PathBuf + Send + Sync + 'static>(mut self, map_path: F) -> Self {
-        self.map_path = Some(Arc::new(map_path));
+        self.map_path = Some(std::sync::Arc::new(map_path));
         self
     }
 

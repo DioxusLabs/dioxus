@@ -108,10 +108,12 @@ impl IncrementalRenderer {
     ) -> Result<Option<CachedRender<'a>>, IncrementalRendererError> {
         let Self {
             memory_cache,
+            #[cfg(not(target_arch = "wasm32"))]
             file_system_cache,
             ..
         } = self;
 
+        #[allow(unused)]
         enum FsGetError {
             NotPresent,
             Error(IncrementalRendererError),
