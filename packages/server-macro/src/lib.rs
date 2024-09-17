@@ -15,6 +15,10 @@ use syn::__private::ToTokens;
 ///
 /// ## Usage
 /// ```rust,ignore
+/// # use dioxus::prelude::*;
+/// # #[derive(serde::Deserialize, serde::Serialize)]
+/// # pub struct BlogPost;
+/// # async fn load_posts(category: &str) -> Result<Vec<BlogPost>, ServerFnError> { unimplemented!() }
 /// #[server]
 /// pub async fn blog_posts(
 ///     category: String,
@@ -66,6 +70,75 @@ use syn::__private::ToTokens;
 ///   const PATH: &'static str = "/my_api/my_fn";
 ///
 ///   // etc.
+/// }
+/// ```
+///
+/// ## Adding layers to server functions
+///
+/// Layers allow you to transform the request and response of a server function. You can use layers
+/// to add authentication, logging, or other functionality to your server functions. Server functions integrate
+/// with the tower ecosystem, so you can use any layer that is compatible with tower.
+///
+/// Common layers include:
+/// - [`tower_http::trace::TraceLayer`](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) for tracing requests and responses
+/// - [`tower_http::compression::CompressionLayer`](https://docs.rs/tower-http/latest/tower_http/compression/struct.CompressionLayer.html) for compressing large responses
+/// - [`tower_http::cors::CorsLayer`](https://docs.rs/tower-http/latest/tower_http/cors/struct.CorsLayer.html) for adding CORS headers to responses
+/// - [`tower_http::timeout::TimeoutLayer`](https://docs.rs/tower-http/latest/tower_http/timeout/struct.TimeoutLayer.html) for adding timeouts to requests
+/// - [`tower_sessions::service::SessionManagerLayer`](https://docs.rs/tower-sessions/0.13.0/tower_sessions/service/struct.SessionManagerLayer.html) for adding session management to requests
+///
+/// You can add a tower [`Layer`](https://docs.rs/tower/latest/tower/trait.Layer.html) to your server function with the middleware attribute:
+///
+/// ```rust,ignore
+/// # use dioxus::prelude::*;
+/// #[server]
+/// // The TraceLayer will log all requests to the console
+/// #[middleware(tower_http::timeout::TimeoutLayer::new(std::time::Duration::from_secs(5)))]
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<usize, ServerFnError> {
+///     unimplemented!()
+/// }
+/// ```
+///
+/// ## Extracting additional data from requests
+///
+/// Server functions automatically handle serialization and deserialization of arguments and responses.
+/// However, you may want to extract additional data from the request, such as the user's session or
+/// authentication information. You can do this with the `extract` function. This function returns any
+/// type that implements the [`FromRequestParts`](https://docs.rs/axum/latest/axum/extract/trait.FromRequestParts.html)
+/// trait:
+///
+/// ```rust,ignore
+/// # use dioxus::prelude::*;
+/// #[server]
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<String, ServerFnError> {
+///     let headers: axum::http::header::HeaderMap = extract().await?;
+///     Ok(format!("The server got a request with headers: {:?}", headers))
+/// }
+/// ```
+///
+/// ## Sharing data with server functions
+///
+/// You may need to share context with your server functions like a database pool. Server
+/// functions can access any context provided through the launch builder. You can access
+/// this context with the `FromContext` extractor:
+///
+/// ```rust,ignore
+/// # use dioxus::prelude::*;
+/// # fn app() -> Element { unimplemented!() }
+/// #[derive(Clone, Copy, Debug)]
+/// struct DatabasePool;
+///
+/// fn main() {
+///     LaunchBuilder::new()
+///         .with_context(server_only! {
+///             DatabasePool
+///         })
+///         .launch(app);
+/// }
+///
+/// #[server]
+/// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<String, ServerFnError> {
+///     let FromContext(pool): FromContext<DatabasePool> = extract().await?;
+///     Ok(format!("The server read {:?} from the shared context", pool))
 /// }
 /// ```
 #[proc_macro_attribute]

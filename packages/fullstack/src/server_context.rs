@@ -6,9 +6,21 @@ use std::sync::Arc;
 type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
 
 /// A shared context for server functions that contains information about the request and middleware state.
-/// This allows you to pass data between your server framework and the server functions. This can be used to pass request information or information about the state of the server. For example, you could pass authentication data though this context to your server functions.
 ///
-/// You should not construct this directly inside components. Instead use the `HasServerContext` trait to get the server context from the scope.
+/// You should not construct this directly inside components or server functions. Instead use [`server_context()`] to get the server context from the current request.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// #[server]
+/// async fn read_headers() -> Result<(), ServerFnError> {
+///     let server_context = server_context();
+///     let headers: http::HeaderMap = server_context.extract().await?;
+///     println!("{:?}", headers);
+///     Ok(())
+/// }
+/// ```
 #[derive(Clone)]
 pub struct DioxusServerContext {
     shared_context: std::sync::Arc<RwLock<SendSyncAnyMap>>,
@@ -72,7 +84,34 @@ mod server_fn_impl {
             }
         }
 
-        /// Clone a value from the shared server context
+        /// Clone a value from the shared server context. If you are using [`DioxusRouterExt`](crate::prelude::DioxusRouterExt), any values you insert into
+        /// the launch context will also be available in the server context.
+        ///
+        /// Example:
+        /// ```rust, no_run
+        /// use dioxus::prelude::*;
+        ///
+        /// LaunchBuilder::new()
+        ///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
+        ///     .with_context(server_only! {
+        ///         1234567890u32
+        ///     })
+        ///     .launch(app);
+        ///
+        /// #[server]
+        /// async fn read_context() -> Result<u32, ServerFnError> {
+        ///     // You can extract values from the server context with the `extract` function
+        ///     let FromContext(value) = extract().await?;
+        ///     Ok(value)
+        /// }
+        ///
+        /// fn app() -> Element {
+        ///     let future = use_resource(read_context);
+        ///     rsx! {
+        ///         h1 { "{future:?}" }
+        ///     }
+        /// }
+        /// ```
         pub fn get<T: Clone + 'static>(&self) -> Option<T> {
             self.shared_context
                 .read()
@@ -114,33 +153,112 @@ mod server_fn_impl {
         }
 
         /// Get the response parts from the server context
+        ///
+        #[doc = include_str!("../docs/request_origin.md")]
+        ///
+        /// # Example
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        /// #[server]
+        /// async fn set_headers() -> Result<(), ServerFnError> {
+        ///     let server_context = server_context();
+        ///     let cookies = server_context.response_parts()
+        ///         .headers()
+        ///         .get("Cookie")
+        ///         .ok_or_else(|| ServerFnError::msg("failed to find Cookie header in the response"))?;
+        ///     println!("{:?}", cookies);
+        ///     Ok(())
+        /// }
+        /// ```
         pub fn response_parts(&self) -> RwLockReadGuard<'_, http::response::Parts> {
             self.response_parts.read()
         }
 
         /// Get the response parts from the server context
+        ///
+        #[doc = include_str!("../docs/request_origin.md")]
+        ///
+        /// # Example
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        /// #[server]
+        /// async fn set_headers() -> Result<(), ServerFnError> {
+        ///     let server_context = server_context();
+        ///     server_context.response_parts_mut()
+        ///         .headers_mut()
+        ///         .insert("Cookie", "dioxus=fullstack");
+        ///     Ok(())
+        /// }
+        /// ```
         pub fn response_parts_mut(&self) -> RwLockWriteGuard<'_, http::response::Parts> {
             self.response_parts.write()
         }
 
-        /// Get the request that triggered:
-        /// - The initial SSR render if called from a ScopeState or ServerFn
-        /// - The server function to be called if called from a server function after the initial render
+        /// Get the request parts
+        ///
+        #[doc = include_str!("../docs/request_origin.md")]
+        ///
+        /// # Example
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        /// #[server]
+        /// async fn read_headers() -> Result<(), ServerFnError> {
+        ///     let server_context = server_context();
+        ///     let id: &i32 = server_context.request_parts()
+        ///         .extensions
+        ///         .get()
+        ///         .ok_or_else(|| ServerFnError::msg("failed to find i32 extension in the request"))?;
+        ///     println!("{:?}", id);
+        ///     Ok(())
+        /// }
+        /// ```
         pub fn request_parts(&self) -> parking_lot::RwLockReadGuard<'_, http::request::Parts> {
             self.parts.read()
         }
 
-        /// Get the request that triggered:
-        /// - The initial SSR render if called from a ScopeState or ServerFn
-        /// - The server function to be called if called from a server function after the initial render
+        /// Get the request parts mutably
+        ///
+        #[doc = include_str!("../docs/request_origin.md")]
+        ///
+        /// # Example
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        /// #[server]
+        /// async fn read_headers() -> Result<(), ServerFnError> {
+        ///     let server_context = server_context();
+        ///     let id: i32 = server_context.request_parts_mut()
+        ///         .extensions
+        ///         .remove()
+        ///         .ok_or_else(|| ServerFnError::msg("failed to find i32 extension in the request"))?;
+        ///     println!("{:?}", id);
+        ///     Ok(())
+        /// }
+        /// ```
         pub fn request_parts_mut(&self) -> parking_lot::RwLockWriteGuard<'_, http::request::Parts> {
             self.parts.write()
         }
 
-        /// Extract some part from the request
-        pub async fn extract<R: std::error::Error, T: FromServerContext<Rejection = R>>(
-            &self,
-        ) -> Result<T, R> {
+        /// Extract part of the request.
+        ///
+        #[doc = include_str!("../docs/request_origin.md")]
+        ///
+        /// # Example
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        /// #[server]
+        /// async fn read_headers() -> Result<(), ServerFnError> {
+        ///     let server_context = server_context();
+        ///     let headers: http::HeaderMap = server_context.extract().await?;
+        ///     println!("{:?}", headers);
+        ///     Ok(())
+        /// }
+        /// ```
+        pub async fn extract<M, T: FromServerContext<M>>(&self) -> Result<T, T::Rejection> {
             T::from_request(self).await
         }
     }
@@ -207,7 +325,7 @@ impl<F: std::future::Future> std::future::Future for ProvideServerContext<F> {
 #[async_trait::async_trait]
 pub trait FromServerContext<I = ()>: Sized {
     /// The error type returned when extraction fails. This type must implement `std::error::Error`.
-    type Rejection: std::error::Error;
+    type Rejection;
 
     /// Extract this type from the server context.
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection>;
