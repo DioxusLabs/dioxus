@@ -791,6 +791,11 @@ builder_constructors! {
     nav None {};
 
     /// Build a
+    /// [`<search>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/search)
+    /// element.
+    search None {};
+
+    /// Build a
     /// [`<section>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/section)
     /// element.
     section None {};
