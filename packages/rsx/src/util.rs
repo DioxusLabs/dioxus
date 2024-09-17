@@ -1,8 +1,5 @@
 #![allow(unused)]
 
-#[cfg(feature = "hot_reload")]
-use internment::Intern;
-
 use proc_macro2::TokenStream as TokenStream2;
 use std::{fmt::Debug, hash::Hash};
 use syn::{
@@ -11,13 +8,6 @@ use syn::{
     Ident,
 };
 
-/// interns a object into a static object, reusing the value if it already exists
-#[cfg(feature = "hot_reload")]
-pub(crate) fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(
-    s: impl Into<Intern<T>>,
-) -> &'static T {
-    s.into().as_ref()
-}
 
 /// Parse a raw ident and return a new ident with the r# prefix added
 pub fn parse_raw_ident(parse_buffer: &ParseBuffer) -> syn::Result<Ident> {
