@@ -87,12 +87,14 @@ impl LaunchBuilder {
         }
     }
 
-    /// Launch your fullstack application.
-    #[cfg(feature = "fullstack")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
-    pub fn fullstack() -> LaunchBuilder {
+    /// Launch your fullstack axum server.
+    #[cfg(feature = "server")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+    pub fn server() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| dioxus_fullstack::launch::launch(root, contexts, cfg),
+            launch_fn: |root, contexts, cfg| {
+                dioxus_fullstack::server::launch::launch(root, contexts, cfg)
+            },
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -213,21 +215,24 @@ impl LaunchBuilder {
 /// - `liveview`
 mod current_platform {
     #[cfg(all(feature = "fullstack", feature = "server"))]
-    pub use dioxus_fullstack::launch::*;
+    pub use dioxus_fullstack::server::launch::*;
 
-    #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
+    #[cfg(all(
+        feature = "desktop",
+        not(all(feature = "fullstack", feature = "server"))
+    ))]
     pub use dioxus_desktop::launch::*;
 
     #[cfg(all(
         feature = "mobile",
         not(feature = "desktop"),
-        not(feature = "fullstack")
+        not(all(feature = "fullstack", feature = "server"))
     ))]
     pub use dioxus_mobile::launch::*;
 
     #[cfg(all(
         feature = "static-generation",
-        not(feature = "fullstack"),
+        not(all(feature = "fullstack", feature = "server")),
         not(feature = "desktop"),
         not(feature = "mobile")
     ))]
@@ -235,7 +240,7 @@ mod current_platform {
 
     #[cfg(all(
         feature = "web",
-        not(feature = "fullstack"),
+        not(all(feature = "fullstack", feature = "server")),
         not(feature = "desktop"),
         not(feature = "mobile"),
         not(feature = "static-generation"),
@@ -269,14 +274,13 @@ mod current_platform {
 
             dioxus_web::launch::launch_virtual_dom(factory(), cfg)
         }
-        #[cfg(not(feature = "server"))]
+        #[cfg(not(all(feature = "fullstack", feature = "server")))]
         dioxus_web::launch::launch(root, contexts, platform_config);
     }
-    pub use dioxus_web::launch::*;
 
     #[cfg(all(
         feature = "liveview",
-        not(feature = "fullstack"),
+        not(all(feature = "fullstack", feature = "server")),
         not(feature = "desktop"),
         not(feature = "mobile"),
         not(feature = "static-generation"),
@@ -289,7 +293,7 @@ mod current_platform {
         feature = "desktop",
         feature = "mobile",
         feature = "web",
-        feature = "fullstack",
+        feature = "server",
         feature = "static-generation"
     )))]
     pub fn launch(

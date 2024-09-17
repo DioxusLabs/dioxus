@@ -10,7 +10,7 @@ mod html_storage;
 
 #[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-mod axum_adapter;
+pub mod server;
 
 mod hooks;
 
@@ -35,7 +35,7 @@ pub mod prelude {
 
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-    pub use crate::axum_adapter::*;
+    pub use crate::server::*;
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]

@@ -1,3 +1,5 @@
+//! A launch function that creates an axum router for the LaunchBuilder
+
 use std::any::Any;
 
 use clap::Parser;
@@ -38,10 +40,21 @@ pub fn launch(
                 .unwrap_or_else(dioxus_cli_config::AddressArguments::parse)
                 .address();
 
-            use crate::axum_adapter::DioxusRouterExt;
+            use crate::server::DioxusRouterExt;
+
+            struct TryIntoResult(Result<ServeConfig, crate::UnableToLoadIndex>);
+
+            impl TryInto<ServeConfig> for TryIntoResult {
+                type Error = crate::UnableToLoadIndex;
+
+                fn try_into(self) -> Result<ServeConfig, Self::Error> {
+                    self.0
+                }
+            }
 
             #[allow(unused_mut)]
-            let mut router = axum::Router::new().serve_dioxus_application(platform_config, root);
+            let mut router =
+                axum::Router::new().serve_dioxus_application(TryIntoResult(platform_config), root);
 
             let router = router.into_make_service();
             let listener = tokio::net::TcpListener::bind(address).await.unwrap();
