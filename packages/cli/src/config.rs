@@ -1,6 +1,8 @@
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -40,6 +42,13 @@ pub enum Platform {
 /// An error that occurs when a platform is not recognized
 pub struct UnknownPlatformError;
 
+impl std::error::Error for UnknownPlatformError {}
+
+impl std::fmt::Debug for UnknownPlatformError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unknown platform")
+    }
+}
 impl std::fmt::Display for UnknownPlatformError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Unknown platform")
@@ -387,7 +396,6 @@ pub struct BundleConfig {
     pub windows: Option<WindowsSettings>,
 }
 
-#[cfg(feature = "cli")]
 impl From<BundleConfig> for tauri_bundler::BundleSettings {
     fn from(val: BundleConfig) -> Self {
         tauri_bundler::BundleSettings {
@@ -415,7 +423,6 @@ pub struct DebianSettings {
     pub nsis: Option<NsisSettings>,
 }
 
-#[cfg(feature = "cli")]
 impl From<DebianSettings> for tauri_bundler::DebianSettings {
     fn from(val: DebianSettings) -> Self {
         tauri_bundler::DebianSettings {
@@ -444,7 +451,6 @@ pub struct WixSettings {
     pub fips_compliant: bool,
 }
 
-#[cfg(feature = "cli")]
 impl From<WixSettings> for tauri_bundler::WixSettings {
     fn from(val: WixSettings) -> Self {
         tauri_bundler::WixSettings {
@@ -495,7 +501,6 @@ pub struct MacOsSettings {
     pub info_plist_path: Option<PathBuf>,
 }
 
-#[cfg(feature = "cli")]
 impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
     fn from(val: MacOsSettings) -> Self {
         tauri_bundler::MacOsSettings {
@@ -525,7 +530,6 @@ pub struct WindowsSettings {
     pub nsis: Option<NsisSettings>,
 }
 
-#[cfg(feature = "cli")]
 impl From<WindowsSettings> for tauri_bundler::WindowsSettings {
     fn from(val: WindowsSettings) -> Self {
         tauri_bundler::WindowsSettings {
@@ -556,7 +560,6 @@ pub struct NsisSettings {
     pub display_language_selector: bool,
 }
 
-#[cfg(feature = "cli")]
 impl From<NsisSettings> for tauri_bundler::NsisSettings {
     fn from(val: NsisSettings) -> Self {
         tauri_bundler::NsisSettings {
@@ -581,7 +584,6 @@ pub enum NSISInstallerMode {
     Both,
 }
 
-#[cfg(feature = "cli")]
 impl From<NSISInstallerMode> for tauri_utils::config::NSISInstallerMode {
     fn from(val: NSISInstallerMode) -> Self {
         match val {
@@ -601,7 +603,6 @@ pub enum WebviewInstallMode {
     FixedRuntime { path: PathBuf },
 }
 
-#[cfg(feature = "cli")]
 impl WebviewInstallMode {
     fn into(self) -> tauri_utils::config::WebviewInstallMode {
         match self {
@@ -626,4 +627,42 @@ impl Default for WebviewInstallMode {
     fn default() -> Self {
         Self::OfflineInstaller { silent: false }
     }
+}
+
+/// The arguments for the address the server will run on
+
+#[derive(Clone, Debug, Parser)]
+pub struct AddressArguments {
+    /// The port the server will run on
+    #[clap(long)]
+    #[clap(default_value_t = default_port())]
+    pub port: u16,
+
+    /// The address the server will run on
+    #[clap(long, default_value_t = default_address())]
+    pub addr: std::net::IpAddr,
+}
+
+impl Default for AddressArguments {
+    fn default() -> Self {
+        Self {
+            port: default_port(),
+            addr: default_address(),
+        }
+    }
+}
+
+impl AddressArguments {
+    /// Get the address the server should run on
+    pub fn address(&self) -> SocketAddr {
+        SocketAddr::new(self.addr, self.port)
+    }
+}
+
+fn default_port() -> u16 {
+    8080
+}
+
+fn default_address() -> IpAddr {
+    IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
 }

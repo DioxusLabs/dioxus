@@ -1,3 +1,4 @@
+use crate::config::{AddressArguments, Platform};
 use crate::{
     builder::{BuildResult, UpdateStage},
     builder::{Stage, TargetPlatform, UpdateBuildProgress},
@@ -18,7 +19,6 @@ use crossterm::{
     tty::IsTty,
     ExecutableCommand,
 };
-use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_devtools::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, TerminalOptions, Viewport};

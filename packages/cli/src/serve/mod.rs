@@ -155,9 +155,22 @@ pub async fn serve_all(
                             builder.children.clear();
                         }
 
+                        let asset_dir = dioxus_crate
+                            .dioxus_config
+                            .application
+                            .asset_dir
+                            .canonicalize()
+                            .unwrap_or(std::path::PathBuf::from("./assets"));
+
                         // If we have a build result, open it
                         for build_result in results.iter() {
-                            let child = build_result.open(&serve.server_arguments, server.fullstack_address(), &dioxus_crate.workspace_dir());
+                            let child = build_result.open(
+                                &serve.server_arguments,
+                                server.fullstack_address(),
+                                &dioxus_crate.workspace_dir(),
+                                &asset_dir,
+                                server.ip.clone()
+                            );
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
                                 Err(e) => {

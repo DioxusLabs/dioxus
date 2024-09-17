@@ -1,5 +1,5 @@
 use crate::build::TargetArgs;
-use dioxus_cli_config::{DioxusConfig, Platform};
+use crate::config::{DioxusConfig, Platform};
 use krates::cm::Target;
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use serde::{Deserialize, Serialize};

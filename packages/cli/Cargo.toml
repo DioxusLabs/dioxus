@@ -78,6 +78,7 @@ toml_edit = "0.22.20"
 
 # bundling
 tauri-bundler = { workspace = true }
+tauri-utils = { workspace = true }
 
 # formatting
 # syn = { workspace = true }

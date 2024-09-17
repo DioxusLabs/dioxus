@@ -147,18 +147,12 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn connect_hotreload(&self) {
-        let proxy = self.shared.proxy.clone();
-
-        tokio::task::spawn(async move {
-            let Some(Ok(mut receiver)) = dioxus_devtools::NativeReceiver::create_from_cli().await
-            else {
-                return;
-            };
-
-            while let Some(Ok(msg)) = receiver.next().await {
+        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
+            let proxy = self.shared.proxy.clone();
+            dioxus_devtools::connect(endpoint, move |msg| {
                 _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            }
-        });
+            })
+        }
     }
 
     pub fn handle_new_window(&mut self) {

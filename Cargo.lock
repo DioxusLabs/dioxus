@@ -2548,6 +2548,7 @@ dependencies = [
  "syn 2.0.77",
  "tar",
  "tauri-bundler",
+ "tauri-utils",
  "tempfile",
  "thiserror",
  "tokio",

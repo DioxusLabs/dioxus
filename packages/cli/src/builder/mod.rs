@@ -1,8 +1,8 @@
 use crate::cli::serve::ServeArguments;
+use crate::config::Platform;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use crate::{build::Build, TraceSrc};
-use dioxus_cli_config::{Platform, RuntimeCLIArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
@@ -96,7 +96,6 @@ impl BuildRequest {
             Platform::StaticGeneration | Platform::Fullstack => {
                 Self::new_fullstack(dioxus_crate.clone(), build_arguments, serve)?
             }
-            _ => unimplemented!("Unknown platform: {platform:?}"),
         })
     }
 
@@ -164,6 +163,8 @@ impl BuildResult {
         serve: &ServeArguments,
         fullstack_address: Option<SocketAddr>,
         workspace: &std::path::Path,
+        asset_root: &std::path::Path,
+        devserver_addr: SocketAddr,
     ) -> std::io::Result<Option<Child>> {
         match self.target_platform {
             TargetPlatform::Web => {
@@ -195,19 +196,39 @@ impl BuildResult {
 
         tracing::info!(dx_src = ?TraceSrc::Dev, "Press [o] to open the app manually.");
 
-        let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
+        // let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
         let executable = self.executable.canonicalize()?;
         let mut cmd = Command::new(executable);
-        cmd
-            // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
-            .env(
-                dioxus_cli_config::__private::SERVE_ENV,
-                serde_json::to_string(&arguments).unwrap(),
-            )
-            .stderr(Stdio::piped())
+
+        // Set the env vars that the clients will expect
+        // These need to be stable within a release version (ie 0.6.0)
+        cmd.env(dioxus_cli_config::CLI_ENABLED_ENV, "true");
+        cmd.env(
+            dioxus_cli_config::SERVER_IP_ENV,
+            serve.address.addr.to_string(),
+        );
+        cmd.env(
+            dioxus_cli_config::SERVER_PORT_ENV,
+            serve.address.port.to_string(),
+        );
+        cmd.env(
+            dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+            serve.always_on_top.unwrap_or(true).to_string(),
+        );
+        cmd.env(
+            dioxus_cli_config::ASSET_ROOT_ENV,
+            asset_root.display().to_string(),
+        );
+        cmd.env(
+            dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
+            devserver_addr.to_string(),
+        );
+
+        cmd.stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .current_dir(workspace);
+
         Ok(Some(cmd.spawn()?))
     }
 }
