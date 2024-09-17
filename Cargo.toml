@@ -24,6 +24,7 @@ members = [
     "packages/autofmt",
     "packages/check",
     "packages/rsx",
+    "packages/rsx-hotreload",
     "packages/rsx-rosetta",
     "packages/generational-box",
     "packages/signals",

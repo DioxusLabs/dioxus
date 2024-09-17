@@ -13,7 +13,3 @@ syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mu
 tracing = { workspace = true }
 dioxus-core = { workspace = true }
 dioxus-core-types = { workspace = true }
-
-# internment = { workspace = true, optional = true }
-# dioxus-core = { workspace = true, optional = true } # todo: this is being compiled in a proc macro
-# dioxus-core-types = { workspace = true, optional = true }
