@@ -5,6 +5,7 @@
 pub mod assets;
 pub mod builder;
 pub mod cli;
+pub mod config;
 pub mod dioxus_crate;
 pub mod dx_build_info;
 pub mod error;

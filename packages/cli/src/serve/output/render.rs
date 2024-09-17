@@ -1,6 +1,6 @@
 use super::{BuildProgress, TraceMsg, TraceSrc};
+use crate::config::Platform;
 use ansi_to_tui::IntoText as _;
-use dioxus_cli_config::Platform;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
