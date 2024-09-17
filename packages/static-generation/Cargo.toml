@@ -32,7 +32,7 @@ criterion = { workspace = true }
 
 [features]
 default = []
-server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-hot-reload", "dep:dioxus-cli-config", "dep:tower"]
+server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-hot-reload", "dep:dioxus-cli-config", "dep:tower", "dep:dioxus-isrg"]
 web = ["dioxus-fullstack/web", "dioxus-router/web", "dep:dioxus-web"]
 
 [package.metadata.docs.rs]
