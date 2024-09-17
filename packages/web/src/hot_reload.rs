@@ -7,13 +7,13 @@ use std::fmt::Display;
 use std::time::Duration;
 
 use dioxus_core::ScopeId;
-use dioxus_devtools::{DevserverMsg, HotReloadMsg};
-use dioxus_document::eval;
+use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
+use dioxus_html::prelude::eval;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::{closure::Closure, JsValue};
-use web_sys::{window, Event, MessageEvent, WebSocket};
+use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
 
 const POLL_INTERVAL_MIN: i32 = 250;
 const POLL_INTERVAL_MAX: i32 = 4000;
@@ -75,7 +75,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                     "Your app is being rebuilt.",
                     "A non-hot-reloadable change occurred and we must rebuild.",
                     ToastLevel::Info,
-                    Duration::from_secs(600),
+                    TOAST_TIMEOUT,
                     false,
                 ),
                 // The devserver is telling us that the full rebuild failed.
@@ -111,13 +111,11 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
 
     // Set the onclose handler to reload the page if the connection is closed
     ws.set_onclose(Some(
-        Closure::<dyn FnMut(Event)>::new(move |e: Event| {
+        Closure::<dyn FnMut(CloseEvent)>::new(move |e: CloseEvent| {
             // Firefox will send a 1001 code when the connection is closed because the page is reloaded
             // Only firefox will trigger the onclose event when the page is reloaded manually: https://stackoverflow.com/questions/10965720/should-websocket-onclose-be-triggered-by-user-navigation-or-refresh
             // We should not reload the page in this case
-            if js_sys::Reflect::get(&e, &"code".into()).map(|f| f.as_f64().unwrap_or(0.0))
-                == Ok(1001.0)
-            {
+            if e.code() == 1001 {
                 return;
             }
 
@@ -233,11 +231,9 @@ pub(crate) fn invalidate_browser_asset_cache() {
 
     for x in 0..links.length() {
         use wasm_bindgen::JsCast;
-        if let Some(link) = links.get(x) {
-            let link: web_sys::Element = link.unchecked_into();
-            if let Some(href) = link.get_attribute("href") {
-                _ = link.set_attribute("href", &format!("{}?{}", href, noise));
-            }
+        let link: web_sys::Element = links.get(x).unwrap().unchecked_into();
+        if let Some(href) = link.get_attribute("href") {
+            _ = link.set_attribute("href", &format!("{}?{}", href, noise));
         }
     }
 }

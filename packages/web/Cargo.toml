@@ -10,105 +10,71 @@ homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-
-dioxus-core-types = { workspace = true }
 dioxus-core = { workspace = true }
-dioxus-html = { workspace = true }
-dioxus-document = { workspace = true }
-dioxus-devtools = { workspace = true }
+dioxus-core-types = { workspace = true }
+dioxus-html = { workspace = true, features = ["wasm-bind"] }
+dioxus-hot-reload = { workspace = true, features = ["client"] }
 dioxus-signals = { workspace = true }
-dioxus-interpreter-js = { workspace = true, features = ["minimal_bindings", "webonly"] }
+dioxus-interpreter-js = { workspace = true, features = [
+    "minimal_bindings",
+    "webonly",
+] }
 generational-box = { workspace = true }
-async-trait = { workspace = true }
-ciborium = { workspace = true, optional = true }
-console_error_panic_hook = { version = "0.1.7", optional = true }
-futures-channel = { workspace = true }
-futures-util = { workspace = true, features = [ "async-await", "async-await-macro" ] }
-js-sys = { workspace = true }
-rustc-hash = { workspace = true }
-serde = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
-serde-wasm-bindgen = { version = "0.6.5", optional = true }
-tracing = { workspace = true }
+
+js-sys = "0.3.56"
 wasm-bindgen = { workspace = true }
-wasm-bindgen-futures = { workspace = true }
+wasm-bindgen-futures = "0.4.29"
+tracing = { workspace = true }
+rustc-hash = { workspace = true }
+console_error_panic_hook = { version = "0.1.7", optional = true }
+futures-util = { workspace = true, features = [
+    "std",
+    "async-await",
+    "async-await-macro",
+] }
+futures-channel = { workspace = true }
+serde_json = { version = "1.0", optional = true }
+serde = { version = "1.0", optional = true }
+serde-wasm-bindgen = { version = "0.5.0", optional = true }
+
+ciborium = { workspace = true, optional = true }
 
 [dependencies.web-sys]
 version = "0.3.56"
 features = [
-    "AnimationEvent",
-    "ClipboardEvent",
-    "Comment",
-    "CompositionEvent",
-    "console",
-    "CustomEvent",
-    "DataTransfer",
     "Document",
-    "DragEvent",
-    "FocusEvent",
     "HtmlElement",
-    "HtmlHeadElement",
-    "HtmlFormElement",
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",
-    "InputEvent",
-    "KeyboardEvent",
-    "MouseEvent",
-    "NodeList",
-    "PointerEvent",
-    "ResizeObserverEntry",
-    "ResizeObserverSize",
+    "HtmlFormElement",
     "Text",
-    "Touch",
-    "TouchEvent",
-    "TouchList",
-    "TransitionEvent",
-    "WheelEvent",
+    "Comment",
     "Window",
+    "DataTransfer",
+    "console",
+    "NodeList",
+    "CloseEvent",
+    "CustomEvent",
 ]
-
-
-[build-dependencies]
-lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["panic_hook"]
-full = [
-    "devtools",
-    "mounted",
-    "file-engine",
-    "document"
-]
+default = ["panic_hook", "mounted", "file_engine", "hot_reload", "document"]
 panic_hook = ["dep:console_error_panic_hook"]
-
 hydrate = ["web-sys/Comment", "ciborium", "dep:serde"]
 mounted = ["web-sys/Element", "dioxus-html/mounted"]
-file-engine = [
+file_engine = [
     "dioxus-html/file-engine",
-    "web-sys/File",
-    "web-sys/FileList",
-    "web-sys/FileReader"
 ]
-devtools = [
-    "web-sys/MessageEvent",
-    "web-sys/WebSocket",
-    "web-sys/Location",
-    "dep:serde_json",
-    "dep:serde",
-    "dioxus-core/serialize",
-]
-document = [
-    "dep:serde-wasm-bindgen",
-    "dep:serde_json",
-    "dep:serde",
-]
+hot_reload = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "dep:serde_json", "dep:serde", "dioxus-core/serialize"]
+document = ["dioxus-html/document", "dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 
 [dev-dependencies]
 dioxus = { workspace = true, default-features = true }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { workspace = true, default-features = false }
-gloo-timers = { workspace = true }
+gloo-timers = "0.2.3"
+gloo-dialogs = "0.1.1"
 dioxus-web = { path = ".", features = ["hydrate"] }
 tracing-wasm = "0.2.1"
 

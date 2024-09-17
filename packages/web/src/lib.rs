@@ -28,22 +28,21 @@ use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;
 mod dom;
+
 mod event;
 pub mod launch;
 mod mutations;
-use event::*;
+pub use event::*;
 
 #[cfg(feature = "document")]
 mod document;
-
 #[cfg(feature = "document")]
 pub use document::WebDocument;
 
-#[cfg(all(feature = "devtools", debug_assertions))]
-mod devtools;
+#[cfg(all(feature = "hot_reload", debug_assertions))]
+mod hot_reload;
 
 mod hydration;
-
 #[allow(unused)]
 pub use hydration::*;
 
@@ -68,8 +67,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         console_error_panic_hook::set_once();
     }
 
-    #[cfg(all(feature = "devtools", debug_assertions))]
-    let mut hotreload_rx = devtools::init();
+    #[cfg(all(feature = "hot_reload", debug_assertions))]
+    let mut hotreload_rx = hot_reload::init();
 
     let runtime = virtual_dom.runtime();
 
@@ -83,30 +82,30 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
-            let hydration_data = get_initial_hydration_data().to_vec();
-
-            if let Some(server_data) = HTMLDataCursor::from_serialized(&hydration_data) {
-                // If the server serialized an error into the root suspense boundary, throw it into the root scope
-                if let Some(error) = server_data.error() {
-                    virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
+            websys_dom.skip_mutations = true;
+            // Get the initial hydration data from the client
+            #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+                export function get_initial_hydration_data() {
+                    const decoded = atob(window.initial_dioxus_hydration_data);
+                    return Uint8Array.from(decoded, (c) => c.charCodeAt(0))
                 }
-
-                websys_dom.skip_mutations = true;
-                with_server_data(server_data, || {
-                    virtual_dom.rebuild(&mut websys_dom);
-                });
-                websys_dom.skip_mutations = false;
-
-                let rx = websys_dom
-                    .rehydrate(&virtual_dom)
-                    .expect("Failed to rehydrate");
-
-                hydration_receiver = Some(rx);
-            } else {
-                tracing::error!("Hydration data is missing");
-                virtual_dom.rebuild(&mut websys_dom);
-                websys_dom.flush_edits();
+            "#)]
+            extern "C" {
+                fn get_initial_hydration_data() -> js_sys::Uint8Array;
             }
+            let hydration_data = get_initial_hydration_data().to_vec();
+            let server_data = HTMLDataCursor::from_serialized(&hydration_data);
+            // If the server serialized an error into the root suspense boundary, throw it into the root scope
+            if let Some(error) = server_data.error() {
+                virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
+            }
+            with_server_data(server_data, || {
+                virtual_dom.rebuild(&mut websys_dom);
+            });
+            websys_dom.skip_mutations = false;
+
+            let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
+            hydration_receiver = Some(rx);
         }
         #[cfg(not(feature = "hydrate"))]
         {
@@ -124,7 +123,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     loop {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
-        #[cfg(all(feature = "devtools", debug_assertions))]
+        #[cfg(all(feature = "hot_reload", debug_assertions))]
         let template;
         #[allow(unused)]
         let mut hydration_work: Option<SuspenseMessage> = None;
@@ -138,15 +137,15 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 .flatten();
             let mut rx_hydration = hydration_receiver_iter.select_next_some();
 
-            #[cfg(all(feature = "devtools", debug_assertions))]
+            #[cfg(all(feature = "hot_reload", debug_assertions))]
             #[allow(unused)]
             {
-                let mut devtools_next = hotreload_rx.select_next_some();
+                let mut hot_reload_next = hotreload_rx.select_next_some();
                 select! {
                     _ = work => {
                         template = None;
                     },
-                    new_template = devtools_next => {
+                    new_template = hot_reload_next => {
                         template = Some(new_template);
                     },
                     hydration_data = rx_hydration => {
@@ -159,7 +158,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 }
             }
 
-            #[cfg(not(all(feature = "devtools", debug_assertions)))]
+            #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
             #[allow(unused)]
             {
                 select! {
@@ -174,13 +173,13 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             }
         }
 
-        #[cfg(all(feature = "devtools", debug_assertions))]
+        #[cfg(all(feature = "hot_reload", debug_assertions))]
         if let Some(hr_msg) = template {
             // Replace all templates
-            dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
+            dioxus_hot_reload::apply_changes(&mut virtual_dom, &hr_msg);
 
             if !hr_msg.assets.is_empty() {
-                crate::devtools::invalidate_browser_asset_cache();
+                crate::hot_reload::invalidate_browser_asset_cache();
             }
         }
 
@@ -189,10 +188,23 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             websys_dom.rehydrate_streaming(hydration_data, &mut virtual_dom);
         }
 
+        // Todo: This is currently disabled because it has a negative impact on response times for events but it could be re-enabled for tasks
+        // Jank free rendering
+        //
+        // 1. wait for the browser to give us "idle" time
+        // 2. During idle time, diff the dom
+        // 3. Stop diffing if the deadline is exceeded
+        // 4. Wait for the animation frame to patch the dom
+
+        // wait for the mainthread to schedule us in
+        // let deadline = work_loop.wait_for_idle_time().await;
+
         // run the virtualdom work phase until the frame deadline is reached
         virtual_dom.render_immediate(&mut websys_dom);
 
-        // Flush all pending edits to the dom in one swoop
+        // wait for the animation frame to fire so we can apply our changes
+        // work_loop.wait_for_raf().await;
+
         websys_dom.flush_edits();
     }
 }

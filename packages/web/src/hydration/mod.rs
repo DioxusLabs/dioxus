@@ -5,7 +5,6 @@ mod hydrate;
 
 #[cfg(feature = "hydrate")]
 pub use deserialize::*;
-
 #[cfg(feature = "hydrate")]
 #[allow(unused)]
 pub use hydrate::*;
@@ -19,21 +18,4 @@ pub(crate) struct SuspenseMessage {
     #[cfg(feature = "hydrate")]
     /// The data to hydrate the suspense boundary with
     data: Vec<u8>,
-}
-
-#[cfg(feature = "hydrate")]
-// Get the initial hydration data from the client
-#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-    export function get_initial_hydration_data() {
-        if (window.initial_dioxus_hydration_data === undefined) {
-            return new Uint8Array();
-        }
-
-        const decoded = atob(window.initial_dioxus_hydration_data);
-        return Uint8Array.from(decoded, (c) => c.charCodeAt(0))
-    }
-"#)]
-extern "C" {
-    /// Get the initial hydration data from the client
-    pub fn get_initial_hydration_data() -> js_sys::Uint8Array;
 }
