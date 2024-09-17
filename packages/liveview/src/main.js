@@ -1,23 +1,19 @@
-export { };
+const intercept_link_redirects = false;
 
-declare global {
-  interface Window {
-    ipc: IPC;
-    interpreter: NativeInterpreter;
+function main() {
+  let root = window.document.getElementById("main");
+  if (root != null) {
+    window.ipc = new IPC(root);
   }
 }
-type NativeInterpreter = any;
 
 class IPC {
-  ws: WebSocket;
-
-  constructor(root: Element, addr: string) {
-    // window.interpreter = new NativeInterpreter();
+  constructor(root) {
+    window.interpreter = new NativeInterpreter();
     window.interpreter.initialize(root);
     window.interpreter.liveview = true;
     window.interpreter.ipc = this;
-
-    const ws = new WebSocket(addr);
+    const ws = new WebSocket(WS_ADDR);
     ws.binaryType = "arraybuffer";
 
     function ping() {
@@ -38,19 +34,18 @@ class IPC {
       const u8view = new Uint8Array(message.data);
       const binaryFrame = u8view[0] == 1;
       const messageData = message.data.slice(1);
-
       // The first byte tells the shim if this is a binary of text frame
       if (binaryFrame) {
         // binary frame
         window.interpreter.run_from_bytes(messageData);
       } else {
         // text frame
+
         let decoder = new TextDecoder("utf-8");
 
         // Using decode method to get string output
         let str = decoder.decode(messageData);
         // Ignore pongs
-
         if (str != "__pong__") {
           const event = JSON.parse(str);
           switch (event.type) {
@@ -65,15 +60,9 @@ class IPC {
     this.ws = ws;
   }
 
-  postMessage(msg: string) {
+  postMessage(msg) {
     this.ws.send(msg);
   }
 }
 
-export function main(addr: string) {
-  let root = window.document.getElementById("main");
-
-  if (root != null) {
-    window.ipc = new IPC(root, addr);
-  }
-}
+main();

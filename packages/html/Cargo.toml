@@ -11,21 +11,50 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true }
+dioxus-core-macro = { workspace = true }
 dioxus-core-types = { workspace = true }
 dioxus-rsx = { workspace = true, optional = true }
-dioxus-rsx-hotreload = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
-
+dioxus-hooks = { workspace = true }
+generational-box = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { version = "0.3.56", optional = true }
 euclid = "0.22.7"
 enumset = "1.1.2"
 keyboard-types = { version = "0.7", default-features = false }
 async-trait = { version = "0.1.58", optional = true }
+tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
+futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
+rustversion = "1.0.17"
 
-futures-channel = { workspace = true }
+[dependencies.web-sys]
+optional = true
+version = "0.3.56"
+features = [
+    "Touch",
+    "TouchList",
+    "TouchEvent",
+    "MouseEvent",
+    "DragEvent",
+    "InputEvent",
+    "HtmlInputElement",
+    "ClipboardEvent",
+    "KeyboardEvent",
+    "WheelEvent",
+    "AnimationEvent",
+    "TransitionEvent",
+    "PointerEvent",
+    "FocusEvent",
+    "CompositionEvent",
+    "CustomEvent",
+    "ResizeObserverEntry",
+    "ResizeObserverSize"
+]
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
@@ -38,7 +67,7 @@ tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
 
 [features]
-default = ["serialize", "mounted", "file-engine"]
+default = ["serialize", "mounted", "document", "file-engine"]
 serialize = [
     "dep:serde",
     "dep:serde_json",
@@ -48,23 +77,29 @@ serialize = [
     "dioxus-core/serialize"
 ]
 mounted = [
-    # "web-sys?/Element",
-    # "web-sys?/DomRect",
-    # "web-sys?/ScrollIntoViewOptions",
-    # "web-sys?/ScrollLogicalPosition",
-    # "web-sys?/ScrollBehavior",
-    # "web-sys?/HtmlElement",
+    "web-sys?/Element",
+    "web-sys?/DomRect",
+    "web-sys?/ScrollIntoViewOptions",
+    "web-sys?/ScrollLogicalPosition",
+    "web-sys?/ScrollBehavior",
+    "web-sys?/HtmlElement",
+]
+document = [
+    "dep:serde",
+    "dep:serde_json"
 ]
 file-engine = [
     "dep:async-trait",
-    # "dep:js-sys",
-    # "web-sys?/File",
-    # "web-sys?/FileList",
-    # "web-sys?/FileReader"
+    "dep:js-sys",
+    "web-sys?/File",
+    "web-sys?/FileList",
+    "web-sys?/FileReader"
 ]
-hot-reload-context = ["dep:dioxus-rsx", "dep:dioxus-rsx-hotreload"]
+wasm-bind = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+native-bind = ["dep:tokio", "file-engine"]
+hot-reload-context = ["dep:dioxus-rsx"]
 html-to-rsx = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-feature = ["html-to-rsx", "hot-reload-context", "html-to-rsx"]
+feature = ["html-to-rsx", "hot-reload-context", "html-to-rsx", "native-bind", "wasm-bind"]

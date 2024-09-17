@@ -1,49 +1,51 @@
 //! Handles querying data from the renderer
-use std::fmt::{Display, Formatter};
+
+use std::{
+    fmt::{Display, Formatter},
+    future::Future,
+    pin::Pin,
+};
 
 /// An Element that has been rendered and allows reading and modifying information about it.
 ///
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 // we can not use async_trait here because it does not create a trait that is object safe
-// #[async_trait::async_trait(?Send)]
-pub trait MountedElement: std::any::Any {
+pub trait RenderedElementBacking: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 
     /// Get the number of pixels that an element's content is scrolled
-    fn get_scroll_offset(&self) -> MountedResult<PixelsVector2D> {
-        // Err(MountedError::NotSupported)
-        todo!()
+    fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector2D>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
     }
 
     /// Get the size of an element's content, including content not visible on the screen due to overflow
-
-    fn get_scroll_size(&self) -> MountedResult<PixelsSize> {
-        // Err(MountedError::NotSupported)
-        todo!()
+    #[allow(clippy::type_complexity)]
+    fn get_scroll_size(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsSize>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
     }
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
     #[allow(clippy::type_complexity)]
-    fn get_client_rect(&self) -> MountedResult<PixelsRect> {
-        // Err(MountedError::NotSupported)
-        todo!()
+    fn get_client_rect(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsRect>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
     }
 
     /// Scroll to make the element visible
-    fn scroll_to(&self, _behavior: ScrollBehavior) -> MountedResult<()> {
-        // Err(MountedError::NotSupported)
-        todo!()
+    fn scroll_to(
+        &self,
+        _behavior: ScrollBehavior,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
     }
 
     /// Set the focus on the element
-    fn set_focus(&self, _focus: bool) -> MountedResult<()> {
-        // Err(MountedError::NotSupported)
-        todo!()
+    fn set_focus(&self, _focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
     }
 }
 
-impl MountedElement for () {
+impl RenderedElementBacking for () {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -65,10 +67,10 @@ pub enum ScrollBehavior {
 ///
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 pub struct MountedData {
-    inner: Box<dyn MountedElement>,
+    inner: Box<dyn RenderedElementBacking>,
 }
 
-impl<E: MountedElement> From<E> for MountedData {
+impl<E: RenderedElementBacking> From<E> for MountedData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
@@ -76,7 +78,7 @@ impl<E: MountedElement> From<E> for MountedData {
 
 impl MountedData {
     /// Create a new MountedData
-    pub fn new(registry: impl MountedElement + 'static) -> Self {
+    pub fn new(registry: impl RenderedElementBacking + 'static) -> Self {
         Self {
             inner: Box::new(registry),
         }
@@ -86,38 +88,36 @@ impl MountedData {
     #[doc(alias = "scrollTop")]
     #[doc(alias = "scrollLeft")]
     pub async fn get_scroll_offset(&self) -> MountedResult<PixelsVector2D> {
-        // self.inner.get_scroll_offset().await
-        todo!()
+        self.inner.get_scroll_offset().await
     }
 
     /// Get the size of an element's content, including content not visible on the screen due to overflow
     #[doc(alias = "scrollWidth")]
     #[doc(alias = "scrollHeight")]
     pub async fn get_scroll_size(&self) -> MountedResult<PixelsSize> {
-        // self.inner.get_scroll_size().await
-        todo!()
+        self.inner.get_scroll_size().await
     }
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
     #[doc(alias = "getBoundingClientRect")]
     pub async fn get_client_rect(&self) -> MountedResult<PixelsRect> {
-        // self.inner.get_client_rect().await
-        todo!()
+        self.inner.get_client_rect().await
     }
 
     /// Scroll to make the element visible
     #[doc(alias = "scrollIntoView")]
-    pub async fn scroll_to(&self, behavior: ScrollBehavior) -> MountedResult<()> {
-        // self.inner.scroll_to(behavior).await
-        todo!()
+    pub fn scroll_to(
+        &self,
+        behavior: ScrollBehavior,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.scroll_to(behavior)
     }
 
     /// Set the focus on the element
     #[doc(alias = "focus")]
     #[doc(alias = "blur")]
-    pub async fn set_focus(&self, focus: bool) -> MountedResult<()> {
-        // self.inner.set_focus(focus).await
-        todo!()
+    pub fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.set_focus(focus)
     }
 
     /// Downcast this event to a concrete event type
@@ -127,7 +127,7 @@ impl MountedData {
     }
 }
 
-use dioxus_core_types::Event;
+use dioxus_core::Event;
 
 use crate::geometry::{PixelsRect, PixelsSize, PixelsVector2D};
 

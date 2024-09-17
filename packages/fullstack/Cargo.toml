@@ -12,11 +12,7 @@ resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { version = "0.6.5", features = [
-    "json",
-    "url",
-    "browser",
-], default-features = false }
+server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
 dioxus_server_macro = { workspace = true }
 
 # axum
@@ -25,7 +21,6 @@ tower-http = { workspace = true, optional = true, features = ["fs"] }
 
 dioxus-lib = { workspace = true }
 generational-box = { workspace = true }
-dioxus-runtime-config = { workspace = true }
 
 # Dioxus + SSR
 dioxus-ssr = { workspace = true, optional = true }
@@ -34,9 +29,7 @@ hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 
 # Web Integration
-dioxus-web = { workspace = true, features = [
-    "hydrate",
-], default-features = false, optional = true }
+dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
 dioxus-interpreter-js = { workspace = true, optional = true }
 
 # Desktop Integration
@@ -51,7 +44,7 @@ once_cell = { workspace = true }
 tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
 async-trait = { version = "0.1.58", optional = true }
 
-serde = { workspace = true }
+serde = "1.0.159"
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
@@ -59,8 +52,6 @@ ciborium = { workspace = true }
 base64 = { workspace = true }
 rustls = { workspace = true, optional = true }
 hyper-rustls = { workspace = true, optional = true }
-dioxus-document = { workspace = true }
-dioxus-core-types = { workspace = true }
 
 pin-project = { version = "1.1.2", optional = true }
 thiserror = { workspace = true, optional = true }
@@ -68,50 +59,36 @@ bytes = "1.4.0"
 tower = { workspace = true, features = ["util"], optional = true }
 tower-layer = { version = "0.3.2", optional = true }
 parking_lot = { version = "0.12.1", features = ["send_guard"], optional = true }
-web-sys = { version = "0.3.61", optional = true, features = [
-    "Window",
-    "Document",
-    "Element",
-    "HtmlDocument",
-    "Storage",
-    "console",
-] }
+web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
+
+dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
+clap = { version = "4.5.7", optional = true, features = ["derive"] }
+
 aws-lc-rs = { version = "1.8.1", optional = true }
-dioxus-devtools = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = [
-    "rt",
-    "sync",
-    "rt-multi-thread",
-], optional = true }
+dioxus-hot-reload = { workspace = true, features = ["serve"] }
+tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["base"]
-base = ["panic_hook", "document", "mounted", "devtools"]
+default = ["hot-reload", "panic_hook", "document", "file_engine", "mounted"]
 panic_hook = ["dioxus-web?/panic_hook"]
+hot-reload = ["dioxus-web?/hot_reload", "dioxus-hot-reload/serve"]
 mounted = ["dioxus-web?/mounted"]
-devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
+file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]
-# web = ["dep:dioxus-web", "dep:web-sys"]
-# desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest", "server_fn/browser"]
-# mobile = ["dep:dioxus-mobile"]
+web = ["dep:dioxus-web", "dep:web-sys"]
+desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
+mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
-axum = [
-    "dep:axum",
-    "dep:tower-http",
-    "server",
-    "server_fn/axum",
-    "dioxus_server_macro/axum",
-    "default-tls",
-]
+axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",
@@ -127,9 +104,12 @@ server = [
     "dep:tracing-futures",
     "dep:pin-project",
     "dep:thiserror",
+    "dep:dioxus-cli-config",
     "dep:async-trait",
     "dep:parking_lot",
     "dioxus-interpreter-js",
+    "dep:clap",
+    "dioxus-cli-config/read-from-args",
 ]
 aws-lc-rs = ["dep:aws-lc-rs"]
 

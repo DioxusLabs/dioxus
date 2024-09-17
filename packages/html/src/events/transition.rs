@@ -1,4 +1,4 @@
-use dioxus_core_types::Event;
+use dioxus_core::Event;
 
 pub type TransitionEvent = Event<TransitionData>;
 

@@ -21,7 +21,7 @@ fn app() -> Element {
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    pretty_env_logger::init();
 
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], 3030).into();
 

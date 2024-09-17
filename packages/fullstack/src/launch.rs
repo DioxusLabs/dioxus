@@ -62,8 +62,8 @@ pub fn launch(
     #[cfg(feature = "document")]
     let factory = move || {
         let mut vdom = factory();
-        let document = std::rc::Rc::new(crate::document::web::FullstackWebDocument::new())
-            as std::rc::Rc<dyn dioxus_document::Document>;
+        let document = std::rc::Rc::new(crate::document::web::FullstackWebDocument)
+            as std::rc::Rc<dyn dioxus_lib::prelude::document::Document>;
         vdom.provide_root_context(document);
         vdom
     };
@@ -126,10 +126,16 @@ async fn launch_server(
     build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     context_providers: ContextProviders,
 ) {
+    use clap::Parser;
+
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
-    let serve_address = dioxus_runtime_config::fullstack_address()
-        .unwrap_or_else(|| todo!("parse cli args for fullstack address"));
+    let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli();
+    let address = cli_args
+        .as_ref()
+        .map(|args| args.fullstack_address())
+        .unwrap_or_else(dioxus_cli_config::AddressArguments::parse)
+        .address();
 
     #[cfg(feature = "axum")]
     {
@@ -161,7 +167,7 @@ async fn launch_server(
         }
 
         let router = router.into_make_service();
-        let listener = tokio::net::TcpListener::bind(serve_address).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(address).await.unwrap();
 
         axum::serve(listener, router).await.unwrap();
     }

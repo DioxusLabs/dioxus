@@ -1,12 +1,12 @@
 use crate::{
-    document::init_eval,
     element::LiveviewElement,
+    eval::init_eval,
     events::SerializedHtmlEventConverter,
     query::{QueryEngine, QueryResult},
     LiveViewError,
 };
 use dioxus_core::prelude::*;
-use dioxus_devtools::DevserverMsg;
+use dioxus_hot_reload::DevserverMsg;
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
@@ -117,12 +117,10 @@ impl<S> LiveViewSocket for S where
 ///
 /// You might need to transform the error types of the web backend into the LiveView error type.
 pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveViewError> {
-    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        if let Some(addr) = dioxus_runtime_config::devserver_raw_addr() {
-            dioxus_devtools::connect(addr, move |template| _ = tx.send(template));
-        }
+        dioxus_hot_reload::connect(move |template| _ = tx.send(template));
         rx
     };
 
@@ -159,9 +157,9 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     }
 
     loop {
-        #[cfg(all(feature = "devtools", debug_assertions))]
+        #[cfg(all(feature = "hot-reload", debug_assertions))]
         let hot_reload_wait = hot_reload_rx.recv();
-        #[cfg(not(all(feature = "devtools", debug_assertions)))]
+        #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
         let hot_reload_wait: std::future::Pending<Option<()>> = std::future::pending();
 
         tokio::select! {
@@ -215,10 +213,10 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             }
 
             Some(msg) = hot_reload_wait => {
-                #[cfg(all(feature = "devtools", debug_assertions))]
+                #[cfg(all(feature = "hot-reload", debug_assertions))]
                 match msg{
                     DevserverMsg::HotReload(msg)=> {
-                        dioxus_devtools::apply_changes(&mut vdom, &msg);
+                        dioxus_hot_reload::apply_changes(&mut vdom, &msg);
                     }
                     DevserverMsg::Shutdown => {
                         std::process::exit(0);
@@ -230,12 +228,14 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                         // Maybe we could just binary patch ourselves in place without losing window state?
                     },
                 }
-                #[cfg(not(all(feature = "devtools", debug_assertions)))]
+                #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
                 let () = msg;
             }
         }
 
+        // wait for suspense to resolve in a 10ms window
         tokio::select! {
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
             _ = vdom.wait_for_suspense() => {}
         }
 

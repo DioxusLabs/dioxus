@@ -22,35 +22,29 @@ tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.4", features = ["rt"] }
 serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
-dioxus-html = { workspace = true, features = ["serialize", "mounted"] }
+dioxus-html = { workspace = true, features = ["serialize", "document", "mounted"] }
 rustc-hash = { workspace = true }
-
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-core-types = { workspace = true }
-dioxus-document = { workspace = true }
-dioxus-devtools = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-dioxus-runtime-config = { workspace = true }
+dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"] }
+dioxus-cli-config = { workspace = true, features = ["read-config", "read-from-args"] }
 generational-box = { workspace = true }
 
 # axum
 axum = { workspace = true, optional = true, features = ["ws"] }
 
 [dev-dependencies]
-env_logger = { workspace = true }
+pretty_env_logger = { version = "0.5.0" }
 tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true, features = ["ws"] }
 tower = { workspace = true }
 dioxus = { workspace = true }
 
-[build-dependencies]
-lazy-js-bundle = { workspace = true }
-
 [features]
-default = ["devtools", "multi-thread", "axum"]
+default = ["hot-reload", "multi-thread"]
 axum = ["dep:axum"]
 multi-thread = ["tokio/rt-multi-thread"]
-devtools = ["dep:dioxus-devtools"]
+hot-reload = ["dep:dioxus-hot-reload"]
 
 [[example]]
 name = "axum"

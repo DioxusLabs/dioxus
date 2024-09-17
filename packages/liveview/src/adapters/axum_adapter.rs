@@ -46,13 +46,14 @@ impl LiveviewRouter for Router {
         let view = crate::LiveViewPool::new();
 
         let ws_path = format!("{}/ws", route.trim_start_matches('/'));
+        let title = crate::app_title();
 
         let index_page_with_glue = move |glue: &str| {
             Html(format!(
                 r#"
         <!DOCTYPE html>
         <html>
-            <head></head>
+            <head><title>{title}</title></head>
             <body><div id="main"></div></body>
             {glue}
         </html>

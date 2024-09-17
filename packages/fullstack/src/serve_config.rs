@@ -77,12 +77,12 @@ impl ServeConfigBuilder {
 
 /// Get the path to the public assets directory to serve static files from
 pub(crate) fn public_path() -> PathBuf {
-    // The CLI always bundles static assets into the exe/web directory
+    // The CLI always bundles static assets into the exe/public directory
     std::env::current_exe()
         .expect("Failed to get current executable path")
         .parent()
         .unwrap()
-        .join("web")
+        .join("public")
 }
 
 /// An error that can occur when loading the index.html file
