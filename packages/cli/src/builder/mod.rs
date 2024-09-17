@@ -158,6 +158,7 @@ pub(crate) struct BuildResult {
 
 impl BuildResult {
     /// Open the executable if this is a native build
+    #[allow(clippy::too_many_arguments)]
     pub fn open(
         &self,
         serve: &ServeArguments,
@@ -177,7 +178,7 @@ impl BuildResult {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app at {} 🎉", self.executable.display());
             }
             TargetPlatform::Server => {
-                // shut this up for now - the web app will take priority
+                // shut this up for now - the web app will take priority in logging
             }
             TargetPlatform::Liveview => {
                 if let Some(fullstack_address) = fullstack_address {
