@@ -63,13 +63,15 @@
 //! The subproblem is optimal because the alternative is leaving less dynamic items for the remaining templates to hot reload which just makes it
 //! more difficult to match future templates.
 
-use crate::innerlude::*;
-use crate::HotReloadingContext;
 use dioxus_core::internal::{
     FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute, HotReloadDynamicNode,
     HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
 };
+use dioxus_core_types::HotReloadingContext;
+use dioxus_rsx::*;
 use std::collections::HashMap;
+
+use crate::extensions::{html_tag_and_namespace, intern, to_template_node};
 
 use super::last_build_state::LastBuildState;
 
@@ -193,7 +195,7 @@ impl HotReloadResult {
         let roots: Vec<_> = new
             .roots
             .iter()
-            .map(|node| node.to_template_node::<Ctx>())
+            .map(|node| to_template_node::<Ctx>(node))
             .collect();
         let roots: &[dioxus_core::TemplateNode] = intern(&*roots);
 
@@ -589,7 +591,7 @@ impl HotReloadResult {
         &mut self,
         attribute: &Attribute,
     ) -> Option<()> {
-        let (tag, namespace) = attribute.html_tag_and_namespace::<Ctx>();
+        let (tag, namespace) = html_tag_and_namespace::<Ctx>(attribute);
 
         // If the attribute is a spread, try to grab it from the last build
         // If it wasn't in the last build with the same name, we can't hot reload it
