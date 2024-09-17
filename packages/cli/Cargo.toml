@@ -120,9 +120,7 @@ built = { version = "=0.7.4", features = ["git2"] }
 default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
-
-# when releasing dioxus, we want to enable wasm-opt
-wasm-opt = ["dep:wasm-opt"]
+# optimizations = ["dep:wasm-opt"]
 
 [[bin]]
 path = "src/main.rs"

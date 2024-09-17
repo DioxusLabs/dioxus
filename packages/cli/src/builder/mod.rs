@@ -165,6 +165,7 @@ impl BuildResult {
         workspace: &std::path::Path,
         asset_root: &std::path::Path,
         devserver_addr: SocketAddr,
+        app_title: String,
     ) -> std::io::Result<Option<Child>> {
         match self.target_platform {
             TargetPlatform::Web => {
@@ -175,13 +176,7 @@ impl BuildResult {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app at {} 🎉", self.executable.display());
             }
             TargetPlatform::Server => {
-                if let Some(fullstack_address) = fullstack_address {
-                    tracing::info!(
-                        dx_src = ?TraceSrc::Dev,
-                        "Launching fullstack server on http://{:?} 🎉",
-                        fullstack_address
-                    );
-                }
+                // shut this up for now - the web app will take priority
             }
             TargetPlatform::Liveview => {
                 if let Some(fullstack_address) = fullstack_address {
@@ -196,21 +191,16 @@ impl BuildResult {
 
         tracing::info!(dx_src = ?TraceSrc::Dev, "Press [o] to open the app manually.");
 
-        // let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
         let executable = self.executable.canonicalize()?;
         let mut cmd = Command::new(executable);
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         cmd.env(dioxus_cli_config::CLI_ENABLED_ENV, "true");
-        cmd.env(
-            dioxus_cli_config::SERVER_IP_ENV,
-            serve.address.addr.to_string(),
-        );
-        cmd.env(
-            dioxus_cli_config::SERVER_PORT_ENV,
-            serve.address.port.to_string(),
-        );
+        if let Some(addr) = fullstack_address {
+            cmd.env(dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string());
+            cmd.env(dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string());
+        }
         cmd.env(
             dioxus_cli_config::ALWAYS_ON_TOP_ENV,
             serve.always_on_top.unwrap_or(true).to_string(),
@@ -223,6 +213,7 @@ impl BuildResult {
             dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
             devserver_addr.to_string(),
         );
+        cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
 
         cmd.stderr(Stdio::piped())
             .stdout(Stdio::piped())

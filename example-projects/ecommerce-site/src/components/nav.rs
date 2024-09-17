@@ -129,7 +129,7 @@ pub fn nav() -> Element {
                         li { class: "mb-8",
                             a {
                                 href: "/",
-                                "Category"
+                                "Category????"
                             }
                         }
                         li { class: "mb-8",

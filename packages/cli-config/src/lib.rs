@@ -9,6 +9,7 @@ pub const SERVER_PORT_ENV: &str = "PORT";
 pub const DEVSERVER_RAW_ADDR_ENV: &str = "DIOXUS_DEVSERVER_ADDR";
 pub const ALWAYS_ON_TOP_ENV: &str = "DIOXUS_ALWAYS_ON_TOP";
 pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
+pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 
 /// todo: this is not implemented but we're going to reserve this
 ///
@@ -49,7 +50,7 @@ pub fn fullstack_address_or_localhost() -> SocketAddr {
 }
 
 pub fn app_title() -> Option<String> {
-    todo!()
+    std::env::var(APP_TITLE_ENV).ok()
 }
 
 pub fn always_on_top() -> Option<bool> {

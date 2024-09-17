@@ -1,6 +1,6 @@
 use crate::build::TargetArgs;
 use crate::config::{DioxusConfig, Platform};
-use krates::cm::Target;
+use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -84,16 +84,26 @@ fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId,
     let kid = match package {
         Some(package) => {
             let mut workspace_members = krates.workspace_members();
-            workspace_members
-                .find_map(|node| {
-                    if let krates::Node::Krate { id, krate, .. } = node {
-                        if krate.name == package {
-                            return Some(id);
-                        }
+            let found = workspace_members.find_map(|node| {
+                if let krates::Node::Krate { id, krate, .. } = node {
+                    if krate.name == package {
+                        return Some(id);
                     }
-                    None
-                })
-                .ok_or_else(|| CrateConfigError::PackageNotFound(package.clone()))?
+                }
+                None
+            });
+
+            if found.is_none() {
+                eprintln!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
+                eprintln!("Packages in the workspace:");
+                for package in krates.workspace_members() {
+                    if let krates::Node::Krate { krate, .. } = package {
+                        eprintln!("{}", krate.name());
+                    }
+                }
+            }
+
+            found.ok_or_else(|| CrateConfigError::PackageNotFound(package.clone()))?
         }
         None => {
             // Otherwise find the package that is the closest parent of the current directory
@@ -144,6 +154,7 @@ impl DioxusCrate {
         cmd.features(target.features.clone());
         let builder = krates::Builder::new();
         let krates = builder.build(cmd, |_| {})?;
+
         let package = find_main_package(target.package.clone(), &krates)?;
 
         let dioxus_config = load_dioxus_config(&krates, package)?.unwrap_or_default();

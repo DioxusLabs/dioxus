@@ -169,7 +169,8 @@ pub async fn serve_all(
                                 server.fullstack_address(),
                                 &dioxus_crate.workspace_dir(),
                                 &asset_dir,
-                                server.ip.clone()
+                                server.ip.clone(),
+                                dioxus_crate.dioxus_config.application.name.clone(),
                             );
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),

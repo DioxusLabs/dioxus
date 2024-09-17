@@ -173,6 +173,7 @@ web-sys = { version = "0.3.56", default-features = false }
 dirs = "5.0.1"
 cargo-config2 = "0.1.26"
 criterion = { version = "0.5" }
+walrus = "*"
 
 # desktop
 wry = { version = "0.43.0", default-features = false }
@@ -192,13 +193,7 @@ objc_id = "0.1.1"
 [profile.dev.package.dioxus-core-macro]
 opt-level = 3
 
-# Enable a small amount of optimization in debug mode
-[profile.cli-dev]
-inherits = "dev"
-opt-level = 1
-
-# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
-[profile.cli-dev.package."*"]
+[profile.dev.package.walrus]
 opt-level = 3
 
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick

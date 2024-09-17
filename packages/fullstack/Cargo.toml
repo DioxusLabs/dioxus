@@ -62,7 +62,6 @@ parking_lot = { version = "0.12.1", features = ["send_guard"], optional = true }
 web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
 dioxus-cli-config = { workspace = true, optional = true }
-clap = { version = "4.5.7", optional = true, features = ["derive"] }
 
 dioxus-devtools = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.8.1", optional = true }
@@ -108,7 +107,6 @@ server = [
     "dep:async-trait",
     "dep:parking_lot",
     "dioxus-interpreter-js",
-    "dep:clap"
 ]
 aws-lc-rs = ["dep:aws-lc-rs"]
 

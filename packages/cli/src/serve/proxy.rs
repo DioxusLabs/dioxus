@@ -3,8 +3,8 @@ use crate::TraceSrc;
 use crate::{Error, Result};
 
 use anyhow::{anyhow, Context};
-use axum::body::Body as MyBody;
 use axum::body::Body;
+use axum::{body::Body as MyBody, response::IntoResponse};
 use axum::{
     http::StatusCode,
     routing::{any, MethodRouter},
@@ -97,7 +97,7 @@ pub(crate) fn proxy_to(
     nocache: bool,
     handle_error: fn(Error) -> Response<Body>,
 ) -> MethodRouter {
-    let client = ProxyClient::new(url);
+    let client = ProxyClient::new(url.clone());
 
     any(move |mut req: Request<MyBody>| async move {
         // Prevent request loops
@@ -115,11 +115,54 @@ pub(crate) fn proxy_to(
             "true".parse().expect("header value is valid"),
         );
 
+        // We have to throw a redirect for ws connections since the upgrade handler will not be called
+        // Our _dioxus handler will override this in the default case
+        if req.uri().scheme().map(|f| f.as_str()) == Some("ws")
+            || req.uri().scheme().map(|f| f.as_str()) == Some("wss")
+        {
+            let new_host = url.host().unwrap_or("localhost");
+            let proxied_uri = format!(
+                "{scheme}://{host}:{port}{path_and_query}",
+                scheme = req.uri().scheme_str().unwrap_or("ws"),
+                port = url.port().unwrap(),
+                host = new_host,
+                path_and_query = req
+                    .uri()
+                    .path_and_query()
+                    .map(|f| f.to_string())
+                    .unwrap_or_else(|| "".to_string()),
+            );
+            tracing::info!(dx_src = ?TraceSrc::Dev, "Proxied websocket request {req:?} to {proxied_uri}");
+
+            return Ok(axum::response::Redirect::permanent(&proxied_uri).into_response());
+        }
+
         if nocache {
             crate::serve::insert_no_cache_headers(req.headers_mut());
         }
 
-        client.send(req).await.map_err(handle_error)
+        let uri = req.uri().clone();
+        let res = client.send(req).await.map_err(handle_error);
+
+        match res {
+            Ok(res) => {
+                // log assets at a different log level
+                if uri.path().starts_with("/assets")
+                    || uri.path().starts_with("/_dioxus")
+                    || uri.path().starts_with("/public")
+                {
+                    tracing::trace!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
+                } else {
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
+                }
+
+                Ok(res.into_response())
+            }
+            Err(err) => {
+                tracing::error!(dx_src = ?TraceSrc::Dev, "[{}] {}", err.status().as_u16(), uri);
+                Err(err)
+            }
+        }
     })
 }
 
