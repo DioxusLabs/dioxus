@@ -193,6 +193,8 @@ objc_id = "0.1.1"
 [profile.dev.package.dioxus-core-macro]
 opt-level = 3
 
+# wasm bindgen is slooooooow, but it's because we're actually processing the wasm
+# so, lets just bump up walrus to make it faster, no need for any special profiles
 [profile.dev.package.walrus]
 opt-level = 3
 
