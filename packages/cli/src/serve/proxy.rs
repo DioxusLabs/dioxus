@@ -130,7 +130,7 @@ pub(crate) fn proxy_to(
                     .uri()
                     .path_and_query()
                     .map(|f| f.to_string())
-                    .unwrap_or_else(|| "".to_string()),
+                    .unwrap_or_default()
             );
             tracing::info!(dx_src = ?TraceSrc::Dev, "Proxied websocket request {req:?} to {proxied_uri}");
 

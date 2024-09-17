@@ -3,14 +3,13 @@
 #[cfg(not(target_arch = "wasm32"))]
 use crate::fs_cache::PathMapFn;
 
-use crate::IncrementalRenderer;
 use crate::memory_cache::InMemoryCache;
+use crate::IncrementalRenderer;
 
 use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-
 
 /// A configuration for the incremental renderer.
 #[derive(Clone)]

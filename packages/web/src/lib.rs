@@ -176,7 +176,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         #[cfg(all(feature = "hot_reload", debug_assertions))]
         if let Some(hr_msg) = template {
             // Replace all templates
-            dioxus_devtools::apply_changes(&mut virtual_dom, &hr_msg);
+            dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
 
             if !hr_msg.assets.is_empty() {
                 crate::hot_reload::invalidate_browser_asset_cache();

@@ -169,7 +169,7 @@ pub async fn serve_all(
                                 server.fullstack_address(),
                                 &dioxus_crate.workspace_dir(),
                                 &asset_dir,
-                                server.ip.clone(),
+                                server.ip,
                                 dioxus_crate.dioxus_config.application.name.clone(),
                             );
                             match child {

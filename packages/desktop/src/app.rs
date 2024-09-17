@@ -282,7 +282,7 @@ impl App {
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_devtools::apply_changes(&mut webview.dom, &hr_msg);
+                    dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
 
