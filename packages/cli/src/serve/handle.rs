@@ -89,18 +89,18 @@ impl AppHandle {
             Platform::Desktop | Platform::Server | Platform::Liveview => {
                 let mut cmd = Command::new(handle.executable.clone());
                 cmd.env(
-                    dioxus_runtime_config::FULLSTACK_ADDRESS_ENV,
+                    dioxus_cli_config::FULLSTACK_ADDRESS_ENV,
                     fullstack_address
                         .as_ref()
                         .map(|addr| addr.to_string())
                         .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
                 )
                 .env(
-                    dioxus_runtime_config::IOS_DEVSERVER_ADDR_ENV,
+                    dioxus_cli_config::IOS_DEVSERVER_ADDR_ENV,
                     format!("ws://{}/_dioxus", ip),
                 )
                 .env(
-                    dioxus_runtime_config::DEVSERVER_RAW_ADDR_ENV,
+                    dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
                     format!("ws://{}/_dioxus", ip),
                 )
                 .env("CARGO_MANIFEST_DIR", handle.app.build.krate.crate_dir())

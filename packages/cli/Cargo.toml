@@ -93,7 +93,7 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-core-types = { workspace = true }
 dioxus-devtools-types = { workspace = true }
-dioxus-runtime-config = { workspace = true }
+dioxus-cli-config = { workspace = true }
 dioxus-fullstack = { workspace = true }
 ignore = "0.4.22"
 env_logger = { workspace = true }

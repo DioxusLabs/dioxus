@@ -20,7 +20,7 @@ dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
 dioxus-devtools = { workspace = true, optional = true }
-dioxus-runtime-config = { workspace = true }
+dioxus-cli-config = { workspace = true }
 generational-box = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

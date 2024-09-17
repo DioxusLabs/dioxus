@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-runtime-config"
+name = "dioxus-cli-config"
 edition = "2021"
 version.workspace = true
 
