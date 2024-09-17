@@ -17,24 +17,21 @@
 //! Currently, we don't validate for structures, but do validate attributes.
 
 pub mod elements;
+
 #[cfg(feature = "hot-reload-context")]
 pub use elements::HtmlCtx;
+
 #[cfg(feature = "html-to-rsx")]
 pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
+
 pub mod events;
 pub(crate) mod file_data;
 pub use file_data::*;
 mod attribute_groups;
 pub mod geometry;
 pub mod input_data;
-#[cfg(feature = "native-bind")]
-pub mod native_bind;
+
 pub mod point_interaction;
-mod render_template;
-#[cfg(feature = "wasm-bind")]
-mod web_sys_bind;
-#[cfg(feature = "wasm-bind")]
-pub use web_sys_bind::*;
 
 #[cfg(feature = "serialize")]
 mod transit;
@@ -45,10 +42,6 @@ pub use transit::*;
 pub use attribute_groups::*;
 pub use elements::*;
 pub use events::*;
-pub use render_template::*;
-
-#[cfg(feature = "document")]
-pub mod document;
 
 pub mod extensions {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
@@ -57,11 +50,6 @@ pub mod extensions {
 
 pub mod prelude {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
-    #[cfg(feature = "document")]
-    pub use crate::document::{
-        self, document, eval, head, Document, Meta, MetaProps, Script, ScriptProps, Style,
-        StyleProps, Title, TitleProps, UseEval,
-    };
     pub use crate::elements::extensions::*;
     pub use crate::events::*;
     pub use crate::point_interaction::*;

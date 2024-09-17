@@ -65,18 +65,21 @@ impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
-        let dioxus_config = dioxus_cli_config::CURRENT_CONFIG.as_ref();
+        // let dioxus_config = dioxus_cli_config::CURRENT_CONFIG.as_ref();
 
         let mut window: WindowBuilder = WindowBuilder::new().with_title(
-            dioxus_config
-                .map(|c| c.application.name.clone())
-                .unwrap_or("Dioxus App".to_string()),
+            "Dioxus App".to_string(),
+            // dioxus_config
+            //     .map(|c| c.application.name.clone())
+            //     .unwrap_or("Dioxus App".to_string()),
         );
 
         // During development we want the window to be on top so we can see it while we work
-        let always_on_top = dioxus_config
-            .map(|c| c.desktop.always_on_top)
-            .unwrap_or(true);
+        // let always_on_top = dioxus_config
+        //     // .map(|c| c.desktop.always_on_top)
+        //     .unwrap_or(true);
+        let always_on_top = true;
+
         if cfg!(debug_assertions) {
             window = window.with_always_on_top(always_on_top);
         }

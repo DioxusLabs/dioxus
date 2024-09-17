@@ -1,4 +1,4 @@
-use dioxus_core::Event;
+use dioxus_core_types::Event;
 use keyboard_types::Modifiers;
 
 use crate::{geometry::*, input_data::*, prelude::*};

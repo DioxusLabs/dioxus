@@ -1,4 +1,4 @@
-use dioxus_core::prelude::{Runtime, ScopeId};
+use dioxus_core::prelude::Callback;
 use rustc_hash::FxHashMap;
 use std::{cell::RefCell, rc::Rc};
 use wry::{http::Request, RequestAsyncResponder};
@@ -7,20 +7,17 @@ use wry::{http::Request, RequestAsyncResponder};
 pub type AssetRequest = Request<Vec<u8>>;
 
 pub struct AssetHandler {
-    f: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
-    scope: ScopeId,
+    f: Callback<(AssetRequest, RequestAsyncResponder)>,
 }
 
 #[derive(Clone)]
-pub struct AssetHandlerRegistry {
-    dom_rt: Rc<Runtime>,
+pub struct AssetHandlers {
     handlers: Rc<RefCell<FxHashMap<String, AssetHandler>>>,
 }
 
-impl AssetHandlerRegistry {
-    pub fn new(dom_rt: Rc<Runtime>) -> Self {
-        AssetHandlerRegistry {
-            dom_rt,
+impl AssetHandlers {
+    pub fn new() -> Self {
+        AssetHandlers {
             handlers: Default::default(),
         }
     }
@@ -36,21 +33,16 @@ impl AssetHandlerRegistry {
         responder: RequestAsyncResponder,
     ) {
         if let Some(handler) = self.handlers.borrow().get(name) {
-            // And run the handler in the scope of the component that created it
-            self.dom_rt
-                .on_scope(handler.scope, || (handler.f)(request, responder));
+            handler.f.call((request, responder));
         }
     }
 
     pub fn register_handler(
         &self,
         name: String,
-        f: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
-        scope: ScopeId,
+        f: Callback<(AssetRequest, RequestAsyncResponder)>,
     ) {
-        self.handlers
-            .borrow_mut()
-            .insert(name, AssetHandler { f, scope });
+        self.handlers.borrow_mut().insert(name, AssetHandler { f });
     }
 
     pub fn remove_handler(&self, name: &str) -> Option<AssetHandler> {

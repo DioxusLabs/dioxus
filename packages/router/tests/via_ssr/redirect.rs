@@ -33,10 +33,6 @@ fn Home(lang: String) -> Element {
 #[component]
 fn App(path: Route) -> Element {
     rsx! {
-        Router::<Route> {
-            config: {
-                move |_| RouterConfig::default().history(MemoryHistory::with_initial_path(path.clone()))
-            }
-        }
+        Router::<Route> { config: move |_| RouterConfig::default().with_initial_path(path.clone()) }
     }
 }

@@ -1,7 +1,7 @@
 #![allow(unused)]
 //! On the client, we use the [`WebDocument`] implementation to render the head for any elements that were not rendered on the server.
 
-use dioxus_lib::events::Document;
+use dioxus_document::{Document, LinkProps, MetaProps, ScriptProps, StyleProps};
 use dioxus_web::WebDocument;
 
 fn head_element_written_on_server() -> bool {
@@ -11,52 +11,61 @@ fn head_element_written_on_server() -> bool {
         .unwrap_or_default()
 }
 
-pub(crate) struct FullstackWebDocument;
+pub(crate) struct FullstackWebDocument {}
+
+impl FullstackWebDocument {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+}
 
 impl Document for FullstackWebDocument {
-    fn new_evaluator(
+    fn create_head_element(
         &self,
-        js: String,
-    ) -> generational_box::GenerationalBox<Box<dyn dioxus_lib::prelude::document::Evaluator>> {
-        WebDocument.new_evaluator(js)
+        name: &str,
+        attributes: Vec<(&str, String)>,
+        contents: Option<String>,
+    ) {
+        if head_element_written_on_server() {
+            return;
+        }
+
+        WebDocument::get().create_head_element(name, attributes, contents);
     }
 
     fn set_title(&self, title: String) {
         if head_element_written_on_server() {
             return;
         }
-        WebDocument.set_title(title);
+
+        WebDocument::get().set_title(title);
     }
 
-    fn create_meta(&self, props: dioxus_lib::prelude::MetaProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.create_meta(props);
-    }
-
-    fn create_script(&self, props: dioxus_lib::prelude::ScriptProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.create_script(props);
-    }
-
-    fn create_style(&self, props: dioxus_lib::prelude::StyleProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.create_style(props);
-    }
-
-    fn create_link(&self, props: dioxus_lib::prelude::head::LinkProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.create_link(props);
+    fn eval(&self, js: String) -> dioxus_document::Eval {
+        WebDocument::get().eval(js)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn current_route(&self) -> String {
+        todo!()
+    }
+
+    fn go_back(&mut self) {
+        todo!()
+    }
+
+    fn go_forward(&mut self) {
+        todo!()
+    }
+
+    fn push_route(&mut self, route: String) {
+        todo!()
+    }
+
+    fn replace(&mut self, path: String) {
+        todo!()
     }
 }

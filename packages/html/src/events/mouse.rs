@@ -1,7 +1,7 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
 use crate::prelude::*;
-use dioxus_core::Event;
+use dioxus_core_types::Event;
 use keyboard_types::Modifiers;
 
 pub type MouseEvent = Event<MouseData>;

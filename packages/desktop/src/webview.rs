@@ -1,17 +1,15 @@
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
+use crate::file_upload::NativeFileEngine;
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
-    DesktopContext, DesktopService,
+    app::SharedContext, assets::AssetHandlers, edits::WryQueue, file_upload::NativeFileHover,
+    ipc::UserWindowEvent, protocol, waker::tao_waker, Config, DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
+use dioxus_document::Document;
 use dioxus_hooks::to_owned;
-use dioxus_html::document::Document;
-use dioxus_html::native_bind::NativeFileEngine;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
-use dioxus_interpreter_js::SynchronousEventResponse;
 use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
@@ -84,13 +82,12 @@ impl WebviewEdits {
             return Default::default();
         };
 
-        let query = desktop_context.query.clone();
         let recent_file = desktop_context.file_hover.clone();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, desktop_context.clone(), query);
+                let element = DesktopElement::new(element, desktop_context.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
             dioxus_html::EventData::Drag(ref drag) => {
@@ -147,9 +144,17 @@ impl WebviewInstance {
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
-        // tao makes small windows for some reason, make them bigger
-        if cfg.window.window.inner_size.is_none() {
-            window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+        // tao makes small windows for some reason, make them bigger on desktop
+        //
+        // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
+        // get a window that is not the size of the screen and weird black bars.
+        //
+        // todo: move this to our launch function that's different for desktop and mobile
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            if cfg.window.window.inner_size.is_none() {
+                window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+            }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
@@ -182,7 +187,7 @@ impl WebviewInstance {
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
-        let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
+        let asset_handlers = AssetHandlers::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
@@ -196,19 +201,16 @@ impl WebviewInstance {
                 edits
             ];
             move |request, responder: RequestAsyncResponder| {
-                // Try to serve the index file first
-                if let Some(index_bytes) = protocol::index_request(
-                    &request,
+                protocol::desktop_handler(
+                    request,
+                    asset_handlers.clone(),
+                    responder,
+                    &edits,
                     custom_head.clone(),
                     custom_index.clone(),
                     &root_name,
                     headless,
-                ) {
-                    return responder.respond(index_bytes);
-                }
-
-                // Otherwise, try to serve an asset, either from the user or the filesystem
-                protocol::desktop_handler(request, asset_handlers.clone(), responder, &edits);
+                )
             }
         };
 
@@ -326,6 +328,8 @@ impl WebviewInstance {
             None
         };
 
+        // The context will function as both the document and the context provider
+        // But we need to disambiguate the types for rust's TypeId to downcast Rc<dyn Document> properly
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
@@ -333,13 +337,14 @@ impl WebviewInstance {
             asset_handlers,
             file_hover,
         ));
+        let as_document: Rc<dyn Document> = desktop_context.clone() as Rc<dyn Document>;
 
         // Provide the desktop context to the virtual dom and edit handler
         edits.set_desktop_context(desktop_context.clone());
-        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
+
         dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
-            ScopeId::ROOT.provide_context(provider);
+            ScopeId::ROOT.provide_context(as_document);
         });
 
         WebviewInstance {
@@ -381,7 +386,7 @@ impl WebviewInstance {
         }
     }
 
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn kick_stylsheets(&self) {
         // run eval in the webview to kick the stylesheets by appending a query string
         // we should do something less clunky than this
@@ -389,5 +394,20 @@ impl WebviewInstance {
             .desktop_context
             .webview
             .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
+    }
+}
+
+/// A synchronous response to a browser event which may prevent the default browser's action
+#[derive(serde::Serialize, Default)]
+pub struct SynchronousEventResponse {
+    #[serde(rename = "preventDefault")]
+    prevent_default: bool,
+}
+
+impl SynchronousEventResponse {
+    /// Create a new SynchronousEventResponse
+    #[allow(unused)]
+    pub fn new(prevent_default: bool) -> Self {
+        Self { prevent_default }
     }
 }

@@ -1,24 +1,15 @@
-#![allow(unused)]
-
 use dioxus_html::{
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
-    native_bind::NativeFileEngine,
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    prelude::{SerializedMouseData, SerializedPointInteraction},
+    prelude::SerializedPointInteraction,
     FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData,
 };
 
 use serde::Deserialize;
-use std::{
-    cell::{Cell, RefCell},
-    path::PathBuf,
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{cell::RefCell, path::PathBuf, rc::Rc, str::FromStr, sync::Arc};
 use wry::DragDropEvent;
 
 #[derive(Debug, Deserialize)]
@@ -108,7 +99,7 @@ impl FileDialogRequest {
 
 enum Filters {
     Extension(String),
-    Mime(String),
+    Mime,
     Audio,
     Video,
     Image,
@@ -118,7 +109,7 @@ impl Filters {
     fn as_extensions(&self) -> Vec<&str> {
         match self {
             Filters::Extension(extension) => vec![extension.as_str()],
-            Filters::Mime(_) => vec![],
+            Filters::Mime => vec![],
             Filters::Audio => vec!["mp3", "wav", "ogg"],
             Filters::Video => vec!["mp4", "webm"],
             Filters::Image => vec!["png", "jpg", "jpeg", "gif", "webp"],
@@ -137,7 +128,7 @@ impl FromStr for Filters {
                 "audio/*" => Ok(Filters::Audio),
                 "video/*" => Ok(Filters::Video),
                 "image/*" => Ok(Filters::Image),
-                _ => Ok(Filters::Mime(s.to_string())),
+                _ => Ok(Filters::Mime),
             }
         }
     }
@@ -164,6 +155,7 @@ impl HasFormData for DesktopFileUploadForm {
 pub struct NativeFileHover {
     event: Rc<RefCell<Option<DragDropEvent>>>,
 }
+
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
         self.event.borrow_mut().replace(event);
@@ -235,5 +227,60 @@ impl PointerInteraction for DesktopFileDragEvent {
 
     fn trigger_button(&self) -> Option<MouseButton> {
         self.mouse.trigger_button()
+    }
+}
+
+use std::any::Any;
+// use std::path::PathBuf;
+
+// use dioxus_html::FileEngine;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+
+pub struct NativeFileEngine {
+    files: Vec<PathBuf>,
+}
+
+impl NativeFileEngine {
+    pub fn new(files: Vec<PathBuf>) -> Self {
+        Self { files }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl FileEngine for NativeFileEngine {
+    fn files(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .filter_map(|f| Some(f.to_str()?.to_string()))
+            .collect()
+    }
+
+    async fn file_size(&self, file: &str) -> Option<u64> {
+        let file = File::open(file).await.ok()?;
+        Some(file.metadata().await.ok()?.len())
+    }
+
+    async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
+        let mut file = File::open(file).await.ok()?;
+
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents).await.ok()?;
+
+        Some(contents)
+    }
+
+    async fn read_file_to_string(&self, file: &str) -> Option<String> {
+        let mut file = File::open(file).await.ok()?;
+
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).await.ok()?;
+
+        Some(contents)
+    }
+
+    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
+        let file = File::open(file).await.ok()?;
+        Some(Box::new(file))
     }
 }

@@ -1,0 +1,8 @@
+[package]
+name = "dioxus-devtools-types"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+dioxus-core = { workspace = true }

@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "lib": [
+            "ES2015",
+            "DOM",
+            "dom",
+            "dom.iterable",
+            "ESNext"
+        ],
+        "noImplicitAny": true,
+        "removeComments": true,
+        "preserveConstEnums": true,
+        "typeRoots": [".src/ts/types"]
+    },
+    "exclude": [
+        "**/*.spec.ts"
+    ]
+}

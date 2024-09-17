@@ -1,5 +1,11 @@
 use std::{io::Write as _, path::PathBuf};
 
+fn main() {
+    check_gnu();
+
+    maybe_copy_doc_scrope();
+}
+
 fn check_gnu() {
     // WARN about wry support on windows gnu targets. GNU windows targets don't work well in wry currently
     if std::env::var("CARGO_CFG_WINDOWS").is_ok()
@@ -8,7 +14,10 @@ fn check_gnu() {
     {
         println!("cargo:warning=GNU windows targets have some limitations within Wry. Using the MSVC windows toolchain is recommended. If you would like to use continue using GNU, you can read https://github.com/wravery/webview2-rs#cross-compilation and disable this warning by adding the gnu feature to dioxus-desktop in your Cargo.toml")
     }
+}
 
+// todo: maybe we don't want to do this in this build script
+fn maybe_copy_doc_scrope() {
     // To prepare for a release, we add extra examples to desktop for doc scraping and copy assets from the workspace to make those examples compile
     if option_env!("DIOXUS_RELEASE").is_some() {
         // Append EXAMPLES_TOML to the cargo.toml
@@ -34,10 +43,6 @@ fn check_gnu() {
             }
         }
     }
-}
-
-fn main() {
-    check_gnu();
 }
 
 const EXAMPLES_TOML: &str = r#"
