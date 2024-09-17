@@ -8,7 +8,6 @@ use syn::{
     Ident,
 };
 
-
 /// Parse a raw ident and return a new ident with the r# prefix added
 pub fn parse_raw_ident(parse_buffer: &ParseBuffer) -> syn::Result<Ident> {
     // First try to parse as a normal ident
