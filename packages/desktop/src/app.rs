@@ -1,13 +1,14 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest},
     ipc::{IpcMessage, UserWindowEvent},
+    query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
 use dioxus_core::{ElementId, VirtualDom};
-use dioxus_html::PlatformEventData;
+use dioxus_html::{native_bind::NativeFileEngine, PlatformEventData};
 use std::{
     any::Any,
     cell::{Cell, RefCell},
@@ -84,9 +85,9 @@ impl App {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.set_menubar_receiver();
 
-        // Allow hotreloading and other devtools to work - but only in debug mode
+        // Allow hotreloading to work - but only in debug mode
         #[cfg(all(feature = "devtools", debug_assertions))]
-        app.connect_devtools();
+        app.connect_hotreload();
 
         #[cfg(debug_assertions)]
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -134,13 +135,13 @@ impl App {
         }
     }
 
-    #[cfg(all(feature = "devtools", debug_assertions,))]
-    pub fn connect_devtools(&self) {
-        if let Some(addr) = dioxus_cli_config::devserver_raw_addr() {
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub fn connect_hotreload(&self) {
+        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
             let proxy = self.shared.proxy.clone();
-            dioxus_devtools::connect(addr, move |msg| {
+            dioxus_devtools::connect(endpoint, move |msg| {
                 _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            });
+            })
         }
     }
 
@@ -247,8 +248,20 @@ impl App {
         }
     }
 
-    #[cfg(all(feature = "devtools", debug_assertions,))]
-    pub fn handle_devserver_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+    pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
+        let Ok(result) = serde_json::from_value::<QueryResult>(msg.params()) else {
+            return;
+        };
+
+        let Some(view) = self.webviews.get(&id) else {
+            return;
+        };
+
+        view.desktop_context.query.send(result);
+    }
+
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
         use dioxus_devtools::DevserverMsg;
 
         match msg {

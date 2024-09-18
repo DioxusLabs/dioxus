@@ -1,6 +1,7 @@
 #![allow(unused)] // for whatever reason, the compiler is not recognizing the use of these functions
 
 use dioxus::prelude::*;
+use dioxus_core::Element;
 
 pub fn check_app_exits(app: fn() -> Element) {
     use dioxus_desktop::tao::window::WindowBuilder;
@@ -16,7 +17,7 @@ pub fn check_app_exits(app: fn() -> Element) {
         }
     });
 
-    dioxus::launch::builder()
+    LaunchBuilder::desktop()
         .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(false)))
         .launch(app);
 
@@ -49,7 +50,7 @@ pub fn mock_event_with_extra(id: &'static str, value: &'static str, extra: &'sta
                 "#
             );
 
-            document::eval(&js).await.unwrap();
+            eval(&js).await.unwrap();
         });
     })
 }
