@@ -274,37 +274,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "argh"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7af5ba06967ff7214ce4c7419c7d185be7ecd6cc4965a8f6e1d8ce0398aad219"
-dependencies = [
- "argh_derive",
- "argh_shared",
-]
-
-[[package]]
-name = "argh_derive"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56df0aeedf6b7a2fc67d06db35b09684c3e8da0c95f8f27685cb17e08413d87a"
-dependencies = [
- "argh_shared",
- "proc-macro2",
- "quote",
- "syn 2.0.74",
-]
-
-[[package]]
-name = "argh_shared"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5693f39141bda5760ecc4111ab08da40565d1771038c4a0250f03457ec707531"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1279,42 +1248,6 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
-
-[[package]]
-name = "cached"
-version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b195e4fbc4b6862bbd065b991a34750399c119797efff72492f28a5864de8700"
-dependencies = [
- "async-trait",
- "cached_proc_macro",
- "cached_proc_macro_types",
- "futures",
- "hashbrown 0.13.2",
- "instant",
- "once_cell",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "cached_proc_macro"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b48814962d2fd604c50d2b9433c2a41a0ab567779ee2c02f7fba6eca1221f082"
-dependencies = [
- "cached_proc_macro_types",
- "darling 0.14.4",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "cached_proc_macro_types"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 
 [[package]]
 name = "cairo-rs"
@@ -2304,36 +2237,12 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b750cb3417fd1b327431a470f388520309479ab0bf5e323505daf0290cd3850"
-dependencies = [
- "darling_core 0.14.4",
- "darling_macro 0.14.4",
-]
-
-[[package]]
-name = "darling"
 version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f63b86c8a8826a49b8c21f08a2d07338eec8d900540f8630dc76284be802989"
 dependencies = [
- "darling_core 0.20.10",
- "darling_macro 0.20.10",
-]
-
-[[package]]
-name = "darling_core"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "109c1ca6e6b7f82cc233a97004ea8ed7ca123a9af07a8230878fcfda9b158bf0"
-dependencies = [
- "fnv",
- "ident_case",
- "proc-macro2",
- "quote",
- "strsim 0.10.0",
- "syn 1.0.109",
+ "darling_core",
+ "darling_macro",
 ]
 
 [[package]]
@@ -2352,22 +2261,11 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4aab4dbc9f7611d8b55048a3a16d2d010c2c8334e46304b40ac1cc14bf3b48e"
-dependencies = [
- "darling_core 0.14.4",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "darling_macro"
 version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
 dependencies = [
- "darling_core 0.20.10",
+ "darling_core",
  "quote",
  "syn 2.0.74",
 ]
@@ -2492,9 +2390,9 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-macro",
  "dioxus-desktop",
+ "dioxus-devtools",
  "dioxus-fullstack",
  "dioxus-hooks",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-liveview",
  "dioxus-mobile",
@@ -2565,9 +2463,12 @@ dependencies = [
  "dioxus-check",
  "dioxus-cli-config",
  "dioxus-core",
- "dioxus-hot-reload",
+ "dioxus-core-types",
+ "dioxus-devtools",
  "dioxus-html",
  "dioxus-rsx",
+ "dioxus-rsx-hotreload",
+ "dioxus-rsx-rosetta",
  "dirs",
  "env_logger 0.11.5",
  "fern",
@@ -2592,8 +2493,7 @@ dependencies = [
  "ratatui",
  "rayon",
  "regex",
- "reqwest 0.12.5",
- "rsx-rosetta",
+ "reqwest",
  "rustls 0.23.12",
  "serde",
  "serde_json",
@@ -2601,6 +2501,7 @@ dependencies = [
  "syn 2.0.74",
  "tar",
  "tauri-bundler",
+ "tauri-utils",
  "tempfile",
  "thiserror",
  "tokio",
@@ -2621,19 +2522,6 @@ dependencies = [
 [[package]]
 name = "dioxus-cli-config"
 version = "0.6.0-alpha.2"
-dependencies = [
- "built",
- "cargo_toml",
- "clap",
- "dirs",
- "once_cell",
- "serde",
- "serde_json",
- "tauri-bundler",
- "tauri-utils",
- "toml 0.8.19",
- "tracing",
-]
 
 [[package]]
 name = "dioxus-config-macro"
@@ -2658,7 +2546,7 @@ dependencies = [
  "manganis",
  "pretty_assertions",
  "rand 0.8.5",
- "reqwest 0.12.5",
+ "reqwest",
  "rustc-hash 1.1.0",
  "rustversion",
  "serde",
@@ -2680,7 +2568,6 @@ dependencies = [
  "dioxus",
  "dioxus-html",
  "dioxus-rsx",
- "prettyplease",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -2688,6 +2575,10 @@ dependencies = [
  "tokio",
  "trybuild",
 ]
+
+[[package]]
+name = "dioxus-core-types"
+version = "0.6.0-alpha.2"
 
 [[package]]
 name = "dioxus-desktop"
@@ -2699,8 +2590,8 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
+ "dioxus-devtools",
  "dioxus-hooks",
- "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",
@@ -2717,7 +2608,7 @@ dependencies = [
  "objc",
  "objc_id",
  "rand 0.8.5",
- "reqwest 0.12.5",
+ "reqwest",
  "rfd",
  "rustc-hash 1.1.0",
  "separator",
@@ -2736,6 +2627,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-devtools"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-devtools-types",
+ "dioxus-signals",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tungstenite 0.23.0",
+ "warnings",
+]
+
+[[package]]
+name = "dioxus-devtools-types"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "serde",
+]
+
+[[package]]
 name = "dioxus-examples"
 version = "0.6.0-alpha.2"
 dependencies = [
@@ -2750,7 +2664,7 @@ dependencies = [
  "http-range",
  "manganis",
  "rand 0.8.5",
- "reqwest 0.12.5",
+ "reqwest",
  "separator",
  "serde",
  "serde_json",
@@ -2764,8 +2678,8 @@ name = "dioxus-ext"
 version = "0.6.0-alpha.2"
 dependencies = [
  "dioxus-autofmt",
+ "dioxus-rsx-rosetta",
  "html_parser",
- "rsx-rosetta",
  "syn 2.0.74",
  "wasm-bindgen",
 ]
@@ -2780,12 +2694,12 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "ciborium",
- "clap",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-desktop",
- "dioxus-hot-reload",
+ "dioxus-devtools",
  "dioxus-interpreter-js",
+ "dioxus-isrg",
  "dioxus-lib",
  "dioxus-mobile",
  "dioxus-ssr",
@@ -2825,37 +2739,13 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
- "reqwest 0.12.5",
+ "reqwest",
  "rustversion",
  "slab",
  "tokio",
  "tracing",
  "warnings",
  "web-sys",
-]
-
-[[package]]
-name = "dioxus-hot-reload"
-version = "0.6.0-alpha.2"
-dependencies = [
- "chrono",
- "dioxus-cli-config",
- "dioxus-core",
- "dioxus-html",
- "dioxus-rsx",
- "dioxus-signals",
- "execute",
- "futures-util",
- "ignore",
- "notify",
- "once_cell",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite 0.23.1",
- "tracing",
- "warnings",
 ]
 
 [[package]]
@@ -2866,6 +2756,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-core-types",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
@@ -2905,6 +2796,7 @@ name = "dioxus-interpreter-js"
 version = "0.6.0-alpha.2"
 dependencies = [
  "dioxus-core",
+ "dioxus-core-types",
  "dioxus-html",
  "js-sys",
  "lazy-js-bundle",
@@ -2915,6 +2807,18 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "dioxus-isrg"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "chrono",
+ "http 1.1.0",
+ "lru 0.12.4",
+ "rustc-hash 1.1.0",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -2939,7 +2843,7 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
- "dioxus-hot-reload",
+ "dioxus-devtools",
  "dioxus-html",
  "dioxus-interpreter-js",
  "futures-channel",
@@ -3071,16 +2975,42 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.6.0-alpha.2"
 dependencies = [
- "dioxus-core",
- "internment",
  "prettier-please",
  "prettyplease",
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
- "serde",
+ "syn 2.0.74",
+]
+
+[[package]]
+name = "dioxus-rsx-hotreload"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-core-types",
+ "dioxus-rsx",
+ "internment",
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
  "syn 2.0.74",
  "tracing",
+]
+
+[[package]]
+name = "dioxus-rsx-rosetta"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "convert_case 0.6.0",
+ "dioxus-autofmt",
+ "dioxus-html",
+ "dioxus-rsx",
+ "html_parser",
+ "pretty_assertions",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.74",
 ]
 
 [[package]]
@@ -3095,7 +3025,7 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "rand 0.8.5",
- "reqwest 0.12.5",
+ "reqwest",
  "rustc-hash 1.1.0",
  "serde",
  "simple_logger",
@@ -3109,28 +3039,11 @@ dependencies = [
 name = "dioxus-ssr"
 version = "0.6.0-alpha.2"
 dependencies = [
- "anyhow",
- "argh",
  "askama_escape",
- "async-trait",
- "chrono",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-core",
- "dioxus-html",
- "dioxus-interpreter-js",
- "dioxus-signals",
- "fern",
- "fs_extra",
- "generational-box",
- "http 1.1.0",
- "lru 0.12.4",
+ "dioxus-core-types",
  "rustc-hash 1.1.0",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -3141,8 +3054,9 @@ dependencies = [
  "criterion",
  "dioxus",
  "dioxus-cli-config",
+ "dioxus-devtools",
  "dioxus-fullstack",
- "dioxus-hot-reload",
+ "dioxus-isrg",
  "dioxus-lib",
  "dioxus-router",
  "dioxus-ssr",
@@ -3170,7 +3084,8 @@ dependencies = [
  "console_error_panic_hook",
  "dioxus",
  "dioxus-core",
- "dioxus-hot-reload",
+ "dioxus-core-types",
+ "dioxus-devtools",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",
@@ -3199,7 +3114,6 @@ name = "dioxus_server_macro"
 version = "0.6.0-alpha.2"
 dependencies = [
  "axum 0.7.5",
- "convert_case 0.6.0",
  "dioxus",
  "proc-macro2",
  "quote",
@@ -3329,10 +3243,9 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 name = "ecommerce-site"
 version = "0.1.1"
 dependencies = [
- "cached",
  "chrono",
  "dioxus",
- "reqwest 0.11.27",
+ "reqwest",
  "serde",
 ]
 
@@ -3402,7 +3315,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59c3b24c345d8c314966bdc1832f6c2635bfcce8e7cf363bd115987bba2ee242"
 dependencies = [
- "darling 0.20.10",
+ "darling",
  "proc-macro2",
  "quote",
  "syn 2.0.74",
@@ -3824,7 +3737,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dioxus",
- "reqwest 0.12.5",
+ "reqwest",
  "serde",
  "tracing",
  "tracing-subscriber",
@@ -3836,7 +3749,7 @@ name = "fullstack-hello-world-example"
 version = "0.1.0"
 dependencies = [
  "dioxus",
- "reqwest 0.12.5",
+ "reqwest",
  "serde",
  "simple_logger",
  "tracing",
@@ -5286,19 +5199,6 @@ dependencies = [
 
 [[package]]
 name = "hyper-tls"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
-dependencies = [
- "bytes",
- "hyper 0.14.30",
- "native-tls",
- "tokio",
- "tokio-native-tls",
-]
-
-[[package]]
-name = "hyper-tls"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
@@ -6295,7 +6195,7 @@ dependencies = [
  "railwind",
  "ravif",
  "rayon",
- "reqwest 0.12.5",
+ "reqwest",
  "rustc-hash 1.1.0",
  "serde",
  "serde_json",
@@ -6316,7 +6216,7 @@ dependencies = [
  "built",
  "home",
  "infer 0.11.0",
- "reqwest 0.12.5",
+ "reqwest",
  "serde",
  "toml 0.7.8",
  "tracing",
@@ -8273,46 +8173,6 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.27"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd67538700a17451e7cba03ac727fb961abb7607553461627b97de0b89cf4a62"
-dependencies = [
- "base64 0.21.7",
- "bytes",
- "encoding_rs",
- "futures-core",
- "futures-util",
- "h2 0.3.26",
- "http 0.2.12",
- "http-body 0.4.6",
- "hyper 0.14.30",
- "hyper-tls 0.5.0",
- "ipnet",
- "js-sys",
- "log",
- "mime",
- "native-tls",
- "once_cell",
- "percent-encoding",
- "pin-project-lite",
- "rustls-pemfile 1.0.4",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sync_wrapper 0.1.2",
- "system-configuration",
- "tokio",
- "tokio-native-tls",
- "tower-service",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "winreg 0.50.0",
-]
-
-[[package]]
-name = "reqwest"
 version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7d6d2a27d57148378eb5e111173f4276ad26340ecc5c49a4a2152167a2d6a37"
@@ -8329,7 +8189,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.4.1",
  "hyper-rustls",
- "hyper-tls 0.6.0",
+ "hyper-tls",
  "hyper-util",
  "ipnet",
  "js-sys",
@@ -8512,21 +8372,6 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "rsx-rosetta"
-version = "0.6.0-alpha.2"
-dependencies = [
- "convert_case 0.6.0",
- "dioxus-autofmt",
- "dioxus-html",
- "dioxus-rsx",
- "html_parser",
- "pretty_assertions",
- "proc-macro2",
- "quote",
- "syn 2.0.74",
 ]
 
 [[package]]
@@ -8997,7 +8842,7 @@ version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8fee4991ef4f274617a51ad4af30519438dacb2f56ac773b08a1922ff743350"
 dependencies = [
- "darling 0.20.10",
+ "darling",
  "proc-macro2",
  "quote",
  "syn 2.0.74",
@@ -9021,7 +8866,7 @@ dependencies = [
  "inventory",
  "js-sys",
  "once_cell",
- "reqwest 0.12.5",
+ "reqwest",
  "send_wrapper",
  "serde",
  "serde_json",
@@ -12794,16 +12639,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68a9bda4691f099d435ad181000724da8e5899daa10713c2d432552b9ccd3a6f"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "winreg"
-version = "0.50.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
-dependencies = [
- "cfg-if",
- "windows-sys 0.48.0",
 ]
 
 [[package]]

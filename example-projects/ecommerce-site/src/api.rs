@@ -55,7 +55,6 @@ impl Display for Sort {
 }
 
 // Cache up to 100 requests, invalidating them after 60 seconds
-#[cached::proc_macro::cached(size = 100, time = 60, result = true)]
 pub(crate) async fn fetch_user_carts(user_id: usize) -> Result<Vec<Cart>, reqwest::Error> {
     reqwest::get(format!(
         "https://fakestoreapi.com/carts/user/{user_id}?startdate=2019-12-10&enddate=2023-01-01"
@@ -66,7 +65,6 @@ pub(crate) async fn fetch_user_carts(user_id: usize) -> Result<Vec<Cart>, reqwes
 }
 
 // Cache up to 100 requests, invalidating them after 60 seconds
-#[cached::proc_macro::cached(size = 100, time = 60, result = true)]
 pub(crate) async fn fetch_user(user_id: usize) -> dioxus::Result<Product> {
     Ok(
         reqwest::get(format!("https://fakestoreapi.com/users/{user_id}"))
@@ -77,7 +75,6 @@ pub(crate) async fn fetch_user(user_id: usize) -> dioxus::Result<Product> {
 }
 
 // Cache up to 100 requests, invalidating them after 60 seconds
-#[cached::proc_macro::cached(size = 100, time = 60, result = true)]
 pub(crate) async fn fetch_product(product_id: usize) -> dioxus::Result<Product> {
     Ok(
         reqwest::get(format!("https://fakestoreapi.com/products/{product_id}"))
@@ -88,7 +85,6 @@ pub(crate) async fn fetch_product(product_id: usize) -> dioxus::Result<Product> 
 }
 
 // Cache up to 100 requests, invalidating them after 60 seconds
-#[cached::proc_macro::cached(size = 100, time = 60, result = true)]
 pub(crate) async fn fetch_products(count: usize, sort: Sort) -> dioxus::Result<Vec<Product>> {
     Ok(reqwest::get(format!(
         "https://fakestoreapi.com/products/?sort={sort}&limit={count}"

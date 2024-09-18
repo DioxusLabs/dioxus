@@ -132,11 +132,11 @@ impl BuildRequest {
 
         // Only run wasm-opt if the feature is enabled
         // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
-        #[cfg(feature = "wasm-opt")]
+        #[cfg(feature = "optimizations")]
         {
             // Run wasm-opt if this is a release build
             if self.build_arguments.release {
-                use dioxus_cli_config::WasmOptLevel;
+                use crate::config::WasmOptLevel;
 
                 tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
                 let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {

@@ -10,11 +10,11 @@ use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
+use crate::config::Platform;
 use crate::link::LinkCommand;
 use crate::Result;
 use crate::TraceSrc;
 use anyhow::Context;
-use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use manganis_cli_support::ManganisSupportGuard;
@@ -115,10 +115,6 @@ impl BuildRequest {
             let hash = &hash.trim_start_matches('g')[..4];
             dioxus_version.push_str(&format!("-{hash}"));
         }
-        let _guard = dioxus_cli_config::__private::save_config(
-            &self.dioxus_crate.dioxus_config,
-            &dioxus_version,
-        );
         let _manganis_support = ManganisSupportGuard::default();
         let _asset_guard =
             AssetConfigDropGuard::new(self.dioxus_crate.dioxus_config.web.app.base_path.as_deref());
