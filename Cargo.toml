@@ -39,7 +39,6 @@ members = [
     "packages/devtools-types",
     "packages/isrg",
     "packages/manganis-core",
-    "packages/server",
     "packages/rsx-hotreload",
 
     # Static generation examples
@@ -116,7 +115,6 @@ dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.2" 
 dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.2" }
-dioxus-server = { path = "packages/server", version = "0.6.0-alpha.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.2", default-features = false }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.2" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.2", default-features = false }

@@ -2952,10 +2952,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-server"
-version = "0.6.0-alpha.2"
-
-[[package]]
 name = "dioxus-signals"
 version = "0.6.0-alpha.2"
 dependencies = [
