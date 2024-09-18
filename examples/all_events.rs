@@ -6,7 +6,7 @@
 use dioxus::prelude::*;
 use std::{collections::VecDeque, fmt::Debug, rc::Rc};
 
-const STYLE: &str = asset!("./examples/assets/events.css");
+const STYLE: Asset = asset!("/examples/assets/events.css");
 
 fn main() {
     launch(app);

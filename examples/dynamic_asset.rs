@@ -7,7 +7,7 @@
 use dioxus::desktop::{use_asset_handler, wry::http::Response};
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!("./examples/assets/custom_assets.css");
+const STYLE: Asset = asset!("/examples/assets/custom_assets.css");
 
 fn main() {
     launch_desktop(app);

@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!("./examples/assets/counter.css");
+const STYLE: Asset = asset!("/examples/assets/counter.css");
 
 static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
 static DOUBLED_COUNT: GlobalMemo<i32> = Memo::global(|| COUNT() * 2);
