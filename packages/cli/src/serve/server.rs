@@ -1,3 +1,4 @@
+use crate::config::{Platform, WebHttpsConfig};
 use crate::serve::{next_or_pending, Serve};
 use crate::{dioxus_crate::DioxusCrate, TraceSrc};
 use crate::{Error, Result};
@@ -18,8 +19,7 @@ use axum::{
     Extension, Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use dioxus_cli_config::{Platform, WebHttpsConfig};
-use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
+use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::stream;
 use futures_util::{stream::FuturesUnordered, StreamExt};
@@ -419,6 +419,7 @@ fn setup_router(
                 "/",
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                        tracing::info!("Incoming hotreload websocket request: {ws:?}");
                         ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
                     },
                 ),

@@ -381,7 +381,7 @@ impl WebviewInstance {
         }
     }
 
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn kick_stylsheets(&self) {
         // run eval in the webview to kick the stylesheets by appending a query string
         // we should do something less clunky than this

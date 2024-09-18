@@ -19,12 +19,12 @@ pub enum UserWindowEvent {
 
     /// Handle a hotreload event, basically telling us to update our templates
     #[cfg(all(
-        feature = "hot-reload",
+        feature = "devtools",
         debug_assertions,
         not(target_os = "android"),
         not(target_os = "ios")
     ))]
-    HotReloadEvent(dioxus_hot_reload::DevserverMsg),
+    HotReloadEvent(dioxus_devtools::DevserverMsg),
 
     /// Create a new window
     NewWindow,

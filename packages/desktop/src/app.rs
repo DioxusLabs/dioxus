@@ -86,12 +86,7 @@ impl App {
         app.set_menubar_receiver();
 
         // Allow hotreloading to work - but only in debug mode
-        #[cfg(all(
-            feature = "hot-reload",
-            debug_assertions,
-            not(target_os = "android"),
-            not(target_os = "ios")
-        ))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         app.connect_hotreload();
 
         #[cfg(debug_assertions)]
@@ -140,25 +135,14 @@ impl App {
         }
     }
 
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn connect_hotreload(&self) {
-        let proxy = self.shared.proxy.clone();
-
-        tokio::task::spawn(async move {
-            let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
-            else {
-                return;
-            };
-
-            while let Some(Ok(msg)) = receiver.next().await {
+        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
+            let proxy = self.shared.proxy.clone();
+            dioxus_devtools::connect(endpoint, move |msg| {
                 _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            }
-        });
+            })
+        }
     }
 
     pub fn handle_new_window(&mut self) {
@@ -276,19 +260,14 @@ impl App {
         view.desktop_context.query.send(result);
     }
 
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
-    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
-        use dioxus_hot_reload::DevserverMsg;
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+        use dioxus_devtools::DevserverMsg;
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
+                    dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
 

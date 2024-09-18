@@ -18,8 +18,8 @@ dioxus-ssr = { workspace = true, optional = true }
 dioxus-isrg = { workspace = true, optional = true }
 axum = { workspace = true, features = ["ws", "macros"], optional = true }
 tower-http = { workspace = true, features = ["fs"], optional = true }
-dioxus-hot-reload = { workspace = true, features = ["serve"], optional = true }
-dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
+dioxus-devtools = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true, optional = true }
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 tokio = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
@@ -32,7 +32,7 @@ criterion = { workspace = true }
 
 [features]
 default = []
-server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-hot-reload", "dep:dioxus-cli-config", "dep:tower", "dep:dioxus-isrg"]
+server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-devtools", "dep:dioxus-cli-config", "dep:tower", "dep:dioxus-isrg"]
 web = ["dioxus-fullstack/web", "dioxus-router/web", "dep:dioxus-web"]
 
 [package.metadata.docs.rs]
