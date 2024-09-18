@@ -34,7 +34,7 @@ serde = { version = "1.0.136", optional = true }
 axum = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "html", "devtools", "signals", "hooks", "launch", "mounted", "file-engine", "document", "asset"]
+default = ["macro", "html", "devtools", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]
@@ -42,7 +42,7 @@ html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools", "dioxus-fullstack?/devtools"]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
-file-engine = ["dioxus-web?/file-engine"]
+file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis"]
 document = ["dioxus-web?/document"]
 

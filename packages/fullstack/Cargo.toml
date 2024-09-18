@@ -76,11 +76,11 @@ tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], option
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["devtools", "panic_hook", "document", "file-engine", "mounted"]
+default = ["devtools", "panic_hook", "document", "file_engine", "mounted"]
 panic_hook = ["dioxus-web?/panic_hook"]
 devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
 mounted = ["dioxus-web?/mounted"]
-file-engine = ["dioxus-web?/file-engine"]
+file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]
 web = ["dep:dioxus-web", "dep:web-sys"]
 desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
