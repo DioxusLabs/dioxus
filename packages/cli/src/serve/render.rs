@@ -6,7 +6,7 @@ use ratatui::{
     prelude::Buffer,
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, List, ListState, Paragraph, Widget, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, List, ListState, Paragraph, Widget, Wrap},
     Frame,
 };
 use regex::Regex;
@@ -47,6 +47,7 @@ impl TuiLayout {
                 // Padding
                 Constraint::Length(1),
             ])
+            .margin(1)
             .split(frame_size);
 
         let mut console_constraints = vec![Constraint::Fill(1)];
@@ -260,6 +261,16 @@ impl TuiLayout {
             .render(self.console[0], frame.buffer_mut());
 
         num_lines_wrapping
+    }
+
+    pub fn render_outer_border(&self, frame: &mut Frame, size: Rect) {
+        frame.render_widget(Clear, size);
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+            size,
+        );
     }
 
     /// Render the status bar.

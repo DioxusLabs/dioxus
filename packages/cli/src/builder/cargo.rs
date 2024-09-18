@@ -6,26 +6,6 @@ use anyhow::Context;
 use serde::Deserialize;
 use std::{path::PathBuf, process::Stdio};
 use tokio::{io::AsyncBufReadExt, process::Command};
-// use super::TargetPlatform;
-// use crate::assets::copy_dir_to;
-// use crate::assets::create_assets_head;
-// use crate::assets::{asset_manifest, process_assets, AssetConfigDropGuard};
-// use crate::builder::progress::build_cargo;
-// use crate::builder::progress::CargoBuildResult;
-// use crate::builder::progress::Stage;
-// use crate::builder::progress::UpdateBuildProgress;
-// use crate::builder::progress::UpdateStage;
-// use crate::config::Platform;
-// use crate::link::LinkCommand;
-// use crate::Result;
-// use crate::TraceSrc;
-// use anyhow::Context;
-// use futures_channel::mpsc::UnboundedSender;
-// use manganis_cli_support::AssetManifest;
-// use manganis_cli_support::ManganisSupportGuard;
-// use std::fs::create_dir_all;
-// use std::path::PathBuf;
-// use tracing::error;
 
 impl BuildRequest {
     pub(crate) async fn build(self) -> Result<AppBundle> {
@@ -45,6 +25,8 @@ impl BuildRequest {
     }
 
     pub(crate) async fn verify_tooling(&self) -> Result<()> {
+        tracing::info!("Verifying tooling...");
+
         match self.platform() {
             // If this is a web, build make sure we have the web build tooling set up
             Platform::Web => {}
@@ -68,6 +50,8 @@ impl BuildRequest {
     ///
     /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
     pub(crate) async fn build_cargo(&self) -> anyhow::Result<PathBuf> {
+        tracing::info!("Executing cargo...");
+
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         let crate_count = self.get_unit_count_estimate().await;
 
@@ -161,6 +145,10 @@ impl BuildRequest {
             }
         }
 
+        if output_location.is_none() {
+            tracing::error!("Cargo build failed {errors:?}");
+        }
+
         output_location.context("Build did not return an executable")
     }
 
@@ -170,6 +158,8 @@ impl BuildRequest {
     /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
     /// tables marked by manganis and parsing them as a ResourceAsset.
     pub(crate) async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
+        tracing::info!("Collecting assets ...");
+
         // If this is the server build, the client build already copied any assets we need
         if self.platform() == Platform::Server {
             return Ok(AssetManifest::default());
@@ -271,6 +261,8 @@ impl BuildRequest {
         };
 
         cargo_args.push(self.krate.executable_name().to_string());
+
+        tracing::info!("cargo args: {:?}", cargo_args);
 
         cargo_args
     }

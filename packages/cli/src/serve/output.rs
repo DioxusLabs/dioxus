@@ -49,6 +49,9 @@ const SCROLL_MODIFIER: u16 = 4;
 // Scroll modifier key.
 const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
 
+const VIEWPORT_WIDTH: u16 = 120;
+const VIEWPORT_HEIGHT: u16 = 8;
+
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
     events: Option<EventStream>,
@@ -84,28 +87,25 @@ type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 impl Output {
     pub(crate) fn start(cfg: &ServeArgs) -> io::Result<Self> {
         let interactive = cfg.interactive_tty();
-        let mut events = None;
+
         if interactive {
             // log_control.output_enabled.store(true, Ordering::SeqCst);
             enable_raw_mode()?;
-            stdout().execute(EnterAlternateScreen)?.execute(Hide)?;
-
-            // workaround for ci where the terminal is not fully initialized
-            // this stupid bug
-            // https://github.com/crossterm-rs/crossterm/issues/659
-            events = Some(EventStream::new());
+            stdout().execute(Clear(ClearType::All))?.execute(Hide)?;
         };
+
+        // workaround for ci where the terminal is not fully initialized
+        // this stupid bug
+        // https://github.com/crossterm-rs/crossterm/issues/659
+        let events = interactive.then_some(EventStream::new());
 
         // set the panic hook to fix the terminal
         set_fix_term_hook();
 
-        // Fix the vscode scrollback issue
-        fix_xtermjs_scrollback();
-
         let term: Option<TerminalBackend> = Terminal::with_options(
             CrosstermBackend::new(stdout()),
             TerminalOptions {
-                viewport: Viewport::Fullscreen,
+                viewport: Viewport::Inline(VIEWPORT_HEIGHT),
             },
         )
         .ok();
@@ -189,41 +189,11 @@ impl Output {
     pub(crate) fn shutdown(&mut self) -> io::Result<()> {
         // if we're a tty then we need to disable the raw mode
         if self.interactive {
-            // self.log_control
-            //     .output_enabled
-            //     .store(false, Ordering::SeqCst);
             disable_raw_mode()?;
-            stdout().execute(LeaveAlternateScreen)?.execute(Show)?;
-            self.drain_print_logs();
+            stdout().execute(Show)?;
         }
 
         Ok(())
-    }
-
-    /// Emit the build logs as println! statements such that the terminal has the same output as cargo
-    ///
-    /// This is used when the terminal is shutdown and we want the build logs in the terminal. Old
-    /// versions of the cli would just eat build logs making debugging issues harder than they needed
-    /// to be.
-    fn drain_print_logs(&mut self) {
-        let messages = self.messages.drain(..);
-
-        for msg in messages {
-            match msg {
-                ConsoleMessage::Log(msg) => {
-                    if msg.source != TraceSrc::Cargo {
-                        println!("[{}] {}: {}", msg.source, msg.level, msg.content);
-                    } else {
-                        println!("{}", msg.content);
-                    }
-                }
-
-                ConsoleMessage::BuildReady => {
-                    // TODO: Better formatting for different content lengths.
-                }
-                ConsoleMessage::OnngoingBuild { stage, progress } => todo!(),
-            }
-        }
     }
 
     /// Handle an input event, returning `true` if the event should cause the program to restart.
@@ -437,11 +407,24 @@ impl Output {
     }
 
     pub fn push_log(&mut self, message: TraceMsg) {
-        self.messages.push(ConsoleMessage::Log(message));
+        let mut term = self.term.borrow_mut();
 
-        if self.is_snapped() {
-            self.scroll_to_bottom();
-        }
+        let mut term = term.as_mut().unwrap();
+
+        // match message.source {
+        //     TraceSrc::App(platform) => todo!(),
+        //     TraceSrc::Dev => todo!(),
+        //     TraceSrc::Build => todo!(),
+        //     TraceSrc::Cargo => todo!(),
+        //     TraceSrc::Unknown => todo!(),
+        // }
+
+        term.insert_before(1, |buf| {
+            Paragraph::new(Line::from(vec![Span::from(
+                format!("{}", message.content,),
+            )]))
+            .render(buf.area, buf);
+        });
     }
 
     pub(crate) fn new_ready_app(&mut self, handle: &AppHandle) {
@@ -465,7 +448,6 @@ impl Output {
     ) {
         // just drain the build logs
         if !self.interactive {
-            self.drain_print_logs();
             return;
         }
 
@@ -482,10 +464,16 @@ impl Output {
             .as_mut()
             .unwrap()
             .draw(|frame| {
-                let mut layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
+                // let size = Rect::new(0, 0, VIEWPORT_WIDTH - 1, VIEWPORT_HEIGHT - 1);
+                let mut size = frame.size();
+                size.width = size.width.min(VIEWPORT_WIDTH);
+
+                let mut layout = render::TuiLayout::new(size, self.show_filter_menu);
                 let (console_width, console_height) = layout.get_console_size();
                 self.console_width = console_width;
                 self.console_height = console_height;
+
+                layout.render_outer_border(frame, size);
 
                 // Render the decor first as some of it (such as backgrounds) may be rendered on top of.
                 layout.render_decor(frame, self.show_filter_menu);
@@ -497,14 +485,6 @@ impl Output {
                     .iter()
                     .map(|f| f.0.clone())
                     .collect::<Vec<String>>();
-
-                // Render console, we need the number of wrapping lines for scroll.
-                self.num_lines_wrapping = layout.render_console(
-                    frame,
-                    self.scroll_position,
-                    &self.messages,
-                    &enabled_filters,
-                );
 
                 if self.show_filter_menu {
                     layout.render_filter_menu(
@@ -635,12 +615,6 @@ fn set_fix_term_hook() {
         _ = stdout.execute(Show);
         original_hook(info);
     }));
-}
-
-/// clearing and writing a new line fixes the xtermjs scrollback issue
-fn fix_xtermjs_scrollback() {
-    _ = crossterm::execute!(std::io::stdout(), Clear(ClearType::All));
-    println!();
 }
 
 // todo: re-enable

@@ -180,8 +180,6 @@ wasm-opt = ["dep:wasm-opt"]
 path = "src/main.rs"
 name = "dx"
 
-
-
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-v{ version }{ archive-suffix }"
 pkg-fmt = "tgz"

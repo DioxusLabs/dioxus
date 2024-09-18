@@ -180,6 +180,7 @@ async fn handle_update(
         }
 
         ServeUpdate::BuildUpdate(BuildUpdate::BuildFailed { err, .. }) => {
+            tracing::error!(dx_src = ?TraceSrc::Build, "Build failed: {}", err);
             devserver.send_build_error(err).await;
         }
 
