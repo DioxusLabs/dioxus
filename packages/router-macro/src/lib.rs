@@ -752,14 +752,6 @@ impl RouteEnum {
                         _ => VNode::empty()
                     }
                 }
-
-                fn serialize(&self) -> String {
-                    self.to_string()
-                }
-
-                fn deserialize(input: &str) -> Result<Self, Box<dyn std::error::Error>> {
-                    std::str::FromStr::from_str(input).map_err(|err| Box::new(err) as _)
-                }
             }
         }
     }

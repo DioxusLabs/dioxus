@@ -1,20 +1,96 @@
 use std::{
+    any::Any,
     collections::HashSet,
     rc::Rc,
     sync::{Arc, RwLock},
 };
 
-use dioxus_document::DocumentContext;
 use dioxus_lib::prelude::*;
 
 use crate::{
     navigation::NavigationTarget,
-    prelude::{IntoRoutable, SiteMapSegment},
+    prelude::{AnyHistoryProvider, IntoRoutable, SiteMapSegment},
     routable::Routable,
     router_cfg::RouterConfig,
 };
 
-use super::generic_router::GenericRouterContext;
+/// This context is set in the root of the virtual dom if there is a router present.
+#[derive(Clone, Copy)]
+struct RootRouterContext(Signal<Option<RouterContext>>);
+
+/// Try to get the router that was created closest to the root of the virtual dom. This may be called outside of the router.
+///
+/// This will return `None` if there is no router present or the router has not been created yet.
+pub fn root_router() -> Option<RouterContext> {
+    if let Some(ctx) = ScopeId::ROOT.consume_context::<RootRouterContext>() {
+        ctx.0.cloned()
+    } else {
+        ScopeId::ROOT.provide_context(RootRouterContext(Signal::new_in_scope(None, ScopeId::ROOT)));
+        None
+    }
+}
+
+pub(crate) fn provide_router_context(ctx: RouterContext) {
+    if root_router().is_none() {
+        ScopeId::ROOT.provide_context(RootRouterContext(Signal::new_in_scope(
+            Some(ctx),
+            ScopeId::ROOT,
+        )));
+    }
+    provide_context(ctx);
+}
+
+/// An error that can occur when navigating.
+#[derive(Debug, Clone)]
+pub struct ExternalNavigationFailure(pub String);
+
+/// A function the router will call after every routing update.
+pub(crate) type RoutingCallback<R> =
+    Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
+pub(crate) type AnyRoutingCallback =
+    Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>;
+
+struct RouterContextInner {
+    /// The current prefix.
+    prefix: Option<String>,
+
+    history: Box<dyn AnyHistoryProvider>,
+
+    unresolved_error: Option<ExternalNavigationFailure>,
+
+    subscribers: Arc<RwLock<HashSet<ScopeId>>>,
+    subscriber_update: Arc<dyn Fn(ScopeId)>,
+    routing_callback: Option<AnyRoutingCallback>,
+
+    failure_external_navigation: fn() -> Element,
+
+    any_route_to_string: fn(&dyn Any) -> String,
+
+    site_map: &'static [SiteMapSegment],
+}
+
+impl RouterContextInner {
+    fn update_subscribers(&self) {
+        let update = &self.subscriber_update;
+        for &id in self.subscribers.read().unwrap().iter() {
+            update(id);
+        }
+    }
+
+    fn external(&mut self, external: String) -> Option<ExternalNavigationFailure> {
+        match self.history.external(external.clone()) {
+            true => None,
+            false => {
+                let failure = ExternalNavigationFailure(external);
+                self.unresolved_error = Some(failure.clone());
+
+                self.update_subscribers();
+
+                Some(failure)
+            }
+        }
+    }
+}
 
 /// A collection of router data that manages all routing functionality.
 #[derive(Clone, Copy)]
@@ -22,79 +98,64 @@ pub struct RouterContext {
     inner: CopyValue<RouterContextInner>,
 }
 
-struct RouterContextInner {
-    basepath: Option<String>,
-
-    runtime: Rc<Runtime>,
-
-    document: DocumentContext,
-
-    unresolved_error: Option<ExternalNavigationFailure>,
-
-    subscribers: Arc<RwLock<HashSet<ScopeId>>>,
-
-    failure_external_navigation: fn() -> Element,
-
-    site_map: &'static [SiteMapSegment],
-    // any_route_to_string: fn(&dyn Any) -> String,
-    // routing_callback: Option<AnyRoutingCallback>,
-}
-
 impl RouterContext {
-    pub(crate) fn new<R: Routable + 'static>(mut cfg: RouterConfig<R>) -> Self {
+    pub(crate) fn new<R: Routable + 'static>(
+        mut cfg: RouterConfig<R>,
+        mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>,
+    ) -> Self
+    where
+        <R as std::str::FromStr>::Err: std::fmt::Display,
+    {
+        let subscriber_update = mark_dirty.clone();
         let subscribers = Arc::new(RwLock::new(HashSet::new()));
 
         let mut myself = RouterContextInner {
-            basepath: Default::default(),
+            prefix: Default::default(),
+            history: cfg.take_history(),
             unresolved_error: None,
             subscribers: subscribers.clone(),
-            document: todo!(),
+            subscriber_update,
+
+            routing_callback: cfg.on_update.map(|update| {
+                Arc::new(move |ctx| {
+                    let ctx = GenericRouterContext {
+                        inner: ctx,
+                        _marker: std::marker::PhantomData,
+                    };
+                    update(ctx).map(|t| match t {
+                        NavigationTarget::Internal(r) => {
+                            NavigationTarget::Internal(Rc::new(r) as Rc<dyn Any>)
+                        }
+                        NavigationTarget::External(s) => NavigationTarget::External(s),
+                    })
+                })
+                    as Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>
+            }),
+
             failure_external_navigation: cfg.failure_external_navigation,
-            site_map: todo!(),
-            runtime: todo!(),
-            // history: cfg.take_history(),
 
-            // subscriber_update,
+            any_route_to_string: |route| {
+                route
+                    .downcast_ref::<R>()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Route is not of the expected type: {}\n found typeid: {:?}\n expected typeid: {:?}",
+                            std::any::type_name::<R>(),
+                            route.type_id(),
+                            std::any::TypeId::of::<R>()
+                        )
+                    })
+                    .to_string()
+            },
 
-            // routing_callback: cfg.on_update.map(|update| {
-            //     Arc::new(move |ctx| {
-            //         let ctx = GenericRouterContext {
-            //             inner: ctx,
-            //             _marker: std::marker::PhantomData,
-            //         };
-            //         update(ctx).map(|t| match t {
-            //             NavigationTarget::Internal(r) => {
-            //                 NavigationTarget::Internal(Rc::new(r) as Rc<dyn Any>)
-            //             }
-            //             NavigationTarget::External(s) => NavigationTarget::External(s),
-            //         })
-            //     })
-            //         as Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>
-            // }),
-            // any_route_to_string: |route| {
-            // todo!()
-            // route
-            //     .downcast_ref::<R>()
-            //     .unwrap_or_else(|| {
-            //         panic!(
-            //             "Route is not of the expected type: {}\n found typeid: {:?}\n expected typeid: {:?}",
-            //             std::any::type_name::<R>(),
-            //             route.type_id(),
-            //             std::any::TypeId::of::<R>()
-            //         )
-            //     })
-            //     .to_string()
-            // },
-            // site_map: R::SITE_MAP,
-            // routing_callback: todo!(),
+            site_map: R::SITE_MAP,
         };
 
         // set the updater
         {
-            let rt = myself.runtime.clone();
-            myself.document.updater(Arc::new(move || {
+            myself.history.updater(Arc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {
-                    rt.mark_dirty(id);
+                    (mark_dirty)(id);
                 }
             }));
         }
@@ -106,25 +167,31 @@ impl RouterContext {
 
     /// Check if the router is running in a liveview context
     /// We do some slightly weird things for liveview because of the network boundary
-    pub fn is_synchronous(&self) -> bool {
-        self.inner.read().document.is_synchronous()
+    pub fn is_liveview(&self) -> bool {
+        #[cfg(feature = "liveview")]
+        {
+            self.inner.read().history.is_liveview()
+        }
+        #[cfg(not(feature = "liveview"))]
+        {
+            false
+        }
     }
 
-    pub(crate) fn route_from_str<R: Routable>(&self, route: &str) -> Result<R, String> {
-        todo!()
-        // self.inner.read().history.parse_route(route)
+    pub(crate) fn route_from_str(&self, route: &str) -> Result<Rc<dyn Any>, String> {
+        self.inner.read().history.parse_route(route)
     }
 
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
-        self.inner.read().document.can_go_back()
+        self.inner.read().history.can_go_back()
     }
 
     /// Check whether there is a future page to navigate forward to.
     #[must_use]
     pub fn can_go_forward(&self) -> bool {
-        self.inner.read().document.can_go_forward()
+        self.inner.read().history.can_go_forward()
     }
 
     /// Go back to the previous location.
@@ -132,7 +199,7 @@ impl RouterContext {
     /// Will fail silently if there is no previous location to go to.
     pub fn go_back(&self) {
         {
-            self.inner.write_unchecked().document.go_back();
+            self.inner.write_unchecked().history.go_back();
         }
 
         self.change_route();
@@ -143,23 +210,22 @@ impl RouterContext {
     /// Will fail silently if there is no next location to go to.
     pub fn go_forward(&self) {
         {
-            self.inner.write_unchecked().document.go_forward();
+            self.inner.write_unchecked().history.go_forward();
         }
 
         self.change_route();
     }
 
-    pub(crate) fn push_any<R: Routable>(
+    pub(crate) fn push_any(
         &self,
-        target: NavigationTarget<R>,
+        target: NavigationTarget<Rc<dyn Any>>,
     ) -> Option<ExternalNavigationFailure> {
-        match target {
-            NavigationTarget::Internal(p) => self
-                .inner
-                .write_unchecked()
-                .document
-                .push_route(p.serialize()),
-            NavigationTarget::External(e) => return self.navigate_external(e),
+        {
+            let mut write = self.inner.write_unchecked();
+            match target {
+                NavigationTarget::Internal(p) => write.history.push(p),
+                NavigationTarget::External(e) => return write.external(e),
+            }
         }
 
         self.change_route()
@@ -169,77 +235,75 @@ impl RouterContext {
     ///
     /// The previous location will be available to go back to.
     pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
-        todo!()
-        // let target = self.resolve_into_routable(target.into());
-        // {
-        //     let mut write = self.inner.write_unchecked();
-        //     match target {
-        //         NavigationTarget::Internal(p) => write.history.push_route(p),
-        //         NavigationTarget::External(e) => return write.external(e),
-        //     }
-        // }
+        let target = self.resolve_into_routable(target.into());
+        {
+            let mut write = self.inner.write_unchecked();
+            match target {
+                NavigationTarget::Internal(p) => write.history.push(p),
+                NavigationTarget::External(e) => return write.external(e),
+            }
+        }
 
-        // self.change_route()
+        self.change_route()
     }
 
     /// Replace the current location.
     ///
     /// The previous location will **not** be available to go back to.
     pub fn replace(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
-        todo!()
-        // let target = self.resolve_into_routable(target.into());
+        let target = self.resolve_into_routable(target.into());
 
-        // {
-        //     let mut state = self.inner.write_unchecked();
-        //     match target {
-        //         NavigationTarget::Internal(p) => state.history.replace_route(p),
-        //         NavigationTarget::External(e) => return state.external(e),
-        //     }
-        // }
+        {
+            let mut state = self.inner.write_unchecked();
+            match target {
+                NavigationTarget::Internal(p) => state.history.replace(p),
+                NavigationTarget::External(e) => return state.external(e),
+            }
+        }
 
-        // self.change_route()
+        self.change_route()
     }
 
     /// The route that is currently active.
     pub fn current<R: Routable>(&self) -> R {
-        todo!()
-        // self.inner
-        //     .read()
-        //     .history
-        //     .current_route()
-        //     .parse()
-        //     .unwrap_or_else(|err| panic!("Failed to parse route"))
+        self.inner
+            .read()
+            .history
+            .current_route()
+            .downcast::<R>()
+            .unwrap()
+            .as_ref()
+            .clone()
     }
 
     /// The route that is currently active.
     pub fn current_route_string(&self) -> String {
-        self.inner.read_unchecked().document.current_route()
+        self.any_route_to_string(&*self.inner.read().history.current_route())
     }
 
-    // pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
-    //     (self.inner.read().any_route_to_string)(route)
-    // }
+    pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
+        (self.inner.read().any_route_to_string)(route)
+    }
 
-    pub(crate) fn resolve_into_routable<R: Routable>(
+    pub(crate) fn resolve_into_routable(
         &self,
         into_routable: IntoRoutable,
-    ) -> NavigationTarget<R> {
-        todo!()
-        // match into_routable {
-        //     IntoRoutable::FromStr(url) => {
-        //         let parsed_route: NavigationTarget<Rc<dyn Any>> = match self.route_from_str(&url) {
-        //             Ok(route) => NavigationTarget::Internal(route),
-        //             Err(_) => NavigationTarget::External(url),
-        //         };
-        //         parsed_route
-        //     }
-        //     IntoRoutable::Route(route) => NavigationTarget::Internal(route),
-        // }
+    ) -> NavigationTarget<Rc<dyn Any>> {
+        match into_routable {
+            IntoRoutable::FromStr(url) => {
+                let parsed_route: NavigationTarget<Rc<dyn Any>> = match self.route_from_str(&url) {
+                    Ok(route) => NavigationTarget::Internal(route),
+                    Err(_) => NavigationTarget::External(url),
+                };
+                parsed_route
+            }
+            IntoRoutable::Route(route) => NavigationTarget::Internal(route),
+        }
     }
 
     /// The prefix that is currently active.
     pub fn prefix(&self) -> Option<String> {
-        self.inner.read().basepath.clone()
+        self.inner.read().prefix.clone()
     }
 
     /// Manually subscribe to the current route
@@ -254,11 +318,10 @@ impl RouterContext {
 
     /// Clear any unresolved errors
     pub fn clear_error(&self) {
-        {
-            let mut write_inner = self.inner.write_unchecked();
-            write_inner.unresolved_error = None;
-        }
-        self.update_subscribers();
+        let mut write_inner = self.inner.write_unchecked();
+        write_inner.unresolved_error = None;
+
+        write_inner.update_subscribers();
     }
 
     /// Get the site map of the router.
@@ -275,61 +338,106 @@ impl RouterContext {
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {
-        todo!()
-        // let self_read = self.inner.read();
-        // if let Some(callback) = &self_read.routing_callback {
-        //     let myself = *self;
-        //     let callback = callback.clone();
-        //     drop(self_read);
-        //     if let Some(new) = callback(myself) {
-        //         let mut self_write = self.inner.write_unchecked();
-        //         match new {
-        //             NavigationTarget::Internal(p) => self_write.history.replace_route(p),
-        //             NavigationTarget::External(e) => return self_write.external(e),
-        //         }
-        //     }
-        // }
-
-        // self.inner.read().update_subscribers();
-
-        // None
-    }
-
-    fn update_subscribers(&self) {
-        let inner = self.inner.read_unchecked();
-        for &id in inner.subscribers.read().unwrap().iter() {
-            inner.runtime.mark_dirty(id)
-        }
-    }
-
-    fn navigate_external(&self, external: String) -> Option<ExternalNavigationFailure> {
-        let failure = {
-            let mut myself = self.inner.write_unchecked();
-            match myself.document.navigate_external(external.clone()) {
-                true => None,
-                false => {
-                    let failure = ExternalNavigationFailure(external);
-                    myself.unresolved_error = Some(failure.clone());
-                    Some(failure)
+        let self_read = self.inner.read();
+        if let Some(callback) = &self_read.routing_callback {
+            let myself = *self;
+            let callback = callback.clone();
+            drop(self_read);
+            if let Some(new) = callback(myself) {
+                let mut self_write = self.inner.write_unchecked();
+                match new {
+                    NavigationTarget::Internal(p) => self_write.history.replace(p),
+                    NavigationTarget::External(e) => return self_write.external(e),
                 }
             }
-        };
-
-        if failure.is_some() {
-            self.update_subscribers();
         }
 
-        failure
+        self.inner.read().update_subscribers();
+
+        None
     }
 }
 
-/// An error that can occur when navigating.
-#[derive(Debug, Clone)]
-pub struct ExternalNavigationFailure(pub String);
+pub struct GenericRouterContext<R> {
+    inner: RouterContext,
+    _marker: std::marker::PhantomData<R>,
+}
 
-/// A function the router will call after every routing update.
-pub(crate) type RoutingCallback<R> =
-    Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
+impl<R> GenericRouterContext<R>
+where
+    R: Routable,
+{
+    /// Check whether there is a previous page to navigate back to.
+    #[must_use]
+    pub fn can_go_back(&self) -> bool {
+        self.inner.can_go_back()
+    }
 
-pub(crate) type AnyRoutingCallback = Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<String>>>;
-// Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>;
+    /// Check whether there is a future page to navigate forward to.
+    #[must_use]
+    pub fn can_go_forward(&self) -> bool {
+        self.inner.can_go_forward()
+    }
+
+    /// Go back to the previous location.
+    ///
+    /// Will fail silently if there is no previous location to go to.
+    pub fn go_back(&self) {
+        self.inner.go_back();
+    }
+
+    /// Go back to the next location.
+    ///
+    /// Will fail silently if there is no next location to go to.
+    pub fn go_forward(&self) {
+        self.inner.go_forward();
+    }
+
+    /// Push a new location.
+    ///
+    /// The previous location will be available to go back to.
+    pub fn push(
+        &self,
+        target: impl Into<NavigationTarget<R>>,
+    ) -> Option<ExternalNavigationFailure> {
+        self.inner.push(target.into())
+    }
+
+    /// Replace the current location.
+    ///
+    /// The previous location will **not** be available to go back to.
+    pub fn replace(
+        &self,
+        target: impl Into<NavigationTarget<R>>,
+    ) -> Option<ExternalNavigationFailure> {
+        self.inner.replace(target.into())
+    }
+
+    /// The route that is currently active.
+    pub fn current(&self) -> R
+    where
+        R: Clone,
+    {
+        self.inner.current()
+    }
+
+    /// The prefix that is currently active.
+    pub fn prefix(&self) -> Option<String> {
+        self.inner.prefix()
+    }
+
+    /// Manually subscribe to the current route
+    pub fn subscribe(&self, id: ScopeId) {
+        self.inner.subscribe(id)
+    }
+
+    /// Manually unsubscribe from the current route
+    pub fn unsubscribe(&self, id: ScopeId) {
+        self.inner.unsubscribe(id)
+    }
+
+    /// Clear any unresolved errors
+    pub fn clear_error(&self) {
+        self.inner.clear_error()
+    }
+}

@@ -6,7 +6,6 @@ fn with_class() {
     enum ChildRoute {
         #[route("/")]
         ChildRoot {},
-
         #[route("/:not_static")]
         NotStatic { not_static: String },
     }
@@ -15,10 +14,8 @@ fn with_class() {
     enum Route {
         #[route("/")]
         Root {},
-
         #[route("/test")]
         Test {},
-
         #[child("/child")]
         Nested { child: ChildRoute },
     }
