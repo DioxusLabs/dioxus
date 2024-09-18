@@ -38,6 +38,7 @@ use std::{
 };
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
+use tower_http::services::ServeFile;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::fs::{ServeDir, ServeFileSystemResponseBody},
@@ -478,7 +479,11 @@ fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRou
                 let out_dir = out_dir.clone();
                 move |response| async move { Ok(no_cache(index_on_404, &out_dir, response)) }
             })
-            .service(ServeDir::new(out_dir)),
+            .service(
+                ServeDir::new(&out_dir)
+                    .fallback(ServeFile::new(out_dir.join("404.html")))
+                    .fallback(ServeFile::new(out_dir.join("404/index.html"))),
+            ),
     )
     .handle_error(|error: Infallible| async move {
         (

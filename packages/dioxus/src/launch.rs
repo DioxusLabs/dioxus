@@ -88,8 +88,8 @@ impl LaunchBuilder {
     }
 
     /// Launch your fullstack axum server.
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+    #[cfg(all(feature = "fullstack", feature = "server"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "fullstack", feature = "server"))))]
     pub fn server() -> LaunchBuilder {
         LaunchBuilder {
             launch_fn: |root, contexts, cfg| {
@@ -101,8 +101,11 @@ impl LaunchBuilder {
     }
 
     /// Launch your static site generation application.
-    #[cfg(feature = "static-generation")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "static-generation")))]
+    #[cfg(all(feature = "static-generation", feature = "server"))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(feature = "static-generation", feature = "server")))
+    )]
     pub fn static_generation() -> LaunchBuilder {
         LaunchBuilder {
             launch_fn: |root, contexts, cfg| {
@@ -231,7 +234,7 @@ mod current_platform {
     pub use dioxus_mobile::launch::*;
 
     #[cfg(all(
-        feature = "static-generation",
+        all(feature = "static-generation", feature = "server"),
         not(all(feature = "fullstack", feature = "server")),
         not(feature = "desktop"),
         not(feature = "mobile")
@@ -241,9 +244,9 @@ mod current_platform {
     #[cfg(all(
         feature = "web",
         not(all(feature = "fullstack", feature = "server")),
+        not(all(feature = "static-generation", feature = "server")),
         not(feature = "desktop"),
         not(feature = "mobile"),
-        not(feature = "static-generation"),
     ))]
     pub fn launch(
         root: fn() -> dioxus_core::Element,
@@ -251,7 +254,10 @@ mod current_platform {
         platform_config: Vec<Box<dyn std::any::Any>>,
     ) {
         // If the server feature is enabled, launch the client with hydration enabled
-        #[cfg(feature = "server")]
+        #[cfg(all(
+            any(feature = "static-generation", feature = "server"),
+            feature = "server"
+        ))]
         {
             let contexts = Arc::new(contexts);
             let mut factory = virtual_dom_factory(root, contexts);
@@ -274,27 +280,30 @@ mod current_platform {
 
             dioxus_web::launch::launch_virtual_dom(factory(), cfg)
         }
-        #[cfg(not(all(feature = "fullstack", feature = "server")))]
+        #[cfg(not(all(
+            any(feature = "static-generation", feature = "server"),
+            feature = "server"
+        )))]
         dioxus_web::launch::launch(root, contexts, platform_config);
     }
 
     #[cfg(all(
         feature = "liveview",
         not(all(feature = "fullstack", feature = "server")),
+        not(all(feature = "static-generation", feature = "server")),
         not(feature = "desktop"),
         not(feature = "mobile"),
-        not(feature = "static-generation"),
         not(feature = "web"),
     ))]
     pub use dioxus_liveview::launch::*;
 
     #[cfg(not(any(
         feature = "liveview",
+        all(feature = "fullstack", feature = "server"),
+        all(feature = "static-generation", feature = "server"),
         feature = "desktop",
         feature = "mobile",
         feature = "web",
-        feature = "server",
-        feature = "static-generation"
     )))]
     pub fn launch(
         root: fn() -> dioxus_core::Element,
