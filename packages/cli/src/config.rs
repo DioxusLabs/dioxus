@@ -9,32 +9,32 @@ use std::str::FromStr;
 #[derive(
     Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
 )]
-#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
+#[derive(clap::ValueEnum)]
 #[non_exhaustive]
 pub enum Platform {
     /// Targeting the web platform using WASM
-    #[cfg_attr(feature = "cli", clap(name = "web"))]
+    #[clap(name = "web")]
     #[serde(rename = "web")]
     #[default]
     Web,
 
     /// Targeting the desktop platform using Tao/Wry-based webview
-    #[cfg_attr(feature = "cli", clap(name = "desktop"))]
+    #[clap(name = "desktop")]
     #[serde(rename = "desktop")]
     Desktop,
 
     /// Targeting the server platform using Axum and Dioxus-Fullstack
-    #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
+    #[clap(name = "fullstack")]
     #[serde(rename = "fullstack")]
     Fullstack,
 
     /// Targeting the static generation platform using SSR and Dioxus-Fullstack
-    #[cfg_attr(feature = "cli", clap(name = "static-generation"))]
+    #[ clap(name = "static-generation")]
     #[serde(rename = "static-generation")]
     StaticGeneration,
 
     /// Targeting the static generation platform using SSR and Dioxus-Fullstack
-    #[cfg_attr(feature = "cli", clap(name = "liveview"))]
+    #[clap(name = "liveview")]
     #[serde(rename = "liveview")]
     Liveview,
 }
