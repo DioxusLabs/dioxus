@@ -151,8 +151,6 @@ impl WebviewInstance {
         //
         // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
         // get a window that is not the size of the screen and weird black bars.
-        //
-        // todo: move this to our launch function that's different for desktop and mobile
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
             if cfg.window.window.inner_size.is_none() {
