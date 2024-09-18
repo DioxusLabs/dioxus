@@ -1,4 +1,4 @@
-# dioxus-runtime-config
+# dioxus-cli-config
 
 A crate that provides key/value names and types for configuring Dioxus applications at runtime.
 
