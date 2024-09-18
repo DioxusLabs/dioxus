@@ -1,5 +1,3 @@
-use dioxus_core_types::DioxusFormattable;
-
 use crate::innerlude::VProps;
 use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
@@ -9,6 +7,7 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
 use std::{
@@ -16,7 +15,6 @@ use std::{
     cell::Cell,
     fmt::{Arguments, Debug},
 };
-use std::{fmt::Display, ops::Deref};
 
 /// The information about the
 #[derive(Debug)]
@@ -520,6 +518,13 @@ pub enum DynamicNode {
     Fragment(Vec<VNode>),
 }
 
+impl DynamicNode {
+    /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`]
+    pub fn make_node<'c, I>(into: impl IntoDynNode<I> + 'c) -> DynamicNode {
+        into.into_dyn_node()
+    }
+}
+
 impl Default for DynamicNode {
     fn default() -> Self {
         Self::Placeholder(Default::default())
@@ -717,9 +722,9 @@ impl Attribute {
     ///
     /// "Volatile" refers to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
-    pub fn new<Marker>(
+    pub fn new(
         name: &'static str,
-        value: impl IntoAttributeValue<Marker>,
+        value: impl IntoAttributeValue,
         namespace: Option<&'static str>,
         volatile: bool,
     ) -> Attribute {
@@ -768,7 +773,11 @@ impl AttributeValue {
         // TODO: maybe don't use the copy-variant of EventHandler here?
         // Maybe, create an Owned variant so we are less likely to run into leaks
         AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
-            callback(event.downcast::<T>().unwrap());
+            let data = event.data.downcast::<T>().unwrap();
+            callback(Event {
+                metadata: event.metadata.clone(),
+                data,
+            });
         }))
     }
 
@@ -853,7 +862,14 @@ impl IntoDynNode for DynamicNode {
         self
     }
 }
-
+impl<T: IntoDynNode> IntoDynNode for Option<T> {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self {
+            Some(val) => val.into_dyn_node(),
+            None => DynamicNode::default(),
+        }
+    }
+}
 impl IntoDynNode for &Element {
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
@@ -878,84 +894,25 @@ impl IntoDynNode for &Option<VNode> {
         }
     }
 }
-pub struct DisplayMarker;
-impl<T> IntoDynNode<DisplayMarker> for T
-where
-    T: Display,
-{
+impl IntoDynNode for &str {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
         })
     }
 }
-pub struct OptionDisplayMarker;
-impl<T> IntoDynNode<OptionDisplayMarker> for Option<T>
-where
-    T: Display,
-{
+impl IntoDynNode for String {
     fn into_dyn_node(self) -> DynamicNode {
-        todo!()
-        // DynamicNode::Text(VText {
-        //     value: self.to_string(),
-        // })
+        DynamicNode::Text(VText { value: self })
     }
 }
-
-impl<T: IntoDynNode> IntoDynNode for Option<T> {
+impl IntoDynNode for Arguments<'_> {
     fn into_dyn_node(self) -> DynamicNode {
-        match self {
-            Some(val) => val.into_dyn_node(),
-            None => DynamicNode::default(),
-        }
+        DynamicNode::Text(VText {
+            value: self.to_string(),
+        })
     }
 }
-
-// // struct DisplayMarker;
-// // impl<T: Display> IntoDynNode<DisplayMarker> for Option<T> {
-// //     fn into_dyn_node(self) -> DynamicNode {
-// //         todo!()
-// //     }
-// // }
-
-// impl IntoDynNode for &str {
-//     fn into_dyn_node(self) -> DynamicNode {
-//         DynamicNode::Text(VText {
-//             value: self.to_string(),
-//         })
-//     }
-// }
-// impl IntoDynNode for String {
-//     fn into_dyn_node(self) -> DynamicNode {
-//         DynamicNode::Text(VText { value: self })
-//     }
-// }
-// impl IntoDynNode for Arguments<'_> {
-//     fn into_dyn_node(self) -> DynamicNode {
-//         DynamicNode::Text(VText {
-//             value: self.to_string(),
-//         })
-//     }
-// }
-
-// Note that we're using the E as a generic but this is never crafted anyways.
-pub struct FromNodeIterator;
-impl<T, I> IntoDynNode<FromNodeIterator> for T
-where
-    T: Iterator<Item = I>,
-    I: IntoVNode,
-{
-    fn into_dyn_node(self) -> DynamicNode {
-        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
-
-        if children.is_empty() {
-            DynamicNode::default()
-        } else {
-            DynamicNode::Fragment(children)
-        }
-    }
-}
-
 impl IntoDynNode for &VNode {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(vec![self.clone()])
@@ -1024,8 +981,26 @@ impl IntoVNode for &Option<Element> {
     }
 }
 
+// Note that we're using the E as a generic but this is never crafted anyways.
+pub struct FromNodeIterator;
+impl<T, I> IntoDynNode<FromNodeIterator> for T
+where
+    T: Iterator<Item = I>,
+    I: IntoVNode,
+{
+    fn into_dyn_node(self) -> DynamicNode {
+        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
+
+        if children.is_empty() {
+            DynamicNode::default()
+        } else {
+            DynamicNode::Fragment(children)
+        }
+    }
+}
+
 /// A value that can be converted into an attribute value
-pub trait IntoAttributeValue<Marker = ()> {
+pub trait IntoAttributeValue {
     /// Convert into an attribute value
     fn into_value(self) -> AttributeValue;
 }
@@ -1103,21 +1078,21 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
-pub struct DioxusFormattableMarker;
-impl<T: DioxusFormattable> IntoAttributeValue<DioxusFormattableMarker> for T {
+#[cfg(feature = "manganis")]
+impl IntoAttributeValue for manganis::ImageAsset {
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.format().into_owned())
+        AttributeValue::Text(self.path().to_string())
     }
 }
 
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {
     /// Push an attribute onto the list of attributes
-    fn push_attribute<T>(
+    fn push_attribute(
         self,
         name: &'static str,
         ns: Option<&'static str>,
-        attr: impl IntoAttributeValue<T>,
+        attr: impl IntoAttributeValue,
         volatile: bool,
     ) -> Self;
 }
