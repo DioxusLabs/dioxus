@@ -7,9 +7,19 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 #[derive(
-    Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
+    Copy,
+    Clone,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Debug,
+    Default,
+    clap::ValueEnum,
 )]
-#[derive(clap::ValueEnum)]
 #[non_exhaustive]
 pub enum Platform {
     /// Targeting the web platform using WASM
@@ -29,7 +39,7 @@ pub enum Platform {
     Fullstack,
 
     /// Targeting the static generation platform using SSR and Dioxus-Fullstack
-    #[ clap(name = "static-generation")]
+    #[clap(name = "static-generation")]
     #[serde(rename = "static-generation")]
     StaticGeneration,
 
