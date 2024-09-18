@@ -79,8 +79,7 @@ impl LazyTypeScriptBindings {
         // Compute the hash of the input files
         let hashes = hash_files(watching_paths);
 
-        let hash_location = None;
-        let hash_location = hash_location.unwrap_or_else(|| PathBuf::from("./src/js/"));
+        let hash_location = PathBuf::from("./src/js/");
         std::fs::create_dir_all(&hash_location).unwrap_or_else(|err| {
             panic!(
                 "Failed to create directory for hash file: {} in {}",

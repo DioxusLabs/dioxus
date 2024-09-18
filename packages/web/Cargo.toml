@@ -59,12 +59,12 @@ features = [
 ]
 
 [features]
-default = ["panic_hook", "mounted", "file-engine", "devtools", "document"]
+default = ["panic_hook", "mounted", "file_engine", "devtools", "document"]
 panic_hook = ["dep:console_error_panic_hook"]
 hydrate = ["web-sys/Comment", "ciborium", "dep:serde"]
 mounted = ["web-sys/Element", "dioxus-html/mounted"]
-file-engine = [
-    "dioxus-html/file-engine",
+file_engine = [
+    "dioxus-html/file_engine",
 ]
 devtools = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "dep:serde_json", "dep:serde", "dioxus-core/serialize"]
 document = ["dioxus-html/document", "dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
