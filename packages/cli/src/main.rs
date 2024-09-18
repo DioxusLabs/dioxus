@@ -3,13 +3,13 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub(crate) mod assets;
-pub(crate) mod build_info;
 pub(crate) mod builder;
 pub(crate) mod bundle_utils;
 pub(crate) mod bundler;
 pub(crate) mod cli;
 pub(crate) mod config;
 pub(crate) mod dioxus_crate;
+pub(crate) mod dx_build_info;
 pub(crate) mod error;
 pub(crate) mod fastfs;
 pub(crate) mod metadata;
