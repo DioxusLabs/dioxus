@@ -8,7 +8,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch(app);
+    LaunchBuilder::static_generation().launch(app);
 }
 
 fn app() -> Element {

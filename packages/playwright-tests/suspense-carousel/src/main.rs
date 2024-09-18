@@ -58,7 +58,7 @@ impl ResolvedOn {
 #[component]
 fn SuspendedComponent(id: i32) -> Element {
     let resolved_on = use_server_future(move || async move {
-        sleep(1000).await;
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         ResolvedOn::CURRENT
     })?()
     .unwrap();
@@ -89,7 +89,7 @@ fn SuspendedComponent(id: i32) -> Element {
 #[component]
 fn NestedSuspendedComponent(id: i32) -> Element {
     let resolved_on = use_server_future(move || async move {
-        sleep(1000).await;
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         ResolvedOn::CURRENT
     })?()
     .unwrap();
@@ -104,14 +104,6 @@ fn NestedSuspendedComponent(id: i32) -> Element {
             }
         }
     }
-}
-
-async fn sleep(millis: u64) {
-    #[cfg(target_arch = "wasm32")]
-    gloo_timers::future::sleep(std::time::Duration::from_millis(millis)).await;
-
-    #[cfg(not(target_arch = "wasm32"))]
-    tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
 }
 
 fn main() {
