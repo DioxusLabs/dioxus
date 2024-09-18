@@ -12,7 +12,10 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
-    dioxus::LaunchBuilder::fullstack().launch(app);
+    #[cfg(feature = "web")]
+    dioxus::LaunchBuilder::web().launch(app);
+    #[cfg(feature = "server")]
+    dioxus::LaunchBuilder::server().launch(app);
 }
 
 fn app() -> Element {

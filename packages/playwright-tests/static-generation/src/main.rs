@@ -8,6 +8,9 @@
 use dioxus::prelude::*;
 
 fn main() {
+    #[cfg(feature = "web")]
+    dioxus::LaunchBuilder::web().launch(app);
+    #[cfg(feature = "server")]
     dioxus::LaunchBuilder::static_generation().launch(app);
 }
 

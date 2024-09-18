@@ -8,7 +8,10 @@
 use dioxus::{prelude::*, CapturedError};
 
 fn main() {
-    dioxus::LaunchBuilder::fullstack().launch(app);
+    #[cfg(feature = "web")]
+    dioxus::LaunchBuilder::web().launch(app);
+    #[cfg(feature = "server")]
+    dioxus::LaunchBuilder::server().launch(app);
 }
 
 fn app() -> Element {
