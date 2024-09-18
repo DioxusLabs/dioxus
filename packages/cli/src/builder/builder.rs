@@ -1,7 +1,7 @@
-use crate::builder::*;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use crate::{build::BuildArgs, bundler::AppBundle};
+use crate::{builder::*, Platform};
 use futures_util::StreamExt;
 use progress::{BuildUpdateProgress, ProgressRx, ProgressTx};
 use tokio::task::JoinSet;

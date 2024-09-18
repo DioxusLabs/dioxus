@@ -1,7 +1,8 @@
 use super::*;
+use crate::config::AddressArguments;
 use crate::settings;
 use crate::DioxusCrate;
-use crate::{builder::Platform, config::AddressArguments};
+use crate::Platform;
 use anyhow::Context;
 use build::BuildArgs;
 use crossterm::tty::IsTty;

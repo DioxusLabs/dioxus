@@ -1,4 +1,3 @@
-use super::{BuildRequest, Platform};
 use crate::error::{Error, Result};
 use crate::{
     builder::progress::{
@@ -6,6 +5,7 @@ use crate::{
     },
     TraceSrc,
 };
+use crate::{BuildRequest, Platform};
 use anyhow::Context;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};

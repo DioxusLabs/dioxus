@@ -1,7 +1,8 @@
+use super::profiles::*;
 use super::progress::ProgressTx;
-use super::{platform, profiles::*};
 use crate::build::BuildArgs;
-use crate::builder::Platform;
+use crate::Platform;
+
 use crate::dioxus_crate::DioxusCrate;
 use std::path::PathBuf;
 
@@ -40,8 +41,8 @@ impl BuildRequest {
         let (client_feature, client_platform) = build.auto_detect_client_platform(krate);
 
         let client_feature = match build.platform {
-            Some(platform::Platform::Ios) => Some("mobile".to_string()),
-            Some(platform::Platform::Android) => Some("android".to_string()),
+            Some(Platform::Ios) => Some("mobile".to_string()),
+            Some(Platform::Android) => Some("android".to_string()),
             Some(plat) => Some(plat.to_string()),
             None => client_feature,
         };
@@ -74,7 +75,7 @@ impl BuildRequest {
             krate, &build, features, progress,
         );
 
-        build.build.platform = Some(platform::Platform::Server);
+        build.build.platform = Some(Platform::Server);
         build
     }
 

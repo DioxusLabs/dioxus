@@ -1,7 +1,7 @@
 use crate::dioxus_crate::DioxusCrate;
 use crate::TraceSrc;
-use crate::{builder::Platform, serve::ServeArgs};
 use crate::{config::WebHttpsConfig, serve::update::ServeUpdate};
+use crate::{serve::ServeArgs, Platform};
 use crate::{Error, Result};
 use axum::{
     body::Body,

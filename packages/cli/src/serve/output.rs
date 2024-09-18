@@ -1,11 +1,11 @@
-use crate::config::{AddressArguments, Platform};
+use crate::config::AddressArguments;
 use crate::{
-    builder::{BuildMessage, BuildUpdateProgress, Platform, Stage, UpdateStage},
+    builder::{BuildMessage, BuildUpdateProgress, Stage, UpdateStage},
     cli::serve::ServeArgs,
     dioxus_crate::DioxusCrate,
     serve::{Builder, Watcher},
     tracer::CLILogControl,
-    TraceMsg, TraceSrc,
+    Platform, TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
@@ -48,26 +48,6 @@ const SCROLL_SPEED: u16 = 2;
 const SCROLL_MODIFIER: u16 = 4;
 // Scroll modifier key.
 const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
-
-#[derive(Default)]
-pub struct BuildProgress {
-    pub(crate) current_builds: HashMap<TargetPlatform, ActiveBuild>,
-}
-
-impl BuildProgress {
-    pub fn progress(&self) -> f64 {
-        self.current_builds
-            .values()
-            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|build| match build.stage {
-                Stage::Initializing => 0.0,
-                Stage::InstallingWasmTooling => 0.0,
-                Stage::Compiling => build.progress,
-                Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
-            })
-            .unwrap_or_default()
-    }
-}
 
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
@@ -562,7 +542,7 @@ impl Output {
 /// Our console has "special" messages that get better rendering.
 ///
 /// We want to display them differently since they have their own state and are rendered differently.
-enum ConsoleMessage {
+pub enum ConsoleMessage {
     Log(TraceMsg),
     OnngoingBuild { stage: Stage, progress: f64 },
     BuildReady,
@@ -702,29 +682,9 @@ impl From<Platform> for LogSource {
 
 #[derive(Default)]
 pub(crate) struct BuildProgress {
-    internal_logs: Vec<BuildMessage>,
-    current_builds: HashMap<Platform, ActiveBuild>,
+    pub internal_logs: Vec<BuildMessage>,
+    pub current_builds: HashMap<Platform, ActiveBuild>,
 }
-
-// impl BuildProgress {
-//     pub(crate) fn progress(&self) -> f64 {
-//         self.build_logs
-//             .values()
-//             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-//             .map(|build| match build.stage {
-//                 Stage::Initializing => 0.0,
-//                 Stage::InstallingWasmTooling => 0.0,
-//                 Stage::Compiling => build.progress,
-//                 Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
-//             })
-//             .unwrap_or_default()
-//     }
-// }
-
-// #[derive(Default)]
-// pub struct BuildProgress {
-//     current_builds: HashMap<Platform, ActiveBuild>,
-// }
 
 impl BuildProgress {
     pub fn progress(&self) -> f64 {

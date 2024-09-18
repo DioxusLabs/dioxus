@@ -2,39 +2,30 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-pub(crate) mod assets;
-pub(crate) mod builder;
-pub(crate) mod bundle_utils;
-pub(crate) mod bundler;
-pub(crate) mod cli;
-pub(crate) mod config;
-pub(crate) mod dioxus_crate;
-pub(crate) mod dx_build_info;
-pub(crate) mod error;
-pub(crate) mod fastfs;
-pub(crate) mod metadata;
-pub(crate) mod serve;
-pub(crate) mod settings;
-pub(crate) mod tooling;
-pub(crate) mod tracer;
-// pub mod assets;
-// pub mod builder;
-// pub mod cli;
-// pub mod config;
-// pub mod dioxus_crate;
-// pub mod dx_build_info;
-// pub mod error;
-// pub mod metadata;
-// pub mod serve;
-// pub mod settings;
-// pub mod tracer;
+mod assets;
+mod builder;
+mod bundle_utils;
+mod bundler;
+mod cli;
+mod config;
+mod dioxus_crate;
+mod dx_build_info;
+mod error;
+mod fastfs;
+mod metadata;
+mod platform;
+mod serve;
+mod settings;
+mod tooling;
+mod tracer;
 
-pub(crate) use builder::Platform;
+pub(crate) use builder::*;
 pub(crate) use cli::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
+pub(crate) use platform::*;
 pub(crate) use settings::*;
-pub(crate) use tracer::{TraceMsg, TraceSrc};
+pub(crate) use tracer::*;
 
 use anyhow::Context;
 use clap::Parser;

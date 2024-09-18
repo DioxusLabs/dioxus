@@ -1,8 +1,9 @@
-use crate::builder::{BuildUpdate, BuildUpdateProgress, Builder, Platform, Stage, UpdateStage};
 use crate::cli::serve::ServeArgs;
 use crate::DioxusCrate;
+use crate::Platform;
 use crate::Result;
 use crate::TraceSrc;
+use crate::{BuildUpdate, BuildUpdateProgress, Builder, Stage, UpdateStage};
 use std::ops::ControlFlow;
 
 mod console_widget;

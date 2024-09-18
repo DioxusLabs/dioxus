@@ -1,5 +1,5 @@
 use super::{handle::AppHandle, ServeUpdate};
-use crate::{builder::Platform, bundler::AppBundle, Result};
+use crate::{bundler::AppBundle, Platform, Result};
 use futures_util::{future::OptionFuture, stream::FuturesUnordered};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio_stream::StreamExt;

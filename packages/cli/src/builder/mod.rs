@@ -6,13 +6,11 @@
 /// receiver.
 mod builder;
 mod cargo;
-mod platform;
 mod profiles;
 mod progress;
 mod request;
 mod web;
 
 pub(crate) use builder::*;
-pub(crate) use platform::*;
 pub(crate) use progress::*;
 pub(crate) use request::*;

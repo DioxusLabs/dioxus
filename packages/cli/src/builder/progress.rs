@@ -1,5 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use super::{BuildRequest, Platform};
+use crate::{BuildRequest, Platform};
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};

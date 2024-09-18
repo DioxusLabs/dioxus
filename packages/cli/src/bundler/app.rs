@@ -1,6 +1,6 @@
 use crate::assets::AssetManifest;
-use crate::builder::{BuildRequest, Platform};
 use crate::Result;
+use crate::{BuildRequest, Platform};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;

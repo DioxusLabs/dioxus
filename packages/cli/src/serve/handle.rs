@@ -1,4 +1,4 @@
-use crate::{builder::Platform, bundler::AppBundle};
+use crate::{bundler::AppBundle, Platform};
 use crate::{Result, TraceSrc};
 use std::{net::SocketAddr, path::PathBuf, process::Stdio};
 use tokio::{
@@ -88,29 +88,37 @@ impl AppHandle {
         match handle.app.build.platform() {
             Platform::Desktop | Platform::Server | Platform::Liveview => {
                 let mut cmd = Command::new(handle.executable.clone());
-                cmd.env(
-                    dioxus_cli_config::FULLSTACK_ADDRESS_ENV,
-                    fullstack_address
-                        .as_ref()
-                        .map(|addr| addr.to_string())
-                        .unwrap_or_else(|| "127.0.0.1:8080".to_string()),
-                )
-                .env(
-                    dioxus_cli_config::IOS_DEVSERVER_ADDR_ENV,
-                    format!("ws://{}/_dioxus", ip),
-                )
-                .env(
-                    dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
-                    format!("ws://{}/_dioxus", ip),
-                )
-                .env("CARGO_MANIFEST_DIR", handle.app.build.krate.crate_dir())
-                .env(
-                    "SIMCTL_CHILD_CARGO_MANIFEST_DIR",
-                    handle.app.build.krate.crate_dir(),
-                )
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
-                .kill_on_drop(true);
+
+                // Set the env vars that the clients will expect
+                // These need to be stable within a release version (ie 0.6.0)
+                cmd.env(dioxus_cli_config::CLI_ENABLED_ENV, "true");
+                if let Some(addr) = fullstack_address {
+                    cmd.env(dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string());
+                    cmd.env(dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string());
+                }
+                // cmd.env(
+                //     dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+                //     serve.always_on_top.unwrap_or(true).to_string(),
+                // );
+                // cmd.env(
+                //     dioxus_cli_config::ASSET_ROOT_ENV,
+                //     asset_root.display().to_string(),
+                // );
+                // cmd.env(
+                //     dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
+                //     devserver_addr.to_string(),
+                // );
+                // cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
+                // cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
+
+                cmd.env("CARGO_MANIFEST_DIR", handle.app.build.krate.crate_dir())
+                    .env(
+                        "SIMCTL_CHILD_CARGO_MANIFEST_DIR",
+                        handle.app.build.krate.crate_dir(),
+                    )
+                    .stderr(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .kill_on_drop(true);
 
                 let mut child = cmd.spawn()?;
                 let stdout = BufReader::new(child.stdout.take().unwrap());

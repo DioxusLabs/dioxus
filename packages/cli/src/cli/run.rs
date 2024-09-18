@@ -1,5 +1,5 @@
 use crate::DioxusCrate;
-use crate::{builder::Builder, serve::ServeUpdate};
+use crate::{Builder, serve::ServeUpdate};
 use anyhow::Context;
 use build::BuildArgs;
 

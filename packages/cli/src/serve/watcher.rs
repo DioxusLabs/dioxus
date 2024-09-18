@@ -257,7 +257,12 @@ impl Watcher {
             }
         }
 
-        let msg = HotReloadMsg { templates, assets };
+        let unknown_files = vec![];
+        let msg = HotReloadMsg {
+            templates,
+            assets,
+            unknown_files,
+        };
 
         self.add_hot_reload_message(&msg);
 

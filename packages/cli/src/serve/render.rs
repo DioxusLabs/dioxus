@@ -1,5 +1,5 @@
-use super::{BuildProgress, ConsoleMessage, TraceMsg, TraceSrc};
-use crate::Platform;
+use super::output::{BuildProgress, ConsoleMessage};
+use crate::{Platform, TraceMsg, TraceSrc};
 use ansi_to_tui::IntoText as _;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},

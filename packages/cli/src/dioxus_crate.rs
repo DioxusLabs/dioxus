@@ -1,6 +1,6 @@
-use crate::builder::Platform;
+use crate::Platform;
 use crate::{build::TargetArgs, config::DioxusConfig};
-use krates::cm::Target;
+use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
