@@ -350,14 +350,14 @@ impl<T: 'static> std::fmt::Display for NotFoundInServerContext<T> {
 
 impl<T: 'static> std::error::Error for NotFoundInServerContext<T> {}
 
-/// Extract a value from the server context provided through thedioxus::launch builder context or [`DioxusServerContext::insert`]
+/// Extract a value from the server context provided through the launch builder context or [`DioxusServerContext::insert`]
 ///
 /// Example:
 /// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
-///dioxus::LaunchBuilder::new()
-///     // You can provide context to your whole app (including server functions) with the `with_context` method on thedioxus::launch builder
+/// dioxus::LaunchBuilder::new()
+///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
 ///     .with_context(server_only! {
 ///         1234567890u32
 ///     })

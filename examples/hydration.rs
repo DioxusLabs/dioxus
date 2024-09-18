@@ -18,7 +18,7 @@ fn main() {
             // We build the dom a first time, then pre-render it to HTML
             let pre_rendered_dom = VirtualDom::prebuilt(app);
 
-            // We thendioxus::launch the app with the pre-rendered HTML
+            // We then launch the app with the pre-rendered HTML
             dioxus_ssr::pre_render(&pre_rendered_dom)
         }))
         .launch(app)

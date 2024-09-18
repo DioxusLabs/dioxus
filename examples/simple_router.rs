@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    //dioxus::launch the router, using our `Route` component as the generic type
+    // launch the router, using our `Route` component as the generic type
     // This will automatically boot the app to "/" unless otherwise specified
     dioxus::launch(|| rsx! { Router::<Route> {} });
 }
