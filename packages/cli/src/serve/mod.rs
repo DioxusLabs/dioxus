@@ -12,6 +12,7 @@ mod hot_reloading_file_map;
 mod logs_tab;
 mod output;
 mod proxy;
+mod render;
 mod runner;
 mod server;
 mod tracer;

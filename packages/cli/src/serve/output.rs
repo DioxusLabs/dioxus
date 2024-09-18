@@ -40,7 +40,7 @@ use tracing::Level;
 
 use super::{AppHandle, DevServer, ServeUpdate};
 
-mod render;
+use super::render;
 
 // How many lines should be scroll on each mouse scroll or arrow key input.
 const SCROLL_SPEED: u16 = 2;
@@ -48,6 +48,26 @@ const SCROLL_SPEED: u16 = 2;
 const SCROLL_MODIFIER: u16 = 4;
 // Scroll modifier key.
 const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
+
+#[derive(Default)]
+pub struct BuildProgress {
+    pub(crate) current_builds: HashMap<TargetPlatform, ActiveBuild>,
+}
+
+impl BuildProgress {
+    pub fn progress(&self) -> f64 {
+        self.current_builds
+            .values()
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|build| match build.stage {
+                Stage::Initializing => 0.0,
+                Stage::InstallingWasmTooling => 0.0,
+                Stage::Compiling => build.progress,
+                Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
+            })
+            .unwrap_or_default()
+    }
+}
 
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
@@ -549,10 +569,10 @@ enum ConsoleMessage {
 }
 
 #[derive(Default, Debug, PartialEq)]
-pub(crate) struct ActiveBuild {
-    stage: Stage,
-    progress: f64,
-    failed: Option<String>,
+pub struct ActiveBuild {
+    pub stage: Stage,
+    pub progress: f64,
+    pub failed: Option<String>,
 }
 
 impl ActiveBuild {
@@ -577,7 +597,7 @@ impl ActiveBuild {
     //     }
     // }
 
-    fn make_spans(&self, area: Rect) -> Vec<Span> {
+    pub fn make_spans(&self, area: Rect) -> Vec<Span> {
         let mut spans = Vec::new();
 
         let message = match self.stage {
@@ -607,7 +627,7 @@ impl ActiveBuild {
         spans
     }
 
-    fn max_layout_size(&self) -> u16 {
+    pub fn max_layout_size(&self) -> u16 {
         let progress_size = 4;
         let stage_size = self.stage.to_string().len() as u16;
         let brace_size = 2;
