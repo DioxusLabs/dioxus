@@ -67,7 +67,7 @@ tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
 
 [features]
-default = ["serialize", "mounted", "document", "file-engine"]
+default = ["serialize", "mounted", "document", "file_engine"]
 serialize = [
     "dep:serde",
     "dep:serde_json",
@@ -88,7 +88,7 @@ document = [
     "dep:serde",
     "dep:serde_json"
 ]
-file-engine = [
+file_engine = [
     "dep:async-trait",
     "dep:js-sys",
     "web-sys?/File",
@@ -96,7 +96,7 @@ file-engine = [
     "web-sys?/FileReader"
 ]
 wasm-bind = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
-native-bind = ["dep:tokio", "file-engine"]
+native-bind = ["dep:tokio", "file_engine"]
 hot-reload-context = ["dep:dioxus-rsx"]
 html-to-rsx = []
 
