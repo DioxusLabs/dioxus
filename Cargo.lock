@@ -2879,6 +2879,7 @@ dependencies = [
  "dioxus-fullstack",
  "dioxus-lib",
  "dioxus-liveview",
+ "dioxus-router",
  "dioxus-router-macro",
  "dioxus-ssr",
  "gloo",
@@ -9268,10 +9269,9 @@ dependencies = [
 name = "suspense-carousel"
 version = "0.6.0-alpha.2"
 dependencies = [
+ "async-std",
  "dioxus",
- "gloo-timers 0.3.0",
  "serde",
- "tokio",
 ]
 
 [[package]]
