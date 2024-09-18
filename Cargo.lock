@@ -2770,7 +2770,6 @@ dependencies = [
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-signals",
- "manganis",
 ]
 
 [[package]]
