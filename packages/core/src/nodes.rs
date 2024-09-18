@@ -1000,7 +1000,7 @@ where
 }
 
 /// A value that can be converted into an attribute value
-pub trait IntoAttributeValue {
+pub trait IntoAttributeValue<T = ()> {
     /// Convert into an attribute value
     fn into_value(self) -> AttributeValue;
 }
@@ -1078,21 +1078,14 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
-#[cfg(feature = "manganis")]
-impl IntoAttributeValue for manganis::ImageAsset {
-    fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.path().to_string())
-    }
-}
-
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {
     /// Push an attribute onto the list of attributes
-    fn push_attribute(
+    fn push_attribute<T>(
         self,
         name: &'static str,
         ns: Option<&'static str>,
-        attr: impl IntoAttributeValue,
+        attr: impl IntoAttributeValue<T>,
         volatile: bool,
     ) -> Self;
 }
