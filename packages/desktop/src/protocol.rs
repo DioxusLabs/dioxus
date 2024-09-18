@@ -203,6 +203,11 @@ fn get_asset_root() -> Option<PathBuf> {
     // This works with asset!() since asset!() is always relatif to the manifest dir, both in dev and bundled
     if let Some(cargo_dir) = std::env::var("CARGO_MANIFEST_DIR").map(PathBuf::from).ok() {
         return Some(cargo_dir);
+        // if running_in_dev_mode() {
+        //     // todo: we don't want to canonicalize assets like this, but it will take longer to migrate, so we'll do it later
+        //     // we should just be parsing paths the way they are instead of relative to the "asset" dir
+        //     // manganis will eventually just dump the raw path to us, but until then, we need to canonicalize here
+        //     return dioxus_cli_config::base_path();
     }
 
     // Use the prescence of the bundle to determine if we're in dev mode

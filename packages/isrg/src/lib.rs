@@ -57,7 +57,7 @@ impl IncrementalRenderer {
     /// Cache a rendered response.
     ///
     /// ```rust
-    /// # use dioxus_ssr::incremental::IncrementalRenderer;
+    /// # use dioxus_isrg::IncrementalRenderer;
     /// # let mut renderer = IncrementalRenderer::builder().build();
     /// let route = "/index".to_string();
     /// let response = b"<html><body>Hello world</body></html>";
@@ -83,7 +83,7 @@ impl IncrementalRenderer {
     /// Try to get a cached response for a route.
     ///
     /// ```rust
-    /// # use dioxus_ssr::incremental::IncrementalRenderer;
+    /// # use dioxus_isrg::IncrementalRenderer;
     /// # let mut renderer = IncrementalRenderer::builder().build();
     /// # let route = "/index".to_string();
     /// # let response = b"<html><body>Hello world</body></html>";
@@ -96,7 +96,7 @@ impl IncrementalRenderer {
     /// If the route is not cached, `None` is returned.
     ///
     /// ```rust
-    /// # use dioxus_ssr::incremental::IncrementalRenderer;
+    /// # use dioxus_isrg::IncrementalRenderer;
     /// # let mut renderer = IncrementalRenderer::builder().build();
     /// let route = "/index";
     /// let response = renderer.get(route).unwrap();
@@ -108,10 +108,12 @@ impl IncrementalRenderer {
     ) -> Result<Option<CachedRender<'a>>, IncrementalRendererError> {
         let Self {
             memory_cache,
+            #[cfg(not(target_arch = "wasm32"))]
             file_system_cache,
             ..
         } = self;
 
+        #[allow(unused)]
         enum FsGetError {
             NotPresent,
             Error(IncrementalRendererError),

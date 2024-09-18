@@ -4,6 +4,52 @@ use crate::dioxus_crate::DioxusCrate;
 use anyhow::Context;
 use std::str::FromStr;
 
+use crate::config::Platform;
+use anyhow::Context;
+
+use crate::{
+    builder::{BuildRequest, TargetPlatform},
+    dioxus_crate::DioxusCrate,
+};
+
+use super::*;
+
+/// Information about the target to build
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
+pub struct TargetArgs {
+    /// Build for nightly [default: false]
+    #[clap(long)]
+    pub nightly: bool,
+
+    /// Build a example [default: ""]
+    #[clap(long)]
+    pub example: Option<String>,
+
+    /// Build a binary [default: ""]
+    #[clap(long)]
+    pub bin: Option<String>,
+
+    /// The package to build
+    #[clap(short, long)]
+    pub package: Option<String>,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub features: Vec<String>,
+
+    /// The feature to use for the client in a fullstack app [default: "web"]
+    #[clap(long)]
+    pub client_feature: Option<String>,
+
+    /// The feature to use for the server in a fullstack app [default: "server"]
+    #[clap(long)]
+    pub server_feature: Option<String>,
+
+    /// Rustc platform triple
+    #[clap(long)]
+    pub target: Option<String>,
+}
+
 /// Build the Rust Dioxus app and all of its assets.
 ///
 /// Produces a final output bundle designed to be run on the target platform.

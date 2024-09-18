@@ -7,7 +7,7 @@ use std::fmt::Display;
 use std::time::Duration;
 
 use dioxus_core::ScopeId;
-use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
+use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use dioxus_html::prelude::eval;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;

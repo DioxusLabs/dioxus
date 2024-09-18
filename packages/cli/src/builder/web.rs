@@ -59,7 +59,7 @@ impl BuildRequest {
             return Ok(());
         };
 
-        #[cfg(feature = "wasm-opt")]
+        #[cfg(feature = "optimizations")]
         {
             use crate::config::WasmOptLevel;
 

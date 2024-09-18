@@ -65,10 +65,7 @@ pub async fn generate_static_site(
     }
 
     // Copy over the web output dir into the static output dir
-    let assets_path = dioxus_cli_config::CURRENT_CONFIG
-        .as_ref()
-        .map(|c| c.application.out_dir.clone())
-        .unwrap_or("./dist".into());
+    let assets_path = dioxus_cli_config::out_dir().unwrap_or("./dist".into());
 
     let assets_path = assets_path.join("public");
 

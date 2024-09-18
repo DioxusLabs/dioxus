@@ -28,12 +28,15 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
 ///
 /// This doesn't use any form of security or protocol, so it's not safe to expose to the internet.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn connect(addr: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
+pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
     std::thread::spawn(move || {
-        let (mut websocket, _req) = match tungstenite::connect(addr.clone()) {
+        let (mut websocket, _req) = match tungstenite::connect(endpoint.clone()) {
             Ok((websocket, req)) => (websocket, req),
             Err(err) => {
-                eprintln!("Failed to connect to devserver at {} because {}", addr, err);
+                eprintln!(
+                    "Failed to connect to devserver at {} because {}",
+                    endpoint, err
+                );
                 return;
             }
         };

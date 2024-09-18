@@ -454,7 +454,7 @@ impl HasFormData for WebFormData {
 }
 
 impl HasFileData for WebFormData {
-    #[cfg(feature = "file_engine")]
+    #[cfg(feature = "file-engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
         let files = self
             .element
@@ -535,7 +535,7 @@ impl InteractionLocation for WebDragData {
 }
 
 impl HasFileData for WebDragData {
-    #[cfg(feature = "file_engine")]
+    #[cfg(feature = "file-engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
         let files = self
             .raw

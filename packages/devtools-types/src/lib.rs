@@ -37,4 +37,5 @@ pub enum ClientMsg {
 pub struct HotReloadMsg {
     pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
+    pub unknown_files: Vec<PathBuf>,
 }

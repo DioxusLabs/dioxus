@@ -411,6 +411,49 @@ impl DevServer {
 
         Ok(router)
     }
+
+    // // Setup middleware to intercept html requests if the build status is "Building"
+    // router = router.layer(middleware::from_fn_with_state(
+    //     build_status,
+    //     build_status_middleware,
+    // ));
+
+    // // Setup websocket endpoint - and pass in the extension layer immediately after
+    // router = router.nest(
+    //     "/_dioxus",
+    //     Router::new()
+    //         .route(
+    //             "/",
+    //             get(
+    //                 |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+    //                     tracing::info!("Incoming hotreload websocket request: {ws:?}");
+    //                     ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+    //                 },
+    //             ),
+    //         )
+    //         .layer(Extension(hot_reload_sockets))
+    //         .route(
+    //             "/build_status",
+    //             get(
+    //                 |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+    //                     ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+    //                 },
+    //             ),
+    //         )
+    //         .layer(Extension(build_status_sockets)),
+    // );
+
+    // // Setup cors
+    // router = router.layer(
+    //     CorsLayer::new()
+    //         // allow `GET` and `POST` when accessing the resource
+    //         .allow_methods([Method::GET, Method::POST])
+    //         // allow requests from any origin
+    //         .allow_origin(Any)
+    //         .allow_headers(Any),
+    // );
+
+    Ok(router)
 }
 
 fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::MethodRouter {

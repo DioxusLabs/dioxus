@@ -34,8 +34,7 @@ members = [
     "packages/server-macro",
     "packages/static-generation",
     "packages/lazy-js-bundle",
-    "packages/document",
-    "packages/runtime-config",
+    "packages/cli-config",
     "packages/devtools",
     "packages/devtools-types",
     "packages/isrg",
@@ -98,7 +97,6 @@ dioxus-core = { path = "packages/core", version = "0.6.0-alpha.2" }
 dioxus-core-types = { path = "packages/core-types", version = "0.6.0-alpha.2" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.6.0-alpha.2" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.6.0-alpha.2" }
-dioxus-document = { path = "packages/document", version = "0.6.0-alpha.2" }
 dioxus-router = { path = "packages/router", version = "0.6.0-alpha.2" }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.6.0-alpha.2" }
 dioxus-html = { path = "packages/html", version = "0.6.0-alpha.2", default-features = false }
@@ -227,6 +225,10 @@ longest-increasing-subsequence = "0.1.0"
 trybuild = "1.0"
 js-sys = "0.3.56"
 web-sys = { version = "0.3.56", default-features = false }
+dirs = "5.0.1"
+cargo-config2 = "0.1.26"
+criterion = { version = "0.5" }
+walrus = "*"
 
 # desktop
 wry = { version = "0.43.0", default-features = false }
@@ -244,11 +246,6 @@ objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 
 # cli, cli-config
-dirs = "5.0.1"
-cargo-config2 = "0.1.26"
-
-criterion = { version = "0.5" }
-
 # dirs = "5.0.1"
 # cargo-config2 = "0.1.26"
 # criterion = { version = "0.5" }
@@ -271,11 +268,10 @@ criterion = { version = "0.5" }
 # [profile.dev.package.dioxus-core-macro]
 # opt-level = 3
 
-# Enable a small amount of optimization in debug mode
-[profile.cli-dev]
-inherits = "release"
-opt-level = 1
-debug = true
+# wasm bindgen is slooooooow, but it's because we're actually processing the wasm
+# so, lets just bump up walrus to make it faster, no need for any special profiles
+[profile.dev.package.walrus]
+opt-level = 3
 
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
 [profile.release-unoptimized]

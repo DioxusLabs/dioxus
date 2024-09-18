@@ -11,7 +11,6 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-lib = { workspace = true }
-dioxus-document = { workspace = true }
 dioxus-router-macro = { workspace = true }
 gloo = { workspace = true, optional = true }
 tracing = { workspace = true }
@@ -30,6 +29,7 @@ http = { workspace = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
 rustversion = { workspace = true }
+dioxus-cli-config = { workspace = true }
 
 # you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
 # dev-dependncey crates
@@ -43,11 +43,11 @@ wasm-bindgen-test = "0.3.33"
 
 [features]
 default = []
-# ssr = []
-# wasm_test = []
-# liveview = ["dioxus-liveview", "dep:tokio", "dep:serde", "dep:serde_json"]
-# web = ["dep:gloo", "dep:web-sys", "dep:wasm-bindgen", "dep:gloo-utils", "dep:js-sys", "dioxus-router-macro/web"]
-# fullstack = ["dep:dioxus-fullstack"]
+ssr = []
+wasm_test = []
+liveview = ["dioxus-liveview", "dep:tokio", "dep:serde", "dep:serde_json"]
+web = ["dep:gloo", "dep:web-sys", "dep:wasm-bindgen", "dep:gloo-utils", "dep:js-sys", "dioxus-router-macro/web"]
+fullstack = ["dep:dioxus-fullstack"]
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }
