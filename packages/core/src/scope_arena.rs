@@ -1,5 +1,6 @@
 use crate::innerlude::{throw_error, RenderError, ScopeOrder};
 use crate::prelude::ReactiveContext;
+use crate::runtime::RuntimeGuard;
 use crate::scope_context::SuspenseLocation;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
@@ -49,8 +50,7 @@ impl VirtualDom {
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
-        // Ensure we are currently inside a `Runtime`.
-        crate::Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        let _guard = RuntimeGuard::new(self.runtime.clone());
 
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope = &self.scopes[scope_id.0];
