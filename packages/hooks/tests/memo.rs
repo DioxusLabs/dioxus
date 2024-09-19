@@ -52,7 +52,7 @@ async fn memo_updates() {
 
     let race = async move {
         let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+        let _guard = RuntimeGuard::new(dom.runtime());
 
         dom.rebuild_in_place();
         let mut signal = VEC_SIGNAL.with(|cell| (*cell.borrow()).unwrap());
@@ -110,7 +110,7 @@ async fn use_memo_only_triggers_one_update() {
     }
 
     let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild_in_place();
 
     tokio::select! {
