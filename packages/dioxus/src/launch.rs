@@ -139,7 +139,7 @@ impl LaunchBuilder {
     /// #[derive(Default)]
     /// struct Config;
     ///
-    /// fn my_custom_launcher(root: fn() -> Element, contexts: Vec<Box<dyn Any>>, cfg: Config) {
+    /// fn my_custom_launcher(root: fn() -> Element, contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>, cfg: Vec<Box<dyn Any>>) {
     ///     println!("launching with root: {:?}", root());
     ///     loop {
     ///         println!("running...");

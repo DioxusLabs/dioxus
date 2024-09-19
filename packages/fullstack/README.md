@@ -107,7 +107,7 @@ fn main() {
 // For any other platform, we just launch the app
 #[cfg(not(feature = "server"))]
 fn main() {
-    launch(App);
+    dioxus::launch(App);
 }
 
 #[component]
