@@ -42,6 +42,7 @@ fn reading_subscribes() {
         },
         counter.clone(),
     );
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     #[derive(Props, Clone)]
     struct ChildProps {
