@@ -152,7 +152,7 @@ impl LaunchBuilder {
     ///     }
     /// }
     ///
-    /// LaunchBuilder::custom(my_custom_launcher).launch(app);
+    /// dioxus::LaunchBuilder::custom(my_custom_launcher).launch(app);
     /// ```
     pub fn custom(launch_fn: LaunchFn) -> LaunchBuilder {
         LaunchBuilder {
