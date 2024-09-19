@@ -46,6 +46,7 @@ use crate::prelude::{Navigator, RouterContext};
 /// }
 ///
 /// # let mut vdom = VirtualDom::new(App);
+/// # let _guard = RuntimeGuard::new(vdom.runtime());
 /// # vdom.rebuild_in_place();
 /// ```
 #[must_use]
