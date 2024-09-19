@@ -38,7 +38,6 @@ use std::{
 };
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
-use tower_http::services::ServeFile;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::fs::{ServeDir, ServeFileSystemResponseBody},
@@ -115,7 +114,7 @@ impl Server {
         // If we're serving a fullstack app, we need to find a port to proxy to
         let fullstack_port = if matches!(
             serve.build_arguments.platform(),
-            Platform::Liveview | Platform::Fullstack | Platform::StaticGeneration
+            Platform::Liveview | Platform::Fullstack
         ) {
             get_available_port(addr.ip())
         } else {
@@ -369,7 +368,7 @@ fn setup_router(
 
     // server the dir if it's web, otherwise let the fullstack server itself handle it
     match platform {
-        Platform::Web => {
+        Platform::Web | Platform::StaticGeneration => {
             // Route file service to output the .wasm and assets if this is a web build
             let base_path = format!(
                 "/{}",
@@ -383,9 +382,9 @@ fn setup_router(
                     .trim_matches('/')
             );
 
-            router = router.nest_service(&base_path, build_serve_dir(serve, config));
+            router = router.nest_service(&base_path, build_serve_dir(serve, config, platform));
         }
-        Platform::Liveview | Platform::Fullstack | Platform::StaticGeneration => {
+        Platform::Liveview | Platform::Fullstack => {
             // For fullstack and static generation, forward all requests to the server
             let address = fullstack_address.unwrap();
 
@@ -450,7 +449,11 @@ fn setup_router(
     Ok(router)
 }
 
-fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
+fn build_serve_dir(
+    serve: &Serve,
+    cfg: &DioxusCrate,
+    platform: Platform,
+) -> axum::routing::MethodRouter {
     static CORS_UNSAFE: (HeaderValue, HeaderValue) = (
         HeaderValue::from_static("unsafe-none"),
         HeaderValue::from_static("unsafe-none"),
@@ -466,7 +469,11 @@ fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRou
         false => CORS_UNSAFE.clone(),
     };
 
-    let out_dir = cfg.out_dir();
+    let out_dir = match platform {
+        // Static generation only serves files from the public directory
+        Platform::StaticGeneration => cfg.out_dir().join("public"),
+        _ => cfg.out_dir(),
+    };
     let index_on_404 = cfg.dioxus_config.web.watcher.index_on_404;
 
     get_service(
@@ -480,11 +487,7 @@ fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRou
                 let out_dir = out_dir.clone();
                 move |response| async move { Ok(no_cache(index_on_404, &out_dir, response)) }
             })
-            .service(
-                ServeDir::new(&out_dir)
-                    .fallback(ServeFile::new(out_dir.join("404.html")))
-                    .fallback(ServeFile::new(out_dir.join("404/index.html"))),
-            ),
+            .service(ServeDir::new(&out_dir)),
     )
     .handle_error(|error: Infallible| async move {
         (
@@ -505,7 +508,18 @@ fn no_cache(
     // If there's a 404 and we're supposed to index on 404, upgrade that failed request to the index.html
     // We might want to isnert a header here saying we *did* that but oh well
     if response.status() == StatusCode::NOT_FOUND && index_on_404 {
-        let body = Body::from(std::fs::read_to_string(out_dir.join("index.html")).unwrap());
+        // First try to find a 404.html or 404/index.html file
+        let out_dir_404_html = out_dir.join("404.html");
+        let out_dir_404_index_html = out_dir.join("404").join("index.html");
+        let path = if out_dir_404_html.exists() {
+            out_dir_404_html
+        } else if out_dir_404_index_html.exists() {
+            out_dir_404_index_html
+        } else {
+            // If we can't find a 404.html or 404/index.html, just use the index.html
+            out_dir.join("index.html")
+        };
+        let body = Body::from(std::fs::read_to_string(path).unwrap());
 
         response = Response::builder()
             .status(StatusCode::OK)

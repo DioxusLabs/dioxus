@@ -254,36 +254,35 @@ mod current_platform {
         platform_config: Vec<Box<dyn std::any::Any>>,
     ) {
         // If the server feature is enabled, launch the client with hydration enabled
-        #[cfg(all(
-            any(feature = "static-generation", feature = "server"),
-            feature = "server"
-        ))]
+        #[cfg(any(feature = "static-generation", feature = "fullstack"))]
         {
-            let contexts = Arc::new(contexts);
-            let mut factory = virtual_dom_factory(root, contexts);
-            let platform_config = *platform_config
+            let platform_config = platform_config
                 .into_iter()
-                .find_map(|cfg| cfg.downcast::<Config>().ok())
-                .unwrap_or_default();
+                .find_map(|cfg| cfg.downcast::<dioxus_web::Config>().ok())
+                .unwrap_or_default()
+                .hydrate(true);
 
             let factory = move || {
-                let mut vdom = factory();
+                let mut vdom = dioxus_core::VirtualDom::new(root);
+                for context in contexts {
+                    vdom.insert_any_root_context(context());
+                }
                 #[cfg(feature = "document")]
                 {
-                    let document =
-                        std::rc::Rc::new(dioxus_fullstack::document::web::FullstackWebDocument)
-                            as std::rc::Rc<dyn crate::prelude::Document>;
+                    #[cfg(feature = "fullstack")]
+                    use dioxus_fullstack::document;
+                    #[cfg(feature = "static-generation")]
+                    use dioxus_static_site_generation::document;
+                    let document = std::rc::Rc::new(document::web::FullstackWebDocument)
+                        as std::rc::Rc<dyn crate::prelude::Document>;
                     vdom.provide_root_context(document);
                 }
                 vdom
             };
 
-            dioxus_web::launch::launch_virtual_dom(factory(), cfg)
+            dioxus_web::launch::launch_virtual_dom(factory(), platform_config)
         }
-        #[cfg(not(all(
-            any(feature = "static-generation", feature = "server"),
-            feature = "server"
-        )))]
+        #[cfg(not(any(feature = "static-generation", feature = "fullstack")))]
         dioxus_web::launch::launch(root, contexts, platform_config);
     }
 
