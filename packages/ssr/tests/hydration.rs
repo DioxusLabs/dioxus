@@ -60,6 +60,7 @@ fn listeners() {
     }
 
     let mut dom = VirtualDom::new(app2);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
@@ -94,6 +95,7 @@ fn text_nodes() {
     }
 
     let mut dom = VirtualDom::new(app2);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
@@ -134,6 +136,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app2);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
@@ -150,6 +153,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app3);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
@@ -170,6 +174,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app4);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(

@@ -79,6 +79,7 @@ impl Renderer {
             props
         }
         let mut dom = VirtualDom::new_with_props(lazy_app, element);
+        let _guard = RuntimeGuard::new(dom.runtime());
         dom.rebuild_in_place();
         self.render_to(buf, &dom)
     }
