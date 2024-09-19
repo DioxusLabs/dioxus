@@ -38,6 +38,7 @@ impl TraceController {
                 .with_writer(Mutex::new(Writer {
                     stdout: io::stdout(),
                 }))
+                .with_timer(tracing_subscriber::fmt::time::time())
                 .with_filter(filter),
         );
 

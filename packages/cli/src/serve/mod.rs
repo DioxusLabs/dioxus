@@ -4,12 +4,13 @@ use crate::Platform;
 use crate::Result;
 use crate::TraceSrc;
 use crate::{BuildUpdate, BuildUpdateProgress, Builder, Stage, UpdateStage};
-use std::ops::ControlFlow;
+use std::{any, ops::ControlFlow};
 
-mod console_widget;
+mod ansi_buffer;
 mod detect;
 mod handle;
 mod hot_reloading_file_map;
+mod loggs;
 mod logs_tab;
 mod output;
 mod proxy;
@@ -85,11 +86,12 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
         match res.await {
             Ok(ControlFlow::Continue(())) => continue,
-            Ok(ControlFlow::Break(())) => {}
-            Err(e) => tracing::error!("Error in TUI: {}", e),
+            Ok(ControlFlow::Break(())) => break,
+            Err(e) => {
+                tracing::error!("Error in TUI: {}", e);
+                break;
+            }
         }
-
-        break;
     }
 
     _ = devserver.shutdown().await;
@@ -232,13 +234,19 @@ async fn handle_update(
             screen.push_inner_log(log);
         }
 
-        ServeUpdate::TuiInput { event } => {
-            let should_rebuild = screen.handle_input(event)?;
-            if should_rebuild {
-                builder.build(args.build_arguments.clone())?;
-                devserver.start_build().await
-            }
+        ServeUpdate::RequestRebuild => {
+            builder.build(args.build_arguments.clone())?;
+            devserver.start_build().await
         }
+
+        ServeUpdate::Redraw => {
+            // gets automatically handled after every event
+        }
+
+        ServeUpdate::Exit { error } => match error {
+            Some(err) => return Err(anyhow::anyhow!("{}", err).into()),
+            None => return Ok(ControlFlow::Break(())),
+        },
     }
 
     Ok(ControlFlow::Continue(()))

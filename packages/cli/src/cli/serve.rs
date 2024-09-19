@@ -112,7 +112,7 @@ impl ServeArgs {
         self.build_arguments.clone()
     }
 
-    pub(crate) fn interactive_tty(&self) -> bool {
+    pub(crate) fn is_interactive_tty(&self) -> bool {
         std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
     }
 

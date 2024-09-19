@@ -1,6 +1,9 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+// when runnnig in debug mode, we want running this to be quieter
+// it's annoying to fill up the console with warnings
+// #![cfg_attr(debug_assertions, allow(warnings))]
 
 mod assets;
 mod builder;
@@ -13,6 +16,7 @@ mod dx_build_info;
 mod error;
 mod fastfs;
 mod metadata;
+mod output;
 mod platform;
 mod serve;
 mod settings;

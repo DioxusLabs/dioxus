@@ -20,6 +20,16 @@ pub(crate) struct DioxusCrate {
     pub(crate) target: Target,
 }
 
+impl std::fmt::Debug for DioxusCrate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DioxusCrate")
+            .field("package", &self.krates[self.package])
+            .field("dioxus_config", &self.dioxus_config)
+            .field("target", &self.target)
+            .finish()
+    }
+}
+
 impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self, CrateConfigError> {
         let mut cmd = Cmd::new();
@@ -155,6 +165,7 @@ impl DioxusCrate {
 
     pub(crate) fn features_for_platform(&mut self, platform: Platform) -> Vec<String> {
         let package = self.package();
+
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = platform.feature_name();
         let feature = package.features.iter().find_map(|(key, features)| {

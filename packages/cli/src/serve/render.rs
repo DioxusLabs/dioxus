@@ -1,4 +1,5 @@
-use super::output::{BuildProgress, ConsoleMessage};
+use super::loggs::*;
+use super::output::*;
 use crate::{Platform, TraceMsg, TraceSrc};
 use ansi_to_tui::IntoText as _;
 use ratatui::{
@@ -38,17 +39,21 @@ impl TuiLayout {
         let body = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                // Footer Status
-                Constraint::Length(1),
-                // Border Separator
-                Constraint::Length(1),
                 // Console
                 Constraint::Fill(1),
+                // Border Separator
+                Constraint::Length(0),
+                // Footer Status
+                Constraint::Length(0),
                 // Padding
-                Constraint::Length(1),
+                Constraint::Length(0),
             ])
-            .margin(1)
             .split(frame_size);
+
+        let status = body[1];
+        let border_sep_top = body[2];
+        let console_layout = body[0];
+        let padding = body[3];
 
         let mut console_constraints = vec![Constraint::Fill(1)];
         if filter_open {
@@ -60,7 +65,7 @@ impl TuiLayout {
         let console = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(console_constraints)
-            .split(body[2]);
+            .split(console_layout);
 
         let filter_drawer = match filter_open {
             false => None,
@@ -80,10 +85,7 @@ impl TuiLayout {
         let status_bar = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-            .split(body[0]);
-
-        // Specify borders
-        let border_sep_top = body[1];
+            .split(status);
 
         Self {
             _body: body,
@@ -96,7 +98,15 @@ impl TuiLayout {
     }
 
     /// Render all decorations.
-    pub fn render_decor(&self, frame: &mut Frame, filter_open: bool) {
+    pub fn render_decor(&self, frame: &mut Frame, size: Rect, filter_open: bool) {
+        frame.render_widget(Clear, size);
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+            size,
+        );
+
         frame.render_widget(
             Block::new()
                 .borders(Borders::TOP)
@@ -261,16 +271,6 @@ impl TuiLayout {
             .render(self.console[0], frame.buffer_mut());
 
         num_lines_wrapping
-    }
-
-    pub fn render_outer_border(&self, frame: &mut Frame, size: Rect) {
-        frame.render_widget(Clear, size);
-        frame.render_widget(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded),
-            size,
-        );
     }
 
     /// Render the status bar.
@@ -463,39 +463,6 @@ impl TuiLayout {
     /// Returns the height of the console TUI area in number of lines.
     pub fn get_console_size(&self) -> (u16, u16) {
         (self.console[0].width, self.console[0].height)
-    }
-
-    /// Render the current scroll position at the top right corner of the frame
-    pub(crate) fn render_current_scroll(
-        &self,
-        scroll_position: u16,
-        lines: u16,
-        console_height: u16,
-        frame: &mut Frame<'_>,
-    ) {
-        let mut row = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1)])
-            .split(self.console[0])[0];
-
-        // Hack: shove upwards the text to overlap with the border so text selection doesn't accidentally capture the number
-        row.y -= 1;
-
-        let max_scroll = lines.saturating_sub(console_height);
-        if max_scroll == 0 {
-            return;
-        }
-
-        let remaining_lines = max_scroll.saturating_sub(scroll_position);
-        if remaining_lines != 0 {
-            let text = vec![Span::from(format!(" {remaining_lines}⬇ ")).dark_gray()];
-            frame.render_widget(
-                Paragraph::new(Line::from(text))
-                    .alignment(Alignment::Right)
-                    .block(Block::default()),
-                row,
-            );
-        }
     }
 }
 

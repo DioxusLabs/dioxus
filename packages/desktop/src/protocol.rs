@@ -1,4 +1,5 @@
 use crate::{assets::*, webview::WebviewEdits};
+use dioxus_html::document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
 use std::path::{Path, PathBuf};
@@ -183,6 +184,10 @@ fn module_loader(root_id: &str, headless: bool) -> String {
         }}
         window.interpreter.waitForRequest({headless});
     }}
+</script>
+<script type="module">
+    // Include the code for eval
+    {NATIVE_EVAL_JS}
 </script>
 "#
     )

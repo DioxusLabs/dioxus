@@ -47,7 +47,8 @@ impl BuildRequest {
             None => client_feature,
         };
 
-        let features = build.target_args.client_feature.clone().or(client_feature);
+        let features = build.target_args.client_feature.clone();
+        // let features = build.target_args.client_feature.clone().or(client_feature);
 
         tracing::info!("Client feature: {features:?}");
 

@@ -465,7 +465,23 @@ fn no_cache(
     // If there's a 404 and we're supposed to index on 404, upgrade that failed request to the index.html
     // We might want to isnert a header here saying we *did* that but oh well
     if response.status() == StatusCode::NOT_FOUND && index_on_404 {
-        let body = Body::from(std::fs::read_to_string(out_dir.join("index.html")).unwrap());
+        let fallback = out_dir.join("index.html");
+        let contents = std::fs::read_to_string(fallback).unwrap_or_else(|_| {
+            String::from(
+                r#"
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>Err 404 - dx is not serving a web app</title>
+                </head>
+                <body>
+                <p>Err 404 - dioxus is not currently serving a web app</p>
+                </body>
+            </html>
+            "#,
+            )
+        });
+        let body = Body::from(contents);
 
         response = Response::builder()
             .status(StatusCode::OK)

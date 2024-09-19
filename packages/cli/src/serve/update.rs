@@ -40,11 +40,15 @@ pub(crate) enum ServeUpdate {
         files: Vec<PathBuf>,
     },
 
-    TuiInput {
-        event: crossterm::event::Event,
-    },
+    RequestRebuild,
+
+    Redraw,
 
     TracingLog {
         log: String,
+    },
+
+    Exit {
+        error: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
 }

@@ -1,5 +1,5 @@
 use crate::DioxusCrate;
-use crate::{Builder, serve::ServeUpdate};
+use crate::{serve::ServeUpdate, Builder};
 use anyhow::Context;
 use build::BuildArgs;
 
@@ -19,6 +19,10 @@ impl RunArgs {
             .context("Failed to load Dioxus workspace")?;
 
         self.build_args.resolve(&mut dioxus_crate)?;
+
+        println!("Building crate krate data: {:#?}", dioxus_crate);
+
+        println!("Build args: {:#?}", self.build_args);
 
         let bundles = Builder::start(&mut dioxus_crate, self.build_args.clone())?
             .wait_for_finish()
@@ -51,7 +55,9 @@ impl RunArgs {
                 ServeUpdate::WsMessage(_) => todo!(),
                 ServeUpdate::BuildUpdate(_) => todo!(),
                 ServeUpdate::FilesChanged { files } => todo!(),
-                ServeUpdate::TuiInput { event } => todo!(),
+                ServeUpdate::RequestRebuild => todo!(),
+                ServeUpdate::Redraw => todo!(),
+                ServeUpdate::Exit { error } => todo!(),
             }
         }
 

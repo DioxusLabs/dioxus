@@ -104,9 +104,9 @@ tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
 console-subscriber = { version = "0.3.0", optional = true }
 tracing = { workspace = true }
 wasm-opt = { version = "0.116.1", optional = true }
-ratatui = { version = "0.27.0", features = ["crossterm", "unstable"] }
-crossterm = { version = "0.27.0", features = ["event-stream"] }
-ansi-to-tui = "=5.0.0-rc.1"
+ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
+crossterm = { version = "0.28.0", features = ["event-stream"] }
+ansi-to-tui = "6.0"
 ansi-to-html = "0.2.1"
 manganis-core = { workspace = true }
 
@@ -146,6 +146,8 @@ tempfile = "3.3"
 # Extracting data from an executable
 object = {version="0.36.0", features=["wasm"]}
 tokio-util = { version = "0.7.11", features = ["full"] }
+itertools = "0.13.0"
+throbber-widgets-tui = "0.7.0"
 
 # [dev-dependencies]
 # tracing-subscriber = "0.3.18"
