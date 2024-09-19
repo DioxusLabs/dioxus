@@ -1,10 +1,8 @@
-use crate::cli::serve::ServeArgs;
-use crate::DioxusCrate;
-use crate::Platform;
-use crate::Result;
-use crate::TraceSrc;
-use crate::{BuildUpdate, BuildUpdateProgress, Builder, Stage, UpdateStage};
-use std::{any, ops::ControlFlow};
+use crate::{
+    BuildUpdate, BuildUpdateProgress, Builder, DioxusCrate, Platform, Result, ServeArgs, Stage,
+    TraceSrc, UpdateStage,
+};
+use std::ops::ControlFlow;
 
 mod ansi_buffer;
 mod detect;
@@ -55,8 +53,8 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;
+    let mut devserver = DevServer::start(&args, &krate)?;
     let mut screen = Output::start(&args).expect("Failed to open terminal logger");
-    let mut devserver = DevServer::start(&args, &krate);
     let mut watcher = Watcher::start(&args, &krate);
     let mut runner = AppRunner::start();
 
@@ -190,7 +188,11 @@ async fn handle_update(
             tracing::info!(dx_src = ?TraceSrc::Dev, "Opening app for [{}]", target);
 
             let handle = runner
-                .open(result, devserver.ip, devserver.fullstack_address())
+                .open(
+                    result,
+                    devserver.devserver_address(),
+                    devserver.server_address(),
+                )
                 .await;
 
             match handle {

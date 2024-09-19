@@ -8,7 +8,7 @@ pub(crate) const LINK_OUTPUT_ENV_VAR: &str = "dx-magic-link-file";
 /// Should we act as a linker?
 ///
 /// Just check if the magic env var is set
-pub(crate) fn should_link() -> bool {
+pub(crate) fn should_act_as_linker() -> bool {
     std::env::var(LINK_OUTPUT_ENV_VAR).is_ok()
 }
 

@@ -25,13 +25,6 @@ impl Default for AddressArguments {
     }
 }
 
-impl AddressArguments {
-    /// Get the address the server should run on
-    pub(crate) fn address(&self) -> SocketAddr {
-        SocketAddr::new(self.addr, self.port)
-    }
-}
-
 fn default_port() -> u16 {
     8080
 }

@@ -24,7 +24,6 @@ use crossterm::{
     ExecutableCommand,
 };
 use dioxus_devtools_types::ClientMsg;
-use dioxus_html::g;
 use futures_util::{
     future::{select_all, OptionFuture},
     Future, FutureExt,
@@ -308,16 +307,16 @@ impl Output {
     pub(crate) fn new_build_logs(&mut self, platform: Platform, update: BuildUpdateProgress) {
         match update.update {
             UpdateStage::Start => {
-                tracing::info!(dx_src = ?TraceSrc::Build, "Starting build for {platform:?}")
+                // tracing::info!(dx_src = ?TraceSrc::Build, "Starting build for {platform:?}")
             }
             UpdateStage::SetProgress(progress) => {
                 self.progress = progress;
             }
             UpdateStage::Failed(err) => {
-                tracing::error!(dx_src = ?TraceSrc::Build, "Build failed for {platform:?}: {err:?}")
+                // tracing::error!(dx_src = ?TraceSrc::Build, "Build failed for {platform:?}: {err:?}")
             }
             UpdateStage::AddMessage(build_message) => {
-                tracing::info!(dx_src = ?TraceSrc::Build, "{build_message:?}")
+                // tracing::info!(dx_src = ?TraceSrc::Build, "{build_message:?}")
             }
         }
     }

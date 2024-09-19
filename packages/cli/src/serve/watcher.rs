@@ -187,16 +187,11 @@ impl Watcher {
 
             // If the path is ignored, don't watch it
             if self.ignore.matched(path, path.is_dir()).is_ignore() {
-                tracing::info!("Ignoring update to file: {:?}", path);
                 continue;
             }
 
-            tracing::info!("Enqueuing hotreload update to file: {:?}", path);
-
             files.push(path.clone());
         }
-
-        tracing::info!("Files changed: {:#?}", files);
 
         ServeUpdate::FilesChanged { files }
     }
@@ -213,6 +208,7 @@ impl Watcher {
         // Prepare the hotreload message we need to send
         let mut edited_rust_files = Vec::new();
         let mut assets = Vec::new();
+        let mut unknown_files = vec![];
 
         for path in modified_files {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
@@ -231,6 +227,7 @@ impl Watcher {
                             assets.push(bundled_name);
                         }
                     }
+                    unknown_files.push(path);
                 }
             }
         }
@@ -259,7 +256,6 @@ impl Watcher {
             }
         }
 
-        let unknown_files = vec![];
         let msg = HotReloadMsg {
             templates,
             assets,
@@ -296,13 +292,17 @@ impl Watcher {
             .collect();
         let mut assets: HashSet<PathBuf> =
             std::mem::take(&mut applied.assets).into_iter().collect();
+        let mut unknown_files: HashSet<PathBuf> = std::mem::take(&mut applied.unknown_files)
+            .into_iter()
+            .collect();
         for template in &msg.templates {
             templates.insert(template.location.clone(), template.clone());
         }
-
         assets.extend(msg.assets.iter().cloned());
+        unknown_files.extend(msg.unknown_files.iter().cloned());
         applied.templates = templates.into_values().collect();
         applied.assets = assets.into_iter().collect();
+        applied.unknown_files = unknown_files.into_iter().collect();
     }
 }
 

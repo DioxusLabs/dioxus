@@ -201,3 +201,21 @@ impl AppHandle {
         todo!("Open mobile apps")
     }
 }
+
+// let start_browser = args.open.unwrap_or_default();
+// let base_path = cfg.dioxus_config.web.app.base_path.clone();
+// let platform = args.platform();
+// // Open the browser
+// if start_browser && platform != Platform::Desktop {
+//     open_browser(base_path, addr, rustls.is_some());
+// }
+
+// /// Open the browser to the address
+// pub(crate) fn open_browser(base_path: Option<String>, address: SocketAddr, https: bool) {
+//     let protocol = if https { "https" } else { "http" };
+//     let base_path = match base_path.as_deref() {
+//         Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+//         None => "".to_owned(),
+//     };
+//     _ = open::that(format!("{protocol}://{address}{base_path}"));
+// }

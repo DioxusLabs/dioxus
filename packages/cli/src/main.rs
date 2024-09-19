@@ -26,6 +26,7 @@ mod tracer;
 pub(crate) use builder::*;
 pub(crate) use cli::*;
 pub(crate) use dioxus_crate::*;
+pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
 pub(crate) use platform::*;
 pub(crate) use settings::*;
@@ -38,7 +39,7 @@ use Commands::*;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // If we have a magic env var set, we want to operate as a linker instead.
-    if link::should_link() {
+    if link::should_act_as_linker() {
         return link::dump_link_args();
     }
 

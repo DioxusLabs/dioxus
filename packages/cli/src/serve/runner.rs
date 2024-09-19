@@ -54,6 +54,10 @@ impl AppRunner {
             .expect("Stream to pending if not empty")
     }
 
+    pub(crate) async fn kill(&mut self, platform: Platform) {
+        self.running.remove(&platform);
+    }
+
     /// Finally "bundle" this app and return a handle to it
     pub(crate) async fn open(
         &mut self,
@@ -68,9 +72,5 @@ impl AppRunner {
         self.running.insert(platform, handle);
 
         Ok(self.running.get(&platform).unwrap())
-    }
-
-    pub(crate) async fn kill(&mut self, platform: Platform) {
-        self.running.remove(&platform);
     }
 }
