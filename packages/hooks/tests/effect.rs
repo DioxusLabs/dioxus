@@ -41,6 +41,7 @@ async fn effects_rerun() {
         },
         counter.clone(),
     );
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild_in_place();
     tokio::select! {
@@ -92,6 +93,7 @@ async fn effects_rerun_without_rerender() {
         },
         counter.clone(),
     );
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild_in_place();
     tokio::select! {
