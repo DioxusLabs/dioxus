@@ -91,6 +91,7 @@ use tracing::instrument;
 /// # fn app() -> Element { rsx! { div {} } }
 ///
 /// let mut vdom = VirtualDom::new(app);
+/// let _guard = RuntimeGuard::new(vdom.runtime());
 /// let edits = vdom.rebuild_to_vec();
 /// ```
 ///
@@ -351,7 +352,6 @@ impl VirtualDom {
     /// Run a closure inside the dioxus runtime
     #[instrument(skip(self, f), level = "trace", name = "VirtualDom::in_runtime")]
     pub fn in_runtime<O>(&self, f: impl FnOnce() -> O) -> O {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
         f()
     }
 
@@ -439,9 +439,6 @@ impl VirtualDom {
                 return;
             }
 
-            // Make sure we set the runtime since we're running user code
-            let _runtime = RuntimeGuard::new(self.runtime.clone());
-
             // There isn't any more work we can do synchronously. Wait for any new work to be ready
             self.wait_for_event().await;
         }
@@ -489,9 +486,6 @@ impl VirtualDom {
     /// Poll any queued tasks
     #[instrument(skip(self), level = "trace", name = "VirtualDom::poll_tasks")]
     fn poll_tasks(&mut self) {
-        // Make sure we set the runtime since we're running user code
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
         // Keep polling tasks until there are no more effects or tasks to run
         // Or until we have no more dirty scopes
         while !self.runtime.state.dirty_tasks.borrow().is_empty()
@@ -561,7 +555,6 @@ impl VirtualDom {
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
@@ -583,7 +576,6 @@ impl VirtualDom {
 
         // Next, diff any dirty scopes
         // We choose not to poll the deadline since we complete pretty quickly anyways
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
         while let Some(work) = self.pop_work() {
             match work {
                 Work::PollTask(task) => {
@@ -646,8 +638,6 @@ impl VirtualDom {
             }
 
             {
-                // Make sure we set the runtime since we're running user code
-                let _runtime = RuntimeGuard::new(self.runtime.clone());
                 // Next, run any queued tasks
                 // We choose not to poll the deadline since we complete pretty quickly anyways
                 let mut tasks_polled = 0;
@@ -680,8 +670,6 @@ impl VirtualDom {
         self.queue_events();
 
         // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
         let mut work_done = 0;
         while let Some(work) = self.pop_work() {
             match work {

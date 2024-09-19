@@ -50,8 +50,6 @@ impl VirtualDom {
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
-        let _guard = RuntimeGuard::new(self.runtime.clone());
-
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope = &self.scopes[scope_id.0];
             let output = {

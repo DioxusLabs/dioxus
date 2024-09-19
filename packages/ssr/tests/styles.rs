@@ -7,6 +7,7 @@ fn static_styles() {
     }
 
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(

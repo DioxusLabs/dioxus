@@ -6,6 +6,7 @@ use dioxus::prelude::*;
 
 async fn run_vdom(app: fn() -> Element) {
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -76,6 +77,7 @@ async fn spawn_forever_persists() {
     }
 
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.render_immediate(&mut dioxus_core::NoOpMutations);

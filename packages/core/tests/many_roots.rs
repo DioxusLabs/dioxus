@@ -31,6 +31,7 @@ fn many_roots() {
     }
 
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
     let edits = dom.rebuild_to_vec();
 
     assert_eq!(

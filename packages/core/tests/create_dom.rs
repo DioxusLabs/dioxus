@@ -16,9 +16,9 @@ fn test_original_diff() {
             div { div { "Hello, world!" } }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     let edits = dom.rebuild_to_vec();
-
     assert_eq!(
         edits.edits,
         [
@@ -45,6 +45,7 @@ fn create() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     let _edits = dom.rebuild_to_vec();
 
@@ -76,7 +77,7 @@ fn create() {
 #[test]
 fn create_list() {
     let mut dom = VirtualDom::new(|| rsx! {{(0..3).map(|f| rsx!( div { "hello" } ))}});
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     let _edits = dom.rebuild_to_vec();
 
     // note: we dont test template edits anymore
@@ -93,33 +94,6 @@ fn create_list() {
 }
 
 #[test]
-fn create_simple() {
-    let mut dom = VirtualDom::new(|| {
-        rsx! {
-            div {}
-            div {}
-            div {}
-            div {}
-        }
-    });
-
-    let edits = dom.rebuild_to_vec();
-
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create template
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         // add to root
-    //         SaveTemplate {  m: 4 }
-    //     ]
-    // );
-}
-#[test]
 fn create_components() {
     let mut dom = VirtualDom::new(|| {
         rsx! {
@@ -128,6 +102,7 @@ fn create_components() {
             Child { "abc3" }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     #[derive(Props, Clone, PartialEq)]
     struct ChildProps {
@@ -159,6 +134,7 @@ fn anchors() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     // note that the template under "false" doesn't show up since it's not loaded
     let edits = dom.rebuild_to_vec();

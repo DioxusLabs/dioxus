@@ -380,7 +380,6 @@ impl SuspenseBoundaryProps {
         replace_with: usize,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let _runtime = RuntimeGuard::new(dom.runtime());
             let Some(scope_state) = dom.scopes.get_mut(scope_id.0) else {
                 return;
             };

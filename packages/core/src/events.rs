@@ -496,7 +496,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
             let rt = Runtime {
                 state: rt_state.clone(),
             };
-            let _guard = RuntimeGuard::new(rt.clone());
+
             rt.with_scope_on_stack(self.origin, || {
                 let mut callback = callback.callback.borrow_mut();
                 callback(arguments)

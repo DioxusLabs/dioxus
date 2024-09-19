@@ -5,6 +5,7 @@ use dioxus::prelude::*;
 #[test]
 fn catches_panic() {
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 }
 

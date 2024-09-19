@@ -115,10 +115,7 @@ impl Runtime {
         let current_scope = current_runtime.current_scope_id().ok();
         move |input| match current_scope {
             Some(scope) => current_runtime.on_scope(scope, || f(input)),
-            None => {
-                let _runtime_guard = RuntimeGuard::new(current_runtime.clone());
-                f(input)
-            }
+            None => f(input),
         }
     }
 
@@ -171,7 +168,6 @@ impl Runtime {
     ///
     /// Useful in a limited number of scenarios
     pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
-        let _runtime_guard = RuntimeGuard::new(self.clone());
         {
             self.push_scope(id);
         }
@@ -305,7 +301,6 @@ impl Runtime {
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
     #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
     pub fn handle_event(&self, name: &str, event: Event<dyn Any>, element: ElementId) {
-        let _runtime = RuntimeGuard::new(self.clone());
         let elements = self.state.elements.borrow();
 
         if let Some(Some(parent_path)) = elements.get(element.0).copied() {
@@ -440,38 +435,6 @@ impl Runtime {
 }
 
 /// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-///
-/// fn main() {
-///     let virtual_dom = VirtualDom::new(app);
-/// }
-///
-/// fn app() -> Element {
-///     rsx! { Component { runtime: Runtime::current().unwrap() } }
-/// }
-///
-/// // In a dynamic library
-/// #[derive(Props, Clone)]
-/// struct ComponentProps {
-///    runtime: std::rc::Rc<Runtime>,
-/// }
-///
-/// impl PartialEq for ComponentProps {
-///     fn eq(&self, _other: &Self) -> bool {
-///         true
-///     }
-/// }
-///
-/// fn Component(cx: ComponentProps) -> Element {
-///     use_hook(|| {
-///         let _guard = RuntimeGuard::new(cx.runtime.clone());
-///     });
-///
-///     rsx! { div {} }
-/// }
-/// ```
 pub struct RuntimeGuard(());
 
 impl RuntimeGuard {
@@ -518,30 +481,7 @@ Help: Some APIs in dioxus require a global runtime to be present.
 If you are calling one of these APIs from outside of a dioxus runtime
 (typically in a web-sys closure or dynamic library), you will need to
 grab the runtime from a scope that has it and then move it into your
-new scope with a runtime guard.
-
-For example, if you are trying to use dioxus apis from a web-sys
-closure, you can grab the runtime from the scope it is created in:
-
-```rust
-use dioxus::prelude::*;
-static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
-
-#[component]
-fn MyComponent() -> Element {{
-    use_effect(|| {{
-        // Grab the runtime from the MyComponent scope
-        let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
-        // Move the runtime into the web-sys closure scope
-        let web_sys_closure = Closure::new(|| {{
-            // Then create a guard to provide the runtime to the closure
-            let _guard = RuntimeGuard::new(runtime);
-            // and run whatever code needs the runtime
-            tracing::info!(\"The count is: {{COUNT}}\");
-        }});
-    }})
-}}
-```"
+new scope with a runtime guard."
         )
     }
 }

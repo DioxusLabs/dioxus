@@ -44,6 +44,7 @@ async fn values_memoize_in_place() {
 
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
 
     let mutations = dom.rebuild_to_vec();
     println!("{:#?}", mutations);
@@ -89,6 +90,7 @@ fn cloning_event_handler_components_work() {
 
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
 
     let mutations = dom.rebuild_to_vec();
     println!("{:#?}", mutations);

@@ -21,6 +21,7 @@ fn nested_passthru_creates() {
     }
 
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
     let edits = dom.rebuild_to_vec();
 
     assert_eq!(
@@ -58,6 +59,7 @@ fn nested_passthru_creates_add() {
     }
 
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
 
     assert_eq!(
         dom.rebuild_to_vec().edits,
@@ -85,6 +87,7 @@ fn dynamic_node_as_root() {
     }
 
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
     let edits = dom.rebuild_to_vec();
 
     // Since the roots were all dynamic, they should not cause any template muations

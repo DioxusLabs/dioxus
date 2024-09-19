@@ -19,6 +19,7 @@ fn keyed_diffing_out_of_order() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     {
         assert_eq!(
@@ -61,7 +62,7 @@ fn keyed_diffing_out_of_order_adds() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::APP);
@@ -87,7 +88,7 @@ fn keyed_diffing_out_of_order_adds_3() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::APP);
@@ -113,7 +114,7 @@ fn keyed_diffing_out_of_order_adds_4() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::APP);
@@ -139,7 +140,7 @@ fn keyed_diffing_out_of_order_adds_5() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::APP);
@@ -164,7 +165,7 @@ fn keyed_diffing_additions() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::APP);
@@ -189,7 +190,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::APP);
@@ -218,7 +219,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // LIS: 4, 5, 6
@@ -252,7 +253,7 @@ fn controlled_keyed_diffing_out_of_order() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // LIS: 5, 6
@@ -286,6 +287,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -315,6 +317,7 @@ fn remove_list() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -340,6 +343,7 @@ fn no_common_keys() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -368,6 +372,7 @@ fn perfect_reverse() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -402,6 +407,7 @@ fn old_middle_empty_left_pivot() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -431,6 +437,7 @@ fn old_middle_empty_right_pivot() {
 
         rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 

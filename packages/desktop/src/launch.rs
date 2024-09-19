@@ -4,6 +4,7 @@ use crate::{
     ipc::{IpcMethod, UserWindowEvent},
 };
 use dioxus_core::*;
+use prelude::RuntimeGuard;
 use std::any::Any;
 use tao::event::{Event, StartCause, WindowEvent};
 
@@ -67,6 +68,8 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
 
 /// Launches the WebView and runs the event loop, with configuration and root props.
 pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! {
+    let _runtime_guard = RuntimeGuard::new(virtual_dom.runtime());
+
     #[cfg(feature = "tokio_runtime")]
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()

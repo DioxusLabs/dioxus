@@ -7,6 +7,7 @@ fn static_inner_html() {
     }
 
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(dioxus_ssr::render(&dom), r#"<div><div>1234</div></div>"#);
@@ -20,6 +21,7 @@ fn dynamic_inner_html() {
     }
 
     let mut dom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(dioxus_ssr::render(&dom), r#"<div><div>1234</div></div>"#);

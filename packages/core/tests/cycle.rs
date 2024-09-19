@@ -9,6 +9,7 @@ fn cycling_elements() {
         1 => rsx! { div { "abcd" } },
         _ => unreachable!(),
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     {
         let edits = dom.rebuild_to_vec();

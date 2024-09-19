@@ -15,6 +15,7 @@ fn toggle_option_text() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     // load the div and then assign the None as a placeholder
     assert_eq!(
@@ -73,6 +74,7 @@ fn toggle_template() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // Rendering again should replace the placeholder with an text node

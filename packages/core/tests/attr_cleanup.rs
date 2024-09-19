@@ -19,6 +19,7 @@ fn attrs_cycle() {
             _ => unreachable!(),
         }
     });
+    let _runtime_guard = RuntimeGuard::new(dom.runtime());
 
     assert_eq!(
         dom.rebuild_to_vec().edits,

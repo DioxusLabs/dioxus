@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 #[test]
 fn root_node_isnt_null() {
     let dom = VirtualDom::new(|| rsx!("Hello world!"));
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     let scope = dom.base_scope();
 
     // We haven't built the tree, so trying to get out the root node should fail
