@@ -121,7 +121,7 @@ async fn handle_update(
             // and then send that update to all connected clients
             if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {
                 // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                if hr.templates.is_empty() && hr.assets.is_empty() {
+                if hr.templates.is_empty() && hr.assets.is_empty() && hr.unknown_files.is_empty() {
                     return Ok(ControlFlow::Continue(()));
                 }
 

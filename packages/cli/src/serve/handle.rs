@@ -96,6 +96,12 @@ impl AppHandle {
                     cmd.env(dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string());
                     cmd.env(dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string());
                 }
+
+                cmd.env(
+                    dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
+                    devserver_ip.to_string(),
+                );
+
                 // cmd.env(
                 //     dioxus_cli_config::ALWAYS_ON_TOP_ENV,
                 //     serve.always_on_top.unwrap_or(true).to_string(),

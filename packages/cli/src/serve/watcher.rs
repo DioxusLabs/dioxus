@@ -196,6 +196,8 @@ impl Watcher {
             files.push(path.clone());
         }
 
+        tracing::info!("Files changed: {:#?}", files);
+
         ServeUpdate::FilesChanged { files }
     }
 

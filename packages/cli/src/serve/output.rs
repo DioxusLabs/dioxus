@@ -24,6 +24,7 @@ use crossterm::{
     ExecutableCommand,
 };
 use dioxus_devtools_types::ClientMsg;
+use dioxus_html::g;
 use futures_util::{
     future::{select_all, OptionFuture},
     Future, FutureExt,
@@ -38,6 +39,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     io::{self, stdout},
+    ops::Add,
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -228,10 +230,7 @@ impl Output {
                 // Toggle more modal
                 self.more_modal_open = !self.more_modal_open;
 
-                let new_size = match self.more_modal_open {
-                    true => VIEWPORT_HEIGHT_BIG,
-                    false => VIEWPORT_HEIGHT_SMALL,
-                };
+                let new_size = self.viewport_height();
 
                 let mut term = self.term.borrow_mut();
                 let terminal = term.as_mut().unwrap();
@@ -345,10 +344,16 @@ impl Output {
 
         let owned_term = self.term.clone();
         let mut term = owned_term.borrow_mut();
-
         if let Some(term) = term.as_mut() {
             _ = self.drain_logs(term);
             _ = term.draw(|frame| self.render_frame(frame));
+        }
+    }
+
+    fn viewport_height(&self) -> u16 {
+        match self.more_modal_open {
+            true => VIEWPORT_HEIGHT_BIG,
+            false => VIEWPORT_HEIGHT_SMALL,
         }
     }
 
@@ -356,6 +361,8 @@ impl Output {
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> io::Result<()> {
+        use unicode_segmentation::UnicodeSegmentation;
+
         // todo: wrong direction of pop.... needs to be a deqeue
         let Some(log) = self.pending_logs.pop() else {
             return Ok(());
@@ -366,34 +373,80 @@ impl Output {
         let term_size = terminal.size().unwrap();
 
         // Create a paragraph by escaping the contents of the log, which is already ansi escaped
+        // let paragraph = log.content.into_text().unwrap();
+        // let line_count = paragraph.lines.len() as u16;
+        // let line_count = log.content.lines().count() as u16;
+        let mut overflowed_lines = 0;
+        for line in log.content.lines() {
+            let grapheme_count = line.graphemes(true).count() as u16;
+            if grapheme_count > term_size.width {
+                overflowed_lines += (grapheme_count / term_size.width) - 1;
+                // overflowed_lines += grapheme_count.div_ceil(term_size.width) - 1;
+            }
+        }
+
         let paragraph = Paragraph::new(log.content.into_text().unwrap());
-
-        // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes
-        let mut raw_ansi_buf = AnsiStringBuffer::new(20000, 1);
-        raw_ansi_buf.render_ref(&paragraph, raw_ansi_buf.buf.area);
-
         let line_count = paragraph.line_count(term_size.width) as u16;
 
-        let width = raw_ansi_buf.trim_end();
-        let lines_to_draw = width.div_ceil(term_size.width) + line_count - 1;
+        // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
+        // This is important because the line_count method on paragraph takes into account the width of these codes
+        let mut raw_ansi_buf = AnsiStringBuffer::new(10000, line_count);
+        raw_ansi_buf.render_ref(&paragraph, raw_ansi_buf.buf.area);
 
-        // write on top of the line if we're at the bottom, otherwise one above since it'll get scrolled
-        let y_offset = match frame_rect.y - 1 < term_size.height - VIEWPORT_HEIGHT_SMALL - 1 {
+        // Calculate how many lines we need to draw by adding the real lines to the wrapped lines
+        let lines_to_draw = line_count + overflowed_lines;
+
+        let space_available = term_size.height - self.viewport_height() - 1;
+
+        // Rendering this line will eat the frame, so just shortcut a more reliable path
+        // Render the new line at the top of the viewport, and then some spaces so that when we call "clear"
+        // The lines will have been scrolled up
+        if space_available < lines_to_draw {
+            crossterm::queue!(
+                std::io::stdout(),
+                crossterm::cursor::MoveTo(0, frame_rect.y),
+                crossterm::style::Print(raw_ansi_buf.to_string().trim_end()),
+                crossterm::style::Print("\n"),
+                crossterm::style::Print(
+                    (0..self.viewport_height() - 1)
+                        .map(|_| "\n")
+                        .collect::<String>()
+                ),
+            )?;
+            terminal.clear()?;
+            return Ok(());
+        }
+
+        // In the case where the log will fit on the screen, we want to make some room for it
+        // by adding some lines above the viewport. `insert_before` will eventually use scroll regions
+        // in ratatui, so we're just going to use that, even if it has extra flickering in the interim.
+        terminal.insert_before(lines_to_draw, |_| {})?;
+
+        // If the viewport is at the bottom of the screen, our new log will be inserted right above
+        // the viewport. If not, the viewport will shift down by lines_to_draw *or* the space available
+        let y_offset = match frame_rect.y - 1 < term_size.height - self.viewport_height() - 1 {
             true => 0,
-            false => lines_to_draw,
+            false => line_count,
         };
 
-        terminal.insert_before(lines_to_draw, |f| {});
+        // Finally, print the log to the terminal using crossterm, not ratatui
+        // We are careful to handle the case where the log won't fit on the screen, since that will
+        // cause this code to be called with the wrong viewport and cause tearing.
+        raw_ansi_buf.trim_end();
+        let buf = raw_ansi_buf.to_string();
 
-        // todo: on small consoles we need to tear, not drop the extra contents
-        let start = frame_rect.y.saturating_sub(y_offset);
-        crossterm::queue!(
-            std::io::stdout(),
-            crossterm::cursor::MoveTo(0, start),
-            crossterm::terminal::Clear(crossterm::terminal::ClearType::FromCursorDown),
-            crossterm::style::Print(raw_ansi_buf.to_string()),
-            crossterm::style::Print("\n"),
-        )
+        for (idx, line) in buf.lines().enumerate() {
+            let start = frame_rect.y.saturating_sub(y_offset) + idx as u16;
+            crossterm::queue!(
+                std::io::stdout(),
+                crossterm::cursor::MoveTo(0, start),
+                crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine),
+                crossterm::style::Print(line),
+                crossterm::style::Print("\n"),
+            );
+        }
+
+        Ok(())
     }
 
     fn render_frame(&self, frame: &mut Frame) {

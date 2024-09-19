@@ -2497,6 +2497,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "unicode-segmentation",
  "uuid",
  "walkdir",
  "wasm-bindgen-cli-support",

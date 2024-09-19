@@ -21,18 +21,21 @@ impl AnsiStringBuffer {
     }
 
     /// Trims the buffer to the last line, returning the number of cells to be rendered
-    pub fn trim_end(&mut self) -> u16 {
-        assert_eq!(self.buf.area.height, 1);
-        let start_x = self.buf.area.width;
-        let mut first_non_empty = start_x;
-        for x in (0..start_x).rev() {
-            if self.buf.get(x, 0) != &Cell::EMPTY {
-                break;
+    pub fn trim_end(&mut self) {
+        for y in 0..self.buf.area.height {
+            // assert_eq!(self.buf.area.height, 1);
+            let start_x = self.buf.area.width;
+            let mut first_non_empty = start_x - 1;
+            for x in (0..start_x).rev() {
+                if self.buf.get(x, y) != &Cell::EMPTY {
+                    break;
+                }
+                first_non_empty = x;
             }
-            first_non_empty = x;
+            self.buf.get_mut(first_non_empty, y).set_symbol("✆");
+            // self.buf.resize(Rect::new(0, 0, first_non_empty, 1));
+            // first_non_empty
         }
-        self.buf.resize(Rect::new(0, 0, first_non_empty, 1));
-        first_non_empty
     }
 }
 
@@ -40,11 +43,16 @@ impl Display for AnsiStringBuffer {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let mut last_style = None;
         for y in 0..self.buf.area.height {
-            if y > 0 {
-                f.write_str("\n")?;
-            }
+            // if y > 0 {
+            //     f.write_str("\n")?;
+            // }
             for x in 0..self.buf.area.width {
                 let cell = self.buf.get(x, y);
+                if cell.symbol() == "✆" {
+                    f.write_str("\n")?;
+                    break;
+                }
+
                 let style = (cell.fg, cell.bg, cell.modifier);
                 if last_style.is_none() || last_style != Some(style) {
                     write_cell_style(f, cell)?;
