@@ -28,7 +28,7 @@ fn suspense_resolves_ssr() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+            let _guard = RuntimeGuard::new(dom.runtime());
             dom.rebuild_in_place();
             dom.wait_for_suspense().await;
             dom.render_immediate(&mut dioxus_core::NoOpMutations);
@@ -83,7 +83,7 @@ fn suspense_keeps_state() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+            let _guard = RuntimeGuard::new(dom.runtime());
             dom.rebuild(&mut dioxus_core::NoOpMutations);
             dom.render_suspense_immediate().await;
 
@@ -143,7 +143,7 @@ fn suspense_does_not_poll_spawn() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+            let _guard = RuntimeGuard::new(dom.runtime());
             dom.rebuild(&mut dioxus_core::NoOpMutations);
 
             dom.wait_for_suspense().await;
@@ -197,7 +197,7 @@ fn suspended_nodes_dont_trigger_effects() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+            let _guard = RuntimeGuard::new(dom.runtime());
             dom.rebuild(&mut dioxus_core::NoOpMutations);
 
             let work = async move {
@@ -270,7 +270,7 @@ fn resolved_to_suspended() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+            let _guard = RuntimeGuard::new(dom.runtime());
             dom.rebuild(&mut dioxus_core::NoOpMutations);
 
             let out = dioxus_ssr::render(&dom);
@@ -334,7 +334,7 @@ fn suspense_tracks_resolved() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+            let _guard = RuntimeGuard::new(dom.runtime());
             dom.rebuild(&mut dioxus_core::NoOpMutations);
 
             dom.render_suspense_immediate().await;
@@ -421,7 +421,7 @@ fn toggle_suspense() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+            let _guard = RuntimeGuard::new(dom.runtime());
             let mutations = dom.rebuild_to_vec();
 
             // First create goodbye world

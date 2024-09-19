@@ -1,8 +1,4 @@
-use crate::{
-    properties::SuperFrom,
-    runtime::{RuntimeGuard, RuntimeState},
-    Runtime, ScopeId,
-};
+use crate::{properties::SuperFrom, runtime::RuntimeState, Runtime, ScopeId};
 use generational_box::GenerationalBox;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 

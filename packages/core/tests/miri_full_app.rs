@@ -7,7 +7,7 @@ use std::{any::Any, rc::Rc};
 fn miri_rollover() {
     set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 

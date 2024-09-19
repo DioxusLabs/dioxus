@@ -8,7 +8,7 @@ use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     arena::ElementId,
     innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
-    runtime::{Runtime, RuntimeGuard},
+    runtime::Runtime,
     scopes::ScopeId,
     ComponentFunction, Element, Mutations,
 };

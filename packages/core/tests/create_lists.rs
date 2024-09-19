@@ -25,7 +25,7 @@ fn app() -> Element {
 #[test]
 fn list_renders() {
     let mut dom = VirtualDom::new(app);
-let _guard = RuntimeGuard::new(dom.runtime());
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     let edits = dom.rebuild_to_vec();
 

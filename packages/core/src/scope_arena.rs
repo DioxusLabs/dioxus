@@ -1,6 +1,5 @@
 use crate::innerlude::{throw_error, RenderError, ScopeOrder};
 use crate::prelude::ReactiveContext;
-use crate::runtime::RuntimeGuard;
 use crate::scope_context::SuspenseLocation;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
