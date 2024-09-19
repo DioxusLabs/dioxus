@@ -225,6 +225,14 @@ impl Output {
             KeyCode::Char('o') => {
                 // Open the running app.
                 // open::that(format!("http://{}:{}", self.addr, self.port))?;
+
+                let mut buf = String::new();
+
+                for x in 0..1000 {
+                    buf.push_str(format!("hello {x}").as_str());
+                }
+
+                tracing::info!("msg! {buf}");
             }
             KeyCode::Char('/') => {
                 // Toggle more modal
@@ -380,17 +388,19 @@ impl Output {
         for line in log.content.lines() {
             let grapheme_count = line.graphemes(true).count() as u16;
             if grapheme_count > term_size.width {
-                overflowed_lines += (grapheme_count / term_size.width) - 1;
-                // overflowed_lines += grapheme_count.div_ceil(term_size.width) - 1;
+                // overflowed_lines += 1;
+                // overflowed_lines += (grapheme_count / term_size.width) - 1;
+                overflowed_lines += (grapheme_count.div_ceil(term_size.width) - 1);
             }
         }
 
+        let byte_count = log.content.len() as u16;
         let paragraph = Paragraph::new(log.content.into_text().unwrap());
         let line_count = paragraph.line_count(term_size.width) as u16;
 
         // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
         // This is important because the line_count method on paragraph takes into account the width of these codes
-        let mut raw_ansi_buf = AnsiStringBuffer::new(10000, line_count);
+        let mut raw_ansi_buf = AnsiStringBuffer::new(3000.max(byte_count), line_count);
         raw_ansi_buf.render_ref(&paragraph, raw_ansi_buf.buf.area);
 
         // Calculate how many lines we need to draw by adding the real lines to the wrapped lines
@@ -424,9 +434,9 @@ impl Output {
 
         // If the viewport is at the bottom of the screen, our new log will be inserted right above
         // the viewport. If not, the viewport will shift down by lines_to_draw *or* the space available
-        let y_offset = match frame_rect.y - 1 < term_size.height - self.viewport_height() - 1 {
+        let y_offset = match frame_rect.y - 1 < space_available {
             true => 0,
-            false => line_count,
+            false => lines_to_draw,
         };
 
         // Finally, print the log to the terminal using crossterm, not ratatui
@@ -435,15 +445,23 @@ impl Output {
         raw_ansi_buf.trim_end();
         let buf = raw_ansi_buf.to_string();
 
+        let mut max_idx = 0_u16;
         for (idx, line) in buf.lines().enumerate() {
+            if line.is_empty() {
+                continue;
+            }
             let start = frame_rect.y.saturating_sub(y_offset) + idx as u16;
             crossterm::queue!(
                 std::io::stdout(),
                 crossterm::cursor::MoveTo(0, start),
-                crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine),
                 crossterm::style::Print(line),
                 crossterm::style::Print("\n"),
             );
+            max_idx = idx as _;
+        }
+
+        if (max_idx - line_count) != 0 {
+            panic!("\n\n\n\nmax_idx: {max_idx}, line_count: {line_count}, overflowed_lines: {overflowed_lines}");
         }
 
         Ok(())
