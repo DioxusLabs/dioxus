@@ -6,7 +6,7 @@ use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
     properties::ComponentFunction,
 };
-use crate::{Properties, ScopeId, VirtualDom};
+use crate::{Properties, Runtime, ScopeId, VirtualDom};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -604,18 +604,15 @@ impl VComponent {
     /// This is useful for rendering nodes outside of the VirtualDom, such as in SSR
     ///
     /// Returns [`None`] if the node is not mounted
-    pub fn mounted_scope<'a>(
-        &self,
-        dynamic_node_index: usize,
-        vnode: &VNode,
-        dom: &'a VirtualDom,
-    ) -> Option<&'a ScopeState> {
+    pub fn mounted_scope(&self, dynamic_node_index: usize, vnode: &VNode) -> Option<ScopeState> {
         let mount = vnode.mount.get().as_usize()?;
 
-        let mounts = dom.runtime.mounts.borrow();
+        let rt = Runtime::current().unwrap();
+        let mounts = rt.mounts.borrow();
         let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
-        dom.scopes.get(scope_id)
+        let scopes = rt.scopes.borrow();
+        scopes.get(scope_id).cloned()
     }
 }
 

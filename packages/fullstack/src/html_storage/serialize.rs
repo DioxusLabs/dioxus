@@ -66,7 +66,7 @@ impl super::HTMLData {
                 }
             }
             if let Some(node) = scope.try_root_node() {
-                self.take_from_vnode(vdom, node);
+                self.take_from_vnode(vdom, &node);
             }
         }
     }
@@ -75,7 +75,7 @@ impl super::HTMLData {
         for (dynamic_node_index, dyn_node) in vnode.dynamic_nodes.iter().enumerate() {
             match dyn_node {
                 DynamicNode::Component(comp) => {
-                    if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
+                    if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode) {
                         self.take_from_scope(vdom, scope.id());
                     }
                 }

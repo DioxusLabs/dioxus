@@ -95,7 +95,7 @@ impl Renderer {
         scope: ScopeId,
     ) -> std::fmt::Result {
         let node = dom.get_scope(scope).unwrap().root_node();
-        self.render_template(buf, dom, node)?;
+        self.render_template(buf, dom, &node)?;
 
         Ok(())
     }
@@ -165,9 +165,9 @@ impl Renderer {
 
                             render_components(self, &mut buf, dom, scope_id)?;
                         } else {
-                            let scope = node.mounted_scope(*idx, template, dom).unwrap();
+                            let scope = node.mounted_scope(*idx, template).unwrap();
                             let node = scope.root_node();
-                            self.render_template(buf, dom, node)?
+                            self.render_template(buf, dom, &node)?
                         }
                     }
                     DynamicNode::Text(text) => {

@@ -137,12 +137,12 @@ impl VirtualDom {
 
     /// Queue a scope to be rerendered
     pub(crate) fn queue_scope(&mut self, order: ScopeOrder) {
-        self.dirty_scopes.insert(order);
+        self.runtime.dirty_scopes.borrow_mut().insert(order);
     }
 
     /// Check if there are any dirty scopes
     pub(crate) fn has_dirty_scopes(&self) -> bool {
-        !self.dirty_scopes.is_empty()
+        !self.runtime.dirty_scopes.borrow_mut().is_empty()
     }
 
     /// Take the top task from the highest scope
@@ -151,7 +151,7 @@ impl VirtualDom {
         let mut tasks = dirty_tasks.first()?;
 
         // If the scope doesn't exist for whatever reason, then we should skip it
-        while !self.scopes.contains(tasks.order.id.0) {
+        while !self.runtime.scopes.borrow_mut().contains(tasks.order.id.0) {
             dirty_tasks.pop_first();
             tasks = dirty_tasks.first()?;
         }
@@ -171,7 +171,7 @@ impl VirtualDom {
         let mut effect = pending_effects.pop_first()?;
 
         // If the scope doesn't exist for whatever reason, then we should skip it
-        while !self.scopes.contains(effect.order.id.0) {
+        while !self.runtime.scopes.borrow().contains(effect.order.id.0) {
             effect = pending_effects.pop_first()?;
         }
 
@@ -180,12 +180,12 @@ impl VirtualDom {
 
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
     pub(crate) fn pop_work(&mut self) -> Option<Work> {
-        let mut dirty_scope = self.dirty_scopes.first();
+        let mut dirty_scope = self.runtime.dirty_scopes.borrow().first().cloned();
         // Pop any invalid scopes off of each dirty task;
         while let Some(scope) = dirty_scope {
-            if !self.scopes.contains(scope.id.0) {
-                self.dirty_scopes.pop_first();
-                dirty_scope = self.dirty_scopes.first();
+            if !self.runtime.scopes.borrow().contains(scope.id.0) {
+                self.runtime.dirty_scopes.borrow_mut().pop_first();
+                dirty_scope = self.runtime.dirty_scopes.borrow().first().cloned();
             } else {
                 break;
             }
@@ -197,7 +197,9 @@ impl VirtualDom {
             let mut dirty_task = dirty_tasks.first();
             // Pop any invalid tasks off of each dirty scope;
             while let Some(task) = dirty_task {
-                if task.tasks_queued.borrow().is_empty() || !self.scopes.contains(task.order.id.0) {
+                if task.tasks_queued.borrow().is_empty()
+                    || !self.runtime.scopes.borrow().contains(task.order.id.0)
+                {
                     dirty_tasks.pop_first();
                     dirty_task = dirty_tasks.first()
                 } else {
@@ -212,7 +214,7 @@ impl VirtualDom {
                 let tasks_order = task.borrow();
                 match scope.cmp(tasks_order) {
                     std::cmp::Ordering::Less => {
-                        let scope = self.dirty_scopes.pop_first().unwrap();
+                        let scope = self.runtime.dirty_scopes.borrow_mut().pop_first().unwrap();
                         Some(Work::RerunScope(scope))
                     }
                     std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => {
@@ -221,7 +223,7 @@ impl VirtualDom {
                 }
             }
             (Some(_), None) => {
-                let scope = self.dirty_scopes.pop_first().unwrap();
+                let scope = self.runtime.dirty_scopes.borrow_mut().pop_first().unwrap();
                 Some(Work::RerunScope(scope))
             }
             (None, Some(_)) => Some(Work::PollTask(self.pop_task().unwrap())),

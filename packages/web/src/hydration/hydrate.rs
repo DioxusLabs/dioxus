@@ -173,7 +173,7 @@ impl WebsysDom {
         self.suspense_hydration_ids
             .current_path
             .clone_from(&suspense_path);
-        self.start_hydration_at_scope(root_scope, dom, children)?;
+        self.start_hydration_at_scope(&root_scope, dom, children)?;
 
         Ok(())
     }
@@ -218,7 +218,7 @@ impl WebsysDom {
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
         // Any suspense boundaries we run into are stored for hydration later.
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone().into()])?;
+        self.start_hydration_at_scope(&vdom.base_scope(), vdom, vec![self.root.clone().into()])?;
 
         Ok(rx)
     }
@@ -240,7 +240,7 @@ impl WebsysDom {
             }
         }
 
-        self.rehydrate_vnode(dom, scope.root_node(), ids, to_mount)
+        self.rehydrate_vnode(dom, &scope.root_node(), ids, to_mount)
     }
 
     fn rehydrate_vnode(
@@ -340,9 +340,9 @@ impl WebsysDom {
             }
             dioxus_core::DynamicNode::Component(comp) => {
                 let scope = comp
-                    .mounted_scope(dynamic_node_index, vnode, dom)
+                    .mounted_scope(dynamic_node_index, vnode)
                     .ok_or(VNodeNotInitialized)?;
-                self.rehydrate_scope(scope, dom, ids, to_mount)?;
+                self.rehydrate_scope(&scope, dom, ids, to_mount)?;
             }
             dioxus_core::DynamicNode::Fragment(fragment) => {
                 for vnode in fragment {
