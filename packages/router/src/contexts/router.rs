@@ -135,7 +135,7 @@ impl RouterContext {
             failure_external_navigation: cfg.failure_external_navigation,
 
             any_route_to_string: |route| {
-                route
+                let path = route
                     .downcast_ref::<R>()
                     .unwrap_or_else(|| {
                         panic!(
@@ -144,8 +144,13 @@ impl RouterContext {
                             route.type_id(),
                             std::any::TypeId::of::<R>()
                         )
-                    })
-                    .to_string()
+                    });
+
+                if let Some(base_path) = dioxus_cli_config::BASE_PATH {
+                    format!("/{base_path}{path}")
+                } else {
+                    path.to_string()
+                }
             },
 
             site_map: R::SITE_MAP,
