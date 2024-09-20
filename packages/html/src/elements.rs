@@ -1553,8 +1553,6 @@ builder_constructors! {
     /// [`<select>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select)
     /// element.
     select None {
-        // defined below
-        // value: String,
         autocomplete: String DEFAULT,
         autofocus: Bool DEFAULT,
         disabled: Bool DEFAULT,
@@ -1563,7 +1561,6 @@ builder_constructors! {
         name: Id DEFAULT,
         required: Bool DEFAULT,
         size: usize DEFAULT,
-        value: String volatile,
     };
 
     /// Build a
