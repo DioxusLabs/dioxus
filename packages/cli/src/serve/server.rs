@@ -1,6 +1,7 @@
 use crate::{
-    config::WebHttpsConfig, serve::ServeArgs, serve::ServeUpdate, DioxusCrate, Error, Platform,
-    Result, TraceSrc,
+    config::WebHttpsConfig,
+    serve::{ServeArgs, ServeUpdate},
+    BuildStage, BuildUpdate, DioxusCrate, Error, Platform, Result, TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -201,15 +202,36 @@ impl DevServer {
     }
 
     /// Sends an updated build status to all clients.
-    pub(crate) async fn update_build_status(&mut self, progress: f64, build_message: String) {
-        if !matches!(self.build_status.get(), Status::Building { .. }) {
-            return;
+    pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate) {
+        match update {
+            BuildUpdate::Progress { stage } => {
+                //
+                match stage {
+                    BuildStage::Initializing => {}
+                    BuildStage::InstallingTooling {} => {}
+                    BuildStage::Compiling { current, total } => {}
+                    BuildStage::OptimizingWasm {} => {}
+                    BuildStage::OptimizingAssets {} => {}
+                    BuildStage::Success => {}
+                    BuildStage::Failed => self.send_reload_failed().await,
+                    BuildStage::Aborted => {}
+                    BuildStage::Restarting => self.send_reload_start().await,
+                    BuildStage::CopyingAssets { current, total } => {}
+                }
+            }
+            BuildUpdate::Message {} => {}
+            BuildUpdate::BuildReady { bundle } => {}
+            BuildUpdate::BuildFailed { err } => {}
         }
-        self.build_status.set(Status::Building {
-            progress,
-            build_message,
-        });
-        self.send_build_status().await;
+
+        // if !matches!(self.build_status.get(), Status::Building { .. }) {
+        //     return;
+        // }
+        // self.build_status.set(Status::Building {
+        //     progress,
+        //     build_message,
+        // });
+        // self.send_build_status().await;
     }
 
     /// Sends hot reloadable changes to all clients.

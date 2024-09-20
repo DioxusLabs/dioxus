@@ -1,5 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use crate::{BuildRequest, Platform};
+use crate::{bundler::AppBundle, BuildRequest, Platform};
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -11,41 +11,61 @@ use std::{fmt::Display, path::Path};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use tracing::Level;
 
+pub(crate) enum BuildUpdate {
+    Progress { stage: BuildStage },
+    Message {},
+    BuildReady { bundle: AppBundle },
+    BuildFailed { err: crate::Error },
+}
+
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BuildStage {
+    Initializing,
+    InstallingTooling {},
+    Compiling { current: usize, total: usize },
+    OptimizingWasm {},
+    OptimizingAssets {},
+    CopyingAssets { current: usize, total: usize },
+    Success,
+    Failed,
+    Aborted,
+    Restarting,
+}
+
 impl BuildRequest {
     pub(crate) fn status_build_diagnostic(&self, message: &Diagnostic) {
-        _ = self.progress.unbounded_send(BuildUpdateProgress {
-            stage: Stage::Compiling,
-            update: UpdateStage::AddMessage(message.clone().into()),
-            platform: self.platform(),
-        });
+        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        //     stage: BuildStage::Compiling,
+        //     update: UpdateStage::AddMessage(message.clone().into()),
+        //     platform: self.platform(),
+        // });
     }
 
     pub(crate) fn status_build_message(&self, line: String) {
-        _ = self.progress.unbounded_send(BuildUpdateProgress {
-            platform: self.platform(),
-            stage: Stage::Compiling,
-            update: UpdateStage::AddMessage(BuildMessage {
-                level: Level::DEBUG,
-                message: MessageType::Text(line),
-                source: MessageSource::Build,
-            }),
-        });
+        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        //     platform: self.platform(),
+        //     stage: BuildStage::Compiling,
+        //     update: UpdateStage::AddMessage(BuildMessage {
+        //         level: Level::DEBUG,
+        //         message: MessageType::Text(line),
+        //         source: MessageSource::Build,
+        //     }),
+        // });
     }
 
-    pub(crate) fn status_build_progress(&self, build_progress: f64) {
-        _ = self.progress.unbounded_send(BuildUpdateProgress {
-            platform: self.platform(),
-            stage: Stage::Compiling,
-            update: UpdateStage::SetProgress((build_progress).clamp(0.0, 1.00)),
+    pub(crate) fn status_build_progress(&self, current: usize, total: usize) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::Compiling { current, total },
         });
     }
 
     pub(crate) fn status_starting_build(&self) {
-        _ = self.progress.unbounded_send(BuildUpdateProgress {
-            stage: Stage::Compiling,
-            update: UpdateStage::Start,
-            platform: self.platform(),
-        });
+        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        //     stage: BuildStage::Compiling,
+        //     update: UpdateStage::Start,
+        //     platform: self.platform(),
+        // });
     }
 
     /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
@@ -98,169 +118,135 @@ impl BuildRequest {
     pub(crate) fn status_build_finished(&self) {
         tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
 
-        _ = self.progress.unbounded_send(BuildUpdateProgress {
-            platform: self.platform(),
-            stage: Stage::Finished,
-            update: UpdateStage::Start,
+        todo!()
+        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        //     stage: BuildStage::Finished,
+        //     progress: 1.0,
+        // });
+    }
+
+    pub(crate) fn status_copying_asset(&self, current: usize, total: usize, asset: &Path) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::CopyingAssets { current, total },
         });
     }
 
-    pub(crate) fn status_copying_asset(&self, cur: usize, total: usize, asset: &Path) {
-        // Update the progress
-        // _ = self.progress.unbounded_send(UpdateBuildProgress {
-        //     stage: Stage::OptimizingAssets,
-        //     update: UpdateStage::AddMessage(BuildMessage {
-        //         level: Level::INFO,
-        //         message: MessageType::Text(format!(
-        //             "Optimized static asset {}",
-        //             asset.display()
-        //         )),
-        //         source: MessageSource::Build,
-        //     }),
-        //     platform: self.target_platform,
-        // });
-    }
-
-    pub(crate) fn status_finished_asset(&self, idx: usize, total: usize, asset: &Path) {
-        // Update the progress
-        // _ = self.progress.unbounded_send(UpdateBuildProgress {
-        //     stage: Stage::OptimizingAssets,
-        //     update: UpdateStage::SetProgress(finished as f64 / asset_count as f64),
-        //     platform: self.target_platform,
-        // });
+    pub(crate) fn status_finished_asset(&self, current: usize, total: usize, asset: &Path) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::CopyingAssets { current, total },
+        });
     }
 }
 
-pub(crate) type ProgressTx = UnboundedSender<BuildUpdateProgress>;
-pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdateProgress>;
+pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
+pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 
-#[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum Stage {
-    #[default]
-    Initializing = 0,
-    InstallingWasmTooling = 1,
-    Compiling = 2,
-    OptimizingWasm = 3,
-    OptimizingAssets = 4,
-    Finished = 5,
-}
+// #[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+// pub(crate) enum BuildStage {
+//     #[default]
+//     Initializing = 0,
+//     InstallingWasmTooling = 1,
+//     Compiling = 2,
+//     OptimizingWasm = 3,
+//     OptimizingAssets = 4,
+//     Finished = 5,
+// }
 
-impl Deref for Stage {
-    type Target = str;
+// impl Deref for BuildStage {
+//     type Target = str;
 
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Stage::Initializing => "Initializing",
-            Stage::InstallingWasmTooling => "Installing Wasm Tooling",
-            Stage::Compiling => "Compiling",
-            Stage::OptimizingWasm => "Optimizing Wasm",
-            Stage::OptimizingAssets => "Optimizing Assets",
-            Stage::Finished => "Finished",
-        }
-    }
-}
+//     fn deref(&self) -> &Self::Target {
+//         match self {
+//             BuildStage::Initializing => "Initializing",
+//             BuildStage::InstallingWasmTooling => "Installing Wasm Tooling",
+//             BuildStage::Compiling => "Compiling",
+//             BuildStage::OptimizingWasm => "Optimizing Wasm",
+//             BuildStage::OptimizingAssets => "Optimizing Assets",
+//             BuildStage::Finished => "Finished",
+//         }
+//     }
+// }
 
-impl std::fmt::Display for Stage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.deref())
-    }
-}
+// impl std::fmt::Display for BuildStage {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.deref())
+//     }
+// }
 
-#[derive(Debug, Clone)]
-pub(crate) struct BuildUpdateProgress {
-    pub(crate) stage: Stage,
-    pub(crate) update: UpdateStage,
-    pub(crate) platform: Platform,
-}
+// #[derive(Debug, Clone)]
+// pub(crate) struct BuildUpdate::Progress {
+//     pub(crate) stage: BuildStage,
+//     pub(crate) update: UpdateStage,
+//     pub(crate) platform: Platform,
+// }
 
-impl BuildUpdateProgress {
-    pub(crate) fn to_std_out(&self) {
-        match &self.update {
-            UpdateStage::Start => println!("--- {} ---", self.stage),
-            UpdateStage::SetProgress(progress) => {
-                println!("Build progress {:0.0}%", progress * 100.0);
-            }
-            UpdateStage::Failed(message) => {
-                println!("Build failed: {}", message);
-            }
-            UpdateStage::AddMessage(message) => {
-                println!(
-                    "{}",
-                    match &message.message {
-                        MessageType::Text(text) => text.to_string(),
-                        MessageType::Cargo(diagnostic) => diagnostic.to_string(),
-                    }
-                );
-            }
-        }
-    }
-}
+// impl BuildUpdate::Progress {
+//     pub(crate) fn to_std_out(&self) {
+//         match &self.update {
+//             UpdateStage::Start => println!("--- {} ---", self.stage),
+//             UpdateStage::SetProgress(progress) => {
+//                 println!("Build progress {:0.0}%", progress * 100.0);
+//             }
+//             UpdateStage::Failed(message) => {
+//                 println!("Build failed: {}", message);
+//             }
+//             UpdateStage::AddMessage(message) => {
+//                 println!(
+//                     "{}",
+//                     match &message.message {
+//                         MessageType::Text(text) => text.to_string(),
+//                         MessageType::Cargo(diagnostic) => diagnostic.to_string(),
+//                     }
+//                 );
+//             }
+//         }
+//     }
+// }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum UpdateStage {
-    Start,
-    SetProgress(f64),
-    Failed(String),
-    AddMessage(BuildMessage),
-}
+// /// Represents the source of where a message came from.
+// ///
+// /// The CLI will render a prefix according to the message type
+// /// but this prefix, [`MessageSource::to_string()`] shouldn't be used if a strict message source is required.
+// #[derive(Debug, Clone, PartialEq)]
+// pub(crate) enum MessageSource {
+//     /// Represents any message from the running application. Renders `[app]`
+//     App,
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct BuildMessage {
-    pub(crate) level: Level,
-    pub(crate) message: MessageType,
-    pub(crate) source: MessageSource,
-}
+//     /// Represents any generic message from the CLI. Renders `[dev]`
+//     ///
+//     /// Usage of Tracing inside of the CLI will be routed to this type.
+//     Dev,
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum MessageType {
-    Cargo(Diagnostic),
-    Text(String),
-}
+//     /// Represents a message from the build process. Renders `[bld]`
+//     ///
+//     /// This is anything emitted from a build process such as cargo and optimizations.
+//     Build,
+// }
 
-/// Represents the source of where a message came from.
-///
-/// The CLI will render a prefix according to the message type
-/// but this prefix, [`MessageSource::to_string()`] shouldn't be used if a strict message source is required.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum MessageSource {
-    /// Represents any message from the running application. Renders `[app]`
-    App,
+// impl Display for MessageSource {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Self::App => write!(f, "app"),
+//             Self::Dev => write!(f, "dev"),
+//             Self::Build => write!(f, "bld"),
+//         }
+//     }
+// }
 
-    /// Represents any generic message from the CLI. Renders `[dev]`
-    ///
-    /// Usage of Tracing inside of the CLI will be routed to this type.
-    Dev,
-
-    /// Represents a message from the build process. Renders `[bld]`
-    ///
-    /// This is anything emitted from a build process such as cargo and optimizations.
-    Build,
-}
-
-impl Display for MessageSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::App => write!(f, "app"),
-            Self::Dev => write!(f, "dev"),
-            Self::Build => write!(f, "bld"),
-        }
-    }
-}
-
-impl From<Diagnostic> for BuildMessage {
-    fn from(message: Diagnostic) -> Self {
-        Self {
-            level: match message.level {
-                cargo_metadata::diagnostic::DiagnosticLevel::Ice
-                | cargo_metadata::diagnostic::DiagnosticLevel::FailureNote
-                | cargo_metadata::diagnostic::DiagnosticLevel::Error => Level::ERROR,
-                cargo_metadata::diagnostic::DiagnosticLevel::Warning => Level::WARN,
-                cargo_metadata::diagnostic::DiagnosticLevel::Note => Level::INFO,
-                cargo_metadata::diagnostic::DiagnosticLevel::Help => Level::DEBUG,
-                _ => Level::DEBUG,
-            },
-            source: MessageSource::Build,
-            message: MessageType::Cargo(message),
-        }
-    }
-}
+// impl From<Diagnostic> for BuildMessage {
+//     fn from(message: Diagnostic) -> Self {
+//         Self {
+//             level: match message.level {
+//                 cargo_metadata::diagnostic::DiagnosticLevel::Ice
+//                 | cargo_metadata::diagnostic::DiagnosticLevel::FailureNote
+//                 | cargo_metadata::diagnostic::DiagnosticLevel::Error => Level::ERROR,
+//                 cargo_metadata::diagnostic::DiagnosticLevel::Warning => Level::WARN,
+//                 cargo_metadata::diagnostic::DiagnosticLevel::Note => Level::INFO,
+//                 cargo_metadata::diagnostic::DiagnosticLevel::Help => Level::DEBUG,
+//                 _ => Level::DEBUG,
+//             },
+//             source: MessageSource::Build,
+//             message: MessageType::Cargo(message),
+//         }
+//     }
+// }

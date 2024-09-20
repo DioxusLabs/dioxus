@@ -1,16 +1,9 @@
 use crate::error::{Error, Result};
-use crate::{
-    builder::progress::{
-        BuildMessage, BuildUpdateProgress, MessageSource, MessageType, Stage, UpdateStage,
-    },
-    TraceSrc,
-};
+use crate::TraceSrc;
 use crate::{BuildRequest, Platform};
 use anyhow::Context;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
-use tokio::process::Command;
-use tracing::Level;
 use wasm_bindgen_cli_support::Bindgen;
 
 const DEFAULT_HTML: &str = include_str!("../../assets/index.html");

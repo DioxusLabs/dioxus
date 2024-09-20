@@ -15,6 +15,7 @@ use uuid::Uuid;
 pub(crate) struct AppHandle {
     pub(crate) _id: Uuid,
     pub(crate) app: AppBundle,
+
     pub(crate) executable: PathBuf,
     pub(crate) child: Option<Child>,
     pub(crate) stdout: Option<Lines<BufReader<ChildStdout>>>,
@@ -146,11 +147,11 @@ impl AppHandle {
     ///
     /// Returns the name of the asset in the bundle if it exists
     pub(crate) fn hotreload_asset(&self, path: &PathBuf) -> Option<PathBuf> {
-        let resource = self.app.assets.assets.get(path).cloned()?;
+        let resource = self.app.app_assets.assets.get(path).cloned()?;
 
         _ = self
             .app
-            .assets
+            .app_assets
             .copy_asset_to(&self.app.asset_dir(), path, false, false);
 
         Some(resource.bundled.into())

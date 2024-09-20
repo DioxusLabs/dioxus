@@ -1,12 +1,11 @@
-use crate::config::AddressArguments;
 use crate::{
-    builder::{BuildMessage, BuildUpdateProgress, Stage, UpdateStage},
     cli::serve::ServeArgs,
     dioxus_crate::DioxusCrate,
     serve::{Builder, Watcher},
     tracer::CLILogControl,
     Platform, TraceMsg, TraceSrc,
 };
+use crate::{config::AddressArguments, BuildUpdate};
 use ansi_to_tui::IntoText;
 use crossterm::{
     cursor::{Hide, Show},
@@ -15,9 +14,8 @@ use crossterm::{
         EnableFocusChange, EnableMouseCapture, Event, EventStream, KeyCode, KeyEvent, KeyEventKind,
         KeyModifiers,
     },
-    execute,
     terminal::{
-        disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
+        self, disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
         LeaveAlternateScreen,
     },
     tty::IsTty,
@@ -37,7 +35,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Display,
-    io::{self, stdout},
+    io::{self, stdout, Write},
     ops::Add,
     rc::Rc,
     time::{Duration, Instant},
@@ -47,45 +45,49 @@ use super::{ansi_buffer::AnsiStringBuffer, loggs::*};
 use super::{AppHandle, DevServer, ServeUpdate};
 use tracing::Level;
 
-use super::render;
-
-// How many lines should be scroll on each mouse scroll or arrow key input.
-const SCROLL_SPEED: u16 = 2;
-// Speed added to `SCROLL_SPEED` when the modifier key is held during scroll.
-const SCROLL_MODIFIER: u16 = 4;
-// Scroll modifier key.
-const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
-
+const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_WIDTH: u16 = 120;
 const VIEWPORT_HEIGHT_SMALL: u16 = 7;
 const VIEWPORT_HEIGHT_BIG: u16 = 14;
 
+/// The TUI that drives the console output.
+///
+/// We try not to store too much state about the world here, just the state about the tui itself.
+/// This is to prevent out-of-sync issues with the rest of the build engine and to use the components
+/// of the serve engine as the source of truth.
+///
+/// Please please, do not add state here that does not belong here. We should only be storing state
+/// here that is used to change how we display *other* state. Things like throbbers, modals, etc.
 pub struct Output {
     term: Rc<RefCell<Option<Terminal<CrosstermBackend<io::Stdout>>>>>,
     events: Option<EventStream>,
 
-    pub(crate) build_progress: BuildProgress,
-
     // A list of all messages from build, dev, app, and more.
     messages: Vec<ConsoleMessage>,
     more_modal_open: bool,
-    anim_start: Instant,
     interactive: bool,
     platform: Platform,
+
+    // Whether to show verbose logs or not
+    // We automatically hide "debug" logs if verbose is false (only showing "info" / "warn" / "error")
+    verbose: bool,
 
     // Pending logs
     pending_logs: Vec<TraceMsg>,
 
-    // Filters
-    show_filter_menu: bool,
-    filters: Vec<(String, bool)>,
-    selected_filter_index: usize,
-    filter_search_mode: bool,
-    filter_search_input: Option<String>,
-
     dx_version: String,
     throbber: RefCell<throbber_widgets_tui::ThrobberState>,
-    progress: f64,
+    tick_animation: bool,
+    last_tick: Instant,
+}
+
+#[derive(Clone, Copy)]
+struct RenderState<'a> {
+    opts: &'a ServeArgs,
+    config: &'a DioxusCrate,
+    build_engine: &'a Builder,
+    server: &'a DevServer,
+    watcher: &'a Watcher,
 }
 
 impl Output {
@@ -106,20 +108,15 @@ impl Output {
             events: None,
             messages: Vec::new(),
             more_modal_open: false,
-            build_progress: Default::default(),
-            anim_start: Instant::now(),
+            last_tick: Instant::now(),
             pending_logs: Vec::new(),
-
-            // Filter
-            show_filter_menu: false,
-            filters: Vec::new(),
-            selected_filter_index: 0,
-            filter_search_input: None,
-            filter_search_mode: false,
 
             // Status bars
             throbber: RefCell::new(throbber_widgets_tui::ThrobberState::default()),
-            progress: 0.0,
+            verbose: cfg.verbose,
+
+            // we dont want to queue unnecessary renders if we can help it
+            tick_animation: false,
         };
 
         output.startup()?;
@@ -127,18 +124,27 @@ impl Output {
         Ok(output)
     }
 
+    /// Call the startup functions that might mess with the terminal settings.
+    /// This is meant to be paired with "shutdown" to restore the terminal to its original state.
     fn startup(&mut self) -> io::Result<()> {
-        // set the panic hook to fix the terminal
-        set_fix_term_hook();
-
         if self.interactive {
+            // set the panic hook to fix the terminal in the event of a panic
+            // The terminal might be left in a wonky state if a panic occurs, and we don't want it to be completely broken
+            let original_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                _ = disable_raw_mode();
+                _ = stdout().execute(Show);
+                original_hook(info);
+            }));
+
             enable_raw_mode()?;
             stdout()
                 .execute(Hide)?
                 .execute(EnableFocusChange)?
                 .execute(EnableBracketedPaste)?;
 
-            // workaround for ci where the terminal is not fully initialized
+            // Initialize the event stream here - this is optional because an EvenStream in a non-interactive
+            // terminal will cause a panic instead of simply doing nothing.
             // https://github.com/crossterm-rs/crossterm/issues/659
             self.events = Some(EventStream::new());
         }
@@ -146,6 +152,8 @@ impl Output {
         Ok(())
     }
 
+    /// Call the shutdown functions that might mess with the terminal settings - see the related code
+    /// in "startup" for more details about what we need to unset
     pub(crate) fn shutdown(&self) -> io::Result<()> {
         if self.interactive {
             stdout()
@@ -156,6 +164,87 @@ impl Output {
         }
 
         Ok(())
+    }
+
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
+        use futures_util::StreamExt;
+
+        // Wait for the next user event or animation tick
+        loop {
+            let next = OptionFuture::from(self.events.as_mut().map(|f| f.next()));
+            let event = tokio::select! {
+                biased; // Always choose the event over the animation tick to not lose the event
+                Some(Some(Ok(event))) = next => event,
+                _ = tokio::time::sleep(Duration::from_millis(TICK_RATE_MS)), if self.tick_animation => return ServeUpdate::Redraw,
+                else => futures_util::future::pending().await
+            };
+
+            match self.handle_input(event) {
+                Ok(Some(update)) => return update,
+                Err(ee) => {
+                    return ServeUpdate::Exit {
+                        error: Some(Box::new(ee)),
+                    }
+                }
+                _ => (),
+            }
+        }
+    }
+
+    /// Handle an input event, returning `true` if the event should cause the program to restart.
+    fn handle_input(&mut self, input: Event) -> io::Result<Option<ServeUpdate>> {
+        // handle ctrlc
+        if let Event::Key(key) = input {
+            if let KeyCode::Char('c') = key.code {
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    return Ok(Some(ServeUpdate::Exit { error: None }));
+                }
+            }
+        }
+
+        match input {
+            Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_keypress(key),
+            Event::Resize(_, _) | _ => Ok(Some(ServeUpdate::Redraw)),
+        }
+    }
+
+    fn handle_keypress(&mut self, key: KeyEvent) -> io::Result<Option<ServeUpdate>> {
+        match key.code {
+            KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
+            KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
+            KeyCode::Char('v') => {
+                self.verbose = !self.verbose;
+                tracing::info!(
+                    "Verbose logging is now {}",
+                    if self.verbose { "on" } else { "off" }
+                );
+            }
+
+            // Toggle the more modal by swapping the the terminal with a new one
+            // This is a bit of a hack since crossterm doesn't technically support changing the
+            // size of an inline viewport.
+            KeyCode::Char('/') => {
+                if let Some(terminal) = self.term.borrow_mut().as_mut() {
+                    // Toggle the more modal, which will change our current viewport height
+                    self.more_modal_open = !self.more_modal_open;
+
+                    // Clear the terminal before resizing it, such that it doesn't tear
+                    terminal.clear()?;
+
+                    // And then set the new viewport, which essentially mimics a resize
+                    *terminal = Terminal::with_options(
+                        CrosstermBackend::new(stdout()),
+                        TerminalOptions {
+                            viewport: Viewport::Inline(self.viewport_current_height()),
+                        },
+                    )?;
+                }
+            }
+
+            _ => {}
+        }
+
+        Ok(None)
     }
 
     /// Add a message from stderr to the logs
@@ -176,148 +265,52 @@ impl Output {
         }));
     }
 
-    pub(crate) async fn wait(&mut self) -> ServeUpdate {
-        use futures_util::StreamExt;
+    /// Push a message from the websocket to the logs
+    pub fn push_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
+        // We can only handle text messages from the websocket...
+        let axum::extract::ws::Message::Text(text) = message else {
+            return;
+        };
 
-        loop {
-            let next = OptionFuture::from(self.events.as_mut().map(|f| f.next()));
-            let event = tokio::select! {
-                Some(Some(Ok(event))) = next => event,
-                else => futures_util::future::pending().await
-            };
+        // ...and then decode them into a ClientMsg
+        let res = serde_json::from_str::<ClientMsg>(text.as_str());
 
-            match self.handle_input(event) {
-                Ok(Some(update)) => return update,
-                Err(ee) => {
-                    return ServeUpdate::Exit {
-                        error: Some(Box::new(ee)),
-                    }
-                }
-                _ => (),
+        // Client logs being errors aren't fatal, but we should still report them them
+        let ClientMsg::Log { level, messages } = match res {
+            Ok(msg) => msg,
+            Err(err) => {
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
+                return;
             }
-        }
+        };
+
+        // FIXME(jon): why are we pulling only the first message here?
+        let content = messages.first().unwrap_or(&String::new()).clone();
+
+        let level = match level.as_str() {
+            "trace" => Level::TRACE,
+            "debug" => Level::DEBUG,
+            "info" => Level::INFO,
+            "warn" => Level::WARN,
+            "error" => Level::ERROR,
+            _ => Level::INFO,
+        };
+
+        // We don't care about logging the app's message so we directly push it instead of using tracing.
+        self.push_log(TraceMsg::new(TraceSrc::App(platform), level, content));
     }
 
-    /// Handle an input event, returning `true` if the event should cause the program to restart.
-    pub(crate) fn handle_input(&mut self, input: Event) -> io::Result<Option<ServeUpdate>> {
-        // handle ctrlc
-        if let Event::Key(key) = input {
-            if let KeyCode::Char('c') = key.code {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    return Ok(Some(ServeUpdate::Exit { error: None }));
-                }
-            }
-        }
-
-        match input {
-            Event::Key(key) => self.handle_keypress(key),
-
-            // todo: if the size is smaller, then we want to clear and redraw to not leave garbage
-            // will be hard to calculate overflow, but we need to do it
-            Event::Resize(_, _) | _ => Ok(Some(ServeUpdate::Redraw)),
-        }
-    }
-
-    fn handle_keypress(&mut self, key: KeyEvent) -> io::Result<Option<ServeUpdate>> {
-        match key.code {
-            KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
-            KeyCode::Char('o') => {
-                // Open the running app.
-                // open::that(format!("http://{}:{}", self.addr, self.port))?;
-
-                let mut buf = String::new();
-
-                for x in 0..1000 {
-                    buf.push_str(format!("hello {x}").as_str());
-                }
-
-                tracing::info!("msg! {buf}");
-            }
-            KeyCode::Char('/') => {
-                // Toggle more modal
-                self.more_modal_open = !self.more_modal_open;
-
-                let new_size = self.viewport_height();
-
-                let mut term = self.term.borrow_mut();
-                let terminal = term.as_mut().unwrap();
-
-                let size = terminal.size().unwrap();
-                terminal.resize(Rect::new(
-                    0,
-                    0,
-                    size.width,
-                    match self.more_modal_open {
-                        true => size.height + 1,
-                        false => size.height - 1,
-                    },
-                ))?;
-
-                *terminal = Terminal::with_options(
-                    CrosstermBackend::new(stdout()),
-                    TerminalOptions {
-                        viewport: Viewport::Inline(new_size),
-                    },
-                )
-                .unwrap();
-            }
-
-            _ => {}
-        }
-
-        Ok(None)
-    }
-
-    pub(crate) fn new_ws_message(
-        &mut self,
-        platform: Platform,
-        message: axum::extract::ws::Message,
-    ) {
-        // Deccode the message and push it to our logs.
-        if let axum::extract::ws::Message::Text(text) = message {
-            let msg = serde_json::from_str::<ClientMsg>(text.as_str());
-            match msg {
-                Ok(ClientMsg::Log { level, messages }) => {
-                    let level = match level.as_str() {
-                        "trace" => Level::TRACE,
-                        "debug" => Level::DEBUG,
-                        "info" => Level::INFO,
-                        "warn" => Level::WARN,
-                        "error" => Level::ERROR,
-                        _ => Level::INFO,
-                    };
-
-                    let content = messages.first().unwrap_or(&String::new()).clone();
-
-                    // We don't care about logging the app's message so we directly push it instead of using tracing.
-                    self.push_log(TraceMsg::new(TraceSrc::App(platform), level, content));
-                }
-                Err(err) => {
-                    tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
-                }
-            }
-        }
-    }
-
-    pub(crate) fn push_inner_log(&mut self, msg: String) {
-        self.push_log(TraceMsg::new(TraceSrc::Build, Level::INFO, msg));
+    pub(crate) fn push_inner_log(&mut self, msg: TraceMsg) {
+        self.push_log(msg);
         self.throbber.borrow_mut().calc_next();
     }
 
-    pub(crate) fn new_build_logs(&mut self, platform: Platform, update: BuildUpdateProgress) {
-        match update.update {
-            UpdateStage::Start => {
-                // tracing::info!(dx_src = ?TraceSrc::Build, "Starting build for {platform:?}")
-            }
-            UpdateStage::SetProgress(progress) => {
-                self.progress = progress;
-            }
-            UpdateStage::Failed(err) => {
-                // tracing::error!(dx_src = ?TraceSrc::Build, "Build failed for {platform:?}: {err:?}")
-            }
-            UpdateStage::AddMessage(build_message) => {
-                // tracing::info!(dx_src = ?TraceSrc::Build, "{build_message:?}")
-            }
+    pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
+        match update {
+            BuildUpdate::Message {} => {}
+            BuildUpdate::Progress { .. } => self.tick_animation = true,
+            BuildUpdate::BuildReady { .. } => self.tick_animation = false,
+            BuildUpdate::BuildFailed { .. } => self.tick_animation = false,
         }
     }
 
@@ -325,189 +318,284 @@ impl Output {
         self.pending_logs.push(message);
     }
 
-    pub(crate) fn new_ready_app(&mut self, handle: &AppHandle) {
-        self.progress = 1.0;
-        // Finish the build progress for the platform that just finished building
-        if let Some(build) = self
-            .build_progress
-            .current_builds
-            .get_mut(&handle.app.build.platform())
-        {
-            build.stage = Stage::Finished;
-        }
-    }
+    pub(crate) fn new_ready_app(&mut self, handle: &AppHandle) {}
 
+    /// Render the current state of everything to the console screen
     pub fn render(
         &mut self,
-        _opts: &ServeArgs,
-        _config: &DioxusCrate,
-        _build_engine: &Builder,
-        _server: &DevServer,
-        _watcher: &Watcher,
+        opts: &ServeArgs,
+        config: &DioxusCrate,
+        build_engine: &Builder,
+        server: &DevServer,
+        watcher: &Watcher,
     ) {
         if !self.interactive {
             return;
         }
 
+        // Get a handle to the terminal with a different lifetime so we can continue to call &self methods
         let owned_term = self.term.clone();
         let mut term = owned_term.borrow_mut();
-        if let Some(term) = term.as_mut() {
-            _ = self.drain_logs(term);
-            _ = term.draw(|frame| self.render_frame(frame));
-        }
-    }
-
-    fn viewport_height(&self) -> u16 {
-        match self.more_modal_open {
-            true => VIEWPORT_HEIGHT_BIG,
-            false => VIEWPORT_HEIGHT_SMALL,
-        }
-    }
-
-    fn drain_logs(
-        &mut self,
-        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    ) -> io::Result<()> {
-        use unicode_segmentation::UnicodeSegmentation;
-
-        // todo: wrong direction of pop.... needs to be a deqeue
-        let Some(log) = self.pending_logs.pop() else {
-            return Ok(());
+        let Some(term) = term.as_mut() else {
+            return;
         };
 
-        // Grab out the size and location of the terminal and its viewport
-        let frame_rect = terminal.get_frame().area();
-        let term_size = terminal.size().unwrap();
+        // First, dequeue any logs that have built up from event handling
+        _ = self.drain_logs(term);
 
-        // Create a paragraph by escaping the contents of the log, which is already ansi escaped
-        // let paragraph = log.content.into_text().unwrap();
-        // let line_count = paragraph.lines.len() as u16;
-        // let line_count = log.content.lines().count() as u16;
-        let mut overflowed_lines = 0;
-        for line in log.content.lines() {
-            let grapheme_count = line.graphemes(true).count() as u16;
-            if grapheme_count > term_size.width {
-                // overflowed_lines += 1;
-                // overflowed_lines += (grapheme_count / term_size.width) - 1;
-                overflowed_lines += (grapheme_count.div_ceil(term_size.width) - 1);
-            }
-        }
-
-        let byte_count = log.content.len() as u16;
-        let paragraph = Paragraph::new(log.content.into_text().unwrap());
-        let line_count = paragraph.line_count(term_size.width) as u16;
-
-        // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
-        // This is important because the line_count method on paragraph takes into account the width of these codes
-        let mut raw_ansi_buf = AnsiStringBuffer::new(3000.max(byte_count), line_count);
-        raw_ansi_buf.render_ref(&paragraph, raw_ansi_buf.buf.area);
-
-        // Calculate how many lines we need to draw by adding the real lines to the wrapped lines
-        let lines_to_draw = line_count + overflowed_lines;
-
-        let space_available = term_size.height - self.viewport_height() - 1;
-
-        // Rendering this line will eat the frame, so just shortcut a more reliable path
-        // Render the new line at the top of the viewport, and then some spaces so that when we call "clear"
-        // The lines will have been scrolled up
-        if space_available < lines_to_draw {
-            crossterm::queue!(
-                std::io::stdout(),
-                crossterm::cursor::MoveTo(0, frame_rect.y),
-                crossterm::style::Print(raw_ansi_buf.to_string().trim_end()),
-                crossterm::style::Print("\n"),
-                crossterm::style::Print(
-                    (0..self.viewport_height() - 1)
-                        .map(|_| "\n")
-                        .collect::<String>()
-                ),
-            )?;
-            terminal.clear()?;
-            return Ok(());
-        }
-
-        // In the case where the log will fit on the screen, we want to make some room for it
-        // by adding some lines above the viewport. `insert_before` will eventually use scroll regions
-        // in ratatui, so we're just going to use that, even if it has extra flickering in the interim.
-        terminal.insert_before(lines_to_draw, |_| {})?;
-
-        // If the viewport is at the bottom of the screen, our new log will be inserted right above
-        // the viewport. If not, the viewport will shift down by lines_to_draw *or* the space available
-        let y_offset = match frame_rect.y - 1 < space_available {
-            true => 0,
-            false => lines_to_draw,
-        };
-
-        // Finally, print the log to the terminal using crossterm, not ratatui
-        // We are careful to handle the case where the log won't fit on the screen, since that will
-        // cause this code to be called with the wrong viewport and cause tearing.
-        raw_ansi_buf.trim_end();
-        let buf = raw_ansi_buf.to_string();
-
-        let mut max_idx = 0_u16;
-        for (idx, line) in buf.lines().enumerate() {
-            if line.is_empty() {
-                continue;
-            }
-            let start = frame_rect.y.saturating_sub(y_offset) + idx as u16;
-            crossterm::queue!(
-                std::io::stdout(),
-                crossterm::cursor::MoveTo(0, start),
-                crossterm::style::Print(line),
-                crossterm::style::Print("\n"),
+        // Then, draw the frame, passing along all the state of the TUI so we can render it properly
+        _ = term.draw(|frame| {
+            self.render_frame(
+                frame,
+                RenderState {
+                    opts,
+                    config,
+                    build_engine,
+                    server,
+                    watcher,
+                },
             );
-            max_idx = idx as _;
-        }
-
-        if (max_idx - line_count) != 0 {
-            panic!("\n\n\n\nmax_idx: {max_idx}, line_count: {line_count}, overflowed_lines: {overflowed_lines}");
-        }
-
-        Ok(())
+        });
     }
 
-    fn render_frame(&self, frame: &mut Frame) {
-        let mut size = frame.size();
-        size.width = size.width.min(VIEWPORT_WIDTH);
+    fn render_frame(&self, frame: &mut Frame, state: RenderState) {
+        // Use the max size of the viewport, but shrunk to a sensible max width
+        let mut area = frame.area();
+        area.width = area.width.min(VIEWPORT_WIDTH);
 
-        // stroke the outer border first
-        self.render_borders(frame, size);
+        let [_top, body, bottom] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ])
+        .horizontal_margin(1)
+        .areas(area);
 
-        // And then start splitting up the frame into chunks
-        // First chunk is the entire block itself
-        let body = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Fill(1),
-                Constraint::Length(1),
-            ])
+        self.render_borders(frame, area);
+        self.render_body(frame, body, state);
+        self.render_bottom_row(frame, bottom, state);
+    }
+
+    fn render_body(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        let [title, body, more, _foot] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Length(3),
+            Constraint::Fill(1),
+            Constraint::Length(0),
+        ])
+        .horizontal_margin(1)
+        .areas(area);
+
+        let [col1, col2] = Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)])
             .horizontal_margin(1)
-            .split(size);
+            .areas(body);
 
-        self.render_top_row(frame, body[0]);
-        self.render_body(frame, body[1]);
-        self.render_bottom_row(frame, body[2]);
+        self.render_body_title(frame, title, state);
+        self.render_gauges(frame, col1, state);
+        self.render_stats(frame, col2, state);
+
+        if self.more_modal_open {
+            self.render_more_modal(frame, more, state);
+        }
     }
 
-    /// Render all decorations.
-    pub fn render_borders(&self, frame: &mut Frame, area: Rect) {
-        frame.render_widget(ratatui::widgets::Clear, area);
+    fn render_gauges(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        let [gauge_area, _margin] =
+            Layout::horizontal([Constraint::Fill(1), Constraint::Length(5)]).areas(area);
+
+        let gauge_list: [_; 3] = Layout::vertical([
+            Constraint::Length(1), // g1
+            Constraint::Length(1), // g2
+            Constraint::Length(1), // g3
+        ])
+        .areas(gauge_area);
+
+        self.render_single_gauge(
+            frame,
+            gauge_list[0],
+            state.build_engine.compile_progress,
+            "Compiling  ",
+        );
+        self.render_single_gauge(
+            frame,
+            gauge_list[1],
+            state.build_engine.optimize_progress,
+            "Optimizing ",
+        );
+        self.render_single_gauge(
+            frame,
+            gauge_list[2],
+            state.build_engine.bundling_progress,
+            "Bundling   ",
+        );
+    }
+
+    fn render_single_gauge(&self, frame: &mut Frame<'_>, area: Rect, value: f64, label: &str) {
+        let value = value.max(0.0).min(1.0);
+
+        let [gauge_row, _, icon] = Layout::horizontal([
+            Constraint::Fill(1),
+            Constraint::Length(2),
+            Constraint::Length(2),
+        ])
+        .areas(area);
+
         frame.render_widget(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::DarkGray)),
+            LineGauge::default()
+                .filled_style(Style::default().fg(match value {
+                    1.0 => Color::Green,
+                    _ => Color::Yellow,
+                }))
+                .unfilled_style(Style::default().fg(Color::DarkGray))
+                .label(label.gray())
+                .line_set(symbols::line::THICK)
+                .ratio(value),
+            gauge_row,
+        );
+
+        if value != 1.0 {
+            let throb = throbber_widgets_tui::Throbber::default()
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
+                .throbber_style(
+                    ratatui::style::Style::default()
+                        .fg(ratatui::style::Color::Red)
+                        .add_modifier(ratatui::style::Modifier::BOLD),
+                )
+                .throbber_set(throbber_widgets_tui::CLOCK)
+                .use_type(throbber_widgets_tui::WhichUse::Spin);
+            frame.render_stateful_widget(throb, icon, &mut self.throbber.borrow_mut());
+        } else {
+            frame.render_widget(Line::from("🎉".white()).right_aligned(), icon);
+        }
+    }
+
+    fn render_stats(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        let stat_list: [_; 3] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        let s1 = Paragraph::new(Line::from(vec![
+            "Serving at ".gray(),
+            "http://127.0.0.1:8080".blue(),
+        ]))
+        .wrap(Wrap { trim: false });
+        let s2 = Paragraph::new(Line::from(vec![
+            "Platform: ".gray(),
+            "web".yellow(),
+            " + ".gray(),
+            "fullstack".yellow(),
+        ]))
+        .wrap(Wrap { trim: false });
+        let s3 = Paragraph::new(Line::from(vec!["Build time: ".gray(), "1m 2s".yellow()]))
+            .wrap(Wrap { trim: false });
+
+        frame.render_widget_ref(s1, stat_list[0]);
+        frame.render_widget(s2, stat_list[1]);
+        frame.render_widget(s3, stat_list[2]);
+    }
+
+    fn render_body_title(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        // Right-aligned text
+        let right_line = Line::from(vec![
+            Span::from("[o] open").gray(),
+            Span::from(" | ").gray(),
+            Span::from("[r] rebuild").gray(),
+            Span::from(" | ").gray(),
+            match self.more_modal_open {
+                true => Span::from("[/] more").light_yellow(),
+                false => Span::from("[/] more").gray(),
+            },
+        ]);
+
+        // // Split the area into two chunks
+        // let row = Layout::default()
+        //     .direction(Direction::Horizontal)
+        //     .constraints([Constraint::Fill(1), Constraint::Fill(1)])
+        //     .split(area);
+
+        // // frame.render_widget(Paragraph::new(right_line).left_aligned(), row[0]);
+        // frame.render_widget(Paragraph::new(left_line).right_aligned(), row[1]);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Serving ".yellow(),
+                "your dioxus app: ".white(),
+                "file-explorer".light_blue(),
+                "! 🚀".white(),
+            ]))
+            .wrap(Wrap { trim: false })
+            .left_aligned(),
             area,
+        );
+
+        frame.render_widget(right_line.right_aligned(), area);
+    }
+
+    fn render_more_modal(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        let [top, bottom] = Layout::vertical([Constraint::Fill(1), Constraint::Length(2)])
+            .horizontal_margin(1)
+            .areas(area);
+
+        let meta_list: [_; 5] = Layout::vertical([
+            Constraint::Length(1), // spacing
+            Constraint::Length(1), // item 1
+            Constraint::Length(1), // item 2
+            Constraint::Length(1), // item 3
+            Constraint::Length(1), // Spacing
+        ])
+        .areas(top);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Watching: ".dark_gray(),
+                r#"[“assets”, “src”]"#.yellow(),
+            ])),
+            meta_list[1],
+        );
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "rustc: ".dark_gray(),
+                "1.79.9 (nightly)".yellow(),
+            ])),
+            meta_list[2],
+        );
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Hotreload: ".dark_gray(),
+                "enabled".yellow(),
+            ])),
+            meta_list[3],
+        );
+
+        let links_list: [_; 2] =
+            Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(bottom);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Read the docs: ".dark_gray(),
+                "https://dioxuslabs.com/0.6/docs".blue(),
+            ])),
+            links_list[0],
+        );
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Video tutorials: ".dark_gray(),
+                "https://youtube.com/dioxuslabs".blue(),
+            ])),
+            links_list[1],
         );
     }
 
     /// Render the status bar.
-    pub fn render_bottom_row(&self, frame: &mut Frame, area: Rect) {
+    fn render_bottom_row(&self, frame: &mut Frame, area: Rect, state: RenderState) {
         let _platform: Platform = self.platform;
-        let build_progress: &BuildProgress = &self.build_progress;
+        // let build_progress: &BuildProgress = &self.build_progress;
         let more_modal_open: bool = self.more_modal_open;
-        let filter_menu_open: bool = self.show_filter_menu;
+        // let filter_menu_open: bool = self.show_filter_menu;
         let dx_version: &str = &self.dx_version;
 
         // left aligned text
@@ -565,10 +653,7 @@ impl Output {
         ]);
 
         // Split the area into two chunks
-        let row = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-            .split(area);
+        let row = Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).split(area);
 
         // frame.render_widget(Paragraph::new(right_line).left_aligned(), row[0]);
         frame.render_widget(Paragraph::new(left_line).right_aligned(), row[1]);
@@ -576,261 +661,116 @@ impl Output {
         // frame.render_widget(Paragraph::new(right_line).right_aligned(), row[1]);
     }
 
-    fn render_top_row(&self, frame: &mut Frame<'_>, area: Rect) {
-        // right aligned text
-        let more_span = Span::from("[/] more");
-        let more_span = match self.more_modal_open {
-            true => more_span.light_yellow(),
-            false => more_span.gray(),
+    /// Render all decorations.
+    fn render_borders(&self, frame: &mut Frame, area: Rect) {
+        frame.render_widget(ratatui::widgets::Clear, area);
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::DarkGray)),
+            area,
+        );
+    }
+
+    fn drain_logs(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        use unicode_segmentation::UnicodeSegmentation;
+
+        let Some(log) = self.pending_logs.pop() else {
+            return Ok(());
         };
 
-        // Right-aligned text
-        let right_line = Line::from(vec![
-            // Span::from("[o] open").gray(),
-            // Span::from(" | ").gray(),
-            Span::from("[r] rebuild").gray(),
-            Span::from(" | ").gray(),
-            more_span,
-        ]);
+        // Grab out the size and location of the terminal and its viewport
+        let frame_rect = terminal.get_frame().area();
+        let term_size = terminal.size().unwrap();
 
-        let row = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-            .split(area);
-
-        // frame.render_widget(Paragraph::new(right_line).right_aligned(), row[1]);
-    }
-
-    fn render_body(&self, frame: &mut Frame<'_>, area: Rect) {
-        let [title, body, more, foot] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(2),
-                Constraint::Length(3),
-                Constraint::Fill(1),
-                Constraint::Length(0),
-            ])
-            .horizontal_margin(1)
-            .areas(area);
-
-        let [col1, col2] = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-            .horizontal_margin(1)
-            .areas(body);
-
-        self.render_body_title(frame, title);
-        self.render_gauges(frame, col1);
-        self.render_stats(frame, col2);
-
-        if self.more_modal_open {
-            self.render_more_modal(frame, more);
+        // Create a paragraph by escaping the contents of the log, which is already ansi escaped
+        let mut overflowed_lines = 0;
+        for line in log.content.lines() {
+            let grapheme_count = line.graphemes(true).count() as u16;
+            if grapheme_count > term_size.width {
+                // Subtract 1 since we already know this line will count as at least one line
+                overflowed_lines += grapheme_count.div_ceil(term_size.width) - 1;
+            }
         }
-    }
 
-    fn render_gauges(&self, frame: &mut Frame<'_>, area: Rect) {
-        let [gauge_area, _margin] = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Fill(1), Constraint::Length(5)])
-            .areas(area);
+        let byte_count = log.content.len() as u16;
+        let paragraph = Paragraph::new(log.content.into_text().unwrap());
+        let line_count = paragraph.line_count(term_size.width) as u16;
 
-        let gauge_list: [_; 3] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // g1
-                Constraint::Length(1), // g2
-                Constraint::Length(1), // g3
-            ])
-            .areas(gauge_area);
+        // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
+        // This is important because the line_count method on paragraph takes into account the width of these codes
+        let mut raw_ansi_buf = AnsiStringBuffer::new(3000.max(byte_count), line_count);
+        raw_ansi_buf.render_ref(&paragraph, raw_ansi_buf.buf.area);
 
-        self.render_single_gauge(
-            frame,
-            gauge_list[0],
-            (self.progress * 3.0) - 0.0,
-            "Compiling  ",
-        );
-        self.render_single_gauge(
-            frame,
-            gauge_list[1],
-            (self.progress * 3.0) - 1.0,
-            "Optimizing ",
-        );
-        self.render_single_gauge(
-            frame,
-            gauge_list[2],
-            (self.progress * 3.0) - 2.0,
-            "Bundling   ",
-        );
-    }
+        // Calculate how many lines we need to draw by adding the real lines to the wrapped lines
+        let lines_to_draw = line_count + overflowed_lines;
 
-    fn render_single_gauge(&self, frame: &mut Frame<'_>, area: Rect, value: f64, label: &str) {
-        let value = value.max(0.0).min(1.0);
+        let space_available = term_size.height - self.viewport_current_height() - 1;
 
-        let [gauge_row, _, icon] = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Fill(1),
-                Constraint::Length(2),
-                Constraint::Length(2),
-            ])
-            .areas(area);
-
-        frame.render_widget(
-            LineGauge::default()
-                .filled_style(Style::default().fg(match value {
-                    1.0 => Color::Green,
-                    _ => Color::Yellow,
-                }))
-                .unfilled_style(Style::default().fg(Color::DarkGray))
-                .label(label.gray())
-                .line_set(symbols::line::THICK)
-                .ratio(value),
-            gauge_row,
-        );
-
-        if value != 1.0 {
-            let throb = throbber_widgets_tui::Throbber::default()
-                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
-                .throbber_style(
-                    ratatui::style::Style::default()
-                        .fg(ratatui::style::Color::Red)
-                        .add_modifier(ratatui::style::Modifier::BOLD),
-                )
-                .throbber_set(throbber_widgets_tui::CLOCK)
-                .use_type(throbber_widgets_tui::WhichUse::Spin);
-            frame.render_stateful_widget(throb, icon, &mut self.throbber.borrow_mut());
-        } else {
-            frame.render_widget(Line::from("🎉".white()).right_aligned(), icon);
+        // Rendering this line will eat the frame, so just shortcut a more reliable path
+        // Render the new line at the top of the viewport, and then some spaces so that when we call "clear"
+        // The lines will have been scrolled up
+        if space_available < lines_to_draw {
+            crossterm::queue!(
+                std::io::stdout(),
+                crossterm::cursor::MoveTo(0, frame_rect.y),
+                crossterm::style::Print(raw_ansi_buf.to_string().trim_end()),
+                crossterm::style::Print("\n"),
+                crossterm::style::Print(
+                    (0..self.viewport_current_height() - 1)
+                        .map(|_| "\n")
+                        .collect::<String>()
+                ),
+            )?;
+            terminal.clear()?;
+            return Ok(());
         }
+
+        // In the case where the log will fit on the screen, we want to make some room for it
+        // by adding some lines above the viewport. `insert_before` will eventually use scroll regions
+        // in ratatui, so we're just going to use that, even if it has extra flickering in the interim.
+        terminal.insert_before(lines_to_draw, |_| {})?;
+
+        // If the viewport is at the bottom of the screen, our new log will be inserted right above
+        // the viewport. If not, the viewport will shift down by lines_to_draw *or* the space available
+        let y_offset = match frame_rect.y - 1 < space_available {
+            true => 0,
+            false => lines_to_draw,
+        };
+
+        // Finally, print the log to the terminal using crossterm, not ratatui
+        // We are careful to handle the case where the log won't fit on the screen, since that will
+        // cause this code to be called with the wrong viewport and cause tearing.
+        raw_ansi_buf.trim_end();
+        let buf = raw_ansi_buf.to_string();
+
+        let mut max_idx = 0_u16;
+        for (idx, line) in buf.lines().enumerate() {
+            let start = frame_rect.y.saturating_sub(y_offset) + idx as u16;
+            crossterm::queue!(
+                std::io::stdout(),
+                crossterm::cursor::MoveTo(0, start),
+                crossterm::style::Print(line.trim_end()),
+                crossterm::style::Print("\n"),
+            )?;
+            max_idx = idx as _;
+        }
+
+        // Just sanity check that our math works out
+        debug_assert_eq!(max_idx - line_count, 0);
+
+        Ok(())
     }
 
-    fn render_stats(&self, frame: &mut Frame<'_>, area: Rect) {
-        let stat_list: [_; 3] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(1),
-            ])
-            .areas(area);
-
-        let s1 = Paragraph::new(Line::from(vec![
-            "Serving at ".gray(),
-            "http://127.0.0.1:8080".blue(),
-        ]))
-        .wrap(Wrap { trim: false });
-        let s2 = Paragraph::new(Line::from(vec![
-            "Platform: ".gray(),
-            "web".yellow(),
-            " + ".gray(),
-            "fullstack".yellow(),
-        ]))
-        .wrap(Wrap { trim: false });
-        let s3 = Paragraph::new(Line::from(vec!["Build time: ".gray(), "1m 2s".yellow()]))
-            .wrap(Wrap { trim: false });
-
-        frame.render_widget_ref(s1, stat_list[0]);
-        frame.render_widget(s2, stat_list[1]);
-        frame.render_widget(s3, stat_list[2]);
-    }
-
-    fn render_body_title(&self, frame: &mut Frame<'_>, title: Rect) {
-        // Right-aligned text
-        let right_line = Line::from(vec![
-            Span::from("[o] open").gray(),
-            Span::from(" | ").gray(),
-            Span::from("[r] rebuild").gray(),
-            Span::from(" | ").gray(),
-            match self.more_modal_open {
-                true => Span::from("[/] more").light_yellow(),
-                false => Span::from("[/] more").gray(),
-            },
-        ]);
-
-        // // Split the area into two chunks
-        // let row = Layout::default()
-        //     .direction(Direction::Horizontal)
-        //     .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-        //     .split(area);
-
-        // // frame.render_widget(Paragraph::new(right_line).left_aligned(), row[0]);
-        // frame.render_widget(Paragraph::new(left_line).right_aligned(), row[1]);
-
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Serving ".yellow(),
-                "your dioxus app: ".white(),
-                "file-explorer".light_blue(),
-                "! 🚀".white(),
-            ]))
-            .wrap(Wrap { trim: false })
-            .left_aligned(),
-            title,
-        );
-
-        frame.render_widget(right_line.right_aligned(), title);
-    }
-
-    fn render_more_modal(&self, frame: &mut Frame<'_>, area: Rect) {
-        let [top, bottom] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Fill(1), Constraint::Length(2)])
-            .horizontal_margin(1)
-            .areas(area);
-
-        let meta_list: [_; 5] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // spacing
-                Constraint::Length(1), // item 1
-                Constraint::Length(1), // item 2
-                Constraint::Length(1), // item 3
-                Constraint::Length(1), // Spacing
-            ])
-            .areas(top);
-
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Watching: ".dark_gray(),
-                r#"[“assets”, “src”]"#.yellow(),
-            ])),
-            meta_list[1],
-        );
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "rustc: ".dark_gray(),
-                "1.79.9 (nightly)".yellow(),
-            ])),
-            meta_list[2],
-        );
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Hotreload: ".dark_gray(),
-                "enabled".yellow(),
-            ])),
-            meta_list[3],
-        );
-
-        let links_list: [_; 2] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Length(1)])
-            .areas(bottom);
-
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Read the docs: ".dark_gray(),
-                "https://dioxuslabs.com/0.6/docs".blue(),
-            ])),
-            links_list[0],
-        );
-
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Video tutorials: ".dark_gray(),
-                "https://youtube.com/dioxuslabs".blue(),
-            ])),
-            links_list[1],
-        );
+    fn viewport_current_height(&self) -> u16 {
+        match self.more_modal_open {
+            true => VIEWPORT_HEIGHT_BIG,
+            false => VIEWPORT_HEIGHT_SMALL,
+        }
     }
 
     // /// Renders the "more" modal to show extra info/keybinds accessible via the more keybind.

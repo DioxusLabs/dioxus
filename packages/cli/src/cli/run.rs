@@ -24,8 +24,8 @@ impl RunArgs {
 
         println!("Build args: {:#?}", self.build_args);
 
-        let bundles = Builder::start(&mut dioxus_crate, self.build_args.clone())?
-            .wait_for_finish()
+        let bundle = Builder::start(&mut dioxus_crate, self.build_args.clone())?
+            .finish()
             .await?;
 
         let mut runner = crate::serve::AppRunner::start();
@@ -33,11 +33,9 @@ impl RunArgs {
         let devserver_ip = "127.0.0.1:8080".parse().unwrap();
         let fullstack_ip = "127.0.0.1:6955".parse().unwrap();
 
-        for bundle in bundles {
-            runner
-                .open(bundle, devserver_ip, Some(fullstack_ip))
-                .await?;
-        }
+        runner
+            .open(bundle, devserver_ip, Some(fullstack_ip))
+            .await?;
 
         loop {
             let msg = runner.wait().await;
@@ -49,15 +47,15 @@ impl RunArgs {
                     runner.kill(platform).await;
                     eprintln!("[{platform}]: process exited with status: {status:?}")
                 }
-
-                ServeUpdate::TracingLog { log } => todo!(),
-                ServeUpdate::NewConnection => todo!(),
-                ServeUpdate::WsMessage(_) => todo!(),
-                ServeUpdate::BuildUpdate(_) => todo!(),
-                ServeUpdate::FilesChanged { files } => todo!(),
-                ServeUpdate::RequestRebuild => todo!(),
-                ServeUpdate::Redraw => todo!(),
-                ServeUpdate::Exit { error } => todo!(),
+                ServeUpdate::BuildUpdate { .. } => {}
+                ServeUpdate::TracingLog { log } => {}
+                ServeUpdate::NewConnection => {}
+                ServeUpdate::WsMessage(_) => {}
+                ServeUpdate::FilesChanged { files } => {}
+                ServeUpdate::RequestRebuild => {}
+                ServeUpdate::Redraw => {}
+                ServeUpdate::Exit { error } => {}
+                ServeUpdate::OpenApp => {}
             }
         }
 

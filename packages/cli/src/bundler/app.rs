@@ -5,24 +5,63 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 
+/// The end result of a build.
+///
+/// Contains the final asset manifest, the executables, and the workdir.
+///
+/// Every dioxus app can have an optional server executable which will influence the final bundle.
+/// This is built in parallel with the app executable during the `build` phase and the progres/status
+/// of the build is aggregated.
+///
+/// When we write the AppBundle to a folder, it'll contain each bundle for each platform under the app's name:
+/// ```
+/// bundle/
+///   dog-app/
+///       build.json                 // The build stats, config flags, and other info that was used to build the app
+///       Mobile_x64.app
+///       Mobile_arm64.app
+///       Mobile_rosetta.app
+///       server.exe
+///       private/                   // The assets that were collected for the server, if they exist
+///           some-secret-asset.txt
+///       public/
+///           index.html
+///           assets/
+///               logo.png
+///               style.css
+///      server.appimage             // contains everything - you can just ./ it to run everything
+/// ```
+///
+/// When deploying, the build.json file will provide all the metadata that dx-deploy will use to
+/// push the app to stores, set up infra, manage versions, etc.
+///
+/// The format of each build will follow the name plus some metadata such that when distributing you
+/// can easily trim off the metadata.
 pub(crate) struct AppBundle {
     pub(crate) build: BuildRequest,
     pub(crate) workdir: PathBuf,
-    pub(crate) executable: PathBuf,
-    pub(crate) assets: AssetManifest,
+
+    pub(crate) app_executable: PathBuf,
+    pub(crate) app_assets: AssetManifest,
+
+    pub(crate) server_executable: Option<PathBuf>,
+    pub(crate) server_assets: AssetManifest,
 }
 
 impl AppBundle {
     pub(crate) async fn new(
         build: BuildRequest,
-        assets: AssetManifest,
-        executable: PathBuf,
+        app_assets: AssetManifest,
+        app_exe: PathBuf,
+        server_exe: Option<PathBuf>,
     ) -> Result<Self> {
         let bundle = Self {
             workdir: build.krate.workdir(build.build.platform()),
+            server_executable: server_exe,
             build,
-            executable,
-            assets,
+            app_executable: app_exe,
+            app_assets,
+            server_assets: Default::default(),
         };
 
         bundle.prepare_workdir()?;
@@ -68,7 +107,10 @@ impl AppBundle {
             Platform::Web => {
                 // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
                 self.build
-                    .run_wasm_bindgen(&self.executable.with_extension("wasm"), &self.bindgen_dir())
+                    .run_wasm_bindgen(
+                        &self.app_executable.with_extension("wasm"),
+                        &self.bindgen_dir(),
+                    )
                     .await?;
 
                 // Only run wasm-opt if the feature is enabled
@@ -82,7 +124,7 @@ impl AppBundle {
 
             // Move the executable to the workdir
             Platform::Desktop => {
-                std::fs::copy(self.executable.clone(), self.workdir.join("app"))?;
+                std::fs::copy(self.app_executable.clone(), self.workdir.join("app"))?;
             }
 
             Platform::Ios => {}
@@ -120,7 +162,7 @@ impl AppBundle {
             );
 
             let res = self
-                .assets
+                .app_assets
                 .copy_asset_to(&asset_dir, asset, optimize, pre_compress);
 
             if let Err(err) = res {
@@ -158,19 +200,19 @@ impl AppBundle {
             Platform::Desktop => {
                 // for now, until we have bundled hotreload, just copy the executable to the output location
                 // let output_location = destination.join(self.build.app_name());
-                Ok(self.executable.clone())
+                Ok(self.app_executable.clone())
                 // Ok(output_location)
             }
 
             Platform::Server => {
                 std::fs::copy(
-                    self.executable.clone(),
+                    self.app_executable.clone(),
                     destination.join(self.build.app_name()),
                 )?;
 
                 Ok(destination.join(self.build.app_name()))
             }
-            Platform::Liveview => Ok(self.executable.clone()),
+            Platform::Liveview => Ok(self.app_executable.clone()),
 
             // Create a .ipa, only from macOS
             Platform::Ios => todo!(),
@@ -189,7 +231,7 @@ impl AppBundle {
         // Legacy assets need to retain their name in case they're referenced in the manifest
         // todo: we should only copy over assets that appear in `img { src: "assets/logo.png" }` to
         // properly deprecate the legacy asset dir
-        self.assets
+        self.app_assets
             .assets
             .keys()
             .cloned()

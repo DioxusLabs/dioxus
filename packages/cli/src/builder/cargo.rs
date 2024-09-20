@@ -15,13 +15,17 @@ impl BuildRequest {
         self.verify_tooling().await?;
 
         // Run the build command with a pretty loader, returning the executable output location
-        let executable = self.build_cargo().await?;
+        let app_exe = self.build_cargo().await?;
 
         // Extract out the asset manifest from the executable using our linker tricks
-        let assets = self.collect_assets().await?;
+        let app_assets = self.collect_assets().await?;
+
+        // Todo: actually run the server build in parallel with the app build
+        let server_exe = None;
+        // let server_assets = Default::default();
 
         // Assemble a bundle from everything
-        AppBundle::new(self, assets, executable).await
+        AppBundle::new(self, app_assets, app_exe, server_exe).await
     }
 
     pub(crate) async fn verify_tooling(&self) -> Result<()> {
@@ -131,9 +135,7 @@ impl BuildRequest {
                     units_compiled += 1;
                     match artifact.executable {
                         Some(executable) => output_location = Some(executable.into()),
-                        None => {
-                            self.status_build_progress(units_compiled as f64 / crate_count as f64)
-                        }
+                        None => self.status_build_progress(units_compiled, crate_count),
                     }
                 }
                 Message::BuildFinished(finished) => {

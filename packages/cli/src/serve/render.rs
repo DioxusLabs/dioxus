@@ -278,7 +278,7 @@ impl TuiLayout {
         &self,
         frame: &mut Frame,
         _platform: Platform,
-        build_progress: &BuildProgress,
+        // build_progress: &BuildProgress,
         more_modal_open: bool,
         filter_menu_open: bool,
         dx_version: &str,
@@ -291,33 +291,33 @@ impl TuiLayout {
             Span::from(" | ").dark_gray(),
         ];
 
-        // If there is build progress, render the current status.
-        let is_build_progress = !build_progress.current_builds.is_empty();
-        if is_build_progress {
-            // If the build failed, show a failed status.
-            // Otherwise, render current status.
-            let build_failed = build_progress
-                .current_builds
-                .values()
-                .any(|b| b.failed.is_some());
+        // // If there is build progress, render the current status.
+        // let is_build_progress = !build_progress.current_builds.is_empty();
+        // if is_build_progress {
+        //     // If the build failed, show a failed status.
+        //     // Otherwise, render current status.
+        //     let build_failed = build_progress
+        //         .current_builds
+        //         .values()
+        //         .any(|b| b.failed.is_some());
 
-            if build_failed {
-                spans.push(Span::from("Build failed ❌").red());
-            } else {
-                // spans.push(Span::from("status: ").gray());
-                let build = build_progress
-                    .current_builds
-                    .values()
-                    .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                    .unwrap();
-                spans.extend_from_slice(&build.make_spans(Rect::new(
-                    0,
-                    0,
-                    build.max_layout_size(),
-                    1,
-                )));
-            }
-        }
+        //     if build_failed {
+        //         spans.push(Span::from("Build failed ❌").red());
+        //     } else {
+        //         // spans.push(Span::from("status: ").gray());
+        //         let build = build_progress
+        //             .current_builds
+        //             .values()
+        //             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+        //             .unwrap();
+        //         spans.extend_from_slice(&build.make_spans(Rect::new(
+        //             0,
+        //             0,
+        //             build.max_layout_size(),
+        //             1,
+        //         )));
+        //     }
+        // }
 
         // right aligned text
         let more_span = Span::from("[/] more");

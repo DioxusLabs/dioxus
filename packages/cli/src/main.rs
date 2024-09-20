@@ -3,7 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 // when runnnig in debug mode, we want running this to be quieter
 // it's annoying to fill up the console with warnings
-// #![cfg_attr(debug_assertions, allow(warnings))]
+#![cfg_attr(debug_assertions, allow(warnings))]
 
 mod assets;
 mod builder;
@@ -16,7 +16,6 @@ mod dx_build_info;
 mod error;
 mod fastfs;
 mod metadata;
-mod output;
 mod platform;
 mod serve;
 mod settings;
@@ -25,7 +24,6 @@ mod tracer;
 
 pub(crate) use builder::*;
 pub(crate) use cli::*;
-pub(crate) use dioxus_crate::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
 pub(crate) use platform::*;
@@ -44,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Start the tracer so it captures logs from the build engine before we start the builder
-    crate::serve::TraceController::initialize();
+    TraceController::initialize();
 
     match Cli::parse().action {
         Translate(opts) => opts

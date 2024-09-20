@@ -5,11 +5,6 @@ use std::{collections::HashMap, net::SocketAddr};
 use tokio_stream::StreamExt;
 
 pub(crate) struct AppRunner {
-    /// Ongoing apps running in place
-    ///
-    /// They might be actively being being, running, or have exited.
-    ///
-    /// When a new full rebuild occurs, we will keep these requests here
     pub(crate) running: HashMap<Platform, AppHandle>,
 }
 
@@ -54,10 +49,6 @@ impl AppRunner {
             .expect("Stream to pending if not empty")
     }
 
-    pub(crate) async fn kill(&mut self, platform: Platform) {
-        self.running.remove(&platform);
-    }
-
     /// Finally "bundle" this app and return a handle to it
     pub(crate) async fn open(
         &mut self,
@@ -73,4 +64,11 @@ impl AppRunner {
 
         Ok(self.running.get(&platform).unwrap())
     }
+
+    pub(crate) async fn kill(&mut self, platform: Platform) {
+        self.running.remove(&platform);
+    }
+
+    /// Open an existing app bundle, if it exists
+    pub(crate) async fn open_existing(&self) {}
 }

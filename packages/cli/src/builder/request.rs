@@ -10,7 +10,12 @@ use std::path::PathBuf;
 ///
 /// As the build progresses, we'll fill in fields like assets, executable, entitlements, etc
 ///
+/// This combines both the app and its potential server in one go, since we do end up bundling them
+/// together in the end anyways. We can also track progress for both in one spot, which is better
+/// than trying to aggregate them after the builds have finished.
+///
 /// If the app needs to be bundled, we'll add the bundle info here too
+#[derive(Clone)]
 pub(crate) struct BuildRequest {
     /// The configuration for the crate we are building
     pub(crate) krate: DioxusCrate,
@@ -29,11 +34,7 @@ pub(crate) struct BuildRequest {
 }
 
 impl BuildRequest {
-    pub(crate) fn new_client(
-        krate: &DioxusCrate,
-        mut build: BuildArgs,
-        progress: ProgressTx,
-    ) -> Self {
+    pub(crate) fn new(krate: &DioxusCrate, mut build: BuildArgs, progress: ProgressTx) -> Self {
         if build.profile.is_none() {
             build.profile = Some(CLIENT_PROFILE.to_string());
         }
