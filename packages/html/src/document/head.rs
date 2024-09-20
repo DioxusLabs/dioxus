@@ -20,12 +20,42 @@ fn use_update_warning<T: PartialEq + Clone + 'static>(value: &T, name: &'static 
     }
 }
 
-fn extract_single_text_node(children: &Element, component: &str) -> Option<String> {
+/// An error that can occur when extracting a single text node from a component
+pub enum ExtractSingleTextNodeError<'a> {
+    /// The node contained an render error, so we can't extract the text node
+    RenderError(&'a RenderError),
+    /// There was only one child, but it wasn't a text node
+    NonTextNode,
+    /// There is multiple child nodes
+    NonTemplate,
+}
+
+impl ExtractSingleTextNodeError<'_> {
+    /// Log a warning depending on the error
+    pub fn log(&self, component: &str) {
+        match self {
+            ExtractSingleTextNodeError::RenderError(err) => {
+                tracing::error!("Error while rendering {component}: {err}");
+            }
+            ExtractSingleTextNodeError::NonTextNode => {
+                tracing::error!(
+                    "Error while rendering {component}: The children of {component} must be a single text node"
+                );
+            }
+            ExtractSingleTextNodeError::NonTemplate => {
+                tracing::error!(
+                    "Error while rendering {component}: The children of {component} must be a single text node"
+                );
+            }
+        }
+    }
+}
+
+fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleTextNodeError<'_>> {
     let vnode = match children {
         Element::Ok(vnode) => vnode,
         Element::Err(err) => {
-            tracing::error!("Error while rendering {component}: {err}");
-            return None;
+            return Err(ExtractSingleTextNodeError::RenderError(err));
         }
     };
     // The title's children must be in one of two forms:
@@ -38,7 +68,7 @@ fn extract_single_text_node(children: &Element, component: &str) -> Option<Strin
             node_paths: &[],
             attr_paths: &[],
             ..
-        } => Some(text.to_string()),
+        } => Ok(text.to_string()),
         // rsx! { "title: {dynamic_text}" }
         Template {
             roots: &[TemplateNode::Dynamic { id }],
@@ -48,19 +78,11 @@ fn extract_single_text_node(children: &Element, component: &str) -> Option<Strin
         } => {
             let node = &vnode.dynamic_nodes[id];
             match node {
-                DynamicNode::Text(text) => Some(text.value.clone()),
-                _ => {
-                    tracing::error!("Error while rendering {component}: The children of {component} must be a single text node. It cannot be a component, if statement, loop, or a fragment");
-                    None
-                }
+                DynamicNode::Text(text) => Ok(text.value.clone()),
+                _ => Err(ExtractSingleTextNodeError::NonTextNode),
             }
         }
-        _ => {
-            tracing::error!(
-                "Error while rendering title: The children of title must be a single text node"
-            );
-            None
-        }
+        _ => Err(ExtractSingleTextNodeError::NonTemplate),
     }
 }
 
@@ -91,8 +113,12 @@ pub struct TitleProps {
 #[component]
 pub fn Title(props: TitleProps) -> Element {
     let children = props.children;
-    let Some(text) = extract_single_text_node(&children, "Title") else {
-        return VNode::empty();
+    let text = match extract_single_text_node(&children) {
+        Ok(text) => text,
+        Err(err) => {
+            err.log("Title");
+            return VNode::empty();
+        }
     };
 
     // Update the title as it changes. NOTE: We don't use use_effect here because we need this to run on the server
@@ -235,8 +261,8 @@ impl ScriptProps {
         attributes
     }
 
-    pub fn script_contents(&self) -> Option<String> {
-        extract_single_text_node(&self.children, "Script")
+    pub fn script_contents(&self) -> Result<String, ExtractSingleTextNodeError<'_>> {
+        extract_single_text_node(&self.children)
     }
 }
 
@@ -316,8 +342,8 @@ impl StyleProps {
         attributes
     }
 
-    pub fn style_contents(&self) -> Option<String> {
-        extract_single_text_node(&self.children, "Title")
+    pub fn style_contents(&self) -> Result<String, ExtractSingleTextNodeError<'_>> {
+        extract_single_text_node(&self.children)
     }
 }
 
