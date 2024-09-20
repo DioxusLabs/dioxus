@@ -327,7 +327,7 @@ fn web_launch(
             {
                 #[cfg(feature = "fullstack")]
                 use dioxus_fullstack::document;
-                #[cfg(feature = "static-generation")]
+                #[cfg(all(feature = "static-generation", not(feature = "fullstack")))]
                 use dioxus_static_site_generation::document;
                 let document = std::rc::Rc::new(document::web::FullstackWebDocument)
                     as std::rc::Rc<dyn crate::prelude::Document>;
