@@ -264,11 +264,15 @@ pub fn Link(props: LinkProps) -> Element {
     let do_default = onclick.is_none() || !onclick_only;
 
     let action = move |event: MouseEvent| {
+        // Only handle internal links
+        if is_external {
+            return;
+        }
         // Only handle events without modifiers
         if !event.modifiers().is_empty() {
             return;
         }
-        // only handle left clicks
+        // Only handle left clicks
         if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
             return;
         }
