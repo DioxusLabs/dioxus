@@ -1,8 +1,8 @@
-use crate::build::Build;
 use crate::cli::serve::ServeArguments;
+use crate::config::Platform;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
-use dioxus_cli_config::{Platform, RuntimeCLIArguments};
+use crate::{build::Build, TraceSrc};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
@@ -15,9 +15,7 @@ mod fullstack;
 mod prepare_html;
 mod progress;
 mod web;
-pub use progress::{
-    BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
-};
+pub use progress::{Stage, UpdateBuildProgress, UpdateStage};
 
 /// The target platform for the build
 /// This is very similar to the Platform enum, but we need to be able to differentiate between the
@@ -98,7 +96,6 @@ impl BuildRequest {
             Platform::StaticGeneration | Platform::Fullstack => {
                 Self::new_fullstack(dioxus_crate.clone(), build_arguments, serve)?
             }
-            _ => unimplemented!("Unknown platform: {platform:?}"),
         })
     }
 
@@ -161,32 +158,71 @@ pub(crate) struct BuildResult {
 
 impl BuildResult {
     /// Open the executable if this is a native build
+    #[allow(clippy::too_many_arguments)]
     pub fn open(
         &self,
         serve: &ServeArguments,
         fullstack_address: Option<SocketAddr>,
         workspace: &std::path::Path,
+        asset_root: &std::path::Path,
+        devserver_addr: SocketAddr,
+        app_title: String,
+        out_dir: PathBuf,
     ) -> std::io::Result<Option<Child>> {
-        if self.target_platform == TargetPlatform::Web {
-            return Ok(None);
-        }
-        if self.target_platform == TargetPlatform::Server {
-            tracing::trace!("Proxying fullstack server from port {fullstack_address:?}");
+        match self.target_platform {
+            TargetPlatform::Web => {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", serve.address.address());
+                return Ok(None);
+            }
+            TargetPlatform::Desktop => {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app at {} 🎉", self.executable.display());
+            }
+            TargetPlatform::Server => {
+                // shut this up for now - the web app will take priority in logging
+            }
+            TargetPlatform::Liveview => {
+                if let Some(fullstack_address) = fullstack_address {
+                    tracing::info!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Launching liveview server on http://{:?} 🎉",
+                        fullstack_address
+                    );
+                }
+            }
         }
 
-        let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
+        tracing::info!(dx_src = ?TraceSrc::Dev, "Press [o] to open the app manually.");
+
         let executable = self.executable.canonicalize()?;
         let mut cmd = Command::new(executable);
-        cmd
-            // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
-            .env(
-                dioxus_cli_config::__private::SERVE_ENV,
-                serde_json::to_string(&arguments).unwrap(),
-            )
-            .stderr(Stdio::piped())
+
+        // Set the env vars that the clients will expect
+        // These need to be stable within a release version (ie 0.6.0)
+        cmd.env(dioxus_cli_config::CLI_ENABLED_ENV, "true");
+        if let Some(addr) = fullstack_address {
+            cmd.env(dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string());
+            cmd.env(dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string());
+        }
+        cmd.env(
+            dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+            serve.always_on_top.unwrap_or(true).to_string(),
+        );
+        cmd.env(
+            dioxus_cli_config::ASSET_ROOT_ENV,
+            asset_root.display().to_string(),
+        );
+        cmd.env(
+            dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
+            devserver_addr.to_string(),
+        );
+        cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
+        cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
+
+        cmd.stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .current_dir(workspace);
+
         Ok(Some(cmd.spawn()?))
     }
 }

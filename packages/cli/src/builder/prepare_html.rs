@@ -1,14 +1,12 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
 use super::{BuildRequest, UpdateBuildProgress};
-use crate::builder::progress::MessageSource;
-use crate::builder::Stage;
 use crate::Result;
+use crate::TraceSrc;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
-use tracing::Level;
 
 const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 const TOAST_HTML: &str = include_str!("../../assets/toast.html");
@@ -17,12 +15,12 @@ impl BuildRequest {
     pub(crate) fn prepare_html(
         &self,
         assets: Option<&AssetManifest>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
+        _progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> Result<String> {
         let mut html = html_or_default(&self.dioxus_crate.crate_dir());
 
         // Inject any resources from the config into the html
-        self.inject_resources(&mut html, assets, progress)?;
+        self.inject_resources(&mut html, assets)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
@@ -38,12 +36,7 @@ impl BuildRequest {
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(
-        &self,
-        html: &mut String,
-        assets: Option<&AssetManifest>,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
-    ) -> Result<()> {
+    fn inject_resources(&self, html: &mut String, assets: Option<&AssetManifest>) -> Result<()> {
         // Collect all resources into a list of styles and scripts
         let resources = &self.dioxus_crate.dioxus_config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
@@ -65,7 +58,7 @@ impl BuildRequest {
         }
 
         if !style_list.is_empty() {
-            self.send_resource_deprecation_warning(progress, style_list, ResourceType::Style);
+            self.send_resource_deprecation_warning(style_list, ResourceType::Style);
         }
 
         // Add all scripts to the head
@@ -78,7 +71,7 @@ impl BuildRequest {
         }
 
         if !script_list.is_empty() {
-            self.send_resource_deprecation_warning(progress, script_list, ResourceType::Script);
+            self.send_resource_deprecation_warning(script_list, ResourceType::Script);
         }
 
         // Inject any resources from manganis into the head
@@ -139,13 +132,8 @@ impl BuildRequest {
         *html = html.replace("{app_name}", app_name);
     }
 
-    fn send_resource_deprecation_warning(
-        &self,
-        progress: &mut UnboundedSender<UpdateBuildProgress>,
-        paths: Vec<PathBuf>,
-        variant: ResourceType,
-    ) {
-        const RESOURCE_DEPRECATION_MESSAGE: &str = r#"The `web.resource` config has been deprecated in favor of head components and will be removed in a future release. Instead of including assets in the config, you can include assets with the `asset!` macro and add them to the head with `head::Link` and `Script` components."#;
+    fn send_resource_deprecation_warning(&self, paths: Vec<PathBuf>, variant: ResourceType) {
+        const RESOURCE_DEPRECATION_MESSAGE: &str = r#"The `web.resource` config has been deprecated in favor of head components and will be removed in a future release."#;
 
         let replacement_components = paths
             .iter()
@@ -187,14 +175,7 @@ impl BuildRequest {
         "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
     );
 
-        _ = progress.unbounded_send(UpdateBuildProgress {
-            stage: Stage::OptimizingWasm,
-            update: super::UpdateStage::AddMessage(super::BuildMessage {
-                level: Level::WARN,
-                message: super::MessageType::Text(message),
-                source: MessageSource::Build,
-            }),
-        });
+        tracing::warn!(dx_src = ?TraceSrc::Build, "{}", message);
     }
 }
 

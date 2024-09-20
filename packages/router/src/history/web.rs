@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use gloo::{console::error, events::EventListener, render::AnimationFrame};
 
@@ -14,12 +17,12 @@ use super::{
 };
 
 #[allow(dead_code)]
-fn base_path() -> Option<&'static str> {
+fn base_path() -> Option<PathBuf> {
     tracing::trace!(
-        "Using base_path from Dioxus.toml: {:?}",
-        dioxus_cli_config::BASE_PATH
+        "Using base_path from the CLI: {:?}",
+        dioxus_cli_config::base_path()
     );
-    dioxus_cli_config::BASE_PATH
+    dioxus_cli_config::base_path()
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
@@ -97,7 +100,7 @@ impl<R: Routable> WebHistory<R> {
 
         let prefix = prefix
             // If there isn't a base path, try to grab one from the CLI
-            .or_else(|| base_path().map(|s| s.to_string()))
+            .or_else(|| base_path().map(|s| s.display().to_string()))
             // Normalize the prefix to start and end with no slashes
             .map(|prefix| prefix.trim_matches('/').to_string())
             // If the prefix is empty, don't add it

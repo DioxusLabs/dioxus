@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
+use crate::config::Platform;
 use anyhow::Context;
-use dioxus_cli_config::Platform;
 
 use crate::{
     builder::{BuildRequest, TargetPlatform},

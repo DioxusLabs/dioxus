@@ -221,7 +221,25 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
 
 ## Running the examples
 
-The examples in the top level of this repository can be run with `cargo run --example <example>`. However, we encourage you to download the dioxus-cli and run the examples with `dx serve` since many examples also support web. When running for web, you either need to modify the Cargo.toml to disable the default desktop feature, or use
+> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.5 branch](https://github.com/DioxusLabs/dioxus/tree/v0.5/examples).
+
+The examples in the top level of this repository can be run with:
+
+```sh
+cargo run --example <example>
+```
+
+However, we encourage you to download the dioxus-cli. If you are running the git version of dioxus, you can install the matching version of the CLI with:
+
+```sh
+cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli --locked
+```
+
+With the CLI, you can also run examples with the web platform. You just need to disable the default desktop feature and enable the web feature with this command:
+
+```sh
+dx serve --example <example> --platform web -- --no-default-features
+```
 
 ## Dioxus vs other frameworks
 
@@ -298,7 +316,7 @@ fn Counters() -> impl IntoView {
 
 - **`Copy` state**: Dioxus 0.1 to 0.4 relied on lifetimes to relax the rules of Rust's borrow checker. This worked well for event handlers, but struggled around async. In Dioxus 0.5, we've switched to a [`Copy` state model](https://crates.io/crates/generational-box) borrowed from Leptos.
 
-- **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge, meaning we've historically released at a slower cadence than Leptos. Leptos focuses on the fullstack web, with features that Dioxus doesn't have like `<Suspense />`-based streaming HTML, islands, `<Form />` components, and other web-specific features. Generally, web apps you build with Leptos will have a smaller footprint.
+- **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge, meaning we've historically released at a slower cadence than Leptos. Leptos focuses on the fullstack web, with features that Dioxus doesn't have like islands, `<Form />` components, and other web-specific features. Generally, web apps you build with Leptos will have a smaller footprint.
 
 - **Different DSLs**: While both frameworks target the web, Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses a more HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL. For example, dioxus will automatically format strings for you while Leptos can split up strings into static and dynamic segments.
 

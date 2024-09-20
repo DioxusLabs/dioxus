@@ -2,6 +2,8 @@ use std::process::exit;
 
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
 
+use crate::TraceSrc;
+
 use super::*;
 
 /// Translate some source file into Dioxus code
@@ -48,7 +50,7 @@ impl Translate {
 }
 
 pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
-    let callbody = rsx_rosetta::rsx_from_html(dom);
+    let callbody = dioxus_rsx_rosetta::rsx_from_html(dom);
 
     match component {
         true => write_callbody_with_icon_section(callbody),
@@ -59,7 +61,7 @@ pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
 fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
     let mut svgs = vec![];
 
-    rsx_rosetta::collect_svgs(&mut callbody.body.roots, &mut svgs);
+    dioxus_rsx_rosetta::collect_svgs(&mut callbody.body.roots, &mut svgs);
 
     let mut out = write_component_body(dioxus_autofmt::write_block_out(&callbody).unwrap());
 
@@ -106,7 +108,7 @@ fn indent_and_write(raw: &str, idx: usize, out: &mut String) {
 fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> {
     // Make sure not both are specified
     if file.is_some() && raw.is_some() {
-        tracing::error!("Only one of --file or --raw should be specified.");
+        tracing::error!(dx_src = ?TraceSrc::Dev, "Only one of --file or --raw should be specified.");
         exit(0);
     }
 
@@ -127,13 +129,4 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
     std::io::stdin().read_to_string(&mut buffer).unwrap();
 
     Ok(buffer.trim().to_string())
-}
-
-#[test]
-fn generates_svgs() {
-    let st = include_str!("../../tests/svg.html");
-
-    let out = convert_html_to_formatted_rsx(&html_parser::Dom::parse(st).unwrap(), true);
-
-    println!("{}", out);
 }

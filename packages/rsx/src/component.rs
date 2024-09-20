@@ -245,7 +245,7 @@ impl Component {
     }
 
     // Iterate over the props of the component (without spreads, key, and custom attributes)
-    pub(crate) fn component_props(&self) -> impl Iterator<Item = &Attribute> {
+    pub fn component_props(&self) -> impl Iterator<Item = &Attribute> {
         self.fields
             .iter()
             .filter(move |attr| !attr.name.is_likely_key())
@@ -350,6 +350,7 @@ fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments
 mod tests {
     use super::*;
     use prettier_please::PrettyUnparse;
+    use syn::parse_quote;
 
     /// Ensure we can parse a component
     #[test]
@@ -486,5 +487,24 @@ mod tests {
         };
 
         let _parsed: syn::Path = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn identifies_key() {
+        let input = quote! {
+            Link { key: "{value}", to: Route::List, class: "pure-button", "Go back" }
+        };
+
+        let component: Component = syn::parse2(input).unwrap();
+
+        // The key should exist
+        assert_eq!(component.get_key(), Some(&parse_quote!("{value}")));
+
+        // The key should not be included in the properties
+        let properties = component
+            .component_props()
+            .map(|attr| attr.name.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(properties, ["to", "class"]);
     }
 }

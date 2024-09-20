@@ -1,17 +1,17 @@
+use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::WryQueue,
+    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
     DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_hooks::to_owned;
-use dioxus_html::document::Document;
-use dioxus_html::native_bind::NativeFileEngine;
-use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
-use dioxus_interpreter_js::SynchronousEventResponse;
+use dioxus_html::{
+    native_bind::NativeFileEngine, prelude::Document, HasFileData, HtmlEvent, PlatformEventData,
+};
 use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
@@ -90,7 +90,7 @@ impl WebviewEdits {
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, desktop_context.clone(), query);
+                let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
             dioxus_html::EventData::Drag(ref drag) => {
@@ -147,9 +147,15 @@ impl WebviewInstance {
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
-        // tao makes small windows for some reason, make them bigger
-        if cfg.window.window.inner_size.is_none() {
-            window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+        // tao makes small windows for some reason, make them bigger on desktop
+        //
+        // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
+        // get a window that is not the size of the screen and weird black bars.
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            if cfg.window.window.inner_size.is_none() {
+                window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+            }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
@@ -317,10 +323,11 @@ impl WebviewInstance {
         let webview = webview.build().unwrap();
 
         let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
-            if let Some(menu) = &cfg.menu {
+            let menu_option = cfg.menu.into();
+            if let Some(menu) = &menu_option {
                 crate::menubar::init_menu_bar(menu, &window);
             }
-            cfg.menu
+            menu_option
         } else {
             None
         };
@@ -380,7 +387,7 @@ impl WebviewInstance {
         }
     }
 
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn kick_stylsheets(&self) {
         // run eval in the webview to kick the stylesheets by appending a query string
         // we should do something less clunky than this
@@ -388,5 +395,20 @@ impl WebviewInstance {
             .desktop_context
             .webview
             .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
+    }
+}
+
+/// A synchronous response to a browser event which may prevent the default browser's action
+#[derive(serde::Serialize, Default)]
+pub struct SynchronousEventResponse {
+    #[serde(rename = "preventDefault")]
+    prevent_default: bool,
+}
+
+impl SynchronousEventResponse {
+    /// Create a new SynchronousEventResponse
+    #[allow(unused)]
+    pub fn new(prevent_default: bool) -> Self {
+        Self { prevent_default }
     }
 }
