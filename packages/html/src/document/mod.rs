@@ -60,7 +60,7 @@ pub trait Document {
 
     /// Create a new script tag
     fn create_script(&self, props: ScriptProps) {
-        let mut attributes = props.attributes();
+        let attributes = props.attributes();
         let js = match (&props.src, props.script_contents()) {
             // The script has inline contents, render it as a script tag
             (_, Ok(contents)) => create_element_in_head("script", &attributes, Some(contents)),
