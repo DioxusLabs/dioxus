@@ -70,7 +70,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
     pub fn web() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: dioxus_web::launch::launch,
+            launch_fn: web_launch,
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -253,37 +253,7 @@ mod current_platform {
         contexts: Vec<super::ContextFn>,
         platform_config: Vec<Box<dyn std::any::Any>>,
     ) {
-        // If the server feature is enabled, launch the client with hydration enabled
-        #[cfg(any(feature = "static-generation", feature = "fullstack"))]
-        {
-            let platform_config = platform_config
-                .into_iter()
-                .find_map(|cfg| cfg.downcast::<dioxus_web::Config>().ok())
-                .unwrap_or_default()
-                .hydrate(true);
-
-            let factory = move || {
-                let mut vdom = dioxus_core::VirtualDom::new(root);
-                for context in contexts {
-                    vdom.insert_any_root_context(context());
-                }
-                #[cfg(feature = "document")]
-                {
-                    #[cfg(feature = "fullstack")]
-                    use dioxus_fullstack::document;
-                    #[cfg(feature = "static-generation")]
-                    use dioxus_static_site_generation::document;
-                    let document = std::rc::Rc::new(document::web::FullstackWebDocument)
-                        as std::rc::Rc<dyn crate::prelude::Document>;
-                    vdom.provide_root_context(document);
-                }
-                vdom
-            };
-
-            dioxus_web::launch::launch_virtual_dom(factory(), platform_config)
-        }
-        #[cfg(not(any(feature = "static-generation", feature = "fullstack")))]
-        dioxus_web::launch::launch(root, contexts, platform_config);
+        super::web_launch(root, contexts, platform_config);
     }
 
     #[cfg(all(
@@ -332,3 +302,42 @@ macro_rules! impl_launch {
 impl_launch!(());
 #[cfg(not(any(feature = "static-generation", feature = "web")))]
 impl_launch!(!);
+
+#[cfg(feature = "web")]
+fn web_launch(
+    root: fn() -> dioxus_core::Element,
+    contexts: Vec<super::ContextFn>,
+    platform_config: Vec<Box<dyn std::any::Any>>,
+) {
+    // If the server feature is enabled, launch the client with hydration enabled
+    #[cfg(any(feature = "static-generation", feature = "fullstack"))]
+    {
+        let platform_config = platform_config
+            .into_iter()
+            .find_map(|cfg| cfg.downcast::<dioxus_web::Config>().ok())
+            .unwrap_or_default()
+            .hydrate(true);
+
+        let factory = move || {
+            let mut vdom = dioxus_core::VirtualDom::new(root);
+            for context in contexts {
+                vdom.insert_any_root_context(context());
+            }
+            #[cfg(feature = "document")]
+            {
+                #[cfg(feature = "fullstack")]
+                use dioxus_fullstack::document;
+                #[cfg(feature = "static-generation")]
+                use dioxus_static_site_generation::document;
+                let document = std::rc::Rc::new(document::web::FullstackWebDocument)
+                    as std::rc::Rc<dyn crate::prelude::Document>;
+                vdom.provide_root_context(document);
+            }
+            vdom
+        };
+
+        dioxus_web::launch::launch_virtual_dom(factory(), platform_config)
+    }
+    #[cfg(not(any(feature = "static-generation", feature = "fullstack")))]
+    dioxus_web::launch::launch(root, contexts, platform_config);
+}
