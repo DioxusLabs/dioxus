@@ -683,6 +683,11 @@ impl Output {
             return Ok(());
         };
 
+        // Only show debug logs if verbose is enabled
+        if log.level == Level::DEBUG && !self.verbose {
+            return Ok(());
+        }
+
         // Grab out the size and location of the terminal and its viewport
         let frame_rect = terminal.get_frame().area();
         let term_size = terminal.size().unwrap();
@@ -698,7 +703,25 @@ impl Output {
         }
 
         let byte_count = log.content.len() as u16;
-        let paragraph = Paragraph::new(log.content.into_text().unwrap());
+        let mut text = log.content.into_text().unwrap();
+        text.lines[0] = {
+            let mut line = Line::default();
+
+            let style = match log.source {
+                TraceSrc::App(platform) => Style::new().blue(),
+                TraceSrc::Dev => Style::new().magenta(),
+                TraceSrc::Build => Style::new().yellow(),
+                TraceSrc::Cargo => Style::new().yellow(),
+                TraceSrc::Unknown => Style::new().gray(),
+            };
+
+            let padding = " ".repeat(3usize.saturating_sub(log.source.to_string().len()));
+            line.push_span(Span::raw("15:04:05 ").dark_gray());
+            line.push_span(Span::raw(format!("[{}] {padding}", log.source)).style(style));
+            line.extend(text.lines[0].iter().cloned());
+            line
+        };
+        let paragraph = Paragraph::new(text);
         let line_count = paragraph.line_count(term_size.width) as u16;
 
         // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)

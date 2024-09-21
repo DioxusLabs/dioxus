@@ -57,7 +57,8 @@ impl AppHandle {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", ip);
             }
             Platform::Desktop => {
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app at {} 🎉", handle.executable.display());
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app 🎉");
+                tracing::debug!(dx_src = ?TraceSrc::Dev, "Desktop app location: {:?}", handle.executable.display());
             }
             Platform::Server => {
                 if let Some(fullstack_address) = fullstack_address {

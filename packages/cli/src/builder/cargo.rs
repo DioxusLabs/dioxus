@@ -1,5 +1,5 @@
 use super::BuildRequest;
-use crate::{assets::AssetManifest, link::LINK_OUTPUT_ENV_VAR};
+use crate::{assets::AssetManifest, link::LINK_OUTPUT_ENV_VAR, TraceSrc};
 use crate::{bundler::AppBundle, Platform};
 use crate::{link::InterceptedArgs, Result};
 use anyhow::Context;
@@ -9,7 +9,7 @@ use tokio::{io::AsyncBufReadExt, process::Command};
 
 impl BuildRequest {
     pub(crate) async fn build(self) -> Result<AppBundle> {
-        tracing::info!("🚅 Running build command...");
+        tracing::info!("Running build command...");
 
         // Install any tooling that might be required for this build.
         self.verify_tooling().await?;
@@ -29,7 +29,7 @@ impl BuildRequest {
     }
 
     pub(crate) async fn verify_tooling(&self) -> Result<()> {
-        tracing::info!("Verifying tooling...");
+        tracing::debug!("Verifying tooling...");
 
         match self.platform() {
             // If this is a web, build make sure we have the web build tooling set up
@@ -54,7 +54,7 @@ impl BuildRequest {
     ///
     /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
     pub(crate) async fn build_cargo(&self) -> anyhow::Result<PathBuf> {
-        tracing::info!("Executing cargo...");
+        tracing::debug!("Executing cargo...");
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         let crate_count = self.get_unit_count_estimate().await;
@@ -160,7 +160,7 @@ impl BuildRequest {
     /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
     /// tables marked by manganis and parsing them as a ResourceAsset.
     pub(crate) async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
-        tracing::info!("Collecting assets ...");
+        tracing::debug!("Collecting assets ...");
 
         // If this is the server build, the client build already copied any assets we need
         if self.platform() == Platform::Server {
@@ -264,7 +264,7 @@ impl BuildRequest {
 
         cargo_args.push(self.krate.executable_name().to_string());
 
-        tracing::info!("cargo args: {:?}", cargo_args);
+        tracing::debug!(dx_src = ?TraceSrc::Build, "cargo args: {:?}", cargo_args);
 
         cargo_args
     }
@@ -292,7 +292,7 @@ impl BuildRequest {
     //     &self,
     //     mut progress: UnboundedSender<UpdateBuildProgress>,
     // ) -> Result<BuildResult> {
-    //     tracing::info!(
+    //     tracing::debug!(
     //         dx_src = ?TraceSrc::Build,
     //         "Running build [{}] command...",
     //         self.target_platform,
@@ -326,7 +326,7 @@ impl BuildRequest {
     //         .await
     //         .context("Failed to post process build")?;
 
-    //     tracing::info!(
+    //     tracing::debug!(
     //         dx_src = ?TraceSrc::Build,
     //         "Build completed: [{}]",
     //         self.dioxus_crate.out_dir().display(),
@@ -430,7 +430,7 @@ impl BuildRequest {
     // }
 
     // pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
-    //     tracing::info!(dx_src = ?TraceSrc::Build, "Copying public assets to the output directory...");
+    //     tracing::debug!(dx_src = ?TraceSrc::Build, "Copying public assets to the output directory...");
     //     let out_dir = self.target_out_dir();
     //     let asset_dir = self.dioxus_crate.asset_dir();
 

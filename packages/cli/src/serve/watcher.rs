@@ -343,8 +343,6 @@ fn is_allowed_notify_event(event: &notify::Event) -> bool {
         _ => false,
     };
 
-    tracing::info!("is_allowed_notify_event:  {allowed:?} for {event:#?}");
-
     allowed
 }
 

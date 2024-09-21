@@ -51,7 +51,7 @@ impl BuildRequest {
         let features = build.target_args.client_feature.clone();
         // let features = build.target_args.client_feature.clone().or(client_feature);
 
-        tracing::info!("Client feature: {features:?}");
+        tracing::debug!("Client feature: {features:?}");
 
         let mut build = Self::new_with_target_directory_rust_flags_and_features(
             krate, &build, features, progress,

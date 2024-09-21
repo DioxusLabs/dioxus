@@ -74,6 +74,10 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                     continue;
                 }
 
+                let file = files[0].display().to_string();
+                let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
+                tracing::info!(dx_src = ?TraceSrc::Dev, "changed: {}", file);
+
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {

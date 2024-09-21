@@ -202,12 +202,6 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        // // We only care about user-facing logs.
-        // let has_src_flag = event.fields().any(|f| f.name() == DX_SRC_FLAG);
-        // if !has_src_flag {
-        //     return;
-        // }
-
         let mut visitor = CollectVisitor::new();
         event.record(&mut visitor);
 
@@ -274,13 +268,12 @@ impl Visit for CollectVisitor {
             return;
         }
 
-        // if name == DX_SRC_FLAG {
-        self.source = TraceSrc::from(value_string);
-        // self.dx_user_msg = true;
-        return;
-        // }
+        if name == DX_SRC_FLAG {
+            self.source = TraceSrc::from(value_string);
+            return;
+        }
 
-        // self.fields.insert(name.to_string(), value_string);
+        self.fields.insert(name.to_string(), value_string);
     }
 }
 
@@ -372,12 +365,12 @@ impl From<String> for TraceSrc {
     fn from(value: String) -> Self {
         match value.as_str() {
             "dev" => Self::Dev,
-            "build" => Self::Build,
+            "bld" => Self::Build,
             "cargo" => Self::Cargo,
-            "web" => Self::App(TargetPlatform::Web),
-            "desktop" => Self::App(TargetPlatform::Desktop),
-            "server" => Self::App(TargetPlatform::Server),
-            "liveview" => Self::App(TargetPlatform::Liveview),
+            "app" => Self::App(TargetPlatform::Web),
+            "app" => Self::App(TargetPlatform::Desktop),
+            "app" => Self::App(TargetPlatform::Server),
+            "app" => Self::App(TargetPlatform::Liveview),
             _ => Self::Unknown,
         }
     }

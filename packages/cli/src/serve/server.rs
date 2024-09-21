@@ -380,7 +380,7 @@ fn build_devserver_router(
                 "/",
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                        tracing::info!("Incoming hotreload websocket request: {ws:?}");
+                        tracing::debug!("Incoming hotreload websocket request: {ws:#?}");
                         ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
                     },
                 ),
