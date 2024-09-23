@@ -148,20 +148,23 @@ fn memos_prevents_component_rerun() {
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2990
 #[test]
 fn memos_sync_rerun_after_unrelated_write() {
-    let _ = simple_logger::SimpleLogger::new().init();
-
+    static PASSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let mut dom = VirtualDom::new(|| {
         let mut signal = use_signal(|| 0);
-        let memo = use_memo(move || signal() / 2);
-        assert_eq!(memo(), 0);
-        signal += 1;
-        // It should be fine to hold the write and read the memo at the same time
-        let mut write = signal.write();
-        println!("Memo: {:?}", memo());
-        assert_eq!(memo(), 0);
-        *write = 2;
-        drop(write);
-        assert_eq!(memo(), 0);
+        let memo = use_memo(move || dbg!(signal() < 2));
+        if generation() == 0 {
+            assert!(memo());
+            signal += 1;
+        } else {
+            // It should be fine to hold the write and read the memo at the same time
+            let mut write = signal.write();
+            println!("Memo: {:?}", memo());
+            assert!(memo());
+            *write = 2;
+            drop(write);
+            assert!(!memo());
+            PASSED.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
 
         rsx! {
             div {}
@@ -169,4 +172,7 @@ fn memos_sync_rerun_after_unrelated_write() {
     });
 
     dom.rebuild_in_place();
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate(&mut NoOpMutations);
+    assert!(PASSED.load(std::sync::atomic::Ordering::SeqCst));
 }
