@@ -38,7 +38,6 @@ impl AppHandle {
             );
         }
 
-        // let work_dir = std::env::temp_dir();
         let work_dir = app.build.krate.out_dir().join("launch");
         std::fs::create_dir_all(&work_dir)?;
         let executable = app.finish(work_dir).await?;
@@ -54,30 +53,30 @@ impl AppHandle {
 
         match platform {
             Platform::Web => {
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", ip);
+                // tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", ip);
             }
             Platform::Desktop => {
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app 🎉");
+                // tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app 🎉");
                 tracing::debug!(dx_src = ?TraceSrc::Dev, "Desktop app location: {:?}", handle.executable.display());
             }
             Platform::Server => {
                 if let Some(fullstack_address) = fullstack_address {
-                    tracing::info!(
-                        dx_src = ?TraceSrc::Dev,
-                        "Launching fullstack server on http://{:?} 🎉",
-                        fullstack_address
-                    );
+                    // tracing::info!(
+                    //     dx_src = ?TraceSrc::Dev,
+                    //     "Launching fullstack server on http://{:?} 🎉",
+                    //     fullstack_address
+                    // );
                 }
             }
             Platform::Ios => {}
             Platform::Android => {}
             Platform::Liveview => {
                 if let Some(fullstack_address) = fullstack_address {
-                    tracing::info!(
-                        dx_src = ?TraceSrc::Dev,
-                        "Launching liveview server on http://{:?} 🎉",
-                        fullstack_address
-                    );
+                    // tracing::info!(
+                    //     dx_src = ?TraceSrc::Dev,
+                    //     "Launching liveview server on http://{:?} 🎉",
+                    //     fullstack_address
+                    // );
                 }
             }
         }

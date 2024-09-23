@@ -57,9 +57,12 @@ impl AppRunner {
         fullstack_address: Option<SocketAddr>,
     ) -> Result<&AppHandle> {
         let platform = app.build.build.platform();
+
+        // Start the new app before we kill the old one to give it a little bit of time to start up
+        let handle = AppHandle::start(app, devserver_ip, fullstack_address).await?;
+
         self.kill(platform).await;
 
-        let handle = AppHandle::start(app, devserver_ip, fullstack_address).await?;
         self.running.insert(platform, handle);
 
         Ok(self.running.get(&platform).unwrap())

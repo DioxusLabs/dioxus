@@ -15,6 +15,7 @@
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
 use crate::{serve::ServeUpdate, Platform as TargetPlatform};
+use chrono::{DateTime, Utc};
 use console::strip_ansi_codes;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
@@ -331,6 +332,7 @@ pub struct TraceMsg {
     pub source: TraceSrc,
     pub level: Level,
     pub content: String,
+    pub timestamp: DateTime<chrono::Local>,
 }
 
 impl TraceMsg {
@@ -339,6 +341,7 @@ impl TraceMsg {
             source,
             level,
             content,
+            timestamp: chrono::Local::now(),
         }
     }
 }
@@ -352,6 +355,7 @@ pub enum TraceSrc {
     Cargo,
     /// Avoid using this
     Unknown,
+    Hotreload,
 }
 
 impl std::fmt::Debug for TraceSrc {
@@ -391,6 +395,7 @@ impl Display for TraceSrc {
             Self::Build => write!(f, "build"),
             Self::Cargo => write!(f, "cargo"),
             Self::Unknown => write!(f, "n/a"),
+            Self::Hotreload => write!(f, "hotreload"),
         }
     }
 }

@@ -9,8 +9,7 @@ use tokio::{io::AsyncBufReadExt, process::Command};
 
 impl BuildRequest {
     pub(crate) async fn build(self) -> Result<AppBundle> {
-        tracing::info!("Running build command...");
-
+        tracing::debug!("Running build command...");
         // Install any tooling that might be required for this build.
         self.verify_tooling().await?;
 

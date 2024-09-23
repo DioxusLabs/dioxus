@@ -6,7 +6,7 @@ use crate::{
     Platform, TraceMsg, TraceSrc,
 };
 use crate::{config::AddressArguments, BuildUpdate};
-use ansi_to_tui::IntoText;
+use chrono::{Timelike, Utc};
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -41,7 +41,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::{ansi_buffer::AnsiStringBuffer, loggs::*};
+use super::ansi_buffer::AnsiStringBuffer;
 use super::{AppHandle, DevServer, ServeUpdate};
 use tracing::Level;
 
@@ -63,7 +63,7 @@ pub struct Output {
     events: Option<EventStream>,
 
     // A list of all messages from build, dev, app, and more.
-    messages: Vec<ConsoleMessage>,
+    messages: Vec<TraceMsg>,
     more_modal_open: bool,
     interactive: bool,
     platform: Platform,
@@ -84,7 +84,7 @@ pub struct Output {
 #[derive(Clone, Copy)]
 struct RenderState<'a> {
     opts: &'a ServeArgs,
-    config: &'a DioxusCrate,
+    krate: &'a DioxusCrate,
     build_engine: &'a Builder,
     server: &'a DevServer,
     watcher: &'a Watcher,
@@ -186,7 +186,7 @@ impl Output {
                         error: Some(Box::new(ee)),
                     }
                 }
-                _ => (),
+                Ok(None) => {}
             }
         }
     }
@@ -244,25 +244,28 @@ impl Output {
             _ => {}
         }
 
-        Ok(None)
+        // Out of safety, we always redraw, since it's relatively cheap operation
+        Ok(Some(ServeUpdate::Redraw))
     }
 
     /// Add a message from stderr to the logs
     pub fn push_stderr(&mut self, platform: Platform, stderr: String) {
-        self.messages.push(ConsoleMessage::Log(TraceMsg {
+        self.messages.push(TraceMsg {
             source: TraceSrc::App(platform),
             level: Level::ERROR,
             content: stderr,
-        }));
+            timestamp: chrono::Local::now(),
+        });
     }
 
     /// Add a message from stdout to the logs
     pub fn push_stdout(&mut self, platform: Platform, stdout: String) {
-        self.messages.push(ConsoleMessage::Log(TraceMsg {
+        self.messages.push(TraceMsg {
             source: TraceSrc::App(platform),
             level: Level::INFO,
             content: stdout,
-        }));
+            timestamp: chrono::Local::now(),
+        });
     }
 
     /// Push a message from the websocket to the logs
@@ -349,7 +352,7 @@ impl Output {
                 frame,
                 RenderState {
                     opts,
-                    config,
+                    krate: config,
                     build_engine,
                     server,
                     watcher,
@@ -361,7 +364,7 @@ impl Output {
     fn render_frame(&self, frame: &mut Frame, state: RenderState) {
         // Use the max size of the viewport, but shrunk to a sensible max width
         let mut area = frame.area();
-        area.width = area.width.min(VIEWPORT_WIDTH);
+        area.width = area.width.clamp(0, VIEWPORT_WIDTH);
 
         let [_top, body, bottom] = Layout::vertical([
             Constraint::Length(1),
@@ -401,7 +404,7 @@ impl Output {
 
     fn render_gauges(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
         let [gauge_area, _margin] =
-            Layout::horizontal([Constraint::Fill(1), Constraint::Length(5)]).areas(area);
+            Layout::horizontal([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
 
         let gauge_list: [_; 3] = Layout::vertical([
             Constraint::Length(1), // g1
@@ -420,23 +423,33 @@ impl Output {
             frame,
             gauge_list[1],
             state.build_engine.optimize_progress,
-            "Optimizing ",
-        );
-        self.render_single_gauge(
-            frame,
-            gauge_list[2],
-            state.build_engine.bundling_progress,
             "Bundling   ",
         );
+
+        frame.render_widget(
+            Line::from(vec![
+                "Status:    ".white(),
+                " build completed ".yellow(),
+                "10ms ".dark_gray(),
+            ]),
+            gauge_list[2],
+        );
+
+        // self.render_single_gauge(
+        //     frame,
+        //     gauge_list[2],
+        //     state.build_engine.bundling_progress,
+        //     "Bundling   ",
+        // );
     }
 
     fn render_single_gauge(&self, frame: &mut Frame<'_>, area: Rect, value: f64, label: &str) {
-        let value = value.max(0.0).min(1.0);
+        let value = value.clamp(0.0, 1.0);
 
         let [gauge_row, _, icon] = Layout::horizontal([
             Constraint::Fill(1),
             Constraint::Length(2),
-            Constraint::Length(2),
+            Constraint::Length(10),
         ])
         .areas(area);
 
@@ -465,7 +478,10 @@ impl Output {
                 .use_type(throbber_widgets_tui::WhichUse::Spin);
             frame.render_stateful_widget(throb, icon, &mut self.throbber.borrow_mut());
         } else {
-            frame.render_widget(Line::from("🎉".white()).right_aligned(), icon);
+            frame.render_widget(
+                Line::from(vec!["🎉 ".white(), "100ms".dark_gray()]).left_aligned(),
+                icon,
+            );
         }
     }
 
@@ -477,61 +493,57 @@ impl Output {
         ])
         .areas(area);
 
-        let s1 = Paragraph::new(Line::from(vec![
-            "Serving at ".gray(),
-            "http://127.0.0.1:8080".blue(),
-        ]))
-        .wrap(Wrap { trim: false });
-        let s2 = Paragraph::new(Line::from(vec![
-            "Platform: ".gray(),
-            "web".yellow(),
-            " + ".gray(),
-            "fullstack".yellow(),
-        ]))
-        .wrap(Wrap { trim: false });
-        let s3 = Paragraph::new(Line::from(vec!["Build time: ".gray(), "1m 2s".yellow()]))
-            .wrap(Wrap { trim: false });
-
-        frame.render_widget_ref(s1, stat_list[0]);
-        frame.render_widget(s2, stat_list[1]);
-        frame.render_widget(s3, stat_list[2]);
+        frame.render_widget_ref(
+            Paragraph::new(Line::from(vec![
+                "Serving at ".gray(),
+                "http://127.0.0.1:8080".blue(),
+            ]))
+            .wrap(Wrap { trim: false }),
+            stat_list[0],
+        );
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Platform: ".gray(),
+                "web".yellow(),
+                " + ".gray(),
+                "fullstack".yellow(),
+            ]))
+            .wrap(Wrap { trim: false }),
+            stat_list[1],
+        );
+        frame.render_widget(
+            Paragraph::new(Line::from(vec!["Build time: ".gray(), "1m 2s".yellow()]))
+                .wrap(Wrap { trim: false }),
+            stat_list[2],
+        );
     }
 
     fn render_body_title(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
-        // Right-aligned text
-        let right_line = Line::from(vec![
-            Span::from("[o] open").gray(),
-            Span::from(" | ").gray(),
-            Span::from("[r] rebuild").gray(),
-            Span::from(" | ").gray(),
-            match self.more_modal_open {
-                true => Span::from("[/] more").light_yellow(),
-                false => Span::from("[/] more").gray(),
-            },
-        ]);
-
-        // // Split the area into two chunks
-        // let row = Layout::default()
-        //     .direction(Direction::Horizontal)
-        //     .constraints([Constraint::Fill(1), Constraint::Fill(1)])
-        //     .split(area);
-
-        // // frame.render_widget(Paragraph::new(right_line).left_aligned(), row[0]);
-        // frame.render_widget(Paragraph::new(left_line).right_aligned(), row[1]);
-
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                "Serving ".yellow(),
-                "your dioxus app: ".white(),
-                "file-explorer".light_blue(),
-                "! 🚀".white(),
+                "Serving app ".white(),
+                state.krate.executable_name().light_blue(),
+                " 🚀".white(),
             ]))
             .wrap(Wrap { trim: false })
             .left_aligned(),
             area,
         );
 
-        frame.render_widget(right_line.right_aligned(), area);
+        frame.render_widget(
+            Line::from(vec![
+                "[o] open".gray(),
+                " | ".gray(),
+                "[r] rebuild".gray(),
+                " | ".gray(),
+                match self.more_modal_open {
+                    true => "[/] more".light_yellow(),
+                    false => "[/] more".gray(),
+                },
+            ])
+            .right_aligned(),
+            area,
+        );
     }
 
     fn render_more_modal(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
@@ -590,75 +602,20 @@ impl Output {
         );
     }
 
-    /// Render the status bar.
+    /// Render the version number on the bottom right
     fn render_bottom_row(&self, frame: &mut Frame, area: Rect, state: RenderState) {
-        let _platform: Platform = self.platform;
-        // let build_progress: &BuildProgress = &self.build_progress;
-        let more_modal_open: bool = self.more_modal_open;
-        // let filter_menu_open: bool = self.show_filter_menu;
-        let dx_version: &str = &self.dx_version;
-
-        // left aligned text
-        let mut left_line = Line::from(vec![
-            Span::from("🧬 dx").dark_gray(),
-            Span::from(" ").dark_gray(),
-            Span::from(dx_version).dark_gray(),
-        ]);
-
-        // // If there is build progress, render the current status.
-        // let is_build_progress = !build_progress.current_builds.is_empty();
-        // if is_build_progress {
-        //     // If the build failed, show a failed status.
-        //     // Otherwise, render current status.
-        //     let build_failed = build_progress
-        //         .current_builds
-        //         .values()
-        //         .any(|b| b.failed.is_some());
-
-        //     if build_failed {
-        //         spans.push(Span::from("Build failed ❌").red());
-        //     } else {
-        //         let build = build_progress
-        //             .current_builds
-        //             .values()
-        //             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        //             .unwrap();
-        //         spans.extend_from_slice(&build.make_spans(Rect::new(
-        //             0,
-        //             0,
-        //             build.max_layout_size(),
-        //             1,
-        //         )));
-        //     }
-        // }
-
-        // let filter_span = Span::from("[f] filter");
-        // let filter_span = match filter_menu_open {
-        //     true => filter_span.light_yellow(),
-        //     false => filter_span.gray(),
-        // };
-
-        let more_span = Span::from("[/] more");
-        let more_span = match more_modal_open {
-            true => more_span.light_yellow(),
-            false => more_span.gray(),
-        };
-
-        let right_line = Line::from(vec![
-            Span::from("[o] open").gray(),
-            Span::from(" | ").gray(),
-            Span::from("[r] rebuild").gray(),
-            Span::from(" | ").gray(),
-            more_span,
-        ]);
-
         // Split the area into two chunks
         let row = Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).split(area);
 
-        // frame.render_widget(Paragraph::new(right_line).left_aligned(), row[0]);
-        frame.render_widget(Paragraph::new(left_line).right_aligned(), row[1]);
-        // frame.render_widget(Paragraph::new(left_line).left_aligned(), row[0]);
-        // frame.render_widget(Paragraph::new(right_line).right_aligned(), row[1]);
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "🧬 dx".dark_gray(),
+                " ".dark_gray(),
+                self.dx_version.as_str().dark_gray(),
+            ]))
+            .right_aligned(),
+            row[1],
+        );
     }
 
     /// Render all decorations.
@@ -702,8 +659,9 @@ impl Output {
             }
         }
 
-        let byte_count = log.content.len() as u16;
+        use ansi_to_tui::IntoText;
         let mut text = log.content.into_text().unwrap();
+        let byte_count = log.content.len() as u16;
         text.lines[0] = {
             let mut line = Line::default();
 
@@ -713,10 +671,19 @@ impl Output {
                 TraceSrc::Build => Style::new().yellow(),
                 TraceSrc::Cargo => Style::new().yellow(),
                 TraceSrc::Unknown => Style::new().gray(),
+                TraceSrc::Hotreload => Style::new().light_yellow(),
             };
 
             let padding = " ".repeat(3usize.saturating_sub(log.source.to_string().len()));
-            line.push_span(Span::raw("15:04:05 ").dark_gray());
+            line.push_span(
+                Span::raw(format!(
+                    "{:02}:{:02}:{:02} ",
+                    log.timestamp.hour(),
+                    log.timestamp.minute(),
+                    log.timestamp.second()
+                ))
+                .dark_gray(),
+            );
             line.push_span(Span::raw(format!("[{}] {padding}", log.source)).style(style));
             line.extend(text.lines[0].iter().cloned());
             line
@@ -737,18 +704,29 @@ impl Output {
         // Rendering this line will eat the frame, so just shortcut a more reliable path
         // Render the new line at the top of the viewport, and then some spaces so that when we call "clear"
         // The lines will have been scrolled up
+        // FIXME(jon): if a line is longer than the terminal width, it will be truncated since we're not
+        // advancing by the grapheme_count
         if space_available < lines_to_draw {
-            crossterm::queue!(
-                std::io::stdout(),
-                crossterm::cursor::MoveTo(0, frame_rect.y),
-                crossterm::style::Print(raw_ansi_buf.to_string().trim_end()),
-                crossterm::style::Print("\n"),
-                crossterm::style::Print(
-                    (0..self.viewport_current_height() - 1)
-                        .map(|_| "\n")
-                        .collect::<String>()
-                ),
-            )?;
+            raw_ansi_buf.trim_end();
+            let buf = raw_ansi_buf.to_string();
+            for (idx, line) in buf.lines().enumerate() {
+                let start = (frame_rect.y + idx as u16).min(term_size.height - 1);
+                crossterm::queue!(
+                    std::io::stdout(),
+                    crossterm::cursor::MoveTo(0, start),
+                    crossterm::terminal::Clear(ClearType::CurrentLine),
+                    crossterm::style::Print(line.trim_end()),
+                    crossterm::style::Print("\n"),
+                )?;
+            }
+            // -2 because the line we just printed already pushed the cursor down by 1
+            for _ in 0..self.viewport_current_height() - 2 {
+                crossterm::queue!(
+                    std::io::stdout(),
+                    crossterm::cursor::MoveTo(0, term_size.height - 1),
+                    crossterm::style::Print("\n"),
+                )?;
+            }
             terminal.clear()?;
             return Ok(());
         }
@@ -814,3 +792,30 @@ impl Output {
     //     );
     // }
 }
+
+// pub fn set_fix_term_hook() {
+//     let original_hook = std::panic::take_hook();
+
+//     std::panic::set_hook(Box::new(move |info| {
+//         _ = disable_raw_mode();
+//         let mut stdout = stdout();
+//         _ = stdout.execute(Show);
+//         original_hook(info);
+//     }));
+// }
+
+// // todo: re-enable
+// #[allow(unused)]
+// async fn rustc_version() -> String {
+//     tokio::process::Command::new("rustc")
+//         .arg("--version")
+//         .output()
+//         .await
+//         .ok()
+//         .map(|o| o.stdout)
+//         .and_then(|o| {
+//             let out = String::from_utf8(o).unwrap();
+//             out.split_ascii_whitespace().nth(1).map(|v| v.to_string())
+//         })
+//         .unwrap_or_else(|| "<unknown>".to_string())
+// }

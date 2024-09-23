@@ -7,11 +7,8 @@ mod ansi_buffer;
 mod detect;
 mod handle;
 mod hot_reloading_file_map;
-mod loggs;
-mod logs_tab;
 mod output;
 mod proxy;
-mod render;
 mod runner;
 mod server;
 mod update;
@@ -76,11 +73,12 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
                 let file = files[0].display().to_string();
                 let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
-                tracing::info!(dx_src = ?TraceSrc::Dev, "changed: {}", file);
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {} in 3ms", file);
+
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty()
                         && hr.assets.is_empty()
@@ -91,10 +89,12 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
                     devserver.send_hotreload(hr).await;
                 } else {
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {} in 3ms", file);
+
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
                     builder.rebuild(args.build_arguments.clone());
 
-                    // Clear the hot reload changes
+                    // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
                     watcher.clear_hot_reload_changes();
 
                     // Tell the server to show a loading page for any new requests
@@ -183,6 +183,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
             }
 
             ServeUpdate::RequestRebuild => {
+                tracing::info!("Full rebuild: triggered manually");
                 builder.rebuild(args.build_arguments.clone());
                 devserver.start_build().await
             }
