@@ -2,6 +2,7 @@ use crate::{
     serve::{ansi_buffer::AnsiStringBuffer, Builder, DevServer, ServeUpdate, Watcher},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceMsg, TraceSrc,
 };
+use console::strip_ansi_codes;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -674,163 +675,51 @@ impl Output {
         let frame_rect = terminal.get_frame().area();
         let term_size = terminal.size().unwrap();
 
-        // Create a paragraph widget using the log line itself
-        // From here on out, we want to work with the escaped ansi string and the "real lines" to be printed
-        // todo(jon): refactor this out to accept any widget, not just paragraphs
-        let paragraph = Paragraph::new({
-            use ansi_to_tui::IntoText;
-            use chrono::Timelike;
+        // Render the log into an ansi string
+        // We're going to add some metadata to it like the timestamp and source and then dump it to the raw ansi sequences we need to send to crossterm
+        let output_sequence = tracemsg_to_ansi_string(log, term_size.width);
 
-            // Call `into_text` to convert any ansi sequences to tui spans
-            let mut text = log.content.into_text().unwrap();
+        // Wipe the viewport clean so it doesn't tear
+        crossterm::queue!(
+            std::io::stdout(),
+            crossterm::cursor::MoveTo(0, frame_rect.y),
+            crossterm::terminal::Clear(ClearType::FromCursorDown),
+        )?;
 
-            // And then add the extra log spans to the first line
-            text.lines[0] = {
-                let mut line = Line::default();
-                line.push_span(
-                    Span::raw(format!(
-                        "{:02}:{:02}:{:02} ",
-                        log.timestamp.hour(),
-                        log.timestamp.minute(),
-                        log.timestamp.second()
-                    ))
-                    .dark_gray(),
-                );
-                line.push_span(
-                    Span::raw(format!(
-                        "[{src}] {padding}",
-                        src = log.source,
-                        padding = " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
-                    ))
-                    .style(match log.source {
-                        TraceSrc::App(_platform) => Style::new().blue(),
-                        TraceSrc::Dev => Style::new().magenta(),
-                        TraceSrc::Build => Style::new().yellow(),
-                        TraceSrc::Cargo => Style::new().yellow(),
-                        TraceSrc::Unknown => Style::new().gray(),
-                        TraceSrc::Hotreload => Style::new().light_yellow(),
-                    }),
-                );
-                line.extend(text.lines[0].iter().cloned());
-                line
-            };
-            text
-        });
-        let line_count = paragraph.line_count(term_size.width) as u16;
-
-        // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
-        //
-        // This is important because the line_count method on paragraph takes into account the width of these codes
-        // the 3000 clip width is to bound log lines to a reasonable memory usage
-        // We could consider reusing this buffer since it's a lot to allocate, but log printing is not the
-        // slowest thing in the world and allocating is pretty fast...
-        //
-        // After we've dumped the ascii out, we want to call "trim_end" which ensures we don't attempt
-        // to print extra characters as lines, since AnsiStringBuffer will in fact attempt to print empty
-        // cells as characters. That might not actually be important, but we want to shrink the buffer
-        // before printing it
-        let output_sequence = {
-            let mut raw_ansi_buf = AnsiStringBuffer::new(3000, line_count);
-            raw_ansi_buf.render_ref(&paragraph, raw_ansi_buf.buf.area);
-            raw_ansi_buf.dump()
-        };
-
-        // Create a paragraph by escaping the contents of the log, which is already ansi escaped
-        let mut overflowed_lines = 0;
-        for line in output_sequence.lines() {
-            let grapheme_count = line.graphemes(true).count() as u16;
-            if grapheme_count > term_size.width {
-                // Subtract 1 since we already know this line will count as at least one line
-                overflowed_lines += grapheme_count.div_ceil(term_size.width) - 1;
-            }
-        }
-
-        // Calculate how many lines we need to draw by adding the real lines to the wrapped lines
-        let lines_to_draw = line_count + overflowed_lines;
-
-        // The viewport might be clipped, but the math still needs to work out.
-        let actual_vh_height = self.viewport_current_height().min(term_size.height);
-
-        // Determine how many free lines are above the viewport that we can print into
-        let space_available = term_size.height.saturating_sub(actual_vh_height);
-
-        // Rendering this line will eat the frame, so just shortcut a more reliable path
-        // Render the new line at the top of the viewport, and then some spaces so that when we call "clear"
-        // The lines will have been scrolled up
-        //
-        // FIXME(jon): if a line is longer than the terminal width, it will be truncated since we're not
-        // advancing by the grapheme_count
-        if space_available < lines_to_draw {
-            for (idx, line) in output_sequence.lines().enumerate() {
-                // Move the cursor to the correct line but don't go past the bottom of the terminal
-                let start = frame_rect.y + idx as u16;
-                let start = start.min(term_size.height - 1);
-                crossterm::queue!(
-                    std::io::stdout(),
-                    crossterm::cursor::MoveTo(0, start),
-                    crossterm::terminal::Clear(ClearType::CurrentLine),
-                    crossterm::style::Print(line.trim_end()),
-                    crossterm::style::Print("\n"),
-                )?;
-
-                let grapheme_count = line.graphemes(true).count() as u16;
-                let lines_overflow = grapheme_count.div_ceil(term_size.width) - 1;
-                for _ in 0..lines_overflow {
-                    crossterm::queue!(
-                        std::io::stdout(),
-                        crossterm::cursor::MoveTo(0, start + 1),
-                        crossterm::terminal::Clear(ClearType::CurrentLine),
-                        crossterm::style::Print("\n"),
-                    )?;
-                }
-            }
-
-            // Push the scrollback buffer up the number of lines we need to clear
-            // This will either be the viewport height (for multi-line logs that overflow the viewport)
-            // or the number of lines we need to clear (for multi-line logs that fit in the viewport)
-            //
-            // We're subtracting 2 because overflowed lines already shoved the viewport down
-            for _ in 0..actual_vh_height.saturating_sub(2).min(lines_to_draw) {
-                crossterm::queue!(
-                    std::io::stdout(),
-                    crossterm::cursor::MoveTo(0, term_size.height - 1),
-                    crossterm::style::Print("\n"),
-                )?;
-            }
-            terminal.clear()?;
-            return Ok(());
-        }
-
-        // In the case where the log will fit on the screen, we want to make some room for it
-        // by adding some lines above the viewport. `insert_before` will eventually use scroll regions
-        // in ratatui, so we're just going to use that, even if it has extra flickering in the interim.
-        terminal.insert_before(lines_to_draw, |_| {})?;
-
-        // Finally, print the log to the terminal using crossterm, not ratatui
-        // We are careful to handle the case where the log won't fit on the screen, since that will
-        // cause this code to be called with the wrong viewport and cause tearing.
+        // Start printing the log by writing on top of the topmost line
+        let mut lines_printed = 0;
         for (idx, line) in output_sequence.lines().enumerate() {
-            // Move the cursor to the correct line but don't go past the bottom of the terminal
-            let start = frame_rect.y.saturating_sub(lines_to_draw) + idx as u16;
+            // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
+            let grapheme_count = strip_ansi_codes(line).graphemes(true).count() as u16;
+            let lines_will_print = grapheme_count.div_ceil(term_size.width);
+
+            // Move the cursor to the correct line offset but don't go past the bottom of the terminal
+            let start = frame_rect.y + idx as u16;
             let start = start.min(term_size.height - 1);
             crossterm::queue!(
                 std::io::stdout(),
                 crossterm::cursor::MoveTo(0, start),
-                crossterm::style::Print(line.trim_end()),
+                crossterm::style::Print(line),
                 crossterm::style::Print("\n"),
             )?;
 
-            let grapheme_count = line.graphemes(true).count() as u16 + 1;
-            let lines_overflow = grapheme_count.div_ceil(term_size.width) - 1;
-            for _ in 0..lines_overflow {
-                crossterm::queue!(
-                    std::io::stdout(),
-                    crossterm::cursor::MoveTo(0, start + 1),
-                    // crossterm::terminal::Clear(ClearType::CurrentLine),
-                    crossterm::style::Print("\n"),
-                )?;
-            }
+            lines_printed += lines_will_print;
         }
+
+        // The viewport might be clipped, but the math still needs to work out.
+        let actual_vh_height = self.viewport_current_height().min(term_size.height);
+
+        // We'll then add some pushback to ensure the log scrolls up above the viewport.
+        for _ in 0..lines_printed.min(actual_vh_height.saturating_sub(2)) {
+            crossterm::queue!(
+                std::io::stdout(),
+                crossterm::cursor::MoveTo(0, term_size.height - 1),
+                crossterm::style::Print("\n"),
+            )?;
+        }
+
+        // force a refresh of the viewport to make the frame redraw
+        terminal.clear()?;
 
         Ok(())
     }
@@ -841,6 +730,96 @@ impl Output {
             false => VIEWPORT_HEIGHT_SMALL,
         }
     }
+}
+
+fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
+    // Create a paragraph widget using the log line itself
+    // From here on out, we want to work with the escaped ansi string and the "real lines" to be printed
+    // todo(jon): refactor this out to accept any widget, not just paragraphs
+    let paragraph = Paragraph::new({
+        use ansi_to_tui::IntoText;
+        use chrono::Timelike;
+
+        // Call `into_text` to convert any ansi sequences to tui spans
+        let mut text = log.content.into_text().unwrap();
+
+        // And then add the extra log spans to the first line
+        text.lines[0] = {
+            let mut line = Line::default();
+            line.push_span(
+                Span::raw(format!(
+                    "{:02}:{:02}:{:02} ",
+                    log.timestamp.hour(),
+                    log.timestamp.minute(),
+                    log.timestamp.second()
+                ))
+                .dark_gray(),
+            );
+            line.push_span(
+                Span::raw(format!(
+                    "[{src}] {padding}",
+                    src = log.source,
+                    padding = " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
+                ))
+                .style(match log.source {
+                    TraceSrc::App(_platform) => Style::new().blue(),
+                    TraceSrc::Dev => Style::new().magenta(),
+                    TraceSrc::Build => Style::new().yellow(),
+                    TraceSrc::Cargo => Style::new().yellow(),
+                    TraceSrc::Unknown => Style::new().gray(),
+                    TraceSrc::Hotreload => Style::new().light_yellow(),
+                }),
+            );
+            line.extend(text.lines[0].iter().cloned());
+            line
+        };
+        text
+    });
+
+    // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
+    //
+    // This is important because the line_count method on paragraph takes into account the width of these codes
+    // the 3000 clip width is to bound log lines to a reasonable memory usage
+    // We could consider reusing this buffer since it's a lot to allocate, but log printing is not the
+    // slowest thing in the world and allocating is pretty fast...
+    //
+    // After we've dumped the ascii out, we want to call "trim_end" which ensures we don't attempt
+    // to print extra characters as lines, since AnsiStringBuffer will in fact attempt to print empty
+    // cells as characters. That might not actually be important, but we want to shrink the buffer
+    // before printing it
+    let line_count = paragraph.line_count(term_width);
+    let mut raw_ansi_buf = AnsiStringBuffer::new(3000, line_count as u16);
+    raw_ansi_buf.render_ref(&paragraph, raw_ansi_buf.buf.area);
+    raw_ansi_buf.dump()
+}
+
+#[test]
+fn how_long_is_a_tracemsg() {
+    use unicode_segmentation::UnicodeSegmentation;
+
+    // This log
+    // 11:52:27 [desktop] mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"
+    // Should be 137 characters
+    let log = TraceMsg::new(TraceSrc::App(Platform::Desktop), Level::INFO,
+        r#"mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"#.to_string()
+    );
+
+    let seq = tracemsg_to_ansi_string(log, 200);
+    let line = seq.lines().next().unwrap().to_string();
+
+    // Print the escaped version of the line
+    let expected_len = r#"11:52:27 [desktop] mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"#.len();
+
+    let mut count = 0;
+    for grapheme in line.graphemes(true) {
+        if grapheme != "\u{1b}" {
+            count += 1;
+        }
+        println!("{count} {grapheme:?}");
+    }
+
+    let resolved = strip_ansi_codes(&line).graphemes(true).count();
+    assert_eq!(resolved, expected_len);
 }
 
 // // todo: re-enable
