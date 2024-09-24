@@ -20,7 +20,7 @@ Dioxus SSR provides utilities to render Dioxus components to valid HTML. Once re
 ```rust
 # use dioxus::prelude::*;
 fn app() -> Element {
-   rsx!{
+  rsx!{
     div {"hello world!"}
   }
 }
@@ -88,7 +88,7 @@ Dioxus SSR can also be used to render on the server. You can just render the Vir
 ```rust
 # use dioxus::prelude::*;
 fn App() -> Element {
-   rsx! { div { "hello world!" } }
+  rsx! { div { "hello world!" } }
 }
 let mut vdom = VirtualDom::new(App);
 vdom.rebuild_in_place();
