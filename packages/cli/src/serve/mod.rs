@@ -1,6 +1,6 @@
 use crate::{
     BuildStage, BuildUpdate, Builder, DioxusCrate, Platform, Result, ServeArgs, TraceController,
-    TraceSrc,
+    TraceMsg, TraceSrc,
 };
 
 mod ansi_buffer;
@@ -54,16 +54,17 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
     tracing::info!(
-        r#"============================================================================
-               Serving your Dioxus app: {} 🚀
+        // r#"───────────────────────────────────────────────────────────────────────────────────────
+        r#"Serving your Dioxus app: {} 🚀
 
-               - Press `ctrl+c` to exit the server
-               - Press `r` to rebuild the app
-               - Press `o` to open the app
-               - Press `/` for more commands and shortcuts
+                - Press `ctrl+c` to exit the server
+                - Press `r` to rebuild the app
+                - Press `o` to open the app
+                - Press `/` for more commands and shortcuts
 
-               To learn morea, check out the docs at https://dioxuslabs.com/learn/0.6/getting_started
-               ============================================================================"#,
+                To learn more, check out the docs at https://dioxuslabs.com/learn/0.6/getting_started
+    "#,
+        //    ───────────────────────────────────────────────────────────────────────────────────────"#,
         krate.executable_name()
     );
 
@@ -93,7 +94,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {} in 3ms", file);
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
 
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty()
@@ -105,7 +106,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
                     devserver.send_hotreload(hr).await;
                 } else {
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {} in 3ms", file);
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
 
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
                     builder.rebuild(args.build_arguments.clone());
@@ -147,8 +148,12 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 // todo: maybe we want to shuffle the runner around to send an "open" command instead of doing that
                 match update {
                     BuildUpdate::Progress { .. } => {}
-                    BuildUpdate::Message {} => {}
-                    BuildUpdate::BuildFailed { .. } => {}
+                    BuildUpdate::CompilerMessage { message } => {
+                        screen.push_log(TraceMsg::cargo(message));
+                    }
+                    BuildUpdate::BuildFailed { err } => {
+                        tracing::error!("Build failed: {}", err);
+                    }
                     BuildUpdate::BuildReady { bundle } => {
                         let handle = runner.open(
                             bundle,

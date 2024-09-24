@@ -15,7 +15,7 @@ impl BuildRequest {
         input_path: &Path,
         bindgen_outdir: &Path,
     ) -> Result<()> {
-        tracing::info!("Running wasm-bindgen");
+        tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
 
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
@@ -41,7 +41,7 @@ impl BuildRequest {
         .context("Wasm-bindgen crashed while optimizing the wasm binary")?
         .context("Failed to generate wasm-bindgen bindings")?;
 
-        tracing::info!(dx_src = ?TraceSrc::Build, "wasm-bindgen complete in {:?}", start.elapsed());
+        tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 
         Ok(())
     }

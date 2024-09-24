@@ -21,7 +21,6 @@ impl BuildRequest {
 
         // Todo: actually run the server build in parallel with the app build
         let server_exe = None;
-        // let server_assets = Default::default();
 
         // Assemble a bundle from everything
         AppBundle::new(self, app_assets, app_exe, server_exe).await
@@ -85,7 +84,6 @@ impl BuildRequest {
         let mut stdout = stdout.lines();
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
-        let mut errors = Vec::new();
 
         loop {
             use cargo_metadata::Message;
@@ -107,31 +105,7 @@ impl BuildRequest {
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
                 Message::TextLine(line) => self.status_build_message(line),
-                Message::CompilerMessage(msg) => {
-                    let message = msg.message;
-                    self.status_build_diagnostic(&message);
-                    const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
-                        cargo_metadata::diagnostic::DiagnosticLevel::Help,
-                        cargo_metadata::diagnostic::DiagnosticLevel::Note,
-                        cargo_metadata::diagnostic::DiagnosticLevel::Warning,
-                        cargo_metadata::diagnostic::DiagnosticLevel::Error,
-                        cargo_metadata::diagnostic::DiagnosticLevel::FailureNote,
-                        cargo_metadata::diagnostic::DiagnosticLevel::Ice,
-                    ];
-                    const FATAL_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
-                        cargo_metadata::diagnostic::DiagnosticLevel::Error,
-                        cargo_metadata::diagnostic::DiagnosticLevel::FailureNote,
-                        cargo_metadata::diagnostic::DiagnosticLevel::Ice,
-                    ];
-                    if WARNING_LEVELS.contains(&message.level) {
-                        if let Some(rendered) = message.rendered.as_ref() {
-                            errors.push(rendered.clone());
-                        }
-                    }
-                    if FATAL_LEVELS.contains(&message.level) {
-                        return Err(anyhow::anyhow!(errors.join("\n")));
-                    }
-                }
+                Message::CompilerMessage(msg) => self.status_build_diagnostic(msg),
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
                     match artifact.executable {
@@ -145,7 +119,7 @@ impl BuildRequest {
                 }
                 Message::BuildFinished(finished) => {
                     if !finished.success {
-                        return Err(anyhow::anyhow!("Build failed"));
+                        return Err(anyhow::anyhow!("Cargo build failed."));
                     }
                 }
                 _ => {}
@@ -153,7 +127,7 @@ impl BuildRequest {
         }
 
         if output_location.is_none() {
-            tracing::error!("Cargo build failed {errors:?}");
+            tracing::error!("Cargo build failed - no output location");
         }
 
         output_location.context("Build did not return an executable")

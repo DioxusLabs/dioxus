@@ -1,8 +1,7 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringBuffer, Builder, DevServer, ServeUpdate, Watcher},
-    BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceMsg, TraceSrc,
+    BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
-use console::strip_ansi_codes;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -251,7 +250,7 @@ impl Output {
     /// This will queue the stderr message as a TraceMsg and print it on the next render
     /// We'll use the `App` TraceSrc for the msg, and whatever level is provided
     pub fn push_stdio(&mut self, platform: Platform, msg: String, level: Level) {
-        self.push_log(TraceMsg::new(TraceSrc::App(platform), level, msg));
+        self.push_log(TraceMsg::text(TraceSrc::App(platform), level, msg));
     }
 
     /// Push a message from the websocket to the logs
@@ -288,7 +287,7 @@ impl Output {
         };
 
         // We don't care about logging the app's message so we directly push it instead of using tracing.
-        self.push_log(TraceMsg::new(TraceSrc::App(platform), level, content));
+        self.push_log(TraceMsg::text(TraceSrc::App(platform), level, content));
     }
 
     /// Change internal state based on the build engine's update
@@ -301,7 +300,7 @@ impl Output {
     /// we won't be drawing it.
     pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
         match update {
-            BuildUpdate::Message {} => {}
+            BuildUpdate::CompilerMessage { .. } => {}
             BuildUpdate::Progress { .. } => self.tick_animation = true,
             BuildUpdate::BuildReady { .. } => self.tick_animation = false,
             BuildUpdate::BuildFailed { .. } => self.tick_animation = false,
@@ -365,6 +364,28 @@ impl Output {
         self.render_body_title(frame, _top, state);
     }
 
+    fn render_body_title(&self, frame: &mut Frame<'_>, area: Rect, _state: RenderState) {
+        frame.render_widget(
+            Line::from(vec![
+                // todo: re-enable open + clear
+                // "c:clear".gray(),
+                // "  ".gray(),
+                // "o:open".gray(),
+                // "  ".gray(),
+                " ".dark_gray(),
+                "r:rebuild".dark_gray(),
+                " ─ ".dark_gray(),
+                match self.more_modal_open {
+                    true => "/:more".light_yellow(),
+                    false => "/:more".dark_gray(),
+                },
+                " ".dark_gray(),
+            ])
+            .right_aligned(),
+            area,
+        );
+    }
+
     fn render_body(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
         let [_title, body, more, _foot] = Layout::vertical([
             Constraint::Length(0),
@@ -404,6 +425,7 @@ impl Output {
             state.build_engine.compile_progress,
             "Compiling  ",
             state,
+            state.build_engine.compile_duration(),
         );
         self.render_single_gauge(
             frame,
@@ -411,6 +433,7 @@ impl Output {
             state.build_engine.bundling_progress,
             "Bundling   ",
             state,
+            state.build_engine.bundle_duration(),
         );
 
         let mut lines = vec!["Status:     ".white()];
@@ -428,6 +451,12 @@ impl Output {
             }
             BuildStage::OptimizingWasm {} => {
                 lines.push("Optimizing wasm".yellow());
+            }
+            BuildStage::RunningBindgen {} => {
+                lines.push("Running wasm-bindgen".yellow());
+            }
+            BuildStage::Bundling {} => {
+                lines.push("Bundling app".yellow());
             }
             BuildStage::OptimizingAssets {} => lines.push("Optimizing assets".yellow()),
             BuildStage::CopyingAssets {
@@ -460,6 +489,7 @@ impl Output {
         value: f64,
         label: &str,
         state: RenderState,
+        time_taken: Option<Duration>,
     ) {
         let failed = state.build_engine.stage == BuildStage::Failed;
         let value = if failed { 1.0 } else { value.clamp(0.0, 1.0) };
@@ -504,7 +534,12 @@ impl Output {
                     } else {
                         "🎉 ".white()
                     },
-                    "100ms".dark_gray(),
+                    // todo: properly printy-print this as 1.5s or something
+                    if let Some(time_taken) = time_taken {
+                        format!("{:.1}s", time_taken.as_secs_f32()).dark_gray()
+                    } else {
+                        "".dark_gray()
+                    },
                 ])
                 .left_aligned(),
                 icon,
@@ -512,7 +547,7 @@ impl Output {
         }
     }
 
-    fn render_stats(&self, frame: &mut Frame<'_>, area: Rect, _state: RenderState) {
+    fn render_stats(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
         let stat_list: [_; 3] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
@@ -520,53 +555,47 @@ impl Output {
         ])
         .areas(area);
 
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Platform: ".gray(),
+                self.platform.to_string().yellow(),
+                if state.opts.build_arguments.fullstack {
+                    " (fullstack enabled)".yellow()
+                } else {
+                    " (fullstack disabled)".dark_gray()
+                },
+            ]))
+            .wrap(Wrap { trim: false }),
+            stat_list[0],
+        );
+
+        frame.render_widget(
+            Paragraph::new(Line::from({
+                let mut lines = vec!["Features: ".gray(), "[".yellow()];
+
+                let feature_list = &state.build_engine.request.build.target_args.features;
+                for (idx, feature) in feature_list.iter().enumerate() {
+                    lines.push(feature.as_str().yellow());
+                    if idx != feature_list.len() - 1 {
+                        lines.push(", ".dark_gray());
+                    }
+                }
+
+                lines.push("]".yellow());
+
+                lines
+            }))
+            .wrap(Wrap { trim: false }),
+            stat_list[1],
+        );
+
         frame.render_widget_ref(
             Paragraph::new(Line::from(vec![
                 "Serving at: ".gray(),
                 "http://127.0.0.1:8080".blue(),
             ]))
             .wrap(Wrap { trim: false }),
-            stat_list[0],
-        );
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Platform: ".gray(),
-                self.platform.to_string().yellow(),
-                if _state.opts.build_arguments.fullstack {
-                    " (fullstack)".yellow()
-                } else {
-                    "".white()
-                },
-            ]))
-            .wrap(Wrap { trim: false }),
-            stat_list[1],
-        );
-        frame.render_widget(
-            Paragraph::new(Line::from(vec!["Build time: ".gray(), "1m 2s".yellow()]))
-                .wrap(Wrap { trim: false }),
             stat_list[2],
-        );
-    }
-
-    fn render_body_title(&self, frame: &mut Frame<'_>, area: Rect, _state: RenderState) {
-        frame.render_widget(
-            Line::from(vec![
-                // todo: re-enable open + clear
-                // "c:clear".gray(),
-                // "  ".gray(),
-                // "o:open".gray(),
-                // "  ".gray(),
-                " ".dark_gray(),
-                "r:rebuild".dark_gray(),
-                " ─ ".dark_gray(),
-                match self.more_modal_open {
-                    true => "/:more".light_yellow(),
-                    false => "/:more".dark_gray(),
-                },
-                " ".dark_gray(),
-            ])
-            .right_aligned(),
-            area,
         );
     }
 
@@ -624,15 +653,12 @@ impl Output {
     }
 
     /// Render the version number on the bottom right
-    fn render_bottom_row(&self, frame: &mut Frame, area: Rect, state: RenderState) {
+    fn render_bottom_row(&self, frame: &mut Frame, area: Rect, _state: RenderState) {
         // Split the area into two chunks
         let row = Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).split(area);
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                " ".dark_gray(),
-                state.krate.executable_name().dark_gray(),
-                " ─ ".dark_gray(),
                 "🧬 dx".dark_gray(),
                 " ".dark_gray(),
                 self.dx_version.as_str().dark_gray(),
@@ -643,7 +669,7 @@ impl Output {
         );
     }
 
-    /// Render all decorations.
+    /// Render borders around the terminal, forcing an inner clear while we're at it
     fn render_borders(&self, frame: &mut Frame, area: Rect) {
         frame.render_widget(ratatui::widgets::Clear, area);
         frame.render_widget(
@@ -655,6 +681,23 @@ impl Output {
         );
     }
 
+    /// Print logs to the terminal as close to a regular "println!()" as possible.
+    ///
+    /// We don't want alternate screens or other terminal tricks because we want these logs to be as
+    /// close to real as possible. Once the log is printed, it is lost, so we need to be very careful
+    /// here to not print it incorrectly.
+    ///
+    /// This method works by printing lines at the top of the viewport frame, and then scrolling up
+    /// the viewport accordingly, such that our final call to "clear"  will cause the terminal the viewport
+    /// to be comlpetely erased and rewritten. This is slower since we're going around ratatui's diff
+    /// logic, but it's the only way to do this that gives us "true println!" semantics.
+    ///
+    /// In the future, Ratatui's insert_before method will get scroll regions, which will make this logic
+    /// much simpler. In that future, we'll simply insert a line into the scrollregion which should automatically
+    /// force that portion of the terminal to scroll up.
+    ///
+    /// TODO(jon): we could look into implementing scroll regions ourselves, but I think insert_before will
+    /// land in a reasonable amount of time.
     #[deny(clippy::manual_saturating_arithmetic)]
     fn drain_logs(
         &mut self,
@@ -671,13 +714,39 @@ impl Output {
             return Ok(());
         }
 
-        // Grab out the size and location of the terminal and its viewport
+        // Grab out the size and location of the terminal and its viewport before we start messing with it
         let frame_rect = terminal.get_frame().area();
         let term_size = terminal.size().unwrap();
 
         // Render the log into an ansi string
         // We're going to add some metadata to it like the timestamp and source and then dump it to the raw ansi sequences we need to send to crossterm
         let output_sequence = tracemsg_to_ansi_string(log, term_size.width);
+
+        // Get the lines of the output sequence and their overflow
+        let lines = output_sequence.lines().collect::<Vec<_>>();
+        let lines_printed = lines
+            .iter()
+            .map(|line| {
+                // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
+                let grapheme_count = console::strip_ansi_codes(line).graphemes(true).count() as u16;
+                grapheme_count.div_ceil(term_size.width).max(1)
+            })
+            .sum::<u16>();
+
+        // The viewport might be clipped, but the math still needs to work out.
+        let actual_vh_height = self.viewport_current_height().min(term_size.height);
+
+        // We don't need to add any pushback if the frame is in the middle of the viewport
+        // We'll then add some pushback to ensure the log scrolls up above the viewport.
+        let max_scrollback = lines_printed.min(actual_vh_height.saturating_sub(2));
+
+        // Move the terminal's cursor down to the number of lines printed
+        let remaining_space = term_size
+            .height
+            .saturating_sub(frame_rect.y + frame_rect.height);
+
+        // Calculate how many lines we need to push back
+        let to_push = max_scrollback.saturating_sub(remaining_space + 1);
 
         // Wipe the viewport clean so it doesn't tear
         crossterm::queue!(
@@ -686,13 +755,16 @@ impl Output {
             crossterm::terminal::Clear(ClearType::FromCursorDown),
         )?;
 
-        // Start printing the log by writing on top of the topmost line
-        let mut lines_printed = 0;
-        for (idx, line) in output_sequence.lines().enumerate() {
-            // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
-            let grapheme_count = strip_ansi_codes(line).graphemes(true).count() as u16;
-            let lines_will_print = grapheme_count.div_ceil(term_size.width);
+        // The only reliable way we can force the terminal downards is through "insert_before"
+        // If we need to push the terminal down, we'll use this method with the number of lines
+        // Ratatui will handle this rest.
+        // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
+        if to_push == 0 {
+            terminal.insert_before(lines_printed, |_| {})?;
+        }
 
+        // Start printing the log by writing on top of the topmost line
+        for (idx, line) in lines.into_iter().enumerate() {
             // Move the cursor to the correct line offset but don't go past the bottom of the terminal
             let start = frame_rect.y + idx as u16;
             let start = start.min(term_size.height - 1);
@@ -702,15 +774,10 @@ impl Output {
                 crossterm::style::Print(line),
                 crossterm::style::Print("\n"),
             )?;
-
-            lines_printed += lines_will_print;
         }
 
-        // The viewport might be clipped, but the math still needs to work out.
-        let actual_vh_height = self.viewport_current_height().min(term_size.height);
-
-        // We'll then add some pushback to ensure the log scrolls up above the viewport.
-        for _ in 0..lines_printed.min(actual_vh_height.saturating_sub(2)) {
+        // Scroll the terminal if we need to
+        for _ in 0..to_push {
             crossterm::queue!(
                 std::io::stdout(),
                 crossterm::cursor::MoveTo(0, term_size.height - 1),
@@ -718,7 +785,16 @@ impl Output {
             )?;
         }
 
-        // force a refresh of the viewport to make the frame redraw
+        // Multiline logs will print a newline as part of their last line, so they need to be shoved up by one extra
+        // Otherwise they'll be clipped by the final viewport height
+        // In all likelihood, there's an off-by-on error in `to_push` for short lines, so this is likely an inverted fix
+        if lines_printed >= actual_vh_height {
+            crossterm::queue!(std::io::stdout(), crossterm::style::Print("\n"),)?;
+        }
+
+        // Force a clear
+        // Might've been triggered by insert_before already, but supposedly double-queuing is fine
+        // since this isn't a "real" syncronous clear
         terminal.clear()?;
 
         Ok(())
@@ -733,46 +809,78 @@ impl Output {
 }
 
 fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
+    let rendered = match log.content {
+        TraceContent::Cargo(msg) => msg.message.rendered.unwrap_or_default(),
+        TraceContent::Text(text) => text,
+    };
+
     // Create a paragraph widget using the log line itself
     // From here on out, we want to work with the escaped ansi string and the "real lines" to be printed
+    //
+    // We make a special case for lines that look like frames (ie ==== or ---- or ------) and make them
+    // dark gray, just for readability.
+    //
     // todo(jon): refactor this out to accept any widget, not just paragraphs
     let paragraph = Paragraph::new({
         use ansi_to_tui::IntoText;
         use chrono::Timelike;
 
-        // Call `into_text` to convert any ansi sequences to tui spans
-        let mut text = log.content.into_text().unwrap();
+        let mut text = Text::default();
 
-        // And then add the extra log spans to the first line
-        text.lines[0] = {
-            let mut line = Line::default();
-            line.push_span(
-                Span::raw(format!(
-                    "{:02}:{:02}:{:02} ",
-                    log.timestamp.hour(),
-                    log.timestamp.minute(),
-                    log.timestamp.second()
-                ))
-                .dark_gray(),
-            );
-            line.push_span(
-                Span::raw(format!(
-                    "[{src}] {padding}",
-                    src = log.source,
-                    padding = " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
-                ))
-                .style(match log.source {
-                    TraceSrc::App(_platform) => Style::new().blue(),
-                    TraceSrc::Dev => Style::new().magenta(),
-                    TraceSrc::Build => Style::new().yellow(),
-                    TraceSrc::Cargo => Style::new().yellow(),
-                    TraceSrc::Unknown => Style::new().gray(),
-                    TraceSrc::Hotreload => Style::new().light_yellow(),
-                }),
-            );
-            line.extend(text.lines[0].iter().cloned());
-            line
-        };
+        for (idx, raw_line) in rendered.lines().enumerate() {
+            let line_as_text = raw_line.into_text().unwrap();
+            let is_pretending_to_be_frame = raw_line
+                .chars()
+                .all(|c| c == '=' || c == '-' || c == ' ' || c == '─');
+
+            for (subline_idx, line) in line_as_text.lines.into_iter().enumerate() {
+                let mut out_line = if idx == 0 && subline_idx == 0 {
+                    let mut formatted_line = Line::default();
+
+                    formatted_line.push_span(
+                        Span::raw(format!(
+                            "{:02}:{:02}:{:02} ",
+                            log.timestamp.hour(),
+                            log.timestamp.minute(),
+                            log.timestamp.second()
+                        ))
+                        .dark_gray(),
+                    );
+                    formatted_line.push_span(
+                        Span::raw(format!(
+                            "[{src}] {padding}",
+                            src = log.source,
+                            padding =
+                                " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
+                        ))
+                        .style(match log.source {
+                            TraceSrc::App(_platform) => Style::new().blue(),
+                            TraceSrc::Dev => Style::new().magenta(),
+                            TraceSrc::Build => Style::new().yellow(),
+                            TraceSrc::Bundle => Style::new().magenta(),
+                            TraceSrc::Cargo => Style::new().yellow(),
+                            TraceSrc::Unknown => Style::new().gray(),
+                            TraceSrc::Hotreload => Style::new().light_yellow(),
+                        }),
+                    );
+
+                    for span in line.spans {
+                        formatted_line.push_span(span);
+                    }
+
+                    formatted_line
+                } else {
+                    line
+                };
+
+                if is_pretending_to_be_frame {
+                    out_line = out_line.dark_gray();
+                }
+
+                text.lines.push(out_line);
+            }
+        }
+
         text
     });
 
@@ -799,8 +907,8 @@ fn how_long_is_a_tracemsg() {
 
     // This log
     // 11:52:27 [desktop] mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"
-    // Should be 137 characters
-    let log = TraceMsg::new(TraceSrc::App(Platform::Desktop), Level::INFO,
+    // Should be 136 characters
+    let log = TraceMsg::text(TraceSrc::App(Platform::Desktop), Level::INFO,
         r#"mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"#.to_string()
     );
 
@@ -818,8 +926,9 @@ fn how_long_is_a_tracemsg() {
         println!("{count} {grapheme:?}");
     }
 
-    let resolved = strip_ansi_codes(&line).graphemes(true).count();
+    let resolved = console::strip_ansi_codes(&line).graphemes(true).count();
     assert_eq!(resolved, expected_len);
+    assert_eq!(resolved, 136);
 }
 
 // // todo: re-enable

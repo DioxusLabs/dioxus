@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::builder::*;
 use crate::dioxus_crate::DioxusCrate;
@@ -27,8 +27,10 @@ pub(crate) struct Builder {
 
     pub compile_progress: f64,
     pub bundling_progress: f64,
-    pub build_start: Option<Instant>,
+    pub compile_start: Option<Instant>,
+    pub compile_end: Option<Instant>,
     pub bundle_start: Option<Instant>,
+    pub bundle_end: Option<Instant>,
 }
 
 impl Builder {
@@ -40,26 +42,29 @@ impl Builder {
             krate: krate.clone(),
             request: request.clone(),
             stage: BuildStage::Initializing,
-            build: tokio::spawn(async move { request.build().await }),
+            build: tokio::spawn(async move {
+                let res = request.build().await;
+
+                // The first launch gets some extra logging :)
+                if res.is_ok() {
+                    tracing::info!("Build completed successfully, launching app! 💫")
+                }
+
+                res
+            }),
             tx,
             rx,
             compile_progress: 0.0,
             bundling_progress: 0.0,
-            build_start: Some(Instant::now()),
+            compile_start: Some(Instant::now()),
+            compile_end: None,
             bundle_start: None,
+            bundle_end: None,
         })
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
-    ///
-    /// Also listen for any input from the app's handle
-    ///
-    /// Returns immediately with `Finished` if there are no more builds to run - don't poll-loop this!
     pub(crate) async fn wait(&mut self) -> BuildUpdate {
-        // if self.build.is_finished() {
-        //     std::future::pending().await
-        // }
-
         // Wait for the build to finish or for it to eminate a status message
         let update = tokio::select! {
             bundle = (&mut self.build) => {
@@ -91,6 +96,16 @@ impl Builder {
                     }
                     BuildStage::Compiling { current, total, .. } => {
                         self.compile_progress = *current as f64 / *total as f64;
+
+                        if self.compile_start.is_none() {
+                            self.compile_start = Some(Instant::now());
+                        }
+                    }
+                    BuildStage::Bundling {} => {
+                        self.compile_progress = 1.0;
+                        self.bundling_progress = 0.0;
+                        self.compile_end = Some(Instant::now());
+                        self.bundle_start = Some(Instant::now());
                     }
                     BuildStage::OptimizingWasm {} => {}
                     BuildStage::OptimizingAssets {} => {}
@@ -110,13 +125,18 @@ impl Builder {
                         self.compile_progress = 0.0;
                         self.bundling_progress = 0.0;
                     }
+                    BuildStage::RunningBindgen {} => {
+                        self.compile_progress = 1.0;
+                        self.bundling_progress = 0.5;
+                    }
                 }
             }
-            BuildUpdate::Message {} => {}
+            BuildUpdate::CompilerMessage { .. } => {}
             BuildUpdate::BuildReady { .. } => {
                 self.compile_progress = 1.0;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
+                self.bundle_end = Some(Instant::now());
             }
             BuildUpdate::BuildFailed { .. } => {
                 tracing::debug!("Setting builder to failed state");
@@ -130,32 +150,16 @@ impl Builder {
     /// Wait for the build to finish, returning the final bundle
     pub(crate) async fn finish(&mut self) -> Result<AppBundle> {
         loop {
-            let next = self.wait().await;
-            match next {
+            match self.wait().await {
                 BuildUpdate::BuildReady { bundle } => return Ok(bundle),
                 BuildUpdate::BuildFailed { err } => return Err(err),
                 BuildUpdate::Progress { .. } => {
                     // maybe log this?
                 }
-                BuildUpdate::Message {} => {
+                BuildUpdate::CompilerMessage { .. } => {
                     // maybe log this?
                 }
             }
-        }
-    }
-
-    fn is_finished(&self) -> bool {
-        match self.stage {
-            BuildStage::Initializing => false,
-            BuildStage::InstallingTooling {} => false,
-            BuildStage::Compiling { .. } => false,
-            BuildStage::OptimizingWasm {} => false,
-            BuildStage::OptimizingAssets {} => false,
-            BuildStage::CopyingAssets { .. } => false,
-            BuildStage::Success => true,
-            BuildStage::Failed => true,
-            BuildStage::Aborted => true,
-            BuildStage::Restarting => false,
         }
     }
 
@@ -168,6 +172,8 @@ impl Builder {
         let request = BuildRequest::new(&self.krate, args.clone(), self.tx.clone());
         self.request = request.clone();
         self.stage = BuildStage::Restarting;
+
+        // This build doesn't have any extra special logging - rebuilds would get pretty noisy
         self.build = tokio::spawn(async move { request.build().await });
     }
 
@@ -178,7 +184,27 @@ impl Builder {
         self.build.abort();
         self.stage = BuildStage::Aborted;
         self.compile_progress = 0.0;
-
         self.bundling_progress = 0.0;
+        self.compile_start = None;
+        self.bundle_start = None;
+        self.bundle_end = None;
+        self.compile_end = None;
+    }
+
+    pub fn compile_duration(&self) -> Option<Duration> {
+        Some(self.compile_end?.duration_since(self.compile_start?))
+    }
+
+    pub fn bundle_duration(&self) -> Option<Duration> {
+        Some(self.bundle_end?.duration_since(self.bundle_start?))
+    }
+
+    fn is_finished(&self) -> bool {
+        match self.stage {
+            BuildStage::Success => true,
+            BuildStage::Failed => true,
+            BuildStage::Aborted => true,
+            _ => false,
+        }
     }
 }

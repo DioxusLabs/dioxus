@@ -65,6 +65,7 @@ impl AppBundle {
             server_assets: Default::default(),
         };
 
+        bundle.build.status_start_bundle();
         bundle.prepare_workdir()?;
         bundle.write_main_executable().await?;
         bundle.write_assets().await?;
@@ -106,6 +107,8 @@ impl AppBundle {
             //            logo.png
             // ```
             Platform::Web => {
+                self.build.status_wasm_bindgen();
+
                 // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
                 self.build
                     .run_wasm_bindgen(

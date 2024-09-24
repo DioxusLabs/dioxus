@@ -15,6 +15,7 @@
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
 use crate::{serve::ServeUpdate, Platform as TargetPlatform};
+use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
 use chrono::{DateTime, Utc};
 use console::strip_ansi_codes;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
@@ -232,7 +233,7 @@ where
         TUI_TX
             .get()
             .unwrap()
-            .unbounded_send(TraceMsg::new(visitor.source, *level, final_msg))
+            .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg))
             .unwrap();
     }
 
@@ -331,19 +332,44 @@ fn format_field(field_name: &str, value: &dyn Debug) -> String {
 pub struct TraceMsg {
     pub source: TraceSrc,
     pub level: Level,
-    pub content: String,
+    pub content: TraceContent,
     pub timestamp: DateTime<chrono::Local>,
 }
 
 impl TraceMsg {
-    pub fn new(source: TraceSrc, level: Level, content: String) -> Self {
+    pub fn text(source: TraceSrc, level: Level, content: String) -> Self {
         Self {
             source,
             level,
-            content,
+            content: TraceContent::Text(content),
             timestamp: chrono::Local::now(),
         }
     }
+
+    pub fn cargo(content: CompilerMessage) -> Self {
+        let level = match content.message.level {
+            DiagnosticLevel::Ice => Level::ERROR,
+            DiagnosticLevel::Error => Level::ERROR,
+            DiagnosticLevel::FailureNote => Level::ERROR,
+            DiagnosticLevel::Warning => Level::DEBUG,
+            DiagnosticLevel::Note => Level::DEBUG,
+            DiagnosticLevel::Help => Level::DEBUG,
+            _ => todo!(),
+        };
+
+        Self {
+            source: TraceSrc::Cargo,
+            level,
+            content: TraceContent::Cargo(content),
+            timestamp: chrono::Local::now(),
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub enum TraceContent {
+    Cargo(CompilerMessage),
+    Text(String),
 }
 
 #[derive(Clone, PartialEq)]
@@ -351,6 +377,7 @@ pub enum TraceSrc {
     App(TargetPlatform),
     Dev,
     Build,
+    Bundle,
     /// Provides no formatting.
     Cargo,
     /// Avoid using this
@@ -396,6 +423,7 @@ impl Display for TraceSrc {
             Self::Cargo => write!(f, "cargo"),
             Self::Unknown => write!(f, "n/a"),
             Self::Hotreload => write!(f, "hotreload"),
+            Self::Bundle => write!(f, "bundle"),
         }
     }
 }

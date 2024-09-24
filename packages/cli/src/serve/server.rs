@@ -217,9 +217,10 @@ impl DevServer {
                     BuildStage::Aborted => {}
                     BuildStage::Restarting => self.send_reload_start().await,
                     BuildStage::CopyingAssets { .. } => {}
+                    _ => {}
                 }
             }
-            BuildUpdate::Message {} => {}
+            BuildUpdate::CompilerMessage { .. } => {}
             BuildUpdate::BuildReady { bundle } => {}
             BuildUpdate::BuildFailed { err } => {}
         }

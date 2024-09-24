@@ -1,7 +1,7 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
 use crate::{bundler::AppBundle, BuildRequest, Platform};
 use anyhow::Context;
-use cargo_metadata::{diagnostic::Diagnostic, Message};
+use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage, Message};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use serde::Deserialize;
 use std::ops::Deref;
@@ -17,7 +17,7 @@ pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 #[derive(Debug)]
 pub(crate) enum BuildUpdate {
     Progress { stage: BuildStage },
-    Message {},
+    CompilerMessage { message: CompilerMessage },
     BuildReady { bundle: AppBundle },
     BuildFailed { err: crate::Error },
 }
@@ -32,6 +32,8 @@ pub enum BuildStage {
         total: usize,
         krate: String,
     },
+    Bundling {},
+    RunningBindgen {},
     OptimizingWasm {},
     OptimizingAssets {},
     CopyingAssets {
@@ -46,12 +48,22 @@ pub enum BuildStage {
 }
 
 impl BuildRequest {
-    pub(crate) fn status_build_diagnostic(&self, message: &Diagnostic) {
-        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
-        //     stage: BuildStage::Compiling,
-        //     update: UpdateStage::AddMessage(message.clone().into()),
-        //     platform: self.platform(),
-        // });
+    pub(crate) fn status_wasm_bindgen(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::RunningBindgen {},
+        });
+    }
+
+    pub(crate) fn status_start_bundle(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::Bundling {},
+        });
+    }
+
+    pub(crate) fn status_build_diagnostic(&self, message: CompilerMessage) {
+        _ = self
+            .progress
+            .unbounded_send(BuildUpdate::CompilerMessage { message });
     }
 
     pub(crate) fn status_build_message(&self, line: String) {

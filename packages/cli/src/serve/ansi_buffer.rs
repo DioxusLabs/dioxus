@@ -46,9 +46,6 @@ impl AnsiStringBuffer {
     fn write_fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut last_style = None;
         for y in 0..self.buf.area.height {
-            // if y > 0 {
-            //     f.write_str("\n")?;
-            // }
             for x in 0..self.buf.area.width {
                 let cell = self.buf.get(x, y);
                 if cell.symbol() == "✆" {
