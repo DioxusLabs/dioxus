@@ -11,7 +11,7 @@ This overview provides a brief introduction to Dioxus. For a more in-depth guide
 
 - [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
 - [Book (0.5)](https://dioxuslabs.com/learn/0.5)
-- [Examples](https://github.com/DioxusLabs/example-projects)
+- [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
 # Overview and Goals
 
@@ -27,16 +27,19 @@ Dioxus is heavily inspired by React, supporting many of the same concepts:
 
 If you know React, then you know Dioxus.
 
-Dioxus is _substantially_ more performant than many of the other Rust UI libraries (Yew/Percy) and is _significantly_ more performant
+Dioxus is _substantially_ more performant than many of the other Rust UI libraries (Yew/Percy) and is _significantly_
+more performant
 than React—roughly competitive with InfernoJS.
 
-Remember: Dioxus is a library for declaring interactive user interfaces—it is not a dedicated renderer. Most 1st party renderers for Dioxus currently only support web technologies.
+Remember: Dioxus is a library for declaring interactive user interfaces—it is not a dedicated renderer. Most 1st party
+renderers for Dioxus currently only support web technologies.
 
 ## Brief Overview
 
 All Dioxus apps are built by composing functions that start with a capital letter and return an `Element`.
 
-To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
+To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use.
+In the launch function, we pass the app's root `Component`.
 
 ```rust, no_run
 use dioxus::prelude::*;
@@ -73,7 +76,9 @@ rsx! {
 };
 ```
 
-The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that implements [`IntoDynNode`](dioxus_core::IntoDynNode) will be parsed as a child. We make two exceptions: both `for` loops and `if` statements are parsed where their body is parsed as a rsx nodes.
+The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that
+implements [`IntoDynNode`](dioxus_core::IntoDynNode) will be parsed as a child. We make two exceptions: both `for` loops
+and `if` statements are parsed where their body is parsed as a rsx nodes.
 
 ```rust, no_run
 # use dioxus::prelude::*;
@@ -108,9 +113,11 @@ fn App() -> Element {
 ## Components
 
 We can compose these function components to build a complex app. Each new
-component we design must take some Properties. For components with no explicit properties, we can omit the type altogether.
+component we design must take some Properties. For components with no explicit properties, we can omit the type
+altogether.
 
-In Dioxus, all properties are memorized by default with Clone and PartialEq. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
+In Dioxus, all properties are memorized by default with Clone and PartialEq. For props you can't clone, simply wrap the
+fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
 
 ```rust, no_run
 # use dioxus::prelude::*;
@@ -167,14 +174,16 @@ fn App() -> Element {
 Hooks are sensitive to how they are used. To use hooks, you must abide by the
 ["rules of hooks"](https://dioxuslabs.com/learn/0.5/reference/hooks#rules-of-hooks):
 
-- Hooks can only be called in the body of a component or another hook. Not inside of another expression like a loop, conditional or function call.
+- Hooks can only be called in the body of a component or another hook. Not inside of another expression like a loop,
+  conditional or function call.
 - Hooks should start with "use\_"
 
 In a sense, hooks let us add a field of state to our component without declaring
 an explicit state struct. However, this means we need to "load" the struct in the right
 order. If that order is wrong, then the hook will pick the wrong state and panic.
 
-Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with [custom hooks](https://dioxuslabs.com/learn/0.5/cookbook/state/custom_hooks).
+Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can
+also extend Dioxus with [custom hooks](https://dioxuslabs.com/learn/0.5/cookbook/state/custom_hooks).
 
 ## Putting it all together
 
@@ -201,7 +210,8 @@ fn App() -> Element {
 
 ## Conclusion
 
-This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.5/guide) and [reference](https://dioxuslabs.com/learn/0.5/reference) on the official
+This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.5/guide)
+and [reference](https://dioxuslabs.com/learn/0.5/reference) on the official
 website for more details.
 
 Beyond this overview, Dioxus supports:

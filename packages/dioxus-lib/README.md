@@ -5,7 +5,8 @@
   </p>
 </div>
 
-> This crate implements dioxus-lib which is a renderer-free version of Dioxus. This crate is intended to be used by library authors who need a stable core version of dioxus withuot pulling in renderer-related dependencies on accident.
+> This crate implements dioxus-lib which is a renderer-free version of Dioxus. This crate is intended to be used by
+> library authors who need a stable core version of dioxus withuot pulling in renderer-related dependencies on accident.
 
 # Resources
 
@@ -13,7 +14,7 @@ This overview provides a brief introduction to Dioxus. For a more in-depth guide
 
 - [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
 - [Book (0.5)](https://dioxuslabs.com/learn/0.5)
-- [Examples](https://github.com/DioxusLabs/example-projects)
+- [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
 # Overview and Goals
 
@@ -29,16 +30,19 @@ Dioxus is heavily inspired by React, supporting many of the same concepts:
 
 If you know React, then you know Dioxus.
 
-Dioxus is _substantially_ more performant than many of the other Rust UI libraries (Yew/Percy) and is _significantly_ more performant
+Dioxus is _substantially_ more performant than many of the other Rust UI libraries (Yew/Percy) and is _significantly_
+more performant
 than React—roughly competitive with InfernoJS.
 
-Remember: Dioxus is a library for declaring interactive user interfaces—it is not a dedicated renderer. Most 1st party renderers for Dioxus currently only support web technologies.
+Remember: Dioxus is a library for declaring interactive user interfaces—it is not a dedicated renderer. Most 1st party
+renderers for Dioxus currently only support web technologies.
 
 ## Brief Overview
 
 All Dioxus apps are built by composing functions that return an `Element`.
 
-To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
+To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use.
+In the launch function, we pass the app's root `Component`.
 
 ```rust, no_run
 use dioxus::prelude::*;
@@ -78,7 +82,9 @@ rsx! {
 }
 ```
 
-The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that implements `IntoIterator<Item = impl IntoVNode>` will be parsed as a child. We make two exceptions: both `for` loops and `if` statements are parsed where their body is parsed as a child.
+The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that implements
+`IntoIterator<Item = impl IntoVNode>` will be parsed as a child. We make two exceptions: both `for` loops and `if`
+statements are parsed where their body is parsed as a child.
 
 ```rust, ignore
 rsx! {
@@ -123,7 +129,8 @@ We can compose these function components to build a complex app. Each new
 component we design must take some Properties. For components with no explicit
 properties we can omit the type altogether.
 
-In Dioxus, all properties are memoized by default, and this implement both Clone and PartialEq. For props you can't clone, simply wrap the fields in a ReadOnlySignal and Dioxus will handle the wrapping for you.
+In Dioxus, all properties are memoized by default, and this implement both Clone and PartialEq. For props you can't
+clone, simply wrap the fields in a ReadOnlySignal and Dioxus will handle the wrapping for you.
 
 ```rust, ignore
 #[component]
