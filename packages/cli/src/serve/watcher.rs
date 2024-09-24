@@ -37,8 +37,8 @@ impl Watcher {
         // - the assets directory - this is so we can hotreload CSS and other assets by default
         // - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
         // - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
-        let mut allow_watch_path = krate.dioxus_config.web.watcher.watch_path.clone();
-        allow_watch_path.push(krate.dioxus_config.application.asset_dir.clone());
+        let mut allow_watch_path = krate.config.web.watcher.watch_path.clone();
+        allow_watch_path.push(krate.config.application.asset_dir.clone());
         allow_watch_path.push("Cargo.toml".to_string().into());
         allow_watch_path.push("Dioxus.toml".to_string().into());
         allow_watch_path.push("assets".to_string().into());

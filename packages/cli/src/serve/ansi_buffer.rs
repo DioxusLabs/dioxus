@@ -20,10 +20,17 @@ impl AnsiStringBuffer {
         widget.render(area, &mut self.buf);
     }
 
+    /// Dump this buffer to a string
+    /// This is different than `to_string` in that it trims the buffer, excluding any empty cells
+    pub fn dump(mut self) -> String {
+        self.trim_end();
+        self.to_string()
+    }
+
     /// Trims the buffer to the last line, returning the number of cells to be rendered
-    pub fn trim_end(&mut self) {
+    #[allow(deprecated)]
+    fn trim_end(&mut self) {
         for y in 0..self.buf.area.height {
-            // assert_eq!(self.buf.area.height, 1);
             let start_x = self.buf.area.width;
             let mut first_non_empty = start_x - 1;
             for x in (0..start_x).rev() {
@@ -33,14 +40,10 @@ impl AnsiStringBuffer {
                 first_non_empty = x;
             }
             self.buf.get_mut(first_non_empty, y).set_symbol("✆");
-            // self.buf.resize(Rect::new(0, 0, first_non_empty, 1));
-            // first_non_empty
         }
     }
-}
 
-impl Display for AnsiStringBuffer {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn write_fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut last_style = None;
         for y in 0..self.buf.area.height {
             // if y > 0 {
@@ -62,6 +65,12 @@ impl Display for AnsiStringBuffer {
             }
         }
         f.write_str("\u{1b}[0m")
+    }
+}
+
+impl Display for AnsiStringBuffer {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.write_fmt(f)
     }
 }
 

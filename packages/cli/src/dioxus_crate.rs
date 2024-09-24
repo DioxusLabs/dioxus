@@ -16,7 +16,7 @@ use crate::metadata::CargoError;
 pub(crate) struct DioxusCrate {
     pub(crate) krates: Arc<Krates>,
     pub(crate) package: NodeId,
-    pub(crate) dioxus_config: DioxusConfig,
+    pub(crate) config: DioxusConfig,
     pub(crate) target: Target,
 }
 
@@ -24,7 +24,7 @@ impl std::fmt::Debug for DioxusCrate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DioxusCrate")
             .field("package", &self.krates[self.package])
-            .field("dioxus_config", &self.dioxus_config)
+            .field("dioxus_config", &self.config)
             .field("target", &self.target)
             .finish()
     }
@@ -64,7 +64,7 @@ impl DioxusCrate {
         Ok(Self {
             krates: Arc::new(krates),
             package,
-            dioxus_config,
+            config: dioxus_config,
             target,
         })
     }
@@ -72,8 +72,7 @@ impl DioxusCrate {
     /// Compose an asset directory. Represents the typical "public" directory
     /// with publicly available resources (configurable in the `Dioxus.toml`).
     pub(crate) fn legacy_asset_dir(&self) -> PathBuf {
-        self.crate_dir()
-            .join(&self.dioxus_config.application.asset_dir)
+        self.crate_dir().join(&self.config.application.asset_dir)
     }
 
     /// Get the list of files in the "legacy" asset directory
@@ -122,7 +121,7 @@ impl DioxusCrate {
             .workspace_dir()
             .join("target")
             .join("dx-workdir")
-            .join(self.dioxus_config.application.name.clone())
+            .join(self.config.application.name.clone())
             .join(plat_name);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -191,7 +190,7 @@ impl DioxusCrate {
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     pub(crate) fn should_pre_compress_web_assets(&self, release: bool) -> bool {
-        self.dioxus_config.web.pre_compress && release
+        self.config.web.pre_compress && release
     }
 }
 

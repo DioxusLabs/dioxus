@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::builder::*;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
@@ -24,8 +26,9 @@ pub(crate) struct Builder {
     pub rx: ProgressRx,
 
     pub compile_progress: f64,
-    pub optimize_progress: f64,
     pub bundling_progress: f64,
+    pub build_start: Option<Instant>,
+    pub bundle_start: Option<Instant>,
 }
 
 impl Builder {
@@ -37,12 +40,13 @@ impl Builder {
             krate: krate.clone(),
             request: request.clone(),
             stage: BuildStage::Initializing,
-            build: tokio::spawn(request.build()),
+            build: tokio::spawn(async move { request.build().await }),
             tx,
             rx,
             compile_progress: 0.0,
-            optimize_progress: 0.0,
             bundling_progress: 0.0,
+            build_start: Some(Instant::now()),
+            bundle_start: None,
         })
     }
 
@@ -52,16 +56,19 @@ impl Builder {
     ///
     /// Returns immediately with `Finished` if there are no more builds to run - don't poll-loop this!
     pub(crate) async fn wait(&mut self) -> BuildUpdate {
-        if self.build.is_finished() {
-            std::future::pending().await
-        }
+        // if self.build.is_finished() {
+        //     std::future::pending().await
+        // }
 
         // Wait for the build to finish or for it to eminate a status message
         let update = tokio::select! {
-            bundle = (&mut self.build) => match bundle {
-                Ok(Ok(bundle)) => BuildUpdate::BuildReady { bundle },
-                Ok(Err(err)) => BuildUpdate::BuildFailed { err },
-                Err(_) => BuildUpdate::BuildFailed { err: crate::Error::from(anyhow::anyhow!("Build panicked!")) },
+            bundle = (&mut self.build) => {
+                self.build = tokio::task::spawn(std::future::pending());
+                match bundle {
+                    Ok(Ok(bundle)) => BuildUpdate::BuildReady { bundle },
+                    Ok(Err(err)) => BuildUpdate::BuildFailed { err },
+                    Err(_) => BuildUpdate::BuildFailed { err: crate::Error::from(anyhow::anyhow!("Build panicked!")) },
+                }
             },
             Some(progress) = self.rx.next() => progress,
         };
@@ -69,38 +76,38 @@ impl Builder {
         // Update the internal stage of the build so the UI can render it
         match &update {
             BuildUpdate::Progress { stage } => {
-                self.stage = stage.clone();
+                // Prevent updates from flowing in after the build has already finished
+                if !self.is_finished() {
+                    self.stage = stage.clone();
+                }
+
                 match stage {
                     BuildStage::Initializing => {
                         self.compile_progress = 0.0;
-                        self.optimize_progress = 0.0;
                         self.bundling_progress = 0.0;
                     }
                     BuildStage::InstallingTooling {} => {
                         self.compile_progress = 0.1;
                     }
-                    BuildStage::Compiling { current, total } => {
+                    BuildStage::Compiling { current, total, .. } => {
                         self.compile_progress = *current as f64 / *total as f64;
                     }
-                    BuildStage::OptimizingWasm {} => {
-                        self.optimize_progress = 0.3;
-                    }
-                    BuildStage::OptimizingAssets {} => {
-                        self.optimize_progress = 0.7;
-                    }
-                    BuildStage::CopyingAssets { current, total } => {
+                    BuildStage::OptimizingWasm {} => {}
+                    BuildStage::OptimizingAssets {} => {}
+                    BuildStage::CopyingAssets { current, total, .. } => {
                         self.bundling_progress = *current as f64 / *total as f64;
                     }
                     BuildStage::Success => {
                         self.compile_progress = 1.0;
-                        self.optimize_progress = 1.0;
                         self.bundling_progress = 1.0;
                     }
-                    BuildStage::Failed => {}
+                    BuildStage::Failed => {
+                        self.compile_progress = 1.0;
+                        self.bundling_progress = 1.0;
+                    }
                     BuildStage::Aborted => {}
                     BuildStage::Restarting => {
                         self.compile_progress = 0.0;
-                        self.optimize_progress = 0.0;
                         self.bundling_progress = 0.0;
                     }
                 }
@@ -108,10 +115,13 @@ impl Builder {
             BuildUpdate::Message {} => {}
             BuildUpdate::BuildReady { .. } => {
                 self.compile_progress = 1.0;
-                self.optimize_progress = 1.0;
                 self.bundling_progress = 1.0;
+                self.stage = BuildStage::Success;
             }
-            BuildUpdate::BuildFailed { .. } => {}
+            BuildUpdate::BuildFailed { .. } => {
+                tracing::debug!("Setting builder to failed state");
+                self.stage = BuildStage::Failed;
+            }
         }
 
         update
@@ -134,6 +144,21 @@ impl Builder {
         }
     }
 
+    fn is_finished(&self) -> bool {
+        match self.stage {
+            BuildStage::Initializing => false,
+            BuildStage::InstallingTooling {} => false,
+            BuildStage::Compiling { .. } => false,
+            BuildStage::OptimizingWasm {} => false,
+            BuildStage::OptimizingAssets {} => false,
+            BuildStage::CopyingAssets { .. } => false,
+            BuildStage::Success => true,
+            BuildStage::Failed => true,
+            BuildStage::Aborted => true,
+            BuildStage::Restarting => false,
+        }
+    }
+
     /// Restart this builder with new build arguments.
     pub(crate) fn rebuild(&mut self, args: BuildArgs) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
@@ -143,7 +168,7 @@ impl Builder {
         let request = BuildRequest::new(&self.krate, args.clone(), self.tx.clone());
         self.request = request.clone();
         self.stage = BuildStage::Restarting;
-        self.build = tokio::spawn(request.build());
+        self.build = tokio::spawn(async move { request.build().await });
     }
 
     /// Shutdown the current build process
@@ -153,7 +178,7 @@ impl Builder {
         self.build.abort();
         self.stage = BuildStage::Aborted;
         self.compile_progress = 0.0;
-        self.optimize_progress = 0.0;
+
         self.bundling_progress = 0.0;
     }
 }

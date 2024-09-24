@@ -51,6 +51,22 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     let mut watcher = Watcher::start(&args, &krate);
     let mut runner = AppRunner::start();
 
+    // This is our default splash screen. We might want to make this a fancier splash screen in the future
+    // Also, these commands might not be the most important, but it's all we've got enabled right now
+    tracing::info!(
+        r#"============================================================================
+               Serving your Dioxus app: {} 🚀
+
+               - Press `ctrl+c` to exit the server
+               - Press `r` to rebuild the app
+               - Press `o` to open the app
+               - Press `/` for more commands and shortcuts
+
+               To learn morea, check out the docs at https://dioxuslabs.com/learn/0.6/getting_started
+               ============================================================================"#,
+        krate.executable_name()
+    );
+
     let err: Result<(), crate::Error> = loop {
         // Draw the state of the server to the screen
         screen.render(&args, &krate, &builder, &devserver, &watcher);
@@ -134,27 +150,19 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                     BuildUpdate::Message {} => {}
                     BuildUpdate::BuildFailed { .. } => {}
                     BuildUpdate::BuildReady { bundle } => {
-                        let handle = runner
-                            .open(
-                                bundle,
-                                devserver.devserver_address(),
-                                devserver.server_address(),
-                            )
-                            .await;
+                        let handle = runner.open(
+                            bundle,
+                            devserver.devserver_address(),
+                            devserver.server_address(),
+                        );
 
                         match handle {
-                            Ok(handle) => {
-                                // Make sure we immediately capture the stdout/stderr of the executable -
-                                // otherwise it'll clobber our terminal output
-                                screen.new_ready_app(handle);
-
-                                // And then finally tell the server to reload
+                            // Update the screen + devserver with the new handle info
+                            Ok(_handle) => {
                                 devserver.send_reload_command().await;
                             }
 
-                            Err(e) => {
-                                tracing::error!("Failed to open app: {}", e);
-                            }
+                            Err(e) => tracing::error!("Failed to open app: {}", e),
                         }
                     }
                 }
@@ -167,22 +175,25 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                     break Err(anyhow::anyhow!("Application exited with status: {status}").into());
                 }
 
-                runner.kill(platform).await;
+                runner.kill(platform);
             }
 
             ServeUpdate::StdoutReceived { platform, msg } => {
-                screen.push_stdout(platform, msg);
+                screen.push_stdio(platform, msg, tracing::Level::INFO);
             }
 
             ServeUpdate::StderrReceived { platform, msg } => {
-                screen.push_stderr(platform, msg);
+                screen.push_stdio(platform, msg, tracing::Level::ERROR);
             }
 
             ServeUpdate::TracingLog { log } => {
-                screen.push_inner_log(log);
+                screen.push_log(log);
             }
 
             ServeUpdate::RequestRebuild => {
+                // The spacing here is important-ish: we want
+                // `Full rebuild:` to line up with
+                // `Hotreloading:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
                 builder.rebuild(args.build_arguments.clone());
                 devserver.start_build().await

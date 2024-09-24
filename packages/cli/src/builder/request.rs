@@ -15,7 +15,7 @@ use std::path::PathBuf;
 /// than trying to aggregate them after the builds have finished.
 ///
 /// If the app needs to be bundled, we'll add the bundle info here too
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct BuildRequest {
     /// The configuration for the crate we are building
     pub(crate) krate: DioxusCrate,
@@ -109,7 +109,7 @@ impl BuildRequest {
     pub(crate) fn platform(&self) -> Platform {
         self.build
             .platform
-            .unwrap_or_else(|| self.krate.dioxus_config.application.default_platform)
+            .unwrap_or_else(|| self.krate.config.application.default_platform)
     }
 
     /// The final output name of the app, primarly to be used when bundled

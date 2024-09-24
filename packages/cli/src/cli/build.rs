@@ -129,7 +129,7 @@ impl BuildArgs {
         // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
         let bundle = Builder::start(dioxus_crate, self.clone())?.finish().await?;
         let destination = dioxus_crate.out_dir();
-        bundle.finish(destination).await?;
+        bundle.finish(destination)?;
 
         Ok(())
     }
@@ -182,7 +182,7 @@ impl BuildArgs {
     ) -> (Option<String>, Platform) {
         self.find_dioxus_feature(resolved, filter_platform)
             .unwrap_or_else(|| {
-                let default_platform = resolved.dioxus_config.application.default_platform;
+                let default_platform = resolved.config.application.default_platform;
 
                 (Some(default_platform.to_string()), default_platform)
             })

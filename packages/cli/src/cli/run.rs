@@ -33,9 +33,7 @@ impl RunArgs {
         let devserver_ip = "127.0.0.1:8080".parse().unwrap();
         let fullstack_ip = "127.0.0.1:6955".parse().unwrap();
 
-        runner
-            .open(bundle, devserver_ip, Some(fullstack_ip))
-            .await?;
+        runner.open(bundle, devserver_ip, Some(fullstack_ip))?;
 
         loop {
             let msg = runner.wait().await;
@@ -44,7 +42,7 @@ impl RunArgs {
                 ServeUpdate::StderrReceived { platform, msg } => println!("[{platform}]: {msg}"),
                 ServeUpdate::StdoutReceived { platform, msg } => println!("[{platform}]: {msg}"),
                 ServeUpdate::ProcessExited { platform, status } => {
-                    runner.kill(platform).await;
+                    runner.kill(platform);
                     eprintln!("[{platform}]: process exited with status: {status:?}")
                 }
                 ServeUpdate::BuildUpdate { .. } => {}

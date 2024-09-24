@@ -103,7 +103,7 @@ impl Config {
             Config::FormatPrint {} => {
                 println!(
                     "{:#?}",
-                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())?.dioxus_config
+                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())?.config
                 );
             }
             Config::CustomHtml {} => {

@@ -23,7 +23,7 @@ pub(crate) struct AppHandle {
 }
 
 impl AppHandle {
-    pub async fn start(
+    pub fn start(
         app: AppBundle,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
@@ -32,7 +32,7 @@ impl AppHandle {
         let ip = devserver_ip.to_string();
 
         if platform == Platform::Server || app.build.build.fullstack {
-            tracing::info!(
+            tracing::debug!(
                 "Proxying fullstack server from port {:?}",
                 fullstack_address
             );
@@ -40,7 +40,7 @@ impl AppHandle {
 
         let work_dir = app.build.krate.out_dir().join("launch");
         std::fs::create_dir_all(&work_dir)?;
-        let executable = app.finish(work_dir).await?;
+        let executable = app.finish(work_dir)?;
 
         let mut handle = AppHandle {
             app,

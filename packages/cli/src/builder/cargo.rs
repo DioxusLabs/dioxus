@@ -102,6 +102,8 @@ impl BuildRequest {
             let message =
                 Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));
 
+            // tracing::debug!("Raw message from builder {:#?}", message);
+
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
                 Message::TextLine(line) => self.status_build_message(line),
@@ -122,8 +124,8 @@ impl BuildRequest {
                         cargo_metadata::diagnostic::DiagnosticLevel::Ice,
                     ];
                     if WARNING_LEVELS.contains(&message.level) {
-                        if let Some(rendered) = message.rendered {
-                            errors.push(rendered);
+                        if let Some(rendered) = message.rendered.as_ref() {
+                            errors.push(rendered.clone());
                         }
                     }
                     if FATAL_LEVELS.contains(&message.level) {
@@ -134,7 +136,11 @@ impl BuildRequest {
                     units_compiled += 1;
                     match artifact.executable {
                         Some(executable) => output_location = Some(executable.into()),
-                        None => self.status_build_progress(units_compiled, crate_count),
+                        None => self.status_build_progress(
+                            units_compiled,
+                            crate_count,
+                            artifact.target.name,
+                        ),
                     }
                 }
                 Message::BuildFinished(finished) => {

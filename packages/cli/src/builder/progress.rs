@@ -14,6 +14,7 @@ use tracing::Level;
 pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
 pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 
+#[derive(Debug)]
 pub(crate) enum BuildUpdate {
     Progress { stage: BuildStage },
     Message {},
@@ -26,10 +27,18 @@ pub(crate) enum BuildUpdate {
 pub enum BuildStage {
     Initializing,
     InstallingTooling {},
-    Compiling { current: usize, total: usize },
+    Compiling {
+        current: usize,
+        total: usize,
+        krate: String,
+    },
     OptimizingWasm {},
     OptimizingAssets {},
-    CopyingAssets { current: usize, total: usize },
+    CopyingAssets {
+        current: usize,
+        total: usize,
+        path: PathBuf,
+    },
     Success,
     Failed,
     Aborted,
@@ -57,19 +66,14 @@ impl BuildRequest {
         // });
     }
 
-    pub(crate) fn status_build_progress(&self, count: usize, total: usize) {
+    pub(crate) fn status_build_progress(&self, count: usize, total: usize, name: String) {
         self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
                 total,
+                krate: name,
             },
         });
-
-        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
-        //     platform: self.platform(),
-        //     stage: BuildStage::Compiling,
-        //     update: UpdateStage::SetProgress((build_progress).clamp(0.0, 1.00)),
-        // });
     }
 
     pub(crate) fn status_starting_build(&self) {

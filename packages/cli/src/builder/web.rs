@@ -19,8 +19,8 @@ impl BuildRequest {
 
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
-        let name = self.krate.dioxus_config.application.name.clone();
-        let keep_debug = self.krate.dioxus_config.web.wasm_opt.debug || (!self.build.release);
+        let name = self.krate.config.application.name.clone();
+        let keep_debug = self.krate.config.web.wasm_opt.debug || (!self.build.release);
 
         let start = std::time::Instant::now();
         tokio::task::spawn_blocking(move || {
@@ -110,7 +110,7 @@ impl BuildRequest {
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html);
 
-        let title = self.krate.dioxus_config.web.app.title.clone();
+        let title = self.krate.config.web.app.title.clone();
 
         replace_or_insert_before("{app_title}", "</title", &title, &mut html);
 
@@ -124,7 +124,7 @@ impl BuildRequest {
     // Inject any resources from the config into the html
     fn inject_resources(&self, html: &mut String) -> Result<()> {
         // Collect all resources into a list of styles and scripts
-        let resources = &self.krate.dioxus_config.web.resource;
+        let resources = &self.krate.config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
         let mut script_list = resources.script.clone().unwrap_or_default();
 
@@ -213,10 +213,10 @@ impl BuildRequest {
 
     /// Replace any special placeholders in the HTML with resolved values
     fn replace_template_placeholders(&self, html: &mut String) {
-        let base_path = self.krate.dioxus_config.web.app.base_path();
+        let base_path = self.krate.config.web.app.base_path();
         *html = html.replace("{base_path}", base_path);
 
-        let app_name = &self.krate.dioxus_config.application.name;
+        let app_name = &self.krate.config.application.name;
         *html = html.replace("{app_name}", app_name);
     }
 

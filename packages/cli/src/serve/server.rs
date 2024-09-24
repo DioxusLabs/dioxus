@@ -100,7 +100,7 @@ impl DevServer {
 
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
-            cfg.dioxus_config.web.https.clone(),
+            cfg.config.web.https.clone(),
             listener,
             router,
         ));
@@ -114,7 +114,7 @@ impl DevServer {
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
             build_status,
-            application_name: cfg.dioxus_config.application.name.clone(),
+            application_name: cfg.config.application.name.clone(),
             platform: args.build_arguments.platform().to_string(),
         })
     }
@@ -209,14 +209,14 @@ impl DevServer {
                 match stage {
                     BuildStage::Initializing => {}
                     BuildStage::InstallingTooling {} => {}
-                    BuildStage::Compiling { current, total } => {}
+                    BuildStage::Compiling { .. } => {}
                     BuildStage::OptimizingWasm {} => {}
                     BuildStage::OptimizingAssets {} => {}
                     BuildStage::Success => {}
                     BuildStage::Failed => self.send_reload_failed().await,
                     BuildStage::Aborted => {}
                     BuildStage::Restarting => self.send_reload_start().await,
-                    BuildStage::CopyingAssets { current, total } => {}
+                    BuildStage::CopyingAssets { .. } => {}
                 }
             }
             BuildUpdate::Message {} => {}
@@ -328,7 +328,7 @@ fn build_devserver_router(
     let mut router = Router::new();
 
     // Setup proxy for the endpoint specified in the config
-    for proxy_config in krate.dioxus_config.web.proxy.iter() {
+    for proxy_config in krate.config.web.proxy.iter() {
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
@@ -354,7 +354,7 @@ fn build_devserver_router(
         let base_path = format!(
             "/{}",
             krate
-                .dioxus_config
+                .config
                 .web
                 .app
                 .base_path
@@ -452,7 +452,7 @@ fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::Method
     };
 
     let out_dir = cfg.workdir(Platform::Web);
-    let index_on_404 = cfg.dioxus_config.web.watcher.index_on_404;
+    let index_on_404 = cfg.config.web.watcher.index_on_404;
 
     get_service(
         ServiceBuilder::new()

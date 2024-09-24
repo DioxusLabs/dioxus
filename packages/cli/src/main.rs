@@ -3,7 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 // when runnnig in debug mode, we want running this to be quieter
 // it's annoying to fill up the console with warnings
-#![cfg_attr(debug_assertions, allow(warnings))]
+// #![cfg_attr(debug_assertions, allow(warnings))]
 
 mod assets;
 mod builder;

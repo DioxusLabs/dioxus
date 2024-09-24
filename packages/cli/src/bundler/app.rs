@@ -37,6 +37,7 @@ use std::sync::atomic::AtomicUsize;
 ///
 /// The format of each build will follow the name plus some metadata such that when distributing you
 /// can easily trim off the metadata.
+#[derive(Debug)]
 pub(crate) struct AppBundle {
     pub(crate) build: BuildRequest,
     pub(crate) workdir: PathBuf,
@@ -185,7 +186,7 @@ impl AppBundle {
     ///
     /// Perform any finishing steps here:
     /// - Signing the bundle
-    pub(crate) async fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
+    pub(crate) fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
         // std::fs::create_dir_all(&destination.join(self.build.app_name()))?;
 
         match self.build.platform() {

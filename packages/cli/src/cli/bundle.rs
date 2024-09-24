@@ -90,12 +90,12 @@ impl Bundle {
                 .set_src_path(Some(dioxus_crate.workspace_dir().display().to_string())),
         ];
 
-        let bundle_config = dioxus_crate.dioxus_config.bundle.clone();
+        let bundle_config = dioxus_crate.config.bundle.clone();
         let mut bundle_settings = make_tauri_bundler_settings(bundle_config);
 
         if cfg!(windows) {
             let windows_icon_override = dioxus_crate
-                .dioxus_config
+                .config
                 .bundle
                 .windows
                 .as_ref()
@@ -123,7 +123,7 @@ impl Bundle {
         }
 
         // Copy the assets in the dist directory to the bundle
-        let static_asset_output_dir = &dioxus_crate.dioxus_config.application.out_dir;
+        let static_asset_output_dir = &dioxus_crate.config.application.out_dir;
 
         // Make sure the dist directory is relative to the crate directory
         let static_asset_output_dir = static_asset_output_dir
@@ -171,12 +171,12 @@ impl Bundle {
         let mut settings = SettingsBuilder::new()
             .project_out_directory(dioxus_crate.out_dir())
             .package_settings(PackageSettings {
-                product_name: dioxus_crate.dioxus_config.application.name.clone(),
+                product_name: dioxus_crate.config.application.name.clone(),
                 version: package.version.to_string(),
                 description: package.description.clone().unwrap_or_default(),
                 homepage: Some(package.homepage.clone().unwrap_or_default()),
                 authors: Some(package.authors.clone()),
-                default_run: Some(dioxus_crate.dioxus_config.application.name.clone()),
+                default_run: Some(dioxus_crate.config.application.name.clone()),
             })
             .binaries(binaries)
             .bundle_settings(bundle_settings);

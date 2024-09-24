@@ -86,7 +86,7 @@ impl ServeArgs {
             self.always_on_top = Some(settings.always_on_top.unwrap_or(true))
         }
 
-        crate_config.dioxus_config.desktop.always_on_top = self.always_on_top.unwrap_or(true);
+        crate_config.config.desktop.always_on_top = self.always_on_top.unwrap_or(true);
 
         // Resolve the build arguments
         self.build_arguments.resolve(crate_config)?;
@@ -98,7 +98,7 @@ impl ServeArgs {
             dist_dir = dist_dir.join("examples");
         }
 
-        crate_config.dioxus_config.application.out_dir =
+        crate_config.config.application.out_dir =
             dist_dir.join(crate_config.executable_name());
 
         Ok(())
