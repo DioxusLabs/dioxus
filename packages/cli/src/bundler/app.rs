@@ -238,12 +238,10 @@ impl AppBundle {
 
             // Create a final .app/.exe/etc depending on the host platform, not dependent on the host
             Platform::Desktop => {
-                crate::fastfs::copy_asset(
-                    &self.build_dir.join("App.app"),
-                    &destination.join("App.app"),
-                )?;
-
-                Ok(self.app_executable.clone())
+                let work_dir = self.build_dir.join("App.app");
+                let out_dir = destination.join("App.app");
+                crate::fastfs::copy_asset(&work_dir, &out_dir)?;
+                Ok(work_dir)
             }
 
             Platform::Server => {

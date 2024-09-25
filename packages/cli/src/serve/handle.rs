@@ -160,8 +160,11 @@ impl AppHandle {
         // index.html during dev
         match handle.app.build.build.platform() {
             Platform::Desktop => {
-                let mut cmd = Command::new(handle.out_file.clone());
-                cmd.envs(envs)
+                // let mut cmd = Command::new(handle.out_file.clone());
+                let mut cmd = Command::new("open");
+                cmd.arg(handle.out_file.clone())
+                    .envs(envs)
+                    .arg("-W")
                     .stderr(Stdio::piped())
                     .stdout(Stdio::piped())
                     .kill_on_drop(true);

@@ -221,6 +221,8 @@ impl Watcher {
                 continue;
             };
 
+            tracing::debug!("Attempting to hotreload {path:?}");
+
             match ext {
                 "rs" => edited_rust_files.push(path),
 
@@ -243,8 +245,6 @@ impl Watcher {
                             );
                         }
                     }
-
-                    // unknown_files.push(path);
                 }
             }
         }
