@@ -196,13 +196,12 @@ impl AssetManifest {
         _pre_compress: bool,
     ) -> anyhow::Result<()> {
         let Some(src) = self.assets.get(target_asset) else {
-            panic!("Specified asset does not exist while trying to copy {target_asset:?} to {destination:?}");
-            // crate::fastfs::copy_asset(
-            //     target_asset,
-            //     &destination.join(target_asset.file_name().unwrap()),
-            // )?;
+            crate::fastfs::copy_asset(
+                target_asset,
+                &destination.join(target_asset.file_name().unwrap()),
+            )?;
 
-            // return Ok(());
+            return Ok(());
         };
 
         let from = src.absolute.clone();
@@ -214,8 +213,6 @@ impl AssetManifest {
         // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
         if !optimize {
             let to = destination.join(&src.bundled);
-            tracing::debug!("Copying asset {from:?} to {to:?}");
-            // _ = std::fs::remove_file(&to);
             std::fs::copy(from, to).expect("Failed to copy asset");
             return Ok(());
         }

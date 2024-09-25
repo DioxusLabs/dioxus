@@ -106,7 +106,7 @@ impl DioxusCrate {
     /// target/dx/build/app/web/
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
-    pub(crate) fn workdir(&self, platform: Platform) -> PathBuf {
+    pub(crate) fn build_dir(&self, platform: Platform) -> PathBuf {
         let plat_name = match platform {
             Platform::Web => "web",
             Platform::Desktop => "desktop",
@@ -117,9 +117,9 @@ impl DioxusCrate {
         };
         let dir = self
             .out_dir()
-            .join("build")
             .join(self.config.application.name.clone())
-            .join(plat_name);
+            .join(plat_name)
+            .join("build");
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -140,8 +140,9 @@ impl DioxusCrate {
 
         let dir = self
             .out_dir()
-            .join("bundle")
-            .join(self.config.application.name.clone());
+            .join(self.config.application.name.clone())
+            .join(plat_name)
+            .join("bundle");
 
         dir
     }
