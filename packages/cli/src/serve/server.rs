@@ -247,7 +247,7 @@ impl DevServer {
     /// Sends hot reloadable changes to all clients.
     pub(crate) async fn send_hotreload(&mut self, reload: HotReloadMsg) {
         if !reload.assets.is_empty() {
-            tracing::info!("Hot reloading assets {:?}", reload.assets);
+            tracing::info!("Hotreloading assets {:?}", reload.assets);
         }
 
         let msg = DevserverMsg::HotReload(reload);

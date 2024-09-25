@@ -18,7 +18,10 @@ pub(crate) struct AppHandle {
     pub(crate) _id: Uuid,
     pub(crate) app: AppBundle,
 
-    pub(crate) executable: PathBuf,
+    // Output where we put the final bundle
+    pub(crate) bundle_dir: PathBuf,
+
+    pub(crate) out_file: PathBuf,
     pub(crate) server: Option<PathBuf>,
 
     pub(crate) app_child: Option<Child>,
@@ -46,17 +49,18 @@ impl AppHandle {
             );
         }
 
-        let work_dir = app.build.krate.out_dir().join("launch");
-        std::fs::create_dir_all(&work_dir)?;
+        let bundle_dir = app.build.krate.bundle_dir(platform);
+        std::fs::create_dir_all(&bundle_dir)?;
 
-        let executable = app.finish(work_dir.clone())?;
-        let server = app.copy_server(&work_dir)?;
+        let out_file = app.finish(bundle_dir.clone())?;
+        let server = app.copy_server(&bundle_dir)?;
 
         let mut handle = AppHandle {
             _id: Uuid::new_v4(),
             app,
-            executable,
+            out_file,
             server,
+            bundle_dir: bundle_dir.clone(),
             app_child: None,
             app_stderr: None,
             app_stdout: None,
@@ -81,10 +85,6 @@ impl AppHandle {
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
                 devserver_ip.to_string(),
             ),
-            // (
-            //     dioxus_cli_config::ALWAYS_ON_TOP_ENV,
-            //     serve.always_on_top.unwrap_or(true).to_string(),
-            // ),
         ];
 
         if let Some(addr) = fullstack_address {
@@ -92,6 +92,10 @@ impl AppHandle {
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
         };
 
+        // (
+        //     dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+        //     serve.always_on_top.unwrap_or(true).to_string(),
+        // ),
         // cmd.env(
         //     dioxus_cli_config::ASSET_ROOT_ENV,
         //     asset_root.display().to_string(),
@@ -107,7 +111,7 @@ impl AppHandle {
         if let Some(server) = handle.server.clone() {
             let mut cmd = Command::new(server);
             cmd.envs(envs.clone());
-            cmd.current_dir(work_dir);
+            cmd.current_dir(bundle_dir);
             cmd.stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .kill_on_drop(true);
@@ -125,7 +129,7 @@ impl AppHandle {
             }
             Platform::Desktop => {
                 // tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app 🎉");
-                tracing::debug!(dx_src = ?TraceSrc::Dev, "Desktop app location: {:?}", handle.executable.display());
+                tracing::debug!(dx_src = ?TraceSrc::Dev, "Desktop app location: {:?}", handle.out_file.display());
             }
             Platform::Server => {
                 if let Some(fullstack_address) = fullstack_address {
@@ -156,7 +160,7 @@ impl AppHandle {
         // index.html during dev
         match handle.app.build.build.platform() {
             Platform::Desktop => {
-                let mut cmd = Command::new(handle.executable.clone());
+                let mut cmd = Command::new(handle.out_file.clone());
                 cmd.envs(envs)
                     .stderr(Stdio::piped())
                     .stdout(Stdio::piped())
@@ -177,21 +181,6 @@ impl AppHandle {
         }
 
         Ok(handle)
-    }
-    /// Update an asset in the running apps
-    ///
-    /// Might need to upload the asset to the simulator or overwrite it within the bundle
-    ///
-    /// Returns the name of the asset in the bundle if it exists
-    pub(crate) fn hotreload_asset(&self, path: &PathBuf) -> Option<PathBuf> {
-        let resource = self.app.app_assets.assets.get(path).cloned()?;
-
-        _ = self
-            .app
-            .app_assets
-            .copy_asset_to(&self.app.asset_dir(), path, false, false);
-
-        Some(resource.bundled.into())
     }
 
     #[allow(unused)]
@@ -237,6 +226,21 @@ impl AppHandle {
         // # # now that metro is ready, resume the app from background
         // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
         todo!("Open mobile apps")
+    }
+
+    pub(crate) fn runtime_asset_dir(&self) -> PathBuf {
+        let dir = match self.app.build.build.platform() {
+            Platform::Web => self.out_file.join("assets"),
+            Platform::Desktop => todo!(),
+            Platform::Ios => todo!(),
+            Platform::Android => todo!(),
+            Platform::Server => todo!(),
+            Platform::Liveview => todo!(),
+        };
+
+        tracing::debug!("Runtime asset dir: {dir:?}");
+
+        dir
     }
 }
 

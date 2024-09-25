@@ -196,29 +196,50 @@ impl AssetManifest {
         _pre_compress: bool,
     ) -> anyhow::Result<()> {
         let Some(src) = self.assets.get(target_asset) else {
-            crate::fastfs::copy_asset(
-                target_asset,
-                &destination.join(target_asset.file_name().unwrap()),
-            )?;
+            panic!("Specified asset does not exist while trying to copy {target_asset:?} to {destination:?}");
+            // crate::fastfs::copy_asset(
+            //     target_asset,
+            //     &destination.join(target_asset.file_name().unwrap()),
+            // )?;
 
-            return Ok(());
+            // return Ok(());
         };
 
-        let local = src.absolute.clone();
+        let from = src.absolute.clone();
 
-        if !local.exists() {
+        if !from.exists() {
             panic!("Specified asset does not exist while trying to copy {target_asset:?} to {destination:?}")
         }
 
         // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
         if !optimize {
-            std::fs::copy(local, destination.join(&src.bundled)).expect("Failed to copy asset");
+            let to = destination.join(&src.bundled);
+            tracing::debug!("Copying asset {from:?} to {to:?}");
+            // _ = std::fs::remove_file(&to);
+            std::fs::copy(from, to).expect("Failed to copy asset");
             return Ok(());
         }
 
         // Otherwise, let's attempt to optimize the the asset we're copying
 
         Ok(())
+    }
+
+    pub fn insert_legacy_asset(&mut self, asset_dir: &PathBuf, path: &PathBuf) {
+        let input =
+            PathBuf::from("/assets/").join(path.strip_prefix(asset_dir).unwrap().to_path_buf());
+        let absolute = path.canonicalize().unwrap();
+        let bundled = input.file_name().unwrap().to_string_lossy().to_string();
+
+        let asset = ResourceAsset {
+            input,
+            absolute,
+            bundled,
+        };
+
+        tracing::debug!("Adding legacy asset {asset:?} to bundle manifest");
+
+        self.assets.insert(path.clone(), asset);
     }
 }
 

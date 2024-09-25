@@ -92,14 +92,13 @@ impl ServeArgs {
         self.build_arguments.resolve(crate_config)?;
 
         // Since this is a serve, adjust the outdir to be target/dx-dist/<crate name>
-        let mut dist_dir = crate_config.out_dir();
+        // let mut dist_dir = crate_config.bundle_dir(self.b);
 
-        if crate_config.target.is_example() {
-            dist_dir = dist_dir.join("examples");
-        }
+        // if crate_config.target.is_example() {
+        //     dist_dir = dist_dir.join("examples");
+        // }
 
-        crate_config.config.application.out_dir =
-            dist_dir.join(crate_config.executable_name());
+        // crate_config.config.application.out_dir = dist_dir.join(crate_config.executable_name());
 
         Ok(())
     }

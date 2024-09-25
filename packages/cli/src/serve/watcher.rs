@@ -45,11 +45,11 @@ impl Watcher {
         allow_watch_path.dedup();
 
         let crate_dir = krate.crate_dir();
-        let mut builder = ignore::gitignore::GitignoreBuilder::new(&crate_dir);
-        builder.add(crate_dir.join(".gitignore"));
+        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(&crate_dir);
+        ignore_builder.add(crate_dir.join(".gitignore"));
 
-        let out_dir = krate.out_dir();
-        let out_dir_str = out_dir.display().to_string();
+        let workspace_dir = krate.workspace_dir();
+        ignore_builder.add(workspace_dir.join(".gitignore"));
 
         let excluded_paths = vec![
             ".git",
@@ -58,21 +58,21 @@ impl Watcher {
             "target",
             "node_modules",
             "dist",
-            &out_dir_str,
         ];
         for path in excluded_paths {
-            builder
+            ignore_builder
                 .add_line(None, path)
                 .expect("failed to add path to file excluder");
         }
-        let ignore = builder.build().unwrap();
+        let ignore = ignore_builder.build().unwrap();
 
         // Build the event handler for notify.
         let notify_event_handler = {
             let tx = tx.clone();
             move |info: notify::Result<notify::Event>| {
                 if let Ok(e) = info {
-                    if is_allowed_notify_event(&e) {
+                    let is_allowed_notify_event = is_allowed_notify_event(&e);
+                    if is_allowed_notify_event {
                         _ = tx.unbounded_send(e);
                     }
                 }
@@ -111,6 +111,8 @@ impl Watcher {
             if ignore.matched(path, path.is_dir()).is_ignore() {
                 continue;
             }
+
+            tracing::debug!("Watching path {path:?}");
 
             let mode = notify::RecursiveMode::Recursive;
 
@@ -193,6 +195,8 @@ impl Watcher {
             files.push(path.clone());
         }
 
+        tracing::debug!("Files changed: {files:?}");
+
         ServeUpdate::FilesChanged { files }
     }
 
@@ -223,11 +227,24 @@ impl Watcher {
                 // Look through the runners to see if any of them have an asset that matches the path
                 _ => {
                     for runner in runner.running.values() {
-                        if let Some(bundled_name) = runner.hotreload_asset(&path) {
+                        if let Some(bundled_name) = runner
+                            .app
+                            .hotreload_asset(&runner.runtime_asset_dir(), &path)
+                        {
+                            tracing::debug!(
+                                "Hotreloading asset {bundled_name:?} in {:?}",
+                                runner.app.app_assets
+                            );
                             assets.push(bundled_name);
+                        } else {
+                            tracing::debug!(
+                                "Hotreloading asset {path:?} in {:?} which doesn't have it",
+                                runner.app.app_assets
+                            );
                         }
                     }
-                    unknown_files.push(path);
+
+                    // unknown_files.push(path);
                 }
             }
         }
@@ -333,13 +350,15 @@ fn is_allowed_notify_event(event: &notify::Event) -> bool {
     let allowed = match event.kind {
         EventKind::Modify(ModifyKind::Data(_)) => true,
         EventKind::Modify(ModifyKind::Name(_)) => true,
-        EventKind::Create(_) => true,
-        EventKind::Remove(_) => true,
         // The primary modification event on WSL's poll watcher.
         EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)) => true,
         // Catch-all for unknown event types.
-        EventKind::Modify(ModifyKind::Any) => true,
+        EventKind::Modify(ModifyKind::Any) => false,
+        EventKind::Modify(ModifyKind::Metadata(_)) => false,
+        // EventKind::Modify(ModifyKind::Any) => true,
         // Don't care about anything else.
+        EventKind::Create(_) => true,
+        EventKind::Remove(_) => true,
         _ => false,
     };
 

@@ -53,21 +53,31 @@ impl AppBundle {
     pub(crate) async fn new(
         build: BuildRequest,
         app_assets: AssetManifest,
-        app_exe: PathBuf,
-        server_exe: Option<PathBuf>,
+        app_executable: PathBuf,
+        server_executable: Option<PathBuf>,
     ) -> Result<Self> {
-        let bundle = Self {
+        let mut bundle = Self {
             workdir: build.krate.workdir(build.build.platform()),
-            server_executable: server_exe,
-            build,
-            app_executable: app_exe,
+            server_executable,
+            app_executable,
             app_assets,
             server_assets: Default::default(),
+            build,
         };
+
+        // Add any legacy assets to the bundle manifest
+        for legacy in bundle.build.krate.legacy_asset_dir_files() {
+            if let Ok(legacy) = legacy.canonicalize() {
+                bundle
+                    .app_assets
+                    .insert_legacy_asset(&bundle.build.krate.legacy_asset_dir(), &legacy);
+            }
+        }
 
         bundle.build.status_start_bundle();
         bundle.prepare_workdir()?;
         bundle.write_main_executable().await?;
+        // bundle.write_server_executable().await?;
         bundle.write_assets().await?;
         bundle.write_metadata().await?;
         bundle.optimize().await?;
@@ -77,7 +87,6 @@ impl AppBundle {
 
     // Create the workdir and then clean its contents, in case it already exists
     fn prepare_workdir(&self) -> Result<()> {
-        // _ = std::fs::remove_dir_all(&self.workdir);
         _ = std::fs::create_dir_all(&self.workdir);
         Ok(())
     }
@@ -107,23 +116,28 @@ impl AppBundle {
             //            logo.png
             // ```
             Platform::Web => {
+                let public_dir = self.workdir.join("public");
+                let wasm_dir = public_dir.join("wasm");
+
                 self.build.status_wasm_bindgen();
 
                 // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
                 self.build
-                    .run_wasm_bindgen(
-                        &self.app_executable.with_extension("wasm"),
-                        &self.bindgen_dir(),
-                    )
+                    .run_wasm_bindgen(&self.app_executable.with_extension("wasm"), &wasm_dir)
                     .await?;
 
                 // Only run wasm-opt if the feature is enabled
                 // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
                 // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
-                self.build.run_wasm_opt(&self.bindgen_dir())?;
+                self.build.run_wasm_opt(&wasm_dir)?;
 
                 // Write the index.html file
-                std::fs::write(self.workdir.join("index.html"), self.build.prepare_html()?)?;
+                std::fs::write(public_dir.join("index.html"), self.build.prepare_html()?)?;
+
+                // write the server executable
+                if let Some(server) = &self.server_executable {
+                    std::fs::copy(server, self.workdir.join(server.file_name().unwrap()))?;
+                }
             }
 
             // Move the executable to the workdir
@@ -190,23 +204,19 @@ impl AppBundle {
     /// Perform any finishing steps here:
     /// - Signing the bundle
     pub(crate) fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
-        // std::fs::create_dir_all(&destination.join(self.build.app_name()))?;
-
         match self.build.build.platform() {
             // Nothing special to do - just copy the workdir to the output location
             Platform::Web => {
-                let public_dir = destination.join("public");
-                std::fs::create_dir_all(&public_dir)?;
-                crate::fastfs::copy_asset(&self.workdir, &public_dir)?;
-                Ok(public_dir)
+                let work_dir = self.workdir.join("public");
+                let out_dir = destination.join("public");
+                crate::fastfs::copy_asset(&work_dir, &out_dir)?;
+                Ok(out_dir)
             }
 
             // Create a final .app/.exe/etc depending on the host platform, not dependent on the host
             Platform::Desktop => {
                 // for now, until we have bundled hotreload, just copy the executable to the output location
-                // let output_location = destination.join(self.build.app_name());
                 Ok(self.app_executable.clone())
-                // Ok(output_location)
             }
 
             Platform::Server => {
@@ -217,6 +227,7 @@ impl AppBundle {
 
                 Ok(destination.join(self.build.app_name()))
             }
+
             Platform::Liveview => Ok(self.app_executable.clone()),
 
             // Create a .ipa, only from macOS
@@ -227,9 +238,14 @@ impl AppBundle {
         }
     }
 
+    async fn write_server_executable(&self) {
+        todo!()
+    }
+
     pub fn copy_server(&self, destination: &PathBuf) -> Result<Option<PathBuf>> {
         if let Some(server) = &self.server_executable {
             let to = destination.join(server.file_name().unwrap());
+            _ = std::fs::remove_file(&to);
             std::fs::copy(server, &to)?;
             return Ok(Some(to));
         }
@@ -238,7 +254,7 @@ impl AppBundle {
     }
 
     fn bindgen_dir(&self) -> PathBuf {
-        self.workdir.join("wasm")
+        self.workdir.join("public").join("wasm")
     }
 
     pub(crate) fn all_source_assets(&self) -> Vec<PathBuf> {
@@ -260,7 +276,7 @@ impl AppBundle {
 
     pub(crate) fn asset_dir(&self) -> PathBuf {
         let dir: PathBuf = match self.build.build.platform() {
-            Platform::Web => self.workdir.join("assets"),
+            Platform::Web => self.workdir.join("public").join("assets"),
             Platform::Desktop => self.workdir.join("Resources"),
             Platform::Ios => self.workdir.join("Resources"),
             Platform::Android => self.workdir.join("assets"),
@@ -299,5 +315,30 @@ impl AppBundle {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn hotreload_asset(
+        &self,
+        asset_folder: &PathBuf,
+        path: &PathBuf,
+    ) -> Option<PathBuf> {
+        let resource = self.app_assets.assets.get(path).cloned()?;
+
+        tracing::debug!("Copying over asset {resource:?}");
+
+        // let asset_folder_in_outdir = out_dir.join(match self.build.build.platform() {
+        //     Platform::Web => "public",
+        //     Platform::Desktop => todo!(),
+        //     Platform::Ios => todo!(),
+        //     Platform::Android => todo!(),
+        //     Platform::Server => todo!(),
+        //     Platform::Liveview => todo!(),
+        // });
+
+        _ = self
+            .app_assets
+            .copy_asset_to(&asset_folder, path, false, false);
+
+        Some(resource.bundled.into())
     }
 }

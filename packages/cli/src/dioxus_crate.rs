@@ -93,8 +93,8 @@ impl DioxusCrate {
     /// Compose an out directory. Represents the typical "dist" directory that
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
-    pub(crate) fn out_dir(&self) -> PathBuf {
-        let dir = self.workspace_dir().join("target").join("dx-dist");
+    fn out_dir(&self) -> PathBuf {
+        let dir = self.workspace_dir().join("target").join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -102,6 +102,10 @@ impl DioxusCrate {
     /// Create a workdir for the given platform
     /// This can be used as a temporary directory for the build, but in an observable way such that
     /// you can see the files in the directory via `target`
+    ///
+    /// target/dx/build/app/web/
+    /// target/dx/build/app/web/public/
+    /// target/dx/build/app/web/server.exe
     pub(crate) fn workdir(&self, platform: Platform) -> PathBuf {
         let plat_name = match platform {
             Platform::Web => "web",
@@ -112,12 +116,33 @@ impl DioxusCrate {
             Platform::Liveview => "liveview",
         };
         let dir = self
-            .workspace_dir()
-            .join("target")
-            .join("dx-workdir")
+            .out_dir()
+            .join("build")
             .join(self.config.application.name.clone())
             .join(plat_name);
         std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// target/dx/bundle/app/
+    /// target/dx/bundle/app/blah.app
+    /// target/dx/bundle/app/blah.exe
+    /// target/dx/bundle/app/public/
+    pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
+        let plat_name = match platform {
+            Platform::Web => "web",
+            Platform::Desktop => "desktop",
+            Platform::Ios => "ios",
+            Platform::Android => "android",
+            Platform::Server => "server",
+            Platform::Liveview => "liveview",
+        };
+
+        let dir = self
+            .out_dir()
+            .join("bundle")
+            .join(self.config.application.name.clone());
+
         dir
     }
 

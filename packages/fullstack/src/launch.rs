@@ -163,6 +163,7 @@ async fn launch_server(
         // }
 
         let router = router.into_make_service();
+
         let listener = tokio::net::TcpListener::bind(address).await.unwrap();
 
         let cwd = std::env::current_dir().unwrap();

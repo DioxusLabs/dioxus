@@ -135,8 +135,10 @@ impl Bundle {
 
         // Don't copy the executable or the old bundle directory
         let ignored_files = [
-            dioxus_crate.out_dir().join("bundle"),
-            dioxus_crate.out_dir().join(name),
+            dioxus_crate
+                .bundle_dir(self.build_arguments.platform())
+                .join("bundle"),
+            // dioxus_crate.out_dir().join(name),
         ];
 
         for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
@@ -169,7 +171,7 @@ impl Bundle {
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(dioxus_crate.out_dir())
+            .project_out_directory(dioxus_crate.bundle_dir(self.build_arguments.platform()))
             .package_settings(PackageSettings {
                 product_name: dioxus_crate.config.application.name.clone(),
                 version: package.version.to_string(),

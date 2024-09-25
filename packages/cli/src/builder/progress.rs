@@ -149,7 +149,7 @@ impl BuildRequest {
     }
 
     pub(crate) fn status_build_finished(&self) {
-        tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
+        // tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
 
         todo!()
         // _ = self.progress.unbounded_send(BuildUpdate::Progress {

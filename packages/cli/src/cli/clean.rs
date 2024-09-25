@@ -24,10 +24,11 @@ impl Clean {
             return Err(anyhow::anyhow!("Cargo clean failed."));
         }
 
-        let out_dir = &dioxus_crate.out_dir();
-        if out_dir.is_dir() {
-            remove_dir_all(out_dir)?;
-        }
+        todo!();
+        // let out_dir = &dioxus_crate.out_dir();
+        // if out_dir.is_dir() {
+        //     remove_dir_all(out_dir)?;
+        // }
 
         Ok(())
     }
