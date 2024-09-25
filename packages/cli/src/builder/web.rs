@@ -274,7 +274,7 @@ impl BuildRequest {
 
     /// Check if the build is targeting the web platform
     pub(crate) fn targeting_web(&self) -> bool {
-        self.platform() == Platform::Web
+        self.build.platform() == Platform::Web
     }
 }
 

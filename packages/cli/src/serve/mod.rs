@@ -1,6 +1,6 @@
 use crate::{
-    BuildStage, BuildUpdate, Builder, DioxusCrate, Platform, Result, ServeArgs, TraceController,
-    TraceMsg, TraceSrc,
+    BuildUpdate, Builder, DioxusCrate, Platform, Result, ServeArgs, TraceController, TraceMsg,
+    TraceSrc,
 };
 
 mod ansi_buffer;
@@ -94,15 +94,16 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
-
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty()
                         && hr.assets.is_empty()
                         && hr.unknown_files.is_empty()
                     {
+                        tracing::info!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
                         continue;
                     }
+
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
 
                     devserver.send_hotreload(hr).await;
                 } else {
@@ -149,7 +150,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 match update {
                     BuildUpdate::Progress { .. } => {}
                     BuildUpdate::CompilerMessage { message } => {
-                        screen.push_log(TraceMsg::cargo(message));
+                        // screen.push_log(TraceMsg::cargo(message));
                     }
                     BuildUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {}", err);
@@ -158,7 +159,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                         let handle = runner.open(
                             bundle,
                             devserver.devserver_address(),
-                            devserver.server_address(),
+                            devserver.proxied_server_address(),
                         );
 
                         match handle {

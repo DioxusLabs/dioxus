@@ -17,6 +17,7 @@ mod error;
 mod fastfs;
 mod metadata;
 mod platform;
+mod profiles;
 mod serve;
 mod settings;
 mod tooling;
@@ -68,8 +69,6 @@ async fn main() -> anyhow::Result<()> {
         Bundle(opts) => opts.bundle().await.context("🚫 Bundling project failed:"),
 
         Run(opts) => opts.run().await.context("🚫 Running project failed:"),
-
-        HttpServer(opts) => opts.serve().await.context("🚫 Serving project failed:"),
 
         Doctor(opts) => opts.run().await.context("🚫 Checking project failed:"),
     }

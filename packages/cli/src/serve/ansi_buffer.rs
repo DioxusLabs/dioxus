@@ -1,28 +1,29 @@
-use buffer::Cell;
 use ratatui::prelude::*;
 use std::fmt::{self, Display, Formatter};
 
+/// A buffer that can be rendered to and then dumped as raw ansi codes
+///
+/// This is taken from a PR on the ratatui repo (https://github.com/ratatui/ratatui/pull/1065) and
+/// modified to be more appropriate for our use case.
 pub struct AnsiStringBuffer {
-    /// The area of the buffer.
-    pub buf: Buffer,
+    buf: Buffer,
 }
+
+// The sentinel character used to mark the end of the ansi string so when we dump it, we know where to stop
+// Not sure if we actualy still need this....
+const SENTINEL: &str = "✆";
 
 impl AnsiStringBuffer {
     /// Creates a new `AnsiStringBuffer` with the given width and height.
-    pub fn new(width: u16, height: u16) -> Self {
+    pub(crate) fn new(width: u16, height: u16) -> Self {
         Self {
             buf: Buffer::empty(Rect::new(0, 0, width, height)),
         }
     }
 
-    /// Renders the given widget to the buffer.
-    pub fn render_ref(&mut self, widget: impl Widget, area: Rect) {
-        widget.render(area, &mut self.buf);
-    }
-
-    /// Dump this buffer to a string
-    /// This is different than `to_string` in that it trims the buffer, excluding any empty cells
-    pub fn dump(mut self) -> String {
+    /// Renders the given widget to the buffer, returning the string with the ansi codes
+    pub(crate) fn render(mut self, widget: impl Widget) -> String {
+        widget.render(self.buf.area, &mut self.buf);
         self.trim_end();
         self.to_string()
     }
@@ -34,12 +35,12 @@ impl AnsiStringBuffer {
             let start_x = self.buf.area.width;
             let mut first_non_empty = start_x - 1;
             for x in (0..start_x).rev() {
-                if self.buf.get(x, y) != &Cell::EMPTY {
+                if self.buf.get(x, y) != &buffer::Cell::EMPTY {
                     break;
                 }
                 first_non_empty = x;
             }
-            self.buf.get_mut(first_non_empty, y).set_symbol("✆");
+            self.buf.get_mut(first_non_empty, y).set_symbol(SENTINEL);
         }
     }
 
@@ -47,8 +48,8 @@ impl AnsiStringBuffer {
         let mut last_style = None;
         for y in 0..self.buf.area.height {
             for x in 0..self.buf.area.width {
-                let cell = self.buf.get(x, y);
-                if cell.symbol() == "✆" {
+                let cell = self.buf.cell((x, y)).unwrap();
+                if cell.symbol() == SENTINEL {
                     f.write_str("\n")?;
                     break;
                 }

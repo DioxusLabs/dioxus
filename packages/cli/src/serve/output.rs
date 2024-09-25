@@ -52,6 +52,7 @@ pub struct Output {
     // Whether to show verbose logs or not
     // We automatically hide "debug" logs if verbose is false (only showing "info" / "warn" / "error")
     verbose: bool,
+    trace: bool,
 
     // Pending logs
     pending_logs: VecDeque<TraceMsg>,
@@ -96,6 +97,7 @@ impl Output {
             more_modal_open: false,
             pending_logs: VecDeque::new(),
             throbber: RefCell::new(throbber_widgets_tui::ThrobberState::default()),
+            trace: cfg.trace,
             verbose: cfg.verbose,
             tick_animation: false,
             tick_interval: {
@@ -422,7 +424,7 @@ impl Output {
         self.render_single_gauge(
             frame,
             gauge_list[0],
-            state.build_engine.compile_progress,
+            state.build_engine.compile_progress(),
             "Compiling  ",
             state,
             state.build_engine.compile_duration(),
@@ -439,6 +441,12 @@ impl Output {
         let mut lines = vec!["Status:     ".white()];
         match &state.build_engine.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
+            BuildStage::Starting {
+                server,
+                crate_count,
+            } => {
+                lines.push("Starting build".yellow());
+            }
             BuildStage::InstallingTooling {} => lines.push("Installing tooling".yellow()),
             BuildStage::Compiling {
                 current,
@@ -449,15 +457,9 @@ impl Output {
                 lines.push(format!("{current}/{total} ").gray());
                 lines.push(krate.as_str().dark_gray())
             }
-            BuildStage::OptimizingWasm {} => {
-                lines.push("Optimizing wasm".yellow());
-            }
-            BuildStage::RunningBindgen {} => {
-                lines.push("Running wasm-bindgen".yellow());
-            }
-            BuildStage::Bundling {} => {
-                lines.push("Bundling app".yellow());
-            }
+            BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
+            BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
+            BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
             BuildStage::OptimizingAssets {} => lines.push("Optimizing assets".yellow()),
             BuildStage::CopyingAssets {
                 current,
@@ -472,7 +474,11 @@ impl Output {
             }
             BuildStage::Success => {
                 lines.push("Serving ".yellow());
-                lines.push(state.krate.executable_name().dark_gray());
+                lines.push(state.krate.executable_name().white());
+                lines.push(" 🚀 ".green());
+                if let Some(comp_time) = state.build_engine.total_build_time() {
+                    lines.push(format!("{:.1}s", comp_time.as_secs_f32()).dark_gray());
+                }
             }
             BuildStage::Failed => lines.push("Failed".red()),
             BuildStage::Aborted => lines.push("Aborted".red()),
@@ -515,6 +521,11 @@ impl Output {
             gauge_row,
         );
 
+        let [throbber_frame, time_frame] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(3), Constraint::Fill(1)])
+            .areas(icon);
+
         if value != 1.0 {
             let throb = throbber_widgets_tui::Throbber::default()
                 .style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
@@ -525,25 +536,27 @@ impl Output {
                 )
                 .throbber_set(throbber_widgets_tui::BLACK_CIRCLE)
                 .use_type(throbber_widgets_tui::WhichUse::Spin);
-            frame.render_stateful_widget(throb, icon, &mut self.throbber.borrow_mut());
+            frame.render_stateful_widget(throb, throbber_frame, &mut self.throbber.borrow_mut());
         } else {
             frame.render_widget(
-                Line::from(vec![
-                    if failed {
-                        "❌ ".white()
-                    } else {
-                        "🎉 ".white()
-                    },
-                    // todo: properly printy-print this as 1.5s or something
-                    if let Some(time_taken) = time_taken {
-                        format!("{:.1}s", time_taken.as_secs_f32()).dark_gray()
-                    } else {
-                        "".dark_gray()
-                    },
-                ])
+                Line::from(vec![if failed {
+                    "❌ ".white()
+                } else {
+                    "🎉 ".white()
+                }])
                 .left_aligned(),
-                icon,
+                throbber_frame,
             );
+        }
+
+        if let Some(time_taken) = time_taken {
+            if !failed {
+                frame.render_widget(
+                    Line::from(vec![format!("{:.1}s", time_taken.as_secs_f32()).dark_gray()])
+                        .left_aligned(),
+                    time_frame,
+                );
+            }
         }
     }
 
@@ -573,10 +586,14 @@ impl Output {
             Paragraph::new(Line::from({
                 let mut lines = vec!["Features: ".gray(), "[".yellow()];
 
-                let feature_list = &state.build_engine.request.build.target_args.features;
-                for (idx, feature) in feature_list.iter().enumerate() {
-                    lines.push(feature.as_str().yellow());
-                    if idx != feature_list.len() - 1 {
+                let feature_list: Vec<String> = state.build_engine.request.target_features(false);
+                let num_features = feature_list.len();
+
+                for (idx, feature) in feature_list.into_iter().enumerate() {
+                    lines.push("\"".yellow());
+                    lines.push(feature.yellow());
+                    lines.push("\"".yellow());
+                    if idx != num_features - 1 {
                         lines.push(", ".dark_gray());
                     }
                 }
@@ -589,12 +606,14 @@ impl Output {
             stat_list[1],
         );
 
+        // todo(jon) should we write https ?
+        let address = match state.server.server_address() {
+            Some(address) => format!("http://{}", address).blue(),
+            None => "no server address".dark_gray(),
+        };
         frame.render_widget_ref(
-            Paragraph::new(Line::from(vec![
-                "Serving at: ".gray(),
-                "http://127.0.0.1:8080".blue(),
-            ]))
-            .wrap(Wrap { trim: false }),
+            Paragraph::new(Line::from(vec!["Serving at: ".gray(), address]))
+                .wrap(Wrap { trim: false }),
             stat_list[2],
         );
     }
@@ -714,6 +733,10 @@ impl Output {
             return Ok(());
         }
 
+        if log.level == Level::TRACE && !self.trace {
+            return Ok(());
+        }
+
         // Grab out the size and location of the terminal and its viewport before we start messing with it
         let frame_rect = terminal.get_frame().area();
         let term_size = terminal.size().unwrap();
@@ -760,7 +783,7 @@ impl Output {
         // Ratatui will handle this rest.
         // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
         if to_push == 0 {
-            terminal.insert_before(lines_printed, |_| {})?;
+            terminal.insert_before(lines_printed.saturating_sub(1), |_| {})?;
         }
 
         // Start printing the log by writing on top of the topmost line
@@ -896,9 +919,7 @@ fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
     // cells as characters. That might not actually be important, but we want to shrink the buffer
     // before printing it
     let line_count = paragraph.line_count(term_width);
-    let mut raw_ansi_buf = AnsiStringBuffer::new(3000, line_count as u16);
-    raw_ansi_buf.render_ref(&paragraph, raw_ansi_buf.buf.area);
-    raw_ansi_buf.dump()
+    AnsiStringBuffer::new(3000, line_count as u16).render(&paragraph)
 }
 
 #[test]

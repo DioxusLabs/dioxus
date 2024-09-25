@@ -53,7 +53,8 @@ pub(crate) struct DevServer {
     new_build_status_sockets: UnboundedReceiver<WebSocket>,
     build_status: SharedStatus,
     application_name: String,
-    platform: String,
+    platform: Platform,
+    fullstack: bool,
 }
 
 impl DevServer {
@@ -115,7 +116,8 @@ impl DevServer {
             new_build_status_sockets: build_status_sockets_rx,
             build_status,
             application_name: cfg.config.application.name.clone(),
-            platform: args.build_arguments.platform().to_string(),
+            platform: args.build_arguments.platform(),
+            fullstack: args.build_arguments.fullstack,
         })
     }
 
@@ -205,34 +207,41 @@ impl DevServer {
     pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate) {
         match update {
             BuildUpdate::Progress { stage } => {
-                //
+                // Todo(miles): wire up more messages into the splash screen UI
                 match stage {
-                    BuildStage::Initializing => {}
-                    BuildStage::InstallingTooling {} => {}
-                    BuildStage::Compiling { .. } => {}
-                    BuildStage::OptimizingWasm {} => {}
-                    BuildStage::OptimizingAssets {} => {}
                     BuildStage::Success => {}
                     BuildStage::Failed => self.send_reload_failed().await,
-                    BuildStage::Aborted => {}
                     BuildStage::Restarting => self.send_reload_start().await,
+                    BuildStage::Initializing => {}
+                    BuildStage::InstallingTooling {} => {}
+                    BuildStage::Compiling {
+                        current,
+                        total,
+                        krate,
+                    } => {
+                        self.build_status.set(Status::Building {
+                            progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
+                            build_message: format!("{krate} compiling"),
+                        });
+                        self.send_build_status().await;
+                    }
+                    BuildStage::OptimizingWasm {} => {}
+                    BuildStage::OptimizingAssets {} => {}
+                    BuildStage::Aborted => {}
                     BuildStage::CopyingAssets { .. } => {}
                     _ => {}
                 }
             }
             BuildUpdate::CompilerMessage { .. } => {}
-            BuildUpdate::BuildReady { bundle } => {}
-            BuildUpdate::BuildFailed { err } => {}
+            BuildUpdate::BuildReady { .. } => {}
+            BuildUpdate::BuildFailed { err } => {
+                let error = err.to_string();
+                self.build_status.set(Status::BuildError {
+                    error: ansi_to_html::convert(&error).unwrap_or(error),
+                });
+                self.send_build_status().await;
+            }
         }
-
-        // if !matches!(self.build_status.get(), Status::Building { .. }) {
-        //     return;
-        // }
-        // self.build_status.set(Status::Building {
-        //     progress,
-        //     build_message,
-        // });
-        // self.send_build_status().await;
     }
 
     /// Sends hot reloadable changes to all clients.
@@ -254,15 +263,6 @@ impl DevServer {
                 i += 1;
             }
         }
-    }
-
-    /// Converts a `cargo` error to HTML and sends it to clients.
-    pub(crate) async fn send_build_error(&mut self, error: Error) {
-        let error = error.to_string();
-        self.build_status.set(Status::BuildError {
-            error: ansi_to_html::convert(&error).unwrap_or(error),
-        });
-        self.send_build_status().await;
     }
 
     /// Tells all clients that a full rebuild has started.
@@ -305,9 +305,16 @@ impl DevServer {
     }
 
     // Get the address the server should run on if we're serving the user's server
-    pub fn server_address(&self) -> Option<SocketAddr> {
+    pub fn proxied_server_address(&self) -> Option<SocketAddr> {
         self.proxied_port
             .map(|port| SocketAddr::new(self.devserver_ip, port))
+    }
+
+    pub fn server_address(&self) -> Option<SocketAddr> {
+        match self.platform {
+            Platform::Web | Platform::Server | Platform::Liveview => Some(self.devserver_address()),
+            _ => self.proxied_server_address(),
+        }
     }
 }
 
@@ -417,6 +424,7 @@ async fn devserver_mainloop(
     router: Router,
 ) -> Result<std::result::Result<(), Error>, Error> {
     let rustls = get_rustls(&cfg).await.unwrap();
+
     let _ = listener.set_nonblocking(true);
 
     if let Some(rustls) = rustls {
@@ -651,7 +659,7 @@ async fn send_build_status_to(
 enum Status {
     ClientInit {
         application_name: String,
-        platform: String,
+        platform: Platform,
     },
     Building {
         progress: f64,

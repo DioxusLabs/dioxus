@@ -12,14 +12,22 @@ use tokio::{
 use uuid::Uuid;
 
 /// A handle to a running app
+///
+/// Also includes a handle to its server if it exists
 pub(crate) struct AppHandle {
     pub(crate) _id: Uuid,
     pub(crate) app: AppBundle,
 
     pub(crate) executable: PathBuf,
-    pub(crate) child: Option<Child>,
-    pub(crate) stdout: Option<Lines<BufReader<ChildStdout>>>,
-    pub(crate) stderr: Option<Lines<BufReader<ChildStderr>>>,
+    pub(crate) server: Option<PathBuf>,
+
+    pub(crate) app_child: Option<Child>,
+    pub(crate) server_child: Option<Child>,
+
+    pub(crate) app_stdout: Option<Lines<BufReader<ChildStdout>>>,
+    pub(crate) app_stderr: Option<Lines<BufReader<ChildStderr>>>,
+    pub(crate) server_stdout: Option<Lines<BufReader<ChildStdout>>>,
+    pub(crate) server_stderr: Option<Lines<BufReader<ChildStderr>>>,
 }
 
 impl AppHandle {
@@ -28,7 +36,7 @@ impl AppHandle {
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
     ) -> Result<Self> {
-        let platform = app.build.platform();
+        let platform = app.build.build.platform();
         let ip = devserver_ip.to_string();
 
         if platform == Platform::Server || app.build.build.fullstack {
@@ -40,16 +48,76 @@ impl AppHandle {
 
         let work_dir = app.build.krate.out_dir().join("launch");
         std::fs::create_dir_all(&work_dir)?;
-        let executable = app.finish(work_dir)?;
+
+        let server = app.server_executable.clone();
+        let executable = app.finish(work_dir.clone())?;
 
         let mut handle = AppHandle {
+            _id: Uuid::new_v4(),
             app,
             executable,
-            _id: Uuid::new_v4(),
-            child: None,
-            stderr: None,
-            stdout: None,
+            server,
+            app_child: None,
+            app_stderr: None,
+            app_stdout: None,
+            server_child: None,
+            server_stdout: None,
+            server_stderr: None,
         };
+
+        // Set the env vars that the clients will expect
+        // These need to be stable within a release version (ie 0.6.0)
+        let mut envs = vec![
+            ("DIOXUS_CLI_ENABLED", "true".to_string()),
+            (
+                "CARGO_MANIFEST_DIR",
+                handle.app.build.krate.crate_dir().display().to_string(),
+            ),
+            (
+                "SIMCTL_CHILD_CARGO_MANIFEST_DIR",
+                handle.app.build.krate.crate_dir().display().to_string(),
+            ),
+            (
+                dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
+                devserver_ip.to_string(),
+            ),
+            // (
+            //     dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+            //     serve.always_on_top.unwrap_or(true).to_string(),
+            // ),
+        ];
+
+        if let Some(addr) = fullstack_address {
+            envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
+            envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
+        };
+
+        // cmd.env(
+        //     dioxus_cli_config::ASSET_ROOT_ENV,
+        //     asset_root.display().to_string(),
+        // );
+        // cmd.env(
+        //     dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
+        //     devserver_addr.to_string(),
+        // );
+        // cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
+        // cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
+
+        // Launch the server if we have one
+        if let Some(server) = handle.server.clone() {
+            let mut cmd = Command::new(server);
+            cmd.envs(envs.clone());
+            cmd.current_dir(work_dir);
+            cmd.stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .kill_on_drop(true);
+            let mut child = cmd.spawn()?;
+            let stdout = BufReader::new(child.stdout.take().unwrap());
+            let stderr = BufReader::new(child.stderr.take().unwrap());
+            handle.server_stdout = Some(stdout.lines());
+            handle.server_stderr = Some(stderr.lines());
+            handle.server_child = Some(child);
+        }
 
         match platform {
             Platform::Web => {
@@ -86,43 +154,10 @@ impl AppHandle {
         //
         // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
         // index.html during dev
-        match handle.app.build.platform() {
-            Platform::Desktop | Platform::Server | Platform::Liveview => {
+        match handle.app.build.build.platform() {
+            Platform::Desktop => {
                 let mut cmd = Command::new(handle.executable.clone());
-
-                // Set the env vars that the clients will expect
-                // These need to be stable within a release version (ie 0.6.0)
-                cmd.env(dioxus_cli_config::CLI_ENABLED_ENV, "true");
-                if let Some(addr) = fullstack_address {
-                    cmd.env(dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string());
-                    cmd.env(dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string());
-                }
-
-                cmd.env(
-                    dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
-                    devserver_ip.to_string(),
-                );
-
-                // cmd.env(
-                //     dioxus_cli_config::ALWAYS_ON_TOP_ENV,
-                //     serve.always_on_top.unwrap_or(true).to_string(),
-                // );
-                // cmd.env(
-                //     dioxus_cli_config::ASSET_ROOT_ENV,
-                //     asset_root.display().to_string(),
-                // );
-                // cmd.env(
-                //     dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
-                //     devserver_addr.to_string(),
-                // );
-                // cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
-                // cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
-
-                cmd.env("CARGO_MANIFEST_DIR", handle.app.build.krate.crate_dir())
-                    .env(
-                        "SIMCTL_CHILD_CARGO_MANIFEST_DIR",
-                        handle.app.build.krate.crate_dir(),
-                    )
+                cmd.envs(envs)
                     .stderr(Stdio::piped())
                     .stdout(Stdio::piped())
                     .kill_on_drop(true);
@@ -130,10 +165,12 @@ impl AppHandle {
                 let mut child = cmd.spawn()?;
                 let stdout = BufReader::new(child.stdout.take().unwrap());
                 let stderr = BufReader::new(child.stderr.take().unwrap());
-                handle.stdout = Some(stdout.lines());
-                handle.stderr = Some(stderr.lines());
-                handle.child = Some(child);
+                handle.app_stdout = Some(stdout.lines());
+                handle.app_stderr = Some(stderr.lines());
+                handle.app_child = Some(child);
             }
+            Platform::Liveview => panic!(),
+            Platform::Server => panic!(),
             Platform::Web => {}
             Platform::Ios => {}
             Platform::Android => {}

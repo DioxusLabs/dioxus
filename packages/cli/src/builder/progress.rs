@@ -26,6 +26,10 @@ pub(crate) enum BuildUpdate {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BuildStage {
     Initializing,
+    Starting {
+        server: bool,
+        crate_count: usize,
+    },
     InstallingTooling {},
     Compiling {
         current: usize,
@@ -88,16 +92,17 @@ impl BuildRequest {
         });
     }
 
-    pub(crate) fn status_starting_build(&self) {
-        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
-        //     stage: BuildStage::Compiling,
-        //     update: UpdateStage::Start,
-        //     platform: self.platform(),
-        // });
+    pub(crate) fn status_starting_build(&self, server: bool, crate_count: usize) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::Starting {
+                server,
+                crate_count,
+            },
+        });
     }
 
     /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
-    pub(crate) async fn get_unit_count(&self) -> Option<usize> {
+    pub(crate) async fn get_unit_count(&self, server: bool) -> crate::Result<usize> {
         #[derive(Debug, Deserialize)]
         struct UnitGraph {
             units: Vec<serde_json::Value>,
@@ -109,28 +114,28 @@ impl BuildRequest {
             .arg("--unit-graph")
             .arg("-Z")
             .arg("unstable-options")
-            .args(self.build_arguments())
+            .args(self.build_arguments(false))
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-            .await
-            .ok()?;
+            .await?;
 
         if !output.status.success() {
-            return None;
+            return Err(anyhow::anyhow!("Failed to get unit count").into());
         }
 
-        let output_text = String::from_utf8(output.stdout).ok()?;
-        let graph: UnitGraph = serde_json::from_str(&output_text).ok()?;
+        let output_text = String::from_utf8(output.stdout).context("Failed to get unit count")?;
+        let graph: UnitGraph =
+            serde_json::from_str(&output_text).context("Failed to get unit count")?;
 
-        Some(graph.units.len())
+        Ok(graph.units.len())
     }
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
     /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-    pub(crate) async fn get_unit_count_estimate(&self) -> usize {
+    pub(crate) async fn get_unit_count_estimate(&self, server: bool) -> usize {
         // Try to get it from nightly
-        self.get_unit_count().await.unwrap_or_else(|| {
+        self.get_unit_count(server).await.unwrap_or_else(|_| {
             // Otherwise, use cargo metadata
             (self
                 .krate

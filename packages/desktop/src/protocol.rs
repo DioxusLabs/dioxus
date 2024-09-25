@@ -98,7 +98,7 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
     // If the asset exists, then we can serve it!
     if asset.exists() {
         let mime_type = get_mime_from_path(&asset);
-        println!("mime type: {:?} for {:?}", mime_type, asset);
+        // println!("mime type: {:?} for {:?}", mime_type, asset);
         return Ok(Response::builder()
             .header("Content-Type", mime_type?)
             .header("Access-Control-Allow-Origin", "*")

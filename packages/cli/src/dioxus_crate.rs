@@ -1,15 +1,16 @@
+use crate::metadata::CargoError;
 use crate::Platform;
 use crate::{build::TargetArgs, config::DioxusConfig};
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::sync::Arc;
 use std::{
     fmt::{Display, Formatter},
     path::PathBuf,
 };
-
-use crate::metadata::CargoError;
+use toml_edit::Item;
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
 #[derive(Clone)]
@@ -20,15 +21,8 @@ pub(crate) struct DioxusCrate {
     pub(crate) target: Target,
 }
 
-impl std::fmt::Debug for DioxusCrate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DioxusCrate")
-            .field("package", &self.krates[self.package])
-            .field("dioxus_config", &self.config)
-            .field("target", &self.target)
-            .finish()
-    }
-}
+pub(crate) static CLIENT_PROFILE_WEB: &str = "dioxus-client-web";
+pub(crate) static SERVER_PROFILE: &str = "dioxus-server";
 
 impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self, CrateConfigError> {
@@ -162,12 +156,14 @@ impl DioxusCrate {
         self.target.kind[0].clone()
     }
 
-    pub(crate) fn features_for_platform(&mut self, platform: Platform) -> Vec<String> {
+    /// Get the features required to build for the given platform
+    pub(crate) fn feature_for_platform(&mut self, platform: Platform) -> Option<String> {
         let package = self.package();
 
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = platform.feature_name();
-        let feature = package.features.iter().find_map(|(key, features)| {
+
+        package.features.iter().find_map(|(key, features)| {
             // Find a feature that starts with dioxus/ or dioxus?/
             for feature in features {
                 if let Some((_, after_dioxus)) = feature.split_once("dioxus") {
@@ -182,15 +178,70 @@ impl DioxusCrate {
                 }
             }
             None
-        });
-
-        feature.into_iter().collect()
+        })
     }
 
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     pub(crate) fn should_pre_compress_web_assets(&self, release: bool) -> bool {
         self.config.web.pre_compress && release
+    }
+
+    // The `opt-level=2` increases build times, but can noticeably decrease time
+    // between saving changes and being able to interact with an app (for wasm/web). The "overall"
+    // time difference (between having and not having the optimization) can be
+    // almost imperceptible (~1 s) but also can be very noticeable (~6 s) — depends
+    // on setup (hardware, OS, browser, idle load).
+    //
+    // Find or create the client and server profiles in the .cargo/config.toml file
+    pub(crate) fn initialize_profiles(&self) -> crate::Result<()> {
+        let config_path = self.workspace_dir().join(".cargo/config.toml");
+        let mut config = match std::fs::read_to_string(&config_path) {
+            Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {
+                crate::Error::Other(anyhow::anyhow!("Failed to parse .cargo/config.toml: {}", e))
+            })?,
+            Err(_) => Default::default(),
+        };
+
+        if let Item::Table(table) = config
+            .as_table_mut()
+            .entry("profile")
+            .or_insert(Item::Table(Default::default()))
+        {
+            if let toml_edit::Entry::Vacant(entry) = table.entry(CLIENT_PROFILE_WEB) {
+                let mut client = toml_edit::Table::new();
+                client.insert("inherits", Item::Value("dev".into()));
+                client.insert("opt-level", Item::Value(2.into()));
+                entry.insert(Item::Table(client));
+            }
+
+            if let toml_edit::Entry::Vacant(entry) = table.entry(SERVER_PROFILE) {
+                let mut server = toml_edit::Table::new();
+                server.insert("inherits", Item::Value("dev".into()));
+                server.insert("opt-level", Item::Value(2.into()));
+                entry.insert(Item::Table(server));
+            }
+        }
+
+        // Write the config back to the file
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = std::fs::File::create(config_path)?;
+        let mut buf_writer = std::io::BufWriter::new(file);
+        write!(buf_writer, "{}", config)?;
+
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for DioxusCrate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DioxusCrate")
+            .field("package", &self.krates[self.package])
+            .field("dioxus_config", &self.config)
+            .field("target", &self.target)
+            .finish()
     }
 }
 

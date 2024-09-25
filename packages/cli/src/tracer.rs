@@ -354,7 +354,7 @@ impl TraceMsg {
             DiagnosticLevel::Warning => Level::DEBUG,
             DiagnosticLevel::Note => Level::DEBUG,
             DiagnosticLevel::Help => Level::DEBUG,
-            _ => todo!(),
+            _ => Level::DEBUG,
         };
 
         Self {

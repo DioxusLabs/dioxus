@@ -87,7 +87,7 @@ impl AppBundle {
     /// For wasm, we'll want to run `wasm-bindgen` to make it a wasm binary along with some other optimizations
     /// Other platforms we might do some stripping or other optimizations
     async fn write_main_executable(&self) -> Result<()> {
-        match self.build.platform() {
+        match self.build.build.platform() {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
             // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
             //
@@ -145,7 +145,7 @@ impl AppBundle {
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
     async fn write_assets(&self) -> Result<()> {
         // Server doesn't need assets - web will provide them
-        if self.build.platform() == Platform::Server {
+        if self.build.build.platform() == Platform::Server {
             return Ok(());
         }
 
@@ -192,12 +192,13 @@ impl AppBundle {
     pub(crate) fn finish(&self, destination: PathBuf) -> Result<PathBuf> {
         // std::fs::create_dir_all(&destination.join(self.build.app_name()))?;
 
-        match self.build.platform() {
+        match self.build.build.platform() {
             // Nothing special to do - just copy the workdir to the output location
             Platform::Web => {
-                std::fs::create_dir_all(&destination.join("web"))?;
-                crate::fastfs::copy_asset(&self.workdir, &destination.join("web"))?;
-                Ok(destination.join("web"))
+                let public_dir = destination.join("public");
+                std::fs::create_dir_all(&public_dir)?;
+                crate::fastfs::copy_asset(&self.workdir, &public_dir)?;
+                Ok(public_dir)
             }
 
             // Create a final .app/.exe/etc depending on the host platform, not dependent on the host
@@ -219,10 +220,10 @@ impl AppBundle {
             Platform::Liveview => Ok(self.app_executable.clone()),
 
             // Create a .ipa, only from macOS
-            Platform::Ios => todo!(),
+            Platform::Ios => todo!("Implement iOS bundling"),
 
             // Create a .exe, from linux/mac/windows
-            Platform::Android => todo!(),
+            Platform::Android => todo!("Implement Android bundling"),
         }
     }
 
@@ -248,7 +249,7 @@ impl AppBundle {
     }
 
     pub(crate) fn asset_dir(&self) -> PathBuf {
-        let dir: PathBuf = match self.build.platform() {
+        let dir: PathBuf = match self.build.build.platform() {
             Platform::Web => self.workdir.join("assets"),
             Platform::Desktop => self.workdir.join("Resources"),
             Platform::Ios => self.workdir.join("Resources"),
@@ -266,7 +267,7 @@ impl AppBundle {
 
     /// Run the optimizers, obfuscators, minimizers, etc
     pub(crate) async fn optimize(&self) -> Result<()> {
-        match self.build.platform() {
+        match self.build.build.platform() {
             Platform::Web => {
                 // Compress the asset dir
                 // // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output

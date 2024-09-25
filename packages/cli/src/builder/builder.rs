@@ -25,7 +25,8 @@ pub(crate) struct Builder {
     pub tx: ProgressTx,
     pub rx: ProgressRx,
 
-    pub compile_progress: f64,
+    pub compiled_crates: usize,
+    pub expected_crates: usize,
     pub bundling_progress: f64,
     pub compile_start: Option<Instant>,
     pub compile_end: Option<Instant>,
@@ -37,7 +38,7 @@ impl Builder {
     /// Create a new builder and immediately start a build
     pub(crate) fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let request = BuildRequest::new(&krate, args.clone(), tx.clone());
+        let request = BuildRequest::new(krate.clone(), args, tx.clone());
         Ok(Self {
             krate: krate.clone(),
             request: request.clone(),
@@ -54,7 +55,8 @@ impl Builder {
             }),
             tx,
             rx,
-            compile_progress: 0.0,
+            compiled_crates: 0,
+            expected_crates: 1,
             bundling_progress: 0.0,
             compile_start: Some(Instant::now()),
             compile_end: None,
@@ -88,21 +90,24 @@ impl Builder {
 
                 match stage {
                     BuildStage::Initializing => {
-                        self.compile_progress = 0.0;
+                        self.compiled_crates = 0;
                         self.bundling_progress = 0.0;
                     }
-                    BuildStage::InstallingTooling {} => {
-                        self.compile_progress = 0.1;
+                    BuildStage::Starting {
+                        server,
+                        crate_count,
+                    } => {
+                        self.expected_crates += crate_count;
                     }
+                    BuildStage::InstallingTooling {} => {}
                     BuildStage::Compiling { current, total, .. } => {
-                        self.compile_progress = *current as f64 / *total as f64;
+                        self.compiled_crates += 1;
 
                         if self.compile_start.is_none() {
                             self.compile_start = Some(Instant::now());
                         }
                     }
                     BuildStage::Bundling {} => {
-                        self.compile_progress = 1.0;
                         self.bundling_progress = 0.0;
                         self.compile_end = Some(Instant::now());
                         self.bundle_start = Some(Instant::now());
@@ -113,27 +118,27 @@ impl Builder {
                         self.bundling_progress = *current as f64 / *total as f64;
                     }
                     BuildStage::Success => {
-                        self.compile_progress = 1.0;
+                        self.compiled_crates = self.expected_crates;
                         self.bundling_progress = 1.0;
                     }
                     BuildStage::Failed => {
-                        self.compile_progress = 1.0;
+                        self.compiled_crates = self.expected_crates;
                         self.bundling_progress = 1.0;
                     }
                     BuildStage::Aborted => {}
                     BuildStage::Restarting => {
-                        self.compile_progress = 0.0;
+                        self.compiled_crates = 0;
+                        self.expected_crates = 1;
                         self.bundling_progress = 0.0;
                     }
                     BuildStage::RunningBindgen {} => {
-                        self.compile_progress = 1.0;
                         self.bundling_progress = 0.5;
                     }
                 }
             }
             BuildUpdate::CompilerMessage { .. } => {}
             BuildUpdate::BuildReady { .. } => {
-                self.compile_progress = 1.0;
+                self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
                 self.bundle_end = Some(Instant::now());
@@ -169,7 +174,7 @@ impl Builder {
         self.abort_all();
 
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        let request = BuildRequest::new(&self.krate, args.clone(), self.tx.clone());
+        let request = BuildRequest::new(self.krate.clone(), args, self.tx.clone());
         self.request = request.clone();
         self.stage = BuildStage::Restarting;
 
@@ -183,7 +188,8 @@ impl Builder {
     pub(crate) fn abort_all(&mut self) {
         self.build.abort();
         self.stage = BuildStage::Aborted;
-        self.compile_progress = 0.0;
+        self.compiled_crates = 0;
+        self.expected_crates = 1;
         self.bundling_progress = 0.0;
         self.compile_start = None;
         self.bundle_start = None;
@@ -191,12 +197,29 @@ impl Builder {
         self.compile_end = None;
     }
 
+    /// Get the duration of the compile phase
     pub fn compile_duration(&self) -> Option<Duration> {
-        Some(self.compile_end?.duration_since(self.compile_start?))
+        Some(
+            self.compile_end
+                .unwrap_or_else(Instant::now)
+                .duration_since(self.compile_start?),
+        )
     }
 
     pub fn bundle_duration(&self) -> Option<Duration> {
-        Some(self.bundle_end?.duration_since(self.bundle_start?))
+        Some(
+            self.bundle_end
+                .unwrap_or_else(Instant::now)
+                .duration_since(self.bundle_start?),
+        )
+    }
+
+    pub fn compile_progress(&self) -> f64 {
+        self.compiled_crates as f64 / self.expected_crates as f64
+    }
+
+    pub(crate) fn total_build_time(&self) -> Option<Duration> {
+        Some(self.compile_duration()? + self.bundle_duration()?)
     }
 
     fn is_finished(&self) -> bool {
@@ -204,6 +227,7 @@ impl Builder {
             BuildStage::Success => true,
             BuildStage::Failed => true,
             BuildStage::Aborted => true,
+            BuildStage::Restarting => true,
             _ => false,
         }
     }

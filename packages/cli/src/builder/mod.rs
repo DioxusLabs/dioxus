@@ -5,16 +5,12 @@
 /// Uses a request -> response architecture that allows you to monitor the progress with an optional message
 /// receiver.
 mod builder;
-mod cargo;
-mod handle;
-mod profiles;
 mod progress;
 mod request;
 mod stats;
 mod web;
 
 pub(crate) use builder::*;
-pub(crate) use handle::*;
 pub(crate) use progress::*;
 pub(crate) use request::*;
 pub(crate) use stats::*;

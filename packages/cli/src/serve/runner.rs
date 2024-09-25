@@ -1,4 +1,4 @@
-use super::{handle::AppHandle, ServeUpdate};
+use super::{AppHandle, ServeUpdate};
 use crate::{bundler::AppBundle, Platform, Result};
 use futures_util::{future::OptionFuture, stream::FuturesUnordered};
 use std::{collections::HashMap, net::SocketAddr};
@@ -27,13 +27,13 @@ impl AppRunner {
                 use ServeUpdate::*;
                 let platform = *platform;
                 tokio::select! {
-                    Some(Ok(Some(msg))) = OptionFuture::from(handle.stdout.as_mut().map(|f| f.next_line())) => {
+                    Some(Ok(Some(msg))) = OptionFuture::from(handle.app_stdout.as_mut().map(|f| f.next_line())) => {
                         StdoutReceived { platform, msg }
                     },
-                    Some(Ok(Some(msg))) = OptionFuture::from(handle.stderr.as_mut().map(|f| f.next_line())) => {
+                    Some(Ok(Some(msg))) = OptionFuture::from(handle.app_stderr.as_mut().map(|f| f.next_line())) => {
                         StderrReceived { platform, msg }
                     },
-                    Some(status) = OptionFuture::from(handle.child.as_mut().map(|f| f.wait())) => {
+                    Some(status) = OptionFuture::from(handle.app_child.as_mut().map(|f| f.wait())) => {
                         tracing::info!("Child process exited with status: {status:?}");
                         match status {
                             Ok(status) => ProcessExited { status, platform },
@@ -60,9 +60,7 @@ impl AppRunner {
 
         // Start the new app before we kill the old one to give it a little bit of time
         let handle = AppHandle::start(app, devserver_ip, fullstack_address)?;
-
         self.kill(platform);
-
         self.running.insert(platform, handle);
 
         Ok(self.running.get(&platform).unwrap())
