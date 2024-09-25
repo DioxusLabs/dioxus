@@ -1,9 +1,9 @@
 <p>
     <p align="center" >
-      <img src="./notes/header-light.svg#gh-light-mode-only" >
-      <img src="./notes/header-dark.svg#gh-dark-mode-only" >
+      <img src="../../notes/header-light.svg#gh-light-mode-only" >
+      <img src="../../notes/header-dark.svg#gh-dark-mode-only" >
       <a href="https://dioxuslabs.com">
-          <img src="./notes/dioxus_splash_8.avif">
+          <img src="../../notes/dioxus_splash_8.avif">
       </a>
     </p>
 </p>
@@ -88,7 +88,7 @@ fn app() -> Element {
 한 개의 명령어, `dx serve`로 앱을 실행하세요. 마크업과 스타일을 수정하면 실시간으로 결과를 확인할 수 있습니다. Rust 코드 핫 리로딩은 아직 1차 지원은 아니지만 [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/)를 통해 가능합니다.
 
 <div align="center">
-  <img src="./notes/hotreload.gif">
+  <img src="../../notes/hotreload.gif">
 </div>
 
 ## 웹 및 데스크톱 배포를 위한 번들러
@@ -96,7 +96,7 @@ fn app() -> Element {
 단순히 `dx bundle`을 실행하면 앱이 빌드되고 최적화된 번들로 패키징됩니다. 웹에서는 [`.avif` 생성, `.wasm` 압축, 최소화](https://dioxuslabs.com/learn/0.5/reference/assets) 등을 활용할 수 있습니다. [50kb 미만](https://github.com/ealmloff/tiny-dioxus/)의 웹앱과 15mb 미만의 데스크톱/모바일 앱을 빌드하세요.
 
 <div align="center">
-  <img src="./notes/bundle.gif">
+  <img src="../../notes/bundle.gif">
 </div>
 
 ## 환상적인 문서
@@ -104,7 +104,7 @@ fn app() -> Element {
 깨끗하고 읽기 쉽고 포괄적인 문서를 구축하는 데 많은 노력을 기울였습니다. 모든 HTML 요소와 리스너는 MDN 문서로 문서화되었으며, 저희 문서 사이트는 Dioxus 자체와 지속적인 통합을 실행하여 문서가 항상 최신 상태로 유지되도록 합니다. 가이드, 참조, 레시피 등을 보려면 [Dioxus 웹사이트](https://dioxuslabs.com/learn/0.5/)를 확인하세요. 재미있는 사실: 저희는 Dioxus 웹사이트를 새로운 Dioxus 기능의 테스트베드로 사용합니다 - [확인해보세요!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
-  <img src="./notes/docs.avif">
+  <img src="../../notes/docs.avif">
 </div>
 
 ## 개발자 경험에 중점
@@ -112,7 +112,7 @@ fn app() -> Element {
 Dioxus는 개발자 경험을 우선시하며, end-to-end 도구 개발에 많은 노력을 기울였습니다. RSX 코드를 자동으로 포맷하고 HTML을 RSX로 변환하는 등 다양한 기능을 제공하는 [VSCode 확장 프로그램](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)을 제작했습니다. 또한 새로운 앱 생성, 서비스 실행, 크로스 플랫폼 번들링을 지원하는 매우 강력한 [CLI](https://dioxuslabs.com/learn/0.5/CLI)를 개발했으며, 배포는 향후 로드맵에 포함되어 있습니다.
 
 <div align="center">
-  <img src="./notes/autofmt.gif">
+  <img src="../../notes/autofmt.gif">
 </div>
 
 ## 커뮤니티
@@ -120,7 +120,7 @@ Dioxus는 개발자 경험을 우선시하며, end-to-end 도구 개발에 많�
 Dioxus는 커뮤니티 중심의 프로젝트로, 매우 활발한 [Discord](https://discord.gg/XgGxMSkvUM) 및 [GitHub](https://github.com/DioxusLabs/dioxus/issues) 커뮤니티를 보유하고 있습니다. 우리는 항상 도움을 구하고 있으며, 질문에 답변하고 시작하는 데 도움을 드릴 준비가 되어 있습니다. [우리의 SDK](https://github.com/DioxusLabs/dioxus-std)는 커뮤니티에서 운영되며, 무료 업그레이드와 지원을 받는 최고의 Dioxus 크레이트를 위한 [GitHub 조직](https://github.com/dioxus-community/)도 운영하고 있습니다.
 
 <div align="center">
-  <img src="./notes/dioxus-community.avif">
+  <img src="../../notes/dioxus-community.avif">
 </div>
 
 ## 풀타임 코어 팀
