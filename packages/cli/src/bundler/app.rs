@@ -227,6 +227,16 @@ impl AppBundle {
         }
     }
 
+    pub fn copy_server(&self, destination: &PathBuf) -> Result<Option<PathBuf>> {
+        if let Some(server) = &self.server_executable {
+            let to = destination.join(server.file_name().unwrap());
+            std::fs::copy(server, &to)?;
+            return Ok(Some(to));
+        }
+
+        Ok(None)
+    }
+
     fn bindgen_dir(&self) -> PathBuf {
         self.workdir.join("wasm")
     }

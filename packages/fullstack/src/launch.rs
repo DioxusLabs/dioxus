@@ -138,26 +138,29 @@ async fn launch_server(
         let mut router =
             axum::Router::new().register_server_functions_with_context(context_providers);
 
-        #[cfg(not(any(feature = "desktop", feature = "mobile")))]
-        {
-            use crate::prelude::RenderHandleState;
-            use crate::prelude::SSRState;
+        // #[cfg(not(any(feature = "desktop", feature = "mobile")))]
+        // {
+        use crate::prelude::RenderHandleState;
+        use crate::prelude::SSRState;
 
-            match platform_config.server_cfg.build() {
-                Ok(cfg) => {
-                    router = router.serve_static_assets();
-
-                    router = router.fallback(
-                        axum::routing::get(crate::axum_adapter::render_handler).with_state(
-                            RenderHandleState::new_with_virtual_dom_factory(cfg, build_virtual_dom),
-                        ),
-                    );
-                }
-                Err(err) => {
-                    tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
-                }
+        match platform_config.server_cfg.build() {
+            Ok(cfg) => {
+                router = router.serve_static_assets();
+                router = router.fallback(
+                    axum::routing::get(crate::axum_adapter::render_handler).with_state(
+                        RenderHandleState::new_with_virtual_dom_factory(cfg, build_virtual_dom),
+                    ),
+                );
+            }
+            Err(err) => {
+                println!(
+                    "An error occurred while creating a server context {:?}",
+                    err
+                );
+                tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
             }
         }
+        // }
 
         let router = router.into_make_service();
         let listener = tokio::net::TcpListener::bind(address).await.unwrap();

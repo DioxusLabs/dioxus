@@ -49,8 +49,8 @@ impl AppHandle {
         let work_dir = app.build.krate.out_dir().join("launch");
         std::fs::create_dir_all(&work_dir)?;
 
-        let server = app.server_executable.clone();
         let executable = app.finish(work_dir.clone())?;
+        let server = app.copy_server(&work_dir)?;
 
         let mut handle = AppHandle {
             _id: Uuid::new_v4(),
