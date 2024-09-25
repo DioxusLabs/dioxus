@@ -192,6 +192,7 @@ impl BuildRequest {
                             units_compiled,
                             crate_count,
                             artifact.target.name,
+                            server,
                         ),
                     }
                 }

@@ -391,7 +391,7 @@ impl Output {
     fn render_body(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
         let [_title, body, more, _foot] = Layout::vertical([
             Constraint::Length(0),
-            Constraint::Length(3),
+            Constraint::Length(VIEWPORT_HEIGHT_SMALL - 2),
             Constraint::Fill(1),
             Constraint::Length(0),
         ])
@@ -414,31 +414,43 @@ impl Output {
         let [gauge_area, _margin] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
 
-        let gauge_list: [_; 3] = Layout::vertical([
+        let [app_progress, server_progress, status_line]: [_; 3] = Layout::vertical([
             Constraint::Length(1), // g1
             Constraint::Length(1), // g2
             Constraint::Length(1), // g3
+                                   // Constraint::Length(1), // status
         ])
         .areas(gauge_area);
 
         self.render_single_gauge(
             frame,
-            gauge_list[0],
+            app_progress,
             state.build_engine.compile_progress(),
-            "Compiling  ",
+            "App:    ",
             state,
             state.build_engine.compile_duration(),
         );
+
         self.render_single_gauge(
             frame,
-            gauge_list[1],
-            state.build_engine.bundling_progress,
-            "Bundling   ",
+            server_progress,
+            state.build_engine.server_compile_progress(),
+            "Server: ",
             state,
-            state.build_engine.bundle_duration(),
+            state.build_engine.compile_duration(),
         );
 
-        let mut lines = vec!["Status:     ".white()];
+        // self.render_single_gauge(
+        //     frame,
+        //     gauge_list[2],
+        //     state.build_engine.bundling_progress,
+        //     "Bundling: ",
+        //     // "Bundling:        ",
+        //     state,
+        //     state.build_engine.bundle_duration(),
+        // );
+
+        let mut lines = vec!["Status:  ".white()];
         match &state.build_engine.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
             BuildStage::Starting {
@@ -452,13 +464,16 @@ impl Output {
                 current,
                 total,
                 krate,
+                server,
             } => {
                 lines.push("Compiling ".yellow());
                 lines.push(format!("{current}/{total} ").gray());
                 lines.push(krate.as_str().dark_gray())
             }
             BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
-            BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
+            BuildStage::RunningBindgen {} => {
+                lines.push("Running wasm-bindgen".yellow());
+            }
             BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
             BuildStage::OptimizingAssets {} => lines.push("Optimizing assets".yellow()),
             BuildStage::CopyingAssets {
@@ -485,7 +500,7 @@ impl Output {
             BuildStage::Restarting => lines.push("Restarting".yellow()),
         };
 
-        frame.render_widget(Line::from(lines), gauge_list[2]);
+        frame.render_widget(Line::from(lines), status_line);
     }
 
     fn render_single_gauge(
@@ -561,10 +576,11 @@ impl Output {
     }
 
     fn render_stats(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
-        let stat_list: [_; 3] = Layout::vertical([
+        let [current_platform, app_features, serve_address]: [_; 3] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(1),
+            // Constraint::Length(1),
         ])
         .areas(area);
 
@@ -573,20 +589,51 @@ impl Output {
                 "Platform: ".gray(),
                 self.platform.to_string().yellow(),
                 if state.opts.build_arguments.fullstack {
-                    " (fullstack enabled)".yellow()
+                    " (fullstack enabled)".dark_gray()
                 } else {
                     " (fullstack disabled)".dark_gray()
                 },
             ]))
             .wrap(Wrap { trim: false }),
-            stat_list[0],
+            current_platform,
         );
 
+        self.render_feature_list(frame, app_features, state, false);
+        // self.render_feature_list(frame, server_features, state, true);
+
+        // todo(jon) should we write https ?
+        let address = match state.server.server_address() {
+            Some(address) => format!("http://{}", address).blue(),
+            None => "no server address".dark_gray(),
+        };
+        frame.render_widget_ref(
+            Paragraph::new(Line::from(vec!["Serving at: ".gray(), address]))
+                .wrap(Wrap { trim: false }),
+            serve_address,
+        );
+    }
+
+    fn render_feature_list(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        state: RenderState,
+        is_server: bool,
+    ) {
         frame.render_widget(
             Paragraph::new(Line::from({
-                let mut lines = vec!["Features: ".gray(), "[".yellow()];
+                let mut lines = vec![
+                    if is_server {
+                        "Server features: ".gray()
+                    } else {
+                        "App features: ".gray()
+                    },
+                    // "Features ".gray(),
+                    "[".yellow(),
+                ];
 
-                let feature_list: Vec<String> = state.build_engine.request.target_features(false);
+                let feature_list: Vec<String> =
+                    state.build_engine.request.target_features(is_server);
                 let num_features = feature_list.len();
 
                 for (idx, feature) in feature_list.into_iter().enumerate() {
@@ -603,18 +650,7 @@ impl Output {
                 lines
             }))
             .wrap(Wrap { trim: false }),
-            stat_list[1],
-        );
-
-        // todo(jon) should we write https ?
-        let address = match state.server.server_address() {
-            Some(address) => format!("http://{}", address).blue(),
-            None => "no server address".dark_gray(),
-        };
-        frame.render_widget_ref(
-            Paragraph::new(Line::from(vec!["Serving at: ".gray(), address]))
-                .wrap(Wrap { trim: false }),
-            stat_list[2],
+            area,
         );
     }
 

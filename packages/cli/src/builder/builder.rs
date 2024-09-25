@@ -26,10 +26,17 @@ pub(crate) struct Builder {
     pub rx: ProgressRx,
 
     pub compiled_crates: usize,
+    pub compiled_crates_server: usize,
+
     pub expected_crates: usize,
+    pub expected_crates_server: usize,
+
     pub bundling_progress: f64,
+
     pub compile_start: Option<Instant>,
     pub compile_end: Option<Instant>,
+    pub compile_end_server: Option<Instant>,
+
     pub bundle_start: Option<Instant>,
     pub bundle_end: Option<Instant>,
 }
@@ -57,9 +64,13 @@ impl Builder {
             rx,
             compiled_crates: 0,
             expected_crates: 1,
+            expected_crates_server: 1,
+            compiled_crates_server: 0,
+
             bundling_progress: 0.0,
             compile_start: Some(Instant::now()),
             compile_end: None,
+            compile_end_server: None,
             bundle_start: None,
             bundle_end: None,
         })
@@ -97,11 +108,22 @@ impl Builder {
                         server,
                         crate_count,
                     } => {
-                        self.expected_crates += crate_count;
+                        // self.expected_crates += crate_count;
                     }
                     BuildStage::InstallingTooling {} => {}
-                    BuildStage::Compiling { current, total, .. } => {
-                        self.compiled_crates += 1;
+                    BuildStage::Compiling {
+                        current,
+                        total,
+                        server,
+                        ..
+                    } => {
+                        if *server {
+                            self.compiled_crates_server = *current;
+                            self.expected_crates_server = *total;
+                        } else {
+                            self.compiled_crates = *current;
+                            self.expected_crates = *total;
+                        }
 
                         if self.compile_start.is_none() {
                             self.compile_start = Some(Instant::now());
@@ -216,6 +238,10 @@ impl Builder {
 
     pub fn compile_progress(&self) -> f64 {
         self.compiled_crates as f64 / self.expected_crates as f64
+    }
+
+    pub fn server_compile_progress(&self) -> f64 {
+        self.compiled_crates_server as f64 / self.expected_crates_server as f64
     }
 
     pub(crate) fn total_build_time(&self) -> Option<Duration> {
