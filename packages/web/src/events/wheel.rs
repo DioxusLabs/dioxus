@@ -9,7 +9,7 @@ use dioxus_html::{
 };
 use web_sys::{Event, WheelEvent};
 
-use super::Synthetic;
+use super::{Synthetic, WebEventExt};
 
 impl HasWheelData for Synthetic<WheelEvent> {
     fn delta(&self) -> dioxus_html::geometry::WheelDelta {
@@ -86,5 +86,25 @@ impl PointerInteraction for Synthetic<WheelEvent> {
 impl HasScrollData for Synthetic<Event> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl WebEventExt for dioxus_html::ScrollData {
+    type WebEvent = web_sys::Event;
+
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<Self::WebEvent> {
+        self.downcast::<Synthetic<web_sys::Event>>()
+            .map(|e| e.event.clone())
+    }
+}
+
+impl WebEventExt for dioxus_html::WheelData {
+    type WebEvent = web_sys::WheelEvent;
+
+    #[inline(always)]
+    fn try_as_web_event(&self) -> Option<Self::WebEvent> {
+        self.downcast::<Synthetic<web_sys::WheelEvent>>()
+            .map(|e| e.event.clone())
     }
 }
