@@ -114,34 +114,21 @@ impl AppRunner {
                 continue;
             };
 
-            tracing::debug!("Attempting to hotreload {path:?}");
+            // If it's a rust file, we want to hotreload it using the filemap
+            if ext == "rs" {
+                edited_rust_files.push(path);
+                continue;
+            }
 
-            match ext {
-                "rs" => edited_rust_files.push(path),
-
-                // Look through the runners to see if any of them have an asset that matches the path
-                _ => {
-                    for runner in self.running.values() {
-                        if let Some(bundled_name) = runner
-                            .app
-                            .hotreload_asset(&runner.runtime_asset_dir(), &path)
-                        {
-                            tracing::debug!(
-                                "Hotreloading asset {bundled_name:?} in {:?}",
-                                runner.app.app_assets
-                            );
-                            assets.push(bundled_name);
-                        } else {
-                            tracing::debug!(
-                                "Hotreloading asset {path:?} in {:?} which doesn't have it",
-                                runner.app.app_assets
-                            );
-                        }
-                    }
+            // Otherwise, it might be an asset and we should look for it in all the running apps
+            for runner in self.running.values() {
+                if let Some(bundled_name) = runner.hotreload_asset(&path) {
+                    assets.push(bundled_name);
                 }
             }
         }
 
+        // Multiple runners might have queued the same asset, so dedup them
         assets.dedup();
 
         // Process the rust files

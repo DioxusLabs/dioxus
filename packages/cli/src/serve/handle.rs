@@ -16,13 +16,7 @@ use uuid::Uuid;
 /// Also includes a handle to its server if it exists
 pub(crate) struct AppHandle {
     pub(crate) _id: Uuid,
-    pub(crate) app: AppBundle,
-
-    // Output where we put the final bundle
-    pub(crate) bundle_dir: PathBuf,
-
-    pub(crate) out_file: PathBuf,
-    pub(crate) server: Option<PathBuf>,
+    pub(crate) build: AppBundle,
 
     pub(crate) app_child: Option<Child>,
     pub(crate) server_child: Option<Child>,
@@ -49,18 +43,12 @@ impl AppHandle {
             );
         }
 
-        let bundle_dir = app.build.krate.bundle_dir(platform);
-        std::fs::create_dir_all(&bundle_dir)?;
-
-        let out_file = app.finish(bundle_dir.clone())?;
-        let server = app.copy_server(&bundle_dir)?;
+        // let out_file = app.finish(bundle_dir.clone())?;
+        // let server = app.copy_server(&bundle_dir)?;
 
         let mut handle = AppHandle {
             _id: Uuid::new_v4(),
-            app,
-            out_file,
-            server,
-            bundle_dir: bundle_dir.clone(),
+            build: app,
             app_child: None,
             app_stderr: None,
             app_stdout: None,
@@ -75,11 +63,11 @@ impl AppHandle {
             ("DIOXUS_CLI_ENABLED", "true".to_string()),
             (
                 "CARGO_MANIFEST_DIR",
-                handle.app.build.krate.crate_dir().display().to_string(),
+                handle.build.build.krate.crate_dir().display().to_string(),
             ),
             (
                 "SIMCTL_CHILD_CARGO_MANIFEST_DIR",
-                handle.app.build.krate.crate_dir().display().to_string(),
+                handle.build.build.krate.crate_dir().display().to_string(),
             ),
             (
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
@@ -108,11 +96,11 @@ impl AppHandle {
         // cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
 
         // Launch the server if we have one
-        if let Some(server) = handle.server.clone() {
+        if let Some(server) = handle.build.server.clone() {
             let mut cmd = Command::new(server);
 
             cmd.envs(envs.clone())
-                .current_dir(bundle_dir)
+                // .current_dir(bundle_dir)
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .kill_on_drop(true);
@@ -130,7 +118,7 @@ impl AppHandle {
             }
             Platform::Desktop => {
                 // tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app 🎉");
-                tracing::debug!(dx_src = ?TraceSrc::Dev, "Desktop app location: {:?}", handle.out_file.display());
+                // tracing::debug!(dx_src = ?TraceSrc::Dev, "Desktop app location: {:?}", handle.build_dir.display());
             }
             Platform::Server => {
                 if let Some(fullstack_address) = fullstack_address {
@@ -159,10 +147,10 @@ impl AppHandle {
         //
         // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
         // index.html during dev
-        match handle.app.build.build.platform() {
+        match handle.build.build.build.platform() {
             Platform::Desktop => {
                 let mut cmd = Command::new("open");
-                cmd.arg(handle.out_file.clone())
+                cmd.arg(handle.build.build_dir.clone().join("App.app"))
                     .envs(envs)
                     .arg("-W")
                     .stderr(Stdio::piped())
@@ -236,33 +224,61 @@ impl AppHandle {
                 // # # now that metro is ready, resume the app from background
                 // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
 
-                // Install the app
-                let mut cmd = Command::new("xcrun");
-                cmd.arg("simctl")
-                    .arg("launch")
-                    .arg("--console")
-                    .arg("booted")
-                    .arg(handle.out_file.clone());
-                let mut res = cmd.spawn()?;
-                let res = res.wait().await?;
+                // // Install the app
+                // let mut cmd = Command::new("xcrun");
+                // cmd.arg("simctl")
+                //     .arg("launch")
+                //     .arg("--console")
+                //     .arg("booted")
+                //     .arg(handle.build_dir.clone());
+                // let mut res = cmd.spawn()?;
+                // let res = res.wait().await?;
             }
         }
 
         Ok(handle)
     }
 
-    pub(crate) fn runtime_asset_dir(&self) -> PathBuf {
-        let dir = match self.app.build.build.platform() {
-            Platform::Web => self.out_file.join("public").join("assets"),
-            Platform::Desktop => self.out_file.join("Contents").join("Resources"),
+    pub(crate) fn hotreload_asset(&self, path: &PathBuf) -> Option<PathBuf> {
+        let resource = self.build.app_assets.assets.get(path).cloned()?;
+
+        // Find the asset dir for the current app
+        let asset_dir = match self.build.build.build.platform() {
+            Platform::Web => self.build.build_dir.join("public").join("assets"),
+            Platform::Desktop => self.build.build_dir.join("Contents").join("Resources"),
             Platform::Ios => todo!(),
             Platform::Android => todo!(),
             Platform::Server => todo!(),
             Platform::Liveview => todo!(),
         };
 
-        tracing::debug!("Runtime asset dir: {dir:?}");
+        // first, let's modify the build dir in place to include the new asset
+        _ = self
+            .build
+            .app_assets
+            .copy_asset_to(&asset_dir, path, false, false);
 
-        dir
+        // Now let's modify the running app, if we need to
+        // Every platform does this differently in quriky ways
+        match self.build.build.build.platform() {
+            // Nothing to do - editing the build dir is enough since we serve from there anyways
+            Platform::Web => {}
+
+            // Nothing to do - we serve from the .app dir which is executable anyways
+            Platform::Desktop => {}
+
+            // todo: I think we need to modify the simulator mount folder
+            Platform::Ios => todo!(),
+
+            // todo: I think we need to modify the simulator mount folder / and/or adb a new file in
+            Platform::Android => todo!(),
+
+            // These share .appimage semantics, so modifying the build dir is enough
+            Platform::Liveview => {}
+            Platform::Server => {}
+        };
+
+        // Now we can return the bundled asset name to send to the hotreload engine
+        Some(resource.bundled.into())
     }
 }

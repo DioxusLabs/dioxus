@@ -74,9 +74,11 @@ impl ServeArgs {
             self.always_on_top = Some(settings.always_on_top.unwrap_or(true))
         }
 
+        // Resolve the build arguments
+        self.build_arguments.resolve(&krate)?;
+
         // crate_config.config.desktop.always_on_top = self.always_on_top.unwrap_or(true);
 
-        // Resolve the build arguments
         // self.build_arguments.resolve(crate_config)?;
 
         // Since this is a serve, adjust the outdir to be target/dx-dist/<crate name>

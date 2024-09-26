@@ -1,10 +1,7 @@
-use crate::build::TargetArgs;
+use super::*;
+use crate::DioxusCrate;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::Path, process::exit};
-
-use crate::DioxusCrate;
-
-use super::*;
 
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs

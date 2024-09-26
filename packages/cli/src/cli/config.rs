@@ -1,8 +1,6 @@
-use crate::build::TargetArgs;
+use super::*;
 use crate::TraceSrc;
 use crate::{metadata::crate_root, CliSettings};
-
-use super::*;
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]

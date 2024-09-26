@@ -1,6 +1,5 @@
 use super::*;
 use crate::DioxusCrate;
-use build::TargetArgs;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
 use std::{borrow::Cow, fs, path::Path, process::exit};

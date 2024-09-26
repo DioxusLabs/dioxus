@@ -10,11 +10,14 @@ pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod run;
 pub(crate) mod serve;
+pub(crate) mod target;
 pub(crate) mod translate;
 
 pub(crate) use serve::*;
+pub(crate) use target::*;
 
 use crate::{custom_error, error::Result, Error};
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use once_cell::sync::Lazy;

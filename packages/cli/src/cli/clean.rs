@@ -1,8 +1,6 @@
+use super::*;
 use crate::DioxusCrate;
 use anyhow::Context;
-use build::TargetArgs;
-
-use super::*;
 
 /// Clean build artifacts.
 #[derive(Clone, Debug, Parser)]

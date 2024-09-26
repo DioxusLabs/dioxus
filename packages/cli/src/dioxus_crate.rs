@@ -1,6 +1,6 @@
-use crate::metadata::CargoError;
 use crate::Platform;
-use crate::{build::TargetArgs, config::DioxusConfig};
+use crate::{config::DioxusConfig, TargetArgs};
+use crate::{metadata::CargoError, CliSettings};
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use once_cell::sync::OnceCell;
@@ -20,6 +20,7 @@ pub(crate) struct DioxusCrate {
     pub(crate) package: NodeId,
     pub(crate) config: DioxusConfig,
     pub(crate) target: Target,
+    pub(crate) settings: CliSettings,
 }
 
 pub(crate) static CLIENT_PROFILE_WEB: &str = "dioxus-client-web";
@@ -71,11 +72,14 @@ impl DioxusCrate {
             .ok_or(CrateConfigError::TargetNotFound(target_name))?
             .clone();
 
+        let settings = CliSettings::load();
+
         Ok(Self {
             krates: Arc::new(krates),
             package,
             config: dioxus_config,
             target,
+            settings,
         })
     }
 

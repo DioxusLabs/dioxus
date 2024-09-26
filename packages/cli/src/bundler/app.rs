@@ -13,23 +13,46 @@ use std::sync::atomic::AtomicUsize;
 /// This is built in parallel with the app executable during the `build` phase and the progres/status
 /// of the build is aggregated.
 ///
+/// The server will *always* be dropped into the `web` folder since it is considered "web" in nature,
+/// and will likely need to be combined with the public dir to be useful.
+///
 /// When we write the AppBundle to a folder, it'll contain each bundle for each platform under the app's name:
 /// ```
-/// bundle/
-///   dog-app/
-///       build.json                 // The build stats, config flags, and other info that was used to build the app
-///       Mobile_x64.app
-///       Mobile_arm64.app
-///       Mobile_rosetta.app
-///       server.exe
-///       private/                   // The assets that were collected for the server, if they exist
-///           some-secret-asset.txt
-///       public/
+/// dog-app/
+///   build/
+///       web/
+///         server
+///         assets/
+///           some-secret-asset.txt (a server-side asset)
+///         public/
 ///           index.html
 ///           assets/
-///               logo.png
-///               style.css
-///      server.appimage             // contains everything - you can just ./ it to run everything
+///             logo.png
+///       desktop/
+///          App.app
+///          App.appimage
+///          App.exe
+///       ios/
+///          App.app
+///          App.ipa
+///       android/
+///          App.apk
+///   bundle/
+///       build.json
+///       Desktop.app
+///       Mobile_x64.ipa
+///       Mobile_arm64.ipa
+///       Mobile_rosetta.ipa
+///       web.appimage
+///       web/
+///         server.exe
+///            assets/
+///                some-secret-asset.txt
+///            public/
+///                index.html
+///                assets/
+///                    logo.png
+///                    style.css
 /// ```
 ///
 /// When deploying, the build.json file will provide all the metadata that dx-deploy will use to
@@ -37,19 +60,103 @@ use std::sync::atomic::AtomicUsize;
 ///
 /// The format of each build will follow the name plus some metadata such that when distributing you
 /// can easily trim off the metadata.
+///
+/// The idea here is that we can run any of the programs in the same way that they're deployed
 #[derive(Debug)]
 pub(crate) struct AppBundle {
     pub(crate) build: BuildRequest,
+
+    /// The directory where the build is located
+    ///
+    /// app.app
+    /// app.appimage
     pub(crate) build_dir: PathBuf,
 
-    pub(crate) app_executable: PathBuf,
+    pub(crate) app: PathBuf,
     pub(crate) app_assets: AssetManifest,
 
-    pub(crate) server_executable: Option<PathBuf>,
+    pub(crate) server: Option<PathBuf>,
     pub(crate) server_assets: AssetManifest,
 }
 
 impl AppBundle {
+    /// ## Web:
+    /// Create a folder that is somewhat similar to an app-image (exe + asset)
+    /// ```
+    /// web/
+    ///     server
+    ///     public/
+    ///         index.html
+    ///         wasm/
+    ///            app.wasm
+    ///            glue.js
+    ///            snippets/
+    ///                ...
+    ///         assets/
+    ///            logo.png
+    /// ```
+    ///
+    ///
+    /// Linux:
+    /// https://docs.appimage.org/reference/appdir.html#ref-appdir
+    /// current_exe.join("Assets")
+    /// ```
+    /// app.appimage/
+    ///     main.exe
+    ///     main.desktop
+    ///     package.json
+    ///     usr/
+    ///         logo.png
+    /// ```
+    ///
+    /// ## Mac + iOS + TVOS + VisionOS:
+    /// We simply use the macos/ios format where binaries are in `Contents/MacOS` and assets are in `Contents/Resources`
+    /// ```
+    /// blah.app/
+    ///     Contents/
+    ///         Info.plist
+    ///         MacOS/
+    ///             Frameworks/
+    ///         Resources/
+    ///             blah.icns
+    ///             blah.png
+    ///         CodeResources
+    ///         _CodeSignature/
+    /// ```
+    ///
+    /// ## Android:
+    /// ```
+    /// app.apk/
+    ///   lib/
+    ///       armeabi-v7a/
+    ///           libmyapp.so
+    ///       arm64-v8a/
+    ///           libmyapp.so
+    ///   assets/
+    ///       logo.png
+    /// ```
+    ///
+    /// Windows:
+    /// https://superuser.com/questions/749447/creating-a-single-file-executable-from-a-directory-in-windows
+    /// Windows does not provide an AppImage format, so instead we're going build the same folder
+    /// structure as an AppImage, but when distributing, we'll create a .exe that embeds the resources
+    /// as an embedded .zip file. When the app runs, it will implicitly unzip its resources into the
+    /// Program Files folder. Any subsquent launches of the parent .exe will simply call the AppRun.exe
+    /// entrypoint in the associated Program Files folder.
+    ///
+    /// This is, in essence, the same as an installer, so we might eventually just support something like msi/msix
+    /// which functionally do the same thing but with a sleeker UI.
+    ///
+    /// This means no installers are required and we can bake an updater into the host exe.
+    /// current_exe.join("usr")
+    /// ```
+    /// app.appimage/
+    ///     main.exe
+    ///     main.desktop
+    ///     package.json
+    ///     usr/
+    ///         logo.png
+    /// ```
     pub(crate) async fn new(
         build: BuildRequest,
         app_assets: AssetManifest,
@@ -58,8 +165,8 @@ impl AppBundle {
     ) -> Result<Self> {
         let mut bundle = Self {
             build_dir: build.krate.build_dir(build.build.platform()),
-            server_executable,
-            app_executable,
+            server: server_executable,
+            app: app_executable,
             app_assets,
             server_assets: Default::default(),
             build,
@@ -95,6 +202,7 @@ impl AppBundle {
     ///
     /// For wasm, we'll want to run `wasm-bindgen` to make it a wasm binary along with some other optimizations
     /// Other platforms we might do some stripping or other optimizations
+    /// Move the executable to the workdir
     async fn write_main_executable(&self) -> Result<()> {
         match self.build.build.platform() {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
@@ -141,7 +249,7 @@ impl AppBundle {
 
                 // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
                 self.build
-                    .run_wasm_bindgen(&self.app_executable.with_extension("wasm"), &wasm_dir)
+                    .run_wasm_bindgen(&self.app.with_extension("wasm"), &wasm_dir)
                     .await?;
 
                 // Only run wasm-opt if the feature is enabled
@@ -153,27 +261,12 @@ impl AppBundle {
                 std::fs::write(public_dir.join("index.html"), self.build.prepare_html()?)?;
 
                 // write the server executable
-                if let Some(server) = &self.server_executable {
+                if let Some(server) = &self.server {
                     std::fs::copy(server, self.build_dir.join("server"))?;
                 }
             }
 
-            // Move the executable to the workdir
             Platform::Desktop => {
-                // Macos:
-                //
-                // blah.app/
-                // blah.app/Contents/
-                // blah.app/Contents/Info.plist
-                // blah.app/Contents/MacOS/Frameworks/
-                // blah.app/Contents/MacOS/CodeResources
-                // blah.app/Contents/MacOS/_CodeSignature/
-                // blah.app/Contents/MacOS/
-                // blah.app/Contents/MacOS/blah
-                // blah.app/Contents/Resources/
-                // blah.app/Contents/Resources/blah.icns
-                // blah.app/Contents/Resources/blah.png
-
                 // for now, until we have bundled hotreload, just copy the executable to the output location
                 let work_dir = self.build_dir.join("App.app").join("Contents");
                 let app_dir = work_dir.join("MacOS");
@@ -183,7 +276,7 @@ impl AppBundle {
                 std::fs::create_dir_all(&app_dir)?;
                 std::fs::create_dir_all(&assets_dir)?;
 
-                std::fs::copy(self.app_executable.clone(), app_dir.join("app"))?;
+                std::fs::copy(self.app.clone(), app_dir.join("app"))?;
             }
 
             Platform::Ios => {}
@@ -204,9 +297,24 @@ impl AppBundle {
             return Ok(());
         }
 
-        let asset_dir = self.asset_dir();
-        let assets = self.all_source_assets();
+        let build_dir = self.build_dir.clone();
 
+        let asset_dir: PathBuf = match self.build.build.platform() {
+            Platform::Web => build_dir.join("public").join("assets"),
+            Platform::Desktop => self
+                .build_dir
+                .join("App.app")
+                .join("Contents")
+                .join("Resources"),
+            Platform::Ios => build_dir.join("App.app").join("Contents").join("Resources"),
+            Platform::Android => build_dir.join("assets"),
+            Platform::Server => build_dir.join("assets"),
+            Platform::Liveview => build_dir.join("assets"),
+        };
+
+        std::fs::create_dir_all(&asset_dir)?;
+
+        let assets = self.all_source_assets();
         let asset_count = assets.len();
         let assets_finished = AtomicUsize::new(0);
         let optimize = false;
@@ -256,22 +364,20 @@ impl AppBundle {
 
             // Create a final .app/.exe/etc depending on the host platform, not dependent on the host
             Platform::Desktop => {
-                let work_dir = self.build_dir.join("App.app");
-                let out_dir = destination.join("App.app");
-                crate::fastfs::copy_asset(&work_dir, &out_dir)?;
-                Ok(work_dir)
+                let out_app = destination
+                    .join(self.build_dir.file_name().unwrap())
+                    .with_extension("app");
+                crate::fastfs::copy_asset(&self.build_dir, &out_app)?;
+                Ok(out_app)
             }
 
             Platform::Server => {
-                std::fs::copy(
-                    self.app_executable.clone(),
-                    destination.join(self.build.app_name()),
-                )?;
+                std::fs::copy(self.app.clone(), destination.join(self.build.app_name()))?;
 
                 Ok(destination.join(self.build.app_name()))
             }
 
-            Platform::Liveview => Ok(self.app_executable.clone()),
+            Platform::Liveview => Ok(self.app.clone()),
 
             // Create a .ipa, only from macOS
             Platform::Ios => todo!("Implement iOS bundling"),
@@ -286,7 +392,7 @@ impl AppBundle {
     }
 
     pub fn copy_server(&self, destination: &PathBuf) -> Result<Option<PathBuf>> {
-        if let Some(server) = &self.server_executable {
+        if let Some(server) = &self.server {
             let to = destination.join("server");
             _ = std::fs::remove_file(&to);
             std::fs::copy(server, &to)?;
@@ -331,27 +437,6 @@ impl AppBundle {
         Ok(())
     }
 
-    pub(crate) fn asset_dir(&self) -> PathBuf {
-        let dir: PathBuf = match self.build.build.platform() {
-            Platform::Web => self.build_dir.join("public").join("assets"),
-            Platform::Desktop => self
-                .build_dir
-                .join("App.app")
-                .join("Contents")
-                .join("Resources"),
-            Platform::Ios => self.build_dir.join("Resources"),
-            Platform::Android => self.build_dir.join("assets"),
-            Platform::Server => self.build_dir.join("assets"),
-            Platform::Liveview => self.build_dir.join("assets"),
-        };
-
-        if !dir.exists() {
-            std::fs::create_dir_all(&dir).expect("Failed to create asset dir in temp dir");
-        }
-
-        dir
-    }
-
     /// Run the optimizers, obfuscators, minimizers, etc
     pub(crate) async fn optimize(&self) -> Result<()> {
         match self.build.build.platform() {
@@ -376,19 +461,5 @@ impl AppBundle {
         }
 
         Ok(())
-    }
-
-    pub(crate) fn hotreload_asset(
-        &self,
-        asset_folder: &PathBuf,
-        path: &PathBuf,
-    ) -> Option<PathBuf> {
-        let resource = self.app_assets.assets.get(path).cloned()?;
-
-        _ = self
-            .app_assets
-            .copy_asset_to(&asset_folder, path, false, false);
-
-        Some(resource.bundled.into())
     }
 }
