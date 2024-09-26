@@ -3,6 +3,9 @@ use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 use crate::{query::Query, DesktopContext};
 
+/// Code for the Dioxus channel used to communicate between the dioxus and javascript code
+pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
+
 /// Represents the desktop-target's provider of evaluators.
 pub struct DesktopDocument {
     pub(crate) desktop_ctx: DesktopContext,
