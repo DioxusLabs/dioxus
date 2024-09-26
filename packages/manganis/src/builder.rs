@@ -34,16 +34,18 @@ impl Asset {
 
     /// Return a canonicalized path to the asset
     pub fn resolve(&self) -> PathBuf {
-        // if we're running with cargo in the loop, we can use the absolute path.
-        // this is non-bundled situations
-        if let Ok(_manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-            return PathBuf::from(self.local);
-        }
+        // // if we're running with cargo in the loop, we can use the absolute path.
+        // // this is non-bundled situations
+        // if let Ok(_manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        //     return PathBuf::from(self.local);
+        // }
+
+        PathBuf::from("/assets/").join(PathBuf::from(self.bundled.trim_start_matches('/')))
 
         // todo: actually properly resolve this
-        base_path()
-            .unwrap_or_else(|| std::env::current_dir().unwrap_or("/assets/".into()))
-            .join(PathBuf::from(self.bundled.trim_start_matches('/')))
+        // base_path()
+        //     .unwrap_or_else(|| std::env::current_dir().unwrap_or("/assets/".into()))
+        //     .join(PathBuf::from(self.bundled.trim_start_matches('/')))
     }
 }
 

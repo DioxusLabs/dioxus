@@ -1,3 +1,5 @@
+use dioxus_core_types::DioxusFormattable;
+
 use crate::innerlude::VProps;
 use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
@@ -722,9 +724,9 @@ impl Attribute {
     ///
     /// "Volatile" refers to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
-    pub fn new(
+    pub fn new<T>(
         name: &'static str,
-        value: impl IntoAttributeValue,
+        value: impl IntoAttributeValue<T>,
         namespace: Option<&'static str>,
         volatile: bool,
     ) -> Attribute {
@@ -1075,6 +1077,16 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
             Some(val) => val.into_value(),
             None => AttributeValue::None,
         }
+    }
+}
+
+pub struct AnyFmtMarker;
+impl<T> IntoAttributeValue<AnyFmtMarker> for T
+where
+    T: DioxusFormattable,
+{
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.format().to_string())
     }
 }
 

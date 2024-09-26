@@ -46,13 +46,13 @@ use std::sync::atomic::AtomicUsize;
 ///       web.appimage
 ///       web/
 ///         server.exe
-///            assets/
-///                some-secret-asset.txt
-///            public/
-///                index.html
-///                assets/
-///                    logo.png
-///                    style.css
+///         assets/
+///             some-secret-asset.txt
+///         public/
+///             index.html
+///             assets/
+///                 logo.png
+///                 style.css
 /// ```
 ///
 /// When deploying, the build.json file will provide all the metadata that dx-deploy will use to
@@ -72,10 +72,10 @@ pub(crate) struct AppBundle {
     /// app.appimage
     pub(crate) build_dir: PathBuf,
 
-    pub(crate) app: PathBuf,
+    pub(crate) cargo_app_exe: PathBuf,
     pub(crate) app_assets: AssetManifest,
 
-    pub(crate) server: Option<PathBuf>,
+    pub(crate) cargo_server_exe: Option<PathBuf>,
     pub(crate) server_assets: AssetManifest,
 }
 
@@ -105,21 +105,24 @@ impl AppBundle {
     ///     main.exe
     ///     main.desktop
     ///     package.json
-    ///     usr/
+    ///     assets/
     ///         logo.png
     /// ```
     ///
     /// ## Mac + iOS + TVOS + VisionOS:
     /// We simply use the macos/ios format where binaries are in `Contents/MacOS` and assets are in `Contents/Resources`
+    /// We put assets in an assets dir such that it generally matches every other platform and we can
+    /// output `/assets/blah` from manganis.
     /// ```
-    /// blah.app/
+    /// App.app/
     ///     Contents/
     ///         Info.plist
     ///         MacOS/
     ///             Frameworks/
     ///         Resources/
-    ///             blah.icns
-    ///             blah.png
+    ///             assets/
+    ///                 blah.icns
+    ///                 blah.png
     ///         CodeResources
     ///         _CodeSignature/
     /// ```
@@ -148,43 +151,50 @@ impl AppBundle {
     /// which functionally do the same thing but with a sleeker UI.
     ///
     /// This means no installers are required and we can bake an updater into the host exe.
-    /// current_exe.join("usr")
+    /// current_exe.join("assets")
     /// ```
     /// app.appimage/
     ///     main.exe
     ///     main.desktop
     ///     package.json
-    ///     usr/
+    ///     assets/
     ///         logo.png
     /// ```
+    ///
+    /// Since we support just a few locations, we could just search for the first that exists
+    /// - usr
+    /// - ../Resources
+    /// - assets
+    /// - Assets
+    /// - $cwd/assets
+    ///
+    /// assets::root() ->
+    ///     mac -> ../Resources/
+    ///     ios -> ../Resources/
+    ///     android -> assets/
+    ///     server -> assets/
+    ///     liveview -> assets/
+    ///     web -> /assets/
+    /// root().join(bundled)
     pub(crate) async fn new(
         build: BuildRequest,
         app_assets: AssetManifest,
         app_executable: PathBuf,
         server_executable: Option<PathBuf>,
     ) -> Result<Self> {
-        let mut bundle = Self {
+        let bundle = Self {
             build_dir: build.krate.build_dir(build.build.platform()),
-            server: server_executable,
-            app: app_executable,
+            cargo_server_exe: server_executable,
+            cargo_app_exe: app_executable,
             app_assets,
             server_assets: Default::default(),
             build,
         };
 
-        // Add any legacy assets to the bundle manifest
-        for legacy in bundle.build.krate.legacy_asset_dir_files() {
-            if let Ok(legacy) = legacy.canonicalize() {
-                bundle
-                    .app_assets
-                    .insert_legacy_asset(&bundle.build.krate.legacy_asset_dir(), &legacy);
-            }
-        }
-
         bundle.build.status_start_bundle();
         bundle.prepare_build_dir()?;
         bundle.write_main_executable().await?;
-        // bundle.write_server_executable().await?;
+        bundle.write_server_executable().await?;
         bundle.write_assets().await?;
         bundle.write_metadata().await?;
         bundle.optimize().await?;
@@ -249,7 +259,7 @@ impl AppBundle {
 
                 // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
                 self.build
-                    .run_wasm_bindgen(&self.app.with_extension("wasm"), &wasm_dir)
+                    .run_wasm_bindgen(&self.cargo_app_exe.with_extension("wasm"), &wasm_dir)
                     .await?;
 
                 // Only run wasm-opt if the feature is enabled
@@ -261,7 +271,7 @@ impl AppBundle {
                 std::fs::write(public_dir.join("index.html"), self.build.prepare_html()?)?;
 
                 // write the server executable
-                if let Some(server) = &self.server {
+                if let Some(server) = &self.cargo_server_exe {
                     std::fs::copy(server, self.build_dir.join("server"))?;
                 }
             }
@@ -270,13 +280,13 @@ impl AppBundle {
                 // for now, until we have bundled hotreload, just copy the executable to the output location
                 let work_dir = self.build_dir.join("App.app").join("Contents");
                 let app_dir = work_dir.join("MacOS");
-                let assets_dir = work_dir.join("Resources");
+                let assets_dir = work_dir.join("Resources").join("assets");
 
                 std::fs::create_dir_all(&work_dir)?;
                 std::fs::create_dir_all(&app_dir)?;
                 std::fs::create_dir_all(&assets_dir)?;
 
-                std::fs::copy(self.app.clone(), app_dir.join("app"))?;
+                std::fs::copy(self.cargo_app_exe.clone(), app_dir.join("app"))?;
             }
 
             Platform::Ios => {}
@@ -297,55 +307,125 @@ impl AppBundle {
             return Ok(());
         }
 
-        let build_dir = self.build_dir.clone();
+        let asset_dir = self.asset_dir();
 
-        let asset_dir: PathBuf = match self.build.build.platform() {
+        // First, clear the asset dir
+        _ = std::fs::remove_dir_all(&asset_dir);
+        _ = std::fs::create_dir_all(&asset_dir);
+
+        // Copy over the bundled assets
+        for asset in self.app_assets.assets.keys() {
+            let bundled = self.app_assets.assets.get(asset).unwrap();
+            let from = &bundled.absolute;
+            let to = asset_dir.join(&bundled.bundled);
+            tracing::debug!("Copying asset {from:?} to {to:?}");
+            std::fs::copy(from, to)?;
+        }
+
+        // And then copy over the legacy assets
+        for file in self.build.krate.legacy_asset_dir_files() {
+            let from = &file;
+            let to = asset_dir.join(file.file_name().unwrap());
+            tracing::debug!("Copying legacy asset {from:?} to {to:?}");
+            std::fs::copy(file, to)?;
+        }
+
+        // todo: implement par_iter
+        // let asset_count = assets.len();
+        // let assets_finished = AtomicUsize::new(0);
+        // let optimize = false;
+        // let pre_compress = false;
+
+        // // Parallel Copy over the assets and keep track of progress with an atomic counter
+        // assets.par_iter().try_for_each(|(asset, legacy)| {
+        //     self.run_asset_transfer(
+        //         asset,
+        //         &assets_finished,
+        //         asset_count,
+        //         &asset_dir,
+        //         optimize,
+        //         pre_compress,
+        //         *legacy,
+        //     )
+        // })?;
+
+        Ok(())
+    }
+
+    fn run_asset_transfer(
+        &self,
+        asset: &PathBuf,
+        assets_finished: &AtomicUsize,
+        asset_count: usize,
+        asset_dir: &PathBuf,
+        optimize: bool,
+        pre_compress: bool,
+        legacy: bool,
+    ) -> std::result::Result<(), anyhow::Error> {
+        self.build.status_copying_asset(
+            assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
+            asset_count,
+            asset,
+        );
+
+        // let res = self
+        //     .app_assets
+        //     .copy_asset_to(&asset_dir, asset, optimize, pre_compress, legacy);
+
+        // if let Err(err) = res {
+        //     tracing::error!("Failed to copy asset {asset:?}: {err}");
+        // }
+
+        // self.build.status_finished_asset(
+        //     assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        //     asset_count,
+        //     asset,
+        // );
+
+        Ok(()) as anyhow::Result<()>
+    }
+
+    pub fn main_exe(&self) -> PathBuf {
+        match self.build.build.platform() {
+            Platform::Web => self.build_dir.join("public").join("index.html"),
+            Platform::Desktop => self
+                .build_dir
+                .join("App.app")
+                .join("Contents")
+                .join("MacOS")
+                .join("app"),
+            Platform::Ios => self
+                .build_dir
+                .join("App.app")
+                .join("Contents")
+                .join("MacOS")
+                .join("app"),
+            Platform::Android => todo!(),
+            Platform::Server => self.build_dir.join("server"),
+            Platform::Liveview => self.build_dir.join("server"),
+        }
+    }
+
+    pub fn asset_dir(&self) -> PathBuf {
+        let build_dir = &self.build_dir;
+
+        match self.build.build.platform() {
             Platform::Web => build_dir.join("public").join("assets"),
             Platform::Desktop => self
                 .build_dir
                 .join("App.app")
                 .join("Contents")
-                .join("Resources"),
-            Platform::Ios => build_dir.join("App.app").join("Contents").join("Resources"),
+                .join("Resources")
+                .join("assets"),
+            Platform::Ios => build_dir
+                .join("App.app")
+                .join("Contents")
+                .join("Resources")
+                .join("assets"),
             Platform::Android => build_dir.join("assets"),
             Platform::Server => build_dir.join("assets"),
             Platform::Liveview => build_dir.join("assets"),
-        };
-
-        std::fs::create_dir_all(&asset_dir)?;
-
-        let assets = self.all_source_assets();
-        let asset_count = assets.len();
-        let assets_finished = AtomicUsize::new(0);
-        let optimize = false;
-        let pre_compress = false;
-
-        // Parallel Copy over the assets and keep track of progress with an atomic counter
-        assets.par_iter().try_for_each(|asset| {
-            self.build.status_copying_asset(
-                assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
-                asset_count,
-                asset,
-            );
-
-            let res = self
-                .app_assets
-                .copy_asset_to(&asset_dir, asset, optimize, pre_compress);
-
-            if let Err(err) = res {
-                tracing::error!("Failed to copy asset {asset:?}: {err}");
-            }
-
-            self.build.status_finished_asset(
-                assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-                asset_count,
-                asset,
-            );
-
-            Ok(()) as anyhow::Result<()>
-        })?;
-
-        Ok(())
+        }
     }
 
     /// Take the workdir and copy it to the output location, returning the path to final bundle
@@ -372,12 +452,15 @@ impl AppBundle {
             }
 
             Platform::Server => {
-                std::fs::copy(self.app.clone(), destination.join(self.build.app_name()))?;
+                std::fs::copy(
+                    self.cargo_app_exe.clone(),
+                    destination.join(self.build.app_name()),
+                )?;
 
                 Ok(destination.join(self.build.app_name()))
             }
 
-            Platform::Liveview => Ok(self.app.clone()),
+            Platform::Liveview => Ok(self.cargo_app_exe.clone()),
 
             // Create a .ipa, only from macOS
             Platform::Ios => todo!("Implement iOS bundling"),
@@ -387,12 +470,16 @@ impl AppBundle {
         }
     }
 
-    async fn write_server_executable(&self) {
-        todo!()
+    async fn write_server_executable(&self) -> Result<()> {
+        if let Some(server) = &self.cargo_server_exe {
+            std::fs::copy(server, self.build_dir.join("server"))?;
+        }
+
+        Ok(())
     }
 
     pub fn copy_server(&self, destination: &PathBuf) -> Result<Option<PathBuf>> {
-        if let Some(server) = &self.server {
+        if let Some(server) = &self.cargo_server_exe {
             let to = destination.join("server");
             _ = std::fs::remove_file(&to);
             std::fs::copy(server, &to)?;
@@ -406,13 +493,34 @@ impl AppBundle {
         self.build_dir.join("public").join("wasm")
     }
 
-    pub(crate) fn all_source_assets(&self) -> Vec<PathBuf> {
+    pub(crate) fn all_app_assets(&self) -> Vec<(PathBuf, bool)> {
         // Merge the legacy asset dir assets with the assets from the manifest
         // Legacy assets need to retain their name in case they're referenced in the manifest
         // todo: we should only copy over assets that appear in `img { src: "assets/logo.png" }` to
         // properly deprecate the legacy asset dir
         let mut assets = self
             .app_assets
+            .assets
+            .keys()
+            .cloned()
+            .map(|p| (p, false))
+            .chain(
+                self.build
+                    .krate
+                    .legacy_asset_dir_files()
+                    .into_iter()
+                    .map(|p| (p, true)),
+            )
+            .collect::<Vec<_>>();
+
+        assets.dedup();
+
+        assets
+    }
+
+    pub(crate) fn all_server_assets(&self) -> Vec<PathBuf> {
+        let mut assets = self
+            .server_assets
             .assets
             .keys()
             .cloned()
@@ -466,5 +574,13 @@ impl AppBundle {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn server(&self) -> Option<PathBuf> {
+        if let Some(_server) = &self.cargo_server_exe {
+            return Some(self.build_dir.join("server"));
+        }
+
+        None
     }
 }

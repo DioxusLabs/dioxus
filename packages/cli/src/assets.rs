@@ -26,6 +26,7 @@ use crate::link::InterceptedArgs;
 /// This will be filled in primarly by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub(crate) struct AssetManifest {
+    /// Map of bundled asset name to the asset itself
     pub(crate) assets: HashMap<PathBuf, ResourceAsset>,
 }
 
@@ -190,31 +191,35 @@ impl AssetManifest {
     /// Will not actually copy the asset if the source asset hasn't changed?
     pub(crate) fn copy_asset_to(
         &self,
-        destination: &Path,
-        target_asset: &Path,
+        from: &Path,
+        to: &Path,
         optimize: bool,
         _pre_compress: bool,
     ) -> anyhow::Result<()> {
-        let Some(src) = self.assets.get(target_asset) else {
-            crate::fastfs::copy_asset(
-                target_asset,
-                &destination.join(target_asset.file_name().unwrap()),
-            )?;
+        todo!();
+        // tracing::debug!("Copying asset {target_asset:?} to {destination:?} (legacy: {legacy})");
+        // let (from, to) = if legacy {
+        //     (
+        //         target_asset.to_path_buf(),
+        //         destination.join(target_asset.file_name().unwrap()),
+        //     )
+        // } else {
+        //     let Some(src) = self.assets.get(target_asset) else {
+        //         tracing::error!("Specified asset does not exist while trying to get {target_asset:?} to {destination:?}");
+        //         return Ok(());
+        //     };
 
-            return Ok(());
-        };
+        //     (src.absolute.clone(), destination.join(&src.bundled))
+        // };
 
-        let from = src.absolute.clone();
-
-        if !from.exists() {
-            panic!("Specified asset does not exist while trying to copy {target_asset:?} to {destination:?}")
-        }
+        // if !from.exists() {
+        //     tracing::error!("Specified asset does not exist while trying to copy {target_asset:?} to {destination:?}")
+        // }
 
         // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
         if !optimize {
-            let to = destination.join(&src.bundled);
-            tracing::debug!("Copying asset {from:?} to {destination:?} at {to:?}");
-            std::fs::copy(from, to).expect("Failed to copy asset");
+            // tracing::debug!("Copying asset {from:?} to {destination:?} at {to:?}");
+            // std::fs::copy(from, to).expect("Failed to copy asset");
             return Ok(());
         }
 

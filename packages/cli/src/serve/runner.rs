@@ -88,7 +88,10 @@ impl AppRunner {
     }
 
     pub(crate) fn kill(&mut self, platform: Platform) {
-        self.running.remove(&platform);
+        let res = self.running.remove(&platform);
+        if let Some(mut handle) = res {
+            handle.kill();
+        }
     }
 
     /// Open an existing app bundle, if it exists
@@ -122,8 +125,9 @@ impl AppRunner {
 
             // Otherwise, it might be an asset and we should look for it in all the running apps
             for runner in self.running.values() {
-                if let Some(bundled_name) = runner.hotreload_asset(&path) {
-                    assets.push(bundled_name);
+                if let Some(bundled_name) = runner.hotreload_bundled_asset(&path) {
+                    let asset_relative = PathBuf::from("/assets/").join(bundled_name);
+                    assets.push(asset_relative);
                 }
             }
         }

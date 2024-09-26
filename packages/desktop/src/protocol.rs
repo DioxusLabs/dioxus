@@ -77,32 +77,27 @@ pub(super) fn desktop_handler(
 fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
     // If the user provided a custom asset handler, then call it and return the response if the request was handled.
     // The path is the first part of the URI, so we need to trim the leading slash.
-    let mut asset = PathBuf::from(
+    let mut uri_path = PathBuf::from(
         urlencoding::decode(request.uri().path())
             .expect("expected URL to be UTF-8 encoded")
             .as_ref(),
     );
 
-    // If the asset doesn't exist, then we might need to try resolving it from the bundle root manually.
-    // We can mostly guarantee that manganis will give us absolute paths, so the only way we're getting these
-    // is if someone is passing in a relative path to their project, manually
-    //
-    // Do I *think* you should be doing this? No.
-    // Eventually we want to remove this, so consider it deprecated
-    if !asset.exists() {
-        let relative_path = request.uri().path().trim_start_matches('/');
+    // If the asset doesn't exist, or starts with `/assets/`, then we'll try to serve out of the bundle
+    if !uri_path.exists() || uri_path.starts_with("/assets/") {
         let bundle_root = get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap());
-        asset = bundle_root.join(relative_path);
+        println!("bundle root: {bundle_root:?}");
+        let relative_path = uri_path.strip_prefix("/").unwrap();
+        uri_path = bundle_root.join(relative_path);
     }
 
     // If the asset exists, then we can serve it!
-    if asset.exists() {
-        let mime_type = get_mime_from_path(&asset);
-        // println!("mime type: {:?} for {:?}", mime_type, asset);
+    if uri_path.exists() {
+        let mime_type = get_mime_from_path(&uri_path);
         return Ok(Response::builder()
             .header("Content-Type", mime_type?)
             .header("Access-Control-Allow-Origin", "*")
-            .body(std::fs::read(asset)?)?);
+            .body(std::fs::read(uri_path)?)?);
     }
 
     return Ok(Response::builder()
@@ -206,24 +201,43 @@ fn module_loader(root_id: &str, headless: bool) -> String {
 fn get_asset_root() -> Option<PathBuf> {
     // If the manifest_dir is set, we're in a cargo project and we can use that as the asset root
     // This works with asset!() since asset!() is always relatif to the manifest dir, both in dev and bundled
-    if let Some(cargo_dir) = std::env::var("CARGO_MANIFEST_DIR").map(PathBuf::from).ok() {
-        return Some(cargo_dir);
-        // if running_in_dev_mode() {
-        //     // todo: we don't want to canonicalize assets like this, but it will take longer to migrate, so we'll do it later
-        //     // we should just be parsing paths the way they are instead of relative to the "asset" dir
-        //     // manganis will eventually just dump the raw path to us, but until then, we need to canonicalize here
-        //     return dioxus_cli_config::base_path();
+    // if let Some(cargo_dir) = std::env::var("CARGO_MANIFEST_DIR").map(PathBuf::from).ok() {
+    //     return Some(cargo_dir);
+    // if running_in_dev_mode() {
+    //     // todo: we don't want to canonicalize assets like this, but it will take longer to migrate, so we'll do it later
+    //     // we should just be parsing paths the way they are instead of relative to the "asset" dir
+    //     // manganis will eventually just dump the raw path to us, but until then, we need to canonicalize here
+    //     return dioxus_cli_config::base_path();
+    // }
+
+    let cur_exe = std::env::current_exe().ok()?;
+
+    println!("cur exe: {cur_exe:?}");
+
+    if cur_exe
+        .parent()
+        .map(|p| p.file_name().unwrap().to_str().unwrap())
+        == Some("MacOS")
+    {
+        return Some(
+            cur_exe
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("Resources"),
+        );
     }
 
     // Use the prescence of the bundle to determine if we're in dev mode
     // todo: for other platforms, we should check their bundles too. This currently only works for macOS and iOS
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    {
-        // Note that this will return `target/debug` if you're in debug mode - not reliable check if we're in dev mode
-        if let Some(resources) = core_foundation::bundle::CFBundle::main_bundle().resources_path() {
-            return dunce::canonicalize(resources).ok();
-        }
-    }
+    // #[cfg(any(target_os = "macos", target_os = "ios"))]
+    // {
+    //     // Note that this will return `target/debug` if you're in debug mode - not reliable check if we're in dev mode
+    //     if let Some(resources) = core_foundation::bundle::CFBundle::main_bundle().resources_path() {
+    //         return dunce::canonicalize(resources).ok();
+    //     }
+    // }
 
     None
 }

@@ -1,6 +1,7 @@
 use crate::{bundler::AppBundle, Platform};
 use crate::{Result, TraceSrc};
 use std::{net::SocketAddr, path::PathBuf, process::Stdio};
+use tauri_bundler::bundle;
 use tokio::{
     io::AsyncBufReadExt,
     process::{Child, Command},
@@ -96,14 +97,15 @@ impl AppHandle {
         // cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
 
         // Launch the server if we have one
-        if let Some(server) = handle.build.server.clone() {
+        if let Some(server) = handle.build.server() {
+            tracing::debug!("Launching server: {server:?}");
             let mut cmd = Command::new(server);
 
             cmd.envs(envs.clone())
-                // .current_dir(bundle_dir)
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .kill_on_drop(true);
+
             let mut child = cmd.spawn()?;
             let stdout = BufReader::new(child.stdout.take().unwrap());
             let stderr = BufReader::new(child.stderr.take().unwrap());
@@ -149,10 +151,8 @@ impl AppHandle {
         // index.html during dev
         match handle.build.build.build.platform() {
             Platform::Desktop => {
-                let mut cmd = Command::new("open");
-                cmd.arg(handle.build.build_dir.clone().join("App.app"))
-                    .envs(envs)
-                    .arg("-W")
+                let mut cmd = Command::new(handle.build.main_exe());
+                cmd.envs(envs)
                     .stderr(Stdio::piped())
                     .stdout(Stdio::piped())
                     .kill_on_drop(true);
@@ -239,29 +239,45 @@ impl AppHandle {
         Ok(handle)
     }
 
-    pub(crate) fn hotreload_asset(&self, path: &PathBuf) -> Option<PathBuf> {
-        let resource = self.build.app_assets.assets.get(path).cloned()?;
+    pub(crate) fn hotreload_bundled_asset(
+        &self,
+        absolute_changed_file: &PathBuf,
+    ) -> Option<PathBuf> {
+        let mut bundled_name = None;
 
-        // Find the asset dir for the current app
-        let asset_dir = match self.build.build.build.platform() {
-            Platform::Web => self.build.build_dir.join("public").join("assets"),
-            Platform::Desktop => self
-                .build
-                .build_dir
-                .join("App.app")
-                .join("Contents")
-                .join("Resources"),
-            Platform::Ios => todo!(),
-            Platform::Android => todo!(),
-            Platform::Server => todo!(),
-            Platform::Liveview => todo!(),
-        };
+        // If the asset shares the same name in the bundle, reload that
+        let legacy_asset_dir = self.build.build.krate.legacy_asset_dir();
+        if absolute_changed_file.starts_with(&legacy_asset_dir) {
+            tracing::debug!("Hotreloading legacy asset {absolute_changed_file:?}");
+            let trimmed = absolute_changed_file
+                .strip_prefix(legacy_asset_dir)
+                .unwrap();
+            let res = std::fs::copy(absolute_changed_file, self.build.asset_dir().join(trimmed));
+            bundled_name = Some(trimmed.to_path_buf());
+            if let Err(e) = res {
+                tracing::debug!("Failed to hotreload legacy asset {e}");
+            }
+        }
 
-        // first, let's modify the build dir in place to include the new asset
-        _ = self
+        // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
+        let resource = self
             .build
             .app_assets
-            .copy_asset_to(&asset_dir, path, false, false);
+            .assets
+            .get(absolute_changed_file)
+            .cloned();
+
+        if let Some(resource) = resource {
+            let res = std::fs::copy(
+                absolute_changed_file,
+                self.build.asset_dir().join(&resource.bundled),
+            );
+            bundled_name = Some(PathBuf::from(resource.bundled));
+
+            if let Err(e) = res {
+                tracing::debug!("Failed to hotreload asset {e}");
+            }
+        }
 
         // Now let's modify the running app, if we need to
         // Every platform does this differently in quriky ways
@@ -272,18 +288,24 @@ impl AppHandle {
             // Nothing to do - we serve from the .app dir which is executable anyways
             Platform::Desktop => {}
 
+            // These share .appimage semantics, so modifying the build dir is enough
+            Platform::Liveview => {}
+            Platform::Server => {}
+
             // todo: I think we need to modify the simulator mount folder
             Platform::Ios => todo!(),
 
             // todo: I think we need to modify the simulator mount folder / and/or adb a new file in
             Platform::Android => todo!(),
-
-            // These share .appimage semantics, so modifying the build dir is enough
-            Platform::Liveview => {}
-            Platform::Server => {}
         };
 
         // Now we can return the bundled asset name to send to the hotreload engine
-        Some(resource.bundled.into())
+        bundled_name
+    }
+
+    pub fn kill(&mut self) {
+        if let Some(mut app) = self.app_child.take() {
+            app.kill();
+        }
     }
 }

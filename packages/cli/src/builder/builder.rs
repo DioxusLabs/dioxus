@@ -253,7 +253,7 @@ impl Builder {
             BuildStage::Success => true,
             BuildStage::Failed => true,
             BuildStage::Aborted => true,
-            BuildStage::Restarting => true,
+            BuildStage::Restarting => false,
             _ => false,
         }
     }
