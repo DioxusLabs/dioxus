@@ -233,7 +233,7 @@ impl AppHandle {
 
     pub(crate) fn runtime_asset_dir(&self) -> PathBuf {
         let dir = match self.app.build.build.platform() {
-            Platform::Web => self.out_file.join("assets"),
+            Platform::Web => self.out_file.join("public").join("assets"),
             Platform::Desktop => self.out_file.join("Contents").join("Resources"),
             Platform::Ios => todo!(),
             Platform::Android => todo!(),
