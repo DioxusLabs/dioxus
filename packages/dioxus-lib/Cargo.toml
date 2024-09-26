@@ -18,6 +18,7 @@ dioxus-config-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
+manganis = { workspace = true, optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }

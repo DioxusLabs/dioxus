@@ -62,8 +62,8 @@ pub fn launch(
     #[cfg(feature = "document")]
     let factory = move || {
         let mut vdom = factory();
-        let document = std::rc::Rc::new(crate::document::web::FullstackWebDocument)
-            as std::rc::Rc<dyn dioxus_lib::prelude::document::Document>;
+        let document = std::rc::Rc::new(crate::document::web::FullstackWebDocument::new())
+            as std::rc::Rc<dyn dioxus_document::Document>;
         vdom.provide_root_context(document);
         vdom
     };
@@ -160,7 +160,7 @@ async fn launch_server(
         }
 
         let router = router.into_make_service();
-        let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(serve_address).await.unwrap();
 
         axum::serve(listener, router).await.unwrap();
     }

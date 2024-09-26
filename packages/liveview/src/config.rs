@@ -53,7 +53,6 @@ impl<R: LiveviewRouter> Config<R> {
 
     /// Launch the LiveView server.
     pub async fn launch(self) {
-        println!("{} started on http://{}", app_title(), self.address);
         self.router.start(self.address).await
     }
 }

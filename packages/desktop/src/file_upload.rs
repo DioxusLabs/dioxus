@@ -11,18 +11,12 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    prelude::{SerializedMouseData, SerializedPointInteraction},
+    prelude::SerializedPointInteraction,
     FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData,
 };
 
 use serde::Deserialize;
-use std::{
-    cell::{Cell, RefCell},
-    path::PathBuf,
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{cell::RefCell, path::PathBuf, rc::Rc, str::FromStr, sync::Arc};
 use wry::DragDropEvent;
 
 #[derive(Debug, Deserialize)]
@@ -112,7 +106,7 @@ impl FileDialogRequest {
 
 enum Filters {
     Extension(String),
-    Mime(String),
+    Mime,
     Audio,
     Video,
     Image,
@@ -122,7 +116,7 @@ impl Filters {
     fn as_extensions(&self) -> Vec<&str> {
         match self {
             Filters::Extension(extension) => vec![extension.as_str()],
-            Filters::Mime(_) => vec![],
+            Filters::Mime => vec![],
             Filters::Audio => vec!["mp3", "wav", "ogg"],
             Filters::Video => vec!["mp4", "webm"],
             Filters::Image => vec!["png", "jpg", "jpeg", "gif", "webp"],
@@ -141,7 +135,7 @@ impl FromStr for Filters {
                 "audio/*" => Ok(Filters::Audio),
                 "video/*" => Ok(Filters::Video),
                 "image/*" => Ok(Filters::Image),
-                _ => Ok(Filters::Mime(s.to_string())),
+                _ => Ok(Filters::Mime),
             }
         }
     }
@@ -168,6 +162,7 @@ impl HasFormData for DesktopFileUploadForm {
 pub struct NativeFileHover {
     event: Rc<RefCell<Option<DragDropEvent>>>,
 }
+
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
         self.event.borrow_mut().replace(event);

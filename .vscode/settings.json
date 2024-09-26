@@ -1,5 +1,5 @@
 {
-  "editor.formatOnSave": true,
+  // Disable toml formatting since everyone uses it differently
   "[toml]": {
     "editor.formatOnSave": false
   },

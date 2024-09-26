@@ -44,9 +44,9 @@ pub(crate) struct HTMLDataCursor {
 }
 
 impl HTMLDataCursor {
-    pub(crate) fn from_serialized(data: &[u8]) -> Self {
-        let deserialized = ciborium::from_reader(Cursor::new(data)).unwrap();
-        Self::new(deserialized)
+    pub(crate) fn from_serialized(data: &[u8]) -> Option<Self> {
+        let deserialized: Vec<Option<Vec<u8>>> = ciborium::from_reader(Cursor::new(data)).ok()?;
+        Some(Self::new(deserialized))
     }
 
     /// Get the error if there is one

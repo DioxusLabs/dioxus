@@ -22,61 +22,83 @@ impl Document for DesktopDocument {
         DesktopEvaluator::create(self.desktop_ctx.clone(), js)
     }
 
+impl Document for DesktopService {
     fn set_title(&self, title: String) {
-        self.desktop_ctx.window.set_title(&title);
+        self.window.set_title(&title);
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
+    fn eval(&self, js: String) -> Eval {
+        let (tx, eval) = Eval::from_parts();
 
-/// Represents a desktop-target's JavaScript evaluator.
-pub(crate) struct DesktopEvaluator {
-    query: Query<serde_json::Value>,
-}
+        // Dumb wry has a signature of Fn instead of FnOnce, meaning we need to put the callback in a closure
+        // that uses rwlock + option to make sure we don't run the callback twice
+        let tx = Arc::new(Mutex::new(Some(tx)));
+        let callback = {
+            let tx = tx.clone();
+            move |res: String| {
+                if let Ok(res) = serde_json::from_str(&res) {
+                    if let Some(tx) = tx.lock().unwrap().take() {
+                        let _ = tx.send(Ok(res));
+                    }
+                } else {
+                    tracing::error!("Failed to deserialize eval result: {res:?}");
+                }
+            }
+        };
 
-impl DesktopEvaluator {
-    /// Creates a new evaluator for desktop-based targets.
-    pub fn create(desktop_ctx: DesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        let ctx = desktop_ctx.clone();
-        let query = desktop_ctx.query.new_query(&js, ctx);
-
-        // We create a generational box that is owned by the query slot so that when we drop the query slot, the generational box is also dropped.
-        let owner = UnsyncStorage::owner();
-        let query_id = query.id;
-        let query = owner.insert(Box::new(DesktopEvaluator { query }) as Box<dyn Evaluator>);
-        desktop_ctx.query.active_requests.slab.borrow_mut()[query_id].owner = Some(owner);
-
-        query
-    }
-}
-
-impl Evaluator for DesktopEvaluator {
-    fn poll_join(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
-        self.query
-            .poll_result(cx)
-            .map_err(|e| EvalError::Communication(e.to_string()))
-    }
-
-    /// Sends a message to the evaluated JavaScript.
-    fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
-        if let Err(e) = self.query.send(data) {
-            return Err(EvalError::Communication(e.to_string()));
+        let res = self.webview.evaluate_script_with_callback(&js, callback);
+        if let Err(err) = res {
+            _ = tx
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap()
+                .send(Err(EvalError::Communication(err.to_string())));
         }
-        Ok(())
+
+        eval
     }
 
-    /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    fn poll_recv(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
-        self.query
-            .poll_recv(cx)
-            .map_err(|e| EvalError::Communication(e.to_string()))
+    fn create_head_element(
+        &self,
+        name: &str,
+        attributes: Vec<(&str, String)>,
+        contents: Option<String>,
+    ) {
+        let contents = contents.unwrap_or_default();
+        let attr_iter = attributes
+            .into_iter()
+            .map(|(name, value)| format!(r#"element.setAttribute("{name}", "{value}");"#))
+            .collect::<Vec<_>>()
+            .join("");
+
+        self.eval(format!(
+            r#"
+            let element = document.createElement("{name}");
+            {attr_iter}
+            element.innerHTML = "{contents}";
+            document.head.appendChild(element);
+            "#,
+        ));
+    }
+
+    fn current_route(&self) -> String {
+        todo!()
+    }
+
+    fn go_back(&self) {
+        todo!()
+    }
+
+    fn go_forward(&self) {
+        todo!()
+    }
+
+    fn push_route(&self, route: String) {
+        todo!()
+    }
+
+    fn replace_route(&self, path: String) {
+        todo!()
     }
 }

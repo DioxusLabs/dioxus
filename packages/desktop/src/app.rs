@@ -3,7 +3,6 @@ use crate::{
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
-    query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };

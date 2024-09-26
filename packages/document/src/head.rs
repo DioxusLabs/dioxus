@@ -1,4 +1,4 @@
-#![doc = include_str!("../../docs/head.md")]
+#![doc = include_str!("../docs/head.md")]
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
@@ -123,7 +123,7 @@ pub struct MetaProps {
 }
 
 impl MetaProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(property) = &self.property {
             attributes.push(("property", property.clone()));
@@ -196,7 +196,7 @@ pub struct ScriptProps {
 }
 
 impl ScriptProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(defer) = &self.defer {
             attributes.push(("defer", defer.to_string()));
@@ -248,7 +248,7 @@ impl ScriptProps {
 ///     rsx! {
 ///         // You can use the Script component to render a script tag into the head of the page
 ///         Script {
-///             src: asset!("./assets/script.js"),
+///             src: asset!("/assets/script.js"),
 ///         }
 ///     }
 /// }
@@ -289,7 +289,7 @@ pub struct StyleProps {
 }
 
 impl StyleProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(href) = &self.href {
             attributes.push(("href", href.clone()));
@@ -377,7 +377,7 @@ pub struct LinkProps {
 }
 
 impl LinkProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(rel) = &self.rel {
             attributes.push(("rel", rel.clone()));
@@ -437,8 +437,8 @@ impl LinkProps {
 ///     rsx! {
 ///         // You can use the meta component to render a meta tag into the head of the page
 ///         // This meta tag will redirect the user to the dioxuslabs homepage in 10 seconds
-///         head::Link {
-///             href: asset!("./assets/style.css"),
+///         document::Link {
+///             href: asset!("/assets/style.css"),
 ///             rel: "stylesheet",
 ///         }
 ///     }
@@ -466,6 +466,29 @@ pub fn Link(props: LinkProps) -> Element {
     });
 
     VNode::empty()
+}
+
+/// Render a `<link>` element with a `rel="stylesheet"` attribute by default.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn App() -> Element {
+///     rsx! {
+///         Stylesheet {
+///             href: "https://example.com/styles.css",
+///         }
+///     }
+/// }
+/// ```
+#[doc(alias = "<link>")]
+#[component]
+pub fn Stylesheet(props: LinkProps) -> Element {
+    Link(LinkProps {
+        rel: Some("stylesheet".to_string()),
+        ..props
+    })
 }
 
 fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {

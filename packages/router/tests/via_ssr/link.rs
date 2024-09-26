@@ -1,10 +1,6 @@
 use dioxus::prelude::*;
-use std::str::FromStr;
 
-fn prepare<R: Routable>() -> String
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
+fn prepare<R: Routable>() -> String {
     let mut vdom = VirtualDom::new_with_props(
         App,
         AppProps::<R> {
@@ -34,15 +30,10 @@ where
     }
 
     #[allow(non_snake_case)]
-    fn App<R: Routable>(_props: AppProps<R>) -> Element
-    where
-        <R as FromStr>::Err: std::fmt::Display,
-    {
+    fn App<R: Routable>(_props: AppProps<R>) -> Element {
         rsx! {
             h1 { "App" }
-            Router::<R> {
-                config: |_| RouterConfig::default().history(MemoryHistory::default())
-            }
+            Router::<R> { config: |_| RouterConfig::default() }
         }
     }
 }
@@ -65,10 +56,7 @@ fn href_internal() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                "Link"
-            }
+            Link { to: Route::Test {}, "Link" }
         }
     }
 
@@ -95,10 +83,7 @@ fn href_external() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: "https://dioxuslabs.com/",
-                "Link"
-            }
+            Link { to: "https://dioxuslabs.com/", "Link" }
         }
     }
 
@@ -129,11 +114,7 @@ fn with_class() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                class: "test_class",
-                "Link"
-            }
+            Link { to: Route::Test {}, class: "test_class", "Link" }
         }
     }
 
@@ -230,11 +211,7 @@ fn with_id() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                id: "test_id",
-                "Link"
-            }
+            Link { to: Route::Test {}, id: "test_id", "Link" }
         }
     }
 
@@ -265,11 +242,7 @@ fn with_new_tab() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                new_tab: true,
-                "Link"
-            }
+            Link { to: Route::Test {}, new_tab: true, "Link" }
         }
     }
 
@@ -293,11 +266,7 @@ fn with_new_tab_external() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: "https://dioxuslabs.com/",
-                new_tab: true,
-                "Link"
-            }
+            Link { to: "https://dioxuslabs.com/", new_tab: true, "Link" }
         }
     }
 
@@ -329,11 +298,7 @@ fn with_rel() {
     #[component]
     fn Root() -> Element {
         rsx! {
-            Link {
-                to: Route::Test {},
-                rel: "test_rel".to_string(),
-                "Link"
-            }
+            Link { to: Route::Test {}, rel: "test_rel".to_string(), "Link" }
         }
     }
 

@@ -107,6 +107,13 @@ impl Runtime {
         }
     }
 
+    /// Mark a scope as dirty. This will cause it to re-render.
+    pub fn mark_dirty(&self, id: ScopeId) {
+        self.sender
+            .unbounded_send(SchedulerMsg::Immediate(id))
+            .unwrap();
+    }
+
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id;
@@ -377,9 +384,7 @@ impl Runtime {
                     self.rendering.set(false);
                     listener.call(uievent.clone());
                     self.rendering.set(true);
-                    let metadata = uievent.metadata.borrow();
-
-                    if !metadata.propagates {
+                    if !uievent.propagates() {
                         return;
                     }
                 }

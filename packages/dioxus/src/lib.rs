@@ -30,12 +30,18 @@ pub use dioxus_core::{CapturedError, Ok, Result};
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
-mod launch;
+pub mod launch;
+
+pub mod events {
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    pub use dioxus_html::prelude::*;
+}
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 #[allow(deprecated)]
-pub use launch::launch;
+pub use launch::{builder, launch};
 
 #[cfg(feature = "hooks")]
 #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
@@ -44,12 +50,6 @@ pub use dioxus_hooks as hooks;
 #[cfg(feature = "signals")]
 #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
 pub use dioxus_signals as signals;
-
-pub mod events {
-    #[cfg(feature = "html")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_html::prelude::*;
-}
 
 #[cfg(feature = "html")]
 #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
@@ -159,3 +159,81 @@ pub use dioxus_liveview as liveview;
 #[cfg(feature = "ssr")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
 pub use dioxus_ssr as ssr;
+
+#[cfg(feature = "asset")]
+#[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+pub use manganis as assets;
+
+#[cfg(feature = "asset")]
+#[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+pub use manganis;
+
+pub mod prelude {
+    // #[cfg(feature = "launch")]
+    // #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
+    // pub use crate::launch::*;
+
+    #[cfg(feature = "launch")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
+    pub use dioxus_config_macro::*;
+
+    #[cfg(feature = "hooks")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
+    pub use crate::hooks::*;
+
+    #[cfg(feature = "signals")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
+    pub use dioxus_signals::*;
+
+    pub use dioxus_core::prelude::*;
+
+    #[cfg(feature = "macro")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
+    #[allow(deprecated)]
+    pub use dioxus_core_macro::{component, rsx, Props};
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    pub use dioxus_html as dioxus_elements;
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
+
+    pub use dioxus_core;
+
+    #[cfg(feature = "fullstack")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
+    pub use dioxus_fullstack::prelude::*;
+
+    #[cfg(all(feature = "static-generation", not(feature = "fullstack")))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(feature = "static-generation", not(feature = "fullstack"))))
+    )]
+    pub use dioxus_static_site_generation::prelude::*;
+
+    #[cfg(feature = "router")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
+    pub use dioxus_router;
+
+    #[cfg(feature = "router")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
+    pub use dioxus_router::prelude::*;
+
+    #[cfg(feature = "axum")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
+    pub use axum;
+
+    #[cfg(feature = "asset")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+    pub use manganis::{self, self as assets, asset, Asset, ImageAsset, ImageType};
+
+    #[cfg(feature = "document")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+    pub use dioxus_document as document;
+
+    #[cfg(feature = "liveview")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "liveview")))]
+    pub use dioxus_liveview as liveview;
+}
