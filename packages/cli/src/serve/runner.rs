@@ -50,7 +50,7 @@ impl AppRunner {
     }
 
     /// Finally "bundle" this app and return a handle to it
-    pub(crate) fn open(
+    pub(crate) async fn open(
         &mut self,
         app: AppBundle,
         devserver_ip: SocketAddr,
@@ -59,7 +59,7 @@ impl AppRunner {
         let platform = app.build.build.platform();
 
         // Start the new app before we kill the old one to give it a little bit of time
-        let handle = AppHandle::start(app, devserver_ip, fullstack_address)?;
+        let handle = AppHandle::start(app, devserver_ip, fullstack_address).await?;
         self.kill(platform);
         self.running.insert(platform, handle);
 

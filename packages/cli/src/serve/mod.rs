@@ -156,11 +156,13 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                         tracing::error!("Build failed: {}", err);
                     }
                     BuildUpdate::BuildReady { bundle } => {
-                        let handle = runner.open(
-                            bundle,
-                            devserver.devserver_address(),
-                            devserver.proxied_server_address(),
-                        );
+                        let handle = runner
+                            .open(
+                                bundle,
+                                devserver.devserver_address(),
+                                devserver.proxied_server_address(),
+                            )
+                            .await;
 
                         match handle {
                             // Update the screen + devserver with the new handle info

@@ -33,7 +33,9 @@ impl RunArgs {
         let devserver_ip = "127.0.0.1:8080".parse().unwrap();
         let fullstack_ip = "127.0.0.1:6955".parse().unwrap();
 
-        runner.open(bundle, devserver_ip, Some(fullstack_ip))?;
+        runner
+            .open(bundle, devserver_ip, Some(fullstack_ip))
+            .await?;
 
         loop {
             let msg = runner.wait().await;

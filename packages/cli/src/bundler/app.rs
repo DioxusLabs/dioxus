@@ -104,16 +104,34 @@ impl AppBundle {
             //
             // Final output format:
             // ```
-            // dist/
-            //     web
-            //         index.html
-            //         wasm/
-            //            app.wasm
-            //            glue.js
-            //            snippets/
-            //                ...
-            //         assets/
-            //            logo.png
+            // app/
+            //     build/
+            //         desktop.app        // mac
+            //         mobile.ipa         // ios
+            //         mobile.apk         // android (unbundled, not actually zipped yet)
+            //         server.appimage    // server
+            //         app.exe            // windows
+            //         server
+            //         public/            // web
+            //             index.html
+            //             assets/
+            //                 logo.png
+            //
+            // dx/
+            //     app/
+            //         desktop/
+            //         web/
+            //             bundle/
+            //             build/
+            //                 public/
+            //                     index.html
+            //                     wasm/
+            //                        app.wasm
+            //                        glue.js
+            //                        snippets/
+            //                            ...
+            //                     assets/
+            //                        logo.png
             // ```
             Platform::Web => {
                 let public_dir = self.build_dir.join("public");

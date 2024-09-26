@@ -34,7 +34,7 @@ pub(crate) struct AppHandle {
 }
 
 impl AppHandle {
-    pub fn start(
+    pub async fn start(
         app: AppBundle,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
@@ -110,9 +110,10 @@ impl AppHandle {
         // Launch the server if we have one
         if let Some(server) = handle.server.clone() {
             let mut cmd = Command::new(server);
-            cmd.envs(envs.clone());
-            cmd.current_dir(bundle_dir);
-            cmd.stderr(Stdio::piped())
+
+            cmd.envs(envs.clone())
+                .current_dir(bundle_dir)
+                .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .kill_on_drop(true);
             let mut child = cmd.spawn()?;
@@ -160,7 +161,6 @@ impl AppHandle {
         // index.html during dev
         match handle.app.build.build.platform() {
             Platform::Desktop => {
-                // let mut cmd = Command::new(handle.out_file.clone());
                 let mut cmd = Command::new("open");
                 cmd.arg(handle.out_file.clone())
                     .envs(envs)
@@ -168,7 +168,6 @@ impl AppHandle {
                     .stderr(Stdio::piped())
                     .stdout(Stdio::piped())
                     .kill_on_drop(true);
-
                 let mut child = cmd.spawn()?;
                 let stdout = BufReader::new(child.stdout.take().unwrap());
                 let stderr = BufReader::new(child.stderr.take().unwrap());
@@ -176,59 +175,80 @@ impl AppHandle {
                 handle.app_stderr = Some(stderr.lines());
                 handle.app_child = Some(child);
             }
+            Platform::Web => {
+                // let start_browser = args.open.unwrap_or_default();
+                // let base_path = cfg.dioxus_config.web.app.base_path.clone();
+                // let platform = args.platform();
+                // // Open the browser
+                // if start_browser && platform != Platform::Desktop {
+                //     open_browser(base_path, addr, rustls.is_some());
+                // }
+                // // let protocol = if https { "https" } else { "http" };
+                // let base_path = match base_path.as_deref() {
+                //     Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+                //     None => "".to_owned(),
+                // };
+                // _ = open::that(format!("{protocol}://{address}{base_path}"));
+                // _ = open::that(format!("http://{devserver_ip}"));
+            }
             Platform::Liveview => panic!(),
             Platform::Server => panic!(),
-            Platform::Web => {}
-            Platform::Ios => {}
             Platform::Android => {}
+            Platform::Ios => {
+                // command = "xcrun"
+                // args = [
+                // "simctl",
+                // "install",
+                // "booted",
+                // "target/aarch64-apple-ios-sim/debug/bundle/ios/DioxusApp.app",
+                // ] \
+
+                // [tasks.run_ios_sim]
+                // args = ["simctl", "launch", "--console", "booted", "com.dioxuslabs"]
+                // command = "xcrun"
+                // dependencies = ["build_ios_sim", "install_ios_sim"]
+
+                // [tasks.serve-sim]
+                // dependencies = ["build_ios_sim", "install_ios_sim", "run_ios_sim"]
+
+                // APP_PATH="target/aarch64-apple-ios/debug/bundle/ios/DioxusApp.app"
+
+                // # get the device id by jq-ing the json of the device list
+                // xcrun devicectl list devices --json-output target/deviceid.json
+                // DEVICE_UUID=$(jq -r '.result.devices[0].identifier' target/deviceid.json)
+
+                // xcrun devicectl device install app --device "${DEVICE_UUID}" "${APP_PATH}" --json-output target/xcrun.json
+
+                // # get the installation url by jq-ing the json of the device install
+                // INSTALLATION_URL=$(jq -r '.result.installedApplications[0].installationURL' target/xcrun.json)
+
+                // # launch the app
+                // # todo: we can just background it immediately and then pick it up for loading its logs
+                // xcrun devicectl device process launch --device "${DEVICE_UUID}" "${INSTALLATION_URL}"
+
+                // # # launch the app and put it in background
+                // # xcrun devicectl device process launch --no-activate --verbose --device "${DEVICE_UUID}" "${INSTALLATION_URL}" --json-output "${XCRUN_DEVICE_PROCESS_LAUNCH_LOG_DIR}"
+
+                // # # Extract background PID of status app
+                // # STATUS_PID=$(jq -r '.result.process.processIdentifier' "${XCRUN_DEVICE_PROCESS_LAUNCH_LOG_DIR}")
+                // # "${GIT_ROOT}/scripts/wait-for-metro-port.sh"  2>&1
+
+                // # # now that metro is ready, resume the app from background
+                // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
+
+                // Install the app
+                let mut cmd = Command::new("xcrun");
+                cmd.arg("simctl")
+                    .arg("launch")
+                    .arg("--console")
+                    .arg("booted")
+                    .arg(handle.out_file.clone());
+                let mut res = cmd.spawn()?;
+                let res = res.wait().await?;
+            }
         }
 
         Ok(handle)
-    }
-
-    #[allow(unused)]
-    fn open_bundled_ios_app(&self, build: &AppBundle) -> std::io::Result<Option<Child>> {
-        // command = "xcrun"
-        // args = [
-        // "simctl",
-        // "install",
-        // "booted",
-        // "target/aarch64-apple-ios-sim/debug/bundle/ios/DioxusApp.app",
-        // ]
-
-        // [tasks.run_ios_sim]
-        // args = ["simctl", "launch", "--console", "booted", "com.dioxuslabs"]
-        // command = "xcrun"
-        // dependencies = ["build_ios_sim", "install_ios_sim"]
-
-        // [tasks.serve-sim]
-        // dependencies = ["build_ios_sim", "install_ios_sim", "run_ios_sim"]
-
-        // APP_PATH="target/aarch64-apple-ios/debug/bundle/ios/DioxusApp.app"
-
-        // # get the device id by jq-ing the json of the device list
-        // xcrun devicectl list devices --json-output target/deviceid.json
-        // DEVICE_UUID=$(jq -r '.result.devices[0].identifier' target/deviceid.json)
-
-        // xcrun devicectl device install app --device "${DEVICE_UUID}" "${APP_PATH}" --json-output target/xcrun.json
-
-        // # get the installation url by jq-ing the json of the device install
-        // INSTALLATION_URL=$(jq -r '.result.installedApplications[0].installationURL' target/xcrun.json)
-
-        // # launch the app
-        // # todo: we can just background it immediately and then pick it up for loading its logs
-        // xcrun devicectl device process launch --device "${DEVICE_UUID}" "${INSTALLATION_URL}"
-
-        // # # launch the app and put it in background
-        // # xcrun devicectl device process launch --no-activate --verbose --device "${DEVICE_UUID}" "${INSTALLATION_URL}" --json-output "${XCRUN_DEVICE_PROCESS_LAUNCH_LOG_DIR}"
-
-        // # # Extract background PID of status app
-        // # STATUS_PID=$(jq -r '.result.process.processIdentifier' "${XCRUN_DEVICE_PROCESS_LAUNCH_LOG_DIR}")
-        // # "${GIT_ROOT}/scripts/wait-for-metro-port.sh"  2>&1
-
-        // # # now that metro is ready, resume the app from background
-        // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
-        todo!("Open mobile apps")
     }
 
     pub(crate) fn runtime_asset_dir(&self) -> PathBuf {
@@ -246,21 +266,3 @@ impl AppHandle {
         dir
     }
 }
-
-// let start_browser = args.open.unwrap_or_default();
-// let base_path = cfg.dioxus_config.web.app.base_path.clone();
-// let platform = args.platform();
-// // Open the browser
-// if start_browser && platform != Platform::Desktop {
-//     open_browser(base_path, addr, rustls.is_some());
-// }
-
-// /// Open the browser to the address
-// pub(crate) fn open_browser(base_path: Option<String>, address: SocketAddr, https: bool) {
-//     let protocol = if https { "https" } else { "http" };
-//     let base_path = match base_path.as_deref() {
-//         Some(base_path) => format!("/{}", base_path.trim_matches('/')),
-//         None => "".to_owned(),
-//     };
-//     _ = open::that(format!("{protocol}://{address}{base_path}"));
-// }
