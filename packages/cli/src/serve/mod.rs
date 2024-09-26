@@ -124,6 +124,8 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 devserver
                     .send_hotreload(runner.applied_hot_reload_changes())
                     .await;
+
+                runner.client_connected().await;
             }
 
             // Received a message from the devtools server - currently we only use this for

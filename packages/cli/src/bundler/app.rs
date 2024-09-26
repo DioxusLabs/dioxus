@@ -5,6 +5,9 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 
+const EXE_WRITTEN_NAME: &str = "DioxusApp";
+pub const MAC_APP_NAME: &str = "DioxusApp.app";
+
 /// The end result of a build.
 ///
 /// Contains the final asset manifest, the executables, and the workdir.
@@ -278,7 +281,7 @@ impl AppBundle {
 
             Platform::Desktop => {
                 // for now, until we have bundled hotreload, just copy the executable to the output location
-                let work_dir = self.build_dir.join("App.app").join("Contents");
+                let work_dir = self.build_dir.join(MAC_APP_NAME).join("Contents");
                 let app_dir = work_dir.join("MacOS");
                 let assets_dir = work_dir.join("Resources").join("assets");
 
@@ -286,10 +289,22 @@ impl AppBundle {
                 std::fs::create_dir_all(&app_dir)?;
                 std::fs::create_dir_all(&assets_dir)?;
 
-                std::fs::copy(self.cargo_app_exe.clone(), app_dir.join("app"))?;
+                std::fs::copy(self.cargo_app_exe.clone(), app_dir.join(EXE_WRITTEN_NAME))?;
             }
 
-            Platform::Ios => {}
+            Platform::Ios => {
+                // for now, until we have bundled hotreload, just copy the executable to the output location
+                let work_dir = self.build_dir.join(MAC_APP_NAME);
+                let app_dir = work_dir.clone();
+                let assets_dir = work_dir.join("assets");
+
+                std::fs::create_dir_all(&work_dir)?;
+                std::fs::create_dir_all(&app_dir)?;
+                std::fs::create_dir_all(&assets_dir)?;
+
+                std::fs::copy(self.cargo_app_exe.clone(), app_dir.join(EXE_WRITTEN_NAME))?;
+            }
+
             Platform::Server => {}
             Platform::Liveview => {}
             Platform::Android => todo!("android not yet supported!"),
@@ -390,16 +405,16 @@ impl AppBundle {
             Platform::Web => self.build_dir.join("public").join("index.html"),
             Platform::Desktop => self
                 .build_dir
-                .join("App.app")
+                .join(MAC_APP_NAME)
                 .join("Contents")
                 .join("MacOS")
-                .join("app"),
+                .join(EXE_WRITTEN_NAME),
             Platform::Ios => self
                 .build_dir
-                .join("App.app")
-                .join("Contents")
-                .join("MacOS")
-                .join("app"),
+                .join(MAC_APP_NAME)
+                // .join("Contents")
+                // .join("MacOS")
+                .join(EXE_WRITTEN_NAME),
             Platform::Android => todo!(),
             Platform::Server => self.build_dir.join("server"),
             Platform::Liveview => self.build_dir.join("server"),
@@ -413,15 +428,11 @@ impl AppBundle {
             Platform::Web => build_dir.join("public").join("assets"),
             Platform::Desktop => self
                 .build_dir
-                .join("App.app")
+                .join(MAC_APP_NAME)
                 .join("Contents")
                 .join("Resources")
                 .join("assets"),
-            Platform::Ios => build_dir
-                .join("App.app")
-                .join("Contents")
-                .join("Resources")
-                .join("assets"),
+            Platform::Ios => build_dir.join(MAC_APP_NAME).join("assets"),
             Platform::Android => build_dir.join("assets"),
             Platform::Server => build_dir.join("assets"),
             Platform::Liveview => build_dir.join("assets"),
@@ -446,7 +457,7 @@ impl AppBundle {
             Platform::Desktop => {
                 let out_app = destination
                     .join(self.build_dir.file_name().unwrap())
-                    .with_extension("app");
+                    .with_extension(EXE_WRITTEN_NAME);
                 crate::fastfs::copy_asset(&self.build_dir, &out_app)?;
                 Ok(out_app)
             }
@@ -536,12 +547,17 @@ impl AppBundle {
         // write the Info.plist file
         match self.build.build.platform() {
             Platform::Desktop => {
-                let src = include_str!("../../assets/some.plist");
+                let src = include_str!("../../assets/mac.plist");
                 let dest = self
                     .build_dir
-                    .join("App.app")
+                    .join(MAC_APP_NAME)
                     .join("Contents")
                     .join("Info.plist");
+                std::fs::write(dest, src)?;
+            }
+            Platform::Ios => {
+                let src = include_str!("../../assets/ios.plist");
+                let dest = self.build_dir.join(MAC_APP_NAME).join("Info.plist");
                 std::fs::write(dest, src)?;
             }
             _ => {}
@@ -582,5 +598,17 @@ impl AppBundle {
         }
 
         None
+    }
+
+    // returns the .app/.apk/.appimage
+    pub(crate) fn app_root(&self) -> PathBuf {
+        match self.build.build.platform() {
+            Platform::Desktop => self.build_dir.join(MAC_APP_NAME),
+            Platform::Ios => self.build_dir.join(MAC_APP_NAME),
+            Platform::Web => todo!(),
+            Platform::Android => todo!(),
+            Platform::Server => todo!(),
+            Platform::Liveview => todo!(),
+        }
     }
 }

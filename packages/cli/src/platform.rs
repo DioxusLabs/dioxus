@@ -96,10 +96,10 @@ impl Platform {
         match self {
             Platform::Web => "web",
             Platform::Desktop => "desktop",
-            Platform::Liveview => "liveview",
-            Platform::Ios => "ios",
-            Platform::Android => "android",
             Platform::Server => "server",
+            Platform::Liveview => "liveview",
+            Platform::Ios => "mobile",
+            Platform::Android => "mobile",
         }
     }
 }

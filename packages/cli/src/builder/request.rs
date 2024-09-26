@@ -99,6 +99,8 @@ impl BuildRequest {
         )
         .await?;
 
+        tracing::debug!("Assembling app bundle");
+
         // Assemble a bundle from everything
         AppBundle::new(self, app_assets, app_exe, server_exe).await
     }
@@ -285,11 +287,19 @@ impl BuildRequest {
                 cargo_args.push(custom_profile.to_string());
             }
 
-            if let Some(target) = self
-                .targeting_web()
-                .then_some("wasm32-unknown-unknown")
-                .or(self.build.target_args.target.as_deref())
-            {
+            let custom_target = match self.build.platform() {
+                Platform::Web => Some("wasm32-unknown-unknown"),
+                Platform::Ios => match self.build.target_args.device {
+                    Some(true) => Some("aarch64-apple-ios"),
+                    _ => Some("aarch64-apple-ios-sim"),
+                },
+                Platform::Android => todo!(),
+                Platform::Desktop => None,
+                Platform::Server => None,
+                Platform::Liveview => None,
+            };
+
+            if let Some(target) = custom_target.or(self.build.target_args.target.as_deref()) {
                 cargo_args.push("--target".to_string());
                 cargo_args.push(target.to_string());
             }

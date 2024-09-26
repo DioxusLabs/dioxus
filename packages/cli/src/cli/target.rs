@@ -37,6 +37,11 @@ pub(crate) struct TargetArgs {
     #[clap(long)]
     pub(crate) arch: Option<String>,
 
+    /// Are we building for a device or just the simulator
+    /// If device is false, then we'll build for the simulator
+    #[clap(long)]
+    pub(crate) device: Option<bool>,
+
     /// Rustc platform triple
     #[clap(long)]
     pub(crate) target: Option<String>,

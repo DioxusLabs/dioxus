@@ -102,4 +102,11 @@ impl Config {
     pub fn with_mobile_cfg(self, mobile_cfg: dioxus_mobile::Config) -> Self {
         Self { mobile_cfg, ..self }
     }
+
+    /// Set the mobile config.
+    #[cfg(feature = "mobile")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
+    pub fn set_mobile_cfg(&mut self, mobile_cfg: dioxus_mobile::Config) {
+        self.mobile_cfg = mobile_cfg;
+    }
 }

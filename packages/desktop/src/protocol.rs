@@ -84,9 +84,17 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
     );
 
     // If the asset doesn't exist, or starts with `/assets/`, then we'll try to serve out of the bundle
+    // This lets us handle both absolute and relative paths without being too "special"
+    // It just means that our macos bundle is a little "special" because we need to place an `assets`
+    // dir in the `Resources` dir.
+    //
+    // If there's no asset root, we use the cargo manifest dir as the root, or the current dir
     if !uri_path.exists() || uri_path.starts_with("/assets/") {
-        let bundle_root = get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap());
-        println!("bundle root: {bundle_root:?}");
+        let bundle_root = get_asset_root().unwrap_or_else(|| {
+            std::env::var("CARGO_MANIFEST_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| std::env::current_dir().unwrap())
+        });
         let relative_path = uri_path.strip_prefix("/").unwrap();
         uri_path = bundle_root.join(relative_path);
     }
@@ -212,12 +220,7 @@ fn get_asset_root() -> Option<PathBuf> {
 
     let cur_exe = std::env::current_exe().ok()?;
 
-    println!("cur exe: {cur_exe:?}");
-
-    if cur_exe
-        .parent()
-        .map(|p| p.file_name().unwrap().to_str().unwrap())
-        == Some("MacOS")
+    #[cfg(target_os = "macos")]
     {
         return Some(
             cur_exe
@@ -227,6 +230,11 @@ fn get_asset_root() -> Option<PathBuf> {
                 .unwrap()
                 .join("Resources"),
         );
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return Some(cur_exe.parent().unwrap().to_path_buf());
     }
 
     // Use the prescence of the bundle to determine if we're in dev mode

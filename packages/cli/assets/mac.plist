@@ -3,10 +3,10 @@
 <plist version="1.0">
 	<dict>
 		<key>CFBundleDisplayName</key>
-		<string>Dioxus</string>
+		<string>DioxusApp</string>
 
 		<key>CFBundleExecutable</key>
-		<string>app</string>
+		<string>DioxusApp</string>
 
 		<key>CFBundleIconFile</key>
 		<string>icon.icns</string>

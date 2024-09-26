@@ -88,14 +88,15 @@ impl AppRunner {
     }
 
     pub(crate) fn kill(&mut self, platform: Platform) {
-        let res = self.running.remove(&platform);
-        if let Some(mut handle) = res {
-            handle.kill();
-        }
+        self.running.remove(&platform);
     }
 
     /// Open an existing app bundle, if it exists
-    pub(crate) async fn open_existing(&self) {}
+    pub(crate) async fn open_existing(&self) {
+        for (plat, runner) in self.running.iter() {}
+
+        tracing::debug!("todo: open existing app");
+    }
 
     pub(crate) fn attempt_hot_reload(
         &mut self,
@@ -201,5 +202,32 @@ impl AppRunner {
         applied.templates = templates.into_values().collect();
         applied.assets = assets.into_iter().collect();
         applied.unknown_files = unknown_files.into_iter().collect();
+    }
+
+    pub(crate) async fn client_connected(&mut self) {
+        for (platform, runner) in self.running.iter_mut() {
+            // Assign the runtime asset dir to the runner
+            if *platform == Platform::Ios {
+                // xcrun simctl get_app_container booted com.dioxuslabs
+                let res = tokio::process::Command::new("xcrun")
+                    .arg("simctl")
+                    .arg("get_app_container")
+                    .arg("booted")
+                    .arg("com.dioxuslabs")
+                    .output()
+                    .await;
+
+                if let Ok(res) = res {
+                    tracing::debug!("Using runtime asset dir: {:?}", res);
+
+                    if let Ok(out) = String::from_utf8(res.stdout) {
+                        let out = out.trim();
+
+                        tracing::debug!("Setting Runtime asset dir: {out:?}");
+                        runner.runtime_asst_dir = Some(PathBuf::from(out));
+                    }
+                }
+            }
+        }
     }
 }
