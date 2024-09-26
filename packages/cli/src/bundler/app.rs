@@ -411,12 +411,17 @@ impl AppBundle {
         // Legacy assets need to retain their name in case they're referenced in the manifest
         // todo: we should only copy over assets that appear in `img { src: "assets/logo.png" }` to
         // properly deprecate the legacy asset dir
-        self.app_assets
+        let mut assets = self
+            .app_assets
             .assets
             .keys()
             .cloned()
             .chain(self.build.krate.legacy_asset_dir_files())
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        assets.dedup();
+
+        assets
     }
 
     async fn write_metadata(&self) -> Result<()> {

@@ -212,8 +212,8 @@ impl AssetManifest {
 
         // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
         if !optimize {
-            tracing::debug!("Copying asset {from:?} to {destination:?}");
             let to = destination.join(&src.bundled);
+            tracing::debug!("Copying asset {from:?} to {destination:?} at {to:?}");
             std::fs::copy(from, to).expect("Failed to copy asset");
             return Ok(());
         }

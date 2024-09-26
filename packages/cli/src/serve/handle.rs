@@ -245,7 +245,12 @@ impl AppHandle {
         // Find the asset dir for the current app
         let asset_dir = match self.build.build.build.platform() {
             Platform::Web => self.build.build_dir.join("public").join("assets"),
-            Platform::Desktop => self.build.build_dir.join("Contents").join("Resources"),
+            Platform::Desktop => self
+                .build
+                .build_dir
+                .join("App.app")
+                .join("Contents")
+                .join("Resources"),
             Platform::Ios => todo!(),
             Platform::Android => todo!(),
             Platform::Server => todo!(),
