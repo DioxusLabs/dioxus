@@ -2,8 +2,8 @@
 
 use std::any::Any;
 
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
+#[cfg(feature = "tokio_runtime")]
+use tokio::{fs::File, io::AsyncReadExt};
 
 use dioxus_html::{
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
@@ -262,30 +262,58 @@ impl FileEngine for NativeFileEngine {
     }
 
     async fn file_size(&self, file: &str) -> Option<u64> {
-        let file = File::open(file).await.ok()?;
-        Some(file.metadata().await.ok()?.len())
+        #[cfg(feature = "tokio_runtime")]
+        {
+            let file = File::open(file).await.ok()?;
+            Some(file.metadata().await.ok()?.len())
+        }
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            None
+        }
     }
 
     async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
-        let mut file = File::open(file).await.ok()?;
+        #[cfg(feature = "tokio_runtime")]
+        {
+            let mut file = File::open(file).await.ok()?;
 
-        let mut contents = Vec::new();
-        file.read_to_end(&mut contents).await.ok()?;
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents).await.ok()?;
 
-        Some(contents)
+            Some(contents)
+        }
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            None
+        }
     }
 
     async fn read_file_to_string(&self, file: &str) -> Option<String> {
-        let mut file = File::open(file).await.ok()?;
+        #[cfg(feature = "tokio_runtime")]
+        {
+            let mut file = File::open(file).await.ok()?;
 
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).await.ok()?;
+            let mut contents = String::new();
+            file.read_to_string(&mut contents).await.ok()?;
 
-        Some(contents)
+            Some(contents)
+        }
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            None
+        }
     }
 
     async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
-        let file = File::open(file).await.ok()?;
-        Some(Box::new(file))
+        #[cfg(feature = "tokio_runtime")]
+        {
+            let file = File::open(file).await.ok()?;
+            Some(Box::new(file))
+        }
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            None
+        }
     }
 }
