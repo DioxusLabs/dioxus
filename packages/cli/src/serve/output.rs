@@ -250,7 +250,8 @@ impl Output {
     }
 
     pub fn push_cargo_log(&mut self, message: CompilerMessage) {
-        self.push_log(TraceMsg::cargo(message));
+        // currently disabled...
+        // self.push_log(TraceMsg::cargo(message));
     }
 
     /// Add a message from stderr to the logs

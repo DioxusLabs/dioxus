@@ -68,13 +68,13 @@ impl From<PackageType> for tauri_bundler::PackageType {
 
 impl Bundle {
     pub(crate) async fn bundle(mut self) -> anyhow::Result<()> {
-        let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
+        let dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        self.build_arguments.resolve(&mut dioxus_crate)?;
+        self.build_arguments.resolve(&dioxus_crate)?;
 
         // Build the app
-        self.build_arguments.build(&mut dioxus_crate).await?;
+        self.build_arguments.build(&dioxus_crate).await?;
 
         // copy the binary to the out dir
         let package = dioxus_crate.package();

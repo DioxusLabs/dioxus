@@ -185,7 +185,7 @@ impl DioxusCrate {
     }
 
     /// Get the features required to build for the given platform
-    pub(crate) fn feature_for_platform(&mut self, platform: Platform) -> Option<String> {
+    pub(crate) fn feature_for_platform(&self, platform: Platform) -> Option<String> {
         let package = self.package();
 
         // Try to find the feature that activates the dioxus feature for the given platform

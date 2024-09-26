@@ -1,13 +1,10 @@
 use super::*;
 use crate::config::AddressArguments;
-use crate::settings;
-use crate::DioxusCrate;
-use crate::Platform;
+use crate::{settings, DioxusCrate, Platform};
 use anyhow::Context;
 use build::BuildArgs;
-use crossterm::tty::IsTty;
 
-/// Run the WASM project on dev-server
+/// Serve the project
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 #[clap(name = "serve")]
@@ -53,19 +50,9 @@ pub(crate) struct ServeArgs {
 impl ServeArgs {
     /// Start the tui, builder, etc by resolving the arguments and then running the actual top-level serve function
     pub(crate) async fn serve(mut self) -> Result<()> {
-        let mut krate = DioxusCrate::new(&self.build_arguments.target_args)
+        let krate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        self.resolve(&mut krate)?;
-
-        // Give us some space before we start printing things...
-        println!();
-
-        crate::serve::serve_all(self, krate).await
-    }
-
-    /// Resolve the serve arguments from the arguments or the config
-    fn resolve(&mut self, crate_config: &mut DioxusCrate) -> Result<()> {
         // Set config settings.
         let settings = settings::CliSettings::load();
 
@@ -89,10 +76,10 @@ impl ServeArgs {
             self.always_on_top = Some(settings.always_on_top.unwrap_or(true))
         }
 
-        crate_config.config.desktop.always_on_top = self.always_on_top.unwrap_or(true);
+        // crate_config.config.desktop.always_on_top = self.always_on_top.unwrap_or(true);
 
         // Resolve the build arguments
-        self.build_arguments.resolve(crate_config)?;
+        // self.build_arguments.resolve(crate_config)?;
 
         // Since this is a serve, adjust the outdir to be target/dx-dist/<crate name>
         // let mut dist_dir = crate_config.bundle_dir(self.b);
@@ -103,7 +90,10 @@ impl ServeArgs {
 
         // crate_config.config.application.out_dir = dist_dir.join(crate_config.executable_name());
 
-        Ok(())
+        // Give us some space before we start printing things...
+        println!();
+
+        crate::serve::serve_all(self, krate).await
     }
 
     pub(crate) fn should_hotreload(&self) -> bool {
@@ -115,6 +105,8 @@ impl ServeArgs {
     }
 
     pub(crate) fn is_interactive_tty(&self) -> bool {
+        use crossterm::tty::IsTty;
+
         std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
     }
 

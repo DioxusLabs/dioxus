@@ -123,15 +123,15 @@ pub(crate) struct TargetArgs {
 
 impl BuildArgs {
     pub(crate) async fn run(mut self) -> anyhow::Result<()> {
-        let mut dioxus_crate =
+        let krate =
             DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 
-        self.build(&mut dioxus_crate).await?;
+        self.build(&krate).await?;
 
         Ok(())
     }
 
-    pub(crate) async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
+    pub(crate) async fn build(&mut self, dioxus_crate: &DioxusCrate) -> Result<()> {
         self.resolve(dioxus_crate)?;
 
         // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
@@ -147,10 +147,12 @@ impl BuildArgs {
     ///
     /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
     /// fullstack variant even if they omitted the `--fullstack` flag.
-    pub(crate) fn resolve(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
+    pub(crate) fn resolve(&mut self, dioxus_crate: &DioxusCrate) -> Result<()> {
         // Inherit the platform from the args, or auto-detect it
         if self.platform.is_none() {
-            let platform = self.auto_detect_platform(dioxus_crate).ok_or_else(|| anyhow::anyhow!("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>`"))?;
+            let platform = self.auto_detect_platform(dioxus_crate).ok_or_else(|| {
+                anyhow::anyhow!("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>`")
+            })?;
             self.platform = Some(platform);
         }
 
