@@ -49,7 +49,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     let mut devserver = DevServer::start(&args, &krate)?;
     let mut screen = Output::start(&args).expect("Failed to open terminal logger");
     let mut watcher = Watcher::start(&args, &krate);
-    let mut runner = AppRunner::start();
+    let mut runner = AppRunner::start(&krate, &watcher.ignore);
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
@@ -93,7 +93,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = watcher.attempt_hot_reload(files, &runner) {
+                if let Some(hr) = runner.attempt_hot_reload(files) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty()
                         && hr.assets.is_empty()
@@ -113,7 +113,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                     builder.rebuild(args.build_arguments.clone());
 
                     // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
-                    watcher.clear_hot_reload_changes();
+                    runner.clear_hot_reload_changes();
 
                     // Tell the server to show a loading page for any new requests
                     devserver.start_build().await;
@@ -123,9 +123,9 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
             // Run the server in the background
             // Waiting for updates here lets us tap into when clients are added/removed
             ServeUpdate::NewConnection => {
-                if let Some(msg) = watcher.applied_hot_reload_changes() {
-                    devserver.send_hotreload(msg).await;
-                }
+                devserver
+                    .send_hotreload(runner.applied_hot_reload_changes())
+                    .await;
             }
 
             // Received a message from the devtools server - currently we only use this for
@@ -150,7 +150,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 match update {
                     BuildUpdate::Progress { .. } => {}
                     BuildUpdate::CompilerMessage { message } => {
-                        // screen.push_log(TraceMsg::cargo(message));
+                        screen.push_cargo_log(message);
                     }
                     BuildUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {}", err);

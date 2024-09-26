@@ -1,17 +1,38 @@
-use super::{AppHandle, ServeUpdate};
-use crate::{bundler::AppBundle, Platform, Result};
+use super::{hot_reloading_file_map::HotreloadError, AppHandle, ServeUpdate};
+use crate::{bundler::AppBundle, Platform, Result, TraceSrc};
+use crate::{serve::hot_reloading_file_map::FileMap, DioxusCrate};
+use dioxus_devtools_types::HotReloadMsg;
+use dioxus_html::HtmlCtx;
 use futures_util::{future::OptionFuture, stream::FuturesUnordered};
-use std::{collections::HashMap, net::SocketAddr};
+use ignore::gitignore::Gitignore;
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    path::PathBuf,
+};
 use tokio_stream::StreamExt;
 
 pub(crate) struct AppRunner {
     pub(crate) running: HashMap<Platform, AppHandle>,
+    pub(crate) krate: DioxusCrate,
+    pub(crate) file_map: FileMap,
+    pub(crate) applied_hot_reload_message: HotReloadMsg,
 }
 
 impl AppRunner {
-    pub(crate) fn start() -> Self {
+    pub(crate) fn start(krate: &DioxusCrate, ignore: &Gitignore) -> Self {
+        // Probe the entire project looking for our rsx calls
+        // Whenever we get an update from the file watcher, we'll try to hotreload against this file map
+        let file_map = FileMap::create_with_filter::<HtmlCtx>(krate.crate_dir(), |path| {
+            ignore.matched(path, path.is_dir()).is_ignore()
+        })
+        .unwrap();
+
         Self {
             running: Default::default(),
+            file_map,
+            applied_hot_reload_message: Default::default(),
+            krate: krate.clone(),
         }
     }
 
@@ -72,4 +93,122 @@ impl AppRunner {
 
     /// Open an existing app bundle, if it exists
     pub(crate) async fn open_existing(&self) {}
+
+    pub(crate) fn attempt_hot_reload(
+        &mut self,
+        modified_files: Vec<PathBuf>,
+    ) -> Option<HotReloadMsg> {
+        // If we have any changes to the rust files, we need to update the file map
+        let crate_dir = self.krate.crate_dir();
+        let mut templates = vec![];
+
+        // Prepare the hotreload message we need to send
+        let mut edited_rust_files = Vec::new();
+        let mut assets = Vec::new();
+        let mut unknown_files = vec![];
+
+        for path in modified_files {
+            // for various assets that might be linked in, we just try to hotreloading them forcefully
+            // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
+            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+                continue;
+            };
+
+            tracing::debug!("Attempting to hotreload {path:?}");
+
+            match ext {
+                "rs" => edited_rust_files.push(path),
+
+                // Look through the runners to see if any of them have an asset that matches the path
+                _ => {
+                    for runner in self.running.values() {
+                        if let Some(bundled_name) = runner
+                            .app
+                            .hotreload_asset(&runner.runtime_asset_dir(), &path)
+                        {
+                            tracing::debug!(
+                                "Hotreloading asset {bundled_name:?} in {:?}",
+                                runner.app.app_assets
+                            );
+                            assets.push(bundled_name);
+                        } else {
+                            tracing::debug!(
+                                "Hotreloading asset {path:?} in {:?} which doesn't have it",
+                                runner.app.app_assets
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        assets.dedup();
+
+        // Process the rust files
+        for rust_file in edited_rust_files {
+            match self.file_map.update_rsx::<HtmlCtx>(&rust_file, &crate_dir) {
+                Ok(hotreloaded_templates) => {
+                    templates.extend(hotreloaded_templates);
+                }
+
+                // If the file is not reloadable, we need to rebuild
+                Err(HotreloadError::Notreloadable) => return None,
+
+                // The rust file may have failed to parse, but that is most likely
+                // because the user is in the middle of adding new code
+                // We just ignore the error and let Rust analyzer warn about the problem
+                Err(HotreloadError::Parse) => {}
+
+                // Otherwise just log the error
+                Err(err) => {
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "Error hotreloading file {rust_file:?}: {err}")
+                }
+            }
+        }
+
+        let msg = HotReloadMsg {
+            templates,
+            assets,
+            unknown_files,
+        };
+
+        self.add_hot_reload_message(&msg);
+
+        Some(msg)
+    }
+
+    /// Get any hot reload changes that have been applied since the last full rebuild
+    pub(crate) fn applied_hot_reload_changes(&mut self) -> HotReloadMsg {
+        self.applied_hot_reload_message.clone()
+    }
+
+    /// Clear the hot reload changes. This should be called any time a new build is starting
+    pub(crate) fn clear_hot_reload_changes(&mut self) {
+        self.applied_hot_reload_message = Default::default();
+    }
+
+    /// Store the hot reload changes for any future clients that connect
+    fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
+        let applied = &mut self.applied_hot_reload_message;
+
+        // Merge the assets, unknown files, and templates
+        // We keep the newer change if there is both a old and new change
+        let mut templates: HashMap<String, _> = std::mem::take(&mut applied.templates)
+            .into_iter()
+            .map(|template| (template.location.clone(), template))
+            .collect();
+        let mut assets: HashSet<PathBuf> =
+            std::mem::take(&mut applied.assets).into_iter().collect();
+        let mut unknown_files: HashSet<PathBuf> = std::mem::take(&mut applied.unknown_files)
+            .into_iter()
+            .collect();
+        for template in &msg.templates {
+            templates.insert(template.location.clone(), template.clone());
+        }
+        assets.extend(msg.assets.iter().cloned());
+        unknown_files.extend(msg.unknown_files.iter().cloned());
+        applied.templates = templates.into_values().collect();
+        applied.assets = assets.into_iter().collect();
+        applied.unknown_files = unknown_files.into_iter().collect();
+    }
 }

@@ -40,11 +40,13 @@ impl DioxusCrate {
         } else {
             TargetKind::Bin
         };
+
         let target_name = target
             .example
             .clone()
             .or(target.bin.clone())
             .unwrap_or(package_name);
+
         let main_package = &krates[package];
         let target = main_package
             .targets
@@ -258,6 +260,34 @@ impl DioxusCrate {
         write!(buf_writer, "{}", config)?;
 
         Ok(())
+    }
+
+    /// Create a new gitignore map for this target crate
+    pub fn gitignore(&self) -> ignore::gitignore::Gitignore {
+        let crate_dir = self.crate_dir();
+
+        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(&crate_dir);
+        ignore_builder.add(crate_dir.join(".gitignore"));
+
+        let workspace_dir = self.workspace_dir();
+        ignore_builder.add(workspace_dir.join(".gitignore"));
+
+        let excluded_paths = vec![
+            ".git",
+            ".github",
+            ".vscode",
+            "target",
+            "node_modules",
+            "dist",
+        ];
+
+        for path in excluded_paths {
+            ignore_builder
+                .add_line(None, path)
+                .expect("failed to add path to file excluder");
+        }
+
+        ignore_builder.build().unwrap()
     }
 }
 

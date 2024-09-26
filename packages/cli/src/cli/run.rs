@@ -24,11 +24,12 @@ impl RunArgs {
 
         println!("Build args: {:#?}", self.build_args);
 
-        let bundle = Builder::start(&mut dioxus_crate, self.build_args.clone())?
+        let bundle = Builder::start(&dioxus_crate, self.build_args.clone())?
             .finish()
             .await?;
 
-        let mut runner = crate::serve::AppRunner::start();
+        let ignore = dioxus_crate.gitignore();
+        let mut runner = crate::serve::AppRunner::start(&dioxus_crate, &ignore);
 
         let devserver_ip = "127.0.0.1:8080".parse().unwrap();
         let fullstack_ip = "127.0.0.1:6955".parse().unwrap();

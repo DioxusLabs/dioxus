@@ -2,6 +2,7 @@ use crate::{
     serve::{ansi_buffer::AnsiStringBuffer, Builder, DevServer, ServeUpdate, Watcher},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
+use cargo_metadata::CompilerMessage;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -246,6 +247,10 @@ impl Output {
     /// Push a TraceMsg to be printed on the next render
     pub fn push_log(&mut self, message: TraceMsg) {
         self.pending_logs.push_front(message);
+    }
+
+    pub fn push_cargo_log(&mut self, message: CompilerMessage) {
+        self.push_log(TraceMsg::cargo(message));
     }
 
     /// Add a message from stderr to the logs
