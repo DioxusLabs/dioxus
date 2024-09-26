@@ -3,6 +3,7 @@ use crate::Platform;
 use crate::{build::TargetArgs, config::DioxusConfig};
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::sync::Arc;
@@ -24,7 +25,20 @@ pub(crate) struct DioxusCrate {
 pub(crate) static CLIENT_PROFILE_WEB: &str = "dioxus-client-web";
 pub(crate) static SERVER_PROFILE: &str = "dioxus-server";
 
+static CURRENT_CRATE: OnceCell<DioxusCrate> = OnceCell::new();
+
 impl DioxusCrate {
+    /// Set the current global crate for the entire app
+    pub(crate) fn set(target: &TargetArgs) -> Result<&'static Self, CrateConfigError> {
+        let crate_ = Self::new(target)?;
+        CURRENT_CRATE.set(crate_).unwrap();
+        Ok(&Self::current())
+    }
+
+    pub(crate) fn current() -> &'static DioxusCrate {
+        CURRENT_CRATE.get().unwrap()
+    }
+
     pub(crate) fn new(target: &TargetArgs) -> Result<Self, CrateConfigError> {
         let mut cmd = Cmd::new();
         cmd.features(target.features.clone());

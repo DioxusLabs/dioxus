@@ -1,6 +1,6 @@
 use crate::{
-    BuildUpdate, Builder, DioxusCrate, Platform, Result, ServeArgs, TraceController, TraceMsg,
-    TraceSrc,
+    BuildUpdate, Builder, DioxusCrate, Error, Platform, Result, ServeArgs, TraceController,
+    TraceMsg, TraceSrc,
 };
 
 mod ansi_buffer;
@@ -54,7 +54,6 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
     tracing::info!(
-        // r#"───────────────────────────────────────────────────────────────────────────────────────
         r#"Serving your Dioxus app: {} 🚀
 
                 - Press `ctrl+c` to exit the server
@@ -64,11 +63,10 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
                 To learn more, check out the docs at https://dioxuslabs.com/learn/0.6/getting_started
     "#,
-        //    ───────────────────────────────────────────────────────────────────────────────────────"#,
         krate.executable_name()
     );
 
-    let err: Result<(), crate::Error> = loop {
+    let err: Result<(), Error> = loop {
         // Draw the state of the server to the screen
         screen.render(&args, &krate, &builder, &devserver, &watcher);
 

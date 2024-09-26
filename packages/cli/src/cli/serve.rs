@@ -1,8 +1,6 @@
 use super::*;
-use crate::config::AddressArguments;
-use crate::{settings, DioxusCrate, Platform};
+use crate::{build::BuildArgs, config::AddressArguments, settings, DioxusCrate, Platform};
 use anyhow::Context;
-use build::BuildArgs;
 
 /// Serve the project
 #[derive(Clone, Debug, Default, Parser)]
