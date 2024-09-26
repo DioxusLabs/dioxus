@@ -170,6 +170,7 @@ async fn launch_server(
         println!("Listening on http://{address}, serving from {:?}", cwd);
         axum::serve(listener, router).await.unwrap();
     }
+
     #[cfg(not(feature = "axum"))]
     {
         panic!("Launching with dioxus fullstack requires the axum feature. If you are using a community fullstack adapter, please check the documentation for that adapter to see how to launch the application.");

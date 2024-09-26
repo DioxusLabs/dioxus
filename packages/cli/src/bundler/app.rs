@@ -64,7 +64,12 @@ pub const MAC_APP_NAME: &str = "DioxusApp.app";
 /// The format of each build will follow the name plus some metadata such that when distributing you
 /// can easily trim off the metadata.
 ///
-/// The idea here is that we can run any of the programs in the same way that they're deployed
+/// The idea here is that we can run any of the programs in the same way that they're deployed.
+///
+///
+/// ## Bundle structure links
+/// - apple: https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle
+/// - appimage: https://docs.appimage.org/packaging-guide/manual.html#ref-manual
 #[derive(Debug)]
 pub(crate) struct AppBundle {
     pub(crate) build: BuildRequest,
@@ -483,7 +488,12 @@ impl AppBundle {
 
     async fn write_server_executable(&self) -> Result<()> {
         if let Some(server) = &self.cargo_server_exe {
-            std::fs::copy(server, self.build_dir.join("server"))?;
+            let to = self.build_dir.join("server");
+            tracing::debug!("Copying server executable from {server:?} to {to:?}");
+
+            // Remove the old server executable if it exists, since we might corrupt it :(
+            _ = std::fs::remove_file(&to);
+            std::fs::copy(server, to)?;
         }
 
         Ok(())

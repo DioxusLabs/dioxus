@@ -78,10 +78,6 @@ impl AppHandle {
                 self.build.build.krate.crate_dir().display().to_string(),
             ),
             (
-                "SIMCTL_CHILD_CARGO_MANIFEST_DIR",
-                self.build.build.krate.crate_dir().display().to_string(),
-            ),
-            (
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
                 devserver_ip.to_string(),
             ),
@@ -94,9 +90,11 @@ impl AppHandle {
         ];
 
         if let Some(addr) = fullstack_address {
+            tracing::debug!("Setting server ip and port to {addr:?}");
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
-        };
+        } else {
+        }
 
         // Launch the server if we have one
         if let Some(server) = self.build.server() {

@@ -78,6 +78,8 @@ impl DevServer {
             .then(|| get_available_port(devserver_ip))
             .flatten();
 
+        tracing::debug!("Should we proxy port?: {proxied_port:?}");
+
         let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_ip, port));
 
         // Set up the router with some shared state
