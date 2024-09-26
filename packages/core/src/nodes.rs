@@ -889,18 +889,6 @@ where
         })
     }
 }
-pub struct OptionDisplayMarker;
-impl<T> IntoDynNode<OptionDisplayMarker> for Option<T>
-where
-    T: Display,
-{
-    fn into_dyn_node(self) -> DynamicNode {
-        todo!()
-        // DynamicNode::Text(VText {
-        //     value: self.to_string(),
-        // })
-    }
-}
 
 impl<T: IntoDynNode> IntoDynNode for Option<T> {
     fn into_dyn_node(self) -> DynamicNode {
@@ -911,34 +899,6 @@ impl<T: IntoDynNode> IntoDynNode for Option<T> {
     }
 }
 
-// // struct DisplayMarker;
-// // impl<T: Display> IntoDynNode<DisplayMarker> for Option<T> {
-// //     fn into_dyn_node(self) -> DynamicNode {
-// //         todo!()
-// //     }
-// // }
-
-// impl IntoDynNode for &str {
-//     fn into_dyn_node(self) -> DynamicNode {
-//         DynamicNode::Text(VText {
-//             value: self.to_string(),
-//         })
-//     }
-// }
-// impl IntoDynNode for String {
-//     fn into_dyn_node(self) -> DynamicNode {
-//         DynamicNode::Text(VText { value: self })
-//     }
-// }
-// impl IntoDynNode for Arguments<'_> {
-//     fn into_dyn_node(self) -> DynamicNode {
-//         DynamicNode::Text(VText {
-//             value: self.to_string(),
-//         })
-//     }
-// }
-
-// Note that we're using the E as a generic but this is never crafted anyways.
 pub struct FromNodeIterator;
 impl<T, I> IntoDynNode<FromNodeIterator> for T
 where
