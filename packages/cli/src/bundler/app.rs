@@ -199,6 +199,8 @@ impl AppBundle {
             build,
         };
 
+        tracing::debug!("Assembling app bundle");
+
         bundle.build.status_start_bundle();
         bundle.prepare_build_dir()?;
         bundle.write_main_executable().await?;
@@ -297,6 +299,7 @@ impl AppBundle {
                 std::fs::copy(self.cargo_app_exe.clone(), app_dir.join(EXE_WRITTEN_NAME))?;
             }
 
+            // Follows a different format than mac
             Platform::Ios => {
                 // for now, until we have bundled hotreload, just copy the executable to the output location
                 let work_dir = self.build_dir.join(MAC_APP_NAME);
@@ -310,9 +313,13 @@ impl AppBundle {
                 std::fs::copy(self.cargo_app_exe.clone(), app_dir.join(EXE_WRITTEN_NAME))?;
             }
 
+            Platform::Android => {
+                // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
+                todo!("android not yet supported!")
+            }
+
             Platform::Server => {}
             Platform::Liveview => {}
-            Platform::Android => todo!("android not yet supported!"),
         }
 
         Ok(())

@@ -92,9 +92,14 @@ impl AppRunner {
     ) -> Result<&AppHandle> {
         let platform = app.build.build.platform();
 
+        self.kill(platform);
+
+        // wait a tiny sec for the processes to die
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
         // Start the new app before we kill the old one to give it a little bit of time
         let handle = AppHandle::start(app, devserver_ip, fullstack_address).await?;
-        self.kill(platform);
+
         self.running.insert(platform, handle);
 
         Ok(self.running.get(&platform).unwrap())
@@ -106,8 +111,6 @@ impl AppRunner {
 
     /// Open an existing app bundle, if it exists
     pub(crate) async fn open_existing(&self) {
-        for (plat, runner) in self.running.iter() {}
-
         tracing::debug!("todo: open existing app");
     }
 
@@ -122,7 +125,6 @@ impl AppRunner {
         // Prepare the hotreload message we need to send
         let mut edited_rust_files = Vec::new();
         let mut assets = Vec::new();
-        let mut unknown_files = vec![];
 
         for path in modified_files {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
@@ -174,7 +176,7 @@ impl AppRunner {
         let msg = HotReloadMsg {
             templates,
             assets,
-            unknown_files,
+            unknown_files: vec![],
         };
 
         self.add_hot_reload_message(&msg);

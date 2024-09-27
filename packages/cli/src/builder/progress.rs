@@ -190,4 +190,8 @@ impl BuildRequest {
         //     platform: self.target_platform,
         // });
     }
+
+    pub(crate) fn status_optimizing_wasm(&self) {
+        todo!()
+    }
 }

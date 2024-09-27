@@ -90,16 +90,13 @@ impl BuildRequest {
                 Ok((app_exe, app_assets))
             },
             async {
-                if self.build.fullstack {
-                    self.build_cargo(true).await.map(Some)
-                } else {
-                    Ok(None)
+                if !self.build.fullstack {
+                    return Ok(None) as Result<_, anyhow::Error>;
                 }
+                Ok(Some(self.build_cargo(true).await?))
             },
         )
         .await?;
-
-        tracing::debug!("Assembling app bundle");
 
         // Assemble a bundle from everything
         AppBundle::new(self, app_assets, app_exe, server_exe).await

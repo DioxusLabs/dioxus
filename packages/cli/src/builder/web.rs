@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
+use crate::BuildRequest;
 use crate::TraceSrc;
-use crate::{BuildRequest, Platform};
 use anyhow::Context;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
@@ -51,6 +51,8 @@ impl BuildRequest {
         if !self.build.release {
             return Ok(());
         };
+
+        self.status_optimizing_wasm();
 
         #[cfg(feature = "optimizations")]
         {
@@ -257,24 +259,9 @@ impl BuildRequest {
             ResourceType::Script => "web.resource.script",
         };
 
-        let message = format!(
+        tracing::debug!(
             "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
         );
-
-        // _ = self.progress.unbounded_send(BuildUpdateProgress {
-        //     platform: self.platform(),
-        //     stage: Stage::OptimizingWasm,
-        //     update: UpdateStage::AddMessage(BuildMessage {
-        //         level: Level::WARN,
-        //         message: MessageType::Text(message),
-        //         source: MessageSource::Build,
-        //     }),
-        // });
-    }
-
-    /// Check if the build is targeting the web platform
-    pub(crate) fn targeting_web(&self) -> bool {
-        self.build.platform() == Platform::Web
     }
 }
 

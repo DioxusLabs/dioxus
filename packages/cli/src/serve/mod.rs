@@ -1,6 +1,6 @@
 use crate::{
     BuildUpdate, Builder, DioxusCrate, Error, Platform, Result, ServeArgs, TraceController,
-    TraceMsg, TraceSrc,
+    TraceSrc,
 };
 
 mod ansi_buffer;
