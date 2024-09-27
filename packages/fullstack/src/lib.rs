@@ -62,7 +62,7 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use dioxus_ssr::incremental::{IncrementalRenderer, IncrementalRendererConfig};
+    pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
 
     pub use dioxus_server_macro::*;
     pub use server_fn::{self, ServerFn as _, ServerFnError};

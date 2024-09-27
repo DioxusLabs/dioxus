@@ -121,7 +121,7 @@ impl Files {
 
     fn enter_dir(&mut self, dir_id: usize) {
         let path = &self.path_names[dir_id];
-        self.current_path = path.clone();
+        self.current_path.clone_from(path);
         self.reload_path_list();
     }
 

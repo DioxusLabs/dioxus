@@ -658,7 +658,7 @@ impl HasMediaData for web_sys::Event {
 }
 
 impl HasFileData for web_sys::Event {
-    #[cfg(feature = "file-engine")]
+    #[cfg(feature = "file_engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         let files = self
             .dyn_ref()

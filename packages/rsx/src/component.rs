@@ -253,7 +253,7 @@ impl Component {
     }
 
     // Iterate over the props of the component (without spreads, key, and custom attributes)
-    pub(crate) fn component_props(&self) -> impl Iterator<Item = &Attribute> {
+    pub fn component_props(&self) -> impl Iterator<Item = &Attribute> {
         self.fields
             .iter()
             .filter(move |attr| !attr.name.is_likely_key())

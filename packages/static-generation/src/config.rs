@@ -175,9 +175,9 @@ impl Config {
         FullstackHTMLTemplate::new(&cfg.unwrap())
     }
 
-    pub(crate) fn create_cache(&mut self) -> dioxus_ssr::incremental::IncrementalRenderer {
-        let mut builder = dioxus_ssr::incremental::IncrementalRenderer::builder()
-            .static_dir(self.output_dir.clone());
+    pub(crate) fn create_cache(&mut self) -> dioxus_isrg::IncrementalRenderer {
+        let mut builder =
+            dioxus_isrg::IncrementalRenderer::builder().static_dir(self.output_dir.clone());
         if let Some(map_path) = self.map_path.take() {
             builder = builder.map_path(map_path);
         }

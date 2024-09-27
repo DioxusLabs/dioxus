@@ -5,13 +5,13 @@
 pub mod assets;
 pub mod builder;
 pub mod cli;
+pub mod config;
 pub mod dioxus_crate;
 pub mod dx_build_info;
 pub mod error;
 pub mod metadata;
 pub mod serve;
 pub mod settings;
-pub mod tools;
 pub mod tracer;
 
 pub(crate) use cli::*;

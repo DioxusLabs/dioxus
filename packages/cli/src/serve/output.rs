@@ -1,3 +1,4 @@
+use crate::config::{AddressArguments, Platform};
 use crate::{
     builder::{BuildResult, UpdateStage},
     builder::{Stage, TargetPlatform, UpdateBuildProgress},
@@ -18,8 +19,7 @@ use crossterm::{
     tty::IsTty,
     ExecutableCommand,
 };
-use dioxus_cli_config::{AddressArguments, Platform};
-use dioxus_hot_reload::ClientMsg;
+use dioxus_devtools::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, TerminalOptions, Viewport};
 use std::{
@@ -36,7 +36,7 @@ use tokio::{
 };
 use tracing::Level;
 
-mod render;
+use super::render;
 
 // How many lines should be scroll on each mouse scroll or arrow key input.
 const SCROLL_SPEED: u16 = 2;
@@ -47,7 +47,7 @@ const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
 
 #[derive(Default)]
 pub struct BuildProgress {
-    current_builds: HashMap<TargetPlatform, ActiveBuild>,
+    pub(crate) current_builds: HashMap<TargetPlatform, ActiveBuild>,
 }
 
 impl BuildProgress {
@@ -700,9 +700,9 @@ impl Output {
 
 #[derive(Default, Debug, PartialEq)]
 pub struct ActiveBuild {
-    stage: Stage,
-    progress: f64,
-    failed: Option<String>,
+    pub stage: Stage,
+    pub progress: f64,
+    pub failed: Option<String>,
 }
 
 impl ActiveBuild {
@@ -727,7 +727,7 @@ impl ActiveBuild {
         }
     }
 
-    fn make_spans(&self, area: Rect) -> Vec<Span> {
+    pub fn make_spans(&self, area: Rect) -> Vec<Span> {
         let mut spans = Vec::new();
 
         let message = match self.stage {
@@ -757,7 +757,7 @@ impl ActiveBuild {
         spans
     }
 
-    fn max_layout_size(&self) -> u16 {
+    pub fn max_layout_size(&self) -> u16 {
         let progress_size = 4;
         let stage_size = self.stage.to_string().len() as u16;
         let brace_size = 2;
