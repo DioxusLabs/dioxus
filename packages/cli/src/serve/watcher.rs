@@ -15,7 +15,7 @@ use std::{path::PathBuf, time::Duration};
 /// This is where we do workspace discovery and recursively listen for changes in Rust files and asset
 /// directories.
 pub(crate) struct Watcher {
-    pub ignore: Gitignore,
+    ignore: Gitignore,
     rx: UnboundedReceiver<notify::Event>,
     _krate: DioxusCrate,
     _tx: UnboundedSender<notify::Event>,
@@ -51,12 +51,11 @@ impl Watcher {
             }
         };
 
-        // If we are in WSL, we must use Notify's poll watcher due to an event propagation issue.
-        let is_wsl = is_wsl();
         const NOTIFY_ERROR_MSG: &str = "Failed to create file watcher.\nEnsure you have the required permissions to watch the specified directories.";
 
         // Create the file watcher.
-        let mut watcher: Box<dyn notify::Watcher> = match is_wsl {
+        // If we are in WSL, we must use Notify's poll watcher due to an event propagation issue.
+        let mut watcher: Box<dyn notify::Watcher> = match is_wsl() {
             true => {
                 let poll_interval =
                     Duration::from_secs(serve.wsl_file_poll_interval.unwrap_or(2) as u64);

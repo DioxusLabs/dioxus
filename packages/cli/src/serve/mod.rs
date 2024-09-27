@@ -49,7 +49,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     let mut devserver = WebServer::start(&args, &krate)?;
     let mut screen = Output::start(&args).expect("Failed to open terminal logger");
     let mut watcher = Watcher::start(&args, &krate);
-    let mut runner = AppRunner::start(&krate, &watcher.ignore);
+    let mut runner = AppRunner::start(&krate);
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now

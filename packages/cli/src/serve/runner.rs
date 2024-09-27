@@ -21,9 +21,10 @@ pub(crate) struct AppRunner {
 }
 
 impl AppRunner {
-    pub(crate) fn start(krate: &DioxusCrate, ignore: &Gitignore) -> Self {
+    pub(crate) fn start(krate: &DioxusCrate) -> Self {
         // Probe the entire project looking for our rsx calls
         // Whenever we get an update from the file watcher, we'll try to hotreload against this file map
+        let ignore = krate.gitignore();
         let file_map = FileMap::create_with_filter::<HtmlCtx>(krate.crate_dir(), |path| {
             ignore.matched(path, path.is_dir()).is_ignore()
         })
