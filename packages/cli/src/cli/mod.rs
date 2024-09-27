@@ -13,6 +13,7 @@ pub(crate) mod serve;
 pub(crate) mod target;
 pub(crate) mod translate;
 
+pub(crate) use build::*;
 pub(crate) use serve::*;
 pub(crate) use target::*;
 
@@ -24,7 +25,7 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::{
     fmt::Display,
-    fs::{remove_dir_all, File},
+    fs::File,
     io::{Read, Write},
     path::PathBuf,
     process::{Command, Stdio},

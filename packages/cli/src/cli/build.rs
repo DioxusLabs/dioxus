@@ -1,5 +1,5 @@
 use super::*;
-use crate::{dioxus_crate::DioxusCrate, Builder, Platform};
+use crate::{Builder, DioxusCrate, Platform};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///

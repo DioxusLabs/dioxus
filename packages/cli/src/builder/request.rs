@@ -1,10 +1,9 @@
 use super::progress::ProgressTx;
 use crate::build::BuildArgs;
-use crate::bundler::AppBundle;
 use crate::dioxus_crate::DioxusCrate;
-use crate::Platform;
 use crate::{assets::AssetManifest, link::LINK_OUTPUT_ENV_VAR, TraceSrc};
 use crate::{link::InterceptedArgs, Result};
+use crate::{AppBundle, Platform};
 use anyhow::Context;
 use serde::Deserialize;
 use std::{path::PathBuf, process::Stdio};
@@ -48,33 +47,12 @@ impl BuildRequest {
         }
     }
 
-    /// The final output name of the app, primarly to be used when bundled
-    ///
-    /// Needs to be very disambiguated
-    /// Eg: my-app-web-macos-x86_64.app
-    /// {app_name}-{platform}-{arch}
-    ///
-    /// Does not include the extension
-    pub(crate) fn app_name(&self) -> String {
-        match self.build.platform() {
-            Platform::Web => "web".to_string(),
-            Platform::Server => "server".to_string(),
-            Platform::Desktop => todo!(),
-            Platform::Ios => todo!(),
-            Platform::Android => todo!(),
-            Platform::Liveview => todo!(),
-        }
-    }
-
     /// Run the build command with a pretty loader, returning the executable output location
     ///
     /// This will also run the fullstack build. Note that fullstack is handled separately within this
     /// code flow rather than outside of it.
     pub(crate) async fn build(self) -> Result<AppBundle> {
         tracing::debug!("Running build command...");
-
-        // Install any tooling that might be required for this build.
-        self.verify_tooling().await?;
 
         // Run both the app and server builds in parallel
         // We currently don't create a manifest for the server, so all assets belong to the client.
@@ -100,30 +78,6 @@ impl BuildRequest {
 
         // Assemble a bundle from everything
         AppBundle::new(self, app_assets, app_exe, server_exe).await
-    }
-
-    pub(crate) async fn verify_tooling(&self) -> Result<()> {
-        tracing::debug!("Verifying tooling...");
-
-        self.krate.initialize_profiles()?;
-
-        match self.build.platform() {
-            // If this is a web, build make sure we have the web build tooling set up
-            Platform::Web => {}
-
-            // Make sure we have mobile tooling if need be
-            Platform::Ios => {}
-            Platform::Android => {}
-
-            // Make sure we have the required deps for desktop. More important for linux
-            Platform::Desktop => {}
-
-            // Generally nothing for the server, pretty simple
-            Platform::Server => {}
-            Platform::Liveview => {}
-        }
-
-        Ok(())
     }
 
     /// Run `cargo`, returning the location of the final exectuable
@@ -346,6 +300,8 @@ impl BuildRequest {
         cargo_args
     }
 
+    /// Create the list of features we need to pass to cargo to build the app by merging together
+    /// either the client or server features depending on if we're building a server or not.
     pub(crate) fn target_features(&self, server: bool) -> Vec<String> {
         let mut features = self.build.target_args.features.clone();
 
@@ -354,6 +310,25 @@ impl BuildRequest {
         } else {
             features.extend(self.build.target_args.client_features.clone());
         }
+
         features
+    }
+
+    /// The final output name of the app, primarly to be used when bundled
+    ///
+    /// Needs to be very disambiguated
+    /// Eg: my-app-web-macos-x86_64.app
+    /// {app_name}-{platform}-{arch}
+    ///
+    /// Does not include the extension
+    pub(crate) fn app_name(&self) -> String {
+        match self.build.platform() {
+            Platform::Web => "web".to_string(),
+            Platform::Server => "server".to_string(),
+            Platform::Desktop => todo!(),
+            Platform::Ios => todo!(),
+            Platform::Android => todo!(),
+            Platform::Liveview => todo!(),
+        }
     }
 }

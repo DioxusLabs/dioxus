@@ -1,6 +1,6 @@
 use super::{hot_reloading_file_map::HotreloadError, AppHandle, ServeUpdate};
-use crate::{bundler::AppBundle, Platform, Result, TraceSrc};
 use crate::{serve::hot_reloading_file_map::FileMap, DioxusCrate};
+use crate::{AppBundle, Platform, Result, TraceSrc};
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use futures_util::{future::OptionFuture, stream::FuturesUnordered};
@@ -17,6 +17,7 @@ pub(crate) struct AppRunner {
     pub(crate) krate: DioxusCrate,
     pub(crate) file_map: FileMap,
     pub(crate) applied_hot_reload_message: HotReloadMsg,
+    pub(crate) builds_opened: usize,
 }
 
 impl AppRunner {
@@ -33,6 +34,7 @@ impl AppRunner {
             file_map,
             applied_hot_reload_message: Default::default(),
             krate: krate.clone(),
+            builds_opened: 0,
         }
     }
 
@@ -89,17 +91,29 @@ impl AppRunner {
         app: AppBundle,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
+        should_open_web: bool,
     ) -> Result<&AppHandle> {
         let platform = app.build.build.platform();
 
+        // Drop the old handle
+        // todo(jon): we should instead be sending the kill signal rather than dropping the process
+        // This would allow a more graceful shutdown and fix bugs like desktop not retaining its size
         self.kill(platform);
 
-        // wait a tiny sec for the processes to die
+        // wait a tiny sec for the processes to die so we don't have fullstack servers on top of each other
+        // todo(jon): we should allow rebinding to the same port in fullstack itself
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         // Start the new app before we kill the old one to give it a little bit of time
-        let handle = AppHandle::start(app, devserver_ip, fullstack_address).await?;
-
+        let mut handle = AppHandle::new(app).await?;
+        handle
+            .open(
+                devserver_ip,
+                fullstack_address,
+                self.builds_opened == 0 && should_open_web,
+            )
+            .await?;
+        self.builds_opened += 1;
         self.running.insert(platform, handle);
 
         Ok(self.running.get(&platform).unwrap())

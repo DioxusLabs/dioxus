@@ -1,5 +1,5 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringBuffer, Builder, DevServer, ServeUpdate, Watcher},
+    serve::{ansi_buffer::AnsiStringBuffer, Builder, ServeUpdate, Watcher, WebServer},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
 use cargo_metadata::CompilerMessage;
@@ -74,7 +74,7 @@ struct RenderState<'a> {
     opts: &'a ServeArgs,
     krate: &'a DioxusCrate,
     build_engine: &'a Builder,
-    server: &'a DevServer,
+    server: &'a WebServer,
     watcher: &'a Watcher,
 }
 
@@ -321,7 +321,7 @@ impl Output {
         opts: &ServeArgs,
         config: &DioxusCrate,
         build_engine: &Builder,
-        server: &DevServer,
+        server: &WebServer,
         watcher: &Watcher,
     ) {
         if !self.interactive {

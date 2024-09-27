@@ -307,6 +307,15 @@ impl DioxusCrate {
 
         ignore_builder.build().unwrap()
     }
+
+    /// Return the version of the wasm-bindgen crate if it exists
+    pub fn wasm_bindgen_version(&self) -> Option<String> {
+        for krate in self.krates.krates_by_name("wasm-bindgen") {
+            return Some(krate.krate.version.to_string());
+        }
+
+        None
+    }
 }
 
 impl std::fmt::Debug for DioxusCrate {

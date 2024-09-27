@@ -110,7 +110,6 @@ impl ServeArgs {
         std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
     }
 
-    #[tracing::instrument(skip(self), ret, level = "debug")]
     pub(crate) fn should_proxy_build(&self) -> bool {
         match self.build_arguments.platform() {
             Platform::Server => true,

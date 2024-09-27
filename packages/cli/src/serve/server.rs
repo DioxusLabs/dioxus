@@ -1,7 +1,7 @@
 use crate::{
     config::WebHttpsConfig,
     serve::{ServeArgs, ServeUpdate},
-    BuildStage, BuildUpdate, DioxusCrate, Error, Platform, Result, TraceSrc,
+    BuildStage, BuildUpdate, DioxusCrate, Platform, Result, TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -20,7 +20,6 @@ use axum::{
     routing::{get, get_service},
     Extension, Router,
 };
-use axum_server::tls_rustls::RustlsConfig;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
@@ -28,22 +27,29 @@ use futures_util::{
     stream::{self, FuturesUnordered},
     StreamExt,
 };
-use hyper::{header::ACCEPT, HeaderMap};
+use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
     fs, io,
     net::{IpAddr, SocketAddr, TcpListener},
+    path::Path,
+    sync::Arc,
     sync::RwLock,
 };
-use std::{path::Path, sync::Arc};
 use tower_http::{
     cors::Any,
     services::fs::{ServeDir, ServeFileSystemResponseBody},
     ServiceBuilderExt,
 };
 
-pub(crate) struct DevServer {
+/// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
+/// communication layer that we use to send status updates and hotreloads to the client.
+///
+/// todo(jon): we should merge the build status and hotreload sockets into just a "devtools" socket
+/// which carries all the message types. This would make it easier for us to add more message types
+/// and better tooling on the pages that we serve.
+pub(crate) struct WebServer {
     devserver_ip: IpAddr,
     devserver_port: u16,
     proxied_port: Option<u16>,
@@ -54,10 +60,9 @@ pub(crate) struct DevServer {
     build_status: SharedStatus,
     application_name: String,
     platform: Platform,
-    fullstack: bool,
 }
 
-impl DevServer {
+impl WebServer {
     /// Start the development server.
     /// This will set up the default http server if there's no server specified (usually via fullstack).
     ///
@@ -78,11 +83,9 @@ impl DevServer {
             .then(|| get_available_port(devserver_ip))
             .flatten();
 
-        tracing::debug!("Should we proxy port?: {proxied_port:?}");
-
         let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_ip, port));
 
-        // Set up the router with some shared state
+        // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
         let router = build_devserver_router(
             args,
@@ -109,6 +112,7 @@ impl DevServer {
         ));
 
         Ok(Self {
+            build_status,
             proxied_port,
             devserver_ip,
             devserver_port,
@@ -116,10 +120,8 @@ impl DevServer {
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
-            build_status,
             application_name: cfg.config.application.name.clone(),
             platform: args.build_arguments.platform(),
-            fullstack: args.build_arguments.fullstack,
         })
     }
 
@@ -150,8 +152,8 @@ impl DevServer {
 
                     // Update the socket with project info and current build status
                     let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform.clone() });
-                    if send_build_status_to(&project_info, &mut new_socket).await.is_ok() {
-                        _ = send_build_status_to(&self.build_status, &mut new_socket).await;
+                    if project_info.send_to(&mut new_socket).await.is_ok() {
+                        _ = self.build_status.send_to(&mut new_socket).await;
                         self.build_status_sockets.push(new_socket);
                     }
                     return future::pending::<ServeUpdate>().await;
@@ -185,10 +187,7 @@ impl DevServer {
         let mut i = 0;
         while i < self.build_status_sockets.len() {
             let socket = &mut self.build_status_sockets[i];
-            if send_build_status_to(&self.build_status, socket)
-                .await
-                .is_err()
-            {
+            if self.build_status.send_to(socket).await.is_err() {
                 self.build_status_sockets.remove(i);
             } else {
                 i += 1;
@@ -219,8 +218,8 @@ impl DevServer {
                     BuildStage::Compiling {
                         current,
                         total,
+                        server: _,
                         krate,
-                        server,
                     } => {
                         self.build_status.set(Status::Building {
                             progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
@@ -317,6 +316,31 @@ impl DevServer {
             _ => self.proxied_server_address(),
         }
     }
+}
+
+async fn devserver_mainloop(
+    https_cfg: WebHttpsConfig,
+    listener: TcpListener,
+    router: Router,
+) -> Result<()> {
+    // We have a native listener that we're going to give to tokio, so we need to make it non-blocking
+    let _ = listener.set_nonblocking(true);
+
+    // If we're not using rustls, just use regular axum
+    if https_cfg.enabled != Some(true) {
+        axum::serve(listener.try_into().unwrap(), router.into_make_service()).await?;
+        return Ok(());
+    }
+
+    // If we're using rustls, we need to get the cert/key paths and then set up rustls
+    let (cert_path, key_path) = get_rustls(&https_cfg).await?;
+    let rustls = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path).await?;
+
+    axum_server::from_tcp_rustls(listener, rustls)
+        .serve(router.into_make_service())
+        .await?;
+
+    Ok(())
 }
 
 /// Sets up and returns a router
@@ -419,30 +443,6 @@ fn build_devserver_router(
     Ok(router)
 }
 
-async fn devserver_mainloop(
-    cfg: WebHttpsConfig,
-    listener: TcpListener,
-    router: Router,
-) -> Result<std::result::Result<(), Error>, Error> {
-    let rustls = get_rustls(&cfg).await.unwrap();
-
-    let _ = listener.set_nonblocking(true);
-
-    if let Some(rustls) = rustls {
-        axum_server::from_tcp_rustls(listener, rustls)
-            .serve(router.into_make_service())
-            .await?
-    } else {
-        // Create a TCP listener bound to the address
-        axum::serve(
-            tokio::net::TcpListener::from_std(listener).unwrap(),
-            router.into_make_service(),
-        )
-        .await?
-    }
-    Ok(Ok(()) as Result<()>)
-}
-
 fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
     use tower::ServiceBuilder;
 
@@ -531,23 +531,18 @@ pub(crate) fn insert_no_cache_headers(headers: &mut HeaderMap) {
     headers.insert(EXPIRES, HeaderValue::from_static("0"));
 }
 
-/// Returns an enum of rustls config
-async fn get_rustls(web_config: &WebHttpsConfig) -> Result<Option<RustlsConfig>> {
-    if web_config.enabled != Some(true) {
-        return Ok(None);
+async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
+    // If we're not using mkcert, just use the cert/key paths given to use in the config
+    if !web_config.mkcert.unwrap_or(false) {
+        if let (Some(key), Some(cert)) = (web_config.key_path.clone(), web_config.cert_path.clone())
+        {
+            return Ok((cert, key));
+        } else {
+            // missing cert or key
+            return Err("https is enabled but cert or key path is missing".into());
+        }
     }
 
-    let (cert_path, key_path) = match web_config.mkcert {
-        Some(true) => get_rustls_with_mkcert(web_config).await?,
-        _ => get_rustls_without_mkcert(web_config)?,
-    };
-
-    Ok(Some(
-        RustlsConfig::from_pem_file(cert_path, key_path).await?,
-    ))
-}
-
-async fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
     const DEFAULT_KEY_PATH: &str = "ssl/key.pem";
     const DEFAULT_CERT_PATH: &str = "ssl/cert.pem";
 
@@ -599,17 +594,12 @@ async fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, 
 
     Ok((cert_path, key_path))
 }
-
-fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
-    // get paths to cert & key
-    if let (Some(key), Some(cert)) = (web_config.key_path.clone(), web_config.cert_path.clone()) {
-        Ok((cert, key))
-    } else {
-        // missing cert or key
-        Err("https is enabled but cert or key path is missing".into())
-    }
-}
-
+/// Bind a listener to any point and return it
+/// When the listener is dropped, the socket will be closed, but we'll still have a port that we
+/// can bind our proxy to.
+///
+/// Todo: we might want to do this on every new build in case the OS tries to bind things to this port
+/// and we don't already have something bound to it. There's no great way of "reserving" a port.
 fn get_available_port(address: IpAddr) -> Option<u16> {
     TcpListener::bind((address, 0))
         .map(|listener| listener.local_addr().unwrap().port())
@@ -623,7 +613,7 @@ async fn build_status_middleware(
     next: Next,
 ) -> axum::response::Response {
     // If the request is for html, and the status is "Building", return the loading page instead of the contents of the response
-    let accepts = request.headers().get(ACCEPT);
+    let accepts = request.headers().get(hyper::header::ACCEPT);
     let accepts_html = accepts
         .and_then(|v| v.to_str().ok())
         .map(|v| v.contains("text/html"));
@@ -647,13 +637,8 @@ async fn build_status_middleware(
     next.run(request).await
 }
 
-async fn send_build_status_to(
-    build_status: &SharedStatus,
-    socket: &mut WebSocket,
-) -> Result<(), axum::Error> {
-    let msg = serde_json::to_string(&build_status.get()).unwrap();
-    socket.send(Message::Text(msg)).await
-}
+#[derive(Debug, Clone)]
+struct SharedStatus(Arc<RwLock<Status>>);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -671,9 +656,6 @@ enum Status {
     },
     Ready,
 }
-
-#[derive(Debug, Clone)]
-struct SharedStatus(Arc<RwLock<Status>>);
 
 impl SharedStatus {
     fn new(status: Status) -> Self {
@@ -693,5 +675,10 @@ impl SharedStatus {
 
     fn get(&self) -> Status {
         self.0.read().unwrap().clone()
+    }
+
+    async fn send_to(&self, socket: &mut WebSocket) -> Result<(), axum::Error> {
+        let msg = serde_json::to_string(&self.get()).unwrap();
+        socket.send(Message::Text(msg)).await
     }
 }

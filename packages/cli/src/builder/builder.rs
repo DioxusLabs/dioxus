@@ -1,11 +1,8 @@
+use crate::{
+    AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, DioxusCrate, ProgressRx,
+    ProgressTx, Result,
+};
 use std::time::{Duration, Instant};
-
-use crate::builder::*;
-use crate::dioxus_crate::DioxusCrate;
-use crate::Result;
-use crate::{build::BuildArgs, bundler::AppBundle};
-use futures_util::StreamExt;
-use progress::{ProgressRx, ProgressTx};
 use tokio::task::JoinHandle;
 
 /// The struct that handles the state of a build for an App.
@@ -51,6 +48,10 @@ impl Builder {
             request: request.clone(),
             stage: BuildStage::Initializing,
             build: tokio::spawn(async move {
+                // On the first build, we want to verify the tooling
+                // We wont bother verifying on subsequent builds
+                request.verify_tooling().await?;
+
                 let res = request.build().await;
 
                 // The first launch gets some extra logging :)
@@ -66,7 +67,6 @@ impl Builder {
             expected_crates: 1,
             expected_crates_server: 1,
             compiled_crates_server: 0,
-
             bundling_progress: 0.0,
             compile_start: Some(Instant::now()),
             compile_end: None,
@@ -78,6 +78,8 @@ impl Builder {
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
     pub(crate) async fn wait(&mut self) -> BuildUpdate {
+        use futures_util::StreamExt;
+
         // Wait for the build to finish or for it to eminate a status message
         let update = tokio::select! {
             bundle = (&mut self.build) => {
@@ -105,10 +107,14 @@ impl Builder {
                         self.bundling_progress = 0.0;
                     }
                     BuildStage::Starting {
-                        server,
                         crate_count,
+                        server,
                     } => {
-                        // self.expected_crates += crate_count;
+                        if *server {
+                            self.expected_crates_server = *crate_count;
+                        } else {
+                            self.expected_crates = *crate_count;
+                        }
                     }
                     BuildStage::InstallingTooling {} => {}
                     BuildStage::Compiling {
@@ -163,6 +169,9 @@ impl Builder {
                 self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
+
+                self.compile_end = Some(Instant::now());
+                self.compile_end_server = Some(Instant::now());
                 self.bundle_end = Some(Instant::now());
             }
             BuildUpdate::BuildFailed { .. } => {

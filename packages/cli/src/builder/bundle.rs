@@ -70,6 +70,9 @@ pub const MAC_APP_NAME: &str = "DioxusApp.app";
 /// ## Bundle structure links
 /// - apple: https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle
 /// - appimage: https://docs.appimage.org/packaging-guide/manual.html#ref-manual
+///
+/// ## Extra links
+/// - xbuild: https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs
 #[derive(Debug)]
 pub(crate) struct AppBundle {
     pub(crate) build: BuildRequest,
@@ -313,8 +316,12 @@ impl AppBundle {
                 std::fs::copy(self.cargo_app_exe.clone(), app_dir.join(EXE_WRITTEN_NAME))?;
             }
 
+            // Use xbuild's apk carate for building the apk
+            // basically just assemble a bunch of files into a zip file
+            // Should we use xbuild or just hand-roll this? I kinda want to handroll it so we own it completely, but not important enough to do it now
             Platform::Android => {
                 // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
+                // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
                 todo!("android not yet supported!")
             }
 
@@ -519,45 +526,6 @@ impl AppBundle {
 
     fn bindgen_dir(&self) -> PathBuf {
         self.build_dir.join("public").join("wasm")
-    }
-
-    pub(crate) fn all_app_assets(&self) -> Vec<(PathBuf, bool)> {
-        // Merge the legacy asset dir assets with the assets from the manifest
-        // Legacy assets need to retain their name in case they're referenced in the manifest
-        // todo: we should only copy over assets that appear in `img { src: "assets/logo.png" }` to
-        // properly deprecate the legacy asset dir
-        let mut assets = self
-            .app_assets
-            .assets
-            .keys()
-            .cloned()
-            .map(|p| (p, false))
-            .chain(
-                self.build
-                    .krate
-                    .legacy_asset_dir_files()
-                    .into_iter()
-                    .map(|p| (p, true)),
-            )
-            .collect::<Vec<_>>();
-
-        assets.dedup();
-
-        assets
-    }
-
-    pub(crate) fn all_server_assets(&self) -> Vec<PathBuf> {
-        let mut assets = self
-            .server_assets
-            .assets
-            .keys()
-            .cloned()
-            .chain(self.build.krate.legacy_asset_dir_files())
-            .collect::<Vec<_>>();
-
-        assets.dedup();
-
-        assets
     }
 
     async fn write_metadata(&self) -> Result<()> {

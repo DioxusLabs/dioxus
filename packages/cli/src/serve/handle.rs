@@ -1,46 +1,45 @@
-use crate::{bundler::AppBundle, Platform};
-use crate::{Result, TraceSrc};
+use crate::{AppBundle, Platform, Result};
+use anyhow::Context;
 use std::{net::SocketAddr, path::PathBuf, process::Stdio};
 use tokio::{
-    io::AsyncBufReadExt,
-    process::{Child, Command},
+    io::{AsyncBufReadExt, BufReader, Lines},
+    process::{Child, ChildStderr, ChildStdout, Command},
 };
-use tokio::{
-    io::{BufReader, Lines},
-    process::{ChildStderr, ChildStdout},
-};
-use uuid::Uuid;
 
-/// A handle to a running app
+/// A handle to a running app.
 ///
-/// Also includes a handle to its server if it exists
+/// Also includes a handle to its server if it exists.
+/// The actual child processes might not be present (web) or running (died/killed).
+///
+/// The purpose of this struct is to accumulate state about the running app and its server, like
+/// any runtime information needed to hotreload the app or send it messages.
+///
+/// We might want to bring in websockets here too, so we know the exact channels the app is using to
+/// communicate with the devserver. Currently that's a broadcast-type system, so this struct isn't super
+/// duper useful.
 pub(crate) struct AppHandle {
-    pub(crate) _id: Uuid,
-    pub(crate) build: AppBundle,
+    pub(crate) app: AppBundle,
 
-    pub(crate) platform: Platform,
+    // These might be None if the app died or the user did not specify a server
     pub(crate) app_child: Option<Child>,
     pub(crate) server_child: Option<Child>,
 
-    /// The virtual directory that assets will be served from
-    pub(crate) runtime_asst_dir: Option<PathBuf>,
-
+    // stdio for the app so we can read its stdout/stderr
+    // we don't map stdin today (todo) but most apps don't need it
     pub(crate) app_stdout: Option<Lines<BufReader<ChildStdout>>>,
     pub(crate) app_stderr: Option<Lines<BufReader<ChildStderr>>>,
     pub(crate) server_stdout: Option<Lines<BufReader<ChildStdout>>>,
     pub(crate) server_stderr: Option<Lines<BufReader<ChildStderr>>>,
+
+    /// The virtual directory that assets will be served from
+    /// Used mostly for apk/ipa builds since they live in simulator
+    pub(crate) runtime_asst_dir: Option<PathBuf>,
 }
 
 impl AppHandle {
-    pub async fn start(
-        app: AppBundle,
-        devserver_ip: SocketAddr,
-        fullstack_address: Option<SocketAddr>,
-    ) -> Result<Self> {
-        let mut handle = AppHandle {
-            _id: Uuid::new_v4(),
-            platform: app.build.build.platform(),
-            build: app,
+    pub async fn new(app: AppBundle) -> Result<Self> {
+        Ok(AppHandle {
+            app,
             runtime_asst_dir: None,
             app_child: None,
             app_stderr: None,
@@ -48,25 +47,17 @@ impl AppHandle {
             server_child: None,
             server_stdout: None,
             server_stderr: None,
-        };
-
-        handle.open(devserver_ip, fullstack_address).await?;
-
-        Ok(handle)
+        })
     }
 
     pub(crate) async fn open(
         &mut self,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
+        open_browser: bool,
     ) -> Result<()> {
-        let platform = self.platform;
-
-        if platform == Platform::Server || self.build.build.build.fullstack {
-            tracing::debug!(
-                "Proxying fullstack server from port {:?}",
-                fullstack_address
-            );
+        if let Some(addr) = fullstack_address {
+            tracing::debug!("Proxying fullstack server from port {:?}", addr);
         }
 
         // Set the env vars that the clients will expect
@@ -75,38 +66,43 @@ impl AppHandle {
             ("DIOXUS_CLI_ENABLED", "true".to_string()),
             (
                 "CARGO_MANIFEST_DIR",
-                self.build.build.krate.crate_dir().display().to_string(),
+                self.app.build.krate.crate_dir().display().to_string(),
             ),
             (
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
                 devserver_ip.to_string(),
             ),
+            // these are commented out since I'm not sure if we need or even want them.
+            //
+            // eg:
+            // developers should be setting their app title imperatively... which might not be practical for pure SPA
+            // cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
+            //
+            // eg:
+            // why even make always on top configurable?
             // (
             //     dioxus_cli_config::ALWAYS_ON_TOP_ENV,
             //     serve.always_on_top.unwrap_or(true).to_string(),
             // ),
-            // cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
+            //
+            // who uses this?
             // cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
         ];
 
         if let Some(addr) = fullstack_address {
-            tracing::debug!("Setting server ip and port to {addr:?}");
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
-        } else {
         }
 
-        // Launch the server if we have one
-        if let Some(server) = self.build.server() {
-            tracing::debug!("Launching server: {server:?}");
-            let mut cmd = Command::new(server);
-
-            cmd.envs(envs.clone())
+        // Launch the server if we have one and consume its stdout/stderr
+        if let Some(server) = self.app.server() {
+            tracing::debug!("Launching server from path: {server:?}");
+            let mut child = Command::new(server)
+                .envs(envs.clone())
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
-                .kill_on_drop(true);
-
-            let mut child = cmd.spawn()?;
+                .kill_on_drop(true)
+                .spawn()?;
             let stdout = BufReader::new(child.stdout.take().unwrap());
             let stderr = BufReader::new(child.stderr.take().unwrap());
             self.server_stdout = Some(stdout.lines());
@@ -114,44 +110,19 @@ impl AppHandle {
             self.server_child = Some(child);
         }
 
-        match self.platform {
+        let running_process = match self.app.build.build.platform() {
+            // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
+            // use use the websocket to communicate with it. I wish we could merge the concepts here,
+            // like say, opening the socket as a subprocess, but alas, it's simpler to do that somewhere else.
             Platform::Web => {
-                // tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", ip);
-            }
-            Platform::Desktop => {
-                // tracing::info!(dx_src = ?TraceSrc::Dev, "Launching desktop app 🎉");
-                // tracing::debug!(dx_src = ?TraceSrc::Dev, "Desktop app location: {:?}", self.build_dir.display());
-            }
-            Platform::Server => {
-                if let Some(fullstack_address) = fullstack_address {
-                    // tracing::info!(
-                    //     dx_src = ?TraceSrc::Dev,
-                    //     "Launching fullstack server on http://{:?} 🎉",
-                    //     fullstack_address
-                    // );
+                // Only the first build we open the web app, after that the user knows it's running
+                if open_browser {
+                    self.open_web(envs, devserver_ip);
                 }
-            }
-            Platform::Ios => {}
-            Platform::Android => {}
-            Platform::Liveview => {
-                if let Some(fullstack_address) = fullstack_address {
-                    // tracing::info!(
-                    //     dx_src = ?TraceSrc::Dev,
-                    //     "Launching liveview server on http://{:?} 🎉",
-                    //     fullstack_address
-                    // );
-                }
-            }
-        }
 
-        let running_process = match self.build.build.build.platform() {
-            Platform::Desktop => Some(self.open_mac_desktop(envs)?),
-            Platform::Web => {
-                // web can't be configured like this, so instead, we'll need to plumb a meta tag into the
-                // index.html during dev
-                self.open_web(envs);
                 None
             }
+            Platform::Desktop => Some(self.open_desktop_app(envs)?),
             Platform::Ios => Some(self.open_ios_sim(envs).await?),
             Platform::Android => todo!(),
             Platform::Liveview => todo!(),
@@ -170,36 +141,36 @@ impl AppHandle {
         Ok(())
     }
 
-    fn open_mac_desktop(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        Ok(Command::new(self.build.main_exe())
-            .envs(envs)
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()?)
-    }
-
-    pub(crate) fn hotreload_bundled_asset(
-        &self,
-        absolute_changed_file: &PathBuf,
-    ) -> Option<PathBuf> {
+    /// Hotreload an asset in the running app.
+    ///
+    /// This will modify the build dir in place! Be careful! We generally assume you want all bundles
+    /// to reflect the latest changes, so we will modify the bundle.
+    ///
+    /// However, not all platforms work like this, so we might also need to update a separate asset
+    /// dir that the system simulator might be providing. We know this is the case for ios simulators
+    /// and haven't yet checked for android.
+    ///
+    /// This will return the bundled name of the asset such that we can send it to the clients letting
+    /// them know what to reload. It's not super important that this is robust since most clients will
+    /// kick all stylsheets without necessarily checking the name.
+    pub(crate) fn hotreload_bundled_asset(&self, changed_file: &PathBuf) -> Option<PathBuf> {
         let mut bundled_name = None;
 
+        // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
+        // we won't actually be using the build dir.
         let asset_dir = match self.runtime_asst_dir.as_ref() {
             Some(dir) => dir.to_path_buf().join("assets/"),
-            None => self.build.asset_dir(),
+            None => self.app.asset_dir(),
         };
 
-        tracing::debug!("Hotreloading asset {absolute_changed_file:?} in target {asset_dir:?}");
+        tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
         // If the asset shares the same name in the bundle, reload that
-        let legacy_asset_dir = self.build.build.krate.legacy_asset_dir();
-        if absolute_changed_file.starts_with(&legacy_asset_dir) {
-            tracing::debug!("Hotreloading legacy asset {absolute_changed_file:?}");
-            let trimmed = absolute_changed_file
-                .strip_prefix(legacy_asset_dir)
-                .unwrap();
-            let res = std::fs::copy(absolute_changed_file, asset_dir.join(trimmed));
+        let legacy_asset_dir = self.app.build.krate.legacy_asset_dir();
+        if changed_file.starts_with(&legacy_asset_dir) {
+            tracing::debug!("Hotreloading legacy asset {changed_file:?}");
+            let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
+            let res = std::fs::copy(changed_file, asset_dir.join(trimmed));
             bundled_name = Some(trimmed.to_path_buf());
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload legacy asset {e}");
@@ -207,59 +178,70 @@ impl AppHandle {
         }
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        let resource = self
-            .build
-            .app_assets
-            .assets
-            .get(absolute_changed_file)
-            .cloned();
-
-        if let Some(resource) = resource {
-            let res = std::fs::copy(absolute_changed_file, asset_dir.join(&resource.bundled));
+        if let Some(resource) = self.app.app_assets.assets.get(changed_file).cloned() {
+            let res = std::fs::copy(changed_file, asset_dir.join(&resource.bundled));
             bundled_name = Some(PathBuf::from(resource.bundled));
-
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
             }
         }
 
-        // Now let's modify the running app, if we need to
-        // Every platform does this differently in quriky ways
-        match self.build.build.build.platform() {
-            // Nothing to do - editing the build dir is enough since we serve from there anyways
-            Platform::Web => {}
-
-            // Nothing to do - we serve from the .app dir which is executable anyways
-            Platform::Desktop => {}
-
-            // These share .appimage semantics, so modifying the build dir is enough
-            Platform::Liveview => {}
-            Platform::Server => {}
-
-            // todo: I think we need to modify the simulator mount folder
-            Platform::Ios => {
-                // the simulator will mount the app to somewhere in the CoreSimulator dir
-                // we could try to communicate this back the the host...
-                // /Users/jonkelley/Library/Developer/CoreSimulator/Devices/83AE3067-987F-4F85-AE3D-7079EF48C967/data/Containers/Bundle/Application/6C4F0EDF-291E-4EDC-ABCF-B4225762073A/DioxusApp.app
-            }
-
-            // todo: I think we need to modify the simulator mount folder / and/or adb a new file in
-            Platform::Android => todo!(),
-        };
-
         // Now we can return the bundled asset name to send to the hotreload engine
         bundled_name
     }
 
+    /// Open the desktop app simply by running its main exe
+    ///
+    /// Eventually, for mac, we want to run the `.app` with `open` to fix issues with `dylib` paths,
+    /// but for now, we just run the exe directly. Very few users should be caring about `dylib` search
+    /// paths right now, but they will when we start to enable things like swift integration.
+    fn open_desktop_app(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
+        Ok(Command::new(self.app.main_exe())
+            .envs(envs)
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()?)
+    }
+
+    /// Open the web app by opening the browser to the given address.
+    /// Check if we need to use https or not, and if so, add the protocol.
+    /// Go to the basepath if that's set too.
+    fn open_web(&self, _envs: Vec<(&str, String)>, address: SocketAddr) {
+        let base_path = self.app.build.krate.config.web.app.base_path.clone();
+        let https = self
+            .app
+            .build
+            .krate
+            .config
+            .web
+            .https
+            .enabled
+            .unwrap_or_default();
+        let protocol = if https { "https" } else { "http" };
+        let base_path = match base_path.as_deref() {
+            Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+            None => "".to_owned(),
+        };
+        _ = open::that(format!("{protocol}://{address}{base_path}"));
+    }
+
+    /// Use `xcrun` to install the app to the simulator
+    /// With simulators, we're free to basically do anything, so we don't need to do any fancy codesigning
+    /// or entitlements, or anything like that.
+    ///
+    /// However, if there's no simulator running, this *might* fail.
+    ///
+    /// TODO(jon): we should probably check if there's a simulator running before trying to install,
+    /// and open the simulator if we have to.
     async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        // Install the app
-        // xcrun simctl install booted DioxusApp.app
-        tracing::debug!("Installing app to simulator {:?}", self.build.app_root());
+        tracing::debug!("Installing app to simulator {:?}", self.app.app_root());
+
         let res = Command::new("xcrun")
             .arg("simctl")
             .arg("install")
             .arg("booted")
-            .arg(self.build.app_root())
+            .arg(self.app.app_root())
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .output()
@@ -267,16 +249,9 @@ impl AppHandle {
 
         tracing::debug!("Installed app to simulator with exit code: {res:?}");
 
-        // env = {
-        //  SIMCTL_CHILD_DIOXUS_DEVSERVER_ADDR="ws://0.0.0.0:8080/_dioxus",
-        //  SIMCTL_CHILD_CARGO_MANIFEST_DIR="/Users/jonkelley/Development/Tinkering/ios-binary"
-        // }
-        // args = ["simctl", "launch", "--console", "booted", "com.dioxuslabs"]
-        // command = "xcrun"
-        // dependencies = ["build_ios_sim", "install_ios_sim"]
-
         // Remap the envs to the correct simctl env vars
-        let envs = envs
+        // iOS sim lets you pass env vars but they need to be in the format "SIMCTL_CHILD_XXX=XXX"
+        let ios_envs = envs
             .iter()
             .map(|(k, v)| (format!("SIMCTL_CHILD_{k}"), v.clone()));
 
@@ -286,7 +261,7 @@ impl AppHandle {
             .arg("--console")
             .arg("booted")
             .arg("com.dioxuslabs")
-            .envs(envs)
+            .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
@@ -295,23 +270,17 @@ impl AppHandle {
         tracing::debug!("Launched app on simulator with exit code: {child:?}");
 
         Ok(child)
+    }
 
-        // command = "xcrun"
-        // args = [
-        // "simctl",
-        // "install",
-        // "booted",
-        // "target/aarch64-apple-ios-sim/debug/bundle/ios/DioxusApp.app",
-        // ] \
-
-        // [tasks.run_ios_sim]
-        // args = ["simctl", "launch", "--console", "booted", "com.dioxuslabs"]
-        // command = "xcrun"
-        // dependencies = ["build_ios_sim", "install_ios_sim"]
-
-        // [tasks.serve-sim]
-        // dependencies = ["build_ios_sim", "install_ios_sim", "run_ios_sim"]
-
+    /// We have this whole thing figured out, but we don't actually use it yet.
+    ///
+    /// Launching on devices is more complicated and requires us to codesign the app, which we don't
+    /// currently do.
+    ///
+    /// Converting these commands shouldn't be too hard, but device support would imply we need
+    /// better support for codesigning and entitlements.
+    #[allow(unused)]
+    async fn open_ios_device(&self) -> Result<()> {
         // APP_PATH="target/aarch64-apple-ios/debug/bundle/ios/DioxusApp.app"
 
         // # get the device id by jq-ing the json of the device list
@@ -337,31 +306,144 @@ impl AppHandle {
         // # # now that metro is ready, resume the app from background
         // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
 
-        // // Install the app
-        // let mut cmd = Command::new("xcrun");
-        // cmd.arg("simctl")
-        //     .arg("launch")
-        //     .arg("--console")
-        //     .arg("booted")
-        //     .arg(self.build_dir.clone());
-        // let mut res = cmd.spawn()?;
-        // let res = res.wait().await?;
-    }
+        use serde_json::Value;
+        let app_path = self.app.app_root();
 
-    fn open_web(&self, envs: Vec<(&str, String)>) {
-        // let start_browser = args.open.unwrap_or_default();
-        // let base_path = cfg.dioxus_config.web.app.base_path.clone();
-        // let platform = args.platform();
-        // // Open the browser
-        // if start_browser && platform != Platform::Desktop {
-        //     open_browser(base_path, addr, rustls.is_some());
-        // }
-        // // let protocol = if https { "https" } else { "http" };
-        // let base_path = match base_path.as_deref() {
-        //     Some(base_path) => format!("/{}", base_path.trim_matches('/')),
-        //     None => "".to_owned(),
-        // };
-        // _ = open::that(format!("{protocol}://{address}{base_path}"));
-        // _ = open::that(format!("http://{devserver_ip}"));
+        install_app(&app_path).await?;
+
+        // 2. Determine which device the app was installed to
+        let device_uuid = get_device_uuid().await?;
+
+        // 3. Get the installation URL of the app
+        let installation_url = get_installation_url(&device_uuid, &app_path).await?;
+
+        // 4. Launch the app into the background, paused
+        launch_app_paused(&device_uuid, &installation_url).await?;
+
+        // 5. Pick up the paused app and resume it
+        resume_app(&device_uuid).await?;
+
+        async fn install_app(app_path: &PathBuf) -> Result<()> {
+            let output = Command::new("xcrun")
+                .args(&["simctl", "install", "booted"])
+                .arg(app_path)
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                return Err(format!("Failed to install app: {:?}", output).into());
+            }
+
+            Ok(())
+        }
+
+        async fn get_device_uuid() -> Result<String> {
+            let output = Command::new("xcrun")
+                .args(&[
+                    "devicectl",
+                    "list",
+                    "devices",
+                    "--json-output",
+                    "target/deviceid.json",
+                ])
+                .output()
+                .await?;
+
+            let json: Value =
+                serde_json::from_str(&std::fs::read_to_string("target/deviceid.json")?)
+                    .context("Failed to parse xcrun output")?;
+            let device_uuid = json["result"]["devices"][0]["identifier"]
+                .as_str()
+                .ok_or("Failed to extract device UUID")?
+                .to_string();
+
+            Ok(device_uuid)
+        }
+
+        async fn get_installation_url(device_uuid: &str, app_path: &PathBuf) -> Result<String> {
+            let output = Command::new("xcrun")
+                .args(&[
+                    "devicectl",
+                    "device",
+                    "install",
+                    "app",
+                    "--device",
+                    device_uuid,
+                    &app_path.display().to_string(),
+                    "--json-output",
+                    "target/xcrun.json",
+                ])
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                return Err(format!("Failed to install app: {:?}", output).into());
+            }
+
+            let json: Value = serde_json::from_str(&std::fs::read_to_string("target/xcrun.json")?)
+                .context("Failed to parse xcrun output")?;
+            let installation_url = json["result"]["installedApplications"][0]["installationURL"]
+                .as_str()
+                .ok_or("Failed to extract installation URL")?
+                .to_string();
+
+            Ok(installation_url)
+        }
+
+        async fn launch_app_paused(device_uuid: &str, installation_url: &str) -> Result<()> {
+            let output = Command::new("xcrun")
+                .args(&[
+                    "devicectl",
+                    "device",
+                    "process",
+                    "launch",
+                    "--no-activate",
+                    "--verbose",
+                    "--device",
+                    device_uuid,
+                    installation_url,
+                    "--json-output",
+                    "target/launch.json",
+                ])
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                return Err(format!("Failed to launch app: {:?}", output).into());
+            }
+
+            Ok(())
+        }
+
+        async fn resume_app(device_uuid: &str) -> Result<()> {
+            let json: Value = serde_json::from_str(&std::fs::read_to_string("target/launch.json")?)
+                .context("Failed to parse xcrun output")?;
+
+            let status_pid = json["result"]["process"]["processIdentifier"]
+                .as_u64()
+                .ok_or("Failed to extract process identifier")?;
+
+            let output = Command::new("xcrun")
+                .args(&[
+                    "devicectl",
+                    "device",
+                    "process",
+                    "resume",
+                    "--device",
+                    device_uuid,
+                    "--pid",
+                    &status_pid.to_string(),
+                ])
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                return Err(format!("Failed to resume app: {:?}", output).into());
+            }
+
+            Ok(())
+        }
+
+        unimplemented!("dioxus-cli doesn't support ios devices yet.")
     }
 }

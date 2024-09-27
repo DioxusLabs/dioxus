@@ -1,5 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use crate::{bundler::AppBundle, BuildRequest, Platform};
+use crate::{AppBundle, BuildRequest, Platform};
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage, Message};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -90,7 +90,7 @@ impl BuildRequest {
         name: String,
         server: bool,
     ) {
-        self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
                 total,

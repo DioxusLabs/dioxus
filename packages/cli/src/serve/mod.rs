@@ -46,7 +46,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;
-    let mut devserver = DevServer::start(&args, &krate)?;
+    let mut devserver = WebServer::start(&args, &krate)?;
     let mut screen = Output::start(&args).expect("Failed to open terminal logger");
     let mut watcher = Watcher::start(&args, &krate);
     let mut runner = AppRunner::start(&krate, &watcher.ignore);
@@ -161,6 +161,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                                 bundle,
                                 devserver.devserver_address(),
                                 devserver.proxied_server_address(),
+                                args.open.unwrap_or(false),
                             )
                             .await;
 

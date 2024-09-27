@@ -1,14 +1,10 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
-// when runnnig in debug mode, we want running this to be quieter
-// it's annoying to fill up the console with warnings
-// #![cfg_attr(debug_assertions, allow(warnings))]
 
 mod assets;
 mod builder;
 mod bundle_utils;
-mod bundler;
 mod cli;
 mod config;
 mod dioxus_crate;
@@ -18,6 +14,7 @@ mod fastfs;
 mod metadata;
 mod platform;
 mod profiles;
+mod rustup;
 mod serve;
 mod settings;
 mod tooling;
@@ -28,6 +25,7 @@ pub(crate) use cli::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
 pub(crate) use platform::*;
+pub(crate) use rustup::*;
 pub(crate) use settings::*;
 pub(crate) use tracer::*;
 

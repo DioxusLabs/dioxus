@@ -5,10 +5,13 @@
 /// Uses a request -> response architecture that allows you to monitor the progress with an optional message
 /// receiver.
 mod builder;
+mod bundle;
 mod progress;
 mod request;
+mod verify;
 mod web;
 
 pub(crate) use builder::*;
+pub(crate) use bundle::*;
 pub(crate) use progress::*;
 pub(crate) use request::*;
