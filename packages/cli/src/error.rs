@@ -22,12 +22,6 @@ pub(crate) enum Error {
     #[error("Runtime Error: {0}")]
     RuntimeError(String),
 
-    #[error("Failed to write error")]
-    FailedToWrite,
-
-    #[error("Build Failed: {0}")]
-    BuildFailed(String),
-
     #[error("Cargo Error: {0}")]
     CargoError(String),
 

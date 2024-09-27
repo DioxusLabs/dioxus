@@ -6,7 +6,6 @@ use crate::{
 mod ansi_buffer;
 mod detect;
 mod handle;
-mod hot_reloading_file_map;
 mod output;
 mod proxy;
 mod runner;

@@ -89,19 +89,19 @@ impl BuildRequest {
     /// are running on an Apple Silicon Mac, but it would be confusing if we installed these when we actually
     /// should be installing the x86 versions.
     pub(crate) async fn verify_ios_tooling(&self, rustup: RustupShow) -> Result<()> {
-        if !rustup
-            .installed_toolchains
-            .contains(&"aarch64-apple-ios".to_string())
-        {
-            tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
-        }
+        // if !rustup
+        //     .installed_toolchains
+        //     .contains(&"aarch64-apple-ios".to_string())
+        // {
+        //     tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
+        // }
 
-        if !rustup
-            .installed_toolchains
-            .contains(&"aarch64-apple-ios-sim".to_string())
-        {
-            tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
-        }
+        // if !rustup
+        //     .installed_toolchains
+        //     .contains(&"aarch64-apple-ios-sim".to_string())
+        // {
+        //     tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
+        // }
 
         Ok(())
     }

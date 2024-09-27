@@ -104,6 +104,7 @@ impl Builder {
                 match stage {
                     BuildStage::Initializing => {
                         self.compiled_crates = 0;
+                        self.compiled_crates_server = 0;
                         self.bundling_progress = 0.0;
                     }
                     BuildStage::Starting {
@@ -137,6 +138,7 @@ impl Builder {
                     }
                     BuildStage::Bundling {} => {
                         self.bundling_progress = 0.0;
+
                         self.compile_end = Some(Instant::now());
                         self.bundle_start = Some(Instant::now());
                     }
@@ -147,15 +149,18 @@ impl Builder {
                     }
                     BuildStage::Success => {
                         self.compiled_crates = self.expected_crates;
+                        self.compiled_crates_server = self.expected_crates_server;
                         self.bundling_progress = 1.0;
                     }
                     BuildStage::Failed => {
                         self.compiled_crates = self.expected_crates;
+                        self.compiled_crates_server = self.expected_crates_server;
                         self.bundling_progress = 1.0;
                     }
                     BuildStage::Aborted => {}
                     BuildStage::Restarting => {
                         self.compiled_crates = 0;
+                        self.compiled_crates_server = 0;
                         self.expected_crates = 1;
                         self.bundling_progress = 0.0;
                     }
@@ -167,6 +172,7 @@ impl Builder {
             BuildUpdate::CompilerMessage { .. } => {}
             BuildUpdate::BuildReady { .. } => {
                 self.compiled_crates = self.expected_crates;
+                self.compiled_crates_server = self.expected_crates_server;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
 
@@ -220,6 +226,7 @@ impl Builder {
         self.build.abort();
         self.stage = BuildStage::Aborted;
         self.compiled_crates = 0;
+        self.compiled_crates_server = 0;
         self.expected_crates = 1;
         self.bundling_progress = 0.0;
         self.compile_start = None;

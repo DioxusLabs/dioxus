@@ -110,6 +110,7 @@ impl AppHandle {
             self.server_child = Some(child);
         }
 
+        // We try to use stdin/stdout to communicate with the app
         let running_process = match self.app.build.build.platform() {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
             // use use the websocket to communicate with it. I wish we could merge the concepts here,
@@ -122,11 +123,19 @@ impl AppHandle {
 
                 None
             }
-            Platform::Desktop => Some(self.open_desktop_app(envs)?),
+
             Platform::Ios => Some(self.open_ios_sim(envs).await?),
-            Platform::Android => todo!(),
-            Platform::Liveview => todo!(),
-            Platform::Server => todo!(),
+
+            // https://developer.android.com/studio/run/emulator-commandline
+            Platform::Android => {
+                tracing::error!("Android is not yet supported, sorry!");
+                None
+            }
+
+            // These are all just basically running the main exe, but with slightly different resource dir paths
+            Platform::Server | Platform::Liveview | Platform::Desktop => {
+                Some(self.open_with_main_exe(envs)?)
+            }
         };
 
         // If we have a running process, we need to attach to it and wait for its outputs
@@ -190,18 +199,21 @@ impl AppHandle {
         bundled_name
     }
 
-    /// Open the desktop app simply by running its main exe
+    /// Open the native app simply by running its main exe
     ///
     /// Eventually, for mac, we want to run the `.app` with `open` to fix issues with `dylib` paths,
     /// but for now, we just run the exe directly. Very few users should be caring about `dylib` search
     /// paths right now, but they will when we start to enable things like swift integration.
-    fn open_desktop_app(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        Ok(Command::new(self.app.main_exe())
+    ///
+    /// Server/liveview/desktop are all basically the same, though
+    fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
+        let child = Command::new(self.app.main_exe())
             .envs(envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
-            .spawn()?)
+            .spawn()?;
+        Ok(child)
     }
 
     /// Open the web app by opening the browser to the given address.

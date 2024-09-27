@@ -1,10 +1,8 @@
-use super::{hot_reloading_file_map::HotreloadError, AppHandle, ServeUpdate};
-use crate::{serve::hot_reloading_file_map::FileMap, DioxusCrate};
-use crate::{AppBundle, Platform, Result, TraceSrc};
+use super::{AppHandle, ServeUpdate};
+use crate::{AppBundle, DioxusCrate, FileMap, HotreloadError, Platform, Result, TraceSrc};
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use futures_util::{future::OptionFuture, stream::FuturesUnordered};
-use ignore::gitignore::Gitignore;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
