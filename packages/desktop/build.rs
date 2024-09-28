@@ -73,11 +73,6 @@ path = "../../examples/errors.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "file_explorer"
-path = "../../examples/file_explorer.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "future"
 path = "../../examples/future.rs"
 doc-scrape-examples = true
