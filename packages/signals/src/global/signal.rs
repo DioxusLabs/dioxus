@@ -1,3 +1,5 @@
+use generational_box::UnsyncStorage;
+
 use super::{Global, InitializeFromFunction};
 use crate::read::Readable;
 use crate::read_impls;
