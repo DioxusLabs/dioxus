@@ -49,10 +49,10 @@ impl Builder {
     }
 
     /// Start a new build - killing the current one if it exists
-    pub fn build(&mut self) {
+    pub fn build(&mut self) -> Result<()> {
         self.shutdown();
         let build_requests =
-            BuildRequest::create(true, &self.config, self.serve.build_arguments.clone());
+            BuildRequest::create(true, &self.config, self.serve.build_arguments.clone())?;
 
         let mut set = tokio::task::JoinSet::new();
 
@@ -85,6 +85,8 @@ impl Builder {
             }
             Ok(all_results)
         }));
+
+        Ok(())
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc

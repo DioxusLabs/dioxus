@@ -1,6 +1,6 @@
 use crate::{
-    any_props::BoxedAnyProps, nodes::RenderReturn, reactive_context::ReactiveContext,
-    scope_context::Scope, Runtime, VNode,
+    any_props::BoxedAnyProps, nodes::AsVNode, reactive_context::ReactiveContext,
+    scope_context::Scope, Element, Runtime, VNode,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -70,7 +70,7 @@ pub struct ScopeState {
     pub(crate) context_id: ScopeId,
     /// The last node that has been rendered for this component. This node may not ben mounted
     /// During suspense, this component can be rendered in the background multiple times
-    pub(crate) last_rendered_node: Option<RenderReturn>,
+    pub(crate) last_rendered_node: Option<Element>,
     pub(crate) props: BoxedAnyProps,
     pub(crate) reactive_context: ReactiveContext,
 }
@@ -98,7 +98,7 @@ impl ScopeState {
     ///
     /// Returns [`None`] if the tree has not been built yet.
     pub fn try_root_node(&self) -> Option<&VNode> {
-        self.last_rendered_node.as_deref()
+        self.last_rendered_node.as_ref().map(AsVNode::as_vnode)
     }
 
     /// Returns the scope id of this [`ScopeState`].

@@ -1,6 +1,3 @@
-#[cfg(feature = "hot_reload")]
-use dioxus_core::TemplateNode;
-
 use crate::{literal::HotLiteral, location::DynIdx, HotReloadFormattedSegment, IfmtInput};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
@@ -61,19 +58,6 @@ impl TextNode {
 
     pub fn is_static(&self) -> bool {
         self.input.is_static()
-    }
-
-    #[cfg(feature = "hot_reload")]
-    pub fn to_template_node(&self) -> TemplateNode {
-        use crate::intern;
-        match self.input.to_static() {
-            Some(text) => TemplateNode::Text {
-                text: intern(text.as_str()),
-            },
-            None => TemplateNode::Dynamic {
-                id: self.dyn_idx.get(),
-            },
-        }
     }
 }
 

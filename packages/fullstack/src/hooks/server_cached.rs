@@ -17,7 +17,7 @@ use serde::{de::DeserializeOwned, Serialize};
 ///       1234
 ///    });
 ///
-///    todo!()
+///    unimplemented!()
 /// }
 /// ```
 pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(

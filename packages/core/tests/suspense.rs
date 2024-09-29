@@ -415,20 +415,20 @@ fn toggle_suspense() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            let mutations = dom.rebuild_to_vec().sanitize();
+            let mutations = dom.rebuild_to_vec();
 
             // First create goodbye world
             println!("{:#?}", mutations);
             assert_eq!(
                 mutations.edits,
                 [
-                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
                     Mutation::AppendChildren { id: ElementId(0), m: 1 }
                 ]
             );
 
             dom.mark_dirty(ScopeId::APP);
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
 
             // Then replace that with nothing
             println!("{:#?}", mutations);
@@ -441,20 +441,20 @@ fn toggle_suspense() {
             );
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
 
             // Then replace it with a placeholder
             println!("{:#?}", mutations);
             assert_eq!(
                 mutations.edits,
                 [
-                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
                     Mutation::ReplaceWith { id: ElementId(2), m: 1 },
                 ]
             );
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
 
             // Then replace it with the resolved node
             println!("{:#?}", mutations);
@@ -463,7 +463,7 @@ fn toggle_suspense() {
                 [
                     Mutation::CreatePlaceholder { id: ElementId(2,) },
                     Mutation::ReplaceWith { id: ElementId(1,), m: 1 },
-                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
                     Mutation::ReplaceWith { id: ElementId(2), m: 1 },
                 ]
             );
@@ -600,14 +600,14 @@ fn nested_suspense_resolves_client() {
             // DOM STATE:
             // placeholder // ID: 1
             // "Loading 0..." // ID: 2
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
             // Fill in the contents of the initial message and start loading the nested suspense
             // The title also finishes loading
             assert_eq!(
                 mutations.edits,
                 vec![
                     // Creating and swapping these placeholders doesn't do anything
-                    // It is just extra work that we are forced to do because mutations are not 
+                    // It is just extra work that we are forced to do because mutations are not
                     // reversible. We start rendering the children and then realize it is suspended.
                     // Then we need to replace what we just rendered with the suspense placeholder
                     CreatePlaceholder { id: ElementId(3,) },
@@ -622,12 +622,9 @@ fn nested_suspense_resolves_client() {
                     ReplaceWith { id: ElementId(2,), m: 1 },
 
                     // Load the title
-                    LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
-                    HydrateText {
-                        path: &[0,],
-                        value: "The robot says hello world".to_string(),
-                        id: ElementId(4,),
-                    },
+                    LoadTemplate {  index: 0, id: ElementId(2,) },
+                    CreateTextNode { value: "The robot says hello world".to_string(), id: ElementId(4,) },
+                    ReplacePlaceholder { path: &[0,], m: 1 },
                     SetAttribute {
                         name: "id",
                         ns: None,
@@ -636,12 +633,9 @@ fn nested_suspense_resolves_client() {
                     },
 
                     // Then load the body
-                    LoadTemplate { name: "template", index: 1, id: ElementId(5,) },
-                    HydrateText {
-                        path: &[0,],
-                        value: "The robot becomes sentient and says hello world".to_string(),
-                        id: ElementId(6,),
-                    },
+                    LoadTemplate {  index: 1, id: ElementId(5,) },
+                    CreateTextNode { value: "The robot becomes sentient and says hello world".to_string(), id: ElementId(6,) },
+                    ReplacePlaceholder { path: &[0,], m: 1 },
                     SetAttribute {
                         name: "id",
                         ns: None,
@@ -650,7 +644,7 @@ fn nested_suspense_resolves_client() {
                     },
 
                     // Then load the suspended children
-                    LoadTemplate { name: "template", index: 2, id: ElementId(7,) },
+                    LoadTemplate {  index: 2, id: ElementId(7,) },
                     CreateTextNode { value: "Loading 1...".to_string(), id: ElementId(8,) },
                     CreateTextNode { value: "Loading 2...".to_string(), id: ElementId(9,) },
                     ReplacePlaceholder { path: &[0,], m: 2 },
@@ -674,7 +668,7 @@ fn nested_suspense_resolves_client() {
             // div // ID: 7
             //   "Loading 1..." // ID: 8
             //   "Loading 2..." // ID: 9
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
             assert_eq!(
                 mutations.edits,
                 vec![
@@ -693,20 +687,18 @@ fn nested_suspense_resolves_client() {
 
                     // Load the nested suspense
                     LoadTemplate {
-                        name: "template",
+
                         index: 0,
                         id: ElementId(
                             8,
                         ),
                     },
-                    HydrateText {
+                    CreateTextNode { value: "The world says hello back".to_string(), id: ElementId(10,) },
+                    ReplacePlaceholder {
                         path: &[
                             0,
                         ],
-                        value: "The world says hello back".to_string(),
-                        id: ElementId(
-                            10,
-                        ),
+                        m: 1,
                     },
                     SetAttribute {
                         name: "id",
@@ -717,20 +709,18 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 1,
                         id: ElementId(
                             11,
                         ),
                     },
-                    HydrateText {
+                    CreateTextNode { value: "In a stunning turn of events, the world collectively unites and says hello back".to_string(), id: ElementId(12,) },
+                    ReplacePlaceholder {
                         path: &[
                             0,
                         ],
-                        value: "In a stunning turn of events, the world collectively unites and says hello back".to_string(),
-                        id: ElementId(
-                            12,
-                        ),
+                        m: 1,
                     },
                     SetAttribute {
                         name: "id",
@@ -741,19 +731,17 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
                         index: 2,
                         id: ElementId(
                             13,
                         ),
                     },
-                    AssignId {
+                    CreatePlaceholder { id: ElementId(14,) },
+                    ReplacePlaceholder {
                         path: &[
                             0,
                         ],
-                        id: ElementId(
-                            14,
-                        ),
+                        m: 1,
                     },
                     SetAttribute {
                         name: "id",
@@ -783,20 +771,17 @@ fn nested_suspense_resolves_client() {
                         m: 1,
                     },
                     LoadTemplate {
-                        name: "template",
                         index: 0,
                         id: ElementId(
                             9,
                         ),
                     },
-                    HydrateText {
+                    CreateTextNode { value: "Goodbye Robot".to_string(), id: ElementId(15,) },
+                    ReplacePlaceholder {
                         path: &[
                             0,
                         ],
-                        value: "Goodbye Robot".to_string(),
-                        id: ElementId(
-                            15,
-                        ),
+                        m: 1,
                     },
                     SetAttribute {
                         name: "id",
@@ -807,20 +792,17 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
                         index: 1,
                         id: ElementId(
                             16,
                         ),
                     },
-                    HydrateText {
+                    CreateTextNode { value: "The robot says goodbye".to_string(), id: ElementId(17,) },
+                    ReplacePlaceholder {
                         path: &[
                             0,
                         ],
-                        value: "The robot says goodbye".to_string(),
-                        id: ElementId(
-                            17,
-                        ),
+                        m: 1,
                     },
                     SetAttribute {
                         name: "id",
@@ -831,7 +813,7 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 2,
                         id: ElementId(
                             18,
@@ -860,7 +842,7 @@ fn nested_suspense_resolves_client() {
             );
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
             assert_eq!(
                 mutations.edits,
                 vec![
@@ -876,20 +858,18 @@ fn nested_suspense_resolves_client() {
                         m: 1,
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 0,
                         id: ElementId(
                             19,
                         ),
                     },
-                    HydrateText {
+                    CreateTextNode { value: "Goodbye Robot again".to_string(), id: ElementId(20,) },
+                    ReplacePlaceholder {
                         path: &[
                             0,
                         ],
-                        value: "Goodbye Robot again".to_string(),
-                        id: ElementId(
-                            20,
-                        ),
+                        m: 1,
                     },
                     SetAttribute {
                         name: "id",
@@ -900,20 +880,17 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
                         index: 1,
                         id: ElementId(
                             21,
                         ),
                     },
-                    HydrateText {
+                    CreateTextNode { value: "The robot says goodbye again".to_string(), id: ElementId(22,) },
+                    ReplacePlaceholder {
                         path: &[
                             0,
                         ],
-                        value: "The robot says goodbye again".to_string(),
-                        id: ElementId(
-                            22,
-                        ),
+                        m: 1,
                     },
                     SetAttribute {
                         name: "id",
@@ -924,19 +901,17 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
                         index: 2,
                         id: ElementId(
                             23,
                         ),
                     },
-                    AssignId {
+                    CreatePlaceholder { id: ElementId(24,) },
+                    ReplacePlaceholder {
                         path: &[
-                            0,
+                            0
                         ],
-                        id: ElementId(
-                            24,
-                        ),
+                        m: 1,
                     },
                     SetAttribute {
                         name: "id",

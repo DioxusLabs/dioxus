@@ -25,13 +25,13 @@ pub fn vdom_is_rendering() -> bool {
 /// fn Component() -> Element {
 ///     let request = spawn(async move {
 ///         match reqwest::get("https://api.example.com").await {
-///             Ok(_) => todo!(),
+///             Ok(_) => unimplemented!(),
 ///             // You can explicitly throw an error into a scope with throw_error
 ///             Err(err) => ScopeId::APP.throw_error(err)
 ///         }
 ///     });
 ///
-///     todo!()
+///     unimplemented!()
 /// }
 /// ```
 pub fn throw_error(error: impl Into<CapturedError> + 'static) {
@@ -351,7 +351,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///         window.scroll_with_x_and_y(original_scroll_position(), 0.0);
 ///     });
 ///
-///     rsx!{
+///     rsx! {
 ///         div {
 ///             id: "my_element",
 ///             "hello"

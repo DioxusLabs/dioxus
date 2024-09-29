@@ -126,44 +126,38 @@ async fn launch_server(
     build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     context_providers: ContextProviders,
 ) {
-    use clap::Parser;
-
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
-    let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli();
-    let address = cli_args
-        .as_ref()
-        .map(|args| args.fullstack_address())
-        .unwrap_or_else(dioxus_cli_config::AddressArguments::parse)
-        .address();
-
-    // Point the user to the CLI address if the CLI is running or the fullstack address if not
-    let serve_address = cli_args
-        .map(|args| args.cli_address())
-        .unwrap_or_else(|| address);
+    let address = dioxus_cli_config::fullstack_address_or_localhost();
 
     #[cfg(feature = "axum")]
     {
         use crate::axum_adapter::DioxusRouterExt;
 
-        let router = axum::Router::new().register_server_functions_with_context(context_providers);
+        #[allow(unused_mut)]
+        let mut router =
+            axum::Router::new().register_server_functions_with_context(context_providers);
 
         #[cfg(not(any(feature = "desktop", feature = "mobile")))]
-        let router = {
+        {
             use crate::prelude::RenderHandleState;
             use crate::prelude::SSRState;
 
-            let cfg = platform_config.server_cfg.build();
+            match platform_config.server_cfg.build() {
+                Ok(cfg) => {
+                    router = router.serve_static_assets();
 
-            let mut router = router.serve_static_assets();
-
-            router.fallback(
-                axum::routing::get(crate::axum_adapter::render_handler).with_state(
-                    RenderHandleState::new_with_virtual_dom_factory(build_virtual_dom)
-                        .with_config(cfg),
-                ),
-            )
-        };
+                    router = router.fallback(
+                        axum::routing::get(crate::axum_adapter::render_handler).with_state(
+                            RenderHandleState::new_with_virtual_dom_factory(cfg, build_virtual_dom),
+                        ),
+                    );
+                }
+                Err(err) => {
+                    tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
+                }
+            }
+        }
 
         let router = router.into_make_service();
         let listener = tokio::net::TcpListener::bind(address).await.unwrap();

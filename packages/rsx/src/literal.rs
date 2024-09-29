@@ -65,7 +65,7 @@ impl Parse for HotLiteral {
             Lit::Int(a) => HotLiteral::Int(a),
             Lit::Bool(a) => HotLiteral::Bool(a),
             Lit::Float(a) => HotLiteral::Float(a),
-            Lit::Str(a) => HotLiteral::Fmted(IfmtInput::new_litstr(a).into()),
+            Lit::Str(a) => HotLiteral::Fmted(IfmtInput::new_litstr(a)?.into()),
             _ => {
                 return Err(syn::Error::new(
                     raw.span(),

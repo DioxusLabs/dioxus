@@ -1,6 +1,6 @@
 use crate::build::TargetArgs;
-use dioxus_cli_config::{DioxusConfig, Platform};
-use krates::cm::Target;
+use crate::config::{DioxusConfig, Platform};
+use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -84,16 +84,26 @@ fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId,
     let kid = match package {
         Some(package) => {
             let mut workspace_members = krates.workspace_members();
-            workspace_members
-                .find_map(|node| {
-                    if let krates::Node::Krate { id, krate, .. } = node {
-                        if krate.name == package {
-                            return Some(id);
-                        }
+            let found = workspace_members.find_map(|node| {
+                if let krates::Node::Krate { id, krate, .. } = node {
+                    if krate.name == package {
+                        return Some(id);
                     }
-                    None
-                })
-                .ok_or_else(|| CrateConfigError::PackageNotFound(package.clone()))?
+                }
+                None
+            });
+
+            if found.is_none() {
+                eprintln!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
+                eprintln!("Packages in the workspace:");
+                for package in krates.workspace_members() {
+                    if let krates::Node::Krate { krate, .. } = package {
+                        eprintln!("{}", krate.name());
+                    }
+                }
+            }
+
+            found.ok_or_else(|| CrateConfigError::PackageNotFound(package.clone()))?
         }
         None => {
             // Otherwise find the package that is the closest parent of the current directory
@@ -144,6 +154,7 @@ impl DioxusCrate {
         cmd.features(target.features.clone());
         let builder = krates::Builder::new();
         let krates = builder.build(cmd, |_| {})?;
+
         let package = find_main_package(target.package.clone(), &krates)?;
 
         let dioxus_config = load_dioxus_config(&krates, package)?.unwrap_or_default();
@@ -180,7 +191,7 @@ impl DioxusCrate {
     /// Compose an asset directory. Represents the typical "public" directory
     /// with publicly available resources (configurable in the `Dioxus.toml`).
     pub fn asset_dir(&self) -> PathBuf {
-        self.workspace_dir()
+        self.crate_dir()
             .join(&self.dioxus_config.application.asset_dir)
     }
 
@@ -190,22 +201,6 @@ impl DioxusCrate {
     pub fn out_dir(&self) -> PathBuf {
         self.workspace_dir()
             .join(&self.dioxus_config.application.out_dir)
-    }
-
-    /// Compose an out directory for the fullstack platform. See `out_dir()`
-    /// method.
-    pub fn fullstack_out_dir(&self) -> PathBuf {
-        self.workspace_dir().join(".dioxus")
-    }
-
-    /// Compose a target directory for the server (fullstack-only?).
-    pub fn server_target_dir(&self) -> PathBuf {
-        self.fullstack_out_dir().join("ssr")
-    }
-
-    /// Compose a target directory for the client (fullstack-only?).
-    pub fn client_target_dir(&self) -> PathBuf {
-        self.fullstack_out_dir().join("web")
     }
 
     /// Get the workspace directory for the crate

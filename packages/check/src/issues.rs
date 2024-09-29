@@ -8,7 +8,8 @@ use std::{
 };
 
 use crate::metadata::{
-    AnyLoopInfo, ClosureInfo, ConditionalInfo, ForInfo, HookInfo, IfInfo, MatchInfo, WhileInfo,
+    AnyLoopInfo, AsyncInfo, ClosureInfo, ConditionalInfo, ForInfo, HookInfo, IfInfo, MatchInfo,
+    WhileInfo,
 };
 
 /// The result of checking a Dioxus file for issues.
@@ -142,7 +143,9 @@ impl Display for IssueReport {
                 Issue::HookInsideLoop(_, AnyLoopInfo::Loop(_)) => {
                     writeln!(f, "{} `loop {{ … }}` is the loop", note_text_prefix,)?;
                 }
-                Issue::HookOutsideComponent(_) | Issue::HookInsideClosure(_, _) => {}
+                Issue::HookOutsideComponent(_)
+                | Issue::HookInsideClosure(_, _)
+                | Issue::HookInsideAsync(_, _) => {}
             }
 
             if i < self.issues.len() - 1 {
@@ -165,6 +168,7 @@ pub enum Issue {
     HookInsideLoop(HookInfo, AnyLoopInfo),
     /// <https://dioxuslabs.com/learn/0.5/reference/hooks#no-hooks-in-closures>
     HookInsideClosure(HookInfo, ClosureInfo),
+    HookInsideAsync(HookInfo, AsyncInfo),
     HookOutsideComponent(HookInfo),
 }
 
@@ -174,6 +178,7 @@ impl Issue {
             Issue::HookInsideConditional(hook_info, _)
             | Issue::HookInsideLoop(hook_info, _)
             | Issue::HookInsideClosure(hook_info, _)
+            | Issue::HookInsideAsync(hook_info, _)
             | Issue::HookOutsideComponent(hook_info) => hook_info.clone(),
         }
     }
@@ -207,6 +212,9 @@ impl std::fmt::Display for Issue {
             }
             Issue::HookInsideClosure(hook_info, _) => {
                 write!(f, "hook called in a closure: `{}`", hook_info.name)
+            }
+            Issue::HookInsideAsync(hook_info, _) => {
+                write!(f, "hook called in an async block: `{}`", hook_info.name)
             }
             Issue::HookOutsideComponent(hook_info) => {
                 write!(

@@ -1,8 +1,7 @@
 use dioxus_core::internal::{HotReloadTemplateWithLocation, HotReloadedTemplate};
-use dioxus_rsx::{
-    hot_reload::{diff_rsx, ChangedRsx},
-    CallBody, HotReloadingContext,
-};
+use dioxus_core_types::HotReloadingContext;
+use dioxus_rsx::CallBody;
+use dioxus_rsx_hotreload::{diff_rsx, ChangedRsx};
 use krates::cm::MetadataCommand;
 use krates::Cmd;
 pub use std::collections::HashMap;
@@ -155,7 +154,7 @@ impl FileMap {
             let template_location = template_location(old_start, file);
 
             // Returns a list of templates that are hotreloadable
-            let hotreload_result = dioxus_rsx::hot_reload::HotReloadResult::new::<Ctx>(
+            let hotreload_result = dioxus_rsx_hotreload::HotReloadResult::new::<Ctx>(
                 &old_call_body.body,
                 &new_call_body.body,
                 template_location.clone(),

@@ -1,7 +1,7 @@
 use dioxus::html::SerializedHtmlEventConverter;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 use tracing_fluent_assertions::{AssertionRegistry, AssertionsLayer};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
@@ -42,12 +42,11 @@ fn basic_tracing() {
     edited_virtual_dom.assert();
 
     for _ in 0..3 {
-        dom.handle_event(
-            "click",
-            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-            ElementId(2),
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
+        dom.runtime().handle_event("click", event, ElementId(2));
         dom.process_events();
         _ = dom.render_immediate_to_vec();
     }

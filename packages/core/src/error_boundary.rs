@@ -106,7 +106,7 @@ pub trait Context<T, E>: private::Sealed {
     ///             "Error parsing number: {error}"
     ///         }
     ///     })?;
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn show(self, display_error: impl FnOnce(&E) -> Element) -> Result<T>;
@@ -120,7 +120,7 @@ pub trait Context<T, E>: private::Sealed {
     ///     // You can bubble up errors with `?` inside components, and event handlers
     ///     // Along with the error itself, you can provide a way to display the error by calling `context`
     ///     let number = "-1234".parse::<usize>().context("Parsing number inside of the NumberParser")?;
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn context<C: Display + 'static>(self, context: C) -> Result<T>;
@@ -134,7 +134,7 @@ pub trait Context<T, E>: private::Sealed {
     ///     // You can bubble up errors with `?` inside components, and event handlers
     ///     // Along with the error itself, you can provide a way to display the error by calling `context`
     ///     let number = "-1234".parse::<usize>().with_context(|| format!("Timestamp: {:?}", std::time::Instant::now()))?;
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn with_context<C: Display + 'static>(self, context: impl FnOnce() -> C) -> Result<T>;
@@ -451,17 +451,6 @@ impl CapturedError {
         self
     }
 
-    /// Clone the error while retaining the mounted information of the error
-    pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            error: self.error.clone(),
-            backtrace: self.backtrace.clone(),
-            scope: self.scope,
-            render: self.render.clone_mounted(),
-            context: self.context.clone(),
-        }
-    }
-
     /// Get a VNode representation of the error if the error provides one
     pub fn show(&self) -> Option<Element> {
         if self.render == VNode::placeholder() {
@@ -527,7 +516,6 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 
 fn default_handler(errors: ErrorContext) -> Element {
     static TEMPLATE: Template = Template {
-        name: "error_handle.rs:42:5:884",
         roots: &[TemplateNode::Element {
             tag: "div",
             namespace: None,
@@ -549,7 +537,6 @@ fn default_handler(errors: ErrorContext) -> Element {
             .iter()
             .map(|e| {
                 static TEMPLATE: Template = Template {
-                    name: "error_handle.rs:43:5:884",
                     roots: &[TemplateNode::Element {
                         tag: "pre",
                         namespace: None,
@@ -753,7 +740,6 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
     if errors.is_empty() {
         std::result::Result::Ok({
             static TEMPLATE: Template = Template {
-                name: "examples/error_handle.rs:81:17:2342",
                 roots: &[TemplateNode::Dynamic { id: 0usize }],
                 node_paths: &[&[0u8]],
                 attr_paths: &[],

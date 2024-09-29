@@ -98,7 +98,7 @@ fn complex_kitchen_sink() {
                     }
                 })}
             }
-            div { class: "px-4", {is_current.then(|| rsx!{ children })} }
+            div { class: "px-4", {is_current.then(|| rsx! { children })} }
         }
 
         // No nesting

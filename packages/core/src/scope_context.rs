@@ -424,6 +424,8 @@ impl Scope {
 
                 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
                 Functions prefixed with "use" should never be called conditionally.
+
+                Help: Run `dx check` to look for check for some common hook errors.
                 "#,
             )
     }
@@ -556,13 +558,13 @@ impl ScopeId {
     /// fn Component() -> Element {
     ///     let request = spawn(async move {
     ///         match reqwest::get("https://api.example.com").await {
-    ///             Ok(_) => todo!(),
+    ///             Ok(_) => unimplemented!(),
     ///             // You can explicitly throw an error into a scope with throw_error
     ///             Err(err) => ScopeId::APP.throw_error(err)
     ///         }
     ///     });
     ///
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {

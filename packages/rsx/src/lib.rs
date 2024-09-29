@@ -1,7 +1,7 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-//! Parse the root tokens in the rsx!{ } macro
+//! Parse the root tokens in the rsx! { } macro
 //! =========================================
 //!
 //! This parsing path emerges directly from the macro call, with `RsxRender` being the primary entrance into parsing.
@@ -77,11 +77,6 @@ pub use node::*;
 pub use partial_closure::PartialClosure;
 pub use rsx_call::*;
 pub use template_body::TemplateBody;
-
-pub mod hot_reload;
-
-#[cfg(feature = "hot_reload_traits")]
-pub use hot_reload::HotReloadingContext;
 
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{

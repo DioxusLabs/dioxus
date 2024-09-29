@@ -112,6 +112,18 @@ impl ClosureInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Information about an async block.
+pub struct AsyncInfo {
+    pub span: Span,
+}
+
+impl AsyncInfo {
+    pub const fn new(span: Span) -> Self {
+        Self { span }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Information about a component function.
 pub struct ComponentInfo {
     pub span: Span,

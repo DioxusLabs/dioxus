@@ -222,6 +222,9 @@ impl ScriptProps {
         if let Some(r#type) = &self.r#type {
             attributes.push(("type", r#type.clone()));
         }
+        if let Some(src) = &self.src {
+            attributes.push(("src", src.clone()));
+        }
         attributes
     }
 

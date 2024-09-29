@@ -20,7 +20,7 @@ pub struct Renderer {
     render_components: Option<ComponentRenderCallback>,
 
     /// A cache of templates that have been rendered
-    template_cache: FxHashMap<usize, Arc<StringCache>>,
+    template_cache: FxHashMap<Template, Arc<StringCache>>,
 
     /// The current dynamic node id for hydration
     dynamic_node_id: usize,
@@ -108,7 +108,7 @@ impl Renderer {
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.template.id())
+            .entry(template.template)
             .or_insert_with(move || Arc::new(StringCache::from_template(template).unwrap()))
             .clone();
 
@@ -243,7 +243,11 @@ impl Renderer {
                     // then write any listeners
                     for name in accumulated_listeners.drain(..) {
                         write!(buf, ",{}:", &name[2..])?;
-                        write!(buf, "{}", dioxus_html::event_bubbles(&name[2..]) as u8)?;
+                        write!(
+                            buf,
+                            "{}",
+                            dioxus_core_types::event_bubbles(&name[2..]) as u8
+                        )?;
                     }
                 }
 

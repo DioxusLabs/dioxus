@@ -10,7 +10,6 @@ use crate::{
 };
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 pub struct HotreloadedLiteral {
@@ -19,7 +18,6 @@ pub struct HotreloadedLiteral {
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum HotReloadLiteral {
@@ -71,7 +69,6 @@ impl Hash for HotReloadLiteral {
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FmtedSegments {
@@ -98,6 +95,8 @@ impl FmtedSegments {
     }
 }
 
+type StaticStr = &'static str;
+
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -107,7 +106,7 @@ pub enum FmtSegment {
             feature = "serialize",
             serde(deserialize_with = "deserialize_string_leaky")
         )]
-        value: &'static str,
+        value: StaticStr,
     },
     Dynamic {
         id: usize,
@@ -170,21 +169,34 @@ impl DynamicLiteralPool {
             *(Box::new(t) as Box<dyn Any>).downcast::<T2>().unwrap()
         }
         let grab_float = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_float).expect("Expected a float component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_float).unwrap_or_else(|| {
+                tracing::error!("Expected a float component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
+                Default::default()
+
+        })
         };
         let grab_int = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_int).expect("Expected an int component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_int).unwrap_or_else(|| {
+                tracing::error!("Expected a integer component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
+                Default::default()
+            })
         };
         let grab_bool = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_bool).expect("Expected a bool component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_bool).unwrap_or_else(|| {
+                tracing::error!("Expected a bool component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
+                Default::default()
+            })
         };
         let grab_fmted = || {
-            self.get_component_property(id, hot_reload, |fmted| HotReloadLiteral::as_fmted(fmted).map(|segments| self.render_formatted(segments))).expect("Expected a string component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+            self.get_component_property(id, hot_reload, |fmted| HotReloadLiteral::as_fmted(fmted).map(|segments| self.render_formatted(segments))).unwrap_or_else(|| {
+                tracing::error!("Expected a string component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
+                Default::default()
+            })
         };
         match TypeId::of::<T>() {
             // Any string types that accept a literal
             _ if TypeId::of::<String>() == TypeId::of::<T>() => assert_type(grab_fmted()),
-            _ if TypeId::of::<&'static str>() == TypeId::of::<T>() => {
+            _ if TypeId::of::<&str>() == TypeId::of::<T>() => {
                 assert_type(Box::leak(grab_fmted().into_boxed_str()) as &'static str)
             }
             // Any integer types that accept a literal
@@ -235,15 +247,6 @@ impl DynamicValuePool {
 
     pub fn render_with(&mut self, hot_reload: &HotReloadedTemplate) -> VNode {
         // Get the node_paths from a depth first traversal of the template
-        let node_paths = hot_reload.node_paths();
-        let attr_paths = hot_reload.attr_paths();
-
-        let template = Template {
-            name: hot_reload.name,
-            roots: hot_reload.roots,
-            node_paths,
-            attr_paths,
-        };
         let key = hot_reload
             .key
             .as_ref()
@@ -259,7 +262,7 @@ impl DynamicValuePool {
             .map(|attr| self.render_attribute(attr))
             .collect();
 
-        VNode::new(key, template, dynamic_nodes, dynamic_attrs)
+        VNode::new(key, hot_reload.template, dynamic_nodes, dynamic_attrs)
     }
 
     fn render_dynamic_node(&mut self, node: &HotReloadDynamicNode) -> DynamicNode {
@@ -309,17 +312,17 @@ impl DynamicValuePool {
 #[doc(hidden)]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub struct HotReloadTemplateWithLocation {
     pub location: String,
     pub template: HotReloadedTemplate,
 }
 
+type StaticTemplateArray = &'static [TemplateNode];
+
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct HotReloadedTemplate {
-    pub name: &'static str,
     pub key: Option<FmtedSegments>,
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
@@ -328,29 +331,38 @@ pub struct HotReloadedTemplate {
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_leaky")
     )]
-    pub roots: &'static [TemplateNode],
+    pub roots: StaticTemplateArray,
+    /// The template that is computed from the hot reload roots
+    template: Template,
 }
 
 impl HotReloadedTemplate {
     pub fn new(
-        name: &'static str,
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
         roots: &'static [TemplateNode],
     ) -> Self {
+        let node_paths = Self::node_paths(roots);
+        let attr_paths = Self::attr_paths(roots);
+
+        let template = Template {
+            roots,
+            node_paths,
+            attr_paths,
+        };
         Self {
-            name,
             key,
             dynamic_nodes,
             dynamic_attributes,
             component_values,
             roots,
+            template,
         }
     }
 
-    fn node_paths(&self) -> &'static [&'static [u8]] {
+    fn node_paths(roots: &'static [TemplateNode]) -> &'static [&'static [u8]] {
         fn add_node_paths(
             roots: &[TemplateNode],
             node_paths: &mut Vec<&'static [u8]>,
@@ -373,12 +385,12 @@ impl HotReloadedTemplate {
         }
 
         let mut node_paths = Vec::new();
-        add_node_paths(self.roots, &mut node_paths, Vec::new());
+        add_node_paths(roots, &mut node_paths, Vec::new());
         let leaked: &'static [&'static [u8]] = Box::leak(node_paths.into_boxed_slice());
         leaked
     }
 
-    fn attr_paths(&self) -> &'static [&'static [u8]] {
+    fn attr_paths(roots: &'static [TemplateNode]) -> &'static [&'static [u8]] {
         fn add_attr_paths(
             roots: &[TemplateNode],
             attr_paths: &mut Vec<&'static [u8]>,
@@ -403,7 +415,7 @@ impl HotReloadedTemplate {
         }
 
         let mut attr_paths = Vec::new();
-        add_attr_paths(self.roots, &mut attr_paths, Vec::new());
+        add_attr_paths(roots, &mut attr_paths, Vec::new());
         let leaked: &'static [&'static [u8]] = Box::leak(attr_paths.into_boxed_slice());
         leaked
     }
@@ -412,7 +424,6 @@ impl HotReloadedTemplate {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadDynamicNode {
     Dynamic(usize),
     Formatted(FmtedSegments),
@@ -421,7 +432,6 @@ pub enum HotReloadDynamicNode {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadDynamicAttribute {
     Dynamic(usize),
     Named(NamedAttribute),
@@ -436,13 +446,13 @@ pub struct NamedAttribute {
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_string_leaky")
     )]
-    name: &'static str,
+    name: StaticStr,
     /// The namespace of this attribute. Does not exist in the HTML spec
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_option_leaky")
     )]
-    namespace: Option<&'static str>,
+    namespace: Option<StaticStr>,
 
     value: HotReloadAttributeValue,
 }
@@ -464,7 +474,6 @@ impl NamedAttribute {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadAttributeValue {
     Literal(HotReloadLiteral),
     Dynamic(usize),

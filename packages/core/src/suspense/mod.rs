@@ -70,15 +70,6 @@ impl SuspendedFuture {
     pub fn task(&self) -> Task {
         self.task
     }
-
-    /// Clone the future while retaining the mounted information of the future
-    pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            task: self.task,
-            origin: self.origin,
-            placeholder: self.placeholder.clone_mounted(),
-        }
-    }
 }
 
 /// A context with information about suspended components
@@ -117,7 +108,7 @@ impl SuspenseContext {
             .suspended_nodes
             .borrow()
             .as_ref()
-            .map(|node| node.clone_mounted())
+            .map(|node| node.clone())
     }
 
     /// Set the suspense boundary's suspended nodes

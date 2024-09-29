@@ -338,7 +338,7 @@ impl Route {
             RouteType::Leaf { .. } => None,
         };
 
-        create_error_type(error_name, &self.segments, child_type)
+        create_error_type(&self.route, error_name, &self.segments, child_type)
     }
 
     pub fn parse_query(&self) -> TokenStream2 {

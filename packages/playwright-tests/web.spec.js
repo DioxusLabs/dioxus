@@ -94,4 +94,16 @@ test("eval", async ({ page }) => {
   await expect(div).toHaveText("returned eval value");
 });
 
-// Shutdown the li
+test("prevent default", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+
+  // Expect the page to contain the div with the eval and have no text.
+  const a = page.locator("a.prevent-default");
+  await expect(a).toHaveText("View source");
+
+  // Click the <a> element to change the text
+  await a.click();
+
+  // Check that the <a> element changed.
+  await expect(a).toHaveText("Psych!");
+});

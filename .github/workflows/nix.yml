@@ -1,0 +1,43 @@
+name: "Nix CI"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - packages/**
+      - examples/**
+      - docs/guide/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
+      - Makefile.toml
+
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Install omnix
+        run: nix --accept-flake-config profile install "github:juspay/omnix"
+      - name: Build all flake outputs
+        run: om ci
+      - name: Ensure devShell has all build deps
+        run: nix develop -c cargo build -p dioxus-cli

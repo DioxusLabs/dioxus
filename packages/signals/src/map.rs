@@ -88,7 +88,7 @@ where
     type Target = dyn Fn() -> O;
 
     fn deref(&self) -> &Self::Target {
-        Readable::deref_impl(self)
+        unsafe { Readable::deref_impl(self) }
     }
 }
 

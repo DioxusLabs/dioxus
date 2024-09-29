@@ -82,6 +82,6 @@ impl Nest {
     pub fn error_type(&self) -> TokenStream {
         let error_name = self.error_ident();
 
-        create_error_type(error_name, &self.segments, None)
+        create_error_type(&self.route, error_name, &self.segments, None)
     }
 }

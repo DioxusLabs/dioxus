@@ -237,7 +237,7 @@ impl Element {
         }
 
         for attr in attrs {
-            if attr.name.to_string() == "key" {
+            if attr.name.is_likely_key() {
                 continue;
             }
 
@@ -301,15 +301,10 @@ impl Element {
     }
 
     pub(crate) fn key(&self) -> Option<&AttributeValue> {
-        for attr in &self.raw_attributes {
-            if let AttributeName::BuiltIn(name) = &attr.name {
-                if name == "key" {
-                    return Some(&attr.value);
-                }
-            }
-        }
-
-        None
+        self.raw_attributes
+            .iter()
+            .find(|attr| attr.name.is_likely_key())
+            .map(|attr| &attr.value)
     }
 
     fn completion_hints(&self) -> TokenStream2 {

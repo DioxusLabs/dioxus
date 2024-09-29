@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/counter.css");
 
 static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
-static DOUBLED_COUNT: GlobalMemo<i32> = Signal::global_memo(|| COUNT() * 2);
+static DOUBLED_COUNT: GlobalMemo<i32> = Memo::global(|| COUNT() * 2);
 
 fn main() {
     launch(app);
@@ -52,7 +52,7 @@ fn Display() -> Element {
 fn Reset() -> Element {
     // Not all write methods are available on global signals since `write` requires a mutable reference. In these cases,
     // We can simply pull out the actual signal using the signal() method.
-    let mut as_signal = use_hook(|| COUNT.signal());
+    let mut as_signal = use_hook(|| COUNT.resolve());
 
     rsx! {
         button { onclick: move |_| as_signal.set(0), "Reset" }

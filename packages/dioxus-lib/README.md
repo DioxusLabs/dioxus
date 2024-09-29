@@ -13,7 +13,7 @@ This overview provides a brief introduction to Dioxus. For a more in-depth guide
 
 - [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
 - [Book (0.5)](https://dioxuslabs.com/learn/0.5)
-- [Examples](https://github.com/DioxusLabs/example-projects)
+- [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
 # Overview and Goals
 
