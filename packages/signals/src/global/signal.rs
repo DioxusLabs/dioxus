@@ -10,7 +10,7 @@ impl<T> InitializeFromFunction<T> for Signal<T> {
 }
 
 /// A signal that can be accessed from anywhere in the application and created in a static
-pub type GlobalSignal<T> = Global<Signal<T>, T>;
+pub type GlobalSignal<T, S = UnsyncStorage> = Global<Signal<T, S>, T>;
 
 impl<T: 'static> GlobalSignal<T> {
     /// Get the generational id of the signal.
