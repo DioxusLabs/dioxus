@@ -1,6 +1,7 @@
-// use crate::routable::Routable;
-// use dioxus_lib::prelude::*;
-// use document::UseEval;
+use super::HistoryProvider;
+use crate::routable::Routable;
+use dioxus_lib::prelude::*;
+use document::UseEval;
 use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, RwLock};
 use std::{collections::BTreeMap, rc::Rc, str::FromStr, sync::Arc};

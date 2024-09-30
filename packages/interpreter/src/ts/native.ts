@@ -334,7 +334,6 @@ export class NativeInterpreter extends JSChannel_ {
       });
   }
 
-
   kickAllStylesheetsOnPage() {
     // If this function is being called and we have not explicitly set kickStylesheets to true, then we should
     // force kick the stylesheets, regardless if they have a dioxus attribute or not
@@ -342,51 +341,11 @@ export class NativeInterpreter extends JSChannel_ {
     let stylesheets = document.querySelectorAll("link[rel=stylesheet]");
     for (let i = 0; i < stylesheets.length; i++) {
       let sheet = stylesheets[i] as HTMLLinkElement;
-
       // Using `cache: reload` will force the browser to re-fetch the stylesheet and bust the cache
       fetch(sheet.href, { cache: "reload" }).then(() => {
-        // Change the href invalidate parameter to a random number
-        let entropy = Math.random();
-
-        // Cap the entropy to_string length to 10 characters
-        let entropy_string = entropy.toString().substring(0, 10);
-
-        // Split the href into the original and the query string
-        let [href] = sheet.href.split("?entropy=");
-        sheet.href = href + "?entropy=" + entropy_string;
+        sheet.href = sheet.href + "?" + Math.random();
       });
     }
-
-    // Modify the templates' links to include a random entropy parameter
-    this.kickCachedLinks();
-  }
-
-  // modify all the links in our saved templates to include a random entropy parameter
-  // ensures that templates, when rendered again, have some entropy
-  kickCachedLinks() {
-    Object.values(this.templates).forEach((template) => {
-      template.forEach((node) => {
-        let walker = document.createTreeWalker(node, NodeFilter.SHOW_ELEMENT);
-        while (walker.nextNode()) {
-          let element = walker.currentNode as HTMLElement;
-          if (element.tagName === "LINK") {
-            // if it has a href attribute, change it
-            let attr = element.getAttribute("href");
-            if (attr) {
-              // Change the href invalidate parameter to a random number
-              let entropy = Math.random();
-
-              // Cap the entropy to_string length to 10 characters
-              let entropy_string = entropy.toString().substring(0, 10);
-
-              // Split the href into the original and the query string
-              let [href] = attr.split("?entropy=");
-              element.setAttribute("href", href + "?entropy=" + entropy_string);
-            }
-          }
-        }
-      });
-    });
   }
 
   //  A liveview only function
@@ -448,7 +407,7 @@ function handleVirtualdomEventSync(
 }
 
 function getTargetId(target: EventTarget): NodeId | null {
-  // Ensure that the target is a node, sometimes it's not
+  // Ensure that the target is a node, sometimes it's nota
   if (!(target instanceof Node)) {
     return null;
   }
@@ -484,7 +443,7 @@ function getTargetId(target: EventTarget): NodeId | null {
 //           let target_id = find_real_id(target);
 //           if (target_id !== null) {
 //             const send = (event_name) => {
-//               const message = window.interpreter.serializeIpcMessage("file_dialog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+//               const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
 //               window.ipc.postMessage(message);
 //             };
 //             send("change&input");

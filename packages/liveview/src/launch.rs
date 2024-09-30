@@ -11,7 +11,6 @@ pub fn launch(
 ) -> ! {
     #[cfg(feature = "multi-thread")]
     let mut builder = tokio::runtime::Builder::new_multi_thread();
-
     #[cfg(not(feature = "multi-thread"))]
     let mut builder = tokio::runtime::Builder::new_current_thread();
 

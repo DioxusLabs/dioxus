@@ -18,6 +18,7 @@ mod hooks;
 mod ipc;
 mod menubar;
 mod protocol;
+mod query;
 mod shortcut;
 mod waker;
 mod webview;

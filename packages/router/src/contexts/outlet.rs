@@ -28,7 +28,7 @@ pub(crate) fn use_outlet_context<R: 'static>() -> OutletContext<R> {
 impl<R> OutletContext<R> {
     pub(crate) fn render() -> Element
     where
-        R: Routable,
+        R: Routable + Clone,
     {
         let router = use_router_internal().expect("Outlet must be inside of a router");
         let outlet: OutletContext<R> = use_outlet_context();

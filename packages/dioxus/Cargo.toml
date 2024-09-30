@@ -12,8 +12,6 @@ rust-version = "1.79.0"
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-core-types = { workspace = true }
-dioxus-document = { workspace = true }
 dioxus-html = { workspace = true, default-features = false, optional = true }
 dioxus-core-macro = { workspace = true, optional = true }
 dioxus-config-macro = { workspace = true, optional = true }
@@ -23,13 +21,11 @@ dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, default-features = false, optional = true }
 dioxus-mobile = { workspace = true, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
-dioxus-fullstack = { workspace = true, default-features = true, optional = true, features = ["base"] }
+dioxus-fullstack = { workspace = true, default-features = true, optional = true }
 dioxus-static-site-generation = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
-dioxus-isrg = { workspace = true, optional = true }
 manganis = { workspace = true, optional = true }
-dioxus-devtools = { workspace = true, optional = true }
 
 serde = { version = "1.0.136", optional = true }
 axum = { workspace = true, optional = true }
@@ -46,69 +42,36 @@ html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools", "dioxus-fullstack?/devtools"]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
-file-engine = ["dioxus-web?/file-engine"]
-asset = ["dep:manganis"]
-document = ["dioxus-web?/document"]
+file_engine = ["dioxus-web?/file_engine"]
+asset = ["dep:manganis", "dioxus-core/manganis"]
+document = ["dioxus-web?/document", "dioxus-html?/document"]
 
 launch = ["dep:dioxus-config-macro"]
-router = [
-    "dep:dioxus-router"
-]
+router = ["dep:dioxus-router"]
 
 # Platforms
-fullstack = [
-    "dep:dioxus-fullstack",
-    "dioxus-config-macro/fullstack",
-    "dep:serde",
-    # "dioxus-router?/fullstack",
-]
-desktop = [
-    "dep:dioxus-desktop",
-    # "dioxus-fullstack?/desktop",
-    "dioxus-config-macro/desktop",
-]
-mobile = [
-    "dep:dioxus-mobile",
-    # "dioxus-fullstack?/mobile",
-    "dioxus-config-macro/mobile",
-]
-web = [
-    "dep:dioxus-web",
-    # "dioxus-fullstack?/web",
-    "dioxus-static-site-generation?/web",
-    "dioxus-config-macro/web",
-    # "dioxus-router?/web",
-]
-ssr = ["dep:dioxus-ssr",  "dioxus-config-macro/ssr"]
-# ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
-liveview = [
-    "dep:dioxus-liveview",
-    "dioxus-config-macro/liveview",
-    # "dioxus-router?/liveview",
-]
-static-generation = [
-    "dep:dioxus-static-site-generation",
-    "dioxus-config-macro/static-generation",
-]
+fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde", "dioxus-router?/fullstack"]
+desktop = ["dep:dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
+mobile = ["dep:dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
+web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
+ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
+liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
+static-generation = ["dep:dioxus-static-site-generation", "dioxus-config-macro/static-generation"]
 axum = ["server"]
-server = [
-    "dioxus-fullstack?/axum",
-    "dioxus-fullstack?/server",
-    "dioxus-static-site-generation?/server",
-    "ssr",
-    "dioxus-liveview?/axum",
-    "dep:axum",
-]
+server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
+
+# This feature just disables the no-renderer-enabled warning
+third-party-renderer = []
 
 [dev-dependencies]
-criterion = { workspace = true }
-dioxus = { workspace = true }
-env_logger = { workspace = true }
 futures-util = { workspace = true }
-rand = { version = "0.8.4", features = ["small_rng"] }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
+rand = { version = "0.8.4", features = ["small_rng"] }
+criterion = { workspace = true }
+thiserror = { workspace = true }
+env_logger = "0.10.0"
+tokio = { workspace = true, features = ["full"] }
+dioxus = { workspace = true }
 
 [[bench]]
 name = "jsframework"
@@ -126,5 +89,5 @@ features = [
     "html",
     "liveview",
     "static-generation",
-    "server",
+    "server"
 ]

@@ -25,8 +25,6 @@ pub(crate) enum RehydrationError {
     SuspenseHydrationIdNotFound,
     /// The client tried to rehydrate a dom id that was not found on the server
     ElementNotFound,
-    /// Could not deserialize the data, might not be an issue?
-    MissingData,
 }
 
 #[derive(Debug)]
@@ -140,8 +138,7 @@ impl WebsysDom {
             self.interpreter.base().push_root(node);
         }
 
-        let server_data =
-            HTMLDataCursor::from_serialized(&data).ok_or_else(|| RehydrationError::MissingData)?;
+        let server_data = HTMLDataCursor::from_serialized(&data);
         // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
         if let Some(error) = server_data.error() {
             dom.in_runtime(|| id.throw_error(error));

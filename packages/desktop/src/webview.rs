@@ -1,7 +1,6 @@
 use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
-use crate::file_upload::NativeFileEngine;
 use crate::menubar::DioxusMenu;
 use crate::{
     app::SharedContext,
@@ -14,7 +13,6 @@ use crate::{
     Config, DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
-use dioxus_document::Document;
 use dioxus_hooks::to_owned;
 use dioxus_html::{prelude::Document, HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
@@ -89,6 +87,7 @@ impl WebviewEdits {
             return Default::default();
         };
 
+        let query = desktop_context.query.clone();
         let recent_file = desktop_context.file_hover.clone();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
@@ -192,7 +191,7 @@ impl WebviewInstance {
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
-        let asset_handlers = AssetHandlers::new();
+        let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
@@ -206,16 +205,19 @@ impl WebviewInstance {
                 edits
             ];
             move |request, responder: RequestAsyncResponder| {
-                protocol::desktop_handler(
-                    request,
-                    asset_handlers.clone(),
-                    responder,
-                    &edits,
+                // Try to serve the index file first
+                if let Some(index_bytes) = protocol::index_request(
+                    &request,
                     custom_head.clone(),
                     custom_index.clone(),
                     &root_name,
                     headless,
-                )
+                ) {
+                    return responder.respond(index_bytes);
+                }
+
+                // Otherwise, try to serve an asset, either from the user or the filesystem
+                protocol::desktop_handler(request, asset_handlers.clone(), responder, &edits);
             }
         };
 
@@ -333,8 +335,6 @@ impl WebviewInstance {
             None
         };
 
-        // The context will function as both the document and the context provider
-        // But we need to disambiguate the types for rust's TypeId to downcast Rc<dyn Document> properly
         let desktop_context = Rc::from(DesktopService::new(
             webview,
             window,
@@ -342,14 +342,13 @@ impl WebviewInstance {
             asset_handlers,
             file_hover,
         ));
-        let as_document: Rc<dyn Document> = desktop_context.clone() as Rc<dyn Document>;
 
         // Provide the desktop context to the virtual dom and edit handler
         edits.set_desktop_context(desktop_context.clone());
-
+        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
         dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
-            ScopeId::ROOT.provide_context(as_document);
+            ScopeId::ROOT.provide_context(provider);
         });
 
         WebviewInstance {

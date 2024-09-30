@@ -13,15 +13,19 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 [dependencies]
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
-js-sys = { workspace = true, optional = true }
-web-sys = { workspace = true, optional = true, features = ["Element", "Node"] }
-serde = { workspace = true, optional = true, features = ["derive"] }
+js-sys = { version = "0.3.56", optional = true }
+web-sys = { version = "0.3.56", optional = true, features = [
+    "Element",
+    "Node",
+] }
+sledgehammer_bindgen = { version = "0.6.0", default-features = false, optional = true }
+sledgehammer_utils = { version = "0.3.1", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
 rustc-hash = { workspace = true, optional = true }
 
 dioxus-core = { workspace = true, optional = true }
 dioxus-core-types = { workspace = true, optional = true }
-sledgehammer_bindgen = { version = "0.6.0", default-features = false, optional = true }
-sledgehammer_utils = { version = "0.3.1", optional = true }
+dioxus-html = { workspace = true, optional = true }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
@@ -38,5 +42,5 @@ webonly = [
     "dep:web-sys",
     "sledgehammer_bindgen/web",
 ]
-binary-protocol = ["sledgehammer", "dep:dioxus-core", "dep:dioxus-core-types"]
+binary-protocol = ["sledgehammer", "dep:dioxus-core", "dep:dioxus-core-types", "dep:dioxus-html"]
 minimal_bindings = []

@@ -8,7 +8,7 @@
 use dioxus::{prelude::*, CapturedError};
 
 fn main() {
-    launch(app);
+    LaunchBuilder::fullstack().launch(app);
 }
 
 fn app() -> Element {
@@ -16,8 +16,8 @@ fn app() -> Element {
     let mut text = use_signal(|| "...".to_string());
 
     rsx! {
-        document::Title { "hello axum! {count}" }
         h1 { "hello axum! {count}" }
+        Title { "hello axum! {count}" }
         button { class: "increment-button", onclick: move |_| count += 1, "Increment" }
         button {
             class: "server-button",

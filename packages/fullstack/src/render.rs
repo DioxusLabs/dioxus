@@ -1,6 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::streaming::{Mount, StreamingRenderer};
-use dioxus_document::Document;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{CachedRender, RenderFreshness};
 use dioxus_ssr::Renderer;
@@ -449,7 +448,7 @@ impl FullstackHTMLTemplate {
         }
         to.write_str(&index.head_after_title)?;
 
-        let document: Option<std::rc::Rc<dyn Document>> =
+        let document: Option<std::rc::Rc<dyn dioxus_lib::prelude::document::Document>> =
             virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
         let document: Option<&crate::document::server::ServerDocument> = document
             .as_ref()

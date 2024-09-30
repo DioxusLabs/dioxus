@@ -1,21 +1,24 @@
 use crate::{
     app::SharedContext,
-    assets::AssetHandlers,
+    assets::AssetHandlerRegistry,
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
+    query::QueryEngine,
     shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
     webview::WebviewInstance,
-    Config, WryEventHandler,
+    AssetRequest, Config, WryEventHandler,
 };
-use dioxus_core::{prelude::ScopeId, VirtualDom};
-use dioxus_document::Eval;
+use dioxus_core::{
+    prelude::{current_scope_id, ScopeId},
+    VirtualDom,
+};
 use std::rc::{Rc, Weak};
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
-use wry::WebView;
+use wry::{RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
@@ -53,7 +56,9 @@ pub struct DesktopService {
 
     pub(crate) shared: Rc<SharedContext>,
 
-    pub(crate) asset_handlers: AssetHandlers,
+    /// The receiver for queries about the current window
+    pub(super) query: QueryEngine,
+    pub(crate) asset_handlers: AssetHandlerRegistry,
     pub(crate) file_hover: NativeFileHover,
 
     #[cfg(target_os = "ios")]
@@ -74,7 +79,7 @@ impl DesktopService {
         webview: WebView,
         window: Window,
         shared: Rc<SharedContext>,
-        asset_handlers: AssetHandlers,
+        asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,
     ) -> Self {
         Self {
@@ -83,6 +88,7 @@ impl DesktopService {
             shared,
             asset_handlers,
             file_hover,
+            query: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -220,9 +226,31 @@ impl DesktopService {
         self.shared.shortcut_manager.remove_all()
     }
 
-    /// Eval a javascript string into the current document
-    pub fn eval(&self, js: String) -> Eval {
-        dioxus_document::Document::eval(self, js)
+    /// Provide a callback to handle asset loading yourself.
+    /// If the ScopeId isn't provided, defaults to a global handler.
+    /// Note that the handler is namespaced by name, not ScopeId.
+    ///
+    /// When the component is dropped, the handler is removed.
+    ///
+    /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
+    pub fn register_asset_handler(
+        &self,
+        name: String,
+        handler: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
+        scope: Option<ScopeId>,
+    ) {
+        self.asset_handlers.register_handler(
+            name,
+            handler,
+            scope.unwrap_or(current_scope_id().unwrap_or(ScopeId(0))),
+        )
+    }
+
+    /// Removes an asset handler by its identifier.
+    ///
+    /// Returns `None` if the handler did not exist.
+    pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
+        self.asset_handlers.remove_handler(name).map(|_| ())
     }
 
     /// Push an objc view to the window

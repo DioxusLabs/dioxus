@@ -3,20 +3,19 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 mod adapters;
-mod config;
-mod document;
-mod element;
-mod events;
-mod pool;
-mod query;
-
+#[allow(unused_imports)]
 pub use adapters::*;
-pub use config::*;
-pub use pool::*;
 
+mod element;
+pub mod pool;
+mod query;
 use dioxus_interpreter_js::NATIVE_JS;
 use futures_util::{SinkExt, StreamExt};
-
+pub use pool::*;
+mod config;
+mod eval;
+mod events;
+pub use config::*;
 #[cfg(feature = "axum")]
 pub mod launch;
 
@@ -91,7 +90,7 @@ fn handle_edits_code() -> String {
             .unwrap_or_else(|| interpreter.len());
         interpreter.replace_range(import_start..import_end, "");
     }
-    let main_js = include_str!("./js/main.js");
+    let main_js = include_str!("./main.js");
     let js = format!("{interpreter}\n{main_js}");
     js
 }

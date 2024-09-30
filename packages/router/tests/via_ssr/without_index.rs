@@ -34,7 +34,7 @@ fn App(path: Route) -> Element {
     rsx! {
         Router::<Route> {
             config: {
-                move || RouterConfig::default().with_initial_path(path)
+                move || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
             }
         }
     }

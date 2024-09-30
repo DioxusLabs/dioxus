@@ -5,7 +5,7 @@ use crate::{
     ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
 use dioxus_core::{
-    prelude::{consume_context, use_hook_with_cleanup, RuntimeGuard},
+    prelude::{consume_context, current_scope_id, use_hook_with_cleanup, RuntimeGuard},
     use_hook, Runtime,
 };
 
@@ -64,15 +64,16 @@ pub fn use_asset_handler(
     name: &str,
     mut handler: impl FnMut(AssetRequest, RequestAsyncResponder) + 'static,
 ) {
-    let callback = use_callback(move |args: (AssetRequest, RequestAsyncResponder)| {
-        handler(args.0, args.1);
-    });
+    // wrap the user's handler in something that keeps it up to date
+    let cb = use_callback(move |(asset, responder)| handler(asset, responder));
 
     use_hook_with_cleanup(
         || {
-            crate::window()
-                .asset_handlers
-                .register_handler(name.to_string(), callback);
+            crate::window().asset_handlers.register_handler(
+                name.to_string(),
+                Box::new(move |asset, responder| cb((asset, responder))),
+                current_scope_id().unwrap(),
+            );
 
             Rc::new(name.to_string())
         },

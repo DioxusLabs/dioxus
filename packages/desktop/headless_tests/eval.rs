@@ -16,24 +16,23 @@ static EVALS_RETURNED: GlobalSignal<usize> = Signal::global(|| 0);
 fn app() -> Element {
     // Double 100 values in the value
     use_future(|| async {
-        let mut eval = document::eval(
+        let mut eval = eval(
             r#"for (let i = 0; i < 100; i++) {
             let value = await dioxus.recv();
             dioxus.send(value*2);
         }"#,
         );
-        todo!("Fix eval tests")
-        // for i in 0..100 {
-        //     eval.send(serde_json::Value::from(i)).unwrap();
-        //     let value = eval.recv().await.unwrap();
-        //     assert_eq!(value, serde_json::Value::from(i * 2));
-        //     EVALS_RECEIVED.with_mut(|x| *x += 1);
-        // }
+        for i in 0..100 {
+            eval.send(serde_json::Value::from(i)).unwrap();
+            let value = eval.recv().await.unwrap();
+            assert_eq!(value, serde_json::Value::from(i * 2));
+            EVALS_RECEIVED.with_mut(|x| *x += 1);
+        }
     });
 
     // Make sure returning no value resolves the future
     use_future(|| async {
-        let eval = document::eval(r#"return;"#);
+        let eval = eval(r#"return;"#);
 
         eval.await.unwrap();
         EVALS_RETURNED.with_mut(|x| *x += 1);
@@ -41,18 +40,17 @@ fn app() -> Element {
 
     // Return a value from the future
     use_future(|| async {
-        let eval = document::eval(
+        let eval = eval(
             r#"
         return [1, 2, 3];
         "#,
         );
 
-        todo!()
-        // assert_eq!(
-        //     Vec::<i32>::deserialize(&eval.await.unwrap()).unwrap(),
-        //     vec![1, 2, 3]
-        // );
-        // EVALS_RETURNED.with_mut(|x| *x += 1);
+        assert_eq!(
+            Vec::<i32>::deserialize(&eval.await.unwrap()).unwrap(),
+            vec![1, 2, 3]
+        );
+        EVALS_RETURNED.with_mut(|x| *x += 1);
     });
 
     use_memo(|| {

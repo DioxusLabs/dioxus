@@ -12,7 +12,7 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
-    launch(app);
+    LaunchBuilder::fullstack().launch(app);
 }
 
 fn app() -> Element {
@@ -44,7 +44,7 @@ fn LoadTitle() -> Element {
         .unwrap();
 
     rsx! {
-        document::Title { "{title.title}" }
+        Title { "{title.title}" }
     }
 }
 

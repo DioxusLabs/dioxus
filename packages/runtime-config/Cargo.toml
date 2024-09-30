@@ -1,6 +1,0 @@
-[package]
-name = "dioxus-runtime-config"
-edition = "2021"
-version.workspace = true
-
-[dependencies]

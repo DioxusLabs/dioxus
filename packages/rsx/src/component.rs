@@ -209,7 +209,7 @@ impl Component {
 
     /// Create the tokens we'll use for the props of the component
     ///
-    /// todo: don't create the tokenstream from scratch and instead dump it into the existing stream
+    /// todo: don't create the tokenstream from scratch and instead dump it into the existing streama
     fn create_props(&self) -> TokenStream2 {
         let manual_props = self.manual_props();
 
