@@ -61,7 +61,7 @@ pub enum Commands {
     /// Create a new project for Dioxus.
     New(create::Create),
 
-    /// Init a new project for Dioxus in an existing directory.
+    /// Init a new project for Dioxus in the current directory (by default).
     /// Will attempt to keep your project in a good state.
     Init(init::Init),
 
