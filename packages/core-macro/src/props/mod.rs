@@ -1015,11 +1015,11 @@ Finally, call `.build()` to create the instance of `{name}`.
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
-                    fn push_attribute(
+                    fn push_attribute<L>(
                         mut self,
                         name: &'static str,
                         ns: Option<&'static str>,
-                        attr: impl dioxus_core::prelude::IntoAttributeValue,
+                        attr: impl dioxus_core::prelude::IntoAttributeValue<L>,
                         volatile: bool
                     ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;

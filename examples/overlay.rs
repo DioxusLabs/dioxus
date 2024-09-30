@@ -22,7 +22,7 @@ fn app() -> Element {
     rsx! {
         head::Link {
             rel: "stylesheet",
-            href: asset!("./examples/assets/overlay.css"),
+            href: asset!("/examples/assets/overlay.css"),
         }
         if show_overlay() {
             div {

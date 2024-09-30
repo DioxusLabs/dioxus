@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!("./examples/assets/radio.css");
+const STYLE: Asset = asset!("/examples/assets/radio.css");
 
 fn main() {
     launch(app);

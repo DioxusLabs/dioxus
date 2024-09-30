@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
-const STYLE: &str = asset!("./examples/assets/todomvc.css");
+const STYLE: Asset = asset!("/examples/assets/todomvc.css");
 
 fn main() {
     launch(app);

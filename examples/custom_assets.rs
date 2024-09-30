@@ -8,10 +8,10 @@
 use dioxus::prelude::*;
 
 #[cfg(not(feature = "collect-assets"))]
-static ASSET_PATH: &str = "examples/assets/logo.png";
+static ASSET_PATH: &str = "/examples/assets/logo.png";
 
 #[cfg(feature = "collect-assets")]
-static ASSET_PATH: &str = asset!("examples/assets/logo.png".format(ImageType::Avif));
+static ASSET_PATH: &str = asset!("/examples/assets/logo.png".format(ImageType::Avif));
 
 fn main() {
     launch(app);
