@@ -250,8 +250,9 @@ impl Output {
     }
 
     pub fn push_cargo_log(&mut self, message: CompilerMessage) {
-        // currently disabled...
-        // self.push_log(TraceMsg::cargo(message));
+        if self.trace {
+            self.push_log(TraceMsg::cargo(message));
+        }
     }
 
     /// Add a message from stderr to the logs
@@ -794,7 +795,7 @@ impl Output {
             .map(|line| {
                 // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
                 let grapheme_count = console::strip_ansi_codes(line).graphemes(true).count() as u16;
-                grapheme_count.div_ceil(term_size.width).max(1)
+                grapheme_count.max(1).div_ceil(term_size.width)
             })
             .sum::<u16>();
 
@@ -803,7 +804,7 @@ impl Output {
 
         // We don't need to add any pushback if the frame is in the middle of the viewport
         // We'll then add some pushback to ensure the log scrolls up above the viewport.
-        let max_scrollback = lines_printed.min(actual_vh_height.saturating_sub(2));
+        let max_scrollback = lines_printed.min(actual_vh_height.saturating_sub(1));
 
         // Move the terminal's cursor down to the number of lines printed
         let remaining_space = term_size
@@ -848,13 +849,6 @@ impl Output {
                 crossterm::cursor::MoveTo(0, term_size.height - 1),
                 crossterm::style::Print("\n"),
             )?;
-        }
-
-        // Multiline logs will print a newline as part of their last line, so they need to be shoved up by one extra
-        // Otherwise they'll be clipped by the final viewport height
-        // In all likelihood, there's an off-by-on error in `to_push` for short lines, so this is likely an inverted fix
-        if lines_printed >= actual_vh_height {
-            crossterm::queue!(std::io::stdout(), crossterm::style::Print("\n"),)?;
         }
 
         // Force a clear
@@ -925,7 +919,6 @@ fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
                             TraceSrc::Bundle => Style::new().magenta(),
                             TraceSrc::Cargo => Style::new().yellow(),
                             TraceSrc::Unknown => Style::new().gray(),
-                            TraceSrc::Hotreload => Style::new().light_yellow(),
                         }),
                     );
 
