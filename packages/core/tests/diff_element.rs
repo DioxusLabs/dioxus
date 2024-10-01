@@ -10,6 +10,7 @@ fn text_diff() {
     }
 
     let mut vdom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(vdom.runtime());
     vdom.rebuild(&mut NoOpMutations);
 
     vdom.mark_dirty(ScopeId::APP);
@@ -44,6 +45,7 @@ fn element_swap() {
     }
 
     let mut vdom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(vdom.runtime());
     vdom.rebuild(&mut NoOpMutations);
 
     vdom.mark_dirty(ScopeId::APP);
@@ -124,9 +126,11 @@ fn attribute_diff() {
     }
 
     let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
+    let _guard = RuntimeGuard::new(vdom.runtime());
 
+    vdom.rebuild(&mut NoOpMutations);
     vdom.mark_dirty(ScopeId::APP);
+
     assert_eq!(
         vdom.render_immediate_to_vec().edits,
         [
@@ -193,9 +197,11 @@ fn diff_empty() {
     }
 
     let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
+    let _guard = RuntimeGuard::new(vdom.runtime());
 
+    vdom.rebuild(&mut NoOpMutations);
     vdom.mark_dirty(ScopeId::APP);
+
     let edits = vdom.render_immediate_to_vec().edits;
 
     assert_eq!(

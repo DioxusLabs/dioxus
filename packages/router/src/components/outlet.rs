@@ -65,6 +65,7 @@ use dioxus_lib::prelude::*;
 /// # }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
+/// # let _guard = RuntimeGuard::new(vdom.runtime());
 /// # vdom.rebuild_in_place();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Child</p>");
 /// ```

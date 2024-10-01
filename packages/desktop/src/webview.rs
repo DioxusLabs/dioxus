@@ -20,13 +20,13 @@ use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
-    runtime: Rc<Runtime>,
+    runtime: Runtime,
     pub wry_queue: WryQueue,
     desktop_context: Rc<OnceCell<DesktopContext>>,
 }
 
 impl WebviewEdits {
-    fn new(runtime: Rc<Runtime>, wry_queue: WryQueue) -> Self {
+    fn new(runtime: Runtime, wry_queue: WryQueue) -> Self {
         Self {
             runtime,
             wry_queue,

@@ -11,6 +11,7 @@ where
             phantom: std::marker::PhantomData,
         },
     );
+    let _guard = RuntimeGuard::new(vdom.runtime());
     vdom.rebuild_in_place();
     return dioxus_ssr::render(&vdom);
 

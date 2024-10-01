@@ -124,7 +124,7 @@ impl Hash for ScopeOrder {
 impl VirtualDom {
     /// Queue a task to be polled
     pub(crate) fn queue_task(&mut self, task: Task, order: ScopeOrder) {
-        let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
+        let mut dirty_tasks = self.runtime.state.dirty_tasks.borrow_mut();
         match dirty_tasks.get(&order) {
             Some(scope) => scope.queue_task(task),
             None => {
@@ -147,7 +147,7 @@ impl VirtualDom {
 
     /// Take the top task from the highest scope
     pub(crate) fn pop_task(&mut self) -> Option<Task> {
-        let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
+        let mut dirty_tasks = self.runtime.state.dirty_tasks.borrow_mut();
         let mut tasks = dirty_tasks.first()?;
 
         // If the scope doesn't exist for whatever reason, then we should skip it
@@ -167,7 +167,7 @@ impl VirtualDom {
 
     /// Take any effects from the highest scope. This should only be called if there is no pending scope reruns or tasks
     pub(crate) fn pop_effect(&mut self) -> Option<Effect> {
-        let mut pending_effects = self.runtime.pending_effects.borrow_mut();
+        let mut pending_effects = self.runtime.state.pending_effects.borrow_mut();
         let mut effect = pending_effects.pop_first()?;
 
         // If the scope doesn't exist for whatever reason, then we should skip it
@@ -193,7 +193,7 @@ impl VirtualDom {
 
         // Find the height of the highest dirty scope
         let dirty_task = {
-            let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
+            let mut dirty_tasks = self.runtime.state.dirty_tasks.borrow_mut();
             let mut dirty_task = dirty_tasks.first();
             // Pop any invalid tasks off of each dirty scope;
             while let Some(task) = dirty_task {

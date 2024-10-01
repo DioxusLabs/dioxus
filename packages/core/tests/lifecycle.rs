@@ -25,6 +25,7 @@ fn manual_diffing() {
 
     let value = Arc::new(Mutex::new("Hello"));
     let mut dom = VirtualDom::new_with_props(app, AppProps { value: value.clone() });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -59,6 +60,7 @@ fn events_generate() {
     };
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let event = Event::new(

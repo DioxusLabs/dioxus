@@ -48,6 +48,7 @@ pub struct HistoryButtonProps {
 /// }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
+/// # let _guard = RuntimeGuard::new(vdom.runtime());
 /// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
@@ -121,6 +122,7 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
 /// }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
+/// # let _guard = RuntimeGuard::new(vdom.runtime());
 /// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),

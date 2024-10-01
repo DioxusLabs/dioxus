@@ -11,8 +11,9 @@ fn empty_fragment_creates_nothing() {
     }
 
     let mut vdom = VirtualDom::new(app);
-    let edits = vdom.rebuild_to_vec();
+    let _guard = RuntimeGuard::new(vdom.runtime());
 
+    let edits = vdom.rebuild_to_vec();
     assert_eq!(
         edits.edits,
         [
@@ -30,6 +31,7 @@ fn root_fragments_work() {
             div { "goodbye" }
         )
     });
+    let _guard = RuntimeGuard::new(vdom.runtime());
 
     assert_eq!(
         vdom.rebuild_to_vec().edits.last().unwrap(),
@@ -57,6 +59,7 @@ fn fragments_nested() {
             }}
         )
     });
+    let _guard = RuntimeGuard::new(vdom.runtime());
 
     assert_eq!(
         vdom.rebuild_to_vec().edits.last().unwrap(),
@@ -80,8 +83,11 @@ fn fragments_across_components() {
         rsx! { "hellO!" {world} }
     }
 
+    let mut vdom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(vdom.runtime());
+
     assert_eq!(
-        VirtualDom::new(app).rebuild_to_vec().edits.last().unwrap(),
+        vdom.rebuild_to_vec().edits.last().unwrap(),
         &AppendChildren { id: ElementId(0), m: 8 }
     );
 }
@@ -94,8 +100,12 @@ fn list_fragments() {
             {(0..6).map(|f| rsx!( span { "{f}" }))}
         )
     }
+
+    let mut vdom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(vdom.runtime());
+
     assert_eq!(
-        VirtualDom::new(app).rebuild_to_vec().edits.last().unwrap(),
+        vdom.rebuild_to_vec().edits.last().unwrap(),
         &AppendChildren { id: ElementId(0), m: 7 }
     );
 }

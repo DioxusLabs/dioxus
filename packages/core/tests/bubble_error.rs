@@ -17,7 +17,8 @@ fn app() -> Element {
 #[test]
 fn bubbles_error() {
     let mut dom = VirtualDom::new(app);
-
+    let _guard = RuntimeGuard::new(dom.runtime());
+    let _runtime_guard = RuntimeGuard::new(dom.runtime());
     {
         let _edits = dom.rebuild_to_vec();
     }

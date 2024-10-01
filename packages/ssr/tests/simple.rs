@@ -9,6 +9,7 @@ fn simple() {
     }
 
     let mut dom = VirtualDom::new(App);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(dioxus_ssr::render(&dom), "<div>hello!</div>");

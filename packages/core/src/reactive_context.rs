@@ -111,7 +111,7 @@ impl ReactiveContext {
     /// Create a reactive context for a scope id
     pub(crate) fn new_for_scope(scope: &Scope, runtime: &Runtime) -> Self {
         let id = scope.id;
-        let sender = runtime.sender.clone();
+        let sender = runtime.state.sender.clone();
         let update_scope = move || {
             tracing::trace!("Marking scope {:?} as dirty", id);
             sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();

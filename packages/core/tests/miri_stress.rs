@@ -59,6 +59,7 @@ fn test_memory_leak() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -95,6 +96,7 @@ fn memo_works_properly() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 }
@@ -120,12 +122,14 @@ fn free_works_on_root_hooks() {
 
     let ptr = Rc::new("asdasd".to_string());
     let mut dom = VirtualDom::new_with_props(app, AppProps { inner: ptr.clone() });
+    let guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // ptr gets cloned into props and then into the hook
     assert!(Rc::strong_count(&ptr) > 1);
 
     drop(dom);
+    drop(guard);
 
     assert_eq!(Rc::strong_count(&ptr), 1);
 }
@@ -186,6 +190,7 @@ fn supports_async() {
 
     rt.block_on(async {
         let mut dom = VirtualDom::new(app);
+        let _guard = RuntimeGuard::new(dom.runtime());
         dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         for _ in 0..10 {

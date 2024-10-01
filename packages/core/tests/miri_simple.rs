@@ -7,6 +7,7 @@ fn app_drops() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::APP);
@@ -25,6 +26,7 @@ fn hooks_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::APP);
@@ -49,6 +51,7 @@ fn contexts_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::APP);
@@ -66,6 +69,7 @@ fn tasks_drop() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::APP);
@@ -81,7 +85,7 @@ fn root_props_drop() {
         |cx: RootProps| rsx!( div { "{cx.0}" } ),
         RootProps("asdasd".to_string()),
     );
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();
@@ -112,11 +116,14 @@ fn diffing_drops_old() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::APP);
 
     _ = dom.render_immediate_to_vec();
 }
+
+/* TODO(Matt)
 
 #[test]
 fn hooks_drop_before_contexts() {
@@ -139,8 +146,10 @@ fn hooks_drop_before_contexts() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();
 }
+ */

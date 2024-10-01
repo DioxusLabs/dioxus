@@ -33,6 +33,7 @@ fn basic_syntax_is_a_template() -> Element {
 #[test]
 fn dual_stream() {
     let mut dom = VirtualDom::new(basic_syntax_is_a_template);
+    let _guard = RuntimeGuard::new(dom.runtime());
     let edits = dom.rebuild_to_vec();
 
     use Mutation::*;

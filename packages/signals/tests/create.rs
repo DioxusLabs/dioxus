@@ -14,6 +14,7 @@ fn create_signals_global() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     fn Child() -> Element {
         let signal = create_without_cx();
@@ -39,6 +40,7 @@ fn deref_signal() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     fn Child() -> Element {
         let signal = Signal::new("hello world".to_string());
@@ -71,6 +73,7 @@ fn drop_signals() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     fn Child() -> Element {
         struct TracksDrops;

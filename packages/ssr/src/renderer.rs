@@ -79,6 +79,7 @@ impl Renderer {
             props
         }
         let mut dom = VirtualDom::new_with_props(lazy_app, element);
+        let _guard = RuntimeGuard::new(dom.runtime());
         dom.rebuild_in_place();
         self.render_to(buf, &dom)
     }
@@ -289,6 +290,7 @@ fn to_string_works() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();
@@ -344,6 +346,7 @@ fn empty_for_loop_works() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();
@@ -381,6 +384,7 @@ fn empty_render_works() {
     }
 
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();

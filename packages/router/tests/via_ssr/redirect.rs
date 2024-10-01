@@ -12,6 +12,7 @@ fn redirects_apply_in_order() {
         }
     );
     let mut vdom = VirtualDom::new_with_props(App, AppProps { path });
+    let _guard = RuntimeGuard::new(vdom.runtime());
     vdom.rebuild_in_place();
     let as_string = dioxus_ssr::render(&vdom);
     assert_eq!(as_string, "en");

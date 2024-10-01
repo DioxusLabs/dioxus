@@ -67,7 +67,7 @@ impl Task {
     /// Check if the task is paused.
     pub fn paused(&self) -> bool {
         Runtime::with(|rt| {
-            if let Some(task) = rt.tasks.borrow().get(self.id) {
+            if let Some(task) = rt.state.tasks.borrow().get(self.id) {
                 !task.active.get()
             } else {
                 false
@@ -81,6 +81,7 @@ impl Task {
     pub fn wake(&self) {
         Runtime::with(|rt| {
             _ = rt
+                .state
                 .sender
                 .unbounded_send(SchedulerMsg::TaskNotified(self.id))
         })
@@ -97,10 +98,11 @@ impl Task {
     #[track_caller]
     pub fn set_active(&self, active: bool) {
         Runtime::with(|rt| {
-            if let Some(task) = rt.tasks.borrow().get(self.id) {
+            if let Some(task) = rt.state.tasks.borrow().get(self.id) {
                 let was_active = task.active.replace(active);
                 if !was_active && active {
                     _ = rt
+                        .state
                         .sender
                         .unbounded_send(SchedulerMsg::TaskNotified(self.id));
                 }
@@ -165,7 +167,7 @@ impl Runtime {
     ) -> Task {
         // Insert the task, temporarily holding a borrow on the tasks map
         let (task, task_id) = {
-            let mut tasks = self.tasks.borrow_mut();
+            let mut tasks = self.state.tasks.borrow_mut();
 
             let mut task_id = Task::from_id(DefaultKey::default());
             let mut local_task = None;
@@ -179,7 +181,7 @@ impl Runtime {
                     task: RefCell::new(Box::pin(task)),
                     waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
                         id: task_id.id,
-                        tx: self.sender.clone(),
+                        tx: self.state.sender.clone(),
                     })),
                     ty: RefCell::new(ty),
                 });
@@ -193,10 +195,11 @@ impl Runtime {
         };
 
         // Get a borrow on the task, holding no borrows on the tasks map
-        debug_assert!(self.tasks.try_borrow_mut().is_ok());
+        debug_assert!(self.state.tasks.try_borrow_mut().is_ok());
         debug_assert!(task.task.try_borrow_mut().is_ok());
 
-        self.sender
+        self.state
+            .sender
             .unbounded_send(SchedulerMsg::TaskNotified(task_id.id))
             .expect("Scheduler should exist");
 
@@ -227,7 +230,7 @@ impl Runtime {
         f: Box<dyn FnOnce() + 'static>,
     ) {
         // Add the effect to the queue of effects to run after the next render for the given scope
-        let mut effects = self.pending_effects.borrow_mut();
+        let mut effects = self.state.pending_effects.borrow_mut();
         let scope_order = ScopeOrder::new(id.height(), id);
         match effects.get(&scope_order) {
             Some(effects) => effects.push_back(f),
@@ -239,16 +242,16 @@ impl Runtime {
 
     /// Get the currently running task
     pub fn current_task(&self) -> Option<Task> {
-        self.current_task.get()
+        self.state.current_task.get()
     }
 
     /// Get the parent task of the given task, if it exists
     pub fn parent_task(&self, task: Task) -> Option<Task> {
-        self.tasks.borrow().get(task.id)?.parent
+        self.state.tasks.borrow().get(task.id)?.parent
     }
 
     pub(crate) fn task_scope(&self, task: Task) -> Option<ScopeId> {
-        self.tasks.borrow().get(task.id).map(|t| t.scope)
+        self.state.tasks.borrow().get(task.id).map(|t| t.scope)
     }
 
     #[track_caller]
@@ -259,7 +262,7 @@ impl Runtime {
             Runtime::current().unwrap_or_else(|e| panic!("{}", e));
         }
 
-        let task = self.tasks.borrow().get(id.id).cloned();
+        let task = self.state.tasks.borrow().get(id.id).cloned();
 
         // The task was removed from the scheduler, so we can just ignore it
         let Some(task) = task else {
@@ -275,8 +278,8 @@ impl Runtime {
 
         // poll the future with the scope on the stack
         let poll_result = self.with_scope_on_stack(task.scope, || {
-            self.rendering.set(false);
-            self.current_task.set(Some(id));
+            self.state.rendering.set(false);
+            self.state.current_task.set(Some(id));
 
             let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
 
@@ -293,8 +296,8 @@ impl Runtime {
 
             poll_result
         });
-        self.rendering.set(true);
-        self.current_task.set(None);
+        self.state.rendering.set(true);
+        self.state.current_task.set(None);
 
         poll_result
     }
@@ -304,12 +307,14 @@ impl Runtime {
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
         // Remove the task from the task list
-        let task = self.tasks.borrow_mut().remove(id.id);
+        let task = self.state.tasks.borrow_mut().remove(id.id);
 
         if let Some(task) = &task {
             // Remove the task from suspense
             if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
-                self.suspended_tasks.set(self.suspended_tasks.get() - 1);
+                self.state
+                    .suspended_tasks
+                    .set(self.state.suspended_tasks.get() - 1);
                 if let SuspenseLocation::UnderSuspense(boundary) = boundary {
                     boundary.remove_suspended_task(id);
                 }
@@ -318,7 +323,7 @@ impl Runtime {
             // Remove the task from pending work. We could reuse the slot before the task is polled and discarded so we need to remove it from pending work instead of filtering out dead tasks when we try to poll them
             if let Some(scope) = self.get_state(task.scope) {
                 let order = ScopeOrder::new(scope.height(), scope.id);
-                if let Some(dirty_tasks) = self.dirty_tasks.borrow_mut().get(&order) {
+                if let Some(dirty_tasks) = self.state.dirty_tasks.borrow_mut().get(&order) {
                     dirty_tasks.remove(id);
                 }
             }
@@ -329,7 +334,7 @@ impl Runtime {
 
     /// Check if a task should be run during suspense
     pub(crate) fn task_runs_during_suspense(&self, task: Task) -> bool {
-        let borrow = self.tasks.borrow();
+        let borrow = self.state.tasks.borrow();
         let task: Option<&LocalTask> = borrow.get(task.id).map(|t| &**t);
         matches!(task, Some(LocalTask { ty, .. }) if ty.borrow().runs_during_suspense())
     }

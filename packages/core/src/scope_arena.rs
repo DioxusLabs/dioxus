@@ -49,9 +49,6 @@ impl VirtualDom {
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
-        // Ensure we are currently inside a `Runtime`.
-        crate::Runtime::current().unwrap_or_else(|e| panic!("{}", e));
-
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope = &self.scopes[scope_id.0];
             let output = {
@@ -111,6 +108,7 @@ impl VirtualDom {
                     .suspense_location();
                 let already_suspended = self
                     .runtime
+                    .state
                     .tasks
                     .borrow()
                     .get(task.id)
@@ -123,8 +121,9 @@ impl VirtualDom {
                         boundary.add_suspended_task(e.clone());
                     }
                     self.runtime
+                        .state
                         .suspended_tasks
-                        .set(self.runtime.suspended_tasks.get() + 1);
+                        .set(self.runtime.state.suspended_tasks.get() + 1);
                 }
                 e.placeholder = VNode::placeholder();
             }

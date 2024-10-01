@@ -18,6 +18,7 @@ fn list_creates_one_by_one() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
@@ -92,7 +93,7 @@ fn removes_one_by_one() {
             }
         }
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
         dom.rebuild_to_vec().edits,
@@ -174,6 +175,7 @@ fn list_shrink_multiroot() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     assert_eq!(
         dom.rebuild_to_vec().edits,
@@ -242,7 +244,7 @@ fn removes_one_by_one_multiroot() {
             }
         }
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
         dom.rebuild_to_vec().edits,
@@ -304,7 +306,7 @@ fn two_equal_fragments_are_equal_static() {
             }
         }
     });
-
+    let _guard = RuntimeGuard::new(dom.runtime());
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     assert!(dom.render_immediate_to_vec().edits.is_empty());
 }
@@ -318,6 +320,7 @@ fn two_equal_fragments_are_equal() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
     assert!(dom.render_immediate_to_vec().edits.is_empty());
@@ -339,6 +342,7 @@ fn remove_many() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     // len = 0
     {
@@ -449,6 +453,7 @@ fn replace_and_add_items() {
             }
         }
     });
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     // The list starts empty with a placeholder
     {

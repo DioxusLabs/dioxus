@@ -97,7 +97,7 @@ impl Scope {
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        Runtime::with(|rt| rt.sender.clone()).unwrap_or_else(|e| panic!("{}", e))
+        Runtime::with(|rt| rt.state.sender.clone()).unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Mount the scope and queue any pending effects if it is not already mounted

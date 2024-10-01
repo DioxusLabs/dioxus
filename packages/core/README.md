@@ -8,6 +8,7 @@ use dioxus_core::prelude::*;
 use dioxus_core::*;
 
 let mut vdom = VirtualDom::new(app);
+let _guard = RuntimeGuard::new(vdom.runtime());
 let real_dom = SomeRenderer::new();
 
 loop {
@@ -73,6 +74,7 @@ fn app() -> Element {
 fn main() {
     // Next, create a new VirtualDom using this app as the root component.
     let mut dom = VirtualDom::new(app);
+    let _guard = RuntimeGuard::new(dom.runtime());
 
     // The initial render of the dom will generate a stream of edits for the real dom to apply
     let mutations = dom.rebuild_to_vec();

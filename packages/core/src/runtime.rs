@@ -21,11 +21,11 @@ use std::{
 use tracing::instrument;
 
 thread_local! {
-    static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
+    static CURRENT: RefCell<Option<Runtime>> = const { RefCell::new(None) };
 }
 
-/// A global runtime that is shared across all scopes that provides the async runtime and context API
-pub struct Runtime {
+/// State of a [`Runtime`].
+pub(crate) struct RuntimeState {
     pub(crate) scope_states: RefCell<Vec<Option<Scope>>>,
 
     // We use this to track the current scope
@@ -65,33 +65,48 @@ pub struct Runtime {
     pub(crate) mounts: RefCell<Slab<VNodeMount>>,
 }
 
+/// A global runtime that is shared across all scopes that provides the async runtime and context API.
+#[derive(Clone)]
+pub struct Runtime {
+    pub(crate) state: Rc<RuntimeState>,
+}
+
 impl Runtime {
-    pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
+    pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Self {
         let mut elements = Slab::default();
         // the root element is always given element ID 0 since it's the container for the entire tree
         elements.insert(None);
 
-        Rc::new(Self {
-            sender,
-            rendering: Cell::new(true),
-            scope_states: Default::default(),
-            scope_stack: Default::default(),
-            suspense_stack: Default::default(),
-            current_task: Default::default(),
-            tasks: Default::default(),
-            suspended_tasks: Default::default(),
-            pending_effects: Default::default(),
-            dirty_tasks: Default::default(),
-            elements: RefCell::new(elements),
-            mounts: Default::default(),
-        })
+        Self {
+            state: Rc::new(RuntimeState {
+                sender,
+                rendering: Cell::new(true),
+                scope_states: Default::default(),
+                scope_stack: Default::default(),
+                suspense_stack: Default::default(),
+                current_task: Default::default(),
+                tasks: Default::default(),
+                suspended_tasks: Default::default(),
+                pending_effects: Default::default(),
+                dirty_tasks: Default::default(),
+                elements: RefCell::new(elements),
+                mounts: Default::default(),
+            }),
+        }
     }
 
     /// Get the current runtime
-    pub fn current() -> Result<Rc<Self>, RuntimeError> {
-        RUNTIMES
-            .with(|stack| stack.borrow().last().cloned())
+    pub fn current() -> Result<Self, RuntimeError> {
+        CURRENT
+            .try_with(|rt| rt.borrow().as_ref().cloned())
+            .ok()
+            .flatten()
             .ok_or(RuntimeError::new())
+    }
+
+    /// Leave and return the current runtime.
+    pub fn take() -> Option<Self> {
+        CURRENT.with(|rt| rt.borrow_mut().take())
     }
 
     /// Wrap a closure so that it always runs in the runtime that is currently active
@@ -100,26 +115,23 @@ impl Runtime {
         let current_scope = current_runtime.current_scope_id().ok();
         move |input| match current_scope {
             Some(scope) => current_runtime.on_scope(scope, || f(input)),
-            None => {
-                let _runtime_guard = RuntimeGuard::new(current_runtime.clone());
-                f(input)
-            }
+            None => f(input),
         }
     }
 
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id;
-        let mut scopes = self.scope_states.borrow_mut();
+        let mut scopes = self.state.scope_states.borrow_mut();
         if scopes.len() <= id.0 {
             scopes.resize_with(id.0 + 1, Default::default);
         }
         scopes[id.0] = Some(context);
     }
 
-    pub(crate) fn remove_scope(self: &Rc<Self>, id: ScopeId) {
+    pub(crate) fn remove_scope(&self, id: ScopeId) {
         {
-            let borrow = self.scope_states.borrow();
+            let borrow = self.state.scope_states.borrow();
             if let Some(scope) = &borrow[id.0] {
                 // Manually drop tasks, hooks, and contexts inside of the runtime
                 self.on_scope(id, || {
@@ -139,12 +151,13 @@ impl Runtime {
                 });
             }
         }
-        self.scope_states.borrow_mut()[id.0].take();
+        self.state.scope_states.borrow_mut()[id.0].take();
     }
 
     /// Get the current scope id
     pub(crate) fn current_scope_id(&self) -> Result<ScopeId, RuntimeError> {
-        self.scope_stack
+        self.state
+            .scope_stack
             .borrow()
             .last()
             .copied()
@@ -154,8 +167,7 @@ impl Runtime {
     /// Call this function with the current scope set to the given scope
     ///
     /// Useful in a limited number of scenarios
-    pub fn on_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
-        let _runtime_guard = RuntimeGuard::new(self.clone());
+    pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
         {
             self.push_scope(id);
         }
@@ -168,7 +180,7 @@ impl Runtime {
 
     /// Get the current suspense location
     pub(crate) fn current_suspense_location(&self) -> Option<SuspenseLocation> {
-        self.suspense_stack.borrow().last().cloned()
+        self.state.suspense_stack.borrow().last().cloned()
     }
 
     /// Run a callback a [`SuspenseLocation`] at the top of the stack
@@ -177,9 +189,12 @@ impl Runtime {
         suspense_location: SuspenseLocation,
         f: impl FnOnce() -> O,
     ) -> O {
-        self.suspense_stack.borrow_mut().push(suspense_location);
+        self.state
+            .suspense_stack
+            .borrow_mut()
+            .push(suspense_location);
         let o = f();
-        self.suspense_stack.borrow_mut().pop();
+        self.state.suspense_stack.borrow_mut().pop();
         o
     }
 
@@ -194,40 +209,34 @@ impl Runtime {
     /// Push a scope onto the stack
     fn push_scope(&self, scope: ScopeId) {
         let suspense_location = self
+            .state
             .scope_states
             .borrow()
             .get(scope.0)
             .and_then(|s| s.as_ref())
             .map(|s| s.suspense_location())
             .unwrap_or_default();
-        self.suspense_stack.borrow_mut().push(suspense_location);
-        self.scope_stack.borrow_mut().push(scope);
+        self.state
+            .suspense_stack
+            .borrow_mut()
+            .push(suspense_location);
+        self.state.scope_stack.borrow_mut().push(scope);
     }
 
     /// Pop a scope off the stack
     fn pop_scope(&self) {
-        self.scope_stack.borrow_mut().pop();
-        self.suspense_stack.borrow_mut().pop();
+        self.state.scope_stack.borrow_mut().pop();
+        self.state.suspense_stack.borrow_mut().pop();
     }
 
     /// Get the state for any scope given its ID
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub(crate) fn get_state(&self, id: ScopeId) -> Option<Ref<'_, Scope>> {
-        Ref::filter_map(self.scope_states.borrow(), |contexts| {
+        Ref::filter_map(self.state.scope_states.borrow(), |contexts| {
             contexts.get(id.0).and_then(|f| f.as_ref())
         })
         .ok()
-    }
-
-    /// Pushes a new scope onto the stack
-    pub(crate) fn push(runtime: Rc<Runtime>) {
-        RUNTIMES.with(|stack| stack.borrow_mut().push(runtime));
-    }
-
-    /// Pops a scope off the stack
-    pub(crate) fn pop() {
-        RUNTIMES.with(|stack| stack.borrow_mut().pop());
     }
 
     /// Runs a function with the current runtime
@@ -261,8 +270,9 @@ impl Runtime {
     /// Finish a render. This will mark all effects as ready to run and send the render signal.
     pub(crate) fn finish_render(&self) {
         // If there are new effects we can run, send a message to the scheduler to run them (after the renderer has applied the mutations)
-        if !self.pending_effects.borrow().is_empty() {
-            self.sender
+        if !self.state.pending_effects.borrow().is_empty() {
+            self.state
+                .sender
                 .unbounded_send(SchedulerMsg::EffectQueued)
                 .expect("Scheduler should exist");
         }
@@ -271,11 +281,11 @@ impl Runtime {
     /// Check if we should render a scope
     pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
         // If there are no suspended futures, we know the scope is not  and we can skip context checks
-        if self.suspended_tasks.get() == 0 {
+        if self.state.suspended_tasks.get() == 0 {
             return true;
         }
         // If this is not a suspended scope, and we are under a frozen context, then we should
-        let scopes = self.scope_states.borrow();
+        let scopes = self.state.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
         !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
     }
@@ -290,9 +300,8 @@ impl Runtime {
     ///
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
     #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
-    pub fn handle_event(self: &Rc<Self>, name: &str, event: Event<dyn Any>, element: ElementId) {
-        let _runtime = RuntimeGuard::new(self.clone());
-        let elements = self.elements.borrow();
+    pub fn handle_event(&self, name: &str, event: Event<dyn Any>, element: ElementId) {
+        let elements = self.state.elements.borrow();
 
         if let Some(Some(parent_path)) = elements.get(element.0).copied() {
             if event.propagates() {
@@ -330,7 +339,7 @@ impl Runtime {
         name = "VirtualDom::handle_bubbling_event"
     )]
     fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let mounts = self.mounts.borrow();
+        let mounts = self.state.mounts.borrow();
 
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
@@ -374,9 +383,9 @@ impl Runtime {
             );
             for listener in listeners.into_iter().rev() {
                 if let AttributeValue::Listener(listener) = listener {
-                    self.rendering.set(false);
+                    self.state.rendering.set(false);
                     listener.call(uievent.clone());
-                    self.rendering.set(true);
+                    self.state.rendering.set(true);
                     let metadata = uievent.metadata.borrow();
 
                     if !metadata.propagates {
@@ -397,7 +406,7 @@ impl Runtime {
         name = "VirtualDom::handle_non_bubbling_event"
     )]
     fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let mounts = self.mounts.borrow();
+        let mounts = self.state.mounts.borrow();
         let Some(mount) = mounts.get(node.mount.0) else {
             // If the node is suspended and not mounted, we can just ignore the event
             return;
@@ -414,9 +423,9 @@ impl Runtime {
                 // Only call the listener if this is the exact target element.
                 if attr.name.get(2..) == Some(name) && target_path == this_path {
                     if let AttributeValue::Listener(listener) = &attr.value {
-                        self.rendering.set(false);
+                        self.state.rendering.set(false);
                         listener.call(uievent.clone());
-                        self.rendering.set(true);
+                        self.state.rendering.set(true);
                         break;
                     }
                 }
@@ -426,51 +435,21 @@ impl Runtime {
 }
 
 /// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-///
-/// fn main() {
-///     let virtual_dom = VirtualDom::new(app);
-/// }
-///
-/// fn app() -> Element {
-///     rsx! { Component { runtime: Runtime::current().unwrap() } }
-/// }
-///
-/// // In a dynamic library
-/// #[derive(Props, Clone)]
-/// struct ComponentProps {
-///    runtime: std::rc::Rc<Runtime>,
-/// }
-///
-/// impl PartialEq for ComponentProps {
-///     fn eq(&self, _other: &Self) -> bool {
-///         true
-///     }
-/// }
-///
-/// fn Component(cx: ComponentProps) -> Element {
-///     use_hook(|| {
-///         let _guard = RuntimeGuard::new(cx.runtime.clone());
-///     });
-///
-///     rsx! { div {} }
-/// }
-/// ```
 pub struct RuntimeGuard(());
 
 impl RuntimeGuard {
     /// Create a new runtime guard that sets the current Dioxus runtime. The runtime will be reset when the guard is dropped
-    pub fn new(runtime: Rc<Runtime>) -> Self {
-        Runtime::push(runtime);
+    pub fn new(runtime: Runtime) -> Self {
+        CURRENT.with(|rt| {
+            *rt.borrow_mut() = Some(runtime);
+        });
         Self(())
     }
 }
 
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
-        Runtime::pop();
+        Runtime::take();
     }
 }
 
@@ -487,13 +466,13 @@ impl RuntimeError {
 }
 
 impl fmt::Debug for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("RuntimeError").finish()
     }
 }
 
 impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "Must be called from inside a Dioxus runtime.
@@ -502,30 +481,7 @@ Help: Some APIs in dioxus require a global runtime to be present.
 If you are calling one of these APIs from outside of a dioxus runtime
 (typically in a web-sys closure or dynamic library), you will need to
 grab the runtime from a scope that has it and then move it into your
-new scope with a runtime guard.
-
-For example, if you are trying to use dioxus apis from a web-sys
-closure, you can grab the runtime from the scope it is created in:
-
-```rust
-use dioxus::prelude::*;
-static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
-
-#[component]
-fn MyComponent() -> Element {{
-    use_effect(|| {{
-        // Grab the runtime from the MyComponent scope
-        let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
-        // Move the runtime into the web-sys closure scope
-        let web_sys_closure = Closure::new(|| {{
-            // Then create a guard to provide the runtime to the closure
-            let _guard = RuntimeGuard::new(runtime);
-            // and run whatever code needs the runtime
-            tracing::info!(\"The count is: {{COUNT}}\");
-        }});
-    }})
-}}
-```"
+new scope with a runtime guard."
         )
     }
 }

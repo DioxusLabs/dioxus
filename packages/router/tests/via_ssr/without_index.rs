@@ -9,6 +9,7 @@ fn router_without_index_route_parses() {
             path: Route::Test {},
         },
     );
+    let _guard = RuntimeGuard::new(vdom.runtime());
     vdom.rebuild_in_place();
     let as_string = dioxus_ssr::render(&vdom);
     assert_eq!(as_string, "<div>router with no index route renders</div>")

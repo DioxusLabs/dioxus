@@ -14,7 +14,7 @@ pub fn current_scope_id() -> Result<ScopeId, RuntimeError> {
 #[doc(hidden)]
 /// Check if the virtual dom is currently inside of the body of a component
 pub fn vdom_is_rendering() -> bool {
-    Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
+    Runtime::with(|rt| rt.state.rendering.get()).unwrap_or_default()
 }
 
 /// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::prelude::ErrorBoundary()`] or the root of the app.

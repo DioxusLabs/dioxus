@@ -10,6 +10,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
             path: path.into().parse().unwrap(),
         },
     );
+    let _guard = RuntimeGuard::new(vdom.runtime());
     vdom.rebuild_in_place();
     return vdom;
 

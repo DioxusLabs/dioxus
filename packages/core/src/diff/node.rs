@@ -21,6 +21,7 @@ impl VNode {
         // The node we are diffing from should always be mounted
         debug_assert!(
             dom.runtime
+                .state
                 .mounts
                 .borrow()
                 .get(self.mount.get().0)
@@ -67,7 +68,7 @@ impl VNode {
         new.mount.set(mount_id);
 
         if mount_id.mounted() {
-            let mut mounts = dom.runtime.mounts.borrow_mut();
+            let mut mounts = dom.runtime.state.mounts.borrow_mut();
             let mount = &mut mounts[mount_id.0];
 
             // Update the reference to the node for bubbling events
@@ -294,7 +295,7 @@ impl VNode {
         if destroy_component_state {
             let mount = self.mount.take();
             // Remove the mount information
-            dom.runtime.mounts.borrow_mut().remove(mount.0);
+            dom.runtime.state.mounts.borrow_mut().remove(mount.0);
         }
     }
 
@@ -507,7 +508,7 @@ impl VNode {
                     path: ElementPath { path },
                     mount,
                 };
-                let mut elements = dom.runtime.elements.borrow_mut();
+                let mut elements = dom.runtime.state.elements.borrow_mut();
                 elements[id.0] = Some(element_ref);
                 to.create_event_listener(&attribute.name[2..], id);
             }
@@ -529,7 +530,7 @@ impl VNode {
 
         // Initialize the mount information for this vnode if it isn't already mounted
         if !self.mount.get().mounted() {
-            let mut mounts = dom.runtime.mounts.borrow_mut();
+            let mut mounts = dom.runtime.state.mounts.borrow_mut();
             let entry = mounts.vacant_entry();
             let mount = MountId(entry.key());
             self.mount.set(mount);
@@ -553,7 +554,7 @@ impl VNode {
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
         debug_assert!(
-            dom.runtime.mounts.borrow().contains(
+            dom.runtime.state.mounts.borrow().contains(
                 self.mount
                     .get()
                     .as_usize()

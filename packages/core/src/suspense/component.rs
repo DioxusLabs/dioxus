@@ -380,7 +380,6 @@ impl SuspenseBoundaryProps {
         replace_with: usize,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
-            let _runtime = RuntimeGuard::new(dom.runtime());
             let Some(scope_state) = dom.scopes.get_mut(scope_id.0) else {
                 return;
             };
@@ -398,7 +397,7 @@ impl SuspenseBoundaryProps {
             let currently_rendered = scope_state.last_rendered_node.as_ref().unwrap().clone();
             let mount = currently_rendered.as_vnode().mount.get();
             let parent = {
-                let mounts = dom.runtime.mounts.borrow();
+                let mounts = dom.runtime.state.mounts.borrow();
                 mounts
                     .get(mount.0)
                     .expect("suspense placeholder is not mounted")
