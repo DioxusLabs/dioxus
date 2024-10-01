@@ -1,13 +1,13 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
-use dioxus_core::NoOpMutations;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use dioxus::html::p;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
+use dioxus_core::NoOpMutations;
 use dioxus_signals::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
 fn memos_rerun() {
