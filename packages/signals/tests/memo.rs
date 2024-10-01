@@ -174,5 +174,5 @@ fn memos_sync_rerun_after_unrelated_write() {
     dom.rebuild_in_place();
     dom.mark_dirty(ScopeId::APP);
     dom.render_immediate(&mut NoOpMutations);
-    assert!(PASSED.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(PASSED.load(Ordering::SeqCst));
 }
