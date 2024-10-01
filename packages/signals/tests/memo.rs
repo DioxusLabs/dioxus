@@ -148,7 +148,7 @@ fn memos_prevents_component_rerun() {
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2990
 #[test]
 fn memos_sync_rerun_after_unrelated_write() {
-    static PASSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    static PASSED: AtomicBool = AtomicBool::new(false);
     let mut dom = VirtualDom::new(|| {
         let mut signal = use_signal(|| 0);
         let memo = use_memo(move || dbg!(signal() < 2));
