@@ -587,7 +587,7 @@ impl RouteEnum {
             impl<'a> core::convert::TryFrom<&'a str> for #name {
                 type Error = <Self as std::str::FromStr>::Err;
 
-                fn try_from(s: &'a str) -> Result<Self, Self::Error> {
+                fn try_from(s: &'a str) -> ::std::result::Result<Self, Self::Error> {
                     s.parse()
                 }
             }
@@ -595,7 +595,7 @@ impl RouteEnum {
             impl std::str::FromStr for #name {
                 type Err = dioxus_router::routable::RouteParseError<#error_name>;
 
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
                     let route = s;
                     let (route, hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
