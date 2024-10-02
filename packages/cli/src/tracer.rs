@@ -16,29 +16,22 @@
 
 use crate::{serve::ServeUpdate, Platform as TargetPlatform};
 use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
-use chrono::{DateTime, Utc};
-use console::strip_ansi_codes;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use futures_util::StreamExt;
 use once_cell::sync::OnceCell;
-use std::fmt::Display;
 use std::{
     collections::HashMap,
     env,
-    fmt::{Debug, Write as _},
+    fmt::{Debug, Display, Write as _},
     fs,
     io::{self, Write},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Mutex,
     },
 };
-use tracing::Level;
-use tracing::{field::Visit, Subscriber};
-use tracing_subscriber::{
-    filter::filter_fn, fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer,
-};
+use tracing::{field::Visit, Level, Subscriber};
+use tracing_subscriber::{fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer};
 
 const LOG_ENV: &str = "DIOXUS_LOG";
 const LOG_FILE_NAME: &str = "dx.log";
@@ -69,9 +62,9 @@ impl TraceController {
 
     /// Wait for the internal logger to send a message
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
-        ServeUpdate::TracingLog {
-            log: self.tui_rx.next().await.expect("tracer should never die"),
-        }
+        use futures_util::StreamExt;
+        let log = self.tui_rx.next().await.expect("tracer should never die");
+        ServeUpdate::TracingLog { log }
     }
 
     pub(crate) fn shutdown(&self) {
@@ -81,7 +74,7 @@ impl TraceController {
     /// Build tracing infrastructure.
     pub fn initialize() {
         let mut filter =
-            EnvFilter::new("error,dx=debug,dioxus-cli=debug,manganis-cli-support=debug");
+            EnvFilter::new("error,dx=trace,dioxus-cli=debug,manganis-cli-support=debug");
 
         if env::var(LOG_ENV).is_ok() {
             filter = EnvFilter::from_env(LOG_ENV);
@@ -99,9 +92,7 @@ impl TraceController {
         };
 
         // Build CLI layer
-        let cli_layer = CLILayer {
-            stdout: io::stdout(),
-        };
+        let cli_layer = CLILayer;
 
         // Build fmt layer
         let fmt_layer = tracing_subscriber::fmt::layer()
@@ -111,7 +102,7 @@ impl TraceController {
                 })
                 .delimited(" "),
             )
-            .with_writer(Mutex::new(FmtLogWriter::new()))
+            .with_writer(Mutex::new(FmtLogWriter {}))
             .with_timer(tracing_subscriber::fmt::time::time());
 
         let sub = tracing_subscriber::registry()
@@ -179,7 +170,7 @@ where
         };
 
         // Append logs
-        let new_data = strip_ansi_codes(&new_line).to_string();
+        let new_data = console::strip_ansi_codes(&new_line).to_string();
 
         if let Ok(mut buf) = self.buffer.lock() {
             *buf += &new_data;
@@ -190,9 +181,7 @@ where
 }
 
 /// This is our "subscriber" (layer) that records structured data for the tui output.
-struct CLILayer {
-    stdout: io::Stdout,
-}
+struct CLILayer;
 
 impl<S> Layer<S> for CLILayer
 where
@@ -279,23 +268,7 @@ impl Visit for CollectVisitor {
     }
 }
 
-// Contains the sync primitives to control the CLIWriter.
-pub struct CLILogControl {
-    pub output_rx: UnboundedReceiver<TraceMsg>,
-    pub output_enabled: Arc<AtomicBool>,
-}
-
-struct FmtLogWriter {
-    stdout: io::Stdout,
-}
-
-impl FmtLogWriter {
-    pub fn new() -> Self {
-        Self {
-            stdout: io::stdout(),
-        }
-    }
-}
+struct FmtLogWriter {}
 
 impl Write for FmtLogWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -333,7 +306,13 @@ pub struct TraceMsg {
     pub source: TraceSrc,
     pub level: Level,
     pub content: TraceContent,
-    pub timestamp: DateTime<chrono::Local>,
+    pub timestamp: chrono::DateTime<chrono::Local>,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum TraceContent {
+    Cargo(CompilerMessage),
+    Text(String),
 }
 
 impl TraceMsg {
@@ -346,30 +325,25 @@ impl TraceMsg {
         }
     }
 
+    /// Create a new trace message from a cargo compiler message
+    ///
+    /// All `cargo` messages are logged at the `TRACE` level since they get *very* noisy during development
     pub fn cargo(content: CompilerMessage) -> Self {
-        let level = match content.message.level {
-            DiagnosticLevel::Ice => Level::ERROR,
-            DiagnosticLevel::Error => Level::ERROR,
-            DiagnosticLevel::FailureNote => Level::ERROR,
-            DiagnosticLevel::Warning => Level::DEBUG,
-            DiagnosticLevel::Note => Level::DEBUG,
-            DiagnosticLevel::Help => Level::DEBUG,
-            _ => Level::DEBUG,
-        };
-
         Self {
-            source: TraceSrc::Cargo,
-            level,
-            content: TraceContent::Cargo(content),
+            level: match content.message.level {
+                DiagnosticLevel::Ice => Level::ERROR,
+                DiagnosticLevel::Error => Level::ERROR,
+                DiagnosticLevel::FailureNote => Level::ERROR,
+                DiagnosticLevel::Warning => Level::TRACE,
+                DiagnosticLevel::Note => Level::TRACE,
+                DiagnosticLevel::Help => Level::TRACE,
+                _ => Level::TRACE,
+            },
             timestamp: chrono::Local::now(),
+            source: TraceSrc::Cargo,
+            content: TraceContent::Cargo(content),
         }
     }
-}
-
-#[derive(Clone, PartialEq)]
-pub enum TraceContent {
-    Cargo(CompilerMessage),
-    Text(String),
 }
 
 #[derive(Clone, PartialEq)]
@@ -378,11 +352,8 @@ pub enum TraceSrc {
     Dev,
     Build,
     Bundle,
-    /// Provides no formatting.
     Cargo,
-    /// Avoid using this
     Unknown,
-    Hotreload,
 }
 
 impl std::fmt::Debug for TraceSrc {
@@ -399,9 +370,9 @@ impl From<String> for TraceSrc {
             "bld" => Self::Build,
             "cargo" => Self::Cargo,
             "app" => Self::App(TargetPlatform::Web),
-            "app" => Self::App(TargetPlatform::Desktop),
-            "app" => Self::App(TargetPlatform::Server),
-            "app" => Self::App(TargetPlatform::Liveview),
+            "desktop" => Self::App(TargetPlatform::Desktop),
+            "server" => Self::App(TargetPlatform::Server),
+            "liveview" => Self::App(TargetPlatform::Liveview),
             _ => Self::Unknown,
         }
     }
@@ -422,7 +393,6 @@ impl Display for TraceSrc {
             Self::Build => write!(f, "build"),
             Self::Cargo => write!(f, "cargo"),
             Self::Unknown => write!(f, "n/a"),
-            Self::Hotreload => write!(f, "hotreload"),
             Self::Bundle => write!(f, "bundle"),
         }
     }

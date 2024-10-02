@@ -229,7 +229,7 @@ criterion = { version = "0.5" }
 walrus = "*"
 
 # desktop
-wry = { version = "0.43.0", default-features = false }
+wry = { version = "0.45.0", default-features = false }
 tao = { version = "0.30.0", features = ["rwh_05"] }
 webbrowser = "1.0.1"
 infer = "0.16.0"

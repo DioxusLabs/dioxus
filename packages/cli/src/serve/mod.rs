@@ -96,7 +96,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                         && hr.assets.is_empty()
                         && hr.unknown_files.is_empty()
                     {
-                        tracing::info!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+                        tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
                         continue;
                     }
 
@@ -204,6 +204,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 // `Hotreloading:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
                 builder.rebuild(args.build_arguments.clone());
+                runner.file_map.force_rebuild();
                 devserver.start_build().await
             }
 

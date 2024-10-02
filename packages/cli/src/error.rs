@@ -25,9 +25,6 @@ pub(crate) enum Error {
     #[error("Cargo Error: {0}")]
     CargoError(String),
 
-    #[error("Couldn't retrieve cargo metadata")]
-    CargoMetadata(#[source] cargo_metadata::Error),
-
     #[error("{0}")]
     CustomError(String),
 
@@ -36,9 +33,6 @@ pub(crate) enum Error {
 
     #[error("Failed to establish proxy: {0}")]
     ProxySetupError(String),
-
-    #[error("Error proxying request: {0}")]
-    ProxyRequestError(hyper::Error),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),

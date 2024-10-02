@@ -39,6 +39,7 @@ pub mod internal {
         DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttributeValue,
         HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral,
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
+        TemplateGlobalKey,
     };
 }
 

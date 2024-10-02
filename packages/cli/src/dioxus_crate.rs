@@ -327,13 +327,6 @@ pub(crate) enum ExecutableType {
     Example,
 }
 
-impl ExecutableType {
-    /// Get the name of the executable if it is a binary or an example.
-    pub(crate) fn executable(&self) -> bool {
-        matches!(self, Self::Binary | Self::Example)
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct LoadDioxusConfigError {
     location: String,

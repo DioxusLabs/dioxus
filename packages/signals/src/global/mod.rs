@@ -137,10 +137,38 @@ where
     /// This is useful for ensuring that the signal is unique across the application and accessible from
     /// outside the application too.
     #[track_caller]
-    pub const fn with_key(constructor: fn() -> R, key: &'static str) -> Self {
+    pub const fn with_name(constructor: fn() -> R, key: &'static str) -> Self {
         Self {
             constructor,
-            key: GlobalKey::new_from_str(key),
+            key: GlobalKey {
+                file: key,
+                line: 0,
+                column: 0,
+                index: 0,
+            },
+            phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Create this global signal with a specific key.
+    /// This is useful for ensuring that the signal is unique across the application and accessible from
+    /// outside the application too.
+    #[track_caller]
+    pub const fn with_location(
+        constructor: fn() -> R,
+        file: &'static str,
+        line: u32,
+        column: u32,
+        index: usize,
+    ) -> Self {
+        Self {
+            constructor,
+            key: GlobalKey {
+                file,
+                line: line as _,
+                column: column as _,
+                index: index as _,
+            },
             phantom: std::marker::PhantomData,
         }
     }
@@ -190,9 +218,10 @@ pub struct GlobalLazyContext {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GlobalKey<'a> {
     // We create an extra wrapper around location so we can construct it manually for hot reloading
-    file: &'a str,
-    line: u32,
-    column: u32,
+    pub file: &'a str,
+    pub line: u32,
+    pub column: u32,
+    pub index: u32,
 }
 
 impl<'a> GlobalKey<'a> {
@@ -202,23 +231,8 @@ impl<'a> GlobalKey<'a> {
             file: key.file(),
             line: key.line(),
             column: key.column(),
+            index: 0,
         }
-    }
-
-    /// Create a new key from a static string
-    #[allow(unused)]
-    pub const fn new_from_str(key: &'a str) -> Self {
-        GlobalKey {
-            file: key,
-            line: 0,
-            column: 0,
-        }
-    }
-}
-
-impl From<&'static str> for GlobalKey<'static> {
-    fn from(key: &'static str) -> Self {
-        Self::new_from_str(key)
     }
 }
 
@@ -231,9 +245,7 @@ impl From<&'static Location<'static>> for GlobalKey<'static> {
 impl GlobalLazyContext {
     /// Get a signal with the given string key
     /// The key will be converted to a UUID with the appropriate internal namespace
-    pub fn get_signal_with_key<T>(&self, key: &str) -> Option<Signal<T>> {
-        let key = GlobalKey::new_from_str(key);
-
+    pub fn get_signal_with_key<T>(&self, key: GlobalKey) -> Option<Signal<T>> {
         self.map.borrow().get(&key).map(|f| {
             *f.downcast_ref::<Signal<T>>().unwrap_or_else(|| {
                 panic!(
@@ -265,7 +277,7 @@ mod tests {
         // we're using consts since it's harder than statics due to merging - these won't be merged
         const MYSIGNAL: GlobalSignal<i32> = GlobalSignal::new(|| 42);
         const MYSIGNAL2: GlobalSignal<i32> = GlobalSignal::new(|| 42);
-        const MYSIGNAL3: GlobalSignal<i32> = GlobalSignal::with_key(|| 42, "custom-keyed");
+        const MYSIGNAL3: GlobalSignal<i32> = GlobalSignal::with_name(|| 42, "custom-keyed");
 
         let a = MYSIGNAL.key();
         let b = MYSIGNAL.key();

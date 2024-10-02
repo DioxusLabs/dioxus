@@ -1,8 +1,12 @@
 use super::{AppHandle, ServeUpdate};
-use crate::{AppBundle, DioxusCrate, FileMap, HotreloadError, Platform, Result, TraceSrc};
+use crate::{
+    AppBundle, DioxusCrate, HotreloadFilemap, HotreloadResult, Platform, Result, TraceSrc,
+};
+use dioxus_core::internal::TemplateGlobalKey;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use futures_util::{future::OptionFuture, stream::FuturesUnordered};
+use ignore::gitignore::Gitignore;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
@@ -13,28 +17,27 @@ use tokio_stream::StreamExt;
 pub(crate) struct AppRunner {
     pub(crate) running: HashMap<Platform, AppHandle>,
     pub(crate) krate: DioxusCrate,
-    pub(crate) file_map: FileMap,
+    pub(crate) file_map: HotreloadFilemap,
+    pub(crate) ignore: Gitignore,
     pub(crate) applied_hot_reload_message: HotReloadMsg,
     pub(crate) builds_opened: usize,
 }
 
 impl AppRunner {
+    /// Create the AppRunner and then initialize the filemap with the crate directory.
     pub(crate) fn start(krate: &DioxusCrate) -> Self {
-        // Probe the entire project looking for our rsx calls
-        // Whenever we get an update from the file watcher, we'll try to hotreload against this file map
-        let ignore = krate.gitignore();
-        let file_map = FileMap::create_with_filter::<HtmlCtx>(krate.crate_dir(), |path| {
-            ignore.matched(path, path.is_dir()).is_ignore()
-        })
-        .unwrap();
-
-        Self {
+        let mut runner = Self {
             running: Default::default(),
-            file_map,
+            file_map: HotreloadFilemap::new(),
             applied_hot_reload_message: Default::default(),
+            ignore: krate.gitignore(),
             krate: krate.clone(),
             builds_opened: 0,
-        }
+        };
+
+        runner.fill_filemap(krate.crate_dir());
+
+        runner
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
@@ -132,7 +135,6 @@ impl AppRunner {
         modified_files: Vec<PathBuf>,
     ) -> Option<HotReloadMsg> {
         // If we have any changes to the rust files, we need to update the file map
-        let crate_dir = self.krate.crate_dir();
         let mut templates = vec![];
 
         // Prepare the hotreload message we need to send
@@ -155,6 +157,7 @@ impl AppRunner {
             // Otherwise, it might be an asset and we should look for it in all the running apps
             for runner in self.running.values() {
                 if let Some(bundled_name) = runner.hotreload_bundled_asset(&path) {
+                    // todo(jon): don't hardcode this here
                     let asset_relative = PathBuf::from("/assets/").join(bundled_name);
                     assets.push(asset_relative);
                 }
@@ -166,22 +169,31 @@ impl AppRunner {
 
         // Process the rust files
         for rust_file in edited_rust_files {
-            match self.file_map.update_rsx::<HtmlCtx>(&rust_file, &crate_dir) {
-                Ok(hotreloaded_templates) => {
-                    templates.extend(hotreloaded_templates);
-                }
+            // Strip the prefix before sending it to the filemap
+            let Ok(path) = rust_file.strip_prefix(self.krate.workspace_dir()) else {
+                tracing::error!(
+                    "Hotreloading file outside of the crate directory: {:?}",
+                    rust_file
+                );
+                continue;
+            };
 
-                // If the file is not reloadable, we need to rebuild
-                Err(HotreloadError::Notreloadable) => return None,
+            // And grabout the contents
+            let contents = std::fs::read_to_string(&rust_file).unwrap();
+
+            match self.file_map.update_rsx::<HtmlCtx>(path, contents) {
+                HotreloadResult::Rsx(new) => templates.extend(new),
+                HotreloadResult::ServerFn => todo!("server fn hotreloading"),
 
                 // The rust file may have failed to parse, but that is most likely
                 // because the user is in the middle of adding new code
                 // We just ignore the error and let Rust analyzer warn about the problem
-                Err(HotreloadError::Parse) => {}
-
-                // Otherwise just log the error
-                Err(err) => {
-                    tracing::error!(dx_src = ?TraceSrc::Dev, "Error hotreloading file {rust_file:?}: {err}")
+                HotreloadResult::Notreloadable => return None,
+                HotreloadResult::NotParseable => {
+                    tracing::debug!(dx_src = ?TraceSrc::Dev, "Error hotreloading file - not parseable {rust_file:?}")
+                }
+                HotreloadResult::Unknown => {
+                    tracing::error!(dx_src = ?TraceSrc::Dev, "Unkown error hotreloading file {rust_file:?}")
                 }
             }
         }
@@ -213,9 +225,9 @@ impl AppRunner {
 
         // Merge the assets, unknown files, and templates
         // We keep the newer change if there is both a old and new change
-        let mut templates: HashMap<String, _> = std::mem::take(&mut applied.templates)
+        let mut templates: HashMap<TemplateGlobalKey, _> = std::mem::take(&mut applied.templates)
             .into_iter()
-            .map(|template| (template.location.clone(), template))
+            .map(|template| (template.key.clone(), template))
             .collect();
         let mut assets: HashSet<PathBuf> =
             std::mem::take(&mut applied.assets).into_iter().collect();
@@ -223,7 +235,7 @@ impl AppRunner {
             .into_iter()
             .collect();
         for template in &msg.templates {
-            templates.insert(template.location.clone(), template.clone());
+            templates.insert(template.key.clone(), template.clone());
         }
         assets.extend(msg.assets.iter().cloned());
         unknown_files.extend(msg.unknown_files.iter().cloned());
@@ -254,6 +266,40 @@ impl AppRunner {
                         tracing::debug!("Setting Runtime asset dir: {out:?}");
                         runner.runtime_asst_dir = Some(PathBuf::from(out));
                     }
+                }
+            }
+        }
+    }
+
+    /// Fill the filemap with files from the filesystem, using the given filter to determine which files to include.
+    ///
+    /// You can use the filter with something like a gitignore to only include files that are relevant to your project.
+    /// We'll walk the filesystem from the given path and recursively search for all files that match the filter.
+    ///
+    /// The filter function takes a path and returns true if the file should be included in the filemap.
+    /// Generally this will only be .rs files
+    ///
+    /// If a file couldn't be parsed, we don't fail. Instead, we save the error.
+    pub fn fill_filemap(&mut self, path: PathBuf) {
+        if self.ignore.matched(&path, path.is_dir()).is_ignore() {
+            return;
+        }
+
+        // If the file is a .rs file, add it to the filemap
+        if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+            if let Ok(contents) = std::fs::read_to_string(&path) {
+                if let Ok(path) = path.strip_prefix(self.krate.workspace_dir()) {
+                    self.file_map.add_file(path.to_path_buf(), contents);
+                }
+            }
+            return;
+        }
+
+        // If it's not, we'll try to read the directory
+        if path.is_dir() {
+            if let Ok(read_dir) = std::fs::read_dir(&path) {
+                for entry in read_dir.flatten() {
+                    self.fill_filemap(entry.path());
                 }
             }
         }

@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::Result;
 use anyhow::Context;
 use std::path::PathBuf;
 use tokio::process::Command;
@@ -24,7 +24,7 @@ impl RustupShow {
 
     /// Parse the output of `rustup show`
     pub fn from_stdout(output: String) -> RustupShow {
-        // I apologize for this hand-rolled parser.
+        // I apologize for this hand-rolled parser
 
         let mut result = RustupShow::default();
         let mut current_section = "";
@@ -51,7 +51,9 @@ impl RustupShow {
                     continue;
                 }
                 match current_section {
-                    "toolchains" => result.installed_toolchains.push(line.to_string()),
+                    "toolchains" => result
+                        .installed_toolchains
+                        .push(line.trim_end_matches(" (default)").to_string()),
                     "targets" => result.installed_targets.push(line.to_string()),
                     "active_toolchain" => {
                         if result.active_toolchain.is_empty() {
@@ -145,4 +147,24 @@ rustc 1.79.0 (129f3b996 2024-06-10)
     assert_eq!(show.active_rustc, "rustc 1.79.0 (129f3b996 2024-06-10)");
     assert_eq!(show.installed_toolchains.len(), 26);
     assert_eq!(show.installed_targets.len(), 15);
+    assert_eq!(
+        show.installed_targets,
+        vec![
+            "aarch64-apple-darwin".to_string(),
+            "aarch64-apple-ios".to_string(),
+            "aarch64-apple-ios-sim".to_string(),
+            "aarch64-linux-android".to_string(),
+            "aarch64-unknown-linux-gnu".to_string(),
+            "armv7-linux-androideabi".to_string(),
+            "i686-linux-android".to_string(),
+            "thumbv6m-none-eabi".to_string(),
+            "thumbv7em-none-eabihf".to_string(),
+            "wasm32-unknown-unknown".to_string(),
+            "x86_64-apple-darwin".to_string(),
+            "x86_64-apple-ios".to_string(),
+            "x86_64-linux-android".to_string(),
+            "x86_64-pc-windows-msvc".to_string(),
+            "x86_64-unknown-linux-gnu".to_string(),
+        ]
+    )
 }
