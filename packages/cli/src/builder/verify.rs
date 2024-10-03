@@ -30,7 +30,7 @@ impl BuildRequest {
             // Make sure we have the required deps for desktop. More important for linux
             // Todo(jon): verify the flavor of linux and then install the correct deps. Something like
             // the crates for manipulating menu bars, webkit, etc.
-            Platform::Desktop => {}
+            Platform::MacOS | Platform::Windows | Platform::Linux => {}
 
             // Generally nothing for server or liveview, pretty simple, can ignore
             Platform::Server => {}

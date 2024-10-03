@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 
 const EXE_WRITTEN_NAME: &str = "DioxusApp";
-pub const MAC_APP_NAME: &str = "DioxusApp.app";
+const MAC_APP_NAME: &str = "DioxusApp.app";
 
 /// The end result of a build.
 ///
@@ -289,7 +289,7 @@ impl AppBundle {
                 }
             }
 
-            Platform::Desktop => {
+            Platform::MacOS => {
                 // for now, until we have bundled hotreload, just copy the executable to the output location
                 let work_dir = self.build_dir.join(MAC_APP_NAME).join("Contents");
                 let app_dir = work_dir.join("MacOS");
@@ -301,6 +301,10 @@ impl AppBundle {
 
                 std::fs::copy(self.cargo_app_exe.clone(), app_dir.join(EXE_WRITTEN_NAME))?;
             }
+
+            Platform::Windows => {}
+
+            Platform::Linux => {}
 
             // Follows a different format than mac
             Platform::Ios => {
@@ -422,18 +426,15 @@ impl AppBundle {
     pub fn main_exe(&self) -> PathBuf {
         match self.build.build.platform() {
             Platform::Web => self.build_dir.join("public").join("index.html"),
-            Platform::Desktop => self
+            Platform::MacOS => self
                 .build_dir
                 .join(MAC_APP_NAME)
                 .join("Contents")
                 .join("MacOS")
                 .join(EXE_WRITTEN_NAME),
-            Platform::Ios => self
-                .build_dir
-                .join(MAC_APP_NAME)
-                // .join("Contents")
-                // .join("MacOS")
-                .join(EXE_WRITTEN_NAME),
+            Platform::Ios => self.build_dir.join(MAC_APP_NAME).join(EXE_WRITTEN_NAME),
+            Platform::Windows => todo!(),
+            Platform::Linux => todo!(),
             Platform::Android => todo!(),
             Platform::Server => self.build_dir.join("server"),
             Platform::Liveview => self.build_dir.join("server"),
@@ -445,12 +446,14 @@ impl AppBundle {
 
         match self.build.build.platform() {
             Platform::Web => build_dir.join("public").join("assets"),
-            Platform::Desktop => self
+            Platform::MacOS => self
                 .build_dir
                 .join(MAC_APP_NAME)
                 .join("Contents")
                 .join("Resources")
                 .join("assets"),
+            Platform::Windows => todo!(),
+            Platform::Linux => todo!(),
             Platform::Ios => build_dir.join(MAC_APP_NAME).join("assets"),
             Platform::Android => build_dir.join("assets"),
             Platform::Server => build_dir.join("assets"),
@@ -473,7 +476,7 @@ impl AppBundle {
             }
 
             // Create a final .app/.exe/etc depending on the host platform, not dependent on the host
-            Platform::Desktop => {
+            Platform::MacOS => {
                 let out_app = destination
                     .join(self.build_dir.file_name().unwrap())
                     .with_extension(EXE_WRITTEN_NAME);
@@ -494,6 +497,12 @@ impl AppBundle {
 
             // Create a .ipa, only from macOS
             Platform::Ios => todo!("Implement iOS bundling"),
+
+            // create the exe + folders and then bundle them into a final exe/installer
+            Platform::Windows => todo!("Implement iOS bundling"),
+
+            // create the appimage
+            Platform::Linux => todo!("Implement linux bundling"),
 
             // Create a .exe, from linux/mac/windows
             Platform::Android => todo!("Implement Android bundling"),
@@ -531,7 +540,7 @@ impl AppBundle {
     async fn write_metadata(&self) -> Result<()> {
         // write the Info.plist file
         match self.build.build.platform() {
-            Platform::Desktop => {
+            Platform::MacOS => {
                 let src = include_str!("../../assets/mac.plist");
                 let dest = self
                     .build_dir
@@ -540,6 +549,9 @@ impl AppBundle {
                     .join("Info.plist");
                 std::fs::write(dest, src)?;
             }
+            // create the .desktop file for the app image
+            Platform::Linux => {}
+            Platform::Windows => {}
             Platform::Ios => {
                 let src = include_str!("../../assets/ios.plist");
                 let dest = self.build_dir.join(MAC_APP_NAME).join("Info.plist");
@@ -567,7 +579,9 @@ impl AppBundle {
                 // .await
                 // .unwrap()?;
             }
-            Platform::Desktop => {}
+            Platform::MacOS => {}
+            Platform::Windows => {}
+            Platform::Linux => {}
             Platform::Ios => {}
             Platform::Android => {}
             Platform::Server => {}
@@ -588,9 +602,11 @@ impl AppBundle {
     // returns the .app/.apk/.appimage
     pub(crate) fn app_root(&self) -> PathBuf {
         match self.build.build.platform() {
-            Platform::Desktop => self.build_dir.join(MAC_APP_NAME),
+            Platform::MacOS => self.build_dir.join(MAC_APP_NAME),
             Platform::Ios => self.build_dir.join(MAC_APP_NAME),
             Platform::Web => todo!(),
+            Platform::Linux => todo!(),
+            Platform::Windows => todo!(),
             Platform::Android => todo!(),
             Platform::Server => todo!(),
             Platform::Liveview => todo!(),

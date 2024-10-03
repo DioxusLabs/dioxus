@@ -964,7 +964,7 @@ fn how_long_is_a_tracemsg() {
     // This log
     // 11:52:27 [desktop] mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"
     // Should be 136 characters
-    let log = TraceMsg::text(TraceSrc::App(Platform::Desktop), Level::INFO,
+    let log = TraceMsg::text(TraceSrc::App(Platform::MacOS), Level::INFO,
         r#"mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"#.to_string()
     );
 

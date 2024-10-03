@@ -370,7 +370,9 @@ impl From<String> for TraceSrc {
             "bld" => Self::Build,
             "cargo" => Self::Cargo,
             "app" => Self::App(TargetPlatform::Web),
-            "desktop" => Self::App(TargetPlatform::Desktop),
+            "windows" => Self::App(TargetPlatform::Windows),
+            "macos" => Self::App(TargetPlatform::MacOS),
+            "linux" => Self::App(TargetPlatform::Linux),
             "server" => Self::App(TargetPlatform::Server),
             "liveview" => Self::App(TargetPlatform::Liveview),
             _ => Self::Unknown,
@@ -383,7 +385,9 @@ impl Display for TraceSrc {
         match self {
             Self::App(platform) => match platform {
                 TargetPlatform::Web => write!(f, "web"),
-                TargetPlatform::Desktop => write!(f, "desktop"),
+                TargetPlatform::MacOS => write!(f, "macos"),
+                TargetPlatform::Windows => write!(f, "windows"),
+                TargetPlatform::Linux => write!(f, "linux"),
                 TargetPlatform::Server => write!(f, "server"),
                 TargetPlatform::Liveview => write!(f, "server"),
                 TargetPlatform::Ios => write!(f, "ios"),

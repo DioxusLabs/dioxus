@@ -3,37 +3,34 @@ use crate::{
     ProgressTx, Result,
 };
 use std::time::{Duration, Instant};
-use tokio::task::JoinHandle;
 
-/// The struct that handles the state of a build for an App.
-/// Is currently designed to only handle one app and its server at a time, but feasibly could be
-/// extended to support multiple apps and sidecars in the future.
+/// The component of the serve engine that watches ongoing builds and manages their state, handle,
+/// and progress.
+///
+/// Previously, the builder allowed multiple apps to be built simultaneously, but this newer design
+/// simplifies the code and allows only one app and its server to be built at a time.
+///
+/// Here, we track the number of crates being compiled, assets copied, the times of these events, and
+/// other metadata that gives us useful indicators for the UI.
 pub(crate) struct Builder {
-    /// The application we are building
+    // Components of the build
     pub krate: DioxusCrate,
-
     pub request: BuildRequest,
-
-    pub stage: BuildStage,
-
-    pub build: JoinHandle<Result<AppBundle>>,
-
-    /// Messages from the ongoing builds will be sent on this channel
+    pub build: tokio::task::JoinHandle<Result<AppBundle>>,
     pub tx: ProgressTx,
     pub rx: ProgressRx,
 
+    // Metadata about the build that needs to be managed by watching build updates
+    // used to render the TUI
+    pub stage: BuildStage,
     pub compiled_crates: usize,
     pub compiled_crates_server: usize,
-
     pub expected_crates: usize,
     pub expected_crates_server: usize,
-
     pub bundling_progress: f64,
-
     pub compile_start: Option<Instant>,
     pub compile_end: Option<Instant>,
     pub compile_end_server: Option<Instant>,
-
     pub bundle_start: Option<Instant>,
     pub bundle_end: Option<Instant>,
 }
@@ -80,17 +77,18 @@ impl Builder {
     pub(crate) async fn wait(&mut self) -> BuildUpdate {
         use futures_util::StreamExt;
 
-        // Wait for the build to finish or for it to eminate a status message
+        // Wait for the build to finish or for it to emit a status message
         let update = tokio::select! {
+            Some(progress) = self.rx.next() => progress,
             bundle = (&mut self.build) => {
+                // Replace the build with an infinitely pending task so we can select it again without worrying about deadlocks/spins
                 self.build = tokio::task::spawn(std::future::pending());
                 match bundle {
                     Ok(Ok(bundle)) => BuildUpdate::BuildReady { bundle },
                     Ok(Err(err)) => BuildUpdate::BuildFailed { err },
-                    Err(_) => BuildUpdate::BuildFailed { err: crate::Error::from(anyhow::anyhow!("Build panicked!")) },
+                    Err(err) => BuildUpdate::BuildFailed { err: crate::Error::RuntimeError(format!("Build panicked! {:?}", err)) },
                 }
             },
-            Some(progress) = self.rx.next() => progress,
         };
 
         // Update the internal stage of the build so the UI can render it
@@ -138,7 +136,6 @@ impl Builder {
                     }
                     BuildStage::Bundling {} => {
                         self.bundling_progress = 0.0;
-
                         self.compile_end = Some(Instant::now());
                         self.bundle_start = Some(Instant::now());
                     }
@@ -189,22 +186,6 @@ impl Builder {
         update
     }
 
-    /// Wait for the build to finish, returning the final bundle
-    pub(crate) async fn finish(&mut self) -> Result<AppBundle> {
-        loop {
-            match self.wait().await {
-                BuildUpdate::BuildReady { bundle } => return Ok(bundle),
-                BuildUpdate::BuildFailed { err } => return Err(err),
-                BuildUpdate::Progress { .. } => {
-                    // maybe log this?
-                }
-                BuildUpdate::CompilerMessage { .. } => {
-                    // maybe log this?
-                }
-            }
-        }
-    }
-
     /// Restart this builder with new build arguments.
     pub(crate) fn rebuild(&mut self, args: BuildArgs) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
@@ -235,8 +216,28 @@ impl Builder {
         self.compile_end = None;
     }
 
-    /// Get the duration of the compile phase
-    pub fn compile_duration(&self) -> Option<Duration> {
+    /// Wait for the build to finish, returning the final bundle
+    /// Should only be used by code that's not interested in the intermediate updates and only cares about the final bundle
+    ///
+    /// todo(jon): maybe we want to do some logging here? The build/bundle/run screens could be made to
+    /// use the TUI output for prettier outputs.
+    pub(crate) async fn finish(&mut self) -> Result<AppBundle> {
+        loop {
+            match self.wait().await {
+                BuildUpdate::BuildReady { bundle } => return Ok(bundle),
+                BuildUpdate::BuildFailed { err } => return Err(err),
+                BuildUpdate::Progress { .. } => {}
+                BuildUpdate::CompilerMessage { .. } => {}
+            }
+        }
+    }
+
+    /// Get the total duration of the build, if all stages have completed
+    pub(crate) fn total_build_time(&self) -> Option<Duration> {
+        Some(self.compile_duration()? + self.bundle_duration()?)
+    }
+
+    pub(crate) fn compile_duration(&self) -> Option<Duration> {
         Some(
             self.compile_end
                 .unwrap_or_else(Instant::now)
@@ -244,7 +245,7 @@ impl Builder {
         )
     }
 
-    pub fn bundle_duration(&self) -> Option<Duration> {
+    pub(crate) fn bundle_duration(&self) -> Option<Duration> {
         Some(
             self.bundle_end
                 .unwrap_or_else(Instant::now)
@@ -252,16 +253,14 @@ impl Builder {
         )
     }
 
-    pub fn compile_progress(&self) -> f64 {
+    /// Return a number between 0 and 1 representing the progress of the app build
+    pub(crate) fn compile_progress(&self) -> f64 {
         self.compiled_crates as f64 / self.expected_crates as f64
     }
 
-    pub fn server_compile_progress(&self) -> f64 {
+    /// Return a number between 0 and 1 representing the progress of the server build
+    pub(crate) fn server_compile_progress(&self) -> f64 {
         self.compiled_crates_server as f64 / self.expected_crates_server as f64
-    }
-
-    pub(crate) fn total_build_time(&self) -> Option<Duration> {
-        Some(self.compile_duration()? + self.bundle_duration()?)
     }
 
     fn is_finished(&self) -> bool {

@@ -115,7 +115,9 @@ impl DioxusCrate {
     pub(crate) fn build_dir(&self, platform: Platform) -> PathBuf {
         let plat_name = match platform {
             Platform::Web => "web",
-            Platform::Desktop => "desktop",
+            Platform::MacOS => "macos",
+            Platform::Windows => "windows",
+            Platform::Linux => "linux",
             Platform::Ios => "ios",
             Platform::Android => "android",
             Platform::Server => "server",
@@ -137,7 +139,9 @@ impl DioxusCrate {
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
         let plat_name = match platform {
             Platform::Web => "web",
-            Platform::Desktop => "desktop",
+            Platform::MacOS => "macos",
+            Platform::Windows => "windows",
+            Platform::Linux => "linux",
             Platform::Ios => "ios",
             Platform::Android => "android",
             Platform::Server => "server",

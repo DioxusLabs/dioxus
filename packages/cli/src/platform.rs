@@ -24,13 +24,26 @@ pub(crate) enum Platform {
     #[default]
     Web,
 
-    /// Targeting the desktop platform using Tao/Wry-based webview
-    ///
-    /// Will only build for your native architecture - to do cross builds you need to use a VM.
-    /// Read more about cross-builds on the Dioxus Website.
-    #[clap(name = "desktop")]
-    #[serde(rename = "desktop")]
-    Desktop,
+    /// Targetting macos desktop
+    /// When running on macos, you can also use `--platform desktop` to build for the desktop
+    #[cfg_attr(target_os = "macos", clap(alias = "desktop"))]
+    #[clap(name = "macos")]
+    #[serde(rename = "macos")]
+    MacOS,
+
+    /// Targetting windows desktop
+    /// When running on windows, you can also use `--platform desktop` to build for the desktop
+    #[cfg_attr(target_os = "windows", clap(allias = "desktop"))]
+    #[clap(name = "windows")]
+    #[serde(rename = "windows")]
+    Windows,
+
+    /// Targetting linux desktop
+    /// When running on linux, you can also use `--platform desktop` to build for the desktop
+    #[cfg_attr(target_os = "linux", clap(alias = "desktop"))]
+    #[clap(name = "linux")]
+    #[serde(rename = "linux")]
+    Linux,
 
     /// Targeting the ios platform
     ///
@@ -73,7 +86,9 @@ impl FromStr for Platform {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "web" => Ok(Self::Web),
-            "desktop" => Ok(Self::Desktop),
+            "macos" => Ok(Self::MacOS),
+            "windows" => Ok(Self::Windows),
+            "linux" => Ok(Self::Linux),
             "liveview" => Ok(Self::Liveview),
             "server" => Ok(Self::Server),
             "ios" => Ok(Self::Ios),
@@ -95,7 +110,9 @@ impl Platform {
     pub(crate) fn feature_name(&self) -> &str {
         match self {
             Platform::Web => "web",
-            Platform::Desktop => "desktop",
+            Platform::MacOS => "desktop",
+            Platform::Windows => "desktop",
+            Platform::Linux => "desktop",
             Platform::Server => "server",
             Platform::Liveview => "liveview",
             Platform::Ios => "mobile",

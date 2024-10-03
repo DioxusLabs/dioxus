@@ -238,16 +238,21 @@ impl BuildRequest {
                 cargo_args.push(custom_profile.to_string());
             }
 
+            // todo: use the right arch based on the current arch
             let custom_target = match self.build.platform() {
                 Platform::Web => Some("wasm32-unknown-unknown"),
                 Platform::Ios => match self.build.target_args.device {
                     Some(true) => Some("aarch64-apple-ios"),
                     _ => Some("aarch64-apple-ios-sim"),
                 },
-                Platform::Android => todo!(),
-                Platform::Desktop => None,
+                Platform::Android => Some("aarch64-linux-android"),
                 Platform::Server => None,
                 Platform::Liveview => None,
+                // we're assuming we're building for the native platform for now... if you're cross-compiling
+                // the targets here might be different
+                Platform::MacOS => None,
+                Platform::Windows => None,
+                Platform::Linux => None,
             };
 
             if let Some(target) = custom_target.or(self.build.target_args.target.as_deref()) {
@@ -325,7 +330,9 @@ impl BuildRequest {
         match self.build.platform() {
             Platform::Web => "web".to_string(),
             Platform::Server => "server".to_string(),
-            Platform::Desktop => todo!(),
+            Platform::MacOS => todo!(),
+            Platform::Windows => todo!(),
+            Platform::Linux => todo!(),
             Platform::Ios => todo!(),
             Platform::Android => todo!(),
             Platform::Liveview => todo!(),

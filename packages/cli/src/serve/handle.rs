@@ -133,9 +133,11 @@ impl AppHandle {
             }
 
             // These are all just basically running the main exe, but with slightly different resource dir paths
-            Platform::Server | Platform::Liveview | Platform::Desktop => {
-                Some(self.open_with_main_exe(envs)?)
-            }
+            Platform::Server
+            | Platform::Liveview
+            | Platform::MacOS
+            | Platform::Windows
+            | Platform::Linux => Some(self.open_with_main_exe(envs)?),
         };
 
         // If we have a running process, we need to attach to it and wait for its outputs

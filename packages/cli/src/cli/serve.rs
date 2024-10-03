@@ -114,9 +114,7 @@ impl ServeArgs {
         match self.build_arguments.platform() {
             Platform::Server => true,
             Platform::Liveview => true,
-            Platform::Web | Platform::Desktop | Platform::Ios | Platform::Android => {
-                self.build_arguments.fullstack
-            }
+            _ => self.build_arguments.fullstack,
         }
     }
 }

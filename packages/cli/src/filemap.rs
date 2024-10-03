@@ -1,6 +1,5 @@
-use dioxus_core::{
-    internal::{HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey},
-    Template,
+use dioxus_core::internal::{
+    HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::CallBody;
