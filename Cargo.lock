@@ -3090,7 +3090,6 @@ name = "dioxus_server_macro"
 version = "0.6.0-alpha.2"
 dependencies = [
  "axum 0.7.5",
- "convert_case 0.6.0",
  "dioxus",
  "proc-macro2",
  "quote",

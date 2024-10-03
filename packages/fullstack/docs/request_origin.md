@@ -20,12 +20,9 @@ fn PrintHtmlRequestInfo() -> Element {
 ```rust
 #[server]
 async fn read_headers() -> Result<(), ServerFnError> {
-    // The server context only exists on the server, so we need to put it behind a server_only! config
-    server_only! {
-        // Since we are calling this from a server function, the server context that is may be from the
-        // initial request or a request from the client
-        println!("headers are {:?}", server_context().request_parts().headers);
-    }
+    // Since we are calling this from a server function, the server context that is may be from the
+    // initial request or a request from the client
+    println!("headers are {:?}", server_context().request_parts().headers);
     Ok(())
 }
 
