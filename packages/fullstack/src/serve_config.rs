@@ -44,7 +44,7 @@ impl ServeConfigBuilder {
     ///     .with_cfg(cfg)
     ///     .launch(app);
     /// ```
-    pub fn incremental(mut self, cfg: dioxus_ssr::IncrementalRendererConfig) -> Self {
+    pub fn incremental(mut self, cfg: dioxus_isrg::IncrementalRendererConfig) -> Self {
         self.incremental = Some(cfg);
         self
     }
