@@ -2594,6 +2594,7 @@ dependencies = [
  "muda",
  "objc",
  "objc_id",
+ "once_cell",
  "rand 0.8.5",
  "reqwest",
  "rfd",
