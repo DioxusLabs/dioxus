@@ -44,6 +44,62 @@ pub trait Document {
     /// Create a new evaluator for the document that evaluates JavaScript and facilitates communication between JavaScript and Rust.
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>>;
 
+    /// Set the title of the document
+    fn set_title(&self, title: String) {
+        self.new_evaluator(format!("document.title = {title:?};"));
+    }
+
+    /// Create a new meta tag
+    fn create_meta(&self, props: MetaProps) {
+        let attributes = props.attributes();
+        let js = create_element_in_head("meta", &attributes, None);
+        self.new_evaluator(js);
+    }
+
+    /// Create a new script tag
+    fn create_script(&self, props: ScriptProps) {
+        let attributes = props.attributes();
+        let js = match (&props.src, props.script_contents()) {
+            // The script has inline contents, render it as a script tag
+            (_, Ok(contents)) => create_element_in_head("script", &attributes, Some(contents)),
+            // The script has a src, render it as a script tag without a body
+            (Some(_), _) => create_element_in_head("script", &attributes, None),
+            // The script has neither contents nor src, log an error
+            (None, Err(err)) => {
+                err.log("Script");
+                return;
+            }
+        };
+        self.new_evaluator(js);
+    }
+
+    /// Create a new style tag
+    fn create_style(&self, props: StyleProps) {
+        let mut attributes = props.attributes();
+        let js = match (&props.href, props.style_contents()) {
+            // The style has inline contents, render it as a style tag
+            (_, Ok(contents)) => create_element_in_head("style", &attributes, Some(contents)),
+            // The style has a src, render it as a link tag
+            (Some(_), _) => {
+                attributes.push(("type", "text/css".into()));
+                create_element_in_head("link", &attributes, None)
+            }
+            // The style has neither contents nor src, log an error
+            (None, Err(err)) => {
+                err.log("Style");
+                return;
+            }
+        };
+        self.new_evaluator(js);
+    }
+
+    /// Create a new link tag
+    fn create_link(&self, props: head::LinkProps) {
+        let attributes = props.attributes();
+        let js = create_element_in_head("link", &attributes, None);
+        self.new_evaluator(js);
+    }
+
     /// Get a reference to the document as `dyn Any`
     fn as_any(&self) -> &dyn std::any::Any;
 }

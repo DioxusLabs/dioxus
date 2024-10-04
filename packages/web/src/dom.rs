@@ -13,13 +13,13 @@ use dioxus_core::{ElementId, Template};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Element, Event, Node};
+use web_sys::{Document, Event, Node};
 
 use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
 
 pub struct WebsysDom {
     #[allow(dead_code)]
-    pub(crate) root: Element,
+    pub(crate) root: Node,
     pub(crate) document: Document,
     pub(crate) templates: FxHashMap<Template, u16>,
     pub(crate) interpreter: Interpreter,
@@ -67,9 +67,9 @@ impl WebsysDom {
                         document.create_element("body").ok().unwrap()
                     }
                 };
-                (document, root)
+                (document, root.unchecked_into())
             }
-            crate::cfg::ConfigRoot::RootElement(root) => {
+            crate::cfg::ConfigRoot::RootNode(root) => {
                 let document = match root.owner_document() {
                     Some(document) => document,
                     None => load_document(),
