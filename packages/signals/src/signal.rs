@@ -557,6 +557,7 @@ struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
 #[allow(clippy::no_effect)]
 impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
+        println!("dropping signal subscriber");
         #[cfg(debug_assertions)]
         {
             tracing::trace!(

@@ -1,15 +1,15 @@
-//! This example demonstrates how to use the spread operator to pass attributes to child components.
-//!
-//! This lets components like the `Link` allow the user to extend the attributes of the underlying `a` tag.
-//! These attributes are bundled into a `Vec<Attribute>` which can be spread into the child component using the `..` operator.
-
 use dioxus::prelude::*;
 
-fn main() {
+#[test]
+fn spread() {
     let dom = VirtualDom::prebuilt(app);
     let html = dioxus_ssr::render(&dom);
 
-    println!("{}", html);
+    assert_eq!(
+        html,
+        r#"<audio data-custom-attribute="value" style="width:10px;height:10px;left:1;">1: hello1
+2: hello2</audio>"#
+    );
 }
 
 fn app() -> Element {

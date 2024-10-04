@@ -1,5 +1,5 @@
-use ::warnings::Warning;
-use dioxus_core::prelude::{consume_context, provide_context, spawn, use_hook};
+use crate::{use_context_provider, use_future, UseFuture};
+use dioxus_core::prelude::{consume_context, use_hook};
 use dioxus_core::Task;
 use dioxus_signals::*;
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -69,35 +69,24 @@ use std::future::Future;
 /// };
 /// ```
 #[doc = include_str!("../docs/rules_of_hooks.md")]
-pub fn use_coroutine<M, G, F>(init: G) -> Coroutine<M>
+pub fn use_coroutine<M, G, F>(mut init: G) -> Coroutine<M>
 where
     M: 'static,
-    G: FnOnce(UnboundedReceiver<M>) -> F,
+    G: FnMut(UnboundedReceiver<M>) -> F + 'static,
     F: Future<Output = ()> + 'static,
 {
-    let mut coroutine = use_hook(|| {
-        provide_context(Coroutine {
-            needs_regen: Signal::new(true),
-            tx: CopyValue::new(None),
-            task: CopyValue::new(None),
-        })
+    let mut tx_copy_value = use_hook(|| CopyValue::new(None));
+
+    let future = use_future(move || {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        tx_copy_value.set(Some(tx));
+        init(rx)
     });
 
-    // We do this here so we can capture data with FnOnce
-    // this might not be the best API
-    dioxus_signals::warnings::signal_read_and_write_in_reactive_scope::allow(|| {
-        dioxus_signals::warnings::signal_write_in_component_body::allow(|| {
-            if *coroutine.needs_regen.peek() {
-                let (tx, rx) = futures_channel::mpsc::unbounded();
-                let task = spawn(init(rx));
-                coroutine.tx.set(Some(tx));
-                coroutine.task.set(Some(task));
-                coroutine.needs_regen.set(false);
-            }
-        })
-    });
-
-    coroutine
+    use_context_provider(|| Coroutine {
+        tx: tx_copy_value,
+        future,
+    })
 }
 
 /// Get a handle to a coroutine higher in the tree
@@ -111,15 +100,14 @@ pub fn use_coroutine_handle<M: 'static>() -> Coroutine<M> {
 }
 
 pub struct Coroutine<T: 'static> {
-    needs_regen: Signal<bool>,
     tx: CopyValue<Option<UnboundedSender<T>>>,
-    task: CopyValue<Option<Task>>,
+    future: UseFuture,
 }
 
 impl<T> Coroutine<T> {
     /// Get the underlying task handle
     pub fn task(&self) -> Task {
-        (*self.task.read()).unwrap()
+        self.future.task()
     }
 
     /// Send a message to the coroutine
@@ -132,11 +120,8 @@ impl<T> Coroutine<T> {
     }
 
     /// Restart this coroutine
-    ///
-    /// Forces the component to re-render, which will re-invoke the coroutine.
     pub fn restart(&mut self) {
-        self.needs_regen.set(true);
-        self.task().cancel();
+        self.future.restart();
     }
 }
 
@@ -151,6 +136,6 @@ impl<T> Clone for Coroutine<T> {
 
 impl<T> PartialEq for Coroutine<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.needs_regen == other.needs_regen && self.tx == other.tx && self.task == other.task
+        self.tx == other.tx && self.future == other.future
     }
 }
