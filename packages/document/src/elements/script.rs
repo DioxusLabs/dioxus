@@ -1,7 +1,9 @@
-use crate::document;
-
 use super::*;
+use crate::document;
+use dioxus_core_macro::*;
+use dioxus_html as dioxus_elements;
 
+#[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
 pub struct ScriptProps {
     /// The contents of the script tag. If present, the children must be a single text node.
@@ -16,6 +18,8 @@ pub struct ScriptProps {
     pub nonce: Option<String>,
     pub referrerpolicy: Option<String>,
     pub r#type: Option<String>,
+    #[props(extends = script, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
 }
 
 impl ScriptProps {
@@ -51,8 +55,8 @@ impl ScriptProps {
         attributes
     }
 
-    pub fn script_contents(&self) -> Option<String> {
-        extract_single_text_node(&self.children, "Script")
+    pub fn script_contents(&self) -> Result<String, ExtractSingleTextNodeError<'_>> {
+        extract_single_text_node(&self.children)
     }
 }
 

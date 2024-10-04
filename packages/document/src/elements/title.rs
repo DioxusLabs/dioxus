@@ -27,10 +27,15 @@ pub struct TitleProps {
 /// }
 /// ```
 #[component]
+#[doc(alias = "<title>")]
 pub fn Title(props: TitleProps) -> Element {
     let children = props.children;
-    let Some(text) = extract_single_text_node(&children, "Title") else {
-        return VNode::empty();
+    let text = match extract_single_text_node(&children) {
+        Ok(text) => text,
+        Err(err) => {
+            err.log("Title");
+            return VNode::empty();
+        }
     };
 
     // Update the title as it changes. NOTE: We don't use use_effect here because we need this to run on the server

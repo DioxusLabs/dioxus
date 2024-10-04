@@ -1,7 +1,9 @@
-use crate::document;
-
 use super::*;
+use crate::document;
+use dioxus_core_macro::*;
+use dioxus_html as dioxus_elements;
 
+#[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
 pub struct LinkProps {
     pub rel: Option<String>,
@@ -19,6 +21,8 @@ pub struct LinkProps {
     pub integrity: Option<String>,
     pub r#type: Option<String>,
     pub blocking: Option<String>,
+    #[props(extends = link, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
 }
 
 impl LinkProps {

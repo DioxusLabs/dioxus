@@ -11,9 +11,6 @@ use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 mod eval;
 pub use eval::*;
 
-pub mod head;
-pub use head::{Meta, MetaProps, Script, ScriptProps, Style, StyleProps, Title, TitleProps};
-
 fn format_attributes(attributes: &[(&str, String)]) -> String {
     let mut formatted = String::from("[");
     for (key, value) in attributes {

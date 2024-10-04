@@ -5,6 +5,46 @@ use super::*;
 /// A context for the document
 pub type DocumentContext = Arc<dyn Document>;
 
+fn format_string_for_js(s: &str) -> String {
+    let escaped = s
+        .replace('\\', "\\\\")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
+fn format_attributes(attributes: &[(&str, String)]) -> String {
+    let mut formatted = String::from("[");
+    for (key, value) in attributes {
+        formatted.push_str(&format!(
+            "[{}, {}],",
+            format_string_for_js(key),
+            format_string_for_js(value)
+        ));
+    }
+    if formatted.ends_with(',') {
+        formatted.pop();
+    }
+    formatted.push(']');
+    formatted
+}
+
+fn create_element_in_head(
+    tag: &str,
+    attributes: &[(&str, String)],
+    children: Option<String>,
+) -> String {
+    let helpers = include_str!("../js/head.js");
+    let attributes = format_attributes(attributes);
+    let children = children
+        .as_deref()
+        .map(format_string_for_js)
+        .unwrap_or("null".to_string());
+    let tag = format_string_for_js(tag);
+    format!(r#"{helpers};window.createElementInHead({tag}, {attributes}, {children});"#)
+}
+
 /// A provider for document-related functionality.
 ///
 /// Provides things like a history API, a title, a way to run JS, and some other basics/essentials used
@@ -23,7 +63,9 @@ pub trait Document: 'static {
     fn eval(&self, js: String) -> Eval;
 
     /// Set the title of the document
-    fn set_title(&self, title: String);
+    fn set_title(&self, title: String) {
+        self.eval(format!("document.title = {title:?};"));
+    }
 
     /// Create a new element in the head
     fn create_head_element(
@@ -35,22 +77,49 @@ pub trait Document: 'static {
 
     /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
-        self.create_head_element("meta", props.attributes(), None);
+        let attributes = props.attributes();
+        self.create_head_element("meta", &attributes, None);
     }
 
     /// Create a new script tag in the head
     fn create_script(&self, props: ScriptProps) {
-        self.create_head_element("script", props.attributes(), props.script_contents());
+        let attributes = props.attributes();
+        match (&props.src, props.script_contents()) {
+            // The script has inline contents, render it as a script tag
+            (_, Ok(contents)) => self.create_head_element("script", &attributes, Some(contents)),
+            // The script has a src, render it as a script tag without a body
+            (Some(_), _) => self.create_head_element("script", &attributes, None),
+            // The script has neither contents nor src, log an error
+            (None, Err(err)) => {
+                err.log("Script");
+                return;
+            }
+        }
     }
 
     /// Create a new style tag in the head
     fn create_style(&self, props: StyleProps) {
-        self.create_head_element("style", props.attributes(), props.style_contents());
+        let mut attributes = props.attributes();
+        match (&props.href, props.style_contents()) {
+            // The style has inline contents, render it as a style tag
+            (_, Ok(contents)) => self.create_head_element("style", attributes, Some(contents)),
+            // The style has a src, render it as a link tag
+            (Some(_), _) => {
+                attributes.push(("type", "text/css".into()));
+                self.create_head_element("link", attributes, None)
+            }
+            // The style has neither contents nor src, log an error
+            (None, Err(err)) => {
+                err.log("Style");
+                return;
+            }
+        };
     }
 
     /// Create a new link tag in the head
     fn create_link(&self, props: LinkProps) {
-        self.create_head_element("link", props.attributes(), None);
+        let attributes = props.attributes();
+        self.create_head_element("link", &attributes, None);
     }
 
     /// Get the path of the current URL.

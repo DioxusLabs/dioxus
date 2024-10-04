@@ -1,5 +1,9 @@
 use super::*;
+use crate::document;
+use dioxus_core_macro::*;
+use dioxus_html as dioxus_elements;
 
+#[non_exhaustive]
 /// Props for the [`Meta`] component
 #[derive(Clone, Props, PartialEq)]
 pub struct MetaProps {
@@ -8,6 +12,8 @@ pub struct MetaProps {
     pub charset: Option<String>,
     pub http_equiv: Option<String>,
     pub content: Option<String>,
+    #[props(extends = meta, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
 }
 
 impl MetaProps {
@@ -56,11 +62,12 @@ impl MetaProps {
 ///
 /// </div>
 #[component]
+#[doc(alias = "<meta>")]
 pub fn Meta(props: MetaProps) -> Element {
     use_update_warning(&props, "Meta {}");
 
     use_hook(|| {
-        let document = crate::document();
+        let document = document();
         document.create_meta(props);
     });
 

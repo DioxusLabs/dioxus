@@ -1,7 +1,9 @@
-use crate::document;
-
 use super::*;
+use crate::document;
+use dioxus_core_macro::*;
+use dioxus_html as dioxus_elements;
 
+#[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
 pub struct StyleProps {
     /// Styles are deduplicated by their href attribute
@@ -11,6 +13,8 @@ pub struct StyleProps {
     pub title: Option<String>,
     /// The contents of the style tag. If present, the children must be a single text node.
     pub children: Element,
+    #[props(extends = style, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
 }
 
 impl StyleProps {
@@ -31,8 +35,8 @@ impl StyleProps {
         attributes
     }
 
-    pub fn style_contents(&self) -> Option<String> {
-        extract_single_text_node(&self.children, "Title")
+    pub fn style_contents(&self) -> Result<String, ExtractSingleTextNodeError<'_>> {
+        extract_single_text_node(&self.children)
     }
 }
 

@@ -2657,6 +2657,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-macro",
  "dioxus-core-types",
+ "dioxus-html",
  "futures-channel",
  "serde",
  "serde_json",
