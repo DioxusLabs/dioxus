@@ -61,14 +61,37 @@ pub trait Document {
     /// Create a new script tag
     fn create_script(&self, props: ScriptProps) {
         let attributes = props.attributes();
-        let js = create_element_in_head("script", &attributes, props.script_contents());
+        let js = match (&props.src, props.script_contents()) {
+            // The script has inline contents, render it as a script tag
+            (_, Ok(contents)) => create_element_in_head("script", &attributes, Some(contents)),
+            // The script has a src, render it as a script tag without a body
+            (Some(_), _) => create_element_in_head("script", &attributes, None),
+            // The script has neither contents nor src, log an error
+            (None, Err(err)) => {
+                err.log("Script");
+                return;
+            }
+        };
         self.new_evaluator(js);
     }
 
     /// Create a new style tag
     fn create_style(&self, props: StyleProps) {
-        let attributes = props.attributes();
-        let js = create_element_in_head("style", &attributes, props.style_contents());
+        let mut attributes = props.attributes();
+        let js = match (&props.href, props.style_contents()) {
+            // The style has inline contents, render it as a style tag
+            (_, Ok(contents)) => create_element_in_head("style", &attributes, Some(contents)),
+            // The style has a src, render it as a link tag
+            (Some(_), _) => {
+                attributes.push(("type", "text/css".into()));
+                create_element_in_head("link", &attributes, None)
+            }
+            // The style has neither contents nor src, log an error
+            (None, Err(err)) => {
+                err.log("Style");
+                return;
+            }
+        };
         self.new_evaluator(js);
     }
 
