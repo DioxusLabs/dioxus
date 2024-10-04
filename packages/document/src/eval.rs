@@ -1,6 +1,6 @@
 #![doc = include_str!("../docs/eval.md")]
-
 use crate::error::EvalError;
+use futures_util::StreamExt;
 use std::{
     future::{Future, IntoFuture},
     pin::Pin,
@@ -8,36 +8,53 @@ use std::{
 
 #[doc = include_str!("../docs/eval.md")]
 pub struct Eval {
-    rx: futures_channel::oneshot::Receiver<Result<serde_json::Value, EvalError>>,
+    resolve: futures_channel::oneshot::Receiver<Result<serde_json::Value, EvalError>>,
+    sender: futures_channel::mpsc::UnboundedSender<Result<serde_json::Value, EvalError>>,
+    receiver: futures_channel::mpsc::UnboundedReceiver<Result<serde_json::Value, EvalError>>,
 }
 
 impl Eval {
-    /// Create this eval from a oneshot channel that, when resolved, will return the result of the eval
-    pub fn new(
-        rx: futures_channel::oneshot::Receiver<Result<serde_json::Value, EvalError>>,
+    /// Create this eval from:
+    /// - A oneshot channel that, when resolved, will return the result of the eval
+    /// - The sender and receiver for the eval channel
+    pub fn from_parts(
+        resolve: futures_channel::oneshot::Receiver<Result<serde_json::Value, EvalError>>,
+        sender: futures_channel::mpsc::UnboundedSender<Result<serde_json::Value, EvalError>>,
+        receiver: futures_channel::mpsc::UnboundedReceiver<Result<serde_json::Value, EvalError>>,
     ) -> Self {
-        Self { rx }
+        Self {
+            resolve,
+            sender,
+            receiver,
+        }
     }
 
-    /// Create this eval and return the tx that will be used to resolve the eval
-    pub fn from_parts() -> (
-        futures_channel::oneshot::Sender<Result<serde_json::Value, EvalError>>,
-        Self,
-    ) {
-        let (tx, rx) = futures_channel::oneshot::channel();
-        (tx, Self::new(rx))
-    }
-
-    /// Poll this eval until it resolves
-    pub async fn recv(self) -> Result<serde_json::Value, EvalError> {
-        self.rx
+    /// Wait until the javascript task is finished and return the result
+    pub async fn join<T: serde::de::DeserializeOwned>(self) -> Result<T, EvalError> {
+        let json_value = self
+            .resolve
             .await
-            .map_err(|_| EvalError::Communication("eval channel closed".to_string()))?
+            .map_err(|_| EvalError::Communication("eval channel closed".to_string()))??;
+        serde_json::from_value(json_value).map_err(EvalError::Serialization)
     }
 
-    pub async fn recv_as<T: serde::de::DeserializeOwned>(self) -> Result<T, EvalError> {
-        let res = self.recv().await?;
-        serde_json::from_value(res).map_err(EvalError::Deserialization)
+    /// Send a message to the javascript task
+    pub fn send(&self, data: impl serde::Serialize) -> Result<(), EvalError> {
+        self.sender
+            .unbounded_send(Ok(
+                serde_json::to_value(data).map_err(EvalError::Serialization)?
+            ))
+            .map_err(|_| EvalError::Communication("eval channel closed".to_string()))
+    }
+
+    /// Receive a message from the javascript task
+    pub async fn recv<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, EvalError> {
+        let json_value = self
+            .receiver
+            .next()
+            .await
+            .ok_or_else(|| EvalError::Communication("eval channel closed".to_string()))??;
+        serde_json::from_value(json_value).map_err(EvalError::Serialization)
     }
 }
 
@@ -46,6 +63,6 @@ impl IntoFuture for Eval {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(self.recv().into_future())
+        Box::pin(self.join().into_future())
     }
 }

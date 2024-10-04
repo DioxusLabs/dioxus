@@ -17,8 +17,8 @@ pub enum EvalError {
     /// Represents an error communicating between JavaScript and Rust.
     Communication(String),
 
-    /// Represents an error deserializing the result of an eval
-    Deserialization(serde_json::Error),
+    /// Represents an error serializing or deserializing the result of an eval
+    Serialization(serde_json::Error),
 }
 
 impl Display for EvalError {
@@ -28,7 +28,7 @@ impl Display for EvalError {
             EvalError::Finished => write!(f, "EvalError::Finished - eval has already ran"),
             EvalError::InvalidJs(_) => write!(f, "EvalError::InvalidJs - the provided javascript is invalid"),
             EvalError::Communication(_) => write!(f, "EvalError::Communication - there was an error trying to communicate with between javascript and rust"),
-            EvalError::Deserialization(_) => write!(f, "EvalError::Deserialization - there was an error trying to deserialize the result of an eval"),
+            EvalError::Serialization(_) => write!(f, "EvalError::Serialization - there was an error trying to serialize or deserialize the result of an eval"),
         }
     }
 }

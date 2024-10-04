@@ -2659,6 +2659,7 @@ dependencies = [
  "dioxus-core-types",
  "dioxus-html",
  "futures-channel",
+ "futures-util",
  "lazy-js-bundle",
  "serde",
  "serde_json",
