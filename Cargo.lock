@@ -2627,6 +2627,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-document"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-core-macro",
+ "dioxus-core-types",
+ "futures-channel",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "dioxus-examples"
 version = "0.6.0-alpha.2"
 dependencies = [

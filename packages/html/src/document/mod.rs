@@ -44,39 +44,6 @@ pub trait Document {
     /// Create a new evaluator for the document that evaluates JavaScript and facilitates communication between JavaScript and Rust.
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>>;
 
-    /// Set the title of the document
-    fn set_title(&self, title: String) {
-        self.new_evaluator(format!("document.title = {title:?};"));
-    }
-
-    /// Create a new meta tag
-    fn create_meta(&self, props: MetaProps) {
-        let attributes = props.attributes();
-        let js = create_element_in_head("meta", &attributes, None);
-        self.new_evaluator(js);
-    }
-
-    /// Create a new script tag
-    fn create_script(&self, props: ScriptProps) {
-        let attributes = props.attributes();
-        let js = create_element_in_head("script", &attributes, props.script_contents());
-        self.new_evaluator(js);
-    }
-
-    /// Create a new style tag
-    fn create_style(&self, props: StyleProps) {
-        let attributes = props.attributes();
-        let js = create_element_in_head("style", &attributes, props.style_contents());
-        self.new_evaluator(js);
-    }
-
-    /// Create a new link tag
-    fn create_link(&self, props: head::LinkProps) {
-        let attributes = props.attributes();
-        let js = create_element_in_head("link", &attributes, None);
-        self.new_evaluator(js);
-    }
-
     /// Get a reference to the document as `dyn Any`
     fn as_any(&self) -> &dyn std::any::Any;
 }

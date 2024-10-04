@@ -1,15 +1,14 @@
 use std::rc::Rc;
 
 mod document;
+mod elements;
 mod error;
 mod eval;
-mod head;
-mod title;
 
 pub use document::*;
+pub use elements::*;
 pub use error::*;
 pub use eval::*;
-pub use head::*;
 
 /// Get the document provider for the current platform or a no-op provider if the platform doesn't document functionality.
 pub fn document() -> Rc<dyn Document> {
