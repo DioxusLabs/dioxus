@@ -12,3 +12,6 @@ tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 futures-channel = { workspace = true }
+
+[build-dependencies]
+lazy-js-bundle = { workspace = true }

@@ -35,7 +35,7 @@ fn create_element_in_head(
     attributes: &[(&str, String)],
     children: Option<String>,
 ) -> String {
-    let helpers = include_str!("../js/head.js");
+    let helpers = include_str!("./js/head.js");
     let attributes = format_attributes(attributes);
     let children = children
         .as_deref()
@@ -71,9 +71,11 @@ pub trait Document: 'static {
     fn create_head_element(
         &self,
         name: &str,
-        attributes: Vec<(&str, String)>,
+        attributes: &[(&str, String)],
         contents: Option<String>,
-    );
+    ) {
+        self.eval(create_element_in_head(name, attributes, contents));
+    }
 
     /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
@@ -102,11 +104,11 @@ pub trait Document: 'static {
         let mut attributes = props.attributes();
         match (&props.href, props.style_contents()) {
             // The style has inline contents, render it as a style tag
-            (_, Ok(contents)) => self.create_head_element("style", attributes, Some(contents)),
+            (_, Ok(contents)) => self.create_head_element("style", &attributes, Some(contents)),
             // The style has a src, render it as a link tag
             (Some(_), _) => {
                 attributes.push(("type", "text/css".into()));
-                self.create_head_element("link", attributes, None)
+                self.create_head_element("link", &attributes, None)
             }
             // The style has neither contents nor src, log an error
             (None, Err(err)) => {

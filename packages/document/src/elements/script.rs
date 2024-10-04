@@ -1,6 +1,5 @@
 use super::*;
 use crate::document;
-use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
 #[non_exhaustive]
