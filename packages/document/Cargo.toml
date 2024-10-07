@@ -17,3 +17,6 @@ generational-box.workspace = true
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
+
+[dev-dependencies]
+dioxus = { workspace = true }

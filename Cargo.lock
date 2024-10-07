@@ -2656,6 +2656,7 @@ dependencies = [
 name = "dioxus-document"
 version = "0.6.0-alpha.2"
 dependencies = [
+ "dioxus",
  "dioxus-core",
  "dioxus-core-macro",
  "dioxus-core-types",
