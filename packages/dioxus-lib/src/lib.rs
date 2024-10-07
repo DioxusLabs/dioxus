@@ -16,6 +16,9 @@ pub mod events {
 #[cfg(feature = "html")]
 pub use dioxus_html as html;
 
+#[cfg(feature = "html")]
+pub use dioxus_document as document;
+
 #[cfg(feature = "macro")]
 pub use dioxus_rsx as rsx;
 

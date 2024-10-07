@@ -41,7 +41,7 @@ tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
 
 [features]
-default = ["serialize", "mounted", "document", "file_engine"]
+default = ["serialize", "mounted", "file_engine"]
 serialize = [
     "dep:serde",
     "dep:serde_json",
@@ -51,10 +51,6 @@ serialize = [
     "dioxus-core/serialize"
 ]
 mounted = []
-document = [
-    "dep:serde",
-    "dep:serde_json"
-]
 file_engine = [
     "dep:async-trait",
 ]

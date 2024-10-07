@@ -1,5 +1,5 @@
 use dioxus_core::ScopeId;
-use dioxus_document::{Document, EvalError, Evaluator};
+use dioxus_document::{Document, Eval, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde::Serialize;
@@ -64,12 +64,8 @@ pub fn init_document() {
 /// The web-target's document provider.
 pub struct WebDocument;
 impl Document for WebDocument {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        WebEvaluator::create(js)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn eval(&self, js: String) -> Eval {
+        Eval::new(WebEvaluator::create(js))
     }
 }
 

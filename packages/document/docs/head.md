@@ -4,7 +4,7 @@ Dioxus includes a series of components that render into the head of the page:
 
 - [Title](crate::Title)
 - [Meta](crate::Meta)
-- [head::Link](crate::head::Link)
+- [document::Link](crate::document::Link)
 - [Script](crate::Script)
 - [Style](crate::Style)
 

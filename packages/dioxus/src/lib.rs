@@ -51,6 +51,10 @@ pub mod events {
     pub use dioxus_html::prelude::*;
 }
 
+#[cfg(feature = "document")]
+#[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+pub use dioxus_document as document;
+
 #[cfg(feature = "html")]
 #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
 pub use dioxus_html as html;
@@ -60,6 +64,10 @@ pub use dioxus_html as html;
 pub use dioxus_core_macro as core_macro;
 
 pub mod prelude {
+    #[cfg(feature = "document")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+    pub use dioxus_document as document;
+
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
     pub use crate::launch::*;

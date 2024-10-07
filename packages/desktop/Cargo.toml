@@ -15,7 +15,6 @@ dioxus-html = { workspace = true, features = [
     "serialize",
     "mounted",
     "file_engine",
-    "document",
 ] }
 dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }

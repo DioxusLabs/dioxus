@@ -1,4 +1,4 @@
-use dioxus_document::{Document, EvalError, Evaluator};
+use dioxus_document::{Document, Eval, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 use crate::{query::Query, DesktopContext};
@@ -18,8 +18,8 @@ impl DesktopDocument {
 }
 
 impl Document for DesktopDocument {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        DesktopEvaluator::create(self.desktop_ctx.clone(), js)
+    fn eval(&self, js: String) -> Eval {
+        Eval::new(DesktopEvaluator::create(self.desktop_ctx.clone(), js))
     }
 
     fn set_title(&self, title: String) {
