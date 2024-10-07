@@ -92,10 +92,7 @@ pub trait Document: 'static {
             // The script has a src, render it as a script tag without a body
             (Some(_), _) => self.create_head_element("script", &attributes, None),
             // The script has neither contents nor src, log an error
-            (None, Err(err)) => {
-                err.log("Script");
-                return;
-            }
+            (None, Err(err)) => err.log("Script"),
         }
     }
 
@@ -111,10 +108,7 @@ pub trait Document: 'static {
                 self.create_head_element("link", &attributes, None)
             }
             // The style has neither contents nor src, log an error
-            (None, Err(err)) => {
-                err.log("Style");
-                return;
-            }
+            (None, Err(err)) => err.log("Style"),
         };
     }
 

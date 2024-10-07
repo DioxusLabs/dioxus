@@ -13,8 +13,9 @@ use crate::{
     Config, DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
+use dioxus_document::Document;
 use dioxus_hooks::to_owned;
-use dioxus_html::{prelude::Document, HasFileData, HtmlEvent, PlatformEventData};
+use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;

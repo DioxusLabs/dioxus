@@ -1,4 +1,4 @@
-use dioxus_html::document::{Document, EvalError, Evaluator};
+use dioxus_document::{Document, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 use crate::{query::Query, DesktopContext};
@@ -24,10 +24,6 @@ impl Document for DesktopDocument {
 
     fn set_title(&self, title: String) {
         self.desktop_ctx.window.set_title(&title);
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 

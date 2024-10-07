@@ -2,7 +2,7 @@ import {
   Channel,
   DioxusChannel,
   WeakDioxusChannel,
-} from "../../../html/src/ts/eval";
+} from "../../../document/src/ts/eval";
 
 // In dioxus desktop, eval needs to use the window object to store global state because we evaluate separate snippets of javascript in the browser
 declare global {
