@@ -25,7 +25,7 @@ fn RedirectToDioxusHomepageWithoutJS() -> Element {
     rsx! {
         // You can use the meta component to render a meta tag into the head of the page
         // This meta tag will redirect the user to the dioxuslabs homepage in 10 seconds
-        Meta {
+        document::Meta {
             http_equiv: "refresh",
             content: "10;url=https://dioxuslabs.com",
         }
@@ -46,12 +46,12 @@ If you have any important metadata that you want to render into the head, make s
 fn App() -> Element {
     rsx! {
         // This will render in SSR
-        Title { "My Page" }
+        document::Title { "My Page" }
         SuspenseBoundary {
             fallback: |_| rsx! { "Loading..." },
             LoadData {
                 // This will only be rendered on the client after hydration so it may not be visible to search engines
-                Meta { name: "description", content: "My Page" }
+                document::Meta { name: "description", content: "My Page" }
             }
         }
     }

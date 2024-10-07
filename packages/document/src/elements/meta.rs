@@ -47,7 +47,7 @@ impl MetaProps {
 ///     rsx! {
 ///         // You can use the meta component to render a meta tag into the head of the page
 ///         // This meta tag will redirect the user to the dioxuslabs homepage in 10 seconds
-///         Meta {
+///         document::Meta {
 ///             http_equiv: "refresh",
 ///             content: "10;url=https://dioxuslabs.com",
 ///         }

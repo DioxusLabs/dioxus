@@ -22,7 +22,7 @@ pub struct TitleProps {
 /// fn App() -> Element {
 ///     rsx! {
 ///         // You can use the Title component to render a title tag into the head of the page or window
-///         Title { "My Page" }
+///         document::Title { "My Page" }
 ///     }
 /// }
 /// ```

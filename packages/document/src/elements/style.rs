@@ -50,7 +50,7 @@ impl StyleProps {
 ///     rsx! {
 ///         // You can use the style component to render a style tag into the head of the page
 ///         // This style tag will set the background color of the page to red
-///         Style {
+///         document::Style {
 ///             r#"
 ///                 body {{
 ///                     background-color: red;
