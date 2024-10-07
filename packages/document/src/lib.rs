@@ -12,8 +12,15 @@ pub use eval::*;
 
 /// Get the document provider for the current platform or a no-op provider if the platform doesn't document functionality.
 pub fn document() -> Rc<dyn Document> {
-    dioxus_core::prelude::try_consume_context::<Rc<dyn Document>>()
-        .expect("A document should exist with this renderer")
+    match dioxus_core::prelude::try_consume_context::<Rc<dyn Document>>() {
+        Some(document) => document,
+        None => {
+            tracing::error!(
+                "Unable to find a document in the renderer. Using the default no-op document."
+            );
+            Rc::new(NoOpDocument)
+        }
+    }
 }
 
 /// Evaluate some javascript in the current document

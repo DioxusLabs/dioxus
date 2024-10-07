@@ -70,9 +70,8 @@ impl ServerDocument {
 }
 
 impl Document for ServerDocument {
-    fn eval(&self, _: String) -> Eval {
-        let owner = Owner::default();
-        Eval::new(owner.invalid())
+    fn eval(&self, js: String) -> Eval {
+        NoOpDocument.eval(js)
     }
 
     fn set_title(&self, title: String) {

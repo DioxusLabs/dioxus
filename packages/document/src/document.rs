@@ -118,3 +118,14 @@ pub trait Document: 'static {
         self.create_head_element("link", &attributes, None);
     }
 }
+
+/// A document that does nothing
+#[derive(Default)]
+pub struct NoOpDocument;
+
+impl Document for NoOpDocument {
+    fn eval(&self, _: String) -> Eval {
+        let owner = generational_box::Owner::default();
+        Eval::new(owner.invalid())
+    }
+}
