@@ -192,7 +192,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                                     };
                                     vdom.runtime().handle_event(
                                         &evt.name,
-                                        event,
+                                        &event,
                                         evt.element,
                                     );
                                 }

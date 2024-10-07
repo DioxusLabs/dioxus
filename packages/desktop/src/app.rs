@@ -309,10 +309,10 @@ impl App {
 
         let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
         if event_name == "change&input" {
-            view.dom.runtime().handle_event("input", event.clone(), id);
-            view.dom.runtime().handle_event("change", event, id);
+            view.dom.runtime().handle_event("input", &event, id);
+            view.dom.runtime().handle_event("change", &event, id);
         } else {
-            view.dom.runtime().handle_event(event_name, event, id);
+            view.dom.runtime().handle_event(event_name, &event, id);
         }
     }
 

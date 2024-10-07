@@ -114,7 +114,7 @@ impl WebviewEdits {
         };
 
         let event = dioxus_core::Event::new(as_any, bubbles);
-        self.runtime.handle_event(&name, event.clone(), element);
+        self.runtime.handle_event(&name, &event, element);
 
         // Get the response from the event
         SynchronousEventResponse::new(!event.default_action_enabled())

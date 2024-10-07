@@ -735,7 +735,7 @@ impl VirtualDom {
     #[deprecated = "Use [VirtualDom::runtime().handle_event] instead"]
     pub fn handle_event(&self, name: &str, event: Rc<dyn Any>, element: ElementId, bubbling: bool) {
         let event = crate::Event::new(event, bubbling);
-        self.runtime().handle_event(name, event, element);
+        self.runtime().handle_event(name, &event, element);
     }
 }
 
