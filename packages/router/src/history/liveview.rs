@@ -1,7 +1,7 @@
 use super::HistoryProvider;
 use crate::routable::Routable;
+use dioxus_lib::document::Eval;
 use dioxus_lib::prelude::*;
-use document::UseEval;
 use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, RwLock};
 use std::{collections::BTreeMap, rc::Rc, str::FromStr, sync::Arc};
@@ -168,11 +168,10 @@ where
         let updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>> =
             Arc::new(RwLock::new(Arc::new(|| {})));
 
-        let eval_provider = document();
+        let eval_provider = dioxus_lib::document::document();
 
-        let create_eval = Rc::new(move |script: &str| {
-            UseEval::new(eval_provider.new_evaluator(script.to_string()))
-        }) as Rc<dyn Fn(&str) -> UseEval>;
+        let create_eval = Rc::new(move |script: &str| eval_provider.eval(script.to_string()))
+            as Rc<dyn Fn(&str) -> Eval>;
 
         // Listen to server actions
         spawn({

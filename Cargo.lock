@@ -2391,6 +2391,7 @@ dependencies = [
  "dioxus-core-macro",
  "dioxus-desktop",
  "dioxus-devtools",
+ "dioxus-document",
  "dioxus-fullstack",
  "dioxus-hooks",
  "dioxus-html",
@@ -2591,6 +2592,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-devtools",
+ "dioxus-document",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-interpreter-js",
@@ -2604,6 +2606,7 @@ dependencies = [
  "global-hotkey",
  "http-range",
  "infer 0.11.0",
+ "lazy-js-bundle",
  "muda",
  "objc",
  "objc_id",
@@ -2647,6 +2650,24 @@ version = "0.6.0-alpha.2"
 dependencies = [
  "dioxus-core",
  "serde",
+]
+
+[[package]]
+name = "dioxus-document"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "dioxus-core-macro",
+ "dioxus-core-types",
+ "dioxus-html",
+ "futures-channel",
+ "futures-util",
+ "generational-box",
+ "lazy-js-bundle",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -2775,9 +2796,6 @@ dependencies = [
  "serde_repr",
  "tokio",
  "tracing",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
@@ -2829,6 +2847,7 @@ dependencies = [
  "dioxus-config-macro",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-document",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-rsx",
@@ -2844,6 +2863,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-devtools",
+ "dioxus-document",
  "dioxus-html",
  "dioxus-interpreter-js",
  "futures-channel",
@@ -3081,12 +3101,14 @@ dependencies = [
 name = "dioxus-web"
 version = "0.6.0-alpha.2"
 dependencies = [
+ "async-trait",
  "ciborium",
  "console_error_panic_hook",
  "dioxus",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools",
+ "dioxus-document",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",
@@ -3098,6 +3120,7 @@ dependencies = [
  "gloo-dialogs",
  "gloo-timers",
  "js-sys",
+ "lazy-js-bundle",
  "rustc-hash 1.1.0",
  "serde",
  "serde-wasm-bindgen",

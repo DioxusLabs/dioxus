@@ -16,7 +16,7 @@ fn use_inner_html(id: &'static str) -> Option<String> {
         spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-            let res = eval(&format!(
+            let res = document::eval(&format!(
                 r#"let element = document.getElementById('{}');
                 return element.innerHTML"#,
                 id

@@ -29,15 +29,19 @@ use futures_util::{pin_mut, select, FutureExt, StreamExt};
 mod cfg;
 mod dom;
 
-mod event;
+mod events;
 pub mod launch;
 mod mutations;
-pub use event::*;
+pub use events::*;
 
 #[cfg(feature = "document")]
 mod document;
+#[cfg(feature = "file_engine")]
+mod file_engine;
 #[cfg(feature = "document")]
 pub use document::WebDocument;
+#[cfg(feature = "file_engine")]
+pub use file_engine::*;
 
 #[cfg(all(feature = "devtools", debug_assertions))]
 mod devtools;

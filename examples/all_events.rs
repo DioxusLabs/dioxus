@@ -26,7 +26,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         div { id: "container",
             // focusing is necessary to catch keyboard events
             div { id: "receiver", tabindex: 0,

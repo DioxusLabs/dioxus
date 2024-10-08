@@ -1,7 +1,9 @@
 //! A shared pool of renderers for efficient server side rendering.
+use crate::document::ServerDocument;
 use crate::streaming::{Mount, StreamingRenderer};
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{CachedRender, RenderFreshness};
+use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
@@ -165,6 +167,7 @@ impl SsrRendererPool {
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
             let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
+            virtual_dom.provide_root_context(document.clone());
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
             // poll the future, which may call server_context()
@@ -431,11 +434,8 @@ impl FullstackHTMLTemplate {
         let ServeConfig { index, .. } = &self.cfg;
 
         let title = {
-            let document: Option<std::rc::Rc<dyn Document>> =
+            let document: Option<std::rc::Rc<ServerDocument>> =
                 virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
-            let document: Option<&crate::document::server::ServerDocument> = document
-                .as_ref()
-                .and_then(|document| document.as_any().downcast_ref());
             // Collect any head content from the document provider and inject that into the head
             document.and_then(|document| document.title())
         };
@@ -448,11 +448,8 @@ impl FullstackHTMLTemplate {
         }
         to.write_str(&index.head_after_title)?;
 
-        let document: Option<std::rc::Rc<dyn dioxus_lib::prelude::document::Document>> =
+        let document: Option<std::rc::Rc<ServerDocument>> =
             virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
-        let document: Option<&crate::document::server::ServerDocument> = document
-            .as_ref()
-            .and_then(|document| document.as_any().downcast_ref());
         if let Some(document) = document {
             // Collect any head content from the document provider and inject that into the head
             document.render(to)?;

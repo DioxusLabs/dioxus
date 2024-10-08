@@ -1,7 +1,10 @@
-use dioxus_html::document::{Document, EvalError, Evaluator};
+use dioxus_document::{Document, Eval, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 use crate::{query::Query, DesktopContext};
+
+/// Code for the Dioxus channel used to communicate between the dioxus and javascript code
+pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
 
 /// Represents the desktop-target's provider of evaluators.
 pub struct DesktopDocument {
@@ -15,16 +18,12 @@ impl DesktopDocument {
 }
 
 impl Document for DesktopDocument {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        DesktopEvaluator::create(self.desktop_ctx.clone(), js)
+    fn eval(&self, js: String) -> Eval {
+        Eval::new(DesktopEvaluator::create(self.desktop_ctx.clone(), js))
     }
 
     fn set_title(&self, title: String) {
         self.desktop_ctx.window.set_title(&title);
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 

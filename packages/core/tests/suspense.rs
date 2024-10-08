@@ -517,7 +517,7 @@ fn nested_suspense_resolves_client() {
         let title = use_resource(move || async_content(0)).suspend()?();
 
         rsx! {
-            Title { "{title.title}" }
+            document::Title { "{title.title}" }
         }
     }
 

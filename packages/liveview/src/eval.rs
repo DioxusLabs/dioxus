@@ -1,5 +1,5 @@
 use dioxus_core::ScopeId;
-use dioxus_html::document::{Document, EvalError, Evaluator};
+use dioxus_document::{Document, Eval, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use std::rc::Rc;
 
@@ -18,12 +18,8 @@ pub struct LiveviewDocument {
 }
 
 impl Document for LiveviewDocument {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        LiveviewEvaluator::create(self.query.clone(), js)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn eval(&self, js: String) -> Eval {
+        Eval::new(LiveviewEvaluator::create(self.query.clone(), js))
     }
 }
 

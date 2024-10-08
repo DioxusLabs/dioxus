@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "module": "CommonJS",
+        "lib": [
+            "ES2015",
+            "DOM",
+            "dom",
+            "dom.iterable",
+            "ESNext"
+        ],
+        "noImplicitAny": true,
+        "removeComments": true,
+        "preserveConstEnums": true,
+    },
+    "exclude": [
+        "**/*.spec.ts"
+    ]
+}
