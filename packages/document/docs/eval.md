@@ -104,7 +104,7 @@ const SCRIPT: &str = r#"
 
 fn app() -> Element {
     // ❌ You shouldn't run eval in the body of a component. This will run before the component has been mounted
-    // eval(SCRIPT);
+    // document::eval(SCRIPT);
 
     // ✅ You should run eval inside an effect or event. This will run after the component has been mounted
     use_effect(move || {
