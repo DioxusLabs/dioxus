@@ -3007,6 +3007,7 @@ dependencies = [
  "dioxus-html",
  "dioxus-rsx",
  "html_parser",
+ "htmlentity",
  "pretty_assertions",
  "proc-macro2",
  "quote",
@@ -5027,6 +5028,17 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "htmlentity"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd54ae4f69adcc1a43637dcff230852832c3ad50df31a90e0cb5f001dd441359"
+dependencies = [
+ "anyhow",
+ "lazy_static",
  "thiserror",
 ]
 
