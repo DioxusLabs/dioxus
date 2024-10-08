@@ -53,7 +53,12 @@ pub enum BuildStage {
 }
 
 impl BuildRequest {
-    pub(crate) fn status_wasm_bindgen(&self) {
+    pub(crate) fn status_wasm_bindgen_start(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::RunningBindgen {},
+        });
+    }
+    pub(crate) fn status_wasm_opt_start(&self) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::RunningBindgen {},
         });
@@ -107,53 +112,6 @@ impl BuildRequest {
                 crate_count,
             },
         });
-    }
-
-    /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
-    pub(crate) async fn get_unit_count(&self, is_server: bool) -> crate::Result<usize> {
-        #[derive(Debug, Deserialize)]
-        struct UnitGraph {
-            units: Vec<serde_json::Value>,
-        }
-
-        let output = tokio::process::Command::new("cargo")
-            .arg("+nightly")
-            .arg("build")
-            .arg("--unit-graph")
-            .arg("-Z")
-            .arg("unstable-options")
-            .args(self.build_arguments(is_server))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            return Err(anyhow::anyhow!("Failed to get unit count").into());
-        }
-
-        let output_text = String::from_utf8(output.stdout).context("Failed to get unit count")?;
-        let graph: UnitGraph =
-            serde_json::from_str(&output_text).context("Failed to get unit count")?;
-
-        Ok(graph.units.len())
-    }
-
-    /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
-    /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-    pub(crate) async fn get_unit_count_estimate(&self, is_server: bool) -> usize {
-        // Try to get it from nightly
-        self.get_unit_count(is_server).await.unwrap_or_else(|_| {
-            // Otherwise, use cargo metadata
-            (self
-                .krate
-                .krates
-                .krates_filtered(krates::DepKind::Dev)
-                .iter()
-                .map(|k| k.targets.len())
-                .sum::<usize>() as f64
-                / 3.5) as usize
-        })
     }
 
     pub(crate) fn status_build_finished(&self) {

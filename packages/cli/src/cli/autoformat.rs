@@ -239,8 +239,11 @@ fn indentation_for(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::inherit())
         .output()?;
+
     if !out.status.success() {
-        return Err(Error::CargoError("cargo fmt failed".into()));
+        return Err(Error::RuntimeError(format!(
+            "cargo fmt failed with status: {out:?}"
+        )));
     }
 
     let config = String::from_utf8_lossy(&out.stdout);

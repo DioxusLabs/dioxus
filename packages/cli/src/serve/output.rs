@@ -2,7 +2,6 @@ use crate::{
     serve::{ansi_buffer::AnsiStringBuffer, Builder, ServeUpdate, Watcher, WebServer},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
-use cargo_metadata::CompilerMessage;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -29,7 +28,6 @@ use tracing::Level;
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_WIDTH: u16 = 120;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
-
 const VIEWPORT_HEIGHT_BIG: u16 = 12;
 
 /// The TUI that drives the console output.
@@ -249,7 +247,7 @@ impl Output {
         self.pending_logs.push_front(message);
     }
 
-    pub fn push_cargo_log(&mut self, message: CompilerMessage) {
+    pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
         if self.trace {
             self.push_log(TraceMsg::cargo(message));
         }
@@ -421,11 +419,10 @@ impl Output {
         let [gauge_area, _margin] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
 
-        let [app_progress, server_progress, status_line]: [_; 3] = Layout::vertical([
-            Constraint::Length(1), // g1
-            Constraint::Length(1), // g2
-            Constraint::Length(1), // g3
-                                   // Constraint::Length(1), // status
+        let [app_progress, second_progress, status_line]: [_; 3] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
         ])
         .areas(gauge_area);
 
@@ -438,32 +435,30 @@ impl Output {
             state.build_engine.compile_duration(),
         );
 
-        self.render_single_gauge(
-            frame,
-            server_progress,
-            state.build_engine.server_compile_progress(),
-            "Server: ",
-            state,
-            state.build_engine.compile_duration(),
-        );
-
-        // self.render_single_gauge(
-        //     frame,
-        //     gauge_list[2],
-        //     state.build_engine.bundling_progress,
-        //     "Bundling: ",
-        //     // "Bundling:        ",
-        //     state,
-        //     state.build_engine.bundle_duration(),
-        // );
+        if state.build_engine.request.build.fullstack {
+            self.render_single_gauge(
+                frame,
+                second_progress,
+                state.build_engine.server_compile_progress(),
+                "Server: ",
+                state,
+                state.build_engine.compile_duration(),
+            );
+        } else {
+            self.render_single_gauge(
+                frame,
+                second_progress,
+                state.build_engine.bundle_progress(),
+                "Bundle: ",
+                state,
+                state.build_engine.bundle_duration(),
+            );
+        }
 
         let mut lines = vec!["Status:  ".white()];
         match &state.build_engine.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
-            BuildStage::Starting {
-                server,
-                crate_count,
-            } => {
+            BuildStage::Starting { .. } => {
                 lines.push("Starting build".yellow());
             }
             BuildStage::InstallingTooling {} => lines.push("Installing tooling".yellow()),
@@ -471,7 +466,7 @@ impl Output {
                 current,
                 total,
                 krate,
-                server,
+                ..
             } => {
                 lines.push("Compiling ".yellow());
                 lines.push(format!("{current}/{total} ").gray());

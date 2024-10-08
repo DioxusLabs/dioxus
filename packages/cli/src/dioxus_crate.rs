@@ -1,15 +1,12 @@
-use crate::Platform;
+use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
-use crate::{metadata::CargoError, CliSettings};
+use crate::{Platform, Result};
+use anyhow::Context;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
-use serde::{Deserialize, Serialize};
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::{
-    fmt::{Display, Formatter},
-    path::PathBuf,
-};
 use toml_edit::Item;
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
@@ -26,14 +23,17 @@ pub(crate) static CLIENT_PROFILE_WEB: &str = "dioxus-client-web";
 pub(crate) static SERVER_PROFILE: &str = "dioxus-server";
 
 impl DioxusCrate {
-    pub(crate) fn new(target: &TargetArgs) -> Result<Self, CrateConfigError> {
+    pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
         let mut cmd = Cmd::new();
         cmd.features(target.features.clone());
         let builder = krates::Builder::new();
-        let krates = builder.build(cmd, |_| {})?;
+        let krates = builder
+            .build(cmd, |_| {})
+            .context("Failed to run cargo metadata")?;
+
         let package = find_main_package(target.package.clone(), &krates)?;
 
-        let dioxus_config = load_dioxus_config(&krates, package)?.unwrap_or_default();
+        let dioxus_config = DioxusConfig::load(&krates, package)?.unwrap_or_default();
 
         let package_name = krates[package].name.clone();
         let target_kind = if target.example.is_some() {
@@ -55,7 +55,7 @@ impl DioxusCrate {
             .find(|target| {
                 target_name == target.name.as_str() && target.kind.contains(&target_kind)
             })
-            .ok_or(CrateConfigError::TargetNotFound(target_name))?
+            .with_context(|| format!("Failed to find target {target_name}"))?
             .clone();
 
         let settings = CliSettings::load();
@@ -92,10 +92,6 @@ impl DioxusCrate {
         files
     }
 
-    pub(crate) fn bundle_out_dir(&self) -> PathBuf {
-        todo!("bundle out dir")
-    }
-
     /// Compose an out directory. Represents the typical "dist" directory that
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
@@ -113,23 +109,21 @@ impl DioxusCrate {
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
     pub(crate) fn build_dir(&self, platform: Platform) -> PathBuf {
-        let plat_name = match platform {
+        let platform_name = match platform {
             Platform::Web => "web",
+            Platform::Server => "web",
+            Platform::Liveview => "liveview",
             Platform::MacOS => "macos",
             Platform::Windows => "windows",
             Platform::Linux => "linux",
             Platform::Ios => "ios",
             Platform::Android => "android",
-            Platform::Server => "server",
-            Platform::Liveview => "liveview",
         };
-        let dir = self
-            .out_dir()
+
+        self.out_dir()
             .join(self.config.application.name.clone())
-            .join(plat_name)
-            .join("build");
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+            .join("build")
+            .join(platform_name)
     }
 
     /// target/dx/bundle/app/
@@ -137,22 +131,22 @@ impl DioxusCrate {
     /// target/dx/bundle/app/blah.exe
     /// target/dx/bundle/app/public/
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
-        let plat_name = match platform {
+        let platform_name = match platform {
             Platform::Web => "web",
+            Platform::Server => "web",
+            Platform::Liveview => "liveview",
             Platform::MacOS => "macos",
             Platform::Windows => "windows",
             Platform::Linux => "linux",
             Platform::Ios => "ios",
             Platform::Android => "android",
-            Platform::Server => "server",
-            Platform::Liveview => "liveview",
         };
 
         let dir = self
             .out_dir()
             .join(self.config.application.name.clone())
-            .join(plat_name)
-            .join("bundle");
+            .join("bundle")
+            .join(platform_name);
 
         dir
     }
@@ -318,166 +312,8 @@ impl std::fmt::Debug for DioxusCrate {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Executable {
-    pub(crate) name: String,
-    pub(crate) ty: ExecutableType,
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-pub(crate) enum ExecutableType {
-    Binary,
-    Lib,
-    Example,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct LoadDioxusConfigError {
-    location: String,
-    error: String,
-}
-
-impl std::fmt::Display for LoadDioxusConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.location, self.error)
-    }
-}
-
-impl std::error::Error for LoadDioxusConfigError {}
-
-#[derive(Debug)]
-#[non_exhaustive]
-pub(crate) enum CrateConfigError {
-    Cargo(CargoError),
-    Io(std::io::Error),
-    Toml(toml::de::Error),
-    LoadDioxusConfig(LoadDioxusConfigError),
-    TargetNotFound(String),
-    Krates(krates::Error),
-    PackageNotFound(String),
-    CurrentPackageNotFound,
-}
-
-impl From<CargoError> for CrateConfigError {
-    fn from(err: CargoError) -> Self {
-        Self::Cargo(err)
-    }
-}
-
-impl From<std::io::Error> for CrateConfigError {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
-}
-
-impl From<toml::de::Error> for CrateConfigError {
-    fn from(err: toml::de::Error) -> Self {
-        Self::Toml(err)
-    }
-}
-
-impl From<LoadDioxusConfigError> for CrateConfigError {
-    fn from(err: LoadDioxusConfigError) -> Self {
-        Self::LoadDioxusConfig(err)
-    }
-}
-
-impl From<krates::Error> for CrateConfigError {
-    fn from(err: krates::Error) -> Self {
-        Self::Krates(err)
-    }
-}
-
-impl Display for CrateConfigError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Cargo(err) => write!(f, "{}", err),
-            Self::Io(err) => write!(f, "{}", err),
-            Self::Toml(err) => write!(f, "{}", err),
-            Self::LoadDioxusConfig(err) => write!(f, "{}", err),
-            Self::TargetNotFound(target) => {
-                write!(f, "Failed to find target with name: {}", target)
-            }
-            Self::Krates(err) => write!(f, "{}", err),
-            Self::PackageNotFound(package) => write!(f, "Package not found: {}", package),
-            Self::CurrentPackageNotFound => write!(f, "Failed to find current package"),
-        }
-    }
-}
-
-impl std::error::Error for CrateConfigError {}
-
-/// Load the dioxus config from a path
-fn load_dioxus_config(
-    krates: &Krates,
-    package: NodeId,
-) -> Result<Option<DioxusConfig>, CrateConfigError> {
-    fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
-        ["Dioxus.toml", "dioxus.toml"]
-            .into_iter()
-            .map(|file| dir.join(file))
-            .find(|path| path.is_file())
-    }
-
-    // Walk up from the cargo.toml to the root of the workspace looking for Dioxus.toml
-    let mut current_dir = krates[package]
-        .manifest_path
-        .parent()
-        .unwrap()
-        .as_std_path()
-        .to_path_buf()
-        .canonicalize()?;
-
-    let workspace_path = krates
-        .workspace_root()
-        .as_std_path()
-        .to_path_buf()
-        .canonicalize()?;
-
-    let mut dioxus_conf_file = None;
-    while current_dir.starts_with(&workspace_path) {
-        // Try to find Dioxus.toml in the current directory
-        if let Some(new_config) = acquire_dioxus_toml(&current_dir) {
-            dioxus_conf_file = Some(new_config.as_path().to_path_buf());
-            break;
-        }
-        // If we can't find it, go up a directory
-        current_dir = current_dir
-            .parent()
-            .ok_or(CrateConfigError::CurrentPackageNotFound)?
-            .to_path_buf();
-    }
-
-    let Some(dioxus_conf_file) = dioxus_conf_file else {
-        return Ok(None);
-    };
-
-    let cfg = toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
-        .map_err(|err| {
-            CrateConfigError::LoadDioxusConfig(LoadDioxusConfigError {
-                location: dioxus_conf_file.display().to_string(),
-                error: err.to_string(),
-            })
-        })
-        .map(Some);
-    match cfg {
-        Ok(Some(mut cfg)) => {
-            let name = cfg.application.name.clone();
-            if cfg.bundle.identifier.is_none() {
-                cfg.bundle.identifier = Some(format!("io.github.{name}"));
-            }
-            if cfg.bundle.publisher.is_none() {
-                cfg.bundle.publisher = Some(name);
-            }
-
-            Ok(Some(cfg))
-        }
-        cfg => cfg,
-    }
-}
-
 // Find the main package in the workspace
-fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId, CrateConfigError> {
+fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId> {
     let kid = match package {
         Some(package) => {
             let mut workspace_members = krates.workspace_members();
@@ -500,7 +336,7 @@ fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId,
                 }
             }
 
-            found.ok_or_else(|| CrateConfigError::PackageNotFound(package.clone()))?
+            found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?
         }
         None => {
             // Otherwise find the package that is the closest parent of the current directory
@@ -528,7 +364,7 @@ fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId,
             }
             closest_parent
                 .map(|(id, _)| id)
-                .ok_or(CrateConfigError::CurrentPackageNotFound)?
+                .context("Failed to find current package")?
         }
     };
 

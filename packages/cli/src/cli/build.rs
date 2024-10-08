@@ -93,7 +93,6 @@ impl BuildArgs {
         // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
         let bundle = Builder::start(dioxus_crate, self.clone())?.finish().await?;
         let destination = dioxus_crate.build_dir(self.platform());
-        bundle.finish(destination)?;
 
         Ok(())
     }

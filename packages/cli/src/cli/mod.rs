@@ -17,7 +17,7 @@ pub(crate) use build::*;
 pub(crate) use serve::*;
 pub(crate) use target::*;
 
-use crate::{custom_error, error::Result, Error};
+use crate::{error::Result, Error};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use html_parser::Dom;

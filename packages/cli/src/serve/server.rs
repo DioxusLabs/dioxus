@@ -312,7 +312,7 @@ impl WebServer {
 
     pub fn server_address(&self) -> Option<SocketAddr> {
         match self.platform {
-            Platform::Web | Platform::Server | Platform::Liveview => Some(self.devserver_address()),
+            Platform::Web | Platform::Server => Some(self.devserver_address()),
             _ => self.proxied_server_address(),
         }
     }
@@ -621,7 +621,7 @@ async fn build_status_middleware(
     if let Some(true) = accepts_html {
         let status = state.get();
         if status != Status::Ready {
-            let html = include_str!("../../assets/loading.html");
+            let html = include_str!("../../assets/web/loading.html");
             return axum::response::Response::builder()
                 .status(StatusCode::OK)
                 // Load the html loader then keep loading forever

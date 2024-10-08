@@ -1,101 +1,12 @@
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::BuildRequest;
-use crate::TraceSrc;
-use anyhow::Context;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
-use wasm_bindgen_cli_support::Bindgen;
 
-const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
-const TOAST_HTML: &str = include_str!("../../assets/toast.html");
+const DEFAULT_HTML: &str = include_str!("../../assets/web/index.html");
+const TOAST_HTML: &str = include_str!("../../assets/web/toast.html");
 
 impl BuildRequest {
-    pub(crate) async fn run_wasm_bindgen(
-        &self,
-        input_path: &Path,
-        bindgen_outdir: &Path,
-    ) -> Result<()> {
-        tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
-
-        let input_path = input_path.to_path_buf();
-        let bindgen_outdir = bindgen_outdir.to_path_buf();
-        let name = self.krate.config.application.name.clone();
-        let keep_debug = self.krate.config.web.wasm_opt.debug || (!self.build.release);
-
-        let start = std::time::Instant::now();
-        tokio::task::spawn_blocking(move || {
-            Bindgen::new()
-                .input_path(&input_path)
-                .web(true)
-                .unwrap()
-                .debug(keep_debug)
-                .demangle(keep_debug)
-                .keep_debug(keep_debug)
-                .reference_types(true)
-                .remove_name_section(!keep_debug)
-                .remove_producers_section(!keep_debug)
-                .out_name(&name)
-                .generate(&bindgen_outdir)
-        })
-        .await
-        .context("Wasm-bindgen crashed while optimizing the wasm binary")?
-        .context("Failed to generate wasm-bindgen bindings")?;
-
-        tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
-
-        Ok(())
-    }
-
-    #[allow(unused)]
-    pub(crate) fn run_wasm_opt(&self, bindgen_outdir: &std::path::PathBuf) -> Result<(), Error> {
-        if !self.build.release {
-            return Ok(());
-        };
-
-        self.status_optimizing_wasm();
-
-        #[cfg(feature = "optimizations")]
-        {
-            use crate::config::WasmOptLevel;
-
-            tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
-
-            let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {
-                WasmOptLevel::Z => {
-                    wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
-                }
-                WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
-                WasmOptLevel::Zero => wasm_opt::OptimizationOptions::new_opt_level_0(),
-                WasmOptLevel::One => wasm_opt::OptimizationOptions::new_opt_level_1(),
-                WasmOptLevel::Two => wasm_opt::OptimizationOptions::new_opt_level_2(),
-                WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
-                WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
-            };
-            let wasm_file = bindgen_outdir.join(format!(
-                "{}_bg.wasm",
-                self.dioxus_crate.dioxus_config.application.name
-            ));
-            let old_size = wasm_file.metadata()?.len();
-            options
-                // WASM bindgen relies on reference types
-                .enable_feature(wasm_opt::Feature::ReferenceTypes)
-                .debug_info(self.dioxus_crate.dioxus_config.web.wasm_opt.debug)
-                .run(&wasm_file, &wasm_file)
-                .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
-
-            let new_size = wasm_file.metadata()?.len();
-            tracing::info!(
-                dx_src = ?TraceSrc::Build,
-                "wasm-opt reduced WASM size from {} to {} ({:2}%)",
-                old_size,
-                new_size,
-                (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
-            );
-        }
-
-        Ok(())
-    }
-
     pub(crate) fn prepare_html(&self) -> Result<String> {
         let mut html = {
             let crate_root: &Path = &self.krate.crate_dir();

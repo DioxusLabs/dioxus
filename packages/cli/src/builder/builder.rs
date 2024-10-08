@@ -49,7 +49,7 @@ impl Builder {
                 // We wont bother verifying on subsequent builds
                 request.verify_tooling().await?;
 
-                let res = request.build().await;
+                let res = request.build_all().await;
 
                 // The first launch gets some extra logging :)
                 if res.is_ok() {
@@ -197,7 +197,7 @@ impl Builder {
         self.stage = BuildStage::Restarting;
 
         // This build doesn't have any extra special logging - rebuilds would get pretty noisy
-        self.build = tokio::spawn(async move { request.build().await });
+        self.build = tokio::spawn(async move { request.build_all().await });
     }
 
     /// Shutdown the current build process
@@ -261,6 +261,10 @@ impl Builder {
     /// Return a number between 0 and 1 representing the progress of the server build
     pub(crate) fn server_compile_progress(&self) -> f64 {
         self.compiled_crates_server as f64 / self.expected_crates_server as f64
+    }
+
+    pub(crate) fn bundle_progress(&self) -> f64 {
+        self.bundling_progress
     }
 
     fn is_finished(&self) -> bool {

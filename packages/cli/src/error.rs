@@ -1,6 +1,5 @@
+use crate::metadata::CargoError;
 use thiserror::Error as ThisError;
-
-use crate::{metadata::CargoError, CrateConfigError, LoadDioxusConfigError};
 
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -23,10 +22,7 @@ pub(crate) enum Error {
     RuntimeError(String),
 
     #[error("Cargo Error: {0}")]
-    CargoError(String),
-
-    #[error("{0}")]
-    CustomError(String),
+    CargoError(#[from] CargoError),
 
     #[error("Invalid proxy URL: {0}")]
     InvalidProxy(#[from] hyper::http::uri::InvalidUri),
@@ -60,35 +56,4 @@ impl From<hyper::Error> for Error {
     fn from(e: hyper::Error) -> Self {
         Self::RuntimeError(e.to_string())
     }
-}
-
-impl From<LoadDioxusConfigError> for Error {
-    fn from(e: LoadDioxusConfigError) -> Self {
-        Self::RuntimeError(e.to_string())
-    }
-}
-
-impl From<CargoError> for Error {
-    fn from(e: CargoError) -> Self {
-        Self::CargoError(e.to_string())
-    }
-}
-
-impl From<CrateConfigError> for Error {
-    fn from(e: CrateConfigError) -> Self {
-        Self::RuntimeError(e.to_string())
-    }
-}
-
-#[macro_export]
-macro_rules! custom_error {
-    ($msg:literal $(,)?) => {
-        Err(Error::CustomError(format!($msg)))
-    };
-    ($err:expr $(,)?) => {
-        Err(Error::from($err))
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        Err(Error::CustomError(format!($fmt, $($arg)*)))
-    };
 }

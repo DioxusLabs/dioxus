@@ -42,7 +42,6 @@ pub fn server_port() -> Option<u16> {
 pub fn fullstack_address_or_localhost() -> SocketAddr {
     let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
     let port = server_port().unwrap_or(8080);
-    println!("server ip: {ip:?}, port: {port}");
     SocketAddr::new(ip, port)
 }
 

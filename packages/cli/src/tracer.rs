@@ -374,7 +374,6 @@ impl From<String> for TraceSrc {
             "macos" => Self::App(TargetPlatform::MacOS),
             "linux" => Self::App(TargetPlatform::Linux),
             "server" => Self::App(TargetPlatform::Server),
-            "liveview" => Self::App(TargetPlatform::Liveview),
             _ => Self::Unknown,
         }
     }
@@ -389,9 +388,9 @@ impl Display for TraceSrc {
                 TargetPlatform::Windows => write!(f, "windows"),
                 TargetPlatform::Linux => write!(f, "linux"),
                 TargetPlatform::Server => write!(f, "server"),
-                TargetPlatform::Liveview => write!(f, "server"),
                 TargetPlatform::Ios => write!(f, "ios"),
                 TargetPlatform::Android => write!(f, "android"),
+                TargetPlatform::Liveview => write!(f, "liveview"),
             },
             Self::Dev => write!(f, "dev"),
             Self::Build => write!(f, "build"),

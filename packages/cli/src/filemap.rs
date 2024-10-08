@@ -17,7 +17,7 @@ pub(crate) struct HotreloadFilemap {
     ///
     /// Once this is created, we won't change the contents, to preserve the ability to hotreload
     /// from the original source mapping, unless the file change results in a full rebuild.
-    pub(crate) map: HashMap<PathBuf, CachedFile>,
+    map: HashMap<PathBuf, CachedFile>,
 }
 
 struct CachedFile {

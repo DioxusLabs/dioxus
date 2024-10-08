@@ -95,7 +95,7 @@ impl AppHandle {
         }
 
         // Launch the server if we have one and consume its stdout/stderr
-        if let Some(server) = self.app.server() {
+        if let Some(server) = self.app.server_exe() {
             tracing::debug!("Launching server from path: {server:?}");
             let mut child = Command::new(server)
                 .envs(envs.clone())
@@ -134,10 +134,10 @@ impl AppHandle {
 
             // These are all just basically running the main exe, but with slightly different resource dir paths
             Platform::Server
-            | Platform::Liveview
             | Platform::MacOS
             | Platform::Windows
-            | Platform::Linux => Some(self.open_with_main_exe(envs)?),
+            | Platform::Linux
+            | Platform::Liveview => Some(self.open_with_main_exe(envs)?),
         };
 
         // If we have a running process, we need to attach to it and wait for its outputs
@@ -189,9 +189,9 @@ impl AppHandle {
         }
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        if let Some(resource) = self.app.app_assets.assets.get(changed_file).cloned() {
+        if let Some(resource) = self.app.app.assets.assets.get(changed_file).as_ref() {
             let res = std::fs::copy(changed_file, asset_dir.join(&resource.bundled));
-            bundled_name = Some(PathBuf::from(resource.bundled));
+            bundled_name = Some(PathBuf::from(&resource.bundled));
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
             }
@@ -249,13 +249,13 @@ impl AppHandle {
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
     async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        tracing::debug!("Installing app to simulator {:?}", self.app.app_root());
+        tracing::debug!("Installing app to simulator {:?}", self.app.app_dir());
 
         let res = Command::new("xcrun")
             .arg("simctl")
             .arg("install")
             .arg("booted")
-            .arg(self.app.app_root())
+            .arg(self.app.app_dir())
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .output()
@@ -321,7 +321,7 @@ impl AppHandle {
         // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
 
         use serde_json::Value;
-        let app_path = self.app.app_root();
+        let app_path = self.app.app_dir();
 
         install_app(&app_path).await?;
 

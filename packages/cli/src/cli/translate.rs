@@ -1,10 +1,7 @@
-use std::process::exit;
-
-use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
-
-use crate::TraceSrc;
-
 use super::*;
+use crate::{Result, TraceSrc};
+use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
+use std::process::exit;
 
 /// Translate some source file into Dioxus code
 #[derive(Clone, Debug, Parser)]
@@ -122,7 +119,7 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
 
     // If neither exist, we try to read from stdin
     if atty::is(atty::Stream::Stdin) {
-        return custom_error!("No input file, source, or stdin to translate from.");
+        return Err(anyhow::anyhow!("No input file, source, or stdin to translate from.").into());
     }
 
     let mut buffer = String::new();

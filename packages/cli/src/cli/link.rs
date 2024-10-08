@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 /// The env var that will be set by the linker intercept cmd to indicate that we should act as a linker
 pub(crate) const LINK_OUTPUT_ENV_VAR: &str = "dx-magic-link-file";
 
-/// Should we act as a linker?
+/// Should we write the input arguments to a file (aka act as a linker subprocess)?
 ///
 /// Just check if the magic env var is set
-pub(crate) fn should_act_as_linker() -> bool {
+pub(crate) fn should_dump_link_args() -> bool {
     std::env::var(LINK_OUTPUT_ENV_VAR).is_ok()
 }
 

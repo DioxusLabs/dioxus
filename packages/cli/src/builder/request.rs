@@ -1,4 +1,4 @@
-use super::progress::ProgressTx;
+use super::{progress::ProgressTx, BuildArtifacts};
 use crate::build::BuildArgs;
 use crate::dioxus_crate::DioxusCrate;
 use crate::{assets::AssetManifest, link::LINK_OUTPUT_ENV_VAR, TraceSrc};
@@ -9,15 +9,6 @@ use serde::Deserialize;
 use std::{path::PathBuf, process::Stdio};
 use tokio::{io::AsyncBufReadExt, process::Command};
 
-/// An app that's built, bundled, processed, and a handle to its running app, if it exists
-///
-/// As the build progresses, we'll fill in fields like assets, executable, entitlements, etc
-///
-/// This combines both the app and its potential server in one go, since we do end up bundling them
-/// together in the end anyways. We can also track progress for both in one spot, which is better
-/// than trying to aggregate them after the builds have finished.
-///
-/// If the app needs to be bundled, we'll add the bundle info here too
 #[derive(Clone, Debug)]
 pub(crate) struct BuildRequest {
     /// The configuration for the crate we are building
@@ -51,46 +42,44 @@ impl BuildRequest {
     ///
     /// This will also run the fullstack build. Note that fullstack is handled separately within this
     /// code flow rather than outside of it.
-    pub(crate) async fn build(self) -> Result<AppBundle> {
+    pub(crate) async fn build_all(self) -> Result<AppBundle> {
         tracing::debug!("Running build command...");
 
-        // Run both the app and server builds in parallel
-        // We currently don't create a manifest for the server, so all assets belong to the client.
-        //
-        // Run the build command with a pretty loader, returning the executable output location
-        // Then, extract out the asset manifest from the executable using our linker tricks
-        //
-        // todo(jon): we should probably create a manifest for the server too
-        let ((app_exe, app_assets), server_exe) = futures_util::future::try_join(
-            async {
-                let app_exe = self.build_cargo(false).await?;
-                let app_assets = self.collect_assets().await?;
-                Ok((app_exe, app_assets))
-            },
-            async {
-                if !self.build.fullstack {
-                    return Ok(None) as Result<_, anyhow::Error>;
-                }
-                Ok(Some(self.build_cargo(true).await?))
-            },
-        )
-        .await?;
+        let (app, server) =
+            futures_util::future::try_join(self.build_app(), self.build_server()).await?;
 
-        // Assemble a bundle from everything
-        AppBundle::new(self, app_assets, app_exe, server_exe).await
+        AppBundle::new(self, app, server).await
+    }
+
+    pub(crate) async fn build_app(&self) -> Result<BuildArtifacts> {
+        tracing::debug!("Building app...");
+        let exe = self.build_cargo(false).await?;
+        let assets = self.collect_assets(false).await?;
+        Ok(BuildArtifacts { exe, assets })
+    }
+
+    pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
+        tracing::debug!("Building server...");
+        if !self.build.fullstack {
+            return Ok(None);
+        }
+
+        let exe = self.build_cargo(true).await?;
+        let assets = self.collect_assets(true).await?;
+        Ok(Some(BuildArtifacts { exe, assets }))
     }
 
     /// Run `cargo`, returning the location of the final exectuable
     ///
     /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
-    pub(crate) async fn build_cargo(&self, server: bool) -> Result<PathBuf> {
+    pub(crate) async fn build_cargo(&self, is_server: bool) -> Result<PathBuf> {
         tracing::debug!("Executing cargo...");
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
-        let crate_count = self.get_unit_count_estimate(server).await;
+        let crate_count = self.get_unit_count_estimate(is_server).await;
 
         // Update the status to show that we're starting the build and how many crates we expect to build
-        self.status_starting_build(server, crate_count);
+        self.status_starting_build(is_server, crate_count);
 
         let mut child = Command::new("cargo")
             .arg("rustc")
@@ -102,7 +91,7 @@ impl BuildRequest {
             .current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
-            .args(&self.build_arguments(server))
+            .args(&self.build_arguments(is_server))
             .arg("--")
             .args(self.rust_flags.clone())
             .stdout(Stdio::piped())
@@ -145,7 +134,7 @@ impl BuildRequest {
                             units_compiled,
                             crate_count,
                             artifact.target.name,
-                            server,
+                            is_server,
                         ),
                     }
                 }
@@ -177,7 +166,7 @@ impl BuildRequest {
     /// This will execute `dx` with an env var set to force `dx` to operate as a linker, and then
     /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
     /// tables marked by manganis and parsing them as a ResourceAsset.
-    pub(crate) async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
+    pub(crate) async fn collect_assets(&self, is_server: bool) -> anyhow::Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
         // If assets are skipped, we don't need to collect them
@@ -199,7 +188,7 @@ impl BuildRequest {
         // This might not be a "stable" way of keeping artifacts around, but it's in stable rustc, so we use it
         Command::new("cargo")
             .arg("rustc")
-            .args(self.build_arguments(false))
+            .args(self.build_arguments(is_server))
             .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
             .arg(format!("-Clinker={}", std::env::current_exe().unwrap().display())) /* pass ourselves in */
@@ -223,11 +212,11 @@ impl BuildRequest {
     }
 
     /// Create a list of arguments for cargo builds
-    pub(crate) fn build_arguments(&self, server: bool) -> Vec<String> {
+    pub(crate) fn build_arguments(&self, is_server: bool) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
         // Set the target, profile and features that vary between the app and server builds
-        if server {
+        if is_server {
             if let Some(custom_profile) = &self.build.server_profile {
                 cargo_args.push("--profile".to_string());
                 cargo_args.push(custom_profile.to_string());
@@ -247,12 +236,12 @@ impl BuildRequest {
                 },
                 Platform::Android => Some("aarch64-linux-android"),
                 Platform::Server => None,
-                Platform::Liveview => None,
                 // we're assuming we're building for the native platform for now... if you're cross-compiling
                 // the targets here might be different
                 Platform::MacOS => None,
                 Platform::Windows => None,
                 Platform::Linux => None,
+                Platform::Liveview => None,
             };
 
             if let Some(target) = custom_target.or(self.build.target_args.target.as_deref()) {
@@ -271,7 +260,7 @@ impl BuildRequest {
             cargo_args.push("--quiet".to_string());
         }
 
-        let features = self.target_features(server);
+        let features = self.target_features(is_server);
 
         if !features.is_empty() {
             cargo_args.push("--features".to_string());
@@ -286,15 +275,9 @@ impl BuildRequest {
         cargo_args.append(&mut self.build.cargo_args.clone());
 
         match self.krate.executable_type() {
-            krates::cm::TargetKind::Bin => {
-                cargo_args.push("--bin".to_string());
-            }
-            krates::cm::TargetKind::Lib => {
-                cargo_args.push("--lib".to_string());
-            }
-            krates::cm::TargetKind::Example => {
-                cargo_args.push("--example".to_string());
-            }
+            krates::cm::TargetKind::Bin => cargo_args.push("--bin".to_string()),
+            krates::cm::TargetKind::Lib => cargo_args.push("--lib".to_string()),
+            krates::cm::TargetKind::Example => cargo_args.push("--example".to_string()),
             _ => {}
         };
 
@@ -307,10 +290,10 @@ impl BuildRequest {
 
     /// Create the list of features we need to pass to cargo to build the app by merging together
     /// either the client or server features depending on if we're building a server or not.
-    pub(crate) fn target_features(&self, server: bool) -> Vec<String> {
+    pub(crate) fn target_features(&self, is_server: bool) -> Vec<String> {
         let mut features = self.build.target_args.features.clone();
 
-        if server {
+        if is_server {
             features.extend(self.build.target_args.server_features.clone());
         } else {
             features.extend(self.build.target_args.client_features.clone());
@@ -337,5 +320,52 @@ impl BuildRequest {
             Platform::Android => todo!(),
             Platform::Liveview => todo!(),
         }
+    }
+
+    /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
+    pub(crate) async fn get_unit_count(&self, is_server: bool) -> crate::Result<usize> {
+        #[derive(Debug, Deserialize)]
+        struct UnitGraph {
+            units: Vec<serde_json::Value>,
+        }
+
+        let output = tokio::process::Command::new("cargo")
+            .arg("+nightly")
+            .arg("build")
+            .arg("--unit-graph")
+            .arg("-Z")
+            .arg("unstable-options")
+            .args(self.build_arguments(is_server))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("Failed to get unit count").into());
+        }
+
+        let output_text = String::from_utf8(output.stdout).context("Failed to get unit count")?;
+        let graph: UnitGraph =
+            serde_json::from_str(&output_text).context("Failed to get unit count")?;
+
+        Ok(graph.units.len())
+    }
+
+    /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
+    /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
+    pub(crate) async fn get_unit_count_estimate(&self, is_server: bool) -> usize {
+        // Try to get it from nightly
+        self.get_unit_count(is_server).await.unwrap_or_else(|_| {
+            // Otherwise, use cargo metadata
+            (self
+                .krate
+                .krates
+                .krates_filtered(krates::DepKind::Dev)
+                .iter()
+                .map(|k| k.targets.len())
+                .sum::<usize>() as f64
+                / 3.5) as usize
+        })
     }
 }

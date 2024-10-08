@@ -113,7 +113,6 @@ impl ServeArgs {
     pub(crate) fn should_proxy_build(&self) -> bool {
         match self.build_arguments.platform() {
             Platform::Server => true,
-            Platform::Liveview => true,
             _ => self.build_arguments.fullstack,
         }
     }

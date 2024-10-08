@@ -25,14 +25,10 @@ impl BuildRequest {
         match self.build.platform() {
             Platform::Web => self.verify_web_tooling(out).await?,
             Platform::Ios => self.verify_ios_tooling(out).await?,
-            Platform::Android => {}
-
-            // Make sure we have the required deps for desktop. More important for linux
-            // Todo(jon): verify the flavor of linux and then install the correct deps. Something like
-            // the crates for manipulating menu bars, webkit, etc.
-            Platform::MacOS | Platform::Windows | Platform::Linux => {}
-
-            // Generally nothing for server or liveview, pretty simple, can ignore
+            Platform::Android => self.verify_android_tooling(out).await?,
+            Platform::MacOS => {}
+            Platform::Windows => {}
+            Platform::Linux => {}
             Platform::Server => {}
             Platform::Liveview => {}
         }
@@ -50,12 +46,13 @@ impl BuildRequest {
                 .output()
                 .await?;
         }
-        Ok(match self.krate.wasm_bindgen_version() {
+
+        match self.krate.wasm_bindgen_version() {
             Some(version) if version == wasm_bindgen_shared::SCHEMA_VERSION  => {
-                tracing::debug!("wasm-bindgen version {version} is compatible with the cli crate ✅");
+                tracing::debug!("wasm-bindgen version {version} is compatible with dioxus-cli ✅");
             },
             Some(version) => {
-                tracing::error!(
+                tracing::warn!(
                     "wasm-bindgen version {version} is not compatible with the cli crate. Attempting to upgrade the target wasm-bindgen crate manually..."
                 );
 
@@ -78,7 +75,9 @@ impl BuildRequest {
 
             }
             None => tracing::debug!("User is attempting a web build without wasm-bindgen detected. This is probably a bug in the dioxus-cli."),
-        })
+        }
+
+        Ok(())
     }
 
     /// Currently does nothing, but eventually we need to check that the mobile tooling is installed.
@@ -88,7 +87,7 @@ impl BuildRequest {
     /// We don't auto-install these yet since we're not doing an architecture check. We assume most users
     /// are running on an Apple Silicon Mac, but it would be confusing if we installed these when we actually
     /// should be installing the x86 versions.
-    pub(crate) async fn verify_ios_tooling(&self, rustup: RustupShow) -> Result<()> {
+    pub(crate) async fn verify_ios_tooling(&self, _rustup: RustupShow) -> Result<()> {
         // if !rustup
         //     .installed_toolchains
         //     .contains(&"aarch64-apple-ios".to_string())
@@ -103,6 +102,16 @@ impl BuildRequest {
         //     tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
         // }
 
+        Ok(())
+    }
+
+    /// Check if the android tooling is installed
+    ///
+    /// looks for the android sdk + ndk
+    ///
+    /// will do its best to fill in the missing bits by exploring the sdk structure
+    /// IE will attempt to use the Java installed from android studio if possible.
+    pub(crate) async fn verify_android_tooling(&self, _rustup: RustupShow) -> Result<()> {
         Ok(())
     }
 }
