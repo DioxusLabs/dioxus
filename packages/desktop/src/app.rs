@@ -227,6 +227,7 @@ impl App {
         let view = self.webviews.get_mut(&id).unwrap();
 
         view.dom
+            .borrow_mut()
             .rebuild(&mut *view.edits.wry_queue.mutation_state_mut());
 
         view.edits.wry_queue.send_edits();
@@ -267,7 +268,7 @@ impl App {
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
+                    dioxus_devtools::apply_changes(&webview.dom.borrow(), &hr_msg);
                     webview.poll_vdom();
                 }
 
@@ -308,11 +309,14 @@ impl App {
         let view = self.webviews.get_mut(&window).unwrap();
 
         let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
+
+        let dom = view.dom.borrow();
+        let runtime = dom.runtime();
         if event_name == "change&input" {
-            view.dom.runtime().handle_event("input", event.clone(), id);
-            view.dom.runtime().handle_event("change", event, id);
+            runtime.handle_event("input", event.clone(), id);
+            runtime.handle_event("change", event, id);
         } else {
-            view.dom.runtime().handle_event(event_name, event, id);
+            runtime.handle_event(event_name, event, id);
         }
     }
 
