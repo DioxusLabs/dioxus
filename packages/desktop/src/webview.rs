@@ -233,7 +233,11 @@ impl WebviewInstance {
         };
 
         let file_drop_handler = {
-            to_owned![file_hover, dom];
+            to_owned![file_hover];
+
+            #[cfg(windows)]
+            to_owned![dom];
+
             move |evt: DragDropEvent| {
                 // Update the most recent file drop event - when the event comes in from the webview we can use the
                 // most recent event to build a new event with the files in it.
