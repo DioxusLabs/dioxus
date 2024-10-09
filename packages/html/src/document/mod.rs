@@ -16,10 +16,23 @@ pub use eval::*;
 pub mod head;
 pub use head::{Meta, MetaProps, Script, ScriptProps, Style, StyleProps, Title, TitleProps};
 
+fn format_string_for_js(s: &str) -> String {
+    let escaped = s
+        .replace('\\', "\\\\")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
 fn format_attributes(attributes: &[(&str, String)]) -> String {
     let mut formatted = String::from("[");
     for (key, value) in attributes {
-        formatted.push_str(&format!("[{key:?}, {value:?}],"));
+        formatted.push_str(&format!(
+            "[{}, {}],",
+            format_string_for_js(key),
+            format_string_for_js(value)
+        ));
     }
     if formatted.ends_with(',') {
         formatted.pop();
@@ -36,9 +49,11 @@ fn create_element_in_head(
     let helpers = include_str!("../js/head.js");
     let attributes = format_attributes(attributes);
     let children = children
-        .map(|c| format!("\"{c}\""))
+        .as_deref()
+        .map(format_string_for_js)
         .unwrap_or("null".to_string());
-    format!(r#"{helpers};window.createElementInHead("{tag}", {attributes}, {children});"#)
+    let tag = format_string_for_js(tag);
+    format!(r#"{helpers};window.createElementInHead({tag}, {attributes}, {children});"#)
 }
 
 /// A provider for document-related functionality. By default most methods are driven through [`eval`].
