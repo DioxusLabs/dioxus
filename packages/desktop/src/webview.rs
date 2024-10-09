@@ -237,79 +237,84 @@ impl WebviewInstance {
             move |evt: DragDropEvent| {
                 // Update the most recent file drop event - when the event comes in from the webview we can use the
                 // most recent event to build a new event with the files in it.
-                file_hover.set(evt.clone());
+                #[cfg(not(windows))]
+                file_hover.set(evt);
 
                 // Windows webview blocks HTML-native events when the drop handler is provided.
                 // The problem is that the HTML-native events don't provide the file, so we need this.
                 // Solution: this glue code to mimic drag drop events.
                 #[cfg(windows)]
-                dom.borrow().in_runtime(|| {
-                    ScopeId::ROOT.in_runtime(|| {
+                {
+                    file_hover.set(evt.clone());
 
-                        match evt {
-                        wry::DragDropEvent::Drop {
-                            paths: _,
-                            position: _,
-                        } => {
-                            eval(
-                                r#"
-                                if (window.dxDragLastElement) {
-                                    const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
-                                    window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+                    dom.borrow().in_runtime(|| {
+                        ScopeId::ROOT.in_runtime(|| {
 
-                                    let data = new DataTransfer();
-                                    
-                                    // We need to mimic that there are actually files in this event for our native file engine to pick it up.
-                                    const file = new File(["content"], "file.txt", { type: "text/plain" });
-                                    data.items.add(file);
-
-                                    const dragDropEvent = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data });
-                                    window.dxDragLastElement.dispatchEvent(dragDropEvent);
-                                    window.dxDragLastElement = null;
-                                }
-                                "#
-                            );
-                        },
-                        wry::DragDropEvent::Over { position } => {
-                            let script = eval(
-                                r#"
-                                const xPos = await dioxus.recv();
-                                const yPos = await dioxus.recv();
-
-                                const element = document.elementFromPoint(xPos, yPos);
-
-                                if (element != window.dxDragLastElement) {
+                            match evt {
+                            wry::DragDropEvent::Drop {
+                                paths: _,
+                                position: _,
+                            } => {
+                                eval(
+                                    r#"
                                     if (window.dxDragLastElement) {
                                         const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
                                         window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+
+                                        let data = new DataTransfer();
+                                        
+                                        // We need to mimic that there are actually files in this event for our native file engine to pick it up.
+                                        const file = new File(["content"], "file.txt", { type: "text/plain" });
+                                        data.items.add(file);
+
+                                        const dragDropEvent = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data });
+                                        window.dxDragLastElement.dispatchEvent(dragDropEvent);
+                                        window.dxDragLastElement = null;
+                                    }
+                                    "#
+                                );
+                            },
+                            wry::DragDropEvent::Over { position } => {
+                                let script = eval(
+                                    r#"
+                                    const xPos = await dioxus.recv();
+                                    const yPos = await dioxus.recv();
+
+                                    const element = document.elementFromPoint(xPos, yPos);
+
+                                    if (element != window.dxDragLastElement) {
+                                        if (window.dxDragLastElement) {
+                                            const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+                                            window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+                                        }
+
+                                        const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
+                                        element.dispatchEvent(dragOverEvent);
+                                        window.dxDragLastElement = element;
                                     }
 
-                                    const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
-                                    element.dispatchEvent(dragOverEvent);
-                                    window.dxDragLastElement = element;
-                                }
+                                    "#
+                                );
 
-                                "#
-                            );
-
-                            script.send(position.0.into()).unwrap();
-                            script.send(position.1.into()).unwrap();
-                        }
-                        wry::DragDropEvent::Leave => {
-                            eval(
-                                r#"
-                                if (window.dxDragLastElement) {
-                                    const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
-                                    window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
-                                    window.dxDragLastElement = null;
-                                }
-                                "#
-                            );
-                        }
-                        _ => {}
-                        }
+                                script.send(position.0.into()).unwrap();
+                                script.send(position.1.into()).unwrap();
+                            }
+                            wry::DragDropEvent::Leave => {
+                                eval(
+                                    r#"
+                                    if (window.dxDragLastElement) {
+                                        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+                                        window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+                                        window.dxDragLastElement = null;
+                                    }
+                                    "#
+                                );
+                            }
+                            _ => {}
+                            }
+                        });
                     });
-                });
+                }
 
                 false
             }
