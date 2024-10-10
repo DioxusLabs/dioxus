@@ -20,5 +20,5 @@ once_cell = "1.19.0"
 
 [features]
 default = []
-server = ["dioxus/axum", "tokio"]
+server = ["dioxus/axum", "dep:tokio"]
 web = ["dioxus/web"]

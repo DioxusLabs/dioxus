@@ -8,7 +8,10 @@
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::static_generation().launch(app);
+    #[cfg(feature = "web")]
+    dioxus::LaunchBuilder::web().launch(app);
+    #[cfg(feature = "server")]
+    dioxus::LaunchBuilder::static_generation().launch(app);
 }
 
 fn app() -> Element {

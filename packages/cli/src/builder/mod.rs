@@ -150,6 +150,49 @@ impl BuildRequest {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub(crate) struct OpenArguments {
+    fullstack_address: Option<SocketAddr>,
+    devserver_addr: Option<SocketAddr>,
+    always_on_top: Option<bool>,
+    workspace: PathBuf,
+    asset_root: PathBuf,
+    app_title: String,
+    out_dir: PathBuf,
+    serve: bool,
+}
+
+impl OpenArguments {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        serve: &ServeArguments,
+        fullstack_address: Option<SocketAddr>,
+        dioxus_crate: &DioxusCrate,
+    ) -> Self {
+        Self {
+            devserver_addr: Some(serve.address.address()),
+            always_on_top: Some(serve.always_on_top.unwrap_or(true)),
+            serve: true,
+            fullstack_address,
+            workspace: dioxus_crate.workspace_dir().to_path_buf(),
+            asset_root: dioxus_crate.asset_dir().to_path_buf(),
+            app_title: dioxus_crate.dioxus_config.application.name.clone(),
+            out_dir: dioxus_crate.out_dir().to_path_buf(),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new_for_static_generation_build(dioxus_crate: &DioxusCrate) -> Self {
+        Self {
+            workspace: dioxus_crate.workspace_dir().to_path_buf(),
+            asset_root: dioxus_crate.asset_dir().to_path_buf(),
+            app_title: dioxus_crate.dioxus_config.application.name.clone(),
+            out_dir: dioxus_crate.out_dir().to_path_buf(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct BuildResult {
     pub executable: PathBuf,
@@ -158,20 +201,12 @@ pub(crate) struct BuildResult {
 
 impl BuildResult {
     /// Open the executable if this is a native build
-    #[allow(clippy::too_many_arguments)]
-    pub fn open(
-        &self,
-        serve: &ServeArguments,
-        fullstack_address: Option<SocketAddr>,
-        workspace: &std::path::Path,
-        asset_root: &std::path::Path,
-        devserver_addr: SocketAddr,
-        app_title: String,
-        out_dir: PathBuf,
-    ) -> std::io::Result<Option<Child>> {
+    pub fn open(&self, arguments: OpenArguments) -> std::io::Result<Option<Child>> {
         match self.target_platform {
             TargetPlatform::Web => {
-                tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", serve.address.address());
+                if let Some(address) = arguments.fullstack_address {
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Serving web app on http://{} 🎉", address);
+                }
                 return Ok(None);
             }
             TargetPlatform::Desktop => {
@@ -181,7 +216,7 @@ impl BuildResult {
                 // shut this up for now - the web app will take priority in logging
             }
             TargetPlatform::Liveview => {
-                if let Some(fullstack_address) = fullstack_address {
+                if let Some(fullstack_address) = arguments.fullstack_address {
                     tracing::info!(
                         dx_src = ?TraceSrc::Dev,
                         "Launching liveview server on http://{:?} 🎉",
@@ -191,7 +226,9 @@ impl BuildResult {
             }
         }
 
-        tracing::info!(dx_src = ?TraceSrc::Dev, "Press [o] to open the app manually.");
+        if arguments.serve {
+            tracing::info!(dx_src = ?TraceSrc::Dev, "Press [o] to open the app manually.");
+        }
 
         let executable = self.executable.canonicalize()?;
         let mut cmd = Command::new(executable);
@@ -199,29 +236,36 @@ impl BuildResult {
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         cmd.env(dioxus_cli_config::CLI_ENABLED_ENV, "true");
-        if let Some(addr) = fullstack_address {
+        if let Some(addr) = arguments.fullstack_address {
             cmd.env(dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string());
             cmd.env(dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string());
         }
-        cmd.env(
-            dioxus_cli_config::ALWAYS_ON_TOP_ENV,
-            serve.always_on_top.unwrap_or(true).to_string(),
-        );
+        if let Some(always_on_top) = arguments.always_on_top {
+            cmd.env(
+                dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+                always_on_top.to_string(),
+            );
+        }
         cmd.env(
             dioxus_cli_config::ASSET_ROOT_ENV,
-            asset_root.display().to_string(),
+            arguments.asset_root.display().to_string(),
         );
+        if let Some(devserver_addr) = arguments.devserver_addr {
+            cmd.env(
+                dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
+                devserver_addr.to_string(),
+            );
+        }
+        cmd.env(dioxus_cli_config::APP_TITLE_ENV, arguments.app_title);
         cmd.env(
-            dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
-            devserver_addr.to_string(),
+            dioxus_cli_config::OUT_DIR,
+            arguments.out_dir.display().to_string(),
         );
-        cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
-        cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
 
         cmd.stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
-            .current_dir(workspace);
+            .current_dir(arguments.workspace);
 
         Ok(Some(cmd.spawn()?))
     }

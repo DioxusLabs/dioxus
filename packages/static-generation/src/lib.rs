@@ -16,3 +16,8 @@ pub(crate) mod ssg;
 pub mod prelude {
     pub use dioxus_fullstack::prelude::*;
 }
+
+/// A document provider for static generation apps
+pub mod document {
+    pub use dioxus_fullstack::document::*;
+}

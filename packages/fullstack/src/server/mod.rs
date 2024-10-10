@@ -8,7 +8,7 @@
 //! fn main() {
 //!     #[cfg(feature = "web")]
 //!     // Hydrate the application on the client
-//!     launch(app);
+//!     dioxus::launch(app);
 //!     #[cfg(feature = "server")]
 //!     {
 //!         tokio::runtime::Runtime::new()
@@ -21,7 +21,7 @@
 //!                         listener,
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
-//!                             .serve_dioxus_application(ServeConfig::new().unwrap(), app)
+//!                             .serve_dioxus_application(ServeConfigBuilder::default(), app)
 //!                             .into_make_service(),
 //!                     )
 //!                     .await
@@ -52,6 +52,12 @@
 //! }
 //! ```
 
+pub mod launch;
+
+#[allow(unused)]
+pub(crate) type ContextProviders =
+    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
+
 use axum::routing::*;
 use axum::{
     body::{self, Body},
@@ -64,7 +70,6 @@ use http::header::*;
 
 use std::sync::Arc;
 
-use crate::launch::ContextProviders;
 use crate::prelude::*;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -160,8 +165,10 @@ pub trait DioxusRouterExt<S> {
     ///     rsx! { "Hello World" }
     /// }
     /// ```
-    fn serve_dioxus_application(self, cfg: impl Into<ServeConfig>, app: fn() -> Element) -> Self
+    fn serve_dioxus_application<Cfg, Error>(self, cfg: Cfg, app: fn() -> Element) -> Self
     where
+        Cfg: TryInto<ServeConfig, Error = Error>,
+        Error: std::error::Error,
         Self: Sized;
 }
 
@@ -175,8 +182,6 @@ where
     ) -> Self {
         use http::method::Method;
 
-        let context_providers = Arc::new(context_providers);
-
         for (path, method) in server_fn::axum::server_fn_paths() {
             tracing::trace!("Registering server function: {} {}", method, path);
             let context_providers = context_providers.clone();
@@ -184,9 +189,10 @@ where
                 handle_server_fns_inner(
                     path,
                     move |server_context| {
-                        for context_provider in context_providers.iter() {
-                            let context = context_provider();
-                            server_context.insert_any(context);
+                        for index in 0..context_providers.len() {
+                            let context_providers = context_providers.clone();
+                            server_context
+                                .insert_boxed_factory(Box::new(move || context_providers[index]()));
                         }
                     },
                     req,
@@ -243,18 +249,27 @@ where
         self
     }
 
-    fn serve_dioxus_application(self, cfg: impl Into<ServeConfig>, app: fn() -> Element) -> Self {
-        let cfg = cfg.into();
-
-        let ssr_state = SSRState::new(&cfg);
-
+    fn serve_dioxus_application<Cfg, Error>(self, cfg: Cfg, app: fn() -> Element) -> Self
+    where
+        Cfg: TryInto<ServeConfig, Error = Error>,
+        Error: std::error::Error,
+    {
         // Add server functions and render index.html
         let server = self.serve_static_assets().register_server_functions();
 
-        server.fallback(
-            get(render_handler)
-                .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
-        )
+        match cfg.try_into() {
+            Ok(cfg) => {
+                let ssr_state = SSRState::new(&cfg);
+                server.fallback(
+                    get(render_handler)
+                        .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
+                )
+            }
+            Err(err) => {
+                tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
+                server
+            }
+        }
     }
 }
 
@@ -343,7 +358,7 @@ impl RenderHandleState {
 ///         // to inject the context into server functions running outside
 ///         // of an SSR render context.
 ///         .fallback(get(render_handler)
-///             .with_state(RenderHandleState::new(app))
+///             .with_state(RenderHandleState::new(ServeConfig::new().unwrap(), app))
 ///         )
 ///         .into_make_service();
 ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

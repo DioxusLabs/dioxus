@@ -39,7 +39,7 @@ fn app() -> Element {
         div {
             "hello world!"
         }
-    })
+    }
 }
 ```
 

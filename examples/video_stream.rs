@@ -16,13 +16,13 @@ fn main() {
     // For the sake of this example, we will download the video file if it doesn't exist
     ensure_video_is_loaded();
 
-    launch_desktop(app);
+    dioxus::LaunchBuilder::desktop().launch(app);
 }
 
 fn app() -> Element {
     // Any request to /videos will be handled by this handler
     use_asset_handler("videos", move |request, responder| {
-        // Using dioxus::spawn works, but is slower than a dedicated thread
+        // Using spawn works, but is slower than a dedicated thread
         tokio::task::spawn(async move {
             let video_file = PathBuf::from(VIDEO_PATH);
             let mut file = tokio::fs::File::open(&video_file).await.unwrap();
