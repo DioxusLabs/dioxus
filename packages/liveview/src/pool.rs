@@ -1,5 +1,5 @@
 use crate::{
-    document::init_eval,
+    document::init_document,
     element::LiveviewElement,
     events::SerializedHtmlEventConverter,
     query::{QueryEngine, QueryResult},
@@ -132,7 +132,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     let query_engine = QueryEngine::new(query_tx);
     vdom.in_runtime(|| {
         ScopeId::ROOT.provide_context(query_engine.clone());
-        init_eval();
+        init_document();
     });
 
     // pin the futures so we can use select!

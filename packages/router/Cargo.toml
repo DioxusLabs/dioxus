@@ -11,6 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-lib = { workspace = true }
+dioxus-history = { workspace = true, optional = true } 
 dioxus-router-macro = { workspace = true }
 tracing = { workspace = true }
 urlencoding = "2.1.3"
@@ -22,8 +23,6 @@ rustversion = "1.0.17"
 # dev-dependncey crates
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-router = { workspace = true, features = ["web"] }
-# dioxus-web = { workspace = true }
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"
 
@@ -38,7 +37,7 @@ criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
 ciborium = { version = "0.2.1" }
 base64 = { version = "0.21.0" }
 serde = { version = "1", features = ["derive"] }
-tokio = { workspace = true, features = ["full"], optional = true }
+tokio = { workspace = true, features = ["full"] }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

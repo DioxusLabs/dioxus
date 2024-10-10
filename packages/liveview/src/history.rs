@@ -1,11 +1,10 @@
 use dioxus_core::prelude::spawn;
-use dioxus_document::{ Eval};
+use dioxus_document::Eval;
+use dioxus_history::History;
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use std::sync::{Mutex, RwLock};
 use std::{collections::BTreeMap, sync::Arc};
-
-
 
 /// A [`HistoryProvider`] that evaluates history through JS.
 pub(crate) struct LiveviewHistory {
@@ -287,34 +286,34 @@ impl LiveviewHistory {
     }
 }
 
-impl LiveviewHistory {
-    pub(crate) fn go_back(& self) {
+impl History for LiveviewHistory {
+    fn go_back(&self) {
         let _ = self.action_tx.send(Action::GoBack);
     }
 
-    pub(crate) fn go_forward(& self) {
+    fn go_forward(&self) {
         let _ = self.action_tx.send(Action::GoForward);
     }
 
-    pub(crate) fn push(& self, route: String) {
+    fn push(&self, route: String) {
         let _ = self.action_tx.send(Action::Push(route));
     }
 
-    pub(crate) fn replace(& self, route: String) {
+    fn replace(&self, route: String) {
         let _ = self.action_tx.send(Action::Replace(route));
     }
 
-    pub(crate) fn external(& self, url: String) -> bool {
+    fn external(&self, url: String) -> bool {
         let _ = self.action_tx.send(Action::External(url));
         true
     }
 
-    pub(crate) fn current_route(&self) -> String {
+    fn current_route(&self) -> String {
         let timeline = self.timeline.lock().expect("unpoisoned mutex");
         timeline.current_route().to_string()
     }
 
-    pub(crate) fn can_go_back(&self) -> bool {
+    fn can_go_back(&self) -> bool {
         let timeline = self.timeline.lock().expect("unpoisoned mutex");
         // Check if the one before is contiguous (i.e., not an external page)
         let visited_indices: Vec<usize> = timeline.routes.keys().cloned().collect();
@@ -326,7 +325,7 @@ impl LiveviewHistory {
             })
     }
 
-    pub(crate) fn can_go_forward(&self) -> bool {
+    fn can_go_forward(&self) -> bool {
         let timeline = self.timeline.lock().expect("unpoisoned mutex");
         // Check if the one after is contiguous (i.e., not an external page)
         let visited_indices: Vec<usize> = timeline.routes.keys().cloned().collect();
@@ -339,7 +338,7 @@ impl LiveviewHistory {
             })
     }
 
-    pub(crate) fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
+    fn updater(&self, callback: Arc<dyn Fn() + Send + Sync>) {
         let mut updater_callback = self.updater_callback.write().unwrap();
         *updater_callback = callback;
     }

@@ -13,7 +13,7 @@ resolver = "2"
 [dependencies]
 dioxus-fullstack = { workspace = true }
 dioxus-lib.workspace = true
-dioxus-router = { workspace = true, features = ["fullstack"]}
+dioxus-router = { workspace = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-isrg = { workspace = true, optional = true }
 axum = { workspace = true, features = ["ws", "macros"], optional = true }
@@ -32,8 +32,8 @@ criterion = { workspace = true }
 
 [features]
 default = []
-server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-devtools", "dep:dioxus-cli-config", "dep:tower", "dep:dioxus-isrg"]
-web = ["dioxus-fullstack/web", "dioxus-router/web", "dep:dioxus-web"]
+server = ["dioxus-fullstack/server", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-devtools", "dep:dioxus-cli-config", "dep:tower", "dep:dioxus-isrg"]
+web = ["dioxus-fullstack/web", "dep:dioxus-web"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
