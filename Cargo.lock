@@ -2592,6 +2592,7 @@ dependencies = [
  "global-hotkey",
  "http-range",
  "infer 0.11.0",
+ "lazy-js-bundle",
  "muda",
  "objc",
  "objc_id",
@@ -2763,9 +2764,6 @@ dependencies = [
  "serde_repr",
  "tokio",
  "tracing",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
@@ -3069,6 +3067,7 @@ dependencies = [
 name = "dioxus-web"
 version = "0.6.0-alpha.2"
 dependencies = [
+ "async-trait",
  "ciborium",
  "console_error_panic_hook",
  "dioxus",
@@ -3086,6 +3085,7 @@ dependencies = [
  "gloo-dialogs",
  "gloo-timers",
  "js-sys",
+ "lazy-js-bundle",
  "rustc-hash 1.1.0",
  "serde",
  "serde-wasm-bindgen",

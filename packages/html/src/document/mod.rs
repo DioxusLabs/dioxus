@@ -7,9 +7,7 @@ use std::{
 
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
-mod bindings;
 #[allow(unused)]
-pub use bindings::*;
 mod eval;
 pub use eval::*;
 

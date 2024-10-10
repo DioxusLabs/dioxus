@@ -13,8 +13,8 @@ keywords = ["dom", "ui", "gui", "react"]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = [
     "serialize",
-    "native-bind",
     "mounted",
+    "file_engine",
     "document",
 ] }
 dioxus-signals = { workspace = true, optional = true }
@@ -87,6 +87,9 @@ tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls
 cocoa = "0.25"
 core-foundation = "0.9.3"
 objc = "0.2.7"
+
+[build-dependencies]
+lazy-js-bundle = { workspace = true }
 
 [features]
 default = ["tokio_runtime", "wry/objc-exception", "devtools"]
