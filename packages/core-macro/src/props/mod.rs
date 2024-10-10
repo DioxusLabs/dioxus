@@ -1019,7 +1019,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         mut self,
                         ____name: &'static str,
                         ____ns: Option<&'static str>,
-                        ____attr: impl dioxus_core::prelude::IntoAttributeValue,
+                        ____attr: impl dioxus_core::prelude::IntoAttributeValue<L>,
                         ____volatile: bool
                     ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;
