@@ -153,10 +153,10 @@ async fn launch_server(
                 );
             }
             Err(err) => {
-                println!(
-                    "An error occurred while creating a server context {:?}",
-                    err
-                );
+                // println!(
+                //     "An error occurred while creating a server context {:?}",
+                //     err
+                // );
                 tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
             }
         }

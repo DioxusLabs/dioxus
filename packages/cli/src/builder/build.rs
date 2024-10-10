@@ -1,8 +1,8 @@
 use super::{progress::ProgressTx, BuildArtifacts};
-use crate::build::BuildArgs;
 use crate::dioxus_crate::DioxusCrate;
-use crate::{assets::AssetManifest, link::LINK_OUTPUT_ENV_VAR, TraceSrc};
-use crate::{link::InterceptedArgs, Result};
+use crate::Result;
+use crate::{assets::AssetManifest, TraceSrc};
+use crate::{build::BuildArgs, link::LinkAction};
 use crate::{AppBundle, Platform};
 use anyhow::Context;
 use serde::Deserialize;
@@ -20,9 +20,6 @@ pub(crate) struct BuildRequest {
     /// Status channel to send our progress updates to
     pub(crate) progress: ProgressTx,
 
-    /// The rustc flags to pass to the build
-    pub(crate) rust_flags: Vec<String>,
-
     /// The target directory for the build
     pub(crate) custom_target_dir: Option<PathBuf>,
 }
@@ -33,7 +30,6 @@ impl BuildRequest {
             build,
             krate,
             progress,
-            rust_flags: Default::default(),
             custom_target_dir: None,
         }
     }
@@ -81,19 +77,36 @@ impl BuildRequest {
         // Update the status to show that we're starting the build and how many crates we expect to build
         self.status_starting_build(is_server, crate_count);
 
-        let mut child = Command::new("cargo")
-            .arg("rustc")
-            .envs(
-                self.custom_target_dir
-                    .as_ref()
-                    .map(|dir| ("CARGO_TARGET_DIR", dir)),
-            )
+        let mut cmd = Command::new("cargo");
+
+        cmd.arg("rustc")
             .current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
-            .args(&self.build_arguments(is_server))
-            .arg("--")
-            .args(self.rust_flags.clone())
+            .args(self.build_arguments(is_server))
+            .env("RUSTFLAGS", self.rust_flags(is_server));
+
+        if let Some(target_dir) = self.custom_target_dir.as_ref() {
+            cmd.env("CARGO_TARGET_DIR", target_dir);
+        }
+
+        // Android needs a special linker since we have to convert the executable to a shared library
+        // We also need a custom android linker (pointing to something on the system), but we don't
+        // actually want to write that to the user's `.cargo/cargo.toml` since *that* gets committed to git
+        if self.build.platform() == Platform::Android && !is_server {
+            cmd.env(
+                LinkAction::MAGIC_ENV_VAR,
+                LinkAction::LinkAndroid {
+                    linker: "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang".into(),
+                    extra_flags: vec![],
+                }
+                .to_json(),
+            );
+        }
+
+        tracing::debug!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:?}", cmd);
+
+        let mut child = cmd
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -101,7 +114,6 @@ impl BuildRequest {
 
         let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
         let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
-
         let mut output_location = None;
         let mut stdout = stdout.lines();
         let mut stderr = stderr.lines();
@@ -140,7 +152,10 @@ impl BuildRequest {
                 }
                 Message::BuildFinished(finished) => {
                     if !finished.success {
-                        return Err(anyhow::anyhow!("Cargo build failed.").into());
+                        return Err(anyhow::anyhow!(
+                            "Cargo build failed, signaled by the compiler"
+                        )
+                        .into());
                     }
                 }
                 _ => {}
@@ -182,33 +197,31 @@ impl BuildRequest {
         // Run `cargo rustc` again, but this time with a custom linker (dx) and an env var to force
         // `dx` to act as a linker
         //
-        // Pass in the tmp_file as the env var itself
-        //
-        // NOTE: that -Csave-temps=y is needed to prevent rustc from deleting the incremental cache...
-        // This might not be a "stable" way of keeping artifacts around, but it's in stable rustc, so we use it
+        // This will force `dx` to look through the incremental cache and find the assets from the previous build
         Command::new("cargo")
+            .env("RUSTFLAGS", self.rust_flags(is_server))
             .arg("rustc")
             .args(self.build_arguments(is_server))
             .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
-            .arg(format!("-Clinker={}", std::env::current_exe().unwrap().display())) /* pass ourselves in */
-            .env(LINK_OUTPUT_ENV_VAR, tmp_file.path()) /* but with the env var pointing to the temp file */
-            .arg("-Csave-temps=y") /* don't delete the incremental cache */
+            .arg(format!(
+                "-Clinker={}",
+                std::env::current_exe().unwrap().display()
+            ))
+            .env(
+                LinkAction::MAGIC_ENV_VAR,
+                LinkAction::BuildAssetManifest {
+                    destination: tmp_file.path().to_path_buf(),
+                }
+                .to_json(),
+            )
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
             .await?;
 
-        // Read the contents of the temp file
-        let args =
-            std::fs::read_to_string(tmp_file.path()).context("Failed to read linker output")?;
-
-        // Parse them as a Vec<String> which is just our informal format for link args in the cli
-        // Todo: this might be wrong-ish on windows? The format is weird
-        let args = serde_json::from_str::<InterceptedArgs>(&args)
-            .context("Failed to parse linker output")?;
-
-        Ok(AssetManifest::new_from_linker_intercept(args))
+        // The linker wrote the manifest to the temp file, let's load it!
+        AssetManifest::load_from_file(tmp_file.path())
     }
 
     /// Create a list of arguments for cargo builds
@@ -288,6 +301,21 @@ impl BuildRequest {
         cargo_args
     }
 
+    pub(crate) fn rust_flags(&self, is_server: bool) -> String {
+        let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
+
+        if self.build.platform() == Platform::Android && !is_server {
+            let cur_exe = std::env::current_exe().unwrap();
+            rust_flags.push_str(format!(" -Clinker={}", cur_exe.display()).as_str());
+            rust_flags.push_str(" -Clink-arg=-landroid");
+            rust_flags.push_str(" -Clink-arg=-llog");
+            rust_flags.push_str(" -Clink-arg=-lOpenSLES");
+            rust_flags.push_str(" -Clink-arg=-Wl,--export-dynamic");
+        }
+
+        rust_flags
+    }
+
     /// Create the list of features we need to pass to cargo to build the app by merging together
     /// either the client or server features depending on if we're building a server or not.
     pub(crate) fn target_features(&self, is_server: bool) -> Vec<String> {
@@ -300,26 +328,6 @@ impl BuildRequest {
         }
 
         features
-    }
-
-    /// The final output name of the app, primarly to be used when bundled
-    ///
-    /// Needs to be very disambiguated
-    /// Eg: my-app-web-macos-x86_64.app
-    /// {app_name}-{platform}-{arch}
-    ///
-    /// Does not include the extension
-    pub(crate) fn app_name(&self) -> String {
-        match self.build.platform() {
-            Platform::Web => "web".to_string(),
-            Platform::Server => "server".to_string(),
-            Platform::MacOS => todo!(),
-            Platform::Windows => todo!(),
-            Platform::Linux => todo!(),
-            Platform::Ios => todo!(),
-            Platform::Android => todo!(),
-            Platform::Liveview => todo!(),
-        }
     }
 
     /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.

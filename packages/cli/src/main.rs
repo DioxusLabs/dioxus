@@ -37,9 +37,9 @@ use Commands::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // If we have a magic env var set, we want to operate as a linker instead.
-    if link::should_dump_link_args() {
-        return link::dump_link_args();
+    // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
+    if let Some(link_action) = link::LinkAction::from_env() {
+        return link_action.run();
     }
 
     // Start the tracer so it captures logs from the build engine before we start the builder

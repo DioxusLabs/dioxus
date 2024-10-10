@@ -380,8 +380,8 @@ impl Output {
                 // "o:open".gray(),
                 // "  ".gray(),
                 " ".dark_gray(),
-                "r:rebuild".dark_gray(),
-                " ─ ".dark_gray(),
+                // "r:rebuild".dark_gray(),
+                // " ─ ".dark_gray(),
                 match self.more_modal_open {
                     true => "/:more".light_yellow(),
                     false => "/:more".dark_gray(),

@@ -92,7 +92,7 @@ impl BuildArgs {
 
         // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
         let bundle = Builder::start(dioxus_crate, self.clone())?.finish().await?;
-        let destination = dioxus_crate.build_dir(self.platform());
+        let destination = dioxus_crate.build_dir(self.platform(), self.release);
 
         Ok(())
     }
@@ -139,15 +139,21 @@ impl BuildArgs {
 
         // Set the profile of the build if it's not already set
         if self.profile.is_none() {
-            if self.platform == Some(Platform::Web) {
-                self.profile = Some(crate::dioxus_crate::CLIENT_PROFILE_WEB.to_string());
+            match self.platform {
+                Some(Platform::Android) => {
+                    self.profile = Some(crate::dioxus_crate::PROFILE_ANDROID.to_string());
+                }
+                Some(Platform::Web) => {
+                    self.profile = Some(crate::dioxus_crate::PROFILE_WASM.to_string());
+                }
+                _ => {}
             }
         }
 
         // If we're building a server and building for web, we need to set the server profile
         // todo(jon): idek if this is right - do we need profiles here?
         if self.server_profile.is_none() {
-            self.server_profile = Some(crate::dioxus_crate::SERVER_PROFILE.to_string());
+            self.server_profile = Some(crate::dioxus_crate::PROFILE_SERVER.to_string());
         }
 
         Ok(())

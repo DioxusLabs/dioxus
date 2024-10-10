@@ -4,6 +4,7 @@ use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
 use manganis_core::{LinkSection, ResourceAsset};
 use object::{read::archive::ArchiveFile, File as ObjectFile, Object, ObjectSection};
+use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
@@ -19,83 +20,20 @@ use walkdir::WalkDir;
 //     CssOptions, FileOptions, ImageOptions, ImageType, JsOptions, JsonOptions, ResourceAsset,
 // };
 
-use crate::link::InterceptedArgs;
-
 /// A manifest of all assets collected from dependencies
 ///
 /// This will be filled in primarly by incremental compilation artifacts.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct AssetManifest {
     /// Map of bundled asset name to the asset itself
     pub(crate) assets: HashMap<PathBuf, ResourceAsset>,
 }
 
 impl AssetManifest {
-    /// Create a new asset manifest pre-populated with the assets from the linker intercept
-    pub(crate) fn new_from_linker_intercept(args: InterceptedArgs) -> Self {
-        let mut manifest = Self::default();
-        manifest.add_from_linker_intercept(args);
-        manifest
-    }
-
-    /// Fill this manifest from the intercepted rustc args used to link the app together
-    pub(crate) fn add_from_linker_intercept(&mut self, args: InterceptedArgs) {
-        // Attempt to load the arg as a command file, otherwise just use the args themselves
-        // This is because windows will pass in `@linkerargs.txt` as a source of linker args
-        if let Some(command) = args.args.iter().find(|arg| arg.starts_with('@')).cloned() {
-            self.add_from_command_file(args, &command);
-        } else {
-            self.add_from_linker_args(args);
-        }
-    }
-
-    /// Fill this manifest from the contents of a linker command file.
-    ///
-    /// Rustc will pass a file as link args to linkers on windows instead of args directly.
-    ///
-    /// We actually need to read that file and then pull out the args directly.
-    pub(crate) fn add_from_command_file(&mut self, args: InterceptedArgs, arg: &str) {
-        let path = arg.trim().trim_start_matches('@');
-        let file_binary = std::fs::read(path).unwrap();
-
-        // This may be a utf-16le file. Let's try utf-8 first.
-        let content = match String::from_utf8(file_binary.clone()) {
-            Ok(s) => s,
-            Err(_) => {
-                // Convert Vec<u8> to Vec<u16> to convert into a String
-                let binary_u16le: Vec<u16> = file_binary
-                    .chunks_exact(2)
-                    .map(|a| u16::from_le_bytes([a[0], a[1]]))
-                    .collect();
-
-                String::from_utf16_lossy(&binary_u16le)
-            }
-        };
-
-        // Gather linker args
-        let mut linker_args = Vec::new();
-        let lines = content.lines();
-        for line in lines {
-            // Remove quotes from the line - windows link args files are quoted
-            let line_parsed = line.to_string();
-            let line_parsed = line_parsed.trim_end_matches('"').to_string();
-            let line_parsed = line_parsed.trim_start_matches('"').to_string();
-            linker_args.push(line_parsed);
-        }
-
-        self.add_from_linker_args(InterceptedArgs {
-            args: linker_args,
-            ..args
-        });
-    }
-
-    pub(crate) fn add_from_linker_args(&mut self, args: InterceptedArgs) {
-        // Parse through linker args for `.o` or `.rlib` files.
-        for item in args.args {
-            if item.ends_with(".o") || item.ends_with(".rlib") {
-                self.add_from_object_path(args.work_dir.join(PathBuf::from(item)));
-            }
-        }
+    pub(crate) fn load_from_file(path: &Path) -> anyhow::Result<Self> {
+        let src = std::fs::read_to_string(path)
+            .context("Failed to read asset manifest from filesystem")?;
+        serde_json::from_str(&src).context("Failed to parse asset manifest")
     }
 
     /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
@@ -127,7 +65,7 @@ impl AssetManifest {
     }
 
     /// Fill this manifest from an rlib / ar file that contains many object files and their entryies
-    pub(crate) fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) {
+    fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) {
         // Look through each archive member for object files.
         // Read the archive member's binary data (we know it's an object file)
         // And parse it with the normal `object::File::parse` to find the manganis string.
@@ -145,7 +83,7 @@ impl AssetManifest {
     }
 
     /// Fill this manifest with whatever tables might come from the object file
-    pub(crate) fn add_from_object_file(&mut self, obj: &ObjectFile) -> Option<()> {
+    fn add_from_object_file(&mut self, obj: &ObjectFile) -> Option<()> {
         for section in obj.sections() {
             let Ok(section_name) = section.name() else {
                 continue;
@@ -180,69 +118,6 @@ impl AssetManifest {
         }
 
         None
-    }
-
-    /// Copy the assest from this manifest to a target folder
-    ///
-    /// If `optimize` is enabled, then we will run the optimizer for this asset.
-    ///
-    /// The output file is guaranteed to be the destination + the ResourceAsset bundle name
-    ///
-    /// Will not actually copy the asset if the source asset hasn't changed?
-    pub(crate) fn copy_asset_to(
-        &self,
-        from: &Path,
-        to: &Path,
-        optimize: bool,
-        _pre_compress: bool,
-    ) -> anyhow::Result<()> {
-        todo!();
-        // tracing::debug!("Copying asset {target_asset:?} to {destination:?} (legacy: {legacy})");
-        // let (from, to) = if legacy {
-        //     (
-        //         target_asset.to_path_buf(),
-        //         destination.join(target_asset.file_name().unwrap()),
-        //     )
-        // } else {
-        //     let Some(src) = self.assets.get(target_asset) else {
-        //         tracing::error!("Specified asset does not exist while trying to get {target_asset:?} to {destination:?}");
-        //         return Ok(());
-        //     };
-
-        //     (src.absolute.clone(), destination.join(&src.bundled))
-        // };
-
-        // if !from.exists() {
-        //     tracing::error!("Specified asset does not exist while trying to copy {target_asset:?} to {destination:?}")
-        // }
-
-        // If there's no optimizaton while copying this asset, we simply std::fs::copy and call it a day
-        if !optimize {
-            // tracing::debug!("Copying asset {from:?} to {destination:?} at {to:?}");
-            // std::fs::copy(from, to).expect("Failed to copy asset");
-            return Ok(());
-        }
-
-        // Otherwise, let's attempt to optimize the the asset we're copying
-
-        Ok(())
-    }
-
-    pub fn insert_legacy_asset(&mut self, asset_dir: &PathBuf, path: &PathBuf) {
-        let input =
-            PathBuf::from("/assets/").join(path.strip_prefix(asset_dir).unwrap().to_path_buf());
-        let absolute = path.canonicalize().unwrap();
-        let bundled = input.file_name().unwrap().to_string_lossy().to_string();
-
-        let asset = ResourceAsset {
-            input,
-            absolute,
-            bundled,
-        };
-
-        tracing::debug!("Adding legacy asset {asset:?} to bundle manifest");
-
-        self.assets.insert(path.clone(), asset);
     }
 }
 

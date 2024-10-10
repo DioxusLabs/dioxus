@@ -19,8 +19,9 @@ pub(crate) struct DioxusCrate {
     pub(crate) settings: CliSettings,
 }
 
-pub(crate) static CLIENT_PROFILE_WEB: &str = "dioxus-client-web";
-pub(crate) static SERVER_PROFILE: &str = "dioxus-server";
+pub(crate) static PROFILE_WASM: &str = "dioxus-wasm";
+pub(crate) static PROFILE_ANDROID: &str = "dioxus-android";
+pub(crate) static PROFILE_SERVER: &str = "dioxus-server";
 
 impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
@@ -108,22 +109,11 @@ impl DioxusCrate {
     /// target/dx/build/app/web/
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
-    pub(crate) fn build_dir(&self, platform: Platform) -> PathBuf {
-        let platform_name = match platform {
-            Platform::Web => "web",
-            Platform::Server => "web",
-            Platform::Liveview => "liveview",
-            Platform::MacOS => "macos",
-            Platform::Windows => "windows",
-            Platform::Linux => "linux",
-            Platform::Ios => "ios",
-            Platform::Android => "android",
-        };
-
+    pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
         self.out_dir()
             .join(self.config.application.name.clone())
-            .join("build")
-            .join(platform_name)
+            .join(if release { "release" } else { "debug" })
+            .join(platform.build_folder_name())
     }
 
     /// target/dx/bundle/app/
@@ -131,24 +121,10 @@ impl DioxusCrate {
     /// target/dx/bundle/app/blah.exe
     /// target/dx/bundle/app/public/
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
-        let platform_name = match platform {
-            Platform::Web => "web",
-            Platform::Server => "web",
-            Platform::Liveview => "liveview",
-            Platform::MacOS => "macos",
-            Platform::Windows => "windows",
-            Platform::Linux => "linux",
-            Platform::Ios => "ios",
-            Platform::Android => "android",
-        };
-
-        let dir = self
-            .out_dir()
+        self.out_dir()
             .join(self.config.application.name.clone())
             .join("bundle")
-            .join(platform_name);
-
-        dir
+            .join(platform.build_folder_name())
     }
 
     /// Get the workspace directory for the crate
@@ -238,18 +214,25 @@ impl DioxusCrate {
             .entry("profile")
             .or_insert(Item::Table(Default::default()))
         {
-            if let toml_edit::Entry::Vacant(entry) = table.entry(CLIENT_PROFILE_WEB) {
+            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_WASM) {
                 let mut client = toml_edit::Table::new();
                 client.insert("inherits", Item::Value("dev".into()));
                 client.insert("opt-level", Item::Value(2.into()));
                 entry.insert(Item::Table(client));
             }
 
-            if let toml_edit::Entry::Vacant(entry) = table.entry(SERVER_PROFILE) {
+            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_SERVER) {
                 let mut server = toml_edit::Table::new();
                 server.insert("inherits", Item::Value("dev".into()));
                 server.insert("opt-level", Item::Value(2.into()));
                 entry.insert(Item::Table(server));
+            }
+
+            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_ANDROID) {
+                let mut android = toml_edit::Table::new();
+                android.insert("inherits", Item::Value("dev".into()));
+                android.insert("opt-level", Item::Value(2.into()));
+                entry.insert(Item::Table(android));
             }
         }
 

@@ -100,8 +100,16 @@ impl FromStr for Platform {
 
 impl Display for Platform {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let feature = self.feature_name();
-        f.write_str(feature)
+        f.write_str(match self {
+            Platform::Web => "web",
+            Platform::MacOS => "macos",
+            Platform::Windows => "windows",
+            Platform::Linux => "linux",
+            Platform::Ios => "ios",
+            Platform::Android => "android",
+            Platform::Server => "server",
+            Platform::Liveview => "liveview",
+        })
     }
 }
 
@@ -117,6 +125,22 @@ impl Platform {
             Platform::Liveview => "liveview",
             Platform::Ios => "mobile",
             Platform::Android => "mobile",
+        }
+    }
+
+    /// Get the name of the folder we need to generate for this platform
+    ///
+    /// Note that web and server share the same platform folder since we'll export the web folder as a bundle on its own
+    pub(crate) fn build_folder_name(&self) -> &'static str {
+        match self {
+            Platform::Web => "web",
+            Platform::Server => "web",
+            Platform::Liveview => "liveview",
+            Platform::Ios => "ios",
+            Platform::Android => "android",
+            Platform::Windows => "windows",
+            Platform::Linux => "linux",
+            Platform::MacOS => "macos",
         }
     }
 }

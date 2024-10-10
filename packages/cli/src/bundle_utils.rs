@@ -2,9 +2,9 @@
 
 use crate::config::BundleConfig;
 
-pub(crate) fn make_tauri_bundler_settings(bundle_config: BundleConfig) -> tauri_bundler::BundleSettings {
-    todo!()
-}
+// pub(crate) fn make_tauri_bundler_settings(bundle_config: BundleConfig) -> tauri_bundler::BundleSettings {
+//     todo!()
+// }
 
 // impl From<NsisSettings> for tauri_bundler::NsisSettings {
 //     fn from(val: NsisSettings) -> Self {

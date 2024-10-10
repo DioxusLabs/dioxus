@@ -21,6 +21,9 @@ use wasm_bindgen_cli_support::Bindgen;
 /// The server will *always* be dropped into the `web` folder since it is considered "web" in nature,
 /// and will likely need to be combined with the public dir to be useful.
 ///
+/// We do our best to assemble read-to-go bundles here, such that the "bundle" step for each platform
+/// can just use the build dir
+///
 /// When we write the AppBundle to a folder, it'll contain each bundle for each platform under the app's name:
 /// ```
 /// dog-app/
@@ -475,10 +478,7 @@ impl AppBundle {
             Platform::Liveview => self.exe_dir().join("server"),
             Platform::Windows => self.exe_dir().join("app.exe"),
             Platform::Linux => self.exe_dir().join("AppRun"), // from the appimage spec, the root exe needs to be named `AppRun`
-            Platform::Android => {
-                todo!("android needs to be a bit more complicated since the name is important");
-                self.exe_dir().join("libdioxusapp.so")
-            } // from the apk spec, the root exe will actually be a shared library
+            Platform::Android => self.exe_dir().join("libdioxusapp.so"), // from the apk spec, the root exe will actually be a shared library
             Platform::Web => unimplemented!("there's no main exe on web"), // this will be wrong, I think, but not important?
         }
     }
@@ -545,11 +545,15 @@ impl AppBundle {
             Platform::Android => {}
 
             // Probably some custom format or a plist file (haha)
-            // When we do the proper bundle, we'll need to do something with wix templats, I think?
+            // When we do the proper bundle, we'll need to do something with wix templates, I think?
             Platform::Windows => {}
 
-            // create the .desktop file for the app image
+            // eventually we'll create the .appimage file, I guess?
             Platform::Linux => {}
+
+            // These are served as folders, not appimages, so we don't need to do anything special (I think?)
+            // Eventually maybe write some secrets/.env files for the server?
+            // We could also distribute them as a deb/rpm for linux and msi for windows
             Platform::Web => {}
             Platform::Server => {}
             Platform::Liveview => {}
@@ -558,7 +562,7 @@ impl AppBundle {
         Ok(())
     }
 
-    /// Run the optimizers, obfuscators, minimizers, etc
+    /// Run the optimizers, obfuscators, minimizers, signers, etc
     pub(crate) async fn optimize(&self) -> Result<()> {
         match self.build.build.platform() {
             Platform::Web => {
@@ -590,7 +594,12 @@ impl AppBundle {
 
     pub(crate) fn server_exe(&self) -> Option<PathBuf> {
         if let Some(_server) = &self.server {
-            return Some(self.build.krate.build_dir(Platform::Server).join("server"));
+            return Some(
+                self.build
+                    .krate
+                    .build_dir(Platform::Server, self.build.build.release)
+                    .join("server"),
+            );
         }
 
         None
@@ -606,8 +615,10 @@ impl AppBundle {
     ///
     /// For windows/linux, it's also not important since we're just running the exe directly out of the folder
     pub(crate) fn app_dir(&self) -> PathBuf {
-        // todo: maybe cache this?
-        let platform_dir = self.build.krate.build_dir(self.build.build.platform());
+        let platform_dir = self
+            .build
+            .krate
+            .build_dir(self.build.build.platform(), self.build.build.release);
 
         match self.build.build.platform() {
             Platform::Web => platform_dir.join("public"),

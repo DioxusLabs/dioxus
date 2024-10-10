@@ -11,6 +11,14 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 dioxus-desktop = { workspace = true }
+dioxus-lib = { workspace = true }
+jni = "0.21.1"
+libc = "0.2.159"
+once_cell.workspace = true
+
+[features]
+default = ["jnibindings"]
+jnibindings = []
 
 [lib]
 doctest = false

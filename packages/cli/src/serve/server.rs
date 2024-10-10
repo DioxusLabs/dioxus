@@ -461,7 +461,7 @@ fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::Method
         false => CORS_UNSAFE.clone(),
     };
 
-    let out_dir = cfg.build_dir(Platform::Web);
+    let out_dir = cfg.build_dir(Platform::Web, args.build_arguments.release);
     let index_on_404 = cfg.config.web.watcher.index_on_404;
 
     get_service(
