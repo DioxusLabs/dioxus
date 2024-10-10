@@ -11,7 +11,8 @@ fn head_element_written_on_server() -> bool {
         .unwrap_or_default()
 }
 
-pub(crate) struct FullstackWebDocument;
+/// A document provider for fullstack web clients
+pub struct FullstackWebDocument;
 
 impl Document for FullstackWebDocument {
     fn new_evaluator(

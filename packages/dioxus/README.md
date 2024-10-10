@@ -42,7 +42,7 @@ To launch an app, we use the `launch` method and use features in `Cargo.toml` to
 use dioxus::prelude::*;
 
 fn main() {
-    launch(App);
+    dioxus::launch(App);
 }
 
 // The #[component] attribute streamlines component creation.
@@ -184,7 +184,7 @@ Using components, rsx, and hooks, we can build a simple app.
 use dioxus::prelude::*;
 
 fn main() {
-    launch(App);
+    dioxus::launch(App);
 }
 
 #[component]

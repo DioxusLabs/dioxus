@@ -3,8 +3,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-type SendSyncAnyMap =
-    std::collections::HashMap<std::any::TypeId, Box<dyn Any + Send + Sync + 'static>>;
+type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
 
 /// A shared context for server functions that contains information about the request and middleware state.
 ///
@@ -27,6 +26,20 @@ pub struct DioxusServerContext {
     shared_context: std::sync::Arc<RwLock<SendSyncAnyMap>>,
     response_parts: std::sync::Arc<RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
+}
+
+enum ContextType {
+    Factory(Box<dyn Fn() -> Box<dyn Any> + Send + Sync>),
+    Value(Box<dyn Any + Send + Sync>),
+}
+
+impl ContextType {
+    fn downcast<T: Clone + 'static>(&self) -> Option<T> {
+        match self {
+            ContextType::Value(value) => value.downcast_ref::<T>().cloned(),
+            ContextType::Factory(factory) => factory().downcast::<T>().ok().map(|v| *v),
+        }
+    }
 }
 
 #[allow(clippy::derivable_impls)]
@@ -103,21 +116,38 @@ mod server_fn_impl {
             self.shared_context
                 .read()
                 .get(&TypeId::of::<T>())
-                .map(|v| v.downcast_ref::<T>().unwrap().clone())
+                .map(|v| v.downcast::<T>().unwrap())
         }
 
         /// Insert a value into the shared server context
-        ///
-        ///
         pub fn insert<T: Any + Send + Sync + 'static>(&self, value: T) {
             self.insert_any(Box::new(value));
         }
 
-        /// Insert a Boxed `Any` value into the shared server context
-        pub fn insert_any(&self, value: Box<dyn Any + Send + Sync>) {
+        /// Insert a boxed `Any` value into the shared server context
+        pub fn insert_any(&self, value: Box<dyn Any + Send + Sync + 'static>) {
             self.shared_context
                 .write()
-                .insert((*value).type_id(), value);
+                .insert((*value).type_id(), ContextType::Value(value));
+        }
+
+        /// Insert a factory that creates a non-sync value for the shared server context
+        pub fn insert_factory<F, T>(&self, value: F)
+        where
+            F: Fn() -> T + Send + Sync + 'static,
+            T: 'static,
+        {
+            self.shared_context.write().insert(
+                TypeId::of::<T>(),
+                ContextType::Factory(Box::new(move || Box::new(value()))),
+            );
+        }
+
+        /// Insert a boxed factory that creates a non-sync value for the shared server context
+        pub fn insert_boxed_factory(&self, value: Box<dyn Fn() -> Box<dyn Any> + Send + Sync>) {
+            self.shared_context
+                .write()
+                .insert((*value()).type_id(), ContextType::Factory(value));
         }
 
         /// Get the response parts from the server context
@@ -324,7 +354,7 @@ impl<T: 'static> std::error::Error for NotFoundInServerContext<T> {}
 /// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
-/// LaunchBuilder::new()
+/// dioxus::LaunchBuilder::new()
 ///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
 ///     .with_context(server_only! {
 ///         1234567890u32

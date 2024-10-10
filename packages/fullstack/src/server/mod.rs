@@ -8,7 +8,7 @@
 //! fn main() {
 //!     #[cfg(feature = "web")]
 //!     // Hydrate the application on the client
-//!     launch(app);
+//!     dioxus::launch(app);
 //!     #[cfg(feature = "server")]
 //!     {
 //!         tokio::runtime::Runtime::new()
@@ -52,6 +52,12 @@
 //! }
 //! ```
 
+pub mod launch;
+
+#[allow(unused)]
+pub(crate) type ContextProviders =
+    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
+
 use axum::routing::*;
 use axum::{
     body::{self, Body},
@@ -64,7 +70,6 @@ use http::header::*;
 
 use std::sync::Arc;
 
-use crate::launch::ContextProviders;
 use crate::prelude::*;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -177,8 +182,6 @@ where
     ) -> Self {
         use http::method::Method;
 
-        let context_providers = Arc::new(context_providers);
-
         for (path, method) in server_fn::axum::server_fn_paths() {
             tracing::trace!("Registering server function: {} {}", method, path);
             let context_providers = context_providers.clone();
@@ -186,9 +189,10 @@ where
                 handle_server_fns_inner(
                     path,
                     move |server_context| {
-                        for context_provider in context_providers.iter() {
-                            let context = context_provider();
-                            server_context.insert_any(context);
+                        for index in 0..context_providers.len() {
+                            let context_providers = context_providers.clone();
+                            server_context
+                                .insert_boxed_factory(Box::new(move || context_providers[index]()));
                         }
                     },
                     req,

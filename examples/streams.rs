@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use futures_util::{future, stream, Stream, StreamExt};
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

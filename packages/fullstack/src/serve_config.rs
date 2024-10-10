@@ -5,6 +5,8 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
+use dioxus_lib::prelude::dioxus_core::LaunchConfig;
+
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
@@ -13,6 +15,8 @@ pub struct ServeConfigBuilder {
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
 }
+
+impl LaunchConfig for ServeConfigBuilder {}
 
 impl ServeConfigBuilder {
     /// Create a new ServeConfigBuilder with incremental static generation disabled and the default index.html settings
@@ -238,6 +242,8 @@ pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
 }
+
+impl LaunchConfig for ServeConfig {}
 
 impl ServeConfig {
     /// Create a new ServeConfig
