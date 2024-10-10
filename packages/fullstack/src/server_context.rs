@@ -112,7 +112,7 @@ mod server_fn_impl {
         ///     }
         /// }
         /// ```
-        pub fn get<T: Clone + 'static>(&self) -> Option<T> {
+        pub fn get<T: Any + Send + Sync + Clone + 'static>(&self) -> Option<T> {
             self.shared_context
                 .read()
                 .get(&TypeId::of::<T>())
@@ -120,10 +120,8 @@ mod server_fn_impl {
         }
 
         /// Insert a value into the shared server context
-        pub fn insert<T: Send + Sync + 'static>(&self, value: T) {
-            self.shared_context
-                .write()
-                .insert(TypeId::of::<T>(), ContextType::Value(Box::new(value)));
+        pub fn insert<T: Any + Send + Sync + 'static>(&self, value: T) {
+            self.insert_any(Box::new(value));
         }
 
         /// Insert a boxed `Any` value into the shared server context

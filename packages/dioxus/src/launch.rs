@@ -256,6 +256,22 @@ mod current_platform {
         super::web_launch(root, contexts, platform_config);
     }
 
+    #[cfg(all(feature = "fullstack", feature = "axum"))]
+    impl TryIntoConfig<crate::launch::current_platform::Config>
+        for ::dioxus_fullstack::prelude::ServeConfigBuilder
+    {
+        fn into_config(self, config: &mut Option<crate::launch::current_platform::Config>) {
+            match config {
+                Some(config) => config.set_server_config(self),
+                None => {
+                    *config = Some(
+                        crate::launch::current_platform::Config::new().with_server_config(self),
+                    )
+                }
+            }
+        }
+    }
+
     #[cfg(all(
         feature = "liveview",
         not(all(feature = "fullstack", feature = "server")),
