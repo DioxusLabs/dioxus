@@ -94,7 +94,7 @@ impl WebsysDom {
                 let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 
                 let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
-                runtime.handle_event(name.as_str(), event.clone(), element);
+                runtime.handle_event(name.as_str(), &event, element);
 
                 // Prevent the default action if the user set prevent default on the event
                 let prevent_default = !event.default_action_enabled();

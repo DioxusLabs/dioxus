@@ -70,7 +70,7 @@ impl WebsysDom {
                     false,
                 );
                 let name = "mounted";
-                self.runtime.handle_event(name, event, id)
+                self.runtime.handle_event(name, &event, id)
             }
         }
     }

@@ -290,7 +290,7 @@ impl Runtime {
     ///
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
     #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
-    pub fn handle_event(self: &Rc<Self>, name: &str, event: Event<dyn Any>, element: ElementId) {
+    pub fn handle_event(self: &Rc<Self>, name: &str, event: &Event<dyn Any>, element: ElementId) {
         let _runtime = RuntimeGuard::new(self.clone());
         let elements = self.elements.borrow();
 
@@ -329,7 +329,7 @@ impl Runtime {
         level = "trace",
         name = "VirtualDom::handle_bubbling_event"
     )]
-    fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
+    fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: &Event<dyn Any>) {
         let mounts = self.mounts.borrow();
 
         // If the event bubbles, we traverse through the tree until we find the target element.
@@ -396,7 +396,7 @@ impl Runtime {
         level = "trace",
         name = "VirtualDom::handle_non_bubbling_event"
     )]
-    fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
+    fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: &Event<dyn Any>) {
         let mounts = self.mounts.borrow();
         let Some(mount) = mounts.get(node.mount.0) else {
             // If the node is suspended and not mounted, we can just ignore the event
