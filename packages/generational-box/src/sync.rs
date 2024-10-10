@@ -1,20 +1,174 @@
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
-use std::sync::{Arc, OnceLock};
+use std::{
+    any::Any,
+    fmt::Debug,
+    num::NonZeroU64,
+    sync::{Arc, OnceLock},
+};
 
 use crate::{
-    entry::{MemoryLocationBorrowInfo, StorageEntry},
+    entry::{MemoryLocationBorrowInfo, RcStorageEntry, StorageEntry},
     error::{self, ValueDroppedError},
     references::{GenerationalRef, GenerationalRefMut},
-    AnyStorage, GenerationalLocation, GenerationalPointer, Storage,
+    AnyStorage, BorrowError, BorrowMutError, BorrowMutResult, BorrowResult, GenerationalLocation,
+    GenerationalPointer, Storage,
 };
+
+type RwLockStorageEntryRef = RwLockReadGuard<'static, StorageEntry<RwLockStorageEntryData>>;
+type RwLockStorageEntryMut = RwLockWriteGuard<'static, StorageEntry<RwLockStorageEntryData>>;
+
+pub(crate) enum RwLockStorageEntryData {
+    Reference(GenerationalPointer<SyncStorage>),
+    Rc(RcStorageEntry<Box<dyn Any + Send + Sync>>),
+    Data(Box<dyn Any + Send + Sync>),
+    Empty,
+}
+
+impl Default for RwLockStorageEntryData {
+    fn default() -> Self {
+        Self::Empty
+    }
+}
+
+impl Debug for RwLockStorageEntryData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Reference(location) => write!(f, "Reference({:?})", location),
+            Self::Rc(_) => write!(f, "Rc"),
+            Self::Data(_) => write!(f, "Data"),
+            Self::Empty => write!(f, "Empty"),
+        }
+    }
+}
+
+impl RwLockStorageEntryData {
+    pub const fn new_full(data: Box<dyn Any + Send + Sync>) -> Self {
+        Self::Data(data)
+    }
+}
 
 /// A thread safe storage. This is slower than the unsync storage, but allows you to share the value between threads.
 #[derive(Default)]
 pub struct SyncStorage {
     borrow_info: MemoryLocationBorrowInfo,
-    data: RwLock<StorageEntry<Box<dyn std::any::Any + Send + Sync>>>,
+    data: RwLock<StorageEntry<RwLockStorageEntryData>>,
+}
+
+impl SyncStorage {
+    pub(crate) fn read(
+        pointer: GenerationalPointer<Self>,
+    ) -> BorrowResult<MappedRwLockReadGuard<'static, Box<dyn Any + Send + Sync + 'static>>> {
+        Self::get_split_ref(pointer).map(|(_, guard)| {
+            RwLockReadGuard::map(guard, |data| match &data.data {
+                RwLockStorageEntryData::Data(data) => data,
+                RwLockStorageEntryData::Rc(data) => &data.data,
+                _ => unreachable!(),
+            })
+        })
+    }
+
+    pub(crate) fn get_split_ref(
+        mut pointer: GenerationalPointer<Self>,
+    ) -> BorrowResult<(GenerationalPointer<Self>, RwLockStorageEntryRef)> {
+        loop {
+            let borrow = pointer.storage.data.read();
+            if !borrow.valid(&pointer.location) {
+                return Err(BorrowError::Dropped(ValueDroppedError::new_for_location(
+                    pointer.location,
+                )));
+            }
+            match &borrow.data {
+                // If this is a reference, keep traversing the pointers
+                RwLockStorageEntryData::Reference(data) => {
+                    pointer = *data;
+                }
+                // Otherwise return the value
+                RwLockStorageEntryData::Data(_) | RwLockStorageEntryData::Rc(_) => {
+                    return Ok((pointer, borrow));
+                }
+                RwLockStorageEntryData::Empty => {
+                    return Err(BorrowError::Dropped(ValueDroppedError::new_for_location(
+                        pointer.location,
+                    )));
+                }
+            }
+        }
+    }
+
+    pub(crate) fn write(
+        pointer: GenerationalPointer<Self>,
+    ) -> BorrowMutResult<MappedRwLockWriteGuard<'static, Box<dyn Any + Send + Sync + 'static>>>
+    {
+        Self::get_split_mut(pointer).map(|(_, guard)| {
+            RwLockWriteGuard::map(guard, |data| match &mut data.data {
+                RwLockStorageEntryData::Data(data) => data,
+                RwLockStorageEntryData::Rc(data) => &mut data.data,
+                _ => unreachable!(),
+            })
+        })
+    }
+
+    pub(crate) fn get_split_mut(
+        mut pointer: GenerationalPointer<Self>,
+    ) -> BorrowMutResult<(GenerationalPointer<Self>, RwLockStorageEntryMut)> {
+        loop {
+            let borrow = pointer.storage.data.write();
+            if !borrow.valid(&pointer.location) {
+                return Err(BorrowMutError::Dropped(
+                    ValueDroppedError::new_for_location(pointer.location),
+                ));
+            }
+            match &borrow.data {
+                // If this is a reference, keep traversing the pointers
+                RwLockStorageEntryData::Reference(data) => {
+                    pointer = *data;
+                }
+                // Otherwise return the value
+                RwLockStorageEntryData::Data(_) | RwLockStorageEntryData::Rc(_) => {
+                    return Ok((pointer, borrow));
+                }
+                RwLockStorageEntryData::Empty => {
+                    return Err(BorrowMutError::Dropped(
+                        ValueDroppedError::new_for_location(pointer.location),
+                    ));
+                }
+            }
+        }
+    }
+
+    fn create_new(
+        value: RwLockStorageEntryData,
+        #[allow(unused)] caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalPointer<Self> {
+        match sync_runtime().lock().pop() {
+            Some(storage) => {
+                let mut write = storage.data.write();
+                let location = GenerationalLocation {
+                    generation: write.generation(),
+                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    created_at: caller,
+                };
+                write.data = value;
+                GenerationalPointer { storage, location }
+            }
+            None => {
+                let storage: &'static Self = &*Box::leak(Box::new(Self {
+                    borrow_info: Default::default(),
+                    data: RwLock::new(StorageEntry::new(value)),
+                }));
+
+                let location = GenerationalLocation {
+                    generation: NonZeroU64::MIN,
+                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    created_at: caller,
+                };
+
+                GenerationalPointer { storage, location }
+            }
+        }
+    }
 }
 
 static SYNC_RUNTIME: OnceLock<Arc<Mutex<Vec<&'static SyncStorage>>>> = OnceLock::new();
@@ -71,42 +225,50 @@ impl AnyStorage for SyncStorage {
         self.data.data_ptr() as *const ()
     }
 
-    #[track_caller]
-    #[allow(unused)]
-    fn claim(caller: &'static std::panic::Location<'static>) -> GenerationalPointer<Self> {
-        match sync_runtime().lock().pop() {
-            Some(mut storage) => {
-                let location = GenerationalLocation {
-                    generation: storage.data.read().generation(),
-                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                    created_at: caller,
-                };
-                GenerationalPointer { storage, location }
-            }
-            None => {
-                let storage: &'static Self = &*Box::leak(Box::default());
-
-                let location = GenerationalLocation {
-                    generation: 0,
-                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                    created_at: caller,
-                };
-
-                GenerationalPointer { storage, location }
-            }
-        }
-    }
-
-    fn recycle(pointer: GenerationalPointer<Self>) -> Option<Box<dyn std::any::Any>> {
+    fn recycle(pointer: GenerationalPointer<Self>) {
         let mut borrow_mut = pointer.storage.data.write();
+
         // First check if the generation is still valid
         if !borrow_mut.valid(&pointer.location) {
-            return None;
+            return;
         }
+
         borrow_mut.increment_generation();
-        let old_data = borrow_mut.data.take();
+
+        // Then decrement the reference count or drop the value if it's the last reference
+        match &mut borrow_mut.data {
+            // If this is the original reference, drop the value
+            RwLockStorageEntryData::Data(_) => borrow_mut.data = RwLockStorageEntryData::Empty,
+            // If this is a rc, just ignore the drop
+            RwLockStorageEntryData::Rc(_) => {}
+            // If this is a reference, decrement the reference count
+            RwLockStorageEntryData::Reference(reference) => {
+                drop_ref(*reference);
+            }
+            RwLockStorageEntryData::Empty => {}
+        }
+
         sync_runtime().lock().push(pointer.storage);
-        old_data.map(|data| data as Box<dyn std::any::Any>)
+    }
+}
+
+fn drop_ref(pointer: GenerationalPointer<SyncStorage>) {
+    let mut borrow_mut = pointer.storage.data.write();
+
+    // First check if the generation is still valid
+    if !borrow_mut.valid(&pointer.location) {
+        return;
+    }
+
+    if let RwLockStorageEntryData::Rc(entry) = &mut borrow_mut.data {
+        // Decrement the reference count
+        if entry.drop_ref() {
+            // If the reference count is now zero, drop the value
+            borrow_mut.data = RwLockStorageEntryData::Empty;
+            sync_runtime().lock().push(pointer.storage);
+        }
+    } else {
+        unreachable!("References should always point to a data entry directly");
     }
 }
 
@@ -115,15 +277,11 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
     fn try_read(
         pointer: GenerationalPointer<Self>,
     ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
-        let read = pointer.storage.data.read();
+        let read = Self::read(pointer)?;
 
-        let read = RwLockReadGuard::try_map(read, |any| {
-            // Verify the generation is still correct
-            if !any.valid(&pointer.location) {
-                return None;
-            }
+        let read = MappedRwLockReadGuard::try_map(read, |any| {
             // Then try to downcast
-            any.data.as_ref()?.downcast_ref()
+            any.downcast_ref()
         });
         match read {
             Ok(guard) => Ok(GenerationalRef::new(
@@ -140,15 +298,11 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
     fn try_write(
         pointer: GenerationalPointer<Self>,
     ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
-        let write = pointer.storage.data.write();
+        let write = Self::write(pointer)?;
 
-        let write = RwLockWriteGuard::try_map(write, |any| {
-            // Verify the generation is still correct
-            if !any.valid(&pointer.location) {
-                return None;
-            }
+        let write = MappedRwLockWriteGuard::try_map(write, |any| {
             // Then try to downcast
-            any.data.as_mut()?.downcast_mut()
+            any.downcast_mut()
         });
         match write {
             Ok(guard) => Ok(GenerationalRefMut::new(
@@ -161,12 +315,78 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         }
     }
 
-    fn set(pointer: GenerationalPointer<Self>, value: T) {
-        let mut write = pointer.storage.data.write();
-        // First check if the generation is still valid
-        if !write.valid(&pointer.location) {
-            return;
+    fn new(value: T, caller: &'static std::panic::Location<'static>) -> GenerationalPointer<Self> {
+        Self::create_new(RwLockStorageEntryData::new_full(Box::new(value)), caller)
+    }
+
+    fn new_rc(
+        value: T,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalPointer<Self> {
+        // Create the data that the rc points to
+        let data = Self::create_new(
+            RwLockStorageEntryData::Rc(RcStorageEntry::new(Box::new(value))),
+            caller,
+        );
+        Self::create_new(RwLockStorageEntryData::Reference(data), caller)
+    }
+
+    fn new_reference(
+        location: GenerationalPointer<Self>,
+    ) -> BorrowResult<GenerationalPointer<Self>> {
+        // Chase the reference to get the final location
+        let (location, value) = Self::get_split_ref(location)?;
+        if let RwLockStorageEntryData::Rc(data) = &value.data {
+            data.add_ref();
+        } else {
+            unreachable!()
         }
-        write.data = Some(Box::new(value));
+        Ok(Self::create_new(
+            RwLockStorageEntryData::Reference(location),
+            location
+                .location
+                .created_at()
+                .unwrap_or(std::panic::Location::caller()),
+        ))
+    }
+
+    fn change_reference(
+        location: GenerationalPointer<Self>,
+        other: GenerationalPointer<Self>,
+    ) -> BorrowResult {
+        if location == other {
+            return Ok(());
+        }
+
+        let (other_final, other_write) = Self::get_split_ref(other)?;
+
+        let mut write = location.storage.data.write();
+        // First check if the generation is still valid
+        if !write.valid(&location.location) {
+            return Err(BorrowError::Dropped(ValueDroppedError::new_for_location(
+                location.location,
+            )));
+        }
+
+        if let (RwLockStorageEntryData::Reference(reference), RwLockStorageEntryData::Rc(data)) =
+            (&mut write.data, &other_write.data)
+        {
+            if reference == &other_final {
+                return Ok(());
+            }
+            drop_ref(*reference);
+            *reference = other_final;
+            data.add_ref();
+        } else {
+            tracing::trace!(
+                "References should always point to a data entry directly found {:?} instead",
+                other_write.data
+            );
+            return Err(BorrowError::Dropped(ValueDroppedError::new_for_location(
+                other_final.location,
+            )));
+        }
+
+        Ok(())
     }
 }

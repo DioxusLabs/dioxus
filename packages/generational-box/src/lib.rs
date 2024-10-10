@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::{
     fmt::Debug,
     marker::PhantomData,
+    num::NonZeroU64,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -24,7 +25,7 @@ mod unsync;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GenerationalBoxId {
     data_ptr: *const (),
-    generation: u64,
+    generation: NonZeroU64,
 }
 
 // Safety: GenerationalBoxId is Send and Sync because there is no way to access the pointer.
@@ -54,9 +55,19 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     /// Create a new generational box by leaking a value into the storage. This is useful for creating
     /// a box that needs to be manually dropped with no owners.
     #[track_caller]
-    pub fn leak(value: T) -> Self {
-        let location = S::claim(std::panic::Location::caller());
-        location.set(value);
+    pub fn leak(value: T, location: &'static std::panic::Location<'static>) -> Self {
+        let location = S::new(value, location);
+        Self {
+            raw: location,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Create a new reference counted generational box by leaking a value into the storage. This is useful for creating
+    /// a box that needs to be manually dropped with no owners.
+    #[track_caller]
+    pub fn leak_rc(value: T, location: &'static std::panic::Location<'static>) -> Self {
+        let location = S::new_rc(value, location);
         Self {
             raw: location,
             _marker: PhantomData,
@@ -98,8 +109,12 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     }
 
     /// Set the value. Panics if the value is no longer valid.
-    pub fn set(&self, value: T) {
-        S::set(self.raw, value);
+    #[track_caller]
+    pub fn set(&self, value: T)
+    where
+        T: 'static,
+    {
+        *self.write() = value;
     }
 
     /// Returns true if the pointer is equal to the other pointer.
@@ -108,24 +123,30 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     }
 
     /// Drop the value out of the generational box and invalidate the generational box.
-    /// This will return the value if the value was taken.
-    pub fn manually_drop(&self) -> Option<T>
+    pub fn manually_drop(&self)
     where
         T: 'static,
     {
-        self.raw.take()
+        self.raw.recycle();
     }
 
     /// Try to get the location the generational box was created at. In release mode this will always return None.
     pub fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
-        #[cfg(debug_assertions)]
-        {
-            Some(self.raw.location.created_at)
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            None
-        }
+        self.raw.location.created_at()
+    }
+
+    /// Get a reference to the value
+    #[track_caller]
+    pub fn leak_reference(&self) -> BorrowResult<GenerationalBox<T, S>> {
+        Ok(Self {
+            raw: S::new_reference(self.raw)?,
+            _marker: std::marker::PhantomData,
+        })
+    }
+
+    /// Change this box to point to another generational box
+    pub fn point_to(&mut self, other: GenerationalBox<T, S>) -> BorrowResult {
+        S::change_reference(self.raw, other.raw)
     }
 }
 
@@ -140,17 +161,35 @@ impl<T, S> Clone for GenerationalBox<T, S> {
 /// A trait for a storage backing type. (RefCell, RwLock, etc.)
 pub trait Storage<Data = ()>: AnyStorage + 'static {
     /// Try to read the value. Returns None if the value is no longer valid.
-    fn try_read(
-        location: GenerationalPointer<Self>,
-    ) -> Result<Self::Ref<'static, Data>, BorrowError>;
+    fn try_read(pointer: GenerationalPointer<Self>) -> BorrowResult<Self::Ref<'static, Data>>;
 
     /// Try to write the value. Returns None if the value is no longer valid.
-    fn try_write(
-        location: GenerationalPointer<Self>,
-    ) -> Result<Self::Mut<'static, Data>, BorrowMutError>;
+    fn try_write(pointer: GenerationalPointer<Self>) -> BorrowMutResult<Self::Mut<'static, Data>>;
 
-    /// Set the value if the location is valid
-    fn set(location: GenerationalPointer<Self>, value: Data);
+    /// Create a new memory location. This will either create a new memory location or recycle an old one.
+    fn new(
+        value: Data,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalPointer<Self>;
+
+    /// Create a new reference counted memory location. This will either create a new memory location or recycle an old one.
+    fn new_rc(
+        value: Data,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalPointer<Self>;
+
+    /// Reference another location if the location is valid
+    ///
+    /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
+    fn new_reference(inner: GenerationalPointer<Self>) -> BorrowResult<GenerationalPointer<Self>>;
+
+    /// Change the reference a signal is pointing to
+    ///
+    /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
+    fn change_reference(
+        pointer: GenerationalPointer<Self>,
+        rc_pointer: GenerationalPointer<Self>,
+    ) -> BorrowResult;
 }
 
 /// A trait for any storage backing type.
@@ -206,10 +245,7 @@ pub trait AnyStorage: Default + 'static {
     fn data_ptr(&self) -> *const ();
 
     /// Recycle a memory location. This will drop the memory location and return it to the runtime.
-    fn recycle(location: GenerationalPointer<Self>) -> Option<Box<dyn std::any::Any>>;
-
-    /// Claim a new memory location. This will either create a new memory location or recycle an old one.
-    fn claim(caller: &'static std::panic::Location<'static>) -> GenerationalPointer<Self>;
+    fn recycle(location: GenerationalPointer<Self>);
 
     /// Create a new owner. The owner will be responsible for dropping all of the generational boxes that it creates.
     fn owner() -> Owner<Self> {
@@ -222,9 +258,22 @@ pub trait AnyStorage: Default + 'static {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GenerationalLocation {
     /// The generation this location is associated with. Using the location after this generation is invalidated will return errors.
-    generation: u64,
+    generation: NonZeroU64,
     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
     created_at: &'static std::panic::Location<'static>,
+}
+
+impl GenerationalLocation {
+    pub(crate) fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
+        #[cfg(debug_assertions)]
+        {
+            Some(self.created_at)
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            None
+        }
+    }
 }
 
 /// A pointer to a specific generational box and generation in that box.
@@ -261,20 +310,6 @@ impl<S: 'static> Clone for GenerationalPointer<S> {
 impl<S: 'static> Copy for GenerationalPointer<S> {}
 
 impl<S> GenerationalPointer<S> {
-    fn take<T: 'static>(self) -> Option<T>
-    where
-        S: Storage<T>,
-    {
-        S::recycle(self).map(|value| *(value.downcast().unwrap()))
-    }
-
-    fn set<T>(self, value: T)
-    where
-        S: Storage<T>,
-    {
-        S::set(self, value)
-    }
-
     #[track_caller]
     fn try_read<T>(self) -> Result<S::Ref<'static, T>, BorrowError>
     where
@@ -346,6 +381,32 @@ impl<S: AnyStorage> Owner<S> {
         self.insert_with_caller(value, std::panic::Location::caller())
     }
 
+    /// Create a new reference counted box. The box will be dropped when all references are dropped.
+    #[track_caller]
+    pub fn insert_rc<T: 'static>(&self, value: T) -> GenerationalBox<T, S>
+    where
+        S: Storage<T>,
+    {
+        self.insert_rc_with_caller(value, std::panic::Location::caller())
+    }
+
+    /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
+    pub fn insert_rc_with_caller<T: 'static>(
+        &self,
+        value: T,
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalBox<T, S>
+    where
+        S: Storage<T>,
+    {
+        let location = S::new_rc(value, caller);
+        self.0.lock().owned.push(location);
+        GenerationalBox {
+            raw: location,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
     /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
     pub fn insert_with_caller<T: 'static>(
         &self,
@@ -355,8 +416,7 @@ impl<S: AnyStorage> Owner<S> {
     where
         S: Storage<T>,
     {
-        let location = S::claim(caller);
-        location.set(value);
+        let location = S::new(value, caller);
         self.0.lock().owned.push(location);
         GenerationalBox {
             raw: location,
@@ -364,14 +424,19 @@ impl<S: AnyStorage> Owner<S> {
         }
     }
 
-    /// Creates an invalid handle. This is useful for creating a handle that will be filled in later. If you use this before the value is filled in, you will get may get a panic or an out of date value.
+    /// Create a new reference to an existing box. The reference will be dropped when the owner is dropped.
+    ///
+    /// This method may return an error if the other box is no longer valid or it is already borrowed mutably.
     #[track_caller]
-    pub fn invalid<T: 'static>(&self) -> GenerationalBox<T, S> {
-        let location = S::claim(std::panic::Location::caller());
-        self.0.lock().owned.push(location);
-        GenerationalBox {
-            raw: location,
-            _marker: PhantomData,
-        }
+    pub fn insert_reference<T: 'static>(
+        &self,
+        other: GenerationalBox<T, S>,
+    ) -> BorrowResult<GenerationalBox<T, S>>
+    where
+        S: Storage<T>,
+    {
+        let location = other.leak_reference()?;
+        self.0.lock().owned.push(location.raw);
+        Ok(location)
     }
 }
