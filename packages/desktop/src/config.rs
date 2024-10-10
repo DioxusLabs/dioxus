@@ -1,4 +1,4 @@
-use dioxus_core::launch::LaunchConfig;
+use dioxus_core::LaunchConfig;
 use std::borrow::Cow;
 use std::path::PathBuf;
 use tao::window::{Icon, WindowBuilder};

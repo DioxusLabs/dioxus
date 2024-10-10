@@ -2,7 +2,7 @@
 #![allow(clippy::new_without_default)]
 #![allow(unused)]
 use dioxus_config_macro::*;
-use dioxus_core::launch::LaunchConfig;
+use dioxus_core::LaunchConfig;
 use std::any::Any;
 
 use crate::prelude::*;
@@ -254,22 +254,6 @@ mod current_platform {
         platform_config: Vec<Box<dyn std::any::Any>>,
     ) {
         super::web_launch(root, contexts, platform_config);
-    }
-
-    #[cfg(all(feature = "fullstack", feature = "axum"))]
-    impl TryIntoConfig<crate::launch::current_platform::Config>
-        for ::dioxus_fullstack::prelude::ServeConfigBuilder
-    {
-        fn into_config(self, config: &mut Option<crate::launch::current_platform::Config>) {
-            match config {
-                Some(config) => config.set_server_config(self),
-                None => {
-                    *config = Some(
-                        crate::launch::current_platform::Config::new().with_server_config(self),
-                    )
-                }
-            }
-        }
     }
 
     #[cfg(all(

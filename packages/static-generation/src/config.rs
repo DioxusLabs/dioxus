@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use dioxus_lib::prelude::dioxus_core::launch::LaunchConfig;
+use dioxus_lib::prelude::dioxus_core::LaunchConfig;
 
 /// Settings for a statically generated site that may be hydrated in the browser
 pub struct Config {

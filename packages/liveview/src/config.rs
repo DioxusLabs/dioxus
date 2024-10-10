@@ -1,4 +1,4 @@
-use dioxus_core::{launch::LaunchConfig, VirtualDom};
+use dioxus_core::{LaunchConfig, VirtualDom};
 
 use crate::LiveviewRouter;
 

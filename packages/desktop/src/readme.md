@@ -35,7 +35,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx!{
+    rsx! {
         div {
             "hello world!"
         }

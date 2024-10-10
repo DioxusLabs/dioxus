@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use dioxus_lib::prelude::dioxus_core::launch::LaunchConfig;
+use dioxus_lib::prelude::dioxus_core::LaunchConfig;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]

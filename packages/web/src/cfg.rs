@@ -1,4 +1,4 @@
-use dioxus_core::launch::LaunchConfig;
+use dioxus_core::LaunchConfig;
 use wasm_bindgen::JsCast as _;
 
 ///  Configuration for the WebSys renderer for the Dioxus VirtualDOM.
