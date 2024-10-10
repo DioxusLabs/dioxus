@@ -16,10 +16,10 @@ use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::{prelude::Document, HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
-use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
+use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
@@ -125,7 +125,7 @@ impl WebviewEdits {
 }
 
 pub(crate) struct WebviewInstance {
-    pub dom: VirtualDom,
+    pub dom: Rc<RefCell<VirtualDom>>,
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
@@ -148,6 +148,7 @@ impl WebviewInstance {
         dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
+        let dom = Rc::new(RefCell::new(dom));
         let mut window = cfg.window.clone();
 
         // tao makes small windows for some reason, make them bigger on desktop
@@ -192,7 +193,7 @@ impl WebviewInstance {
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
         let asset_handlers = AssetHandlerRegistry::new();
-        let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
+        let edits = WebviewEdits::new(dom.borrow().runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
@@ -235,10 +236,93 @@ impl WebviewInstance {
 
         let file_drop_handler = {
             to_owned![file_hover];
-            move |evt| {
+
+            #[cfg(windows)]
+            to_owned![dom];
+
+            move |evt: DragDropEvent| {
                 // Update the most recent file drop event - when the event comes in from the webview we can use the
                 // most recent event to build a new event with the files in it.
+                #[cfg(not(windows))]
                 file_hover.set(evt);
+
+                // Windows webview blocks HTML-native events when the drop handler is provided.
+                // The problem is that the HTML-native events don't provide the file, so we need this.
+                // Solution: this glue code to mimic drag drop events.
+                #[cfg(windows)]
+                {
+                    use dioxus_html::prelude::eval;
+                    file_hover.set(evt.clone());
+
+                    dom.borrow().in_runtime(|| {
+                        ScopeId::ROOT.in_runtime(|| {
+
+                            match evt {
+                            wry::DragDropEvent::Drop {
+                                paths: _,
+                                position: _,
+                            } => {
+                                eval(
+                                    r#"
+                                    if (window.dxDragLastElement) {
+                                        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+                                        window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+
+                                        let data = new DataTransfer();
+                                        
+                                        // We need to mimic that there are actually files in this event for our native file engine to pick it up.
+                                        const file = new File(["content"], "file.txt", { type: "text/plain" });
+                                        data.items.add(file);
+
+                                        const dragDropEvent = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data });
+                                        window.dxDragLastElement.dispatchEvent(dragDropEvent);
+                                        window.dxDragLastElement = null;
+                                    }
+                                    "#
+                                );
+                            },
+                            wry::DragDropEvent::Over { position } => {
+                                let script = eval(
+                                    r#"
+                                    const xPos = await dioxus.recv();
+                                    const yPos = await dioxus.recv();
+
+                                    const element = document.elementFromPoint(xPos, yPos);
+
+                                    if (element != window.dxDragLastElement) {
+                                        if (window.dxDragLastElement) {
+                                            const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+                                            window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+                                        }
+
+                                        const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
+                                        element.dispatchEvent(dragOverEvent);
+                                        window.dxDragLastElement = element;
+                                    }
+
+                                    "#
+                                );
+
+                                script.send(position.0.into()).unwrap();
+                                script.send(position.1.into()).unwrap();
+                            }
+                            wry::DragDropEvent::Leave => {
+                                eval(
+                                    r#"
+                                    if (window.dxDragLastElement) {
+                                        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+                                        window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+                                        window.dxDragLastElement = null;
+                                    }
+                                    "#
+                                );
+                            }
+                            _ => {}
+                            }
+                        });
+                    });
+                }
+
                 false
             }
         };
@@ -346,7 +430,7 @@ impl WebviewInstance {
         // Provide the desktop context to the virtual dom and edit handler
         edits.set_desktop_context(desktop_context.clone());
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-        dom.in_runtime(|| {
+        dom.borrow().in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
             ScopeId::ROOT.provide_context(provider);
         });
@@ -375,7 +459,8 @@ impl WebviewInstance {
             }
 
             {
-                let fut = self.dom.wait_for_work();
+                let mut dom = self.dom.borrow_mut();
+                let fut = dom.wait_for_work();
                 pin_mut!(fut);
 
                 match fut.poll_unpin(&mut cx) {
@@ -385,6 +470,7 @@ impl WebviewInstance {
             }
 
             self.dom
+                .borrow_mut()
                 .render_immediate(&mut *self.edits.wry_queue.mutation_state_mut());
             self.edits.wry_queue.send_edits();
         }
