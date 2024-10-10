@@ -98,8 +98,6 @@ cargo run --example hello_world
 
 [dog_app](./dog_app.rs) - Accesses dog API
 
-[file_explorer](./file_explorer.rs) - File browser that uses `use_ref` to interact with the model
-
 [todomvc](./todomvc.rs) - Todo task list example
 
 # TODO

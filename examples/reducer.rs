@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 const STYLE: Asset = asset!("/examples/assets/radio.css");
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

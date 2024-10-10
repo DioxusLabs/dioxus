@@ -44,7 +44,7 @@ async fn main() {
 
 #[cfg(not(feature = "liveview"))]
 fn main() {
-    launch(app)
+    dioxus::launch(app)
 }
 
 fn app() -> Element {

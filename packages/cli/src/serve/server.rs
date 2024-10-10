@@ -475,7 +475,7 @@ fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::Method
                 let out_dir = out_dir.clone();
                 move |response| async move { Ok(no_cache(index_on_404, &out_dir, response)) }
             })
-            .service(ServeDir::new(out_dir)),
+            .service(ServeDir::new(&out_dir)),
     )
     .handle_error(|error: Infallible| async move {
         (

@@ -3,15 +3,18 @@ use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
-    DesktopContext, DesktopService,
+    app::SharedContext,
+    assets::AssetHandlerRegistry,
+    edits::WryQueue,
+    file_upload::{NativeFileEngine, NativeFileHover},
+    ipc::UserWindowEvent,
+    protocol,
+    waker::tao_waker,
+    Config, DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_hooks::to_owned;
-use dioxus_html::{
-    native_bind::NativeFileEngine, prelude::Document, HasFileData, HtmlEvent, PlatformEventData,
-};
+use dioxus_html::{prelude::Document, HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
@@ -204,7 +207,7 @@ impl WebviewInstance {
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
-        let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
+        let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;

@@ -218,7 +218,7 @@ impl WebsysDom {
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
         // Any suspense boundaries we run into are stored for hydration later.
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone().into()])?;
+        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone()])?;
 
         Ok(rx)
     }

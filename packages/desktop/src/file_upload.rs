@@ -1,9 +1,13 @@
 #![allow(unused)]
 
+use std::any::Any;
+
+#[cfg(feature = "tokio_runtime")]
+use tokio::{fs::File, io::AsyncReadExt};
+
 use dioxus_html::{
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
-    native_bind::NativeFileEngine,
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
@@ -235,5 +239,81 @@ impl PointerInteraction for DesktopFileDragEvent {
 
     fn trigger_button(&self) -> Option<MouseButton> {
         self.mouse.trigger_button()
+    }
+}
+
+pub struct NativeFileEngine {
+    files: Vec<PathBuf>,
+}
+
+impl NativeFileEngine {
+    pub fn new(files: Vec<PathBuf>) -> Self {
+        Self { files }
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+impl FileEngine for NativeFileEngine {
+    fn files(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .filter_map(|f| Some(f.to_str()?.to_string()))
+            .collect()
+    }
+
+    async fn file_size(&self, file: &str) -> Option<u64> {
+        #[cfg(feature = "tokio_runtime")]
+        {
+            let file = File::open(file).await.ok()?;
+            Some(file.metadata().await.ok()?.len())
+        }
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            None
+        }
+    }
+
+    async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
+        #[cfg(feature = "tokio_runtime")]
+        {
+            let mut file = File::open(file).await.ok()?;
+
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents).await.ok()?;
+
+            Some(contents)
+        }
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            None
+        }
+    }
+
+    async fn read_file_to_string(&self, file: &str) -> Option<String> {
+        #[cfg(feature = "tokio_runtime")]
+        {
+            let mut file = File::open(file).await.ok()?;
+
+            let mut contents = String::new();
+            file.read_to_string(&mut contents).await.ok()?;
+
+            Some(contents)
+        }
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            None
+        }
+    }
+
+    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
+        #[cfg(feature = "tokio_runtime")]
+        {
+            let file = File::open(file).await.ok()?;
+            Some(Box::new(file))
+        }
+        #[cfg(not(feature = "tokio_runtime"))]
+        {
+            None
+        }
     }
 }

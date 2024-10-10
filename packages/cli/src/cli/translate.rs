@@ -1,3 +1,7 @@
+use crate::TraceSrc;
+use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
+use std::{io::IsTerminal as _, process::exit};
+
 use super::*;
 use crate::{Result, TraceSrc};
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
@@ -118,8 +122,8 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
     }
 
     // If neither exist, we try to read from stdin
-    if atty::is(atty::Stream::Stdin) {
-        return Err(anyhow::anyhow!("No input file, source, or stdin to translate from.").into());
+    if std::io::stdin().is_terminal() {
+        return custom_error!("No input file, source, or stdin to translate from.");
     }
 
     let mut buffer = String::new();
