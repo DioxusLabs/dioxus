@@ -14,6 +14,7 @@ fn main() {
     dioxus::LaunchBuilder::static_generation().launch(app);
 }
 
+#[allow(unused)]
 fn app() -> Element {
     let mut count = use_signal(|| 12345);
     let server_data = use_server_future(get_server_data)?;
