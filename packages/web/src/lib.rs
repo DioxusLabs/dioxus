@@ -39,6 +39,8 @@ mod document;
 #[cfg(feature = "file_engine")]
 mod file_engine;
 #[cfg(feature = "document")]
+mod history;
+#[cfg(feature = "document")]
 pub use document::WebDocument;
 #[cfg(feature = "file_engine")]
 pub use file_engine::*;

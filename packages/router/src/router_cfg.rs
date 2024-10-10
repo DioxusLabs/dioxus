@@ -21,7 +21,6 @@ use std::sync::Arc;
 /// ```
 pub struct RouterConfig<R> {
     pub(crate) failure_external_navigation: fn() -> Element,
-    pub(crate) history: Option<Box<dyn AnyHistoryProvider>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
     pub(crate) initial_route: Option<R>,
 }
@@ -30,26 +29,9 @@ impl<R> Default for RouterConfig<R> {
     fn default() -> Self {
         Self {
             failure_external_navigation: FailureExternalNavigation,
-            history: None,
             on_update: None,
             initial_route: None,
         }
-    }
-}
-
-impl<R: Routable + Clone> RouterConfig<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
-    pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
-        self.history
-            .take()
-            .unwrap_or_else(|| {
-                let initial_route = self.initial_route.clone().unwrap_or_else(|| "/".parse().unwrap_or_else(|err|
-                    panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
-                ));
-                default_history(initial_route)
-    })
     }
 }
 
@@ -77,16 +59,6 @@ where
     ) -> Self {
         Self {
             on_update: Some(Arc::new(callback)),
-            ..self
-        }
-    }
-
-    /// The [`HistoryProvider`] the router should use.
-    ///
-    /// Defaults to a different history provider depending on the target platform.
-    pub fn history(self, history: impl HistoryProvider<R> + 'static) -> Self {
-        Self {
-            history: Some(Box::new(AnyHistoryProviderImplWrapper::new(history))),
             ..self
         }
     }

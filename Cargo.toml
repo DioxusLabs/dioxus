@@ -18,6 +18,7 @@ members = [
     "packages/extension",
     "packages/fullstack",
     "packages/generational-box",
+    "packages/history",
     "packages/hooks",
     "packages/html-internal-macro",
     "packages/html",
@@ -78,6 +79,7 @@ dioxus-config-macro = { path = "packages/config-macro", version = "0.6.0-alpha.0
 dioxus-router = { path = "packages/router", version = "0.6.0-alpha.0" }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.6.0-alpha.0" }
 dioxus-document = { path = "packages/document", version = "0.6.0-alpha.0", default-features = false }
+dioxus-history = { path = "packages/history", version = "0.6.0-alpha.0", default-features = false }
 dioxus-html = { path = "packages/html", version = "0.6.0-alpha.0", default-features = false }
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.6.0-alpha.0" }
 dioxus-hooks = { path = "packages/hooks", version = "0.6.0-alpha.0" }

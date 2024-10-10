@@ -1,6 +1,6 @@
 use crate::{
+    document::init_eval,
     element::LiveviewElement,
-    eval::init_eval,
     events::SerializedHtmlEventConverter,
     query::{QueryEngine, QueryResult},
     LiveViewError,

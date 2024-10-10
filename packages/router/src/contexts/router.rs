@@ -5,11 +5,14 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use dioxus_lib::prelude::*;
+use dioxus_lib::{
+    document::{self, Document},
+    prelude::*,
+};
 
 use crate::{
     navigation::NavigationTarget,
-    prelude::{AnyHistoryProvider, IntoRoutable, SiteMapSegment},
+    prelude::{IntoRoutable, SiteMapSegment},
     routable::Routable,
     router_cfg::RouterConfig,
 };
@@ -54,7 +57,7 @@ struct RouterContextInner {
     /// The current prefix.
     prefix: Option<String>,
 
-    history: Box<dyn AnyHistoryProvider>,
+    document: Rc<dyn Document>,
 
     unresolved_error: Option<ExternalNavigationFailure>,
 
@@ -78,7 +81,7 @@ impl RouterContextInner {
     }
 
     fn external(&mut self, external: String) -> Option<ExternalNavigationFailure> {
-        match self.history.external(external.clone()) {
+        match self.document.external(external.clone()) {
             true => None,
             false => {
                 let failure = ExternalNavigationFailure(external);
@@ -111,7 +114,7 @@ impl RouterContext {
 
         let mut myself = RouterContextInner {
             prefix: Default::default(),
-            history: cfg.take_history(),
+            document: document::document(),
             unresolved_error: None,
             subscribers: subscribers.clone(),
             subscriber_update,
@@ -153,7 +156,7 @@ impl RouterContext {
 
         // set the updater
         {
-            myself.history.updater(Arc::new(move || {
+            myself.document.updater(Arc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {
                     (mark_dirty)(id);
                 }
@@ -179,19 +182,19 @@ impl RouterContext {
     }
 
     pub(crate) fn route_from_str(&self, route: &str) -> Result<Rc<dyn Any>, String> {
-        self.inner.read().history.parse_route(route)
+        self.inner.read().document.parse_route(route)
     }
 
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
-        self.inner.read().history.can_go_back()
+        self.inner.read().document.can_go_back()
     }
 
     /// Check whether there is a future page to navigate forward to.
     #[must_use]
     pub fn can_go_forward(&self) -> bool {
-        self.inner.read().history.can_go_forward()
+        self.inner.read().document.can_go_forward()
     }
 
     /// Go back to the previous location.
@@ -199,7 +202,7 @@ impl RouterContext {
     /// Will fail silently if there is no previous location to go to.
     pub fn go_back(&self) {
         {
-            self.inner.write_unchecked().history.go_back();
+            self.inner.write_unchecked().document.go_back();
         }
 
         self.change_route();
@@ -210,7 +213,7 @@ impl RouterContext {
     /// Will fail silently if there is no next location to go to.
     pub fn go_forward(&self) {
         {
-            self.inner.write_unchecked().history.go_forward();
+            self.inner.write_unchecked().document.go_forward();
         }
 
         self.change_route();
@@ -223,7 +226,7 @@ impl RouterContext {
         {
             let mut write = self.inner.write_unchecked();
             match target {
-                NavigationTarget::Internal(p) => write.history.push(p),
+                NavigationTarget::Internal(p) => write.document.push(p),
                 NavigationTarget::External(e) => return write.external(e),
             }
         }
@@ -239,7 +242,7 @@ impl RouterContext {
         {
             let mut write = self.inner.write_unchecked();
             match target {
-                NavigationTarget::Internal(p) => write.history.push(p),
+                NavigationTarget::Internal(p) => write.document.push(p),
                 NavigationTarget::External(e) => return write.external(e),
             }
         }
@@ -256,7 +259,7 @@ impl RouterContext {
         {
             let mut state = self.inner.write_unchecked();
             match target {
-                NavigationTarget::Internal(p) => state.history.replace(p),
+                NavigationTarget::Internal(p) => state.document.replace(p),
                 NavigationTarget::External(e) => return state.external(e),
             }
         }
@@ -268,7 +271,7 @@ impl RouterContext {
     pub fn current<R: Routable>(&self) -> R {
         self.inner
             .read()
-            .history
+            .document
             .current_route()
             .downcast::<R>()
             .unwrap()
@@ -278,7 +281,7 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current_route_string(&self) -> String {
-        self.any_route_to_string(&*self.inner.read().history.current_route())
+        self.any_route_to_string(&*self.inner.read().document.current_route())
     }
 
     pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
@@ -346,7 +349,7 @@ impl RouterContext {
             if let Some(new) = callback(myself) {
                 let mut self_write = self.inner.write_unchecked();
                 match new {
-                    NavigationTarget::Internal(p) => self_write.history.replace(p),
+                    NavigationTarget::Internal(p) => self_write.document.replace(p),
                     NavigationTarget::External(e) => return self_write.external(e),
                 }
             }

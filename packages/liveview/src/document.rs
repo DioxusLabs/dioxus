@@ -3,25 +3,8 @@ use dioxus_document::{Document, Eval, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use std::rc::Rc;
 
+use crate::history::LiveviewHistory;
 use crate::query::{Query, QueryEngine};
-
-/// Provides the LiveviewDocument through [`ScopeId::provide_context`].
-pub fn init_eval() {
-    let query = ScopeId::ROOT.consume_context::<QueryEngine>().unwrap();
-    let provider: Rc<dyn Document> = Rc::new(LiveviewDocument { query });
-    ScopeId::ROOT.provide_context(provider);
-}
-
-/// Reprints the liveview-target's provider of evaluators.
-pub struct LiveviewDocument {
-    query: QueryEngine,
-}
-
-impl Document for LiveviewDocument {
-    fn eval(&self, js: String) -> Eval {
-        Eval::new(LiveviewEvaluator::create(self.query.clone(), js))
-    }
-}
 
 /// Represents a liveview-target's JavaScript evaluator.
 pub(crate) struct LiveviewEvaluator {
@@ -73,5 +56,53 @@ impl Evaluator for LiveviewEvaluator {
         self.query
             .poll_recv(context)
             .map_err(|e| EvalError::Communication(e.to_string()))
+    }
+}
+
+/// Provides the LiveviewDocument through [`ScopeId::provide_context`].
+pub fn init_eval() {
+    let query = ScopeId::ROOT.consume_context::<QueryEngine>().unwrap();
+    let liveview = {
+        let query = query.clone();
+        LiveviewHistory::new(Rc::new(move |script: &str| {
+            Eval::new(LiveviewEvaluator::create(query.clone(), script.to_string()))
+        }))
+    };
+    let provider: Rc<dyn Document> = Rc::new(LiveviewDocument {
+        query,
+        history: liveview,
+    });
+    ScopeId::ROOT.provide_context(provider);
+}
+
+/// Reprints the liveview-target's provider of evaluators.
+pub struct LiveviewDocument {
+    query: QueryEngine,
+    history: LiveviewHistory,
+}
+
+impl Document for LiveviewDocument {
+    fn eval(&self, js: String) -> Eval {
+        Eval::new(LiveviewEvaluator::create(self.query.clone(), js))
+    }
+
+    fn current_route(&self) -> String {
+        self.history.current_route()
+    }
+
+    fn go_back(&self) {
+        self.history.go_back()
+    }
+
+    fn go_forward(&self) {
+        self.history.go_forward()
+    }
+
+    fn push(&self, route: String) {
+        self.history.push(route)
+    }
+
+    fn replace(&self, path: String) {
+        self.history.replace(path)
     }
 }

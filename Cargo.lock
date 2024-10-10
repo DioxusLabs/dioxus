@@ -2751,6 +2751,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-history"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+]
+
+[[package]]
 name = "dioxus-hooks"
 version = "0.6.0-alpha.2"
 dependencies = [
