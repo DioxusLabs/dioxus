@@ -76,9 +76,9 @@ pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
     Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, MarkerWrapper, Mutation,
-    Mutations, NoOpMutations, Ok, Properties, Result, Runtime, ScopeId, ScopeState, SpawnIfAsync,
-    Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder,
-    VText, VirtualDom, WriteMutations,
+    Mutations, NoOpMutations, NodeCursor, Ok, Properties, Result, Runtime, ScopeId, ScopeState,
+    SpawnIfAsync, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner,
+    VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -93,11 +93,11 @@ pub mod prelude {
         throw_error, try_consume_context, use_after_render, use_before_render, use_drop, use_hook,
         use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, Component,
         ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
-        Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker,
-        Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard, ScopeId, ScopeState,
-        SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
-        SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
-        VNodeInner, VirtualDom,
+        Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, NodeCursor,
+        OptionStringFromMarker, Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard,
+        ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+        SuspenseBoundaryProps, SuspenseContext, SuspenseExtension, Task, Template,
+        TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
     };
 }
 
