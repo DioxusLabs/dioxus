@@ -9,7 +9,6 @@ use crate::{
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_hooks::to_owned;
-use dioxus_html::prelude::eval;
 use dioxus_html::{
     native_bind::NativeFileEngine, prelude::Document, HasFileData, HtmlEvent, PlatformEventData,
 };
@@ -249,6 +248,7 @@ impl WebviewInstance {
                 // Solution: this glue code to mimic drag drop events.
                 #[cfg(windows)]
                 {
+                    use dioxus_html::prelude::eval;
                     file_hover.set(evt.clone());
 
                     dom.borrow().in_runtime(|| {
