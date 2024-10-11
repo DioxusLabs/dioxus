@@ -90,7 +90,7 @@ impl Watcher {
             let mode = notify::RecursiveMode::Recursive;
 
             if let Err(err) = watcher.watch(path, mode) {
-                tracing::warn!("Failed to watch path: {}", err);
+                tracing::debug!("Failed to watch path: {}", err);
             }
         }
 

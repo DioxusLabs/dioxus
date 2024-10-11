@@ -1,5 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use crate::{AppBundle, BuildRequest, Platform};
+use crate::{platform, AppBundle, BuildRequest, Platform};
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage, Message};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -27,15 +27,15 @@ pub(crate) enum BuildUpdate {
 pub enum BuildStage {
     Initializing,
     Starting {
-        server: bool,
+        platform: Platform,
         crate_count: usize,
     },
     InstallingTooling {},
     Compiling {
+        platform: Platform,
         current: usize,
         total: usize,
         krate: String,
-        server: bool,
     },
     Bundling {},
     RunningBindgen {},
@@ -93,22 +93,22 @@ impl BuildRequest {
         count: usize,
         total: usize,
         name: String,
-        server: bool,
+        platform: Platform,
     ) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
                 total,
                 krate: name,
-                server,
+                platform,
             },
         });
     }
 
-    pub(crate) fn status_starting_build(&self, server: bool, crate_count: usize) {
+    pub(crate) fn status_starting_build(&self, crate_count: usize) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Starting {
-                server,
+                platform: self.build.platform(),
                 crate_count,
             },
         });

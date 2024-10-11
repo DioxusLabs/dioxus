@@ -49,33 +49,34 @@ impl BuildRequest {
 
     pub(crate) async fn build_app(&self) -> Result<BuildArtifacts> {
         tracing::debug!("Building app...");
-        let exe = self.build_cargo(false).await?;
-        let assets = self.collect_assets(false).await?;
+        let exe = self.build_cargo().await?;
+        let assets = self.collect_assets().await?;
         Ok(BuildArtifacts { exe, assets })
     }
 
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
         tracing::debug!("Building server...");
+
         if !self.build.fullstack {
             return Ok(None);
         }
 
-        let exe = self.build_cargo(true).await?;
-        let assets = self.collect_assets(true).await?;
-        Ok(Some(BuildArtifacts { exe, assets }))
+        let mut cloned = self.clone();
+        cloned.build.platform = Some(Platform::Server);
+        Ok(Some(cloned.build_app().await?))
     }
 
     /// Run `cargo`, returning the location of the final exectuable
     ///
     /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
-    pub(crate) async fn build_cargo(&self, is_server: bool) -> Result<PathBuf> {
+    pub(crate) async fn build_cargo(&self) -> Result<PathBuf> {
         tracing::debug!("Executing cargo...");
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
-        let crate_count = self.get_unit_count_estimate(is_server).await;
+        let crate_count = self.get_unit_count_estimate().await;
 
         // Update the status to show that we're starting the build and how many crates we expect to build
-        self.status_starting_build(is_server, crate_count);
+        self.status_starting_build(crate_count);
 
         let mut cmd = Command::new("cargo");
 
@@ -83,19 +84,22 @@ impl BuildRequest {
             .current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
-            .args(self.build_arguments(is_server))
-            .env("RUSTFLAGS", self.rust_flags(is_server));
+            .args(self.build_arguments())
+            .env("RUSTFLAGS", self.rust_flags());
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             cmd.env("CARGO_TARGET_DIR", target_dir);
         }
 
-        // Android needs a special linker since we have to convert the executable to a shared library
-        // We also need a custom android linker (pointing to something on the system), but we don't
-        // actually want to write that to the user's `.cargo/cargo.toml` since *that* gets committed to git
-        if self.build.platform() == Platform::Android && !is_server {
+        // Android needs a special linker since the linker is actually tied to the android toolchain.
+        // For the sake of simplicitly, we're going to pass the linker here using ourselves as the linker,
+        // but in reality we could simply use the android toolchain's linker as the path.
+        //
+        // We don't want to overwrite the user's .cargo/config.toml since that gets committed to git
+        // and we want everyone's install to be the same.
+        if self.build.platform() == Platform::Android {
             cmd.env(
-                LinkAction::MAGIC_ENV_VAR,
+                LinkAction::ENV_VAR_NAME,
                 LinkAction::LinkAndroid {
                     linker: "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang".into(),
                     extra_flags: vec![],
@@ -146,7 +150,7 @@ impl BuildRequest {
                             units_compiled,
                             crate_count,
                             artifact.target.name,
-                            is_server,
+                            self.build.platform(),
                         ),
                     }
                 }
@@ -181,7 +185,7 @@ impl BuildRequest {
     /// This will execute `dx` with an env var set to force `dx` to operate as a linker, and then
     /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
     /// tables marked by manganis and parsing them as a ResourceAsset.
-    pub(crate) async fn collect_assets(&self, is_server: bool) -> anyhow::Result<AssetManifest> {
+    pub(crate) async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
         // If assets are skipped, we don't need to collect them
@@ -199,9 +203,9 @@ impl BuildRequest {
         //
         // This will force `dx` to look through the incremental cache and find the assets from the previous build
         Command::new("cargo")
-            .env("RUSTFLAGS", self.rust_flags(is_server))
+            .env("RUSTFLAGS", self.rust_flags())
             .arg("rustc")
-            .args(self.build_arguments(is_server))
+            .args(self.build_arguments())
             .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
             .arg(format!(
@@ -209,7 +213,7 @@ impl BuildRequest {
                 std::env::current_exe().unwrap().display()
             ))
             .env(
-                LinkAction::MAGIC_ENV_VAR,
+                LinkAction::ENV_VAR_NAME,
                 LinkAction::BuildAssetManifest {
                     destination: tmp_file.path().to_path_buf(),
                 }
@@ -225,15 +229,13 @@ impl BuildRequest {
     }
 
     /// Create a list of arguments for cargo builds
-    pub(crate) fn build_arguments(&self, is_server: bool) -> Vec<String> {
+    pub(crate) fn build_arguments(&self) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
         // Set the target, profile and features that vary between the app and server builds
-        if is_server {
-            if let Some(custom_profile) = &self.build.server_profile {
-                cargo_args.push("--profile".to_string());
-                cargo_args.push(custom_profile.to_string());
-            }
+        if self.build.platform() == Platform::Server {
+            cargo_args.push("--profile".to_string());
+            cargo_args.push(self.build.server_profile.to_string());
         } else {
             if let Some(custom_profile) = &self.build.profile {
                 cargo_args.push("--profile".to_string());
@@ -273,7 +275,7 @@ impl BuildRequest {
             cargo_args.push("--quiet".to_string());
         }
 
-        let features = self.target_features(is_server);
+        let features = self.target_features();
 
         if !features.is_empty() {
             cargo_args.push("--features".to_string());
@@ -301,10 +303,10 @@ impl BuildRequest {
         cargo_args
     }
 
-    pub(crate) fn rust_flags(&self, is_server: bool) -> String {
+    pub(crate) fn rust_flags(&self) -> String {
         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
 
-        if self.build.platform() == Platform::Android && !is_server {
+        if self.build.platform() == Platform::Android {
             let cur_exe = std::env::current_exe().unwrap();
             rust_flags.push_str(format!(" -Clinker={}", cur_exe.display()).as_str());
             rust_flags.push_str(" -Clink-arg=-landroid");
@@ -318,10 +320,10 @@ impl BuildRequest {
 
     /// Create the list of features we need to pass to cargo to build the app by merging together
     /// either the client or server features depending on if we're building a server or not.
-    pub(crate) fn target_features(&self, is_server: bool) -> Vec<String> {
+    pub(crate) fn target_features(&self) -> Vec<String> {
         let mut features = self.build.target_args.features.clone();
 
-        if is_server {
+        if self.build.platform() == Platform::Server {
             features.extend(self.build.target_args.server_features.clone());
         } else {
             features.extend(self.build.target_args.client_features.clone());
@@ -330,8 +332,27 @@ impl BuildRequest {
         features
     }
 
+    pub(crate) fn all_target_features(&self) -> Vec<String> {
+        let mut features = self.target_features();
+
+        if !self.build.target_args.no_default_features {
+            features.extend(
+                self.krate
+                    .package()
+                    .features
+                    .get("default")
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+        }
+
+        features.dedup();
+
+        features
+    }
+
     /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
-    pub(crate) async fn get_unit_count(&self, is_server: bool) -> crate::Result<usize> {
+    pub(crate) async fn get_unit_count(&self) -> crate::Result<usize> {
         #[derive(Debug, Deserialize)]
         struct UnitGraph {
             units: Vec<serde_json::Value>,
@@ -343,7 +364,7 @@ impl BuildRequest {
             .arg("--unit-graph")
             .arg("-Z")
             .arg("unstable-options")
-            .args(self.build_arguments(is_server))
+            .args(self.build_arguments())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -362,9 +383,9 @@ impl BuildRequest {
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
     /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-    pub(crate) async fn get_unit_count_estimate(&self, is_server: bool) -> usize {
+    pub(crate) async fn get_unit_count_estimate(&self) -> usize {
         // Try to get it from nightly
-        self.get_unit_count(is_server).await.unwrap_or_else(|_| {
+        self.get_unit_count().await.unwrap_or_else(|_| {
             // Otherwise, use cargo metadata
             (self
                 .krate

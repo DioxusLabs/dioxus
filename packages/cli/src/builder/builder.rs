@@ -1,5 +1,5 @@
 use crate::{
-    AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, DioxusCrate, ProgressRx,
+    AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, DioxusCrate, Platform, ProgressRx,
     ProgressTx, Result,
 };
 use std::time::{Duration, Instant};
@@ -107,9 +107,9 @@ impl Builder {
                     }
                     BuildStage::Starting {
                         crate_count,
-                        server,
+                        platform,
                     } => {
-                        if *server {
+                        if *platform == Platform::Server {
                             self.expected_crates_server = *crate_count;
                         } else {
                             self.expected_crates = *crate_count;
@@ -119,10 +119,10 @@ impl Builder {
                     BuildStage::Compiling {
                         current,
                         total,
-                        server,
+                        platform,
                         ..
                     } => {
-                        if *server {
+                        if *platform == Platform::Server {
                             self.compiled_crates_server = *current;
                             self.expected_crates_server = *total;
                         } else {

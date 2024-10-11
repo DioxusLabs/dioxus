@@ -218,8 +218,8 @@ impl WebServer {
                     BuildStage::Compiling {
                         current,
                         total,
-                        server: _,
                         krate,
+                        ..
                     } => {
                         self.build_status.set(Status::Building {
                             progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),

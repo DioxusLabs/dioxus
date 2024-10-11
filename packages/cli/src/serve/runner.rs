@@ -59,7 +59,6 @@ impl AppRunner {
                         StderrReceived { platform, msg }
                     },
                     Some(status) = OptionFuture::from(handle.app_child.as_mut().map(|f| f.wait())) => {
-                        tracing::info!("Child process exited with status: {status:?}");
                         match status {
                             Ok(status) => ProcessExited { status, platform },
                             Err(_err) => todo!("handle error in process joining?"),
@@ -72,7 +71,6 @@ impl AppRunner {
                         StderrReceived { platform: Platform::Server, msg }
                     },
                     Some(status) = OptionFuture::from(handle.server_child.as_mut().map(|f| f.wait())) => {
-                        tracing::info!("Child process exited with status: {status:?}");
                         match status {
                             Ok(status) => ProcessExited { status, platform: Platform::Server },
                             Err(_err) => todo!("handle error in process joining?"),

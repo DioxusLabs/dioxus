@@ -58,6 +58,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 - Press `ctrl+c` to exit the server
                 - Press `r` to rebuild the app
                 - Press `o` to open the app
+                - Press `t` to toggle cargo output
                 - Press `/` for more commands and shortcuts
 
                 To learn more, check out the docs at https://dioxuslabs.com/learn/0.6/getting_started
@@ -179,8 +180,13 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
             // If the process exited *cleanly*, we can exit
             ServeUpdate::ProcessExited { status, platform } => {
                 if !status.success() {
-                    tracing::error!(dx_src = ?TraceSrc::Dev, "Application [{platform}] exited with status: {status}");
-                    break Err(anyhow::anyhow!("Application exited with status: {status}").into());
+                    tracing::error!("Application [{platform}] exited with error: {status}");
+                } else {
+                    tracing::info!(
+                        r#"Application [{platform}] exited gracefully.
+               - To restart the app, press `r` to rebuild or `o` to open
+               - To exit the server, press `ctrl+c`"#
+                    );
                 }
 
                 runner.kill(platform);

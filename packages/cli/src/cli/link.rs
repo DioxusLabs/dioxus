@@ -15,13 +15,13 @@ pub enum LinkAction {
 }
 
 impl LinkAction {
-    pub(crate) const MAGIC_ENV_VAR: &'static str = "dx-magic-link-file";
+    pub(crate) const ENV_VAR_NAME: &'static str = "dx-magic-link-file";
 
     /// Should we write the input arguments to a file (aka act as a linker subprocess)?
     ///
     /// Just check if the magic env var is set
     pub(crate) fn from_env() -> Option<Self> {
-        std::env::var(Self::MAGIC_ENV_VAR)
+        std::env::var(Self::ENV_VAR_NAME)
             .ok()
             .map(|var| serde_json::from_str(&var).expect("Failed to parse magic env var"))
     }

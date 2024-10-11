@@ -51,33 +51,28 @@ impl ServeArgs {
         let krate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        // Set config settings.
-        let settings = settings::CliSettings::load();
-
         // Enable hot reload.
         if self.hot_reload.is_none() {
-            self.hot_reload = Some(settings.always_hot_reload.unwrap_or(true));
+            self.hot_reload = Some(krate.settings.always_hot_reload.unwrap_or(true));
         }
 
         // Open browser.
         if self.open.is_none() {
-            self.open = Some(settings.always_open_browser.unwrap_or_default());
+            self.open = Some(krate.settings.always_open_browser.unwrap_or_default());
         }
 
         // Set WSL file poll interval.
         if self.wsl_file_poll_interval.is_none() {
-            self.wsl_file_poll_interval = Some(settings.wsl_file_poll_interval.unwrap_or(2));
+            self.wsl_file_poll_interval = Some(krate.settings.wsl_file_poll_interval.unwrap_or(2));
         }
 
         // Set always-on-top for desktop.
         if self.always_on_top.is_none() {
-            self.always_on_top = Some(settings.always_on_top.unwrap_or(true))
+            self.always_on_top = Some(krate.settings.always_on_top.unwrap_or(true))
         }
 
         // Resolve the build arguments
         self.build_arguments.resolve(&krate)?;
-
-        // crate_config.config.desktop.always_on_top = self.always_on_top.unwrap_or(true);
 
         // Give us some space before we start printing things...
         println!();
@@ -95,7 +90,6 @@ impl ServeArgs {
 
     pub(crate) fn is_interactive_tty(&self) -> bool {
         use crossterm::tty::IsTty;
-
         std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
     }
 

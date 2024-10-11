@@ -31,6 +31,10 @@ pub(crate) struct TargetArgs {
     #[clap(long)]
     pub(crate) server_features: Vec<String>,
 
+    /// Don't include the default features in the build
+    #[clap(long)]
+    pub(crate) no_default_features: bool,
+
     /// The architecture to build for [default: "native"]
     ///
     /// Can either be `arm | arm64 | x86 | x86_64 | native`

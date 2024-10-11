@@ -14,7 +14,7 @@ impl BuildRequest {
             .initialize_profiles()
             .context("Failed to initialize profiles - dioxus can't build without them. You might need to initialize them yourself.")?;
 
-        let out = match RustupShow::from_cli().await {
+        let rustup = match RustupShow::from_cli().await {
             Ok(out) => out,
             Err(err) => {
                 tracing::error!("Failed to verify tooling: {err}\ndx will proceed, but you might run into errors later.");
@@ -23,12 +23,12 @@ impl BuildRequest {
         };
 
         match self.build.platform() {
-            Platform::Web => self.verify_web_tooling(out).await?,
-            Platform::Ios => self.verify_ios_tooling(out).await?,
-            Platform::Android => self.verify_android_tooling(out).await?,
+            Platform::Web => self.verify_web_tooling(rustup).await?,
+            Platform::Ios => self.verify_ios_tooling(rustup).await?,
+            Platform::Android => self.verify_android_tooling(rustup).await?,
+            Platform::Linux => self.verify_linux_tooling(rustup).await?,
             Platform::MacOS => {}
             Platform::Windows => {}
-            Platform::Linux => {}
             Platform::Server => {}
             Platform::Liveview => {}
         }
@@ -112,6 +112,15 @@ impl BuildRequest {
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     pub(crate) async fn verify_android_tooling(&self, _rustup: RustupShow) -> Result<()> {
+        Ok(())
+    }
+
+    /// Ensure the right dependencies are installed for linux apps.
+    /// This varies by distro, so we just do nothing for now.
+    ///
+    /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
+    ///     https://tauri.app/start/prerequisites/
+    pub(crate) async fn verify_linux_tooling(&self, _rustup: crate::RustupShow) -> Result<()> {
         Ok(())
     }
 }

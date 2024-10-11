@@ -2,7 +2,7 @@ use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
 use crate::{Platform, Result};
 use anyhow::Context;
-use krates::{cm::Target, KrateDetails};
+use krates::{cm::Target, KrateDetails, KrateMatch, Package};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use std::io::Write;
 use std::path::PathBuf;
@@ -162,6 +162,91 @@ impl DioxusCrate {
         self.target.kind[0].clone()
     }
 
+    /// Try to autodetect the platform from the package by reading its features
+    ///
+    /// Read the default-features list and/or the features list on dioxus to see if we can autodetect the platform
+    pub(crate) fn autodetect_platform(&self) -> Option<(Platform, String)> {
+        let krate = self.krates.krates_by_name("dioxus").next()?;
+
+        // We're going to accumulate the platforms that are enabled
+        // This will let us create a better warning if multiple platforms are enabled
+        let manually_enabled_platforms = self
+            .krates
+            .get_enabled_features(krate.kid)?
+            .iter()
+            .flat_map(|feature| {
+                Platform::autodetect_from_cargo_feature(feature).map(|f| (f, feature.to_string()))
+            })
+            .collect::<Vec<_>>();
+
+        if manually_enabled_platforms.len() > 1 {
+            tracing::error!("Multiple platforms are enabled. Please specify a platform with `--platform <platform>` or set a single default platform using a cargo feature.");
+            for platform in manually_enabled_platforms {
+                tracing::error!("  - {platform:?}");
+            }
+            return None;
+        }
+
+        if manually_enabled_platforms.len() == 1 {
+            return manually_enabled_platforms.first().cloned();
+        }
+
+        // Let's try and find the list of platforms from the feature list
+        // This lets apps that specify web + server to work without specifying the platform.
+        // This is because we treat `server` as a binary thing rather than a dedicated platform, so at least we can disambiguate it
+        let possible_platforms = self
+            .package()
+            .features
+            .iter()
+            .filter_map(|(feature, _features)| {
+                match Platform::autodetect_from_cargo_feature(feature) {
+                    Some(platform) => Some((platform, feature.to_string())),
+                    None => {
+                        let auto_implicit = _features
+                            .iter()
+                            .filter_map(|f| {
+                                if !f.starts_with("dioxus?/") && !f.starts_with("dioxus/") {
+                                    return None;
+                                }
+
+                                let rest = f
+                                    .trim_start_matches("dioxus/")
+                                    .trim_start_matches("dioxus?/");
+
+                                Platform::autodetect_from_cargo_feature(rest)
+                            })
+                            .collect::<Vec<_>>();
+
+                        if auto_implicit.len() == 1 {
+                            Some((auto_implicit.first().copied().unwrap(), feature.to_string()))
+                        } else {
+                            None
+                        }
+                    }
+                }
+            })
+            .filter(|platform| platform.0 != Platform::Server)
+            .collect::<Vec<_>>();
+
+        if possible_platforms.len() == 1 {
+            return possible_platforms.first().cloned();
+        }
+
+        tracing::warn!("Could not autodetect platform. Platform must be explicitly specified. Pass `--platform <platform>` or set a default platform using a cargo feature.");
+
+        None
+    }
+
+    /// Check if dioxus is being built with a particular feature
+    pub(crate) fn has_dioxus_feature(&self, filter: &str) -> bool {
+        self.krates.krates_by_name("dioxus").any(|dioxus| {
+            self.krates
+                .get_enabled_features(dioxus.kid)
+                .map(|features| features.contains(filter))
+                .unwrap_or_default()
+        })
+    }
+
     /// Get the features required to build for the given platform
     pub(crate) fn feature_for_platform(&self, platform: Platform) -> Option<String> {
         let package = self.package();
@@ -282,6 +367,91 @@ impl DioxusCrate {
         }
 
         None
+    }
+
+    pub(crate) fn has_incompatible_tokio(&self) -> bool {
+        for tokyo in self.krates.krates_by_name("tokio") {
+            let features = self.krates.get_enabled_features(tokyo.kid).unwrap();
+
+            for feature in features {
+                // https://github.com/tokio-rs/tokio/blob/master/tokio/src/lib.rs#L463-L471
+                match feature.as_str() {
+                    "fs" | "io-std" | "net" | "process" | "rt-multi-thread" | "signal" => {
+                        return true
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        false
+    }
+
+    pub(crate) fn default_platform(&self) -> Option<Platform> {
+        let default = self.package().features.get("default")?;
+
+        // we only trace features 1 level deep..
+        for feature in default.iter() {
+            // If the user directly specified a platform we can just use that.
+            if feature.starts_with("dioxus/") {
+                let dx_feature = feature.trim_start_matches("dioxus/");
+                let auto = Platform::autodetect_from_cargo_feature(dx_feature);
+                if auto.is_some() {
+                    return auto;
+                }
+            }
+
+            // If the user is specifying an internal feature that points to a platform, we can use that
+            let internal_feature = self.package().features.get(feature);
+            if let Some(internal_feature) = internal_feature {
+                for feature in internal_feature {
+                    if feature.starts_with("dioxus/") {
+                        let dx_feature = feature.trim_start_matches("dioxus/");
+                        let auto = Platform::autodetect_from_cargo_feature(dx_feature);
+                        if auto.is_some() {
+                            return auto;
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Gather the features that are enabled for the package
+    pub(crate) fn platformless_features(&self) -> Vec<String> {
+        let default = self.package().features.get("default").unwrap();
+        let mut kept_features = vec![];
+
+        // Only keep the top-level features in the default list that don't point to a platform directly
+        // IE we want to drop `web` if default = ["web"]
+        'top: for feature in default {
+            // Don't keep features that point to a platform via dioxus/blah
+            if feature.starts_with("dioxus/") {
+                let dx_feature = feature.trim_start_matches("dioxus/");
+                if Platform::autodetect_from_cargo_feature(dx_feature).is_some() {
+                    continue 'top;
+                }
+            }
+
+            // Don't keep features that point to a platform via an internal feature
+            if let Some(internal_feature) = self.package().features.get(feature) {
+                for feature in internal_feature {
+                    if feature.starts_with("dioxus/") {
+                        let dx_feature = feature.trim_start_matches("dioxus/");
+                        if Platform::autodetect_from_cargo_feature(dx_feature).is_some() {
+                            continue 'top;
+                        }
+                    }
+                }
+            }
+
+            // Otherwise we can keep it
+            kept_features.push(feature.to_string());
+        }
+
+        kept_features
     }
 }
 

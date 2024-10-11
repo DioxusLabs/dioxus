@@ -143,4 +143,31 @@ impl Platform {
             Platform::MacOS => "macos",
         }
     }
+
+    pub(crate) fn autodetect_from_cargo_feature(feature: &str) -> Option<Self> {
+        match feature {
+            "web" => Some(Platform::Web),
+            "desktop" => {
+                #[cfg(target_os = "macos")]
+                {
+                    Some(Platform::MacOS)
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    Some(Platform::Windows)
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    Some(Platform::Linux)
+                }
+            }
+            "mobile" => {
+                tracing::warn!("Could not autodetect mobile platform. Mobile platforms must be explicitly specified. Pass `--platform ios` or `--platform android` instead.");
+                None
+            }
+            "liveview" => Some(Platform::Liveview),
+            "server" => Some(Platform::Server),
+            _ => None,
+        }
+    }
 }

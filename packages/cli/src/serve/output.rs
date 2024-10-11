@@ -2,6 +2,7 @@ use crate::{
     serve::{ansi_buffer::AnsiStringBuffer, Builder, ServeUpdate, Watcher, WebServer},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
+use cargo_metadata::diagnostic::DiagnosticLevel;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
@@ -210,6 +211,10 @@ impl Output {
                     if self.verbose { "on" } else { "off" }
                 );
             }
+            KeyCode::Char('t') => {
+                self.trace = !self.trace;
+                tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
+            }
             KeyCode::Char('c') => {
                 tracing::info!("clearing terminal (todo... not working)");
             }
@@ -248,7 +253,12 @@ impl Output {
     }
 
     pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
-        if self.trace {
+        if self.trace
+            || matches!(
+                message.message.level,
+                DiagnosticLevel::Error | DiagnosticLevel::FailureNote
+            )
+        {
             self.push_log(TraceMsg::cargo(message));
         }
     }
@@ -591,51 +601,43 @@ impl Output {
                 "Platform: ".gray(),
                 self.platform.to_string().yellow(),
                 if state.opts.build_arguments.fullstack {
-                    " (fullstack enabled)".dark_gray()
+                    " (fullstack)".dark_gray()
                 } else {
-                    " (fullstack disabled)".dark_gray()
+                    " ".dark_gray()
                 },
             ]))
             .wrap(Wrap { trim: false }),
             current_platform,
         );
 
-        self.render_feature_list(frame, app_features, state, false);
-        // self.render_feature_list(frame, server_features, state, true);
+        self.render_feature_list(frame, app_features, state);
 
         // todo(jon) should we write https ?
         let address = match state.server.server_address() {
             Some(address) => format!("http://{}", address).blue(),
             None => "no server address".dark_gray(),
         };
+
         frame.render_widget_ref(
-            Paragraph::new(Line::from(vec!["Serving at: ".gray(), address]))
-                .wrap(Wrap { trim: false }),
+            Paragraph::new(Line::from(vec![
+                if self.platform == Platform::Web {
+                    "Serving at: ".gray()
+                } else {
+                    "ServerFns at: ".gray()
+                },
+                address,
+            ]))
+            .wrap(Wrap { trim: false }),
             serve_address,
         );
     }
 
-    fn render_feature_list(
-        &self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        state: RenderState,
-        is_server: bool,
-    ) {
+    fn render_feature_list(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
         frame.render_widget(
             Paragraph::new(Line::from({
-                let mut lines = vec![
-                    if is_server {
-                        "Server features: ".gray()
-                    } else {
-                        "App features: ".gray()
-                    },
-                    // "Features ".gray(),
-                    "[".yellow(),
-                ];
+                let mut lines = vec!["App features: ".gray(), "[".yellow()];
 
-                let feature_list: Vec<String> =
-                    state.build_engine.request.target_features(is_server);
+                let feature_list: Vec<String> = state.build_engine.request.all_target_features();
                 let num_features = feature_list.len();
 
                 for (idx, feature) in feature_list.into_iter().enumerate() {
