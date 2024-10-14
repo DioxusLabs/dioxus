@@ -5,7 +5,7 @@ use async_std::task::sleep;
 use dioxus::prelude::*;
 use web_time::Instant;
 
-const STYLE: &str = asset!("./examples/assets/clock.css");
+const STYLE: Asset = asset!("/examples/assets/clock.css");
 
 fn main() {
     dioxus::launch(app);

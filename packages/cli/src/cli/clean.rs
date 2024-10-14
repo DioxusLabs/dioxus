@@ -1,19 +1,15 @@
-use crate::DioxusCrate;
-use anyhow::Context;
-use build::TargetArgs;
-
 use super::*;
 
 /// Clean build artifacts.
+///
+/// Simlpy runs `cargo clean`
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "clean")]
-pub struct Clean {}
+pub(crate) struct Clean {}
 
 impl Clean {
-    pub fn clean(self) -> anyhow::Result<()> {
-        let dioxus_crate =
-            DioxusCrate::new(&TargetArgs::default()).context("Failed to load Dioxus workspace")?;
-
+    /// todo(jon): we should add a config option that just wipes target/dx and target/dioxus-client instead of doing a full clean
+    pub(crate) fn clean(self) -> anyhow::Result<()> {
         let output = Command::new("cargo")
             .arg("clean")
             .stdout(Stdio::piped())
@@ -22,11 +18,6 @@ impl Clean {
 
         if !output.status.success() {
             return Err(anyhow::anyhow!("Cargo clean failed."));
-        }
-
-        let out_dir = &dioxus_crate.out_dir();
-        if out_dir.is_dir() {
-            remove_dir_all(out_dir)?;
         }
 
         Ok(())

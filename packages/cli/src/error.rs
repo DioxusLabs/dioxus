@@ -1,11 +1,10 @@
+use crate::metadata::CargoError;
 use thiserror::Error as ThisError;
 
-use crate::{metadata::CargoError, CrateConfigError, LoadDioxusConfigError};
-
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(ThisError, Debug)]
-pub enum Error {
+pub(crate) enum Error {
     /// Used when errors need to propagate but are too unique to be typed
     #[error("{0}")]
     Unique(String),
@@ -22,29 +21,14 @@ pub enum Error {
     #[error("Runtime Error: {0}")]
     RuntimeError(String),
 
-    #[error("Failed to write error")]
-    FailedToWrite,
-
-    #[error("Build Failed: {0}")]
-    BuildFailed(String),
-
     #[error("Cargo Error: {0}")]
-    CargoError(String),
-
-    #[error("Couldn't retrieve cargo metadata")]
-    CargoMetadata(#[source] cargo_metadata::Error),
-
-    #[error("{0}")]
-    CustomError(String),
+    CargoError(#[from] CargoError),
 
     #[error("Invalid proxy URL: {0}")]
     InvalidProxy(#[from] hyper::http::uri::InvalidUri),
 
     #[error("Failed to establish proxy: {0}")]
     ProxySetupError(String),
-
-    #[error("Error proxying request: {0}")]
-    ProxyRequestError(hyper::Error),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -72,35 +56,4 @@ impl From<hyper::Error> for Error {
     fn from(e: hyper::Error) -> Self {
         Self::RuntimeError(e.to_string())
     }
-}
-
-impl From<LoadDioxusConfigError> for Error {
-    fn from(e: LoadDioxusConfigError) -> Self {
-        Self::RuntimeError(e.to_string())
-    }
-}
-
-impl From<CargoError> for Error {
-    fn from(e: CargoError) -> Self {
-        Self::CargoError(e.to_string())
-    }
-}
-
-impl From<CrateConfigError> for Error {
-    fn from(e: CrateConfigError) -> Self {
-        Self::RuntimeError(e.to_string())
-    }
-}
-
-#[macro_export]
-macro_rules! custom_error {
-    ($msg:literal $(,)?) => {
-        Err(Error::CustomError(format!($msg)))
-    };
-    ($err:expr $(,)?) => {
-        Err(Error::from($err))
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        Err(Error::CustomError(format!($fmt, $($arg)*)))
-    };
 }
