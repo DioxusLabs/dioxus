@@ -151,7 +151,7 @@ impl RouterContext {
             site_map: R::SITE_MAP,
         };
 
-        let mut inner = CopyValue::new_in_scope(myself, ScopeId::ROOT);
+        let inner = CopyValue::new_in_scope(myself, ScopeId::ROOT);
         let me = Self { inner };
 
         // set the updater
@@ -160,7 +160,7 @@ impl RouterContext {
             not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
         ))]
         {
-            inner.write().history.updater(Rc::new(move || {
+            inner.write_unchecked().history.updater(Rc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {
                     (mark_dirty)(id);
                 }
@@ -169,7 +169,7 @@ impl RouterContext {
         }
         #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
         {
-            inner.write().history.updater(Arc::new(move || {
+            inner.write_unchecked().history.updater(Arc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {
                     (mark_dirty)(id);
                 }

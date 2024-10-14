@@ -10,7 +10,7 @@
 //! 1) [`MemoryHistory`] for desktop/mobile/ssr platforms
 //! 2) [`WebHistory`] for web platforms
 
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{any::Any, rc::Rc};
 
 mod memory;
 pub use memory::*;
@@ -295,7 +295,7 @@ pub trait HistoryProvider<R: Routable> {
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
     #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {}
 }
 
 pub(crate) trait AnyHistoryProvider {
@@ -336,7 +336,7 @@ pub(crate) trait AnyHistoryProvider {
 
     #[allow(unused_variables)]
     #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {}
 
     #[cfg(feature = "liveview")]
     fn is_liveview(&self) -> bool;
@@ -418,7 +418,7 @@ where
     }
 
     #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
+    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
         self.inner.updater(callback)
     }
 
