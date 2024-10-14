@@ -48,7 +48,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
                 UserWindowEvent::WindowsDragDrop(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.borrow().in_runtime(|| {
+                        webview.dom.in_runtime(|| {
                             ScopeId::ROOT.in_runtime(|| {
                                 eval("window.interpreter.handleWindowsDragDrop();");
                             });
@@ -57,7 +57,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 }
                 UserWindowEvent::WindowsDragLeave(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.borrow().in_runtime(|| {
+                        webview.dom.in_runtime(|| {
                             ScopeId::ROOT.in_runtime(|| {
                                 eval("window.interpreter.handleWindowsDragLeave();");
                             });
@@ -66,7 +66,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 }
                 UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.borrow().in_runtime(|| {
+                        webview.dom.in_runtime(|| {
                             ScopeId::ROOT.in_runtime(|| {
                                 let e = eval(
                                     r#" 

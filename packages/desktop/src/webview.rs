@@ -13,7 +13,7 @@ use dioxus_html::{
     native_bind::NativeFileEngine, prelude::Document, HasFileData, HtmlEvent, PlatformEventData,
 };
 use futures_util::{pin_mut, FutureExt};
-use std::cell::{OnceCell, RefCell};
+use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
@@ -122,7 +122,7 @@ impl WebviewEdits {
 }
 
 pub(crate) struct WebviewInstance {
-    pub dom: Rc<RefCell<VirtualDom>>,
+    pub dom: VirtualDom,
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
@@ -145,7 +145,6 @@ impl WebviewInstance {
         dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
-        let dom = Rc::new(RefCell::new(dom));
         let mut window = cfg.window.clone();
 
         // tao makes small windows for some reason, make them bigger on desktop
@@ -190,7 +189,7 @@ impl WebviewInstance {
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
         let asset_handlers = AssetHandlerRegistry::new();
-        let edits = WebviewEdits::new(dom.borrow().runtime(), edit_queue.clone());
+        let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
@@ -376,7 +375,7 @@ impl WebviewInstance {
         // Provide the desktop context to the virtual dom and edit handler
         edits.set_desktop_context(desktop_context.clone());
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-        dom.borrow().in_runtime(|| {
+        dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
             ScopeId::ROOT.provide_context(provider);
         });
@@ -405,8 +404,7 @@ impl WebviewInstance {
             }
 
             {
-                let mut dom = self.dom.borrow_mut();
-                let fut = dom.wait_for_work();
+                let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
 
                 match fut.poll_unpin(&mut cx) {
@@ -416,7 +414,6 @@ impl WebviewInstance {
             }
 
             self.dom
-                .borrow_mut()
                 .render_immediate(&mut *self.edits.wry_queue.mutation_state_mut());
             self.edits.wry_queue.send_edits();
         }
