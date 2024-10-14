@@ -131,7 +131,7 @@ impl Document for NoOpDocument {
     }
 }
 
-/// An evluator that does nothing
+/// An evaluator that does nothing
 #[derive(Default)]
 pub struct NoOpEvaluator;
 
