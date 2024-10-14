@@ -44,7 +44,7 @@ fn LoadTitle() -> Element {
         .unwrap();
 
     rsx! {
-        Title { "{title.title}" }
+        document::Title { "{title.title}" }
     }
 }
 

@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 #[component]
 pub(crate) fn ChildrenOrLoading(children: Element) -> Element {
     rsx! {
-        head::Link {
+        document::Link {
             rel: "stylesheet",
             href: asset!("./public/loading.css")
         }

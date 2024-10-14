@@ -1,5 +1,5 @@
 use dioxus_core::ScopeId;
-use dioxus_html::document::{Document, EvalError, Evaluator, NoOpEvaluator};
+use dioxus_document::{Document, Eval, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde::Serialize;
@@ -64,12 +64,8 @@ pub fn init_document() {
 /// The web-target's document provider.
 pub struct WebDocument;
 impl Document for WebDocument {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        WebEvaluator::create(js)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn eval(&self, js: String) -> Eval {
+        Eval::new(WebEvaluator::create(js))
     }
 }
 
@@ -95,10 +91,8 @@ impl WebEvaluator {
     fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         let owner = UnsyncStorage::owner();
 
-        let generational_box = owner.insert(Box::new(NoOpEvaluator) as Box<dyn Evaluator>);
-
         // add the drop handler to DioxusChannel so that it gets dropped when the channel is dropped in js
-        let channels = WebDioxusChannel::new(JSOwner::new(owner));
+        let channels = WebDioxusChannel::new(JSOwner::new(owner.clone()));
 
         // The Rust side of the channel is a weak reference to the DioxusChannel
         let weak_channels = channels.weak();
@@ -131,13 +125,11 @@ impl WebEvaluator {
             )),
         };
 
-        generational_box.set(Box::new(Self {
+        owner.insert(Box::new(Self {
             channels: weak_channels,
             result: Some(result),
             next_future: None,
-        }) as Box<dyn Evaluator>);
-
-        generational_box
+        }) as Box<dyn Evaluator>)
     }
 }
 

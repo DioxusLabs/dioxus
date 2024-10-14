@@ -2,7 +2,7 @@ import {
   DioxusChannel,
   Channel,
   WeakDioxusChannel,
-} from "../../../html/src/ts/eval";
+} from "../../../document/src/ts/eval";
 
 export class WebDioxusChannel extends DioxusChannel {
   js_to_rust: Channel;

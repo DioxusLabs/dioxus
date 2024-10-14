@@ -2380,6 +2380,7 @@ dependencies = [
  "dioxus-core-macro",
  "dioxus-desktop",
  "dioxus-devtools",
+ "dioxus-document",
  "dioxus-fullstack",
  "dioxus-hooks",
  "dioxus-html",
@@ -2579,6 +2580,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-devtools",
+ "dioxus-document",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-interpreter-js",
@@ -2636,6 +2638,24 @@ version = "0.6.0-alpha.2"
 dependencies = [
  "dioxus-core",
  "serde",
+]
+
+[[package]]
+name = "dioxus-document"
+version = "0.6.0-alpha.2"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "dioxus-core-macro",
+ "dioxus-core-types",
+ "dioxus-html",
+ "futures-channel",
+ "futures-util",
+ "generational-box",
+ "lazy-js-bundle",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -2815,6 +2835,7 @@ dependencies = [
  "dioxus-config-macro",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-document",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-rsx",
@@ -2830,6 +2851,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-devtools",
+ "dioxus-document",
  "dioxus-html",
  "dioxus-interpreter-js",
  "futures-channel",
@@ -3074,6 +3096,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools",
+ "dioxus-document",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",

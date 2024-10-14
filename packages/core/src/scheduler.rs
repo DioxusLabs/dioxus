@@ -32,7 +32,7 @@
 //!     use_effect(move || {
 //!         let id = id.read();
 //!         // This will panic if the id is not written to the DOM before the effect is run
-//!         eval(format!(r#"document.getElementById("{id}").innerHTML = "Hello World";"#));
+//!         document::eval(format!(r#"document.getElementById("{id}").innerHTML = "Hello World";"#));
 //!     });
 //!
 //!     rsx! {

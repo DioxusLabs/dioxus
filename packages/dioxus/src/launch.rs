@@ -330,7 +330,7 @@ fn web_launch(
                 #[cfg(all(feature = "static-generation", not(feature = "fullstack")))]
                 use dioxus_static_site_generation::document;
                 let document = std::rc::Rc::new(document::web::FullstackWebDocument)
-                    as std::rc::Rc<dyn crate::prelude::Document>;
+                    as std::rc::Rc<dyn crate::prelude::document::Document>;
                 vdom.provide_root_context(document);
             }
             vdom

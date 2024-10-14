@@ -17,7 +17,7 @@ mod api;
 fn main() {
     dioxus::launch(|| {
         rsx! {
-            head::Link {
+            document::Link {
                 rel: "stylesheet",
                 href: asset!("./public/tailwind.css")
             }
