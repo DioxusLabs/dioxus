@@ -126,6 +126,31 @@ pub struct NoOpDocument;
 impl Document for NoOpDocument {
     fn eval(&self, _: String) -> Eval {
         let owner = generational_box::Owner::default();
-        Eval::new(owner.invalid())
+        let boxed = owner.insert(Box::new(NoOpEvaluator {}) as Box<dyn Evaluator + 'static>);
+        Eval::new(boxed)
+    }
+}
+
+/// An evluator that does nothing
+#[derive(Default)]
+pub struct NoOpEvaluator;
+
+impl Evaluator for NoOpEvaluator {
+    fn send(&self, _data: serde_json::Value) -> Result<(), EvalError> {
+        Err(EvalError::Unsupported)
+    }
+
+    fn poll_recv(
+        &mut self,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
+        std::task::Poll::Ready(Err(EvalError::Unsupported))
+    }
+
+    fn poll_join(
+        &mut self,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
+        std::task::Poll::Ready(Err(EvalError::Unsupported))
     }
 }
