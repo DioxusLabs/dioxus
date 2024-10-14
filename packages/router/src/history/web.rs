@@ -233,7 +233,7 @@ where
         self.navigate_external(url)
     }
 
-    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
+    fn updater(&mut self, callback: std::rc::Rc<dyn Fn()>) {
         let w = self.window.clone();
         let h = self.history.clone();
         let s = self.listener_animation_frame.clone();
