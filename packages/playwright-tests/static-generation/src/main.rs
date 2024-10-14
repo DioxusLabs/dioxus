@@ -8,9 +8,13 @@
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::static_generation().launch(app);
+    #[cfg(feature = "web")]
+    dioxus::LaunchBuilder::web().launch(app);
+    #[cfg(feature = "server")]
+    dioxus::LaunchBuilder::static_generation().launch(app);
 }
 
+#[allow(unused)]
 fn app() -> Element {
     let mut count = use_signal(|| 12345);
     let server_data = use_server_future(get_server_data)?;

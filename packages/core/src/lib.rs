@@ -12,6 +12,7 @@ mod events;
 mod fragment;
 mod generational_box;
 mod global_context;
+mod launch;
 mod mutations;
 mod nodes;
 mod properties;
@@ -40,6 +41,9 @@ pub mod internal {
         HotReloadDynamicAttribute, HotReloadDynamicNode, HotReloadLiteral,
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
     };
+
+    #[doc(hidden)]
+    pub use generational_box;
 }
 
 pub(crate) mod innerlude {
@@ -51,6 +55,7 @@ pub(crate) mod innerlude {
     pub use crate::fragment::*;
     pub use crate::generational_box::*;
     pub use crate::global_context::*;
+    pub use crate::launch::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
@@ -75,10 +80,10 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
-    Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, MarkerWrapper, Mutation,
-    Mutations, NoOpMutations, Ok, Properties, Result, Runtime, ScopeId, ScopeState, SpawnIfAsync,
-    Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder,
-    VText, VirtualDom, WriteMutations,
+    Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, LaunchConfig, MarkerWrapper,
+    Mutation, Mutations, NoOpMutations, Ok, Properties, Result, Runtime, ScopeId, ScopeState,
+    SpawnIfAsync, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner,
+    VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

@@ -12,7 +12,7 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/flat_router.css");
 
 fn main() {
-    launch(|| {
+    dioxus::launch(|| {
         rsx! {
             document::Link { rel: "stylesheet", href: STYLE }
             Router::<Route> {}

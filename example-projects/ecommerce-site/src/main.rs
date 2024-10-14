@@ -15,7 +15,7 @@ mod components {
 mod api;
 
 fn main() {
-    launch(|| {
+    dioxus::launch(|| {
         rsx! {
             document::Link {
                 rel: "stylesheet",

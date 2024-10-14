@@ -17,7 +17,7 @@ fn main() {
     #[cfg(feature = "server")]
     tracing_subscriber::fmt::init();
 
-    launch(|| rsx! { Router::<Route> {} });
+    dioxus::launch(|| rsx! { Router::<Route> {} });
 }
 
 #[derive(Clone, Routable)]

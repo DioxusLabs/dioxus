@@ -5,7 +5,7 @@ use dioxus_router::prelude::*;
 use dioxus_ssr::renderer;
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::Config;
 
@@ -66,20 +66,24 @@ pub async fn generate_static_site(
     }
 
     // Copy over the web output dir into the static output dir
-    let assets_path = dioxus_cli_config::out_dir().unwrap_or("./dist".into());
+    let out_path = dioxus_cli_config::out_dir().unwrap_or("./dist".into());
 
-    let assets_path = assets_path.join("public");
+    let assets_path = out_path.join("public");
 
-    copy_static_files(&assets_path, &config.output_dir)?;
+    let index_path = assets_path.join("index.html");
+    let skip = vec![index_path.clone()];
+    copy_static_files(&assets_path, &config.output_dir, &skip)?;
+
+    // Copy the output of the SSG build into the public directory so the CLI serves it
+    copy_static_files(&config.output_dir, &assets_path, &[])?;
 
     Ok(())
 }
 
-fn copy_static_files(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
-    let index_path = src.join("index.html");
+fn copy_static_files(src: &Path, dst: &Path, skip: &[PathBuf]) -> Result<(), std::io::Error> {
     let mut queue = vec![src.to_path_buf()];
     while let Some(path) = queue.pop() {
-        if path == index_path {
+        if skip.contains(&path) {
             continue;
         }
         if path.is_dir() {

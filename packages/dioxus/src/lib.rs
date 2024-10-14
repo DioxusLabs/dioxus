@@ -34,8 +34,7 @@ mod launch;
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
-#[allow(deprecated)]
-pub use launch::launch;
+pub use crate::launch::*;
 
 #[cfg(feature = "hooks")]
 #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]

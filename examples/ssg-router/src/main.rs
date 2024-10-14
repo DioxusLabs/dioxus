@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 
 // Generate all routes and output them to the static path
 fn main() {
-    launch(|| {
+    dioxus::launch(|| {
         rsx! {
             Router::<Route> {}
         }

@@ -8,7 +8,7 @@
 use dioxus::{prelude::*, CapturedError};
 
 fn main() {
-    LaunchBuilder::fullstack().launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

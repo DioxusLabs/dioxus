@@ -1,3 +1,4 @@
+use dioxus_core::LaunchConfig;
 use wasm_bindgen::JsCast as _;
 
 ///  Configuration for the WebSys renderer for the Dioxus VirtualDOM.
@@ -14,6 +15,8 @@ pub struct Config {
     pub(crate) root: ConfigRoot,
     pub(crate) default_panic_hook: bool,
 }
+
+impl LaunchConfig for Config {}
 
 pub(crate) enum ConfigRoot {
     RootName(String),
