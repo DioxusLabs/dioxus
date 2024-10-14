@@ -156,7 +156,7 @@ impl BuildRequest {
                 };
                 match variant {
                     ResourceType::Style => format!(
-                        "    head::Link {{ rel: \"stylesheet\", href: asset!(css(\"{}\")) }}",
+                        "    document::Link {{ rel: \"stylesheet\", href: asset!(css(\"{}\")) }}",
                         path.display()
                     ),
                     ResourceType::Script => {

@@ -7,7 +7,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch_desktop(app);
+    dioxus::LaunchBuilder::desktop().launch(app);
 }
 
 fn app() -> Element {

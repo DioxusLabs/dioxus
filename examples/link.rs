@@ -11,12 +11,12 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/links.css");
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
     rsx! (
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         Router::<Route> {}
     )
 }

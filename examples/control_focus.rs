@@ -11,7 +11,7 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/roulette.css");
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -40,7 +40,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         h1 { "Input Roulette" }
         button { onclick: move |_| running.toggle(), "Toggle roulette" }
         div { id: "roulette-grid",

@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/custom_assets.css");
 
 fn main() {
-    launch_desktop(app);
+    dioxus::LaunchBuilder::desktop().launch(app);
 }
 
 fn app() -> Element {
@@ -24,7 +24,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         h1 { "Dynamic Assets" }
         img { src: "/logos/logo.png" }
     }

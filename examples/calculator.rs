@@ -15,7 +15,7 @@ use dioxus::prelude::*;
 const STYLE: &str = asset!("./examples/assets/calculator.css");
 
 fn main() {
-    LaunchBuilder::desktop()
+    dioxus::LaunchBuilder::desktop()
         .with_cfg(desktop!({
             use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
             Config::new().with_window(
@@ -54,7 +54,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator", tabindex: "0", onkeydown: handle_key_down_event,

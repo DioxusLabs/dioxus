@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 
 // Generate all routes and output them to the static path
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {

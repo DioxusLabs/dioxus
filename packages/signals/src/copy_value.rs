@@ -71,6 +71,19 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         Self::new_with_caller(value, std::panic::Location::caller())
     }
 
+    /// Create a new CopyValue without an owner. This will leak memory if you don't manually drop it.
+    pub fn leak_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
+        Self {
+            value: GenerationalBox::leak(value, caller),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
+        }
+    }
+
+    /// Point to another copy value
+    pub fn point_to(&mut self, other: Self) -> BorrowResult {
+        self.value.point_to(other.value)
+    }
+
     pub(crate) fn new_with_caller(
         value: T,
         caller: &'static std::panic::Location<'static>,
@@ -78,7 +91,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         let owner = current_owner();
 
         Self {
-            value: owner.insert_with_caller(value, caller),
+            value: owner.insert_rc_with_caller(value, caller),
             origin_scope: current_scope_id().expect("in a virtual dom"),
         }
     }
@@ -99,13 +112,13 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         let owner = scope.owner();
 
         Self {
-            value: owner.insert_with_caller(value, caller),
+            value: owner.insert_rc_with_caller(value, caller),
             origin_scope: scope,
         }
     }
 
     /// Manually drop the value in the CopyValue, invalidating the value in the process.
-    pub fn manually_drop(&self) -> Option<T> {
+    pub fn manually_drop(&self) {
         self.value.manually_drop()
     }
 

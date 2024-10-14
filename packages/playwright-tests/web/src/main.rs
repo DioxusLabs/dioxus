@@ -9,7 +9,7 @@ fn app() -> Element {
     rsx! {
         div {
             "hello axum! {num}"
-            Title { "hello axum! {num}" }
+            document::Title { "hello axum! {num}" }
             button { class: "increment-button", onclick: move |_| num += 1, "Increment" }
         }
         svg { circle { cx: 50, cy: 50, r: 40, stroke: "green", fill: "yellow" } }
@@ -24,7 +24,7 @@ fn app() -> Element {
         button {
             class: "eval-button",
             onclick: move |_| async move {
-                let mut eval = eval(
+                let mut eval = document::eval(
                     r#"
                         window.document.title = 'Hello from Dioxus Eval!';
                         // Receive and multiply 10 numbers
@@ -38,9 +38,9 @@ fn app() -> Element {
 
                 // Send 10 numbers
                 for i in 0..10 {
-                    eval.send(serde_json::Value::from(i)).unwrap();
-                    let value = eval.recv().await.unwrap();
-                    assert_eq!(value, serde_json::Value::from(i * 2));
+                    eval.send(i).unwrap();
+                    let value: i32 = eval.recv().await.unwrap();
+                    assert_eq!(value, i * 2);
                 }
 
                 let result = eval.recv().await;
@@ -77,5 +77,5 @@ fn main() {
             .set_max_level(tracing::Level::TRACE)
             .build(),
     );
-    launch(app);
+    dioxus::launch(app);
 }

@@ -11,7 +11,7 @@ use dioxus::{html::HasFileData, prelude::dioxus_elements::FileEngine};
 const STYLE: &str = asset!("./examples/assets/file_upload.css");
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 struct UploadedFile {
@@ -43,7 +43,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
 
         h1 { "File Upload Example" }
         p { "Drop a .txt, .rs, or .js file here to read it" }

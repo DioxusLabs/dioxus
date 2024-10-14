@@ -1,14 +1,14 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
 use dioxus_core::{ElementId, VirtualDom};
-use dioxus_html::{native_bind::NativeFileEngine, PlatformEventData};
+use dioxus_html::PlatformEventData;
 use std::{
     any::Any,
     cell::{Cell, RefCell},
