@@ -6148,18 +6148,18 @@ dependencies = [
 
 [[package]]
 name = "manganis"
-version = "0.3.0-alpha.2"
+version = "0.3.0-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6250942459fe37aecefbf52d5ef5904534d4c3e6383b26835fa3bde98ab5e491"
+checksum = "3857dfc4889510de7db73105aff3906d2e9ee3c30823d9014d8c236e2c7a92c0"
 dependencies = [
  "manganis-macro",
 ]
 
 [[package]]
 name = "manganis-cli-support"
-version = "0.3.0-alpha.2"
+version = "0.3.0-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d9251654f07951e80b1fccde6389a37059f18f1a7dd747ecd7771336f1a1ae6"
+checksum = "a63972fc54ec8162f3d18d95b2dd7fcf2becb127b0cb3fed318fc4be46c3eeda"
 dependencies = [
  "anyhow",
  "image 0.25.2",
@@ -6233,9 +6233,9 @@ dependencies = [
 
 [[package]]
 name = "manganis-common"
-version = "0.3.0-alpha.2"
+version = "0.3.0-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90f9048495439cee460d6092341dc54088895f985ca41379169502d8f46af08e"
+checksum = "77bbcc6cf753925e251a2c5a59fdf2da3214975185226601465792ca2e34ea98"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -6250,9 +6250,9 @@ dependencies = [
 
 [[package]]
 name = "manganis-macro"
-version = "0.3.0-alpha.2"
+version = "0.3.0-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc48d9ad7dccb08194ec0613ad22ad28f4d28dd8565397a1d3fb4a6986bbebef"
+checksum = "0f20a6bb40193a285313478a5db79589f7dd8926c3dc662a9f114cc5690e556d"
 dependencies = [
  "manganis-common",
  "proc-macro2",
