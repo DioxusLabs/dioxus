@@ -235,7 +235,7 @@ impl WebviewInstance {
             to_owned![file_hover];
 
             #[cfg(windows)]
-            to_owned![dom];
+            let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
 
             move |evt: DragDropEvent| {
                 // Update the most recent file drop event - when the event comes in from the webview we can use the
@@ -248,76 +248,25 @@ impl WebviewInstance {
                 // Solution: this glue code to mimic drag drop events.
                 #[cfg(windows)]
                 {
-                    use dioxus_html::prelude::eval;
                     file_hover.set(evt.clone());
 
-                    dom.borrow().in_runtime(|| {
-                        ScopeId::ROOT.in_runtime(|| {
-
-                            match evt {
-                            wry::DragDropEvent::Drop {
-                                paths: _,
-                                position: _,
-                            } => {
-                                eval(
-                                    r#"
-                                    if (window.dxDragLastElement) {
-                                        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
-                                        window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
-
-                                        let data = new DataTransfer();
-                                        
-                                        // We need to mimic that there are actually files in this event for our native file engine to pick it up.
-                                        const file = new File(["content"], "file.txt", { type: "text/plain" });
-                                        data.items.add(file);
-
-                                        const dragDropEvent = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data });
-                                        window.dxDragLastElement.dispatchEvent(dragDropEvent);
-                                        window.dxDragLastElement = null;
-                                    }
-                                    "#
-                                );
-                            },
-                            wry::DragDropEvent::Over { position } => {
-                                let script = eval(
-                                    r#"
-                                    const xPos = await dioxus.recv();
-                                    const yPos = await dioxus.recv();
-
-                                    const element = document.elementFromPoint(xPos, yPos);
-
-                                    if (element != window.dxDragLastElement) {
-                                        if (window.dxDragLastElement) {
-                                            const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
-                                            window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
-                                        }
-
-                                        const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
-                                        element.dispatchEvent(dragOverEvent);
-                                        window.dxDragLastElement = element;
-                                    }
-
-                                    "#
-                                );
-
-                                script.send(position.0.into()).unwrap();
-                                script.send(position.1.into()).unwrap();
-                            }
-                            wry::DragDropEvent::Leave => {
-                                eval(
-                                    r#"
-                                    if (window.dxDragLastElement) {
-                                        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
-                                        window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
-                                        window.dxDragLastElement = null;
-                                    }
-                                    "#
-                                );
-                            }
-                            _ => {}
-                            }
-                        });
-                    });
+                    match evt {
+                        wry::DragDropEvent::Drop {
+                            paths: _,
+                            position: _,
+                        } => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragDrop(window_id));
+                        }
+                        wry::DragDropEvent::Over { position } => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragOver(
+                                window_id, position.0, position.1,
+                            ));
+                        }
+                        wry::DragDropEvent::Leave => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragLeave(window_id));
+                        }
+                        _ => {}
+                    }
                 }
 
                 false
