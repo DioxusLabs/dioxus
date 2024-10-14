@@ -34,8 +34,7 @@ mod launch;
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
-#[allow(deprecated)]
-pub use launch::launch;
+pub use crate::launch::*;
 
 #[cfg(feature = "hooks")]
 #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
@@ -60,9 +59,6 @@ pub use dioxus_html as html;
 pub use dioxus_core_macro as core_macro;
 
 pub mod prelude {
-    #[cfg(feature = "launch")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
-    pub use crate::launch::*;
 
     #[cfg(feature = "hooks")]
     #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
@@ -93,10 +89,10 @@ pub mod prelude {
 
     #[cfg(all(
         not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")),
-        feature = "hot-reload"
+        feature = "devtools"
     ))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "hot-reload")))]
-    pub use dioxus_hot_reload;
+    #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
+    pub use dioxus_devtools;
 
     pub use dioxus_core;
 

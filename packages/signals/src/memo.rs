@@ -139,10 +139,11 @@ impl<T: 'static> Memo<T> {
             drop(peak);
             let mut copy = self.inner;
             copy.set(new_value);
-            update_write
-                .dirty
-                .store(false, std::sync::atomic::Ordering::Relaxed);
         }
+        // Always mark the memo as no longer dirty even if the value didn't change
+        update_write
+            .dirty
+            .store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Get the scope that the signal was created in.

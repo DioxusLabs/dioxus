@@ -1,16 +1,15 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
+use crate::TraceSrc;
+
+use super::BuildRequest;
 use anyhow::Context;
-use cargo_metadata::{diagnostic::Diagnostic, Message};
+use cargo_metadata::Message;
 use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
-use std::fmt::Display;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::AsyncBufReadExt;
-use tracing::Level;
-
-use super::BuildRequest;
 
 #[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
 pub enum Stage {
@@ -54,14 +53,6 @@ impl UpdateBuildProgress {
     pub fn to_std_out(&self) {
         match &self.update {
             UpdateStage::Start => println!("--- {} ---", self.stage),
-            UpdateStage::AddMessage(message) => match &message.message {
-                MessageType::Cargo(message) => {
-                    println!("{}", message.rendered.clone().unwrap_or_default());
-                }
-                MessageType::Text(message) => {
-                    println!("{}", message);
-                }
-            },
             UpdateStage::SetProgress(progress) => {
                 println!("Build progress {:0.0}%", progress * 100.0);
             }
@@ -75,68 +66,8 @@ impl UpdateBuildProgress {
 #[derive(Debug, Clone, PartialEq)]
 pub enum UpdateStage {
     Start,
-    AddMessage(BuildMessage),
     SetProgress(f64),
     Failed(String),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct BuildMessage {
-    pub level: Level,
-    pub message: MessageType,
-    pub source: MessageSource,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum MessageType {
-    Cargo(Diagnostic),
-    Text(String),
-}
-
-/// Represents the source of where a message came from.
-///
-/// The CLI will render a prefix according to the message type
-/// but this prefix, [`MessageSource::to_string()`] shouldn't be used if a strict message source is required.
-#[derive(Debug, Clone, PartialEq)]
-pub enum MessageSource {
-    /// Represents any message from the running application. Renders `[app]`
-    App,
-    /// Represents any generic message from the CLI. Renders `[dev]`
-    ///
-    /// Usage of Tracing inside of the CLI will be routed to this type.
-    Dev,
-    /// Represents a message from the build process. Renders `[bld]`
-    ///
-    /// This is anything emitted from a build process such as cargo and optimizations.
-    Build,
-}
-
-impl Display for MessageSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::App => write!(f, "app"),
-            Self::Dev => write!(f, "dev"),
-            Self::Build => write!(f, "bld"),
-        }
-    }
-}
-
-impl From<Diagnostic> for BuildMessage {
-    fn from(message: Diagnostic) -> Self {
-        Self {
-            level: match message.level {
-                cargo_metadata::diagnostic::DiagnosticLevel::Ice
-                | cargo_metadata::diagnostic::DiagnosticLevel::FailureNote
-                | cargo_metadata::diagnostic::DiagnosticLevel::Error => Level::ERROR,
-                cargo_metadata::diagnostic::DiagnosticLevel::Warning => Level::WARN,
-                cargo_metadata::diagnostic::DiagnosticLevel::Note => Level::INFO,
-                cargo_metadata::diagnostic::DiagnosticLevel::Help => Level::DEBUG,
-                _ => Level::DEBUG,
-            },
-            source: MessageSource::Build,
-            message: MessageType::Cargo(message),
-        }
-    }
 }
 
 pub(crate) async fn build_cargo(
@@ -183,10 +114,8 @@ pub(crate) async fn build_cargo(
         match message {
             Message::CompilerMessage(msg) => {
                 let message = msg.message;
-                _ = progress.start_send(UpdateBuildProgress {
-                    stage: Stage::Compiling,
-                    update: UpdateStage::AddMessage(message.clone().into()),
-                });
+                tracing::info!(dx_src = ?TraceSrc::Cargo, dx_no_fmt = true, "{}", message.to_string());
+
                 const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
                     cargo_metadata::diagnostic::DiagnosticLevel::Help,
                     cargo_metadata::diagnostic::DiagnosticLevel::Note,
@@ -230,14 +159,7 @@ pub(crate) async fn build_cargo(
                 }
             }
             Message::TextLine(line) => {
-                _ = progress.start_send(UpdateBuildProgress {
-                    stage: Stage::Compiling,
-                    update: UpdateStage::AddMessage(BuildMessage {
-                        level: Level::DEBUG,
-                        message: MessageType::Text(line),
-                        source: MessageSource::Build,
-                    }),
-                });
+                tracing::info!(dx_src = ?TraceSrc::Cargo, dx_no_fmt = true, "{}", line);
             }
             _ => {
                 // Unknown message

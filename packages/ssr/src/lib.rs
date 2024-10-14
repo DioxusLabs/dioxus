@@ -4,8 +4,6 @@
 
 mod cache;
 pub mod config;
-#[cfg(feature = "incremental")]
-pub mod incremental;
 pub mod renderer;
 pub mod template;
 

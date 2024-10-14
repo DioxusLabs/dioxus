@@ -1,5 +1,5 @@
+use crate::document::NATIVE_EVAL_JS;
 use crate::{assets::*, webview::WebviewEdits};
-use dioxus_html::document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
 use serde::Deserialize;
@@ -280,10 +280,10 @@ fn running_in_dev_mode() -> bool {
 #[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
     if running_in_dev_mode() {
-        return dioxus_cli_config::CURRENT_CONFIG
-            .as_ref()
-            .map(|c| c.application.out_dir.clone())
-            .ok();
+        // todo: we don't want to canonicalize assets like this, but it will take longer to migrate, so we'll do it later
+        // we should just be parsing paths the way they are instead of relative to the "asset" dir
+        // manganis will eventually just dump the raw path to us, but until then, we need to canonicalize here
+        return dioxus_cli_config::base_path();
     }
 
     #[cfg(target_os = "macos")]

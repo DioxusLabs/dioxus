@@ -1,9 +1,3 @@
-# All of these variables are used in the `openid_connect_demo` example, they are set here for the CI to work, they are set here because as stated here for now: `https://doc.rust-lang.org/cargo/reference/config.html` the .cargo/config.toml of the inner workspaces are not read when being invoked from the root workspace.
-[env]
-DIOXUS_FRONT_ISSUER_URL  = ""
-DIOXUS_FRONT_CLIENT_ID = ""
-DIOXUS_FRONT_URL = ""
-
 [profile]
 
 [profile.dioxus-client]

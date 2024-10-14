@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
+use crate::{builder::OpenArguments, config::Platform};
 use anyhow::Context;
-use dioxus_cli_config::Platform;
 
 use crate::{
     builder::{BuildRequest, TargetPlatform},
@@ -115,7 +115,20 @@ impl Build {
     pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
         self.resolve(dioxus_crate)?;
         let build_requests = BuildRequest::create(false, dioxus_crate, self.clone())?;
-        BuildRequest::build_all_parallel(build_requests).await?;
+        let builds = BuildRequest::build_all_parallel(build_requests).await?;
+
+        // If this is a static generation build, building involves running the server to generate static files
+        if self.platform.unwrap() == Platform::StaticGeneration {
+            println!("Building static site...");
+            for build in builds {
+                if let Some(mut result) =
+                    build.open(OpenArguments::new_for_static_generation_build(dioxus_crate))?
+                {
+                    result.wait().await?;
+                }
+            }
+            println!("Static site built!");
+        }
         Ok(())
     }
 

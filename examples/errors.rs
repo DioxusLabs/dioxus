@@ -11,7 +11,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch(|| rsx! { Router::<Route> {} });
+    dioxus::launch(|| rsx! { Router::<Route> {} });
 }
 
 /// You can use an ErrorBoundary to catch errors in children and display a warning
@@ -81,7 +81,7 @@ fn ParseNumberWithShow() -> Element {
                 let request_data = "0.5";
                 let data: i32 = request_data.parse()
                     // You can attach rsx to results that can be displayed in the Error Boundary
-                    .show(|_| rsx!{
+                    .show(|_| rsx! {
                         div {
                             background_color: "red",
                             border: "black",

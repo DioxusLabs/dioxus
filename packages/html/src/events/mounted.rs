@@ -1,7 +1,7 @@
 //! Handles querying data from the renderer
 
 use std::{
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
     future::Future,
     pin::Pin,
 };
@@ -68,6 +68,12 @@ pub enum ScrollBehavior {
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 pub struct MountedData {
     inner: Box<dyn RenderedElementBacking>,
+}
+
+impl Debug for MountedData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MountedData").finish()
+    }
 }
 
 impl<E: RenderedElementBacking> From<E> for MountedData {

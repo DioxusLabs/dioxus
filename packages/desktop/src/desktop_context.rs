@@ -9,7 +9,7 @@ use crate::{
     AssetRequest, Config, WryEventHandler,
 };
 use dioxus_core::{
-    prelude::{current_scope_id, ScopeId},
+    prelude::{Callback, ScopeId},
     VirtualDom,
 };
 use std::rc::{Rc, Weak};
@@ -236,14 +236,10 @@ impl DesktopService {
     pub fn register_asset_handler(
         &self,
         name: String,
-        handler: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
-        scope: Option<ScopeId>,
+        handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
     ) {
-        self.asset_handlers.register_handler(
-            name,
-            handler,
-            scope.unwrap_or(current_scope_id().unwrap_or(ScopeId(0))),
-        )
+        self.asset_handlers
+            .register_handler(name, Callback::new(move |(req, resp)| handler(req, resp)))
     }
 
     /// Removes an asset handler by its identifier.

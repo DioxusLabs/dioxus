@@ -10,15 +10,17 @@ use crate::builder::progress::CargoBuildResult;
 use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
+use crate::config::Platform;
 use crate::link::LinkCommand;
 use crate::Result;
+use crate::TraceSrc;
 use anyhow::Context;
-use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use manganis_cli_support::ManganisSupportGuard;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
+use tracing::error;
 
 impl BuildRequest {
     /// Create a list of arguments for cargo builds
@@ -101,7 +103,11 @@ impl BuildRequest {
         &self,
         mut progress: UnboundedSender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
-        tracing::info!("🚅 Running build [Desktop] command...");
+        tracing::info!(
+            dx_src = ?TraceSrc::Build,
+            "Running build [{}] command...",
+            self.target_platform,
+        );
 
         // Set up runtime guards
         let mut dioxus_version = crate::dx_build_info::PKG_VERSION.to_string();
@@ -109,10 +115,6 @@ impl BuildRequest {
             let hash = &hash.trim_start_matches('g')[..4];
             dioxus_version.push_str(&format!("-{hash}"));
         }
-        let _guard = dioxus_cli_config::__private::save_config(
-            &self.dioxus_crate.dioxus_config,
-            &dioxus_version,
-        );
         let _manganis_support = ManganisSupportGuard::default();
         let _asset_guard =
             AssetConfigDropGuard::new(self.dioxus_crate.dioxus_config.web.app.base_path.as_deref());
@@ -136,8 +138,9 @@ impl BuildRequest {
             .context("Failed to post process build")?;
 
         tracing::info!(
-            "🚩 Build completed: [{}]",
-            self.dioxus_crate.out_dir().display()
+            dx_src = ?TraceSrc::Build,
+            "Build completed: [{}]",
+            self.dioxus_crate.out_dir().display(),
         );
 
         _ = progress.start_send(UpdateBuildProgress {
@@ -222,7 +225,10 @@ impl BuildRequest {
                 cargo_args,
                 Some(linker_args),
             )?;
-            let assets = asset_manifest(&build);
+            let Some(assets) = asset_manifest(&build) else {
+                error!(dx_src = ?TraceSrc::Build, "the asset manifest was not provided by manganis and we were not able to collect assets");
+                return Err(anyhow::anyhow!("asset manifest was not provided by manganis"));
+            };
             // Collect assets from the asset manifest the linker intercept created
             process_assets(&build, &assets, &mut progress)?;
             // Create the __assets_head.html file for bundling
@@ -235,7 +241,7 @@ impl BuildRequest {
     }
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
-        tracing::info!("Copying public assets to the output directory...");
+        tracing::info!(dx_src = ?TraceSrc::Build, "Copying public assets to the output directory...");
         let out_dir = self.target_out_dir();
         let asset_dir = self.dioxus_crate.asset_dir();
 

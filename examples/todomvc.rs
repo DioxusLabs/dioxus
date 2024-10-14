@@ -6,7 +6,7 @@ use std::collections::HashMap;
 const STYLE: &str = asset!("./examples/assets/todomvc.css");
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -16,9 +16,7 @@ enum FilterState {
     Completed,
 }
 
-#[derive(Debug, PartialEq, Eq)]
 struct TodoItem {
-    id: u32,
     checked: bool,
     contents: String,
 }
@@ -120,7 +118,6 @@ fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
         if evt.key() == Key::Enter && !draft.read().is_empty() {
             let id = todo_id();
             let todo = TodoItem {
-                id,
                 checked: false,
                 contents: draft.to_string(),
             };
