@@ -109,7 +109,7 @@ impl RouterContext {
         let subscriber_update = mark_dirty.clone();
         let subscribers = Arc::new(RwLock::new(HashSet::new()));
 
-        let mut myself = RouterContextInner {
+        let myself = RouterContextInner {
             prefix: Default::default(),
             history: cfg.take_history(),
             unresolved_error: None,
@@ -151,18 +151,32 @@ impl RouterContext {
             site_map: R::SITE_MAP,
         };
 
+        let inner = CopyValue::new_in_scope(myself, ScopeId::ROOT);
+        let me = Self { inner };
+
         // set the updater
+        #[cfg(all(
+            feature = "web",
+            not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+        ))]
         {
-            myself.history.updater(Arc::new(move || {
+            inner.write_unchecked().history.updater(Rc::new(move || {
+                for &id in subscribers.read().unwrap().iter() {
+                    (mark_dirty)(id);
+                }
+                me.change_route();
+            }));
+        }
+        #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
+        {
+            inner.write_unchecked().history.updater(Arc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {
                     (mark_dirty)(id);
                 }
             }));
         }
 
-        Self {
-            inner: CopyValue::new_in_scope(myself, ScopeId::ROOT),
-        }
+        me
     }
 
     /// Check if the router is running in a liveview context
