@@ -155,7 +155,10 @@ impl RouterContext {
         let me = Self { inner };
 
         // set the updater
-        #[cfg(feature = "web")]
+        #[cfg(all(
+            feature = "web",
+            not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+        ))]
         {
             inner.write().history.updater(Rc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {
@@ -164,7 +167,7 @@ impl RouterContext {
                 me.change_route();
             }));
         }
-        #[cfg(not(feature = "web"))]
+        #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
         {
             inner.write().history.updater(Arc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {

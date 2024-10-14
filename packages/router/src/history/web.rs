@@ -233,6 +233,10 @@ where
         self.navigate_external(url)
     }
 
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+    ))]
     fn updater(&mut self, callback: std::rc::Rc<dyn Fn()>) {
         let w = self.window.clone();
         let h = self.history.clone();
@@ -248,5 +252,10 @@ where
                 }
             }
         }));
+    }
+
+    #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
+    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
+        tracing::warn!("dioxus-router should only be used with one platform feature enabled.");
     }
 }

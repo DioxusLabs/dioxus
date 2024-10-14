@@ -283,7 +283,10 @@ pub trait HistoryProvider<R: Routable> {
     /// Some [`HistoryProvider`]s may receive URL updates from outside the router. When such
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
-    #[cfg(feature = "web")]
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+    ))]
     fn updater(&mut self, callback: Rc<dyn Fn()>) {}
 
     /// Provide the [`HistoryProvider`] with an update callback.
@@ -291,7 +294,7 @@ pub trait HistoryProvider<R: Routable> {
     /// Some [`HistoryProvider`]s may receive URL updates from outside the router. When such
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
-    #[cfg(not(feature = "web"))]
+    #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
 }
 
@@ -325,11 +328,14 @@ pub(crate) trait AnyHistoryProvider {
     }
 
     #[allow(unused_variables)]
-    #[cfg(feature = "web")]
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+    ))]
     fn updater(&mut self, callback: Rc<dyn Fn()>) {}
 
     #[allow(unused_variables)]
-    #[cfg(not(feature = "web"))]
+    #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
 
     #[cfg(feature = "liveview")]
@@ -403,12 +409,15 @@ where
         self.inner.external(url)
     }
 
-    #[cfg(feature = "web")]
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+    ))]
     fn updater(&mut self, callback: Rc<dyn Fn()>) {
         self.inner.updater(callback)
     }
 
-    #[cfg(not(feature = "web"))]
+    #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
         self.inner.updater(callback)
     }
