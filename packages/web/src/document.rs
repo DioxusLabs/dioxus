@@ -1,5 +1,5 @@
 use dioxus_core::ScopeId;
-use dioxus_html::document::{Document, EvalError, Evaluator};
+use dioxus_html::document::{Document, EvalError, Evaluator, NoOpEvaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde::Serialize;
@@ -95,7 +95,7 @@ impl WebEvaluator {
     fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         let owner = UnsyncStorage::owner();
 
-        let generational_box = owner.invalid();
+        let generational_box = owner.insert(Box::new(NoOpEvaluator) as Box<dyn Evaluator>);
 
         // add the drop handler to DioxusChannel so that it gets dropped when the channel is dropped in js
         let channels = WebDioxusChannel::new(JSOwner::new(owner));

@@ -652,8 +652,11 @@ mod struct_info {
                         let new_value: &_ = &*new.#signal_fields.peek();
                         (&old_value).compare(&&new_value)
                     };
+                    // Make the old fields point to the new fields
+                    #signal_fields.point_to(new.#signal_fields).unwrap();
                     if !field_eq {
-                        (#signal_fields).__set(new.#signal_fields.__take());
+                        // If the fields are not equal, mark the signal as dirty to rerun any subscribers
+                        (#signal_fields).mark_dirty();
                     }
                     // Move the old value back
                     self.#signal_fields = #signal_fields;
@@ -683,13 +686,13 @@ mod struct_info {
                     quote! {
                         // If the event handler is None, we don't need to update it
                         if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
-                            old_handler.__set(new_handler.__take());
+                            old_handler.__point_to(new_handler);
                         }
                     }
                 } else {
                     quote! {
                         // Update the event handlers
-                        self.#name.__set(new.#name.__take());
+                        self.#name.__point_to(&new.#name);
                     }
                 }
             }).collect();
@@ -1447,7 +1450,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[derive(Clone)]
                     #vis struct #name #generics_with_bounds #where_clause {
                         inner: #original_name #ty_generics,
-                        owner: Owner,
+                        owner: dioxus_core::internal::generational_box::Owner,
                     }
 
                     impl #original_impl_generics PartialEq for #name #ty_generics #where_clause {

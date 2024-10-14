@@ -2,33 +2,63 @@ use crate::{
     BorrowError, BorrowMutError, GenerationalLocation, GenerationalRefBorrowGuard,
     GenerationalRefBorrowMutGuard,
 };
+use std::{
+    num::NonZeroU64,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
-pub(crate) struct StorageEntry<T> {
-    generation: u64,
-
-    pub data: Option<T>,
+pub(crate) struct RcStorageEntry<T> {
+    ref_count: AtomicU64,
+    pub data: T,
 }
 
-impl<T> Default for StorageEntry<T> {
-    fn default() -> Self {
+impl<T> RcStorageEntry<T> {
+    pub const fn new(data: T) -> Self {
         Self {
-            generation: 0,
-            data: None,
+            ref_count: AtomicU64::new(0),
+            data,
         }
+    }
+
+    pub fn add_ref(&self) {
+        self.ref_count.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn drop_ref(&self) -> bool {
+        let new_ref_count = self.ref_count.fetch_sub(1, Ordering::SeqCst);
+        new_ref_count == 0
     }
 }
 
+pub(crate) struct StorageEntry<T> {
+    generation: NonZeroU64,
+    pub(crate) data: T,
+}
+
 impl<T> StorageEntry<T> {
+    pub const fn new(data: T) -> Self {
+        Self {
+            generation: NonZeroU64::MIN,
+            data,
+        }
+    }
+
     pub fn valid(&self, location: &GenerationalLocation) -> bool {
         self.generation == location.generation
     }
 
     pub fn increment_generation(&mut self) {
-        self.generation += 1;
+        self.generation = self.generation.checked_add(1).unwrap();
     }
 
-    pub fn generation(&self) -> u64 {
+    pub fn generation(&self) -> NonZeroU64 {
         self.generation
+    }
+}
+
+impl<T: Default + 'static> Default for StorageEntry<T> {
+    fn default() -> Self {
+        Self::new(T::default())
     }
 }
 
