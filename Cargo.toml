@@ -98,7 +98,7 @@ dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.3" }
 generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.3" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.3" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.3" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.1" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.3" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.3" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.3", default-features = false }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.3" }
