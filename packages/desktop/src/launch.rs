@@ -4,7 +4,7 @@ use crate::{
     ipc::{IpcMethod, UserWindowEvent},
 };
 use dioxus_core::*;
-use dioxus_html::prelude::eval;
+use dioxus_document::eval;
 use std::any::Any;
 use tao::event::{Event, StartCause, WindowEvent};
 
@@ -76,8 +76,8 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                                     "#,
                                 );
 
-                                _ = e.send(x_pos.into());
-                                _ = e.send(y_pos.into());
+                                _ = e.send(x_pos);
+                                _ = e.send(y_pos);
                             });
                         });
                     }
