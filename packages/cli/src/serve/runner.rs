@@ -30,12 +30,14 @@ impl AppRunner {
             running: Default::default(),
             file_map: HotreloadFilemap::new(),
             applied_hot_reload_message: Default::default(),
-            ignore: krate.gitignore(),
+            ignore: krate.workspace_gitignore(),
             krate: krate.clone(),
             builds_opened: 0,
         };
 
-        runner.fill_filemap(krate.crate_dir());
+        for krate in krate.all_watched_crates() {
+            runner.fill_filemap(krate);
+        }
 
         runner
     }

@@ -12,6 +12,7 @@ mod dx_build_info;
 mod error;
 mod fastfs;
 mod filemap;
+mod global_ignore;
 mod metadata;
 mod platform;
 mod profiles;
@@ -23,6 +24,7 @@ mod tracer;
 
 pub(crate) use builder::*;
 pub(crate) use cli::*;
+pub(crate) use config::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
 pub(crate) use filemap::*;

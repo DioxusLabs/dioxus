@@ -2,11 +2,11 @@ use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
 use crate::{Platform, Result};
 use anyhow::Context;
-use krates::{cm::Target, KrateDetails, KrateMatch, Package};
+use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
-use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::{io::Write, path::Path};
 use toml_edit::Item;
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
@@ -332,8 +332,23 @@ impl DioxusCrate {
         Ok(())
     }
 
+    fn default_ignore_list(&self) -> Vec<&'static str> {
+        vec![
+            ".git",
+            ".github",
+            ".vscode",
+            "target",
+            "node_modules",
+            "dist",
+            "*~",
+            ".*",
+        ]
+    }
+
     /// Create a new gitignore map for this target crate
-    pub fn gitignore(&self) -> ignore::gitignore::Gitignore {
+    ///
+    /// todo(jon): this is a bit expensive to build, so maybe we should cache it?
+    pub fn workspace_gitignore(&self) -> ignore::gitignore::Gitignore {
         let crate_dir = self.crate_dir();
 
         let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(&crate_dir);
@@ -342,16 +357,7 @@ impl DioxusCrate {
         let workspace_dir = self.workspace_dir();
         ignore_builder.add(workspace_dir.join(".gitignore"));
 
-        let excluded_paths = vec![
-            ".git",
-            ".github",
-            ".vscode",
-            "target",
-            "node_modules",
-            "dist",
-        ];
-
-        for path in excluded_paths {
+        for path in self.default_ignore_list() {
             ignore_builder
                 .add_line(None, path)
                 .expect("failed to add path to file excluder");
@@ -452,6 +458,96 @@ impl DioxusCrate {
         }
 
         kept_features
+    }
+
+    /// Return the list of paths that we should watch for changes.
+    pub(crate) fn watch_paths(&self) -> Vec<PathBuf> {
+        let mut watched_paths = vec![];
+
+        // Get a list of *all* the crates with Rust code that we need to watch.
+        // This will end up being dependencies in the workspace and non-workspace dependencies on the user's computer.
+        let mut watched_crates = self.local_dependency_manifests();
+        watched_crates.push(self.crate_dir().join("Cargo.toml"));
+
+        // Now, watch all the folders in the crates, but respecting their respective ignore files
+        for manifest in watched_crates {
+            let Some(krate_root) = manifest.parent() else {
+                continue;
+            };
+
+            // Build the ignore builder for this crate, but with our default ignore list as well
+            let ignore = self.ignore_for_krate(krate_root);
+
+            for entry in krate_root.read_dir().unwrap() {
+                let Ok(entry) = entry else {
+                    continue;
+                };
+
+                if ignore
+                    .matched(entry.path(), entry.path().is_dir())
+                    .is_ignore()
+                {
+                    continue;
+                }
+
+                watched_paths.push(entry.path().to_path_buf());
+            }
+        }
+
+        watched_paths.dedup();
+
+        watched_paths
+    }
+
+    fn ignore_for_krate(&self, path: &Path) -> ignore::gitignore::Gitignore {
+        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(path);
+        for path in self.default_ignore_list() {
+            ignore_builder
+                .add_line(None, path)
+                .expect("failed to add path to file excluder");
+        }
+        ignore_builder.build().unwrap()
+    }
+
+    /// Get all the Manifest paths for dependencies that we should watch. Will not return anything
+    /// in the `.cargo` folder - only local dependencies will be watched.
+    ///
+    /// This returns a list of manifest paths
+    ///
+    /// Extend the watch path to include:
+    ///
+    /// - the assets directory - this is so we can hotreload CSS and other assets by default
+    /// - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
+    /// - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
+    pub(crate) fn local_dependency_manifests(&self) -> Vec<PathBuf> {
+        let mut paths = vec![];
+
+        for (dependency, _edge) in self.krates.get_deps(self.package) {
+            let krate = match dependency {
+                krates::Node::Krate { krate, .. } => krate,
+                krates::Node::Feature { krate_index, .. } => &self.krates[krate_index.index()],
+            };
+
+            if krate
+                .manifest_path
+                .components()
+                .any(|c| c.as_str() == ".cargo")
+            {
+                continue;
+            }
+
+            paths.push(krate.manifest_path.to_path_buf().into_std_path_buf());
+        }
+
+        paths
+    }
+
+    pub(crate) fn all_watched_crates(&self) -> Vec<PathBuf> {
+        self.local_dependency_manifests()
+            .into_iter()
+            .map(|p| p.parent().unwrap().to_path_buf())
+            .chain(Some(self.crate_dir().parent().unwrap().to_path_buf()))
+            .collect()
     }
 }
 

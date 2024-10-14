@@ -11,22 +11,22 @@ pub(crate) struct RunArgs {
 
 impl RunArgs {
     pub(crate) async fn run(mut self) -> anyhow::Result<()> {
-        let dioxus_crate = DioxusCrate::new(&self.build_args.target_args)
+        let krate = DioxusCrate::new(&self.build_args.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        self.build_args.resolve(&dioxus_crate)?;
+        self.build_args.resolve(&krate)?;
 
-        println!("Building crate krate data: {:#?}", dioxus_crate);
+        println!("Building crate krate data: {:#?}", krate);
         println!("Build args: {:#?}", self.build_args);
 
-        let bundle = Builder::start(&dioxus_crate, self.build_args.clone())?
+        let bundle = Builder::start(&krate, self.build_args.clone())?
             .finish()
             .await?;
 
         let devserver_ip = "127.0.0.1:8080".parse().unwrap();
         let fullstack_ip = "127.0.0.1:8081".parse().unwrap();
 
-        let mut runner = crate::serve::AppRunner::start(&dioxus_crate);
+        let mut runner = crate::serve::AppRunner::start(&krate);
         runner
             .open(bundle, devserver_ip, Some(fullstack_ip), true)
             .await?;

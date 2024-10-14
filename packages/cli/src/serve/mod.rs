@@ -45,9 +45,9 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;
-    let mut devserver = WebServer::start(&args, &krate)?;
-    let mut screen = Output::start(&args).expect("Failed to open terminal logger");
-    let mut watcher = Watcher::start(&args, &krate);
+    let mut devserver = WebServer::start(&krate, &args)?;
+    let mut screen = Output::start(&args)?;
+    let mut watcher = Watcher::start(&krate, &args);
     let mut runner = AppRunner::start(&krate);
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
@@ -61,7 +61,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 - Press `t` to toggle cargo output
                 - Press `/` for more commands and shortcuts
 
-                To learn more, check out the docs at https://dioxuslabs.com/learn/0.6/getting_started
+                Learn more at https://dioxuslabs.com/learn/0.6/getting_started
     "#,
         krate.executable_name()
     );

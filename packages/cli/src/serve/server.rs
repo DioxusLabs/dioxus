@@ -8,9 +8,8 @@ use axum::{
     body::Body,
     extract::{
         ws::{Message, WebSocket},
-        WebSocketUpgrade,
+        Request, State, WebSocketUpgrade,
     },
-    extract::{Request, State},
     http::{
         header::{HeaderName, HeaderValue, CACHE_CONTROL, EXPIRES, PRAGMA},
         Method, Response, StatusCode,
@@ -68,7 +67,7 @@ impl WebServer {
     ///
     /// This will also start the websocket server that powers the devtools. If you want to communicate
     /// with connected devtools clients, this is the place to do it.
-    pub(crate) fn start(args: &ServeArgs, cfg: &DioxusCrate) -> Result<Self> {
+    pub(crate) fn start(krate: &DioxusCrate, args: &ServeArgs) -> Result<Self> {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
@@ -89,7 +88,7 @@ impl WebServer {
         let build_status = SharedStatus::new_with_starting_build();
         let router = build_devserver_router(
             args,
-            cfg,
+            krate,
             hot_reload_sockets_tx,
             build_status_sockets_tx,
             proxied_address,
@@ -106,7 +105,7 @@ impl WebServer {
 
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
-            cfg.config.web.https.clone(),
+            krate.config.web.https.clone(),
             listener,
             router,
         ));
@@ -120,7 +119,7 @@ impl WebServer {
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
-            application_name: cfg.config.application.name.clone(),
+            application_name: krate.config.application.name.clone(),
             platform: args.build_arguments.platform(),
         })
     }
@@ -248,6 +247,10 @@ impl WebServer {
 
     /// Sends hot reloadable changes to all clients.
     pub(crate) async fn send_hotreload(&mut self, reload: HotReloadMsg) {
+        if reload.is_empty() {
+            return;
+        }
+
         tracing::debug!("Sending hotreload to clients {:?}", reload);
 
         let msg = DevserverMsg::HotReload(reload);
@@ -413,7 +416,7 @@ fn build_devserver_router(
                 "/",
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                        tracing::debug!("New devtool websocket connection: {ws:#?}");
+                        tracing::debug!("New devtool websocket connection");
                         ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
                     },
                 ),

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{build::BuildArgs, config::AddressArguments, settings, DioxusCrate, Platform};
+use crate::{AddressArguments, BuildArgs, DioxusCrate, Platform};
 use anyhow::Context;
 
 /// Serve the project

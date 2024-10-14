@@ -144,6 +144,19 @@ impl Platform {
         }
     }
 
+    pub(crate) fn expected_name(&self) -> &'static str {
+        match self {
+            Platform::Web => "Web",
+            Platform::MacOS => "Desktop MacOS",
+            Platform::Windows => "Desktop Windows",
+            Platform::Linux => "Desktop Linux",
+            Platform::Ios => "Mobile iOS",
+            Platform::Android => "Mobile Android",
+            Platform::Server => "Server",
+            Platform::Liveview => "Liveview",
+        }
+    }
+
     pub(crate) fn autodetect_from_cargo_feature(feature: &str) -> Option<Self> {
         match feature {
             "web" => Some(Platform::Web),

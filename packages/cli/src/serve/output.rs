@@ -2,14 +2,13 @@ use crate::{
     serve::{ansi_buffer::AnsiStringBuffer, Builder, ServeUpdate, Watcher, WebServer},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
-use cargo_metadata::diagnostic::DiagnosticLevel;
 use crossterm::{
     cursor::{Hide, Show},
     event::{
         DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange, Event,
         EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
     },
-    terminal::{disable_raw_mode, enable_raw_mode, ClearType},
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
     ExecutableCommand,
 };
 use ratatui::{
@@ -27,7 +26,7 @@ use std::{
 use tracing::Level;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_WIDTH: u16 = 120;
+const VIEWPORT_MAX_WIDTH: u16 = 120;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 12;
 
@@ -44,7 +43,6 @@ pub struct Output {
     events: Option<EventStream>,
 
     // A list of all messages from build, dev, app, and more.
-    // messages: Vec<TraceMsg>,
     more_modal_open: bool,
     interactive: bool,
     platform: Platform,
@@ -90,7 +88,11 @@ impl Output {
                 .ok(),
             )),
             interactive: cfg.is_interactive_tty(),
-            dx_version: format!("{}", env!("CARGO_PKG_VERSION")),
+            dx_version: format!(
+                "{}-{}",
+                env!("CARGO_PKG_VERSION"),
+                crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or_else(|| "main")
+            ),
             platform: cfg.build_arguments.platform.expect("To be resolved by now"),
             events: None,
             // messages: Vec::new(),
@@ -215,8 +217,12 @@ impl Output {
                 self.trace = !self.trace;
                 tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
             }
+
             KeyCode::Char('c') => {
-                tracing::info!("clearing terminal (todo... not working)");
+                stdout()
+                    .execute(Clear(ClearType::All))?
+                    .execute(Clear(ClearType::Purge))?;
+                _ = self.term.borrow_mut().as_mut().map(|t| t.clear());
             }
 
             // Toggle the more modal by swapping the the terminal with a new one
@@ -253,6 +259,8 @@ impl Output {
     }
 
     pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
+        use cargo_metadata::diagnostic::DiagnosticLevel;
+
         if self.trace
             || matches!(
                 message.message.level,
@@ -365,7 +373,7 @@ impl Output {
     fn render_frame(&self, frame: &mut Frame, state: RenderState) {
         // Use the max size of the viewport, but shrunk to a sensible max width
         let mut area = frame.area();
-        area.width = area.width.clamp(0, VIEWPORT_WIDTH);
+        area.width = area.width.clamp(0, VIEWPORT_MAX_WIDTH);
 
         let [_top, body, bottom] = Layout::vertical([
             Constraint::Length(1),
@@ -413,7 +421,7 @@ impl Output {
         .horizontal_margin(1)
         .areas(area);
 
-        let [col1, col2] = Layout::horizontal([Constraint::Length(60), Constraint::Fill(1)])
+        let [col1, col2] = Layout::horizontal([Constraint::Length(55), Constraint::Fill(1)])
             .horizontal_margin(1)
             .areas(body);
 
@@ -599,9 +607,9 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
-                self.platform.to_string().yellow(),
+                self.platform.expected_name().yellow(),
                 if state.opts.build_arguments.fullstack {
-                    " (fullstack)".dark_gray()
+                    " + fullstack".yellow()
                 } else {
                     " ".dark_gray()
                 },
@@ -674,8 +682,8 @@ impl Output {
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                "Watching: ".gray(),
-                r#"[“assets”, “src”]"#.yellow(),
+                "dx version: ".gray(),
+                self.dx_version.as_str().yellow(),
             ])),
             meta_list[1],
         );
@@ -687,7 +695,7 @@ impl Output {
             meta_list[2],
         );
         frame.render_widget(
-            Paragraph::new(Line::from(vec!["Hotreload: ".gray(), "enabled".yellow()])),
+            Paragraph::new(Line::from(vec!["Hotreload: ".gray(), "rsx only".yellow()])),
             meta_list[3],
         );
 
@@ -718,10 +726,10 @@ impl Output {
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                "🧬 dx".dark_gray(),
-                " ".dark_gray(),
-                self.dx_version.as_str().dark_gray(),
-                " ".dark_gray(),
+                // "🧬 dx".dark_gray(),
+                // " ".dark_gray(),
+                // self.dx_version.as_str().dark_gray(),
+                // " ".dark_gray(),
             ]))
             .right_aligned(),
             row[1],

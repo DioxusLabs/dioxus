@@ -39,3 +39,9 @@ pub struct HotReloadMsg {
     pub assets: Vec<PathBuf>,
     pub unknown_files: Vec<PathBuf>,
 }
+
+impl HotReloadMsg {
+    pub fn is_empty(&self) -> bool {
+        self.templates.is_empty() && self.assets.is_empty() && self.unknown_files.is_empty()
+    }
+}
