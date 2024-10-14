@@ -1,7 +1,5 @@
 use dioxus_core::ScopeId;
-use dioxus_html::document::{
-    Document, EvalError, Evaluator, JSOwner, NoOpEvaluator, WeakDioxusChannel, WebDioxusChannel,
-};
+use dioxus_html::document::{Document, EvalError, Evaluator, NoOpEvaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde::Serialize;
