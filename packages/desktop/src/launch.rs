@@ -4,6 +4,7 @@ use crate::{
     ipc::{IpcMethod, UserWindowEvent},
 };
 use dioxus_core::*;
+use dioxus_document::eval;
 use std::any::Any;
 use tao::event::{Event, StartCause, WindowEvent};
 
@@ -43,6 +44,44 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
 
                 #[cfg(all(feature = "devtools", debug_assertions))]
                 UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
+
+                // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
+                UserWindowEvent::WindowsDragDrop(id) => {
+                    if let Some(webview) = app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                eval("window.interpreter.handleWindowsDragDrop();");
+                            });
+                        });
+                    }
+                }
+                UserWindowEvent::WindowsDragLeave(id) => {
+                    if let Some(webview) = app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                eval("window.interpreter.handleWindowsDragLeave();");
+                            });
+                        });
+                    }
+                }
+                UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
+                    if let Some(webview) = app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                let e = eval(
+                                    r#" 
+                                    const xPos = await dioxus.recv();
+                                    const yPos = await dioxus.recv();
+                                    window.interpreter.handleWindowsDragOver(xPos, yPos)
+                                    "#,
+                                );
+
+                                _ = e.send(x_pos);
+                                _ = e.send(y_pos);
+                            });
+                        });
+                    }
+                }
 
                 UserWindowEvent::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),

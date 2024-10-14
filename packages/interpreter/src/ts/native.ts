@@ -167,6 +167,47 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  // Windows drag-n-drop fix code. Called by wry drag-n-drop handler over the event loop.
+  handleWindowsDragDrop() {
+    if (window.dxDragLastElement) {
+      const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+      window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+
+      let data = new DataTransfer();
+
+      // We need to mimic that there are actually files in this event for our native file engine to pick it up.
+      const file = new File(["content"], "file.txt", { type: "text/plain" });
+      data.items.add(file);
+
+      const dragDropEvent = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data });
+      window.dxDragLastElement.dispatchEvent(dragDropEvent);
+      window.dxDragLastElement = null;
+    }
+  }
+
+  handleWindowsDragOver(xPos, yPos) {
+    const element = document.elementFromPoint(xPos, yPos);
+
+    if (element != window.dxDragLastElement) {
+      if (window.dxDragLastElement) {
+        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+        window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+      }
+
+      const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
+      element.dispatchEvent(dragOverEvent);
+      window.dxDragLastElement = element;
+    }
+  }
+
+  handleWindowsDragLeave() {
+    if (window.dxDragLastElement) {
+      const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+      window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+      window.dxDragLastElement = null;
+    }
+  }
+
   // ignore the fact the base interpreter uses ptr + len but we use array...
   // @ts-ignore
   loadChild(array: number[]) {
