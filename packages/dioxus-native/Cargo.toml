@@ -1,0 +1,51 @@
+[package]
+name = "dioxus-native"
+version = "0.0.0"
+license.workspace = true
+edition = "2021"
+
+[features]
+accessibility = ["dep:accesskit", "dep:accesskit_winit"]
+hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
+menu = ["dep:muda"]
+tracing = ["dep:tracing"]
+default = ["accessibility", "hot-reload", "menu", "tracing"]
+
+[dependencies]
+# Blitz dependencies
+blitz-renderer-vello = { path = "../blitz-renderer-vello" }
+blitz-dom = { path = "../blitz-dom" }
+blitz-net = { path = "../blitz-net" }
+blitz-traits = { path = "../blitz-traits" }
+
+# Servo dependencies
+style = { workspace = true }
+
+# DioxusLabs dependencies
+dioxus = { workspace = true }
+dioxus-cli-config = { workspace = true, optional = true }
+dioxus-devtools = { workspace = true, optional = true }
+
+# Windowing & Input
+winit = { workspace = true }
+muda = { workspace = true, features = ["serde"], optional = true }
+accesskit = { workspace = true, optional = true }
+accesskit_winit = {workspace = true, optional = true }
+keyboard-types = { workspace = true }
+
+# IO & Networking
+url = { workspace = true, features = ["serde"] }
+tokio = { workspace = true, features = ["full"] }
+ureq = { workspace = true }
+
+# Other dependencies
+tracing = { workspace = true, optional = true }
+rustc-hash = { workspace = true }
+futures-util = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-activity = { version = "0.6.0", features = ["native-activity"] }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
