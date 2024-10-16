@@ -44,6 +44,8 @@ pub(crate) enum ServeUpdate {
 
     RequestRebuild,
 
+    ToggleShouldRebuild,
+
     Redraw,
 
     TracingLog {

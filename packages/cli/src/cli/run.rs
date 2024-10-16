@@ -51,6 +51,7 @@ impl RunArgs {
                 ServeUpdate::RequestRebuild => {}
                 ServeUpdate::Redraw => {}
                 ServeUpdate::OpenApp => {}
+                ServeUpdate::ToggleShouldRebuild => {}
             }
         }
 

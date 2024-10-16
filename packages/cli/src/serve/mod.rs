@@ -104,7 +104,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                     tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
 
                     devserver.send_hotreload(hr).await;
-                } else {
+                } else if runner.should_full_rebuild {
                     tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
 
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
@@ -112,9 +112,14 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
                     // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
                     runner.clear_hot_reload_changes();
+                    runner.file_map.force_rebuild();
 
                     // Tell the server to show a loading page for any new requests
                     devserver.start_build().await;
+                } else {
+                    tracing::warn!(
+                        "Rebuild required but is currently paused - press `r` to rebuild manually"
+                    )
                 }
             }
 
@@ -220,6 +225,18 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
             ServeUpdate::Redraw => {
                 // simply returning will cause a redraw
+            }
+
+            ServeUpdate::ToggleShouldRebuild => {
+                runner.should_full_rebuild = !runner.should_full_rebuild;
+                tracing::info!(
+                    "Automatic rebuilds are currently: {}",
+                    if runner.should_full_rebuild {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
+                )
             }
 
             ServeUpdate::Exit { error } => match error {

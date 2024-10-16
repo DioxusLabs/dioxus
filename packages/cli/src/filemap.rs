@@ -97,12 +97,17 @@ impl HotreloadFilemap {
             syn::parse_file(&cached_file.contents),
             syn::parse_file(&new_contents),
         ) else {
+            tracing::debug!("Diff rsx returned not parseable");
             return HotreloadResult::NotParseable;
         };
+
+        // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
+        cached_file.most_recent = Some(new_contents);
 
         // todo(jon): allow server-fn hotreloading
         // also whyyyyyyyyy is this (new, old) instead of (old, new)? smh smh smh
         let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
+            tracing::debug!("Diff rsx returned notreladable");
             return HotreloadResult::Notreloadable;
         };
 
@@ -132,7 +137,6 @@ impl HotreloadFilemap {
 
             // If no result is returned, we can't hotreload this file and need to keep the old file
             let Some(results) = results else {
-                cached_file.contents = new_contents;
                 return HotreloadResult::Notreloadable;
             };
 
@@ -160,9 +164,6 @@ impl HotreloadFilemap {
                 out_templates.push(HotReloadTemplateWithLocation { template, key });
             }
         }
-
-        // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
-        cached_file.most_recent = Some(new_contents);
 
         HotreloadResult::Rsx(out_templates)
     }

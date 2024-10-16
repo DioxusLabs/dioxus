@@ -21,6 +21,7 @@ pub(crate) struct AppRunner {
     pub(crate) ignore: Gitignore,
     pub(crate) applied_hot_reload_message: HotReloadMsg,
     pub(crate) builds_opened: usize,
+    pub(crate) should_full_rebuild: bool,
 }
 
 impl AppRunner {
@@ -33,6 +34,7 @@ impl AppRunner {
             ignore: krate.workspace_gitignore(),
             krate: krate.clone(),
             builds_opened: 0,
+            should_full_rebuild: true,
         };
 
         for krate in krate.all_watched_crates() {

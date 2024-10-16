@@ -1,3 +1,5 @@
+use std::process::Stdio;
+
 use crate::{BuildRequest, Platform, Result, RustupShow};
 use anyhow::Context;
 use tokio::process::Command;
@@ -64,6 +66,8 @@ impl BuildRequest {
                         "--precise",
                         &wasm_bindgen_shared::version(),
                     ])
+                    .stderr(Stdio::piped())
+                    .stdout(Stdio::piped())
                     .output()
                     .await;
 
@@ -88,6 +92,22 @@ impl BuildRequest {
     /// are running on an Apple Silicon Mac, but it would be confusing if we installed these when we actually
     /// should be installing the x86 versions.
     pub(crate) async fn verify_ios_tooling(&self, _rustup: RustupShow) -> Result<()> {
+        // open the simulator
+        _ = tokio::process::Command::new("open")
+            .arg("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app")
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .status()
+            .await;
+
+        // Now xcrun to open the device
+        _ = tokio::process::Command::new("xcrun")
+            .args(["simctl", "boot", "83AE3067-987F-4F85-AE3D-7079EF48C967"])
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .status()
+            .await;
+
         // if !rustup
         //     .installed_toolchains
         //     .contains(&"aarch64-apple-ios".to_string())

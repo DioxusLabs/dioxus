@@ -206,6 +206,7 @@ impl Output {
         match key.code {
             KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
             KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
+            KeyCode::Char('p') => return Ok(Some(ServeUpdate::ToggleShouldRebuild)),
             KeyCode::Char('v') => {
                 self.verbose = !self.verbose;
                 tracing::info!(
