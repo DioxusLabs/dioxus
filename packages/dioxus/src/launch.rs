@@ -188,21 +188,35 @@ impl LaunchBuilder {
         self
     }
 
+    fn launch_inner(self, app: fn() -> Element) {
+        #[cfg(all(feature = "fullstack", not(feature = "server")))]
+        {
+            use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
+            if get_server_url().is_empty() {
+                let serverurl = format!(
+                    "http://127.0.0.1:{}",
+                    std::env::var("PORT").unwrap_or_else(|_| "8080".to_string())
+                )
+                .leak();
+                set_server_url(serverurl);
+            }
+        }
+
+        let cfg = self.configs;
+        (self.launch_fn)(app, self.contexts, cfg);
+    }
+
     // Static generation is the only platform that may exit. We can't use the `!` type here
     #[cfg(any(feature = "static-generation", feature = "web"))]
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
-        let cfg = self.configs;
-
-        (self.launch_fn)(app, self.contexts, cfg)
+        self.launch_inner(app);
     }
 
     #[cfg(not(any(feature = "static-generation", feature = "web")))]
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) -> ! {
-        let cfg = self.configs;
-
-        (self.launch_fn)(app, self.contexts, cfg);
+        self.launch_inner(app);
         unreachable!("Launching an application will never exit")
     }
 }

@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use crate as dioxus_elements;
+use crate::{self as dioxus_elements, prelude::LinkExtension};
 use dioxus_core::{prelude::*, DynamicNode};
 use dioxus_core_macro::*;
 
@@ -462,6 +462,11 @@ impl LinkProps {
         }
         attributes
     }
+}
+
+#[component]
+pub fn Stylesheet(src: String) -> Element {
+    Link(LinkProps::builder().href(src).rel("stylesheet").build())
 }
 
 /// Render a [`link`](crate::elements::link) tag into the head of the page.
