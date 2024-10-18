@@ -90,7 +90,7 @@ use dioxus::prelude::*;
 fn main() {
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
-    let address = dioxus_cli_config::RuntimeCLIArguments::fullstack_address_or_localhost();
+    let address = dioxus_cli_config::fullstack_address_or_localhost();
 
     // Set up the axum router
     let router = axum::Router::new()
@@ -160,11 +160,7 @@ use dioxus::prelude::*;
 fn main() {
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
-    let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli();
-    let address = cli_args
-        .as_ref()
-        .map(|args| args.fullstack_address().address())
-        .unwrap_or_else(SocketAddr::from(([127, 0, 0, 1], 8080)));
+    let address = dioxus_cli_config::fullstack_address_or_localhost();
 
     // Set up the axum router
     let router = axum::Router::new()
