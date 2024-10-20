@@ -98,7 +98,7 @@ impl BuildRequest {
 
     fn new_server(serve: bool, config: &DioxusCrate, build: &Build) -> Self {
         let mut build = build.clone();
-        if build.profile.is_none() {
+        if !build.release && build.profile.is_none() {
             build.profile = Some(CLIENT_PROFILE.to_string());
         }
         let client_feature = build.auto_detect_server_feature(config);
@@ -113,7 +113,7 @@ impl BuildRequest {
 
     fn new_client(serve: bool, config: &DioxusCrate, build: &Build) -> Self {
         let mut build = build.clone();
-        if build.profile.is_none() {
+        if !build.release && build.profile.is_none() {
             build.profile = Some(SERVER_PROFILE.to_string());
         }
         let (client_feature, client_platform) = build.auto_detect_client_platform(config);
