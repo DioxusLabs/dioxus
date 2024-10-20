@@ -161,3 +161,52 @@ fn spreads_memorize_in_place() {
     assert!(props.memoize(&CompProps::builder().build()));
     assert_eq!(props.attributes, vec![]);
 }
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/2331
+#[test]
+fn cloning_read_only_signal_components_work() {
+    fn app() -> Element {
+        if generation() < 5 {
+            println!("Generating new props");
+            needs_update();
+        }
+
+        let read_only_signal_rsx = rsx! {
+            TakesReadOnlySignalNonClone { sig: NonCloneable(generation() as i32) }
+            TakesReadOnlySignalNum { sig: generation() as i32 }
+        };
+
+        rsx! {
+            {read_only_signal_rsx.clone()}
+            {read_only_signal_rsx}
+        }
+    }
+
+    struct NonCloneable<T>(T);
+
+    #[component]
+    fn TakesReadOnlySignalNum(sig: ReadOnlySignal<i32>) -> Element {
+        rsx! {}
+    }
+
+    #[component]
+    fn TakesReadOnlySignalNonClone(sig: ReadOnlySignal<NonCloneable<i32>>) -> Element {
+        rsx! {}
+    }
+
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    let mut dom = VirtualDom::new(app);
+
+    let mutations = dom.rebuild_to_vec();
+    println!("{:#?}", mutations);
+    dom.mark_dirty(ScopeId::APP);
+    for _ in 0..20 {
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
+            true,
+        );
+        dom.runtime().handle_event("click", event, ElementId(1));
+        dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    }
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+}

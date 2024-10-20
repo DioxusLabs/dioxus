@@ -9,5 +9,5 @@ publish = false
 [dependencies]
 dioxus = { workspace = true }
 dioxus-liveview = { workspace = true, features = ["axum"] }
-tokio = { version = "1.19.2", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true, features = ["ws"] }

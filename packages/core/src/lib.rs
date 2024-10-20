@@ -42,6 +42,9 @@ pub mod internal {
         HotReloadTemplateWithLocation, HotReloadedTemplate, HotreloadedLiteral, NamedAttribute,
         TemplateGlobalKey,
     };
+
+    #[doc(hidden)]
+    pub use generational_box;
 }
 
 pub(crate) mod innerlude {

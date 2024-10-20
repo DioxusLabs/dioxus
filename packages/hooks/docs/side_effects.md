@@ -16,7 +16,7 @@ fn MyComponent() -> Element {
         let count = count.read();
 
         // You can use the count value to update the DOM manually
-        eval(&format!(
+        document::eval(&format!(
             r#"var c = document.getElementById("dioxus-canvas");
 var ctx = c.getContext("2d");
 ctx.font = "30px Arial";

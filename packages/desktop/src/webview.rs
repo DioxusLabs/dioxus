@@ -13,13 +13,14 @@ use crate::{
     Config, DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
+use dioxus_document::Document;
 use dioxus_hooks::to_owned;
-use dioxus_html::{prelude::Document, HasFileData, HtmlEvent, PlatformEventData};
+use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
-use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
+use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
@@ -248,10 +249,42 @@ impl WebviewInstance {
 
         let file_drop_handler = {
             to_owned![file_hover];
-            move |evt| {
+
+            #[cfg(windows)]
+            let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
+
+            move |evt: DragDropEvent| {
                 // Update the most recent file drop event - when the event comes in from the webview we can use the
                 // most recent event to build a new event with the files in it.
+                #[cfg(not(windows))]
                 file_hover.set(evt);
+
+                // Windows webview blocks HTML-native events when the drop handler is provided.
+                // The problem is that the HTML-native events don't provide the file, so we need this.
+                // Solution: this glue code to mimic drag drop events.
+                #[cfg(windows)]
+                {
+                    file_hover.set(evt.clone());
+
+                    match evt {
+                        wry::DragDropEvent::Drop {
+                            paths: _,
+                            position: _,
+                        } => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragDrop(window_id));
+                        }
+                        wry::DragDropEvent::Over { position } => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragOver(
+                                window_id, position.0, position.1,
+                            ));
+                        }
+                        wry::DragDropEvent::Leave => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragLeave(window_id));
+                        }
+                        _ => {}
+                    }
+                }
+
                 false
             }
         };

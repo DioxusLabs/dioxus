@@ -1,6 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use dioxus_core::prelude::use_hook;
 use dioxus_core::prelude::Callback;
 
@@ -19,7 +16,7 @@ pub fn use_callback<T: 'static, O: 'static>(f: impl FnMut(T) -> O + 'static) -> 
 
     if let Some(callback) = callback.take() {
         // Every time this hook is called replace the inner callback with the new callback
-        inner.__set(Rc::new(RefCell::new(callback)));
+        inner.replace(Box::new(callback));
     }
 
     inner

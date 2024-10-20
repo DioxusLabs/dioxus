@@ -1,4 +1,5 @@
 use dioxus_isrg::*;
+use dioxus_lib::document::Document;
 use dioxus_lib::prelude::*;
 use dioxus_router::prelude::*;
 use dioxus_ssr::renderer;

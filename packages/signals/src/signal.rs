@@ -182,6 +182,19 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
+    /// Create a new Signal without an owner. This will leak memory if you don't manually drop it.
+    pub fn leak_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
+        Self {
+            inner: CopyValue::leak_with_caller(
+                SignalData {
+                    subscribers: Default::default(),
+                    value,
+                },
+                caller,
+            ),
+        }
+    }
+
     /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
     #[track_caller]
     #[tracing::instrument(skip(value))]
@@ -208,9 +221,14 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
+    /// Point to another signal
+    pub fn point_to(&mut self, other: Self) -> BorrowResult {
+        self.inner.point_to(other.inner)
+    }
+
     /// Drop the value out of the signal, invalidating the signal in the process.
-    pub fn manually_drop(&self) -> Option<T> {
-        self.inner.manually_drop().map(|i| i.value)
+    pub fn manually_drop(&self) {
+        self.inner.manually_drop()
     }
 
     /// Get the scope the signal was created in.
