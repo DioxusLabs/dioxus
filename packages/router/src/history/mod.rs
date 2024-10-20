@@ -10,7 +10,7 @@
 //! 1) [`MemoryHistory`] for desktop/mobile/ssr platforms
 //! 2) [`WebHistory`] for web platforms
 
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{any::Any, rc::Rc};
 
 mod memory;
 pub use memory::*;
@@ -283,7 +283,19 @@ pub trait HistoryProvider<R: Routable> {
     /// Some [`HistoryProvider`]s may receive URL updates from outside the router. When such
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+    ))]
+    fn updater(&mut self, callback: Rc<dyn Fn()>) {}
+
+    /// Provide the [`HistoryProvider`] with an update callback.
+    ///
+    /// Some [`HistoryProvider`]s may receive URL updates from outside the router. When such
+    /// updates are received, they should call `callback`, which will cause the router to update.
+    #[allow(unused_variables)]
+    #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
+    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {}
 }
 
 pub(crate) trait AnyHistoryProvider {
@@ -316,7 +328,15 @@ pub(crate) trait AnyHistoryProvider {
     }
 
     #[allow(unused_variables)]
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+    ))]
+    fn updater(&mut self, callback: Rc<dyn Fn()>) {}
+
+    #[allow(unused_variables)]
+    #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
+    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {}
 
     #[cfg(feature = "liveview")]
     fn is_liveview(&self) -> bool;
@@ -389,7 +409,16 @@ where
         self.inner.external(url)
     }
 
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+    ))]
+    fn updater(&mut self, callback: Rc<dyn Fn()>) {
+        self.inner.updater(callback)
+    }
+
+    #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
+    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
         self.inner.updater(callback)
     }
 
