@@ -441,6 +441,15 @@ function handleVirtualdomEventSync(
   // Serialize the event and send it to the custom protocol in the Rust side of things
   xhr.open("POST", endpoint, false);
   xhr.setRequestHeader("Content-Type", "application/json");
+
+  // hack for android since we CANT SEND BODIES (because wry is using shouldInterceptRequest)
+  //
+  // https://issuetracker.google.com/issues/119844519
+  // https://stackoverflow.com/questions/43273640/android-webviewclient-how-to-get-post-request-body
+  // https://developer.android.com/reference/android/webkit/WebViewClient#shouldInterceptRequest(android.webkit.WebView,%20android.webkit.WebResourceRequest)
+  //
+  // the issue here isn't that big, tbh, but there's a small chance we lose the event due to header max size (16k per header, 32k max)
+  xhr.setRequestHeader("dioxus-data", contents);
   xhr.send(contents);
 
   // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to

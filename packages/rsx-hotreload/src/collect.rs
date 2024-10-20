@@ -11,13 +11,17 @@
 use syn::visit_mut::VisitMut;
 use syn::{File, Macro};
 
-#[derive(Debug)]
 pub struct ChangedRsx {
     /// The old macro - the original RSX from the original file
     pub old: Macro,
 
     /// The new macro
     pub new: Macro,
+}
+
+#[derive(Debug)]
+pub enum ReloadableRustCode {
+    Rsx { old: Macro, new: Macro },
 }
 
 /// Find any rsx calls in the given file and return a list of all the rsx calls that have changed.

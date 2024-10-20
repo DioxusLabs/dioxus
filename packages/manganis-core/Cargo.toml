@@ -1,0 +1,8 @@
+[package]
+name = "manganis-core"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+serde_json = "1.0"
+serde = { workspace = true, features = ["derive"] }

@@ -4,6 +4,7 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+mod android_sync_lock;
 mod app;
 mod assets;
 mod config;

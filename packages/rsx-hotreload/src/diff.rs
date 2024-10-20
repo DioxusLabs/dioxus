@@ -81,9 +81,6 @@ use super::last_build_state::LastBuildState;
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Clone)]
 pub struct HotReloadResult {
-    /// The state of the last full rebuild.
-    full_rebuild_state: LastBuildState,
-
     /// The child templates we have already used. As we walk through the template tree, we will run into child templates.
     /// Each of those child templates also need to be hot reloaded. We keep track of which ones we've already hotreloaded
     /// to avoid diffing the same template twice against different new templates.
@@ -104,6 +101,9 @@ pub struct HotReloadResult {
     ///
     /// You should diff the result of this against the old template to see if you actually need to send down the result
     pub templates: HashMap<usize, HotReloadedTemplate>,
+
+    /// The state of the last full rebuild.
+    full_rebuild_state: LastBuildState,
 
     /// The dynamic nodes for the current node
     dynamic_nodes: Vec<HotReloadDynamicNode>,
