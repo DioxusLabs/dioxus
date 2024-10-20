@@ -263,13 +263,10 @@ objc_id = "0.1.1"
 # objc = { version = "0.2.7", features = ["exception"] }
 # objc_id = "0.1.1"
 
-# [profile.dev.package.dioxus-core-macro]
-# opt-level = 3
-
-# wasm bindgen is slooooooow, but it's because we're actually processing the wasm
-# so, lets just bump up walrus to make it faster, no need for any special profiles
-[profile.dev.package.walrus]
+[profile.cli-dev]
+debug = 0
 opt-level = 3
+inherits = "dev"
 
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
 [profile.release-unoptimized]

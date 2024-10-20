@@ -27,12 +27,12 @@ impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
         let mut cmd = Cmd::new();
         cmd.features(target.features.clone());
-        let builder = krates::Builder::new();
-        let krates = builder
+
+        let krates = krates::Builder::new()
             .build(cmd, |_| {})
             .context("Failed to run cargo metadata")?;
 
-        let package = find_main_package(target.package.clone(), &krates)?;
+        let package = find_main_package(&krates, target.package.clone())?;
 
         let dioxus_config = DioxusConfig::load(&krates, package)?.unwrap_or_default();
 
@@ -545,7 +545,11 @@ impl DioxusCrate {
     pub(crate) fn all_watched_crates(&self) -> Vec<PathBuf> {
         self.local_dependency_manifests()
             .into_iter()
-            .map(|p| p.parent().unwrap().to_path_buf())
+            .map(|p| {
+                p.parent()
+                    .expect("Local manifest to exist and have a parent")
+                    .to_path_buf()
+            })
             .chain(Some(self.crate_dir().parent().unwrap().to_path_buf()))
             .collect()
     }
@@ -562,7 +566,7 @@ impl std::fmt::Debug for DioxusCrate {
 }
 
 // Find the main package in the workspace
-fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId> {
+fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId> {
     let kid = match package {
         Some(package) => {
             let mut workspace_members = krates.workspace_members();

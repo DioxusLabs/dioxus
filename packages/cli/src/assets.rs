@@ -33,7 +33,8 @@ impl AssetManifest {
     pub(crate) fn load_from_file(path: &Path) -> anyhow::Result<Self> {
         let src = std::fs::read_to_string(path)
             .context("Failed to read asset manifest from filesystem")?;
-        serde_json::from_str(&src).context("Failed to parse asset manifest")
+        serde_json::from_str(&src)
+            .with_context(|| format!("Failed to parse asset manifest from {path:?}\n{src}"))
     }
 
     /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
@@ -51,35 +52,39 @@ impl AssetManifest {
         match ext {
             // Parse an unarchived object file
             "o" => {
-                let object = object::File::parse(&*data).unwrap();
-                self.add_from_object_file(&object);
+                if let Ok(object) = object::File::parse(&*data) {
+                    self.add_from_object_file(&object);
+                }
             }
 
             // Parse an rlib as a collection of objects
             "rlib" => {
-                let archive = object::read::archive::ArchiveFile::parse(&*data).unwrap();
-                self.add_from_archive_file(&archive, &data);
+                if let Ok(archive) = object::read::archive::ArchiveFile::parse(&*data) {
+                    _ = self.add_from_archive_file(&archive, &data);
+                }
             }
             _ => {}
         }
     }
 
     /// Fill this manifest from an rlib / ar file that contains many object files and their entryies
-    fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) {
+    fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) -> object::Result<()> {
         // Look through each archive member for object files.
         // Read the archive member's binary data (we know it's an object file)
         // And parse it with the normal `object::File::parse` to find the manganis string.
         for member in archive.members() {
-            let member = member.unwrap();
+            let member = member?;
             let name = String::from_utf8_lossy(member.name()).to_string();
 
             // Check if the archive member is an object file and parse it.
             if name.ends_with(".o") {
-                let data = member.data(&*data).unwrap();
-                let object = object::File::parse(data).unwrap();
+                let data = member.data(&*data)?;
+                let object = object::File::parse(data)?;
                 self.add_from_object_file(&object);
             }
         }
+
+        Ok(())
     }
 
     /// Fill this manifest with whatever tables might come from the object file
@@ -109,11 +114,11 @@ impl AssetManifest {
             let stream = serde_json::Deserializer::from_str(&as_str).into_iter::<ResourceAsset>();
 
             for as_resource in stream {
-                let as_resource = as_resource.unwrap();
-
-                // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
-                self.assets
-                    .insert(as_resource.absolute.clone(), as_resource);
+                if let Ok(as_resource) = as_resource {
+                    // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
+                    self.assets
+                        .insert(as_resource.absolute.clone(), as_resource);
+                }
             }
         }
 

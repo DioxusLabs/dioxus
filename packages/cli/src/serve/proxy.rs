@@ -142,6 +142,9 @@ pub(crate) fn proxy_to(
         }
 
         let uri = req.uri().clone();
+
+        // retry with backoff
+
         let res = client.send(req).await.map_err(handle_error);
 
         match res {
@@ -150,6 +153,7 @@ pub(crate) fn proxy_to(
                 if uri.path().starts_with("/assets")
                     || uri.path().starts_with("/_dioxus")
                     || uri.path().starts_with("/public")
+                    || uri.path().starts_with("/wasm")
                 {
                     tracing::trace!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
                 } else {

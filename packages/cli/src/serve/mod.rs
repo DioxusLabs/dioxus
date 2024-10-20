@@ -61,8 +61,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 - Press `t` to toggle cargo output
                 - Press `/` for more commands and shortcuts
 
-                Learn more at https://dioxuslabs.com/learn/0.6/getting_started
-    "#,
+                Learn more at https://dioxuslabs.com/learn/0.6/getting_started"#,
         krate.executable_name()
     );
 

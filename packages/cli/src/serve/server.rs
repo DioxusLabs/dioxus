@@ -282,6 +282,8 @@ impl WebServer {
 
     /// Tells all clients to reload if possible for new changes.
     pub(crate) async fn send_reload_command(&mut self) {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
         self.send_devserver_message(DevserverMsg::FullReloadCommand)
@@ -464,7 +466,9 @@ fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::Method
         false => CORS_UNSAFE.clone(),
     };
 
-    let out_dir = cfg.build_dir(Platform::Web, args.build_arguments.release);
+    let out_dir = cfg
+        .build_dir(Platform::Web, args.build_arguments.release)
+        .join("public");
     let index_on_404 = cfg.config.web.watcher.index_on_404;
 
     get_service(

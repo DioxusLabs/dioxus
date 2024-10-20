@@ -26,7 +26,7 @@ use std::{
 use tracing::Level;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 120;
+const VIEWPORT_MAX_WIDTH: u16 = 90;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 12;
 
@@ -422,7 +422,7 @@ impl Output {
         .horizontal_margin(1)
         .areas(area);
 
-        let [col1, col2] = Layout::horizontal([Constraint::Length(55), Constraint::Fill(1)])
+        let [col1, col2] = Layout::horizontal([Constraint::Length(50), Constraint::Fill(1)])
             .horizontal_margin(1)
             .areas(body);
 
@@ -477,9 +477,7 @@ impl Output {
         let mut lines = vec!["Status:  ".white()];
         match &state.build_engine.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
-            BuildStage::Starting { .. } => {
-                lines.push("Starting build".yellow());
-            }
+            BuildStage::Starting { .. } => lines.push("Starting build".yellow()),
             BuildStage::InstallingTooling {} => lines.push("Installing tooling".yellow()),
             BuildStage::Compiling {
                 current,
@@ -492,9 +490,7 @@ impl Output {
                 lines.push(krate.as_str().dark_gray())
             }
             BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
-            BuildStage::RunningBindgen {} => {
-                lines.push("Running wasm-bindgen".yellow());
-            }
+            BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
             BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
             BuildStage::OptimizingAssets {} => lines.push("Optimizing assets".yellow()),
             BuildStage::CopyingAssets {

@@ -158,17 +158,17 @@ impl BuildArgs {
         }
 
         // Warn if tokio is being enabled on web, since it's not supported and has the worst errors.
-        if self.platform == Some(Platform::Web) {
-            if krate.has_incompatible_tokio() {
-                return Err(anyhow::anyhow!(
-                    r#"Tokio was found in your dependency tree while building for the web platform.
-Unfortuantely, tokio's IO features are not supported in WASM.
-This is likely because you enabled multiple renderers like `desktop` or `server`.
-Make sure you aren't accidentally enabling a renderer or krate that isn't supported in WASM."#
-                )
-                .into());
-            }
-        }
+        //         if self.platform == Some(Platform::Web) {
+        //             if krate.has_incompatible_tokio() {
+        //                 return Err(anyhow::anyhow!(
+        //                     r#"Tokio was found in your dependency tree while building for the web platform.
+        // Unfortuantely, tokio's IO features are not supported in WASM.
+        // This is likely because you enabled multiple renderers like `desktop` or `server`.
+        // Make sure you aren't accidentally enabling a renderer or krate that isn't supported in WASM."#
+        //                 )
+        //                 .into());
+        //             }
+        //         }
 
         Ok(())
     }

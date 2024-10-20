@@ -423,7 +423,7 @@ impl AppBundle {
             );
 
             // todo(jon): implement optimize + pre_compress on the asset type
-            let res = std::fs::copy(from, to);
+            let res = crate::fastfs::copy_asset(from, to);
 
             if let Err(err) = res.as_ref() {
                 tracing::error!("Failed to copy asset {from:?}: {err}");
