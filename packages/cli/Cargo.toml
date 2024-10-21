@@ -10,14 +10,22 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 rust-version = "1.79.0"
 
 [dependencies]
-# cli core
+dioxus-autofmt = { workspace = true }
+dioxus-check = { workspace = true }
+dioxus-rsx-rosetta = { workspace = true }
+dioxus-rsx = { workspace = true }
+dioxus-rsx-hotreload = { workspace = true }
+dioxus-html = { workspace = true, features = ["hot-reload-context"] }
+dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-core-types = { workspace = true }
+dioxus-devtools-types = { workspace = true }
+dioxus-cli-config = { workspace = true }
+dioxus-fullstack = { workspace = true }
+
 clap = { workspace = true, features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 wasm-bindgen-shared = "0.2"
-colored = "2.0.0"
-
-# features
 uuid = { version = "1.3.0", features = ["v4"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -36,7 +44,6 @@ hyper = { workspace = true }
 hyper-util = "0.1.3"
 hyper-rustls = { workspace = true }
 rustls = { workspace = true }
-subprocess = "0.2.9"
 rayon = "1.8.0"
 console = "0.15.8"
 ctrlc = "3.2.3"
@@ -80,18 +87,6 @@ prettyplease = { workspace = true }
 
 # Assets
 brotli = "6.0.0"
-
-dioxus-autofmt = { workspace = true }
-dioxus-check = { workspace = true }
-dioxus-rsx-rosetta = { workspace = true }
-dioxus-rsx = { workspace = true }
-dioxus-rsx-hotreload = { workspace = true }
-dioxus-html = { workspace = true, features = ["hot-reload-context"] }
-dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-core-types = { workspace = true }
-dioxus-devtools-types = { workspace = true }
-dioxus-cli-config = { workspace = true }
-dioxus-fullstack = { workspace = true }
 ignore = "0.4.22"
 env_logger = { workspace = true }
 
@@ -108,36 +103,6 @@ ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
 tempfile = "3.3"
 manganis-core = { workspace = true }
 
-
-# # just use the manganis crate directly since it has all the types we need
-# manganis = { workspace = true }
-# serde = { version = "1.0.183", features = ["derive"] }
-# serde_json = {version="1.0.116"}
-# anyhow = "1"
-# rayon = "1.7.0"
-# rustc-hash = "1.1.0"
-
-# # Tailwind
-# railwind = "0.1.5"
-
-# # Image compression/conversion
-# # JPEG
-# mozjpeg = { version = "0.10.7", default-features = false, features = ["parallel"] }
-# # PNG
-# imagequant = "4.2.0"
-# png = "0.17.9"
-# # Conversion
-# image = { version = "0.25" }
-# ravif = { version = "0.11", default-features = false }
-
-# # CSS Minification
-# lightningcss = "1.0.0-alpha.44"
-
-# # # Js minification
-# # swc = "=0.283.0"
-# # swc_common = "=0.37.1"
-
-
 # Extracting data from an executable
 object = {version="0.36.0", features=["wasm"]}
 tokio-util = { version = "0.7.11", features = ["full"] }
@@ -146,6 +111,14 @@ throbber-widgets-tui = "0.7.0"
 unicode-segmentation = "1.12.0"
 handlebars = "6.1.0"
 strum = { version = "0.26.3", features = ["derive"] }
+
+# # just use the manganis crate directly since it has all the types we need
+# manganis = { workspace = true }
+# serde = { version = "1.0.183", features = ["derive"] }
+# serde_json = {version="1.0.116"}
+# anyhow = "1"
+# rayon = "1.7.0"
+# rustc-hash = "1.1.0"
 
 # [dev-dependencies]
 # tracing-subscriber = "0.3.18"
@@ -161,6 +134,9 @@ strum = { version = "0.26.3", features = ["derive"] }
 # webp = []
 # avif = []
 
+tauri-utils = { workspace = true }
+tauri-bundler = { workspace = true }
+
 [build-dependencies]
 built = { version = "=0.7.4", features = ["git2"] }
 
@@ -168,6 +144,7 @@ built = { version = "=0.7.4", features = ["git2"] }
 default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
+bundle = []
 
 # when releasing dioxus, we want to enable wasm-opt
 # and then also maybe developing it too.

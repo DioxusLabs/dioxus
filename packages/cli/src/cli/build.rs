@@ -73,7 +73,7 @@ pub(crate) struct BuildArgs {
 }
 
 impl BuildArgs {
-    pub(crate) async fn build(mut self) -> Result<()> {
+    pub(crate) async fn build(&mut self) -> Result<()> {
         let krate =
             DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 

@@ -92,12 +92,19 @@ impl LinkAction {
                 for item in args {
                     if item.ends_with(".o") || item.ends_with(".rlib") {
                         let path_to_item = PathBuf::from(item);
-                        manifest.add_from_object_path(path_to_item.canonicalize().unwrap());
+                        if let Ok(path) = path_to_item.canonicalize() {
+                            _ = manifest.add_from_object_path(path);
+                        }
                     }
                 }
 
-                let contents =
-                    serde_json::to_string(&manifest).expect("Failed to serialize manifest");
+                let Ok(contents) = serde_json::to_string(&manifest) else {
+                    std::fs::write(
+                        "/Users/jonkelley/Development/Tinkering/hr-new-test/errlog.txt",
+                        "Failed to write manifest",
+                    );
+                    return Ok(());
+                };
 
                 std::fs::write(dest, contents).expect("Failed to write output file");
             }

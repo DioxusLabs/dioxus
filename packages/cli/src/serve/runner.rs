@@ -1,4 +1,4 @@
-use super::{AppHandle, ServeUpdate};
+use super::{AppHandle, ServeUpdate, WebServer};
 use crate::{
     AppBundle, DioxusCrate, HotreloadFilemap, HotreloadResult, Platform, Result, TraceSrc,
 };
@@ -128,8 +128,12 @@ impl AppRunner {
     }
 
     /// Open an existing app bundle, if it exists
-    pub(crate) async fn open_existing(&self) {
-        tracing::debug!("todo: open existing app");
+    pub(crate) async fn open_existing(&self, devserver: &WebServer) {
+        if let Some(address) = devserver.server_address() {
+            let url = format!("http://{address}");
+            tracing::debug!("opening url: {url}");
+            _ = open::that(url);
+        }
     }
 
     pub(crate) fn attempt_hot_reload(
@@ -193,9 +197,6 @@ impl AppRunner {
                 HotreloadResult::Notreloadable => return None,
                 HotreloadResult::NotParseable => {
                     tracing::debug!(dx_src = ?TraceSrc::Dev, "Error hotreloading file - not parseable {rust_file:?}")
-                }
-                HotreloadResult::Unknown => {
-                    tracing::error!(dx_src = ?TraceSrc::Dev, "Unkown error hotreloading file {rust_file:?}")
                 }
             }
         }

@@ -103,3 +103,15 @@ impl Default for WebviewInstallMode {
         Self::OfflineInstaller { silent: false }
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PackageType {
+    MacOsBundle,
+    IosBundle,
+    WindowsMsi,
+    Deb,
+    Rpm,
+    AppImage,
+    Dmg,
+    Updater,
+}

@@ -1,9 +1,9 @@
-[profile]
+# [profile]
 
-[profile.dioxus-client]
-inherits = "dev"
-opt-level = 2
+# [profile.dioxus-client]
+# inherits = "dev"
+# opt-level = 2
 
-[profile.dioxus-server]
-inherits = "dev"
-opt-level = 2
+# [profile.dioxus-server]
+# inherits = "dev"
+# opt-level = 2

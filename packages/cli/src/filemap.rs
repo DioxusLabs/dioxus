@@ -31,7 +31,6 @@ pub enum HotreloadResult {
     ServerFn,
     Notreloadable,
     NotParseable,
-    Unknown,
 }
 
 impl HotreloadFilemap {

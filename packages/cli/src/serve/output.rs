@@ -26,7 +26,7 @@ use std::{
 use tracing::Level;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 90;
+const VIEWPORT_MAX_WIDTH: u16 = 100;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 12;
 
@@ -151,6 +151,11 @@ impl Output {
                 .execute(DisableFocusChange)?
                 .execute(DisableBracketedPaste)?;
             disable_raw_mode()?;
+
+            // print a few lines to not cut off the output
+            for _ in 0..3 {
+                println!();
+            }
         }
 
         Ok(())

@@ -55,13 +55,13 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     tracing::info!(
         r#"Serving your Dioxus app: {} 🚀
 
-                - Press `ctrl+c` to exit the server
-                - Press `r` to rebuild the app
-                - Press `o` to open the app
-                - Press `t` to toggle cargo output
-                - Press `/` for more commands and shortcuts
+               - Press `ctrl+c` to exit the server
+               - Press `r` to rebuild the app
+               - Press `o` to open the app
+               - Press `t` to toggle cargo output
+               - Press `/` for more commands and shortcuts
 
-                Learn more at https://dioxuslabs.com/learn/0.6/getting_started"#,
+               Learn more at https://dioxuslabs.com/learn/0.6/getting_started"#,
         krate.executable_name()
     );
 
@@ -219,7 +219,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
             }
 
             ServeUpdate::OpenApp => {
-                runner.open_existing().await;
+                runner.open_existing(&devserver).await;
             }
 
             ServeUpdate::Redraw => {

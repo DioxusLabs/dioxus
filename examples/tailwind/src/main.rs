@@ -9,7 +9,7 @@ fn main() {
 pub fn app() -> Element {
     let grey_background = true;
     rsx! (
-        head::Link { rel: "stylesheet", href: asset!("/public/tailwind.css") }
+        document::Link { rel: "stylesheet", href: asset!("/public/tailwind.css") }
         div {
             header {
                 class: "text-gray-400 body-font",

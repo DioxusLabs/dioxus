@@ -203,14 +203,18 @@ impl BuildRequest {
         //
         // This will force `dx` to look through the incremental cache and find the assets from the previous build
         Command::new("cargo")
-            .env("RUSTFLAGS", self.rust_flags())
+            // .env("RUSTFLAGS", self.rust_flags())
             .arg("rustc")
             .args(self.build_arguments())
             .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
             .arg(format!(
                 "-Clinker={}",
-                std::env::current_exe().unwrap().display()
+                std::env::current_exe()
+                    .unwrap()
+                    .canonicalize()
+                    .unwrap()
+                    .display()
             ))
             .env(
                 LinkAction::ENV_VAR_NAME,

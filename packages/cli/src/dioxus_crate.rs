@@ -375,6 +375,7 @@ impl DioxusCrate {
         None
     }
 
+    // todo: this has a bug where we're not checking the enabled features
     pub(crate) fn has_incompatible_tokio(&self) -> bool {
         for tokyo in self.krates.krates_by_name("tokio") {
             let features = self.krates.get_enabled_features(tokyo.kid).unwrap();
