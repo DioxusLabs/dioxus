@@ -278,4 +278,10 @@ pub trait History {
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
     fn updater(&self, callback: Arc<dyn Fn() + Send + Sync>) {}
+
+    /// Whether the router should include the legacy prevent default attribute instead of the new
+    /// prevent default method. This should only be used by liveview.
+    fn include_prevent_default(&self) -> bool {
+        false
+    }
 }

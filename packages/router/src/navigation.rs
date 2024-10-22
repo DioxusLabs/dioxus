@@ -7,7 +7,7 @@ use std::{
 
 use url::{ParseError, Url};
 
-use crate::routable::Routable;
+use crate::{routable::Routable, router};
 
 /// A target for the router to navigate to.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -77,6 +77,45 @@ impl<R: Routable> From<String> for NavigationTarget<R> {
 impl<R: Routable> From<R> for NavigationTarget<R> {
     fn from(value: R) -> Self {
         Self::Internal(value)
+    }
+}
+
+impl From<&str> for NavigationTarget<String> {
+    fn from(value: &str) -> Self {
+        let router = router();
+        let internal_route = router.internal_route(value);
+        if internal_route {
+            NavigationTarget::Internal(value.to_string())
+        } else {
+            NavigationTarget::External(value.to_string())
+        }
+    }
+}
+
+impl From<String> for NavigationTarget<String> {
+    fn from(value: String) -> Self {
+        let router = router();
+        let internal_route = router.internal_route(&value);
+        if internal_route {
+            NavigationTarget::Internal(value)
+        } else {
+            NavigationTarget::External(value)
+        }
+    }
+}
+
+impl<R: Routable> From<R> for NavigationTarget<String> {
+    fn from(value: R) -> Self {
+        Self::Internal(value.to_string())
+    }
+}
+
+impl<R: Routable> From<NavigationTarget<R>> for NavigationTarget<String> {
+    fn from(value: NavigationTarget<R>) -> Self {
+        match value {
+            NavigationTarget::Internal(r) => Self::Internal(r.to_string()),
+            NavigationTarget::External(s) => Self::External(s),
+        }
     }
 }
 

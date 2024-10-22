@@ -1,20 +1,14 @@
 use std::{
-    any::Any,
     collections::HashSet,
     rc::Rc,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use dioxus_history::history;
-use dioxus_lib::{
-    document::{self, Document},
-    prelude::*,
-};
+use dioxus_lib::prelude::*;
 
 use crate::{
-    navigation::NavigationTarget,
-    prelude::{IntoRoutable, SiteMapSegment},
-    routable::Routable,
+    navigation::NavigationTarget, prelude::SiteMapSegment, routable::Routable,
     router_cfg::RouterConfig,
 };
 
@@ -61,22 +55,27 @@ struct RouterContextInner {
 
     unresolved_error: Option<ExternalNavigationFailure>,
 
-    subscribers: Arc<RwLock<HashSet<ScopeId>>>,
-    subscriber_update: Arc<dyn Fn(ScopeId)>,
+    subscribers: Arc<Mutex<HashSet<ReactiveContext>>>,
     routing_callback: Option<AnyRoutingCallback>,
 
     failure_external_navigation: fn() -> Element,
 
-    any_route_to_string: fn(&dyn Any) -> String,
+    internal_route: fn(&str) -> bool,
 
     site_map: &'static [SiteMapSegment],
 }
 
 impl RouterContextInner {
     fn update_subscribers(&self) {
-        let update = &self.subscriber_update;
-        for &id in self.subscribers.read().unwrap().iter() {
-            update(id);
+        for &id in self.subscribers.lock().unwrap().iter() {
+            id.mark_dirty();
+        }
+    }
+
+    fn subscribe_to_current_context(&self) {
+        let rc = ReactiveContext::current();
+        if let Some(rc) = rc {
+            rc.subscribe(self.subscribers.clone());
         }
     }
 
@@ -102,22 +101,18 @@ pub struct RouterContext {
 }
 
 impl RouterContext {
-    pub(crate) fn new<R: Routable + 'static>(
-        cfg: RouterConfig<R>,
-        mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>,
-    ) -> Self
+    pub(crate) fn new<R: Routable + 'static>(cfg: RouterConfig<R>) -> Self
     where
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
-        let subscriber_update = mark_dirty.clone();
-        let subscribers = Arc::new(RwLock::new(HashSet::new()));
+        let subscribers = Arc::new(Mutex::new(HashSet::new()));
 
         let myself = RouterContextInner {
             prefix: Default::default(),
             history: history(),
             unresolved_error: None,
+
             subscribers: subscribers.clone(),
-            subscriber_update,
 
             routing_callback: cfg.on_update.map(|update| {
                 Arc::new(move |ctx| {
@@ -134,19 +129,7 @@ impl RouterContext {
 
             failure_external_navigation: cfg.failure_external_navigation,
 
-            any_route_to_string: |route| {
-                route
-                    .downcast_ref::<R>()
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Route is not of the expected type: {}\n found typeid: {:?}\n expected typeid: {:?}",
-                            std::any::type_name::<R>(),
-                            route.type_id(),
-                            std::any::TypeId::of::<R>()
-                        )
-                    })
-                    .to_string()
-            },
+            internal_route: |route| R::from_str(route).is_ok(),
 
             site_map: R::SITE_MAP,
         };
@@ -154,8 +137,8 @@ impl RouterContext {
         // set the updater
         {
             myself.history.updater(Arc::new(move || {
-                for &id in subscribers.read().unwrap().iter() {
-                    (mark_dirty)(id);
+                for &rc in subscribers.lock().unwrap().iter() {
+                    rc.mark_dirty();
                 }
             }));
         }
@@ -167,8 +150,8 @@ impl RouterContext {
 
     /// Check if the router is running in a liveview context
     /// We do some slightly weird things for liveview because of the network boundary
-    pub fn is_liveview(&self) -> bool {
-        self.inner.read().history.is_liveview()
+    pub(crate) fn include_prevent_default(&self) -> bool {
+        self.inner.read().history.include_prevent_default()
     }
 
     /// Check whether there is a previous page to navigate back to.
@@ -223,8 +206,11 @@ impl RouterContext {
     /// Push a new location.
     ///
     /// The previous location will be available to go back to.
-    pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
-        let target = self.resolve_into_routable(target.into());
+    pub fn push(
+        &self,
+        target: impl Into<NavigationTarget<String>>,
+    ) -> Option<ExternalNavigationFailure> {
+        let target = target.into();
         {
             let mut write = self.inner.write_unchecked();
             match target {
@@ -239,9 +225,11 @@ impl RouterContext {
     /// Replace the current location.
     ///
     /// The previous location will **not** be available to go back to.
-    pub fn replace(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
-        let target = self.resolve_into_routable(target.into());
-
+    pub fn replace(
+        &self,
+        target: impl Into<NavigationTarget<String>>,
+    ) -> Option<ExternalNavigationFailure> {
+        let target = target.into();
         {
             let mut state = self.inner.write_unchecked();
             match target {
@@ -255,49 +243,28 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current<R: Routable>(&self) -> R {
-        R::from_str(&self.inner.read().history.current_route()).unwrap_or_else(|_| {
+        let inner = self.inner.read();
+        inner.subscribe_to_current_context();
+        R::from_str(&inner.history.current_route()).unwrap_or_else(|_| {
             panic!("route's display implementation must be parsable by FromStr")
         })
     }
 
     /// The route that is currently active.
     pub fn current_route_string(&self) -> String {
-        self.inner.read().history.current_route()
+        let inner = self.inner.read();
+        inner.subscribe_to_current_context();
+        inner.history.current_route()
     }
 
-    pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
-        (self.inner.read().any_route_to_string)(route)
-    }
-
-    pub(crate) fn resolve_into_routable(
-        &self,
-        into_routable: IntoRoutable,
-    ) -> NavigationTarget<String> {
-        match into_routable {
-            IntoRoutable::FromStr(url) => {
-                let parsed_route: NavigationTarget<String> = match self.inner.read().history.help(&url) {
-                    Ok(route) => NavigationTarget::Internal(route),
-                    Err(_) => NavigationTarget::External(url),
-                };
-                parsed_route
-            }
-            IntoRoutable::Route(route) => NavigationTarget::Internal(route),
-        }
+    /// Check if a route looks like an internal route
+    pub(crate) fn internal_route(&self, route: &str) -> bool {
+        (self.inner.read().internal_route)(route)
     }
 
     /// The prefix that is currently active.
     pub fn prefix(&self) -> Option<String> {
         self.inner.read().prefix.clone()
-    }
-
-    /// Manually subscribe to the current route
-    pub fn subscribe(&self, id: ScopeId) {
-        self.inner.read().subscribers.write().unwrap().insert(id);
-    }
-
-    /// Manually unsubscribe from the current route
-    pub fn unsubscribe(&self, id: ScopeId) {
-        self.inner.read().subscribers.write().unwrap().remove(&id);
     }
 
     /// Clear any unresolved errors
@@ -314,11 +281,12 @@ impl RouterContext {
     }
 
     pub(crate) fn render_error(&self) -> Option<Element> {
-        let inner_read = self.inner.write_unchecked();
-        inner_read
+        let inner_write = self.inner.write_unchecked();
+        inner_write.subscribe_to_current_context();
+        inner_write
             .unresolved_error
             .as_ref()
-            .map(|_| (inner_read.failure_external_navigation)())
+            .map(|_| (inner_write.failure_external_navigation)())
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {
@@ -408,16 +376,6 @@ where
     /// The prefix that is currently active.
     pub fn prefix(&self) -> Option<String> {
         self.inner.prefix()
-    }
-
-    /// Manually subscribe to the current route
-    pub fn subscribe(&self, id: ScopeId) {
-        self.inner.subscribe(id)
-    }
-
-    /// Manually unsubscribe from the current route
-    pub fn unsubscribe(&self, id: ScopeId) {
-        self.inner.unsubscribe(id)
     }
 
     /// Clear any unresolved errors
