@@ -17,7 +17,14 @@ use std::sync::Arc;
 ///     #[route("/")]
 ///     Index {},
 /// }
-/// let cfg = RouterConfig::default().history(MemoryHistory::<Route>::default());
+///
+/// fn ExternalNavigationFailure() -> Element {
+///     rsx! {
+///         "Failed to navigate to external URL"
+///     }
+/// }
+///
+/// let cfg = RouterConfig::default().failure_external_navigation(ExternalNavigationFailure);
 /// ```
 pub struct RouterConfig<R> {
     pub(crate) failure_external_navigation: fn() -> Element,

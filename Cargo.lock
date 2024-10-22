@@ -2579,6 +2579,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-devtools",
  "dioxus-document",
+ "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-interpreter-js",

@@ -128,7 +128,7 @@ impl LiveviewHistory {
             "/".parse().unwrap_or_else(|err| {
                 panic!("index route does not exist:\n{}\n use LiveviewHistory::new_with_initial_path to set a custom path", err)
             }),
-            eval 
+            eval
         )
     }
 

@@ -1,5 +1,6 @@
 use dioxus_core::ScopeId;
 use dioxus_document::{Document, Eval, EvalError, Evaluator};
+use dioxus_history::History;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde::Serialize;
@@ -8,6 +9,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::{rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
+
+use crate::history::WebHistory;
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub struct JSOwner {
@@ -53,11 +56,15 @@ extern "C" {
     pub async fn rust_recv(this: &WeakDioxusChannel) -> wasm_bindgen::JsValue;
 }
 
-/// Provides the WebEvalProvider through [`ScopeId::provide_context`].
+/// Provides the Document through [`ScopeId::provide_context`].
 pub fn init_document() {
     let provider: Rc<dyn Document> = Rc::new(WebDocument);
     if ScopeId::ROOT.has_context::<Rc<dyn Document>>().is_none() {
         ScopeId::ROOT.provide_context(provider);
+    }
+    let history_provider: Rc<dyn History> = Rc::new(WebHistory::default());
+    if ScopeId::ROOT.has_context::<Rc<dyn History>>().is_none() {
+        ScopeId::ROOT.provide_context(history_provider);
     }
 }
 

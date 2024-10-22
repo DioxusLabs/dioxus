@@ -22,7 +22,7 @@ impl ScrollPosition {
         );
         web_sys::window()
             .expect("should be run in a context with a `Window` object (dioxus cannot be run from a web worker)")
-            .request_animation_frame(&f.into_js_value().unchecked_into()) 
+            .request_animation_frame(&f.into_js_value().unchecked_into())
             .expect("should register `requestAnimationFrame` OK");
     }
 }
