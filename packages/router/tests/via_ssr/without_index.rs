@@ -1,4 +1,7 @@
+use std::rc::Rc;
+
 use dioxus::prelude::*;
+use dioxus_history::{History, MemoryHistory};
 
 // Tests for regressions of <https://github.com/DioxusLabs/dioxus/issues/2468>
 #[test]
@@ -32,10 +35,9 @@ fn Test() -> Element {
 #[component]
 fn App(path: Route) -> Element {
     rsx! {
-        Router::<Route> {
-            config: {
-                move || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
-            }
+        HistoryProvider {
+            history:  move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+            Router::<Route> {}
         }
     }
 }

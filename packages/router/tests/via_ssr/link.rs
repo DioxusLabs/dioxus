@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use std::str::FromStr;
+use dioxus_history::{History, MemoryHistory};
+use std::{rc::Rc, str::FromStr};
 
 fn prepare<R: Routable>() -> String
 where
@@ -40,8 +41,9 @@ where
     {
         rsx! {
             h1 { "App" }
-            Router::<R> {
-                config: |_| RouterConfig::default().history(MemoryHistory::default())
+            HistoryProvider {
+                history:  |_| Rc::new(MemoryHistory::default()) as Rc<dyn History>,
+                Router::<R> {}
             }
         }
     }

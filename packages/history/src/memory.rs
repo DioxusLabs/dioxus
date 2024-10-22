@@ -15,9 +15,36 @@ pub struct MemoryHistory {
 
 impl Default for MemoryHistory {
     fn default() -> Self {
+        Self::with_initial_path("/")
+    }
+}
+
+impl MemoryHistory {
+    /// Create a [`MemoryHistory`] starting at `path`.
+    ///
+    /// ```rust
+    /// # use dioxus_router::prelude::*;
+    /// # use dioxus::prelude::*;
+    /// # #[component]
+    /// # fn Index() -> Element { VNode::empty() }
+    /// # #[component]
+    /// # fn OtherPage() -> Element { VNode::empty() }
+    /// #[derive(Clone, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[route("/some-other-page")]
+    ///     OtherPage {},
+    /// }
+    ///
+    /// let mut history = MemoryHistory::<Route>::with_initial_path(Route::Index {});
+    /// assert_eq!(history.current_route(), Route::Index {});
+    /// assert_eq!(history.can_go_back(), false);
+    /// ```
+    pub fn with_initial_path(path: impl ToString) -> Self {
         Self {
             state: MemoryHistoryState{
-            current: "/".parse().unwrap_or_else(|err| {
+            current: path.to_string().parse().unwrap_or_else(|err| {
                 panic!("index route does not exist:\n{err}\n use MemoryHistory::with_initial_path to set a custom path")
             }),
             history: Vec::new(),

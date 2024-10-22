@@ -24,6 +24,9 @@ pub mod components {
 
     mod router;
     pub use router::*;
+
+    mod history_provider;
+    pub use history_provider::*;
 }
 
 mod contexts {

@@ -3,6 +3,7 @@ use std::{rc::Rc, sync::Arc};
 mod lens;
 mod memory;
 
+use dioxus_core::prelude::provide_context;
 pub use lens::*;
 pub use memory::*;
 
@@ -14,6 +15,11 @@ pub fn history() -> Rc<dyn History> {
             panic!("Unable to find a history provider in the renderer. Make sure your renderer supports the Router");
         }
     }
+}
+
+/// Provide a history context to the current component.
+pub fn provide_history_context(history: Rc<dyn History>) {
+    provide_context(history);
 }
 
 pub trait History {
