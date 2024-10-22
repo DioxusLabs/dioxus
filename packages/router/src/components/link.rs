@@ -15,34 +15,24 @@ use crate::utils::use_router_internal::use_router_internal;
 use url::Url;
 
 /// Something that can be converted into a [`NavigationTarget`].
-#[derive(Clone)]
-pub enum IntoRoutable {
+#[derive(Clone, PartialEq)]
+pub struct IntoRoutable {
     /// A raw string target.
-    FromStr(String),
-    /// A internal target.
-    Route(Rc<dyn Any>),
-}
-
-impl PartialEq for IntoRoutable {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (IntoRoutable::FromStr(a), IntoRoutable::FromStr(b)) => a == b,
-            (IntoRoutable::Route(a), IntoRoutable::Route(b)) => Rc::ptr_eq(a, b),
-            _ => false,
-        }
-    }
+    route: String,
 }
 
 impl<R: Routable> From<R> for IntoRoutable {
     fn from(value: R) -> Self {
-        IntoRoutable::Route(Rc::new(value) as Rc<dyn Any>)
+        IntoRoutable {
+            route: value.to_string(),
+        }
     }
 }
 
 impl<R: Routable> From<NavigationTarget<R>> for IntoRoutable {
     fn from(value: NavigationTarget<R>) -> Self {
         match value {
-            NavigationTarget::Internal(route) => IntoRoutable::Route(Rc::new(route) as Rc<dyn Any>),
+            NavigationTarget::Internal(route) => IntoRoutable::Route(route.to_string()),
             NavigationTarget::External(url) => IntoRoutable::FromStr(url),
         }
     }
@@ -230,9 +220,9 @@ pub fn Link(props: LinkProps) -> Element {
     let current_url = router.current_route_string();
     let href = match &to {
         IntoRoutable::FromStr(url) => url.to_string(),
-        IntoRoutable::Route(route) => router.any_route_to_string(&**route),
+        IntoRoutable::Route(route) => router.any_route_to_string(&*route),
     };
-    let parsed_route: NavigationTarget<Rc<dyn Any>> = router.resolve_into_routable(to.clone());
+    let parsed_route: NavigationTarget<String> = router.resolve_into_routable(to.clone());
 
     let mut class_ = String::new();
     if let Some(c) = class {

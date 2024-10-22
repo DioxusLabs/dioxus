@@ -37,8 +37,6 @@ mod contexts {
 
 mod router_cfg;
 
-mod history;
-
 /// Hooks for interacting with the router in components.
 pub mod hooks {
     mod use_router;
@@ -57,7 +55,6 @@ pub use hooks::router;
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::contexts::*;
-    pub use crate::history::*;
     pub use crate::hooks::*;
     pub use crate::navigation::*;
     pub use crate::routable::*;

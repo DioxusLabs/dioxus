@@ -51,8 +51,7 @@ pub struct ExternalNavigationFailure(pub String);
 /// A function the router will call after every routing update.
 pub(crate) type RoutingCallback<R> =
     Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
-pub(crate) type AnyRoutingCallback =
-    Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>;
+pub(crate) type AnyRoutingCallback = Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<String>>>;
 
 struct RouterContextInner {
     /// The current prefix.
@@ -127,13 +126,10 @@ impl RouterContext {
                         _marker: std::marker::PhantomData,
                     };
                     update(ctx).map(|t| match t {
-                        NavigationTarget::Internal(r) => {
-                            NavigationTarget::Internal(Rc::new(r) as Rc<dyn Any>)
-                        }
+                        NavigationTarget::Internal(r) => NavigationTarget::Internal(r.to_string()),
                         NavigationTarget::External(s) => NavigationTarget::External(s),
                     })
-                })
-                    as Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>
+                }) as Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<String>>>
             }),
 
             failure_external_navigation: cfg.failure_external_navigation,
@@ -172,18 +168,7 @@ impl RouterContext {
     /// Check if the router is running in a liveview context
     /// We do some slightly weird things for liveview because of the network boundary
     pub fn is_liveview(&self) -> bool {
-        #[cfg(feature = "liveview")]
-        {
-            self.inner.read().history.is_liveview()
-        }
-        #[cfg(not(feature = "liveview"))]
-        {
-            false
-        }
-    }
-
-    pub(crate) fn route_from_str(&self, route: &str) -> Result<Rc<dyn Any>, String> {
-        self.inner.read().history.parse_route(route)
+        self.inner.read().history.is_liveview()
     }
 
     /// Check whether there is a previous page to navigate back to.
@@ -222,7 +207,7 @@ impl RouterContext {
 
     pub(crate) fn push_any(
         &self,
-        target: NavigationTarget<Rc<dyn Any>>,
+        target: NavigationTarget<String>,
     ) -> Option<ExternalNavigationFailure> {
         {
             let mut write = self.inner.write_unchecked();
@@ -270,19 +255,14 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current<R: Routable>(&self) -> R {
-        self.inner
-            .read()
-            .history
-            .current_route()
-            .downcast::<R>()
-            .unwrap()
-            .as_ref()
-            .clone()
+        R::from_str(&self.inner.read().history.current_route()).unwrap_or_else(|_| {
+            panic!("route's display implementation must be parsable by FromStr")
+        })
     }
 
     /// The route that is currently active.
     pub fn current_route_string(&self) -> String {
-        self.any_route_to_string(&*self.inner.read().history.current_route())
+        self.inner.read().history.current_route()
     }
 
     pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
@@ -292,10 +272,10 @@ impl RouterContext {
     pub(crate) fn resolve_into_routable(
         &self,
         into_routable: IntoRoutable,
-    ) -> NavigationTarget<Rc<dyn Any>> {
+    ) -> NavigationTarget<String> {
         match into_routable {
             IntoRoutable::FromStr(url) => {
-                let parsed_route: NavigationTarget<Rc<dyn Any>> = match self.route_from_str(&url) {
+                let parsed_route: NavigationTarget<String> = match self.inner.read().history.help(&url) {
                     Ok(route) => NavigationTarget::Internal(route),
                     Err(_) => NavigationTarget::External(url),
                 };
