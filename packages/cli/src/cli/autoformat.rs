@@ -1,6 +1,5 @@
 use super::*;
 use crate::DioxusCrate;
-use build::TargetArgs;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
 use std::{borrow::Cow, fs, path::Path, process::exit};
@@ -10,35 +9,35 @@ use std::{borrow::Cow, fs, path::Path, process::exit};
 
 /// Format some rsx
 #[derive(Clone, Debug, Parser)]
-pub struct Autoformat {
+pub(crate) struct Autoformat {
     /// Format rust code before the formatting the rsx macros
     #[clap(long)]
-    pub all_code: bool,
+    pub(crate) all_code: bool,
 
     /// Run in 'check' mode. Exits with 0 if input is formatted correctly. Exits
     /// with 1 and prints a diff if formatting is required.
     #[clap(short, long)]
-    pub check: bool,
+    pub(crate) check: bool,
 
     /// Input rsx (selection)
     #[clap(short, long)]
-    pub raw: Option<String>,
+    pub(crate) raw: Option<String>,
 
     /// Input file
     #[clap(short, long)]
-    pub file: Option<String>,
+    pub(crate) file: Option<String>,
 
     /// Split attributes in lines or not
     #[clap(short, long, default_value = "false")]
-    pub split_line_attributes: bool,
+    pub(crate) split_line_attributes: bool,
 
     /// The package to build
     #[clap(short, long)]
-    pub package: Option<String>,
+    pub(crate) package: Option<String>,
 }
 
 impl Autoformat {
-    pub fn autoformat(self) -> Result<()> {
+    pub(crate) fn autoformat(self) -> Result<()> {
         let Autoformat {
             check,
             raw,
@@ -158,7 +157,7 @@ fn format_file(
     let mut if_write = false;
     if format_rust_code {
         let formatted = format_rust(&contents)
-            .map_err(|err| Error::ParseError(format!("Syntax Error:\n{}", err)))?;
+            .map_err(|err| Error::Parse(format!("Syntax Error:\n{}", err)))?;
         if contents != formatted {
             if_write = true;
             contents = formatted;
@@ -166,9 +165,9 @@ fn format_file(
     }
 
     let parsed = syn::parse_file(&contents)
-        .map_err(|err| Error::ParseError(format!("Failed to parse file: {}", err)))?;
+        .map_err(|err| Error::Parse(format!("Failed to parse file: {}", err)))?;
     let edits = dioxus_autofmt::try_fmt_file(&contents, &parsed, indent)
-        .map_err(|err| Error::ParseError(format!("Failed to format file: {}", err)))?;
+        .map_err(|err| Error::Parse(format!("Failed to format file: {}", err)))?;
     let len = edits.len();
 
     if !edits.is_empty() {
@@ -240,8 +239,11 @@ fn indentation_for(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::inherit())
         .output()?;
+
     if !out.status.success() {
-        return Err(Error::CargoError("cargo fmt failed".into()));
+        return Err(Error::Runtime(format!(
+            "cargo fmt failed with status: {out:?}"
+        )));
     }
 
     let config = String::from_utf8_lossy(&out.stdout);
@@ -252,18 +254,16 @@ fn indentation_for(
         .and_then(|line| line.split_once('='))
         .map(|(_, value)| value.trim() == "true")
         .ok_or_else(|| {
-            Error::RuntimeError("Could not find hard_tabs option in rustfmt config".into())
+            Error::Runtime("Could not find hard_tabs option in rustfmt config".into())
         })?;
     let tab_spaces = config
         .lines()
         .find(|line| line.starts_with("tab_spaces "))
         .and_then(|line| line.split_once('='))
         .map(|(_, value)| value.trim().parse::<usize>())
-        .ok_or_else(|| {
-            Error::RuntimeError("Could not find tab_spaces option in rustfmt config".into())
-        })?
+        .ok_or_else(|| Error::Runtime("Could not find tab_spaces option in rustfmt config".into()))?
         .map_err(|_| {
-            Error::RuntimeError("Could not parse tab_spaces option in rustfmt config".into())
+            Error::Runtime("Could not parse tab_spaces option in rustfmt config".into())
         })?;
 
     Ok(IndentOptions::new(
@@ -288,7 +288,7 @@ fn format_syn_error(err: syn::Error) -> Error {
     let start = err.span().start();
     let line = start.line;
     let column = start.column;
-    Error::ParseError(format!(
+    Error::Parse(format!(
         "Syntax Error in line {} column {}:\n{}",
         line, column, err
     ))

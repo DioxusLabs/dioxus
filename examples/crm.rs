@@ -22,11 +22,18 @@ fn main() {
             rsx! {
                 document::Link {
                     rel: "stylesheet",
-                    href: asset!("https://unpkg.com/purecss@2.0.6/build/pure-min.css"), 
+                    href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css",
                     integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
-                    crossorigin: "anonymous"
+                    crossorigin: "anonymous",
                 }
-                document::Link { rel: "stylesheet", href: asset!("./examples/assets/crm.css") }
+                document::Link {
+                    rel: "stylesheet",
+                    href: asset!("/examples/assets/crm.css"),
+                }
+                document::Link {
+                    rel: "stylesheet",
+                    href: asset!("./examples/assets/crm.css"),
+                }
                 h1 { "Dioxus CRM Example" }
                 Router::<Route> {}
             }
@@ -117,7 +124,7 @@ fn New() -> Element {
                         placeholder: "Last Name…",
                         required: true,
                         value: "{last_name}",
-                        oninput: move |e| last_name.set(e.value())
+                        oninput: move |e| last_name.set(e.value()),
                     }
                 }
 
@@ -127,13 +134,21 @@ fn New() -> Element {
                         id: "description",
                         placeholder: "Description…",
                         value: "{description}",
-                        oninput: move |e| description.set(e.value())
+                        oninput: move |e| description.set(e.value()),
                     }
                 }
 
                 div { class: "pure-controls",
-                    button { r#type: "submit", class: "pure-button pure-button-primary", "Save" }
-                    Link { to: Route::List, class: "pure-button pure-button-primary red", "Cancel" }
+                    button {
+                        r#type: "submit",
+                        class: "pure-button pure-button-primary",
+                        "Save"
+                    }
+                    Link {
+                        to: Route::List,
+                        class: "pure-button pure-button-primary red",
+                        "Cancel"
+                    }
                 }
             }
         }

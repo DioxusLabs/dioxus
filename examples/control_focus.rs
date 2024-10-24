@@ -8,7 +8,7 @@ use std::rc::Rc;
 use async_std::task::sleep;
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!("./examples/assets/roulette.css");
+const STYLE: Asset = asset!("/examples/assets/roulette.css");
 
 fn main() {
     dioxus::launch(app);

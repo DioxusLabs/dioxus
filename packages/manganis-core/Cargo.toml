@@ -1,0 +1,10 @@
+[package]
+name = "manganis-core"
+edition = "2021"
+version.workspace = true
+
+# be careful with dependencies you add here - these need to get compiled for the proc macro and therefore
+# prevent the main code from compiling!
+[dependencies]
+serde_json = "1.0"
+serde = { workspace = true, features = ["derive"] }

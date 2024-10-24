@@ -2,87 +2,75 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-pub mod assets;
-pub mod builder;
-pub mod cli;
-pub mod config;
-pub mod dioxus_crate;
-pub mod dx_build_info;
-pub mod error;
-pub mod metadata;
-pub mod serve;
-pub mod settings;
-pub mod tracer;
+mod assets;
+mod builder;
+mod bundle_utils;
+mod cli;
+mod config;
+mod dioxus_crate;
+mod dx_build_info;
+mod error;
+mod fastfs;
+mod filemap;
+mod metadata;
+mod platform;
+mod profiles;
+mod rustup;
+mod serve;
+mod settings;
+mod tooling;
+mod tracer;
 
+pub(crate) use builder::*;
 pub(crate) use cli::*;
+pub(crate) use config::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
+pub(crate) use filemap::*;
+pub(crate) use platform::*;
+pub(crate) use rustup::*;
 pub(crate) use settings::*;
-pub(crate) use tracer::{TraceMsg, TraceSrc};
+pub(crate) use tracer::*;
 
 use anyhow::Context;
 use clap::Parser;
-
 use Commands::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = Cli::parse();
+    // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
+    if let Some(link_action) = link::LinkAction::from_env() {
+        return link_action.run();
+    }
 
-    let log_control = tracer::build_tracing();
+    // Start the tracer so it captures logs from the build engine before we start the builder
+    TraceController::initialize();
 
-    match args.action {
+    match Cli::parse().action {
         Translate(opts) => opts
             .translate()
-            .context(error_wrapper("Translation of HTML into RSX failed")),
+            .context("⛔️ Translation of HTML into RSX failed:"),
 
-        New(opts) => opts
-            .create()
-            .context(error_wrapper("Creating new project failed")),
+        New(opts) => opts.create().context("🚫 Creating new project failed:"),
 
-        Init(opts) => opts
-            .init()
-            .context(error_wrapper("Initializing a new project failed")),
+        Init(opts) => opts.init().context("🚫 Initializing a new project failed:"),
 
-        Config(opts) => opts
-            .config()
-            .context(error_wrapper("Configuring new project failed")),
+        Config(opts) => opts.config().context("🚫 Configuring new project failed:"),
 
-        Autoformat(opts) => opts
-            .autoformat()
-            .context(error_wrapper("Error autoformatting RSX")),
+        Autoformat(opts) => opts.autoformat().context("🚫 Error autoformatting RSX:"),
 
-        Check(opts) => opts
-            .check()
-            .await
-            .context(error_wrapper("Error checking RSX")),
+        Check(opts) => opts.check().await.context("🚫 Error checking RSX:"),
 
-        Link(opts) => opts
-            .link()
-            .context(error_wrapper("Error with linker passthrough")),
+        Clean(opts) => opts.clean().context("🚫 Cleaning project failed:"),
 
-        Build(mut opts) => opts
-            .run()
-            .await
-            .context(error_wrapper("Building project failed")),
+        Build(mut opts) => opts.build().await.context("🚫 Building project failed:"),
 
-        Clean(opts) => opts
-            .clean()
-            .context(error_wrapper("Cleaning project failed")),
+        Serve(opts) => opts.serve().await.context("🚫 Serving project failed:"),
 
-        Serve(opts) => opts
-            .serve(log_control)
-            .await
-            .context(error_wrapper("Serving project failed")),
+        Bundle(opts) => opts.bundle().await.context("🚫 Bundling project failed:"),
 
-        Bundle(opts) => opts
-            .bundle()
-            .await
-            .context(error_wrapper("Bundling project failed")),
+        Run(opts) => opts.run().await.context("🚫 Running project failed:"),
+
+        Doctor(opts) => opts.run().await.context("🚫 Checking project failed:"),
     }
-}
-
-/// Simplifies error messages that use the same pattern.
-fn error_wrapper(message: &str) -> String {
-    format!("🚫 {message}:")
 }

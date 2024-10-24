@@ -1,11 +1,11 @@
-use crate::build::Build;
+use crate::bundle_utils::make_tauri_bundler_settings;
 use crate::DioxusCrate;
+use crate::{build::BuildArgs, PackageType};
 use anyhow::Context;
 use std::env::current_dir;
 use std::fs::create_dir_all;
-use std::ops::Deref;
 use std::str::FromStr;
-use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
+use tauri_bundler::{PackageSettings, SettingsBuilder};
 
 use super::*;
 
@@ -16,72 +16,21 @@ pub struct Bundle {
     /// The package types to bundle
     #[clap(long)]
     pub packages: Option<Vec<PackageType>>,
+
     /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub build_arguments: Build,
-}
-
-impl Deref for Bundle {
-    type Target = Build;
-
-    fn deref(&self) -> &Self::Target {
-        &self.build_arguments
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum PackageType {
-    MacOsBundle,
-    IosBundle,
-    WindowsMsi,
-    Deb,
-    Rpm,
-    AppImage,
-    Dmg,
-    Updater,
-}
-
-impl FromStr for PackageType {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "macos" => Ok(PackageType::MacOsBundle),
-            "ios" => Ok(PackageType::IosBundle),
-            "msi" => Ok(PackageType::WindowsMsi),
-            "deb" => Ok(PackageType::Deb),
-            "rpm" => Ok(PackageType::Rpm),
-            "appimage" => Ok(PackageType::AppImage),
-            "dmg" => Ok(PackageType::Dmg),
-            _ => Err(format!("{} is not a valid package type", s)),
-        }
-    }
-}
-
-impl From<PackageType> for tauri_bundler::PackageType {
-    fn from(val: PackageType) -> Self {
-        match val {
-            PackageType::MacOsBundle => tauri_bundler::PackageType::MacOsBundle,
-            PackageType::IosBundle => tauri_bundler::PackageType::IosBundle,
-            PackageType::WindowsMsi => tauri_bundler::PackageType::WindowsMsi,
-            PackageType::Deb => tauri_bundler::PackageType::Deb,
-            PackageType::Rpm => tauri_bundler::PackageType::Rpm,
-            PackageType::AppImage => tauri_bundler::PackageType::AppImage,
-            PackageType::Dmg => tauri_bundler::PackageType::Dmg,
-            PackageType::Updater => tauri_bundler::PackageType::Updater,
-        }
-    }
+    pub(crate) build_arguments: BuildArgs,
 }
 
 impl Bundle {
-    pub async fn bundle(mut self) -> anyhow::Result<()> {
-        let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
+    pub(crate) async fn bundle(mut self) -> anyhow::Result<()> {
+        let dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        self.build_arguments.resolve(&mut dioxus_crate)?;
+        self.build_arguments.resolve(&dioxus_crate)?;
 
         // Build the app
-        self.build_arguments.build(&mut dioxus_crate).await?;
+        self.build_arguments.build().await?;
 
         // copy the binary to the out dir
         let package = dioxus_crate.package();
@@ -97,10 +46,12 @@ impl Bundle {
                 .set_src_path(Some(dioxus_crate.workspace_dir().display().to_string())),
         ];
 
-        let mut bundle_settings: BundleSettings = dioxus_crate.dioxus_config.bundle.clone().into();
+        let bundle_config = dioxus_crate.config.bundle.clone();
+        let mut bundle_settings = make_tauri_bundler_settings(bundle_config);
+
         if cfg!(windows) {
             let windows_icon_override = dioxus_crate
-                .dioxus_config
+                .config
                 .bundle
                 .windows
                 .as_ref()
@@ -128,7 +79,8 @@ impl Bundle {
         }
 
         // Copy the assets in the dist directory to the bundle
-        let static_asset_output_dir = &dioxus_crate.dioxus_config.application.out_dir;
+        let static_asset_output_dir = &dioxus_crate.config.application.out_dir;
+
         // Make sure the dist directory is relative to the crate directory
         let static_asset_output_dir = static_asset_output_dir
             .strip_prefix(dioxus_crate.workspace_dir())
@@ -139,8 +91,10 @@ impl Bundle {
 
         // Don't copy the executable or the old bundle directory
         let ignored_files = [
-            dioxus_crate.out_dir().join("bundle"),
-            dioxus_crate.out_dir().join(name),
+            dioxus_crate
+                .bundle_dir(self.build_arguments.platform())
+                .join("bundle"),
+            // dioxus_crate.out_dir().join(name),
         ];
 
         for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
@@ -173,14 +127,14 @@ impl Bundle {
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(dioxus_crate.out_dir())
+            .project_out_directory(dioxus_crate.bundle_dir(self.build_arguments.platform()))
             .package_settings(PackageSettings {
-                product_name: dioxus_crate.dioxus_config.application.name.clone(),
+                product_name: dioxus_crate.config.application.name.clone(),
                 version: package.version.to_string(),
                 description: package.description.clone().unwrap_or_default(),
                 homepage: Some(package.homepage.clone().unwrap_or_default()),
                 authors: Some(package.authors.clone()),
-                default_run: Some(dioxus_crate.dioxus_config.application.name.clone()),
+                default_run: Some(dioxus_crate.config.application.name.clone()),
             })
             .binaries(binaries)
             .bundle_settings(bundle_settings);
@@ -188,7 +142,7 @@ impl Bundle {
             settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
         }
 
-        if let Some(target) = &self.target_args.target {
+        if let Some(target) = self.build_arguments.target_args.target.as_ref() {
             settings = settings.target(target.to_string());
         }
 
@@ -198,7 +152,7 @@ impl Bundle {
         #[cfg(target_os = "macos")]
         std::env::set_var("CI", "true");
 
-        tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
+        tauri_bundler::bundle::bundle_project(&settings.unwrap()).unwrap_or_else(|err|{
             #[cfg(target_os = "macos")]
             panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
             #[cfg(not(target_os = "macos"))]
@@ -206,5 +160,23 @@ impl Bundle {
         });
 
         Ok(())
+    }
+}
+
+impl FromStr for PackageType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "macos" => Ok(PackageType::MacOsBundle),
+            "ios" => Ok(PackageType::IosBundle),
+            "msi" => Ok(PackageType::WindowsMsi),
+            "deb" => Ok(PackageType::Deb),
+            "rpm" => Ok(PackageType::Rpm),
+            "appimage" => Ok(PackageType::AppImage),
+            "dmg" => Ok(PackageType::Dmg),
+            "updater" => Ok(PackageType::Updater),
+            _ => Err(format!("{} is not a valid package type", s)),
+        }
     }
 }

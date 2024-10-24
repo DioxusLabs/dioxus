@@ -313,8 +313,18 @@ impl DynamicValuePool {
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct HotReloadTemplateWithLocation {
-    pub location: String,
+    pub key: TemplateGlobalKey,
     pub template: HotReloadedTemplate,
+}
+
+#[doc(hidden)]
+#[derive(Debug, Clone, PartialEq, Hash, PartialOrd, Eq, Ord)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct TemplateGlobalKey {
+    pub file: String,
+    pub line: usize,
+    pub column: usize,
+    pub index: usize,
 }
 
 type StaticTemplateArray = &'static [TemplateNode];

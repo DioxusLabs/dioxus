@@ -55,10 +55,26 @@ impl WebviewEdits {
         &self,
         request: wry::http::Request<Vec<u8>>,
     ) -> Result<Vec<u8>, serde_json::Error> {
-        let response = match serde_json::from_slice(request.body()) {
-            Ok(event) => self.handle_html_event(event),
+        let data_from_header = request
+            .headers()
+            .get("dioxus-data")
+            .map(|f| f.as_bytes())
+            .expect("dioxus-data header is not a string");
+
+        let response = match serde_json::from_slice(data_from_header) {
+            Ok(event) => {
+                // we need to wait for the mutex lock to let us munge the main thread..
+                let _lock = crate::android_sync_lock::android_runtime_lock();
+                self.handle_html_event(event)
+            }
             Err(err) => {
-                tracing::error!("Error parsing user_event: {:?}", err);
+                tracing::error!("cannot decippher format of user event");
+                tracing::error!(
+                    "Error parsing user_event: {:?}.Contents: {:?}, raw: {:#?}",
+                    err,
+                    String::from_utf8(request.body().to_vec()),
+                    request
+                );
                 SynchronousEventResponse::new(false)
             }
         };
@@ -206,19 +222,16 @@ impl WebviewInstance {
                 edits
             ];
             move |request, responder: RequestAsyncResponder| {
-                // Try to serve the index file first
-                if let Some(index_bytes) = protocol::index_request(
-                    &request,
+                protocol::desktop_handler(
+                    request,
+                    asset_handlers.clone(),
+                    responder,
+                    &edits,
                     custom_head.clone(),
                     custom_index.clone(),
                     &root_name,
                     headless,
-                ) {
-                    return responder.respond(index_bytes);
-                }
-
-                // Otherwise, try to serve an asset, either from the user or the filesystem
-                protocol::desktop_handler(request, asset_handlers.clone(), responder, &edits);
+                )
             }
         };
 
@@ -417,8 +430,12 @@ impl WebviewInstance {
                 }
             }
 
-            self.dom
-                .render_immediate(&mut *self.edits.wry_queue.mutation_state_mut());
+            // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            let _lock = crate::android_sync_lock::android_runtime_lock();
+
+            self.edits
+                .wry_queue
+                .with_mutation_state_mut(|f| self.dom.render_immediate(f));
             self.edits.wry_queue.send_edits();
         }
     }
