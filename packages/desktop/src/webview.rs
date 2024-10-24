@@ -282,7 +282,11 @@ impl WebviewInstance {
             target_os = "ios",
             target_os = "android"
         ))]
-        let mut webview = WebViewBuilder::new(&window);
+        let mut webview = if cfg.as_child_window {
+            WebViewBuilder::new_as_child(&window)
+        } else {
+            WebViewBuilder::new(&window)
+        };
 
         #[cfg(not(any(
             target_os = "windows",
