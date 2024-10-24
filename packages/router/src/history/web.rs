@@ -233,7 +233,11 @@ where
         self.navigate_external(url)
     }
 
-    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "fullstack", feature = "liveview", feature = "ssr"))
+    ))]
+    fn updater(&mut self, callback: std::rc::Rc<dyn Fn()>) {
         let w = self.window.clone();
         let h = self.history.clone();
         let s = self.listener_animation_frame.clone();
@@ -248,5 +252,24 @@ where
                 }
             }
         }));
+    }
+
+    #[cfg(any(feature = "fullstack", feature = "liveview", feature = "ssr"))]
+    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
+        let w = self.window.clone();
+        let h = self.history.clone();
+        let s = self.listener_animation_frame.clone();
+        let d = self.do_scroll_restoration;
+        self.listener_navigation = Some(EventListener::new(&self.window, "popstate", move |_| {
+            (*callback)();
+            if d {
+                let mut s = s.lock().expect("unpoisoned scroll mutex");
+                if let Some([x, y]) = get_current(&h) {
+                    *s = Some(ScrollPosition { x, y }.scroll_to(w.clone()));
+                }
+            }
+        }));
+
+        tracing::warn!("dioxus-router should only be used with one platform feature enabled.");
     }
 }
