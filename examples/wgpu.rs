@@ -1,6 +1,6 @@
 use dioxus::desktop::tao::event::Event as WryEvent;
 use dioxus::desktop::tao::window::WindowBuilder;
-use dioxus::desktop::{use_window, use_wry_event_handler, DesktopContext};
+use dioxus::desktop::{use_window, use_wry_event_handler, window, DesktopContext};
 use dioxus::prelude::*;
 use ouroboros::self_referencing;
 use std::borrow::Cow;
@@ -172,7 +172,7 @@ struct GraphicsContext {
 fn app() -> Element {
     let mut graphics_resources = use_resource(move || async {
         let context = GraphicsContextAsyncBuilder {
-            desktop: use_window(),
+            desktop: window(),
             resources_builder: |desktop: &DesktopContext| {
                 Box::pin(async move {
                     let (surface, device, pipeline, queue) = setup_triangle(desktop).await;
@@ -191,33 +191,30 @@ fn app() -> Element {
         context
     });
 
-    let desktop = use_window();
-    graphics_resources.read().as_ref().map(|x| {
-        desktop.window.request_redraw();
+    let desktop_context = use_window();
+    graphics_resources.read().as_ref().map(|_| {
+        desktop_context.window.request_redraw();
     });
 
     use_wry_event_handler(move |event, _| {
         if let WryEvent::RedrawRequested(id) = event {
             println!("Redraw requested for window with id: {:?}", id);
-            graphics_resources.read().as_ref().map_or_else(
-                || println!("No graphics resources allocated yet"),
-                |resources| {
-                    resources.with_resources(|resources| {
-                        render_triangle(
-                            &resources.surface,
-                            &resources.device,
-                            &resources.pipeline,
-                            &resources.queue,
-                        );
-                    })
-                },
-            );
+            graphics_resources.read().as_ref().map(|resources| {
+                resources.with_resources(|resources| {
+                    render_triangle(
+                        &resources.surface,
+                        &resources.device,
+                        &resources.pipeline,
+                        &resources.queue,
+                    );
+                })
+            });
         } else if let WryEvent::WindowEvent {
-            event: dioxus::desktop::tao::event::WindowEvent::Resized(new_size),
+            event: dioxus::desktop::tao::event::WindowEvent::Resized(_new_size),
             ..
         } = event
         {
-            println!("Window resized to: {:?}", new_size);
+            // TODO: use the new_size to update the existing surface instead of recreating the entire graphics resource
             graphics_resources.restart();
         }
     });
