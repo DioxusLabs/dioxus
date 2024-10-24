@@ -1,15 +1,8 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use crate::{platform, AppBundle, BuildRequest, Platform};
-use anyhow::Context;
-use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage, Message};
+use crate::{AppBundle, BuildRequest, Platform, TraceSrc};
+use cargo_metadata::CompilerMessage;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use serde::Deserialize;
-use std::ops::Deref;
 use std::path::PathBuf;
-use std::process::Stdio;
-use std::{fmt::Display, path::Path};
-use tokio::{io::AsyncBufReadExt, process::Command};
-use tracing::Level;
 
 pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
 pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
@@ -40,7 +33,6 @@ pub enum BuildStage {
     Bundling {},
     RunningBindgen {},
     OptimizingWasm {},
-    OptimizingAssets {},
     CopyingAssets {
         current: usize,
         total: usize,
@@ -77,15 +69,7 @@ impl BuildRequest {
     }
 
     pub(crate) fn status_build_message(&self, line: String) {
-        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
-        //     platform: self.platform(),
-        //     stage: BuildStage::Compiling,
-        //     update: UpdateStage::AddMessage(BuildMessage {
-        //         level: Level::DEBUG,
-        //         message: MessageType::Text(line),
-        //         source: MessageSource::Build,
-        //     }),
-        // });
+        tracing::debug!(dx_src = ?TraceSrc::Cargo, "Cargo build message: {line}");
     }
 
     pub(crate) fn status_build_progress(
@@ -114,42 +98,25 @@ impl BuildRequest {
         });
     }
 
-    pub(crate) fn status_build_finished(&self) {
-        // tracing::info!("🚩 Build completed: [{}]", self.krate.out_dir().display());
-
-        todo!()
-        // _ = self.progress.unbounded_send(BuildUpdate::Progress {
-        //     stage: BuildStage::Finished,
-        //     progress: 1.0,
-        // });
-    }
-
-    pub(crate) fn status_copying_asset(&self, cur: usize, total: usize, asset: &Path) {
-        // Update the progress
-        // _ = self.progress.unbounded_send(UpdateBuildProgress {
-        //     stage: Stage::OptimizingAssets,
-        //     update: UpdateStage::AddMessage(BuildMessage {
-        //         level: Level::INFO,
-        //         message: MessageType::Text(format!(
-        //             "Optimized static asset {}",
-        //             asset.display()
-        //         )),
-        //         source: MessageSource::Build,
-        //     }),
-        //     platform: self.target_platform,
-        // });
-    }
-
-    pub(crate) fn status_finished_asset(&self, idx: usize, total: usize, asset: &Path) {
-        // Update the progress
-        // _ = self.progress.unbounded_send(UpdateBuildProgress {
-        //     stage: Stage::OptimizingAssets,
-        //     update: UpdateStage::SetProgress(finished as f64 / asset_count as f64),
-        //     platform: self.target_platform,
-        // });
+    pub(crate) fn status_copying_asset(&self, current: usize, total: usize, path: PathBuf) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::CopyingAssets {
+                current,
+                total,
+                path,
+            },
+        });
     }
 
     pub(crate) fn status_optimizing_wasm(&self) {
-        todo!()
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::OptimizingWasm {},
+        });
+    }
+
+    pub(crate) fn status_installing_tooling(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::InstallingTooling {},
+        });
     }
 }

@@ -28,7 +28,6 @@ struct CachedFile {
 
 pub enum HotreloadResult {
     Rsx(Vec<HotReloadTemplateWithLocation>),
-    ServerFn,
     Notreloadable,
     NotParseable,
 }

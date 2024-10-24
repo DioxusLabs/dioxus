@@ -6,7 +6,7 @@ use crate::{
 pub(crate) fn make_tauri_bundler_settings(
     bundle_config: BundleConfig,
 ) -> tauri_bundler::BundleSettings {
-    todo!()
+    bundle_config.into()
 }
 
 impl From<NsisSettings> for tauri_bundler::NsisSettings {
@@ -21,8 +21,8 @@ impl From<NsisSettings> for tauri_bundler::NsisSettings {
             custom_language_files: None,
             template: None,
             compression: tauri_utils::config::NsisCompression::None,
-            start_menu_folder: todo!(),
-            installer_hooks: todo!(),
+            start_menu_folder: val.start_menu_folder,
+            installer_hooks: val.installer_hooks,
         }
     }
 }
@@ -52,17 +52,17 @@ impl From<DebianSettings> for tauri_bundler::DebianSettings {
         tauri_bundler::DebianSettings {
             depends: val.depends,
             files: val.files,
-            desktop_template: None,
-            provides: todo!(),
-            conflicts: todo!(),
-            replaces: todo!(),
-            section: todo!(),
-            priority: todo!(),
-            changelog: todo!(),
-            pre_install_script: todo!(),
-            post_install_script: todo!(),
-            pre_remove_script: todo!(),
-            post_remove_script: todo!(),
+            desktop_template: val.desktop_template,
+            provides: val.provides,
+            conflicts: val.conflicts,
+            replaces: val.replaces,
+            section: val.section,
+            priority: val.priority,
+            changelog: val.changelog,
+            pre_install_script: val.pre_install_script,
+            post_install_script: val.post_install_script,
+            pre_remove_script: val.pre_remove_script,
+            post_remove_script: val.post_remove_script,
         }
     }
 }
@@ -113,8 +113,8 @@ impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
             provider_short_name: val.provider_short_name,
             entitlements: val.entitlements,
             info_plist_path: val.info_plist_path,
-            files: todo!(),
-            hardened_runtime: todo!(),
+            files: val.files,
+            hardened_runtime: val.hardened_runtime,
         }
     }
 }
@@ -127,12 +127,12 @@ impl From<WindowsSettings> for tauri_bundler::WindowsSettings {
             timestamp_url: val.timestamp_url,
             tsp: val.tsp,
             wix: val.wix.map(Into::into),
-            icon_path: val.icon_path.unwrap_or("icons/icon.ico".into()),
+            icon_path: val.icon_path.unwrap_or("./icons/icon.ico".into()),
             webview_install_mode: val.webview_install_mode.into(),
             webview_fixed_runtime_path: val.webview_fixed_runtime_path,
             allow_downgrades: val.allow_downgrades,
             nsis: val.nsis.map(Into::into),
-            sign_command: todo!(),
+            sign_command: val.sign_command,
         }
     }
 }
@@ -149,7 +149,16 @@ impl From<NSISInstallerMode> for tauri_utils::config::NSISInstallerMode {
 
 impl From<PackageType> for tauri_bundler::PackageType {
     fn from(value: PackageType) -> Self {
-        todo!()
+        match value {
+            PackageType::MacOsBundle => Self::MacOsBundle,
+            PackageType::IosBundle => Self::IosBundle,
+            PackageType::WindowsMsi => Self::WindowsMsi,
+            PackageType::Deb => Self::Deb,
+            PackageType::Rpm => Self::Rpm,
+            PackageType::AppImage => Self::AppImage,
+            PackageType::Dmg => Self::Dmg,
+            PackageType::Updater => Self::Updater,
+        }
     }
 }
 

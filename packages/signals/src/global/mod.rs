@@ -217,7 +217,6 @@ pub struct GlobalLazyContext {
 /// A key used to identify a signal in the global signal context
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GlobalKey<'a> {
-    // We create an extra wrapper around location so we can construct it manually for hot reloading
     pub file: &'a str,
     pub line: u32,
     pub column: u32,

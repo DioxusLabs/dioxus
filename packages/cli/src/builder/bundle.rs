@@ -419,7 +419,7 @@ impl AppBundle {
             self.build.status_copying_asset(
                 assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
                 asset_count,
-                from,
+                from.clone(),
             );
 
             // todo(jon): implement optimize + pre_compress on the asset type
@@ -429,10 +429,10 @@ impl AppBundle {
                 tracing::error!("Failed to copy asset {from:?}: {err}");
             }
 
-            self.build.status_finished_asset(
+            self.build.status_copying_asset(
                 assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
                 asset_count,
-                from,
+                from.clone(),
             );
 
             res.map(|_| ())

@@ -98,14 +98,7 @@ impl LinkAction {
                     }
                 }
 
-                let Ok(contents) = serde_json::to_string(&manifest) else {
-                    std::fs::write(
-                        "/Users/jonkelley/Development/Tinkering/hr-new-test/errlog.txt",
-                        "Failed to write manifest",
-                    );
-                    return Ok(());
-                };
-
+                let contents = serde_json::to_string(&manifest).expect("Failed to write manifest");
                 std::fs::write(dest, contents).expect("Failed to write output file");
             }
         }

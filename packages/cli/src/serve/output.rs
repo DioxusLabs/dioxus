@@ -1,5 +1,5 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringBuffer, Builder, ServeUpdate, Watcher, WebServer},
+    serve::{ansi_buffer::AnsiStringBuffer, RequestBuilder, ServeUpdate, Watcher, WebServer},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
@@ -70,7 +70,7 @@ pub struct Output {
 struct RenderState<'a> {
     opts: &'a ServeArgs,
     krate: &'a DioxusCrate,
-    build_engine: &'a Builder,
+    build_engine: &'a RequestBuilder,
     server: &'a WebServer,
     watcher: &'a Watcher,
 }
@@ -343,7 +343,7 @@ impl Output {
         &mut self,
         opts: &ServeArgs,
         config: &DioxusCrate,
-        build_engine: &Builder,
+        build_engine: &RequestBuilder,
         server: &WebServer,
         watcher: &Watcher,
     ) {
@@ -497,7 +497,6 @@ impl Output {
             BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
             BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
             BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
-            BuildStage::OptimizingAssets {} => lines.push("Optimizing assets".yellow()),
             BuildStage::CopyingAssets {
                 current,
                 total,

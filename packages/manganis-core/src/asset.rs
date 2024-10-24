@@ -71,9 +71,7 @@ impl ResourceAsset {
         // Open the file to get its options
         let file = std::fs::File::open(&file_path).unwrap();
         let metadata = file.metadata().unwrap();
-        let modified = metadata
-            .modified()
-            .unwrap_or_else(|_| SystemTime::UNIX_EPOCH);
+        let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
 
         // Hash a bunch of metadata
         // name, options, modified time, and maybe the version of our crate

@@ -31,7 +31,7 @@ pub fn generate_link_section(asset: &impl Serialize) -> TokenStream2 {
 
 /// Information about the manganis link section for a given platform
 #[derive(Debug, Clone, Copy)]
-struct LinkSection {
+pub struct LinkSection {
     /// The link section we pass to the static
     pub link_section: &'static str,
     /// The name of the section we find in the binary

@@ -12,7 +12,6 @@ mod dx_build_info;
 mod error;
 mod fastfs;
 mod filemap;
-mod global_ignore;
 mod metadata;
 mod platform;
 mod profiles;

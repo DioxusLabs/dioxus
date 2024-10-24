@@ -1,5 +1,3 @@
-use crate::Result;
-use crate::TraceSrc;
 use anyhow::Context;
 use manganis_core::{LinkSection, ResourceAsset};
 use object::{read::archive::ArchiveFile, File as ObjectFile, Object, ObjectSection};
@@ -67,7 +65,7 @@ impl AssetManifest {
 
             // Check if the archive member is an object file and parse it.
             if name.ends_with(".o") {
-                let data = member.data(&*data)?;
+                let data = member.data(data)?;
                 let object = object::File::parse(data)?;
                 _ = self.add_from_object_file(&object);
             }

@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 ///
 /// Here, we track the number of crates being compiled, assets copied, the times of these events, and
 /// other metadata that gives us useful indicators for the UI.
-pub(crate) struct Builder {
+pub(crate) struct RequestBuilder {
     // Components of the build
     pub krate: DioxusCrate,
     pub request: BuildRequest,
@@ -35,7 +35,7 @@ pub(crate) struct Builder {
     pub bundle_end: Option<Instant>,
 }
 
-impl Builder {
+impl RequestBuilder {
     /// Create a new builder and immediately start a build
     pub(crate) fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -140,7 +140,6 @@ impl Builder {
                         self.bundle_start = Some(Instant::now());
                     }
                     BuildStage::OptimizingWasm {} => {}
-                    BuildStage::OptimizingAssets {} => {}
                     BuildStage::CopyingAssets { current, total, .. } => {
                         self.bundling_progress = *current as f64 / *total as f64;
                     }

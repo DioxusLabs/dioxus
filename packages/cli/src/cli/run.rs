@@ -1,5 +1,5 @@
 use super::*;
-use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate};
+use crate::{serve::ServeUpdate, BuildArgs, DioxusCrate, RequestBuilder};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -19,7 +19,7 @@ impl RunArgs {
         println!("Building crate krate data: {:#?}", krate);
         println!("Build args: {:#?}", self.build_args);
 
-        let bundle = Builder::start(&krate, self.build_args.clone())?
+        let bundle = RequestBuilder::start(&krate, self.build_args.clone())?
             .finish()
             .await?;
 

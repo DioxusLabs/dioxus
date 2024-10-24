@@ -189,7 +189,6 @@ impl AppRunner {
 
             match self.file_map.update_rsx::<HtmlCtx>(path, contents) {
                 HotreloadResult::Rsx(new) => templates.extend(new),
-                HotreloadResult::ServerFn => todo!("server fn hotreloading"),
 
                 // The rust file may have failed to parse, but that is most likely
                 // because the user is in the middle of adding new code

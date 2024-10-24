@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
+use crate::{RequestBuilder, DioxusCrate, Platform, PROFILE_SERVER};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -79,9 +79,12 @@ impl BuildArgs {
 
         self.resolve(&krate)?;
 
-        // todo: probably want to consume the logs from the builder here, instead of just waiting for it to finish
-        let bundle = Builder::start(&krate, self.clone())?.finish().await?;
-        let destination = krate.build_dir(self.platform(), self.release);
+        let bundle = RequestBuilder::start(&krate, self.clone())?.finish().await?;
+
+        println!(
+            "Succesfully built! 💫\nBundle at {}",
+            bundle.app_dir().display()
+        );
 
         Ok(())
     }
@@ -156,19 +159,6 @@ impl BuildArgs {
                 _ => {}
             }
         }
-
-        // Warn if tokio is being enabled on web, since it's not supported and has the worst errors.
-        //         if self.platform == Some(Platform::Web) {
-        //             if krate.has_incompatible_tokio() {
-        //                 return Err(anyhow::anyhow!(
-        //                     r#"Tokio was found in your dependency tree while building for the web platform.
-        // Unfortuantely, tokio's IO features are not supported in WASM.
-        // This is likely because you enabled multiple renderers like `desktop` or `server`.
-        // Make sure you aren't accidentally enabling a renderer or krate that isn't supported in WASM."#
-        //                 )
-        //                 .into());
-        //             }
-        //         }
 
         Ok(())
     }

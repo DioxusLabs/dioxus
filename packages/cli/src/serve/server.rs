@@ -99,7 +99,7 @@ impl WebServer {
         // we can display it to the user in the tui
         let listener = std::net::TcpListener::bind(devserver_address).with_context(|| {
             anyhow::anyhow!(
-                "Failed to bind server to: {devserver_address}, is there another devserver running?\nTo run multiple devservers, use the --address flag to specify a different port"
+                "Failed to bind server to: {devserver_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
             )
         })?;
 
@@ -227,7 +227,6 @@ impl WebServer {
                         self.send_build_status().await;
                     }
                     BuildStage::OptimizingWasm {} => {}
-                    BuildStage::OptimizingAssets {} => {}
                     BuildStage::Aborted => {}
                     BuildStage::CopyingAssets { .. } => {}
                     _ => {}

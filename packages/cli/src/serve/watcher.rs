@@ -57,10 +57,10 @@ impl Watcher {
             // Make sure we add new folders to the watch list, provided they're not matched by the ignore list
             // We'll only watch new folders that are found under the crate, and then update our watcher to watch them
             // This unfortunately won't pick up new krates added "at a distance" - IE krates not within the workspace.
-            if let EventKind::Create(create_kind) = event.kind {
+            if let EventKind::Create(_create_kind) = event.kind {
                 // If it's a new folder, watch it
-
                 // If it's a new cargo.toml (ie dep on the fly),
+                // todo(jon) support new folders on the fly
             }
 
             for path in event.paths {

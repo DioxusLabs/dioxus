@@ -11,6 +11,7 @@ impl BuildRequest {
     /// is in place, and we don't want to slow down subsequent builds.
     pub(crate) async fn verify_tooling(&self) -> Result<()> {
         tracing::debug!("Verifying tooling...");
+        self.status_installing_tooling();
 
         self.krate
             .initialize_profiles()

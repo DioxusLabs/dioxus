@@ -287,10 +287,11 @@ objc_id = "0.1.1"
 # objc = { version = "0.2.7", features = ["exception"] }
 # objc_id = "0.1.1"
 
-[profile.cli-dev]
+# our release profile should be fast to compile and fast to run
+# when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
+[profile.release]
+incremental = true
 debug = 0
-opt-level = 3
-inherits = "dev"
 
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
 [profile.release-unoptimized]

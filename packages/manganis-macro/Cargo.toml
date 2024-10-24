@@ -12,6 +12,8 @@ keywords = ["assets"]
 [lib]
 proc-macro = true
 
+# be careful with dependencies you add here - these need to get compiled for the proc macro and therefore
+# prevent the main code from compiling!
 [dependencies]
 proc-macro2 = { version = "1.0" }
 quote = "1.0"
