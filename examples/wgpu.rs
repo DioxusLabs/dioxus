@@ -171,7 +171,7 @@ struct GraphicsContext {
 
 fn app() -> Element {
     let mut graphics_resources = use_resource(move || async {
-        let context = GraphicsContextAsyncBuilder {
+        GraphicsContextAsyncBuilder {
             desktop: window(),
             resources_builder: |desktop: &DesktopContext| {
                 Box::pin(async move {
@@ -186,9 +186,7 @@ fn app() -> Element {
             },
         }
         .build()
-        .await;
-        println!("finished allocation of resources");
-        context
+        .await
     });
 
     let desktop_context = use_window();
@@ -197,8 +195,7 @@ fn app() -> Element {
     });
 
     use_wry_event_handler(move |event, _| {
-        if let WryEvent::RedrawRequested(id) = event {
-            println!("Redraw requested for window with id: {:?}", id);
+        if let WryEvent::RedrawRequested(_id) = event {
             graphics_resources.read().as_ref().map(|resources| {
                 resources.with_resources(|resources| {
                     render_triangle(
