@@ -1,5 +1,5 @@
 use crate::{
-    BuildUpdate, DioxusCrate, Error, Platform, RequestBuilder, Result, ServeArgs, TraceController,
+    BuildUpdate, Builder, DioxusCrate, Error, Platform, Result, ServeArgs, TraceController,
     TraceSrc,
 };
 
@@ -44,7 +44,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     let mut tracer = TraceController::redirect();
 
     // Note that starting the builder will queue up a build immediately
-    let mut builder = RequestBuilder::start(&krate, args.build_args())?;
+    let mut builder = Builder::start(&krate, args.build_args())?;
     let mut devserver = WebServer::start(&krate, &args)?;
     let mut screen = Output::start(&args)?;
     let mut watcher = Watcher::start(&krate, &args);
@@ -247,8 +247,8 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
-    _ = builder.abort_all();
-    _ = tracer.shutdown();
+    builder.abort_all();
+    tracer.shutdown();
 
     if let Err(err) = err {
         eprintln!("Exiting with error: {}", err);

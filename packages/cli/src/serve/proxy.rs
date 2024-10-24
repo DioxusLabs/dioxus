@@ -62,7 +62,7 @@ pub(crate) fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Ro
     let trimmed_path = path.trim_start_matches('/');
 
     if trimmed_path.is_empty() {
-        return Err(crate::Error::ProxySetupError(format!(
+        return Err(crate::Error::ProxySetup(format!(
             "Proxy backend URL must have a non-empty path, e.g. {}/api instead of {}",
             proxy.backend.trim_end_matches('/'),
             proxy.backend
@@ -288,7 +288,7 @@ mod test {
         };
         let router = super::add_proxy(Router::new(), &config);
         match router.unwrap_err() {
-            crate::Error::ProxySetupError(e) => {
+            crate::Error::ProxySetup(e) => {
                 assert_eq!(
                     e,
                     "Proxy backend URL must have a non-empty path, e.g. http://localhost:8000/api instead of http://localhost:8000"

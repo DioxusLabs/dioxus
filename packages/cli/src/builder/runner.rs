@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 ///
 /// Here, we track the number of crates being compiled, assets copied, the times of these events, and
 /// other metadata that gives us useful indicators for the UI.
-pub(crate) struct RequestBuilder {
+pub(crate) struct Builder {
     // Components of the build
     pub krate: DioxusCrate,
     pub request: BuildRequest,
@@ -35,7 +35,7 @@ pub(crate) struct RequestBuilder {
     pub bundle_end: Option<Instant>,
 }
 
-impl RequestBuilder {
+impl Builder {
     /// Create a new builder and immediately start a build
     pub(crate) fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -86,7 +86,7 @@ impl RequestBuilder {
                 match bundle {
                     Ok(Ok(bundle)) => BuildUpdate::BuildReady { bundle },
                     Ok(Err(err)) => BuildUpdate::BuildFailed { err },
-                    Err(err) => BuildUpdate::BuildFailed { err: crate::Error::RuntimeError(format!("Build panicked! {:?}", err)) },
+                    Err(err) => BuildUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:?}", err)) },
                 }
             },
         };

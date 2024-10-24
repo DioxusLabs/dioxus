@@ -129,12 +129,9 @@ impl Watcher {
 fn handle_notify_error(err: notify::Error) {
     tracing::debug!("Failed to watch path: {}", err);
     match err.kind {
-        notify::ErrorKind::Io(error) => match error.kind() {
-            std::io::ErrorKind::PermissionDenied => {
-                tracing::error!("Failed to watch path: permission denied. {:?}", err.paths)
-            }
-            _ => {}
-        },
+        notify::ErrorKind::Io(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            tracing::error!("Failed to watch path: permission denied. {:?}", err.paths)
+        }
         notify::ErrorKind::MaxFilesWatch => {
             tracing::error!("Failed to set up file watcher: too many files to watch")
         }

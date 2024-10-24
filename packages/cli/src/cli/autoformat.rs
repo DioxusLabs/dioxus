@@ -157,7 +157,7 @@ fn format_file(
     let mut if_write = false;
     if format_rust_code {
         let formatted = format_rust(&contents)
-            .map_err(|err| Error::ParseError(format!("Syntax Error:\n{}", err)))?;
+            .map_err(|err| Error::Parse(format!("Syntax Error:\n{}", err)))?;
         if contents != formatted {
             if_write = true;
             contents = formatted;
@@ -165,9 +165,9 @@ fn format_file(
     }
 
     let parsed = syn::parse_file(&contents)
-        .map_err(|err| Error::ParseError(format!("Failed to parse file: {}", err)))?;
+        .map_err(|err| Error::Parse(format!("Failed to parse file: {}", err)))?;
     let edits = dioxus_autofmt::try_fmt_file(&contents, &parsed, indent)
-        .map_err(|err| Error::ParseError(format!("Failed to format file: {}", err)))?;
+        .map_err(|err| Error::Parse(format!("Failed to format file: {}", err)))?;
     let len = edits.len();
 
     if !edits.is_empty() {
@@ -241,7 +241,7 @@ fn indentation_for(
         .output()?;
 
     if !out.status.success() {
-        return Err(Error::RuntimeError(format!(
+        return Err(Error::Runtime(format!(
             "cargo fmt failed with status: {out:?}"
         )));
     }
@@ -254,18 +254,16 @@ fn indentation_for(
         .and_then(|line| line.split_once('='))
         .map(|(_, value)| value.trim() == "true")
         .ok_or_else(|| {
-            Error::RuntimeError("Could not find hard_tabs option in rustfmt config".into())
+            Error::Runtime("Could not find hard_tabs option in rustfmt config".into())
         })?;
     let tab_spaces = config
         .lines()
         .find(|line| line.starts_with("tab_spaces "))
         .and_then(|line| line.split_once('='))
         .map(|(_, value)| value.trim().parse::<usize>())
-        .ok_or_else(|| {
-            Error::RuntimeError("Could not find tab_spaces option in rustfmt config".into())
-        })?
+        .ok_or_else(|| Error::Runtime("Could not find tab_spaces option in rustfmt config".into()))?
         .map_err(|_| {
-            Error::RuntimeError("Could not parse tab_spaces option in rustfmt config".into())
+            Error::Runtime("Could not parse tab_spaces option in rustfmt config".into())
         })?;
 
     Ok(IndentOptions::new(
@@ -290,7 +288,7 @@ fn format_syn_error(err: syn::Error) -> Error {
     let start = err.span().start();
     let line = start.line;
     let column = start.column;
-    Error::ParseError(format!(
+    Error::Parse(format!(
         "Syntax Error in line {} column {}:\n{}",
         line, column, err
     ))

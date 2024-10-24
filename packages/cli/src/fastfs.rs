@@ -26,12 +26,12 @@ pub(crate) fn copy_dir_to(
     dest_dir: &Path,
     pre_compress: bool,
 ) -> std::io::Result<()> {
-    let entries = std::fs::read_dir(&src_dir)?;
+    let entries = std::fs::read_dir(src_dir)?;
     let mut children: Vec<std::thread::JoinHandle<std::io::Result<()>>> = Vec::new();
 
     for entry in entries.flatten() {
         let entry_path = entry.path();
-        let path_relative_to_src = entry_path.strip_prefix(&src_dir).unwrap();
+        let path_relative_to_src = entry_path.strip_prefix(src_dir).unwrap();
         let output_file_location = dest_dir.join(path_relative_to_src);
         children.push(std::thread::spawn(move || {
             if entry.file_type()?.is_dir() {

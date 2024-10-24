@@ -1,6 +1,10 @@
 use crate::{AppBundle, Platform, Result};
 use anyhow::Context;
-use std::{net::SocketAddr, path::PathBuf, process::Stdio};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::{Child, ChildStderr, ChildStdout, Command},
@@ -339,7 +343,7 @@ impl AppHandle {
 
         async fn install_app(app_path: &PathBuf) -> Result<()> {
             let output = Command::new("xcrun")
-                .args(&["simctl", "install", "booted"])
+                .args(["simctl", "install", "booted"])
                 .arg(app_path)
                 .output()
                 .await?;
@@ -353,7 +357,7 @@ impl AppHandle {
 
         async fn get_device_uuid() -> Result<String> {
             let output = Command::new("xcrun")
-                .args(&[
+                .args([
                     "devicectl",
                     "list",
                     "devices",
@@ -374,9 +378,9 @@ impl AppHandle {
             Ok(device_uuid)
         }
 
-        async fn get_installation_url(device_uuid: &str, app_path: &PathBuf) -> Result<String> {
+        async fn get_installation_url(device_uuid: &str, app_path: &Path) -> Result<String> {
             let output = Command::new("xcrun")
-                .args(&[
+                .args([
                     "devicectl",
                     "device",
                     "install",
@@ -406,7 +410,7 @@ impl AppHandle {
 
         async fn launch_app_paused(device_uuid: &str, installation_url: &str) -> Result<()> {
             let output = Command::new("xcrun")
-                .args(&[
+                .args([
                     "devicectl",
                     "device",
                     "process",
@@ -438,7 +442,7 @@ impl AppHandle {
                 .ok_or("Failed to extract process identifier")?;
 
             let output = Command::new("xcrun")
-                .args(&[
+                .args([
                     "devicectl",
                     "device",
                     "process",

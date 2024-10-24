@@ -1,5 +1,5 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringBuffer, RequestBuilder, ServeUpdate, Watcher, WebServer},
+    serve::{ansi_buffer::AnsiStringBuffer, Builder, ServeUpdate, Watcher, WebServer},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
@@ -70,7 +70,7 @@ pub struct Output {
 struct RenderState<'a> {
     opts: &'a ServeArgs,
     krate: &'a DioxusCrate,
-    build_engine: &'a RequestBuilder,
+    build_engine: &'a Builder,
     server: &'a WebServer,
     watcher: &'a Watcher,
 }
@@ -91,7 +91,7 @@ impl Output {
             dx_version: format!(
                 "{}-{}",
                 env!("CARGO_PKG_VERSION"),
-                crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or_else(|| "main")
+                crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("main")
             ),
             platform: cfg.build_arguments.platform.expect("To be resolved by now"),
             events: None,
@@ -203,7 +203,7 @@ impl Output {
 
         match input {
             Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_keypress(key),
-            Event::Resize(_, _) | _ => Ok(Some(ServeUpdate::Redraw)),
+            _ => Ok(Some(ServeUpdate::Redraw)),
         }
     }
 
@@ -343,7 +343,7 @@ impl Output {
         &mut self,
         opts: &ServeArgs,
         config: &DioxusCrate,
-        build_engine: &RequestBuilder,
+        build_engine: &Builder,
         server: &WebServer,
         watcher: &Watcher,
     ) {
@@ -502,7 +502,7 @@ impl Output {
                 total,
                 path,
             } => {
-                lines.push(format!("Copying asset ").yellow());
+                lines.push("Copying asset ".yellow());
                 lines.push(format!("{current}/{total} ").gray());
                 if let Some(name) = path.file_name().and_then(|f| f.to_str()) {
                     lines.push(name.dark_gray())

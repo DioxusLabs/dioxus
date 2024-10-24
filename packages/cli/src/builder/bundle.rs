@@ -673,7 +673,7 @@ impl AppBundle {
     }
 
     #[allow(unused)]
-    pub(crate) fn run_wasm_opt(&self, bindgen_outdir: &std::path::PathBuf) -> Result<()> {
+    pub(crate) fn run_wasm_opt(&self, bindgen_outdir: &std::path::Path) -> Result<()> {
         if !self.build.build.release {
             return Ok(());
         };

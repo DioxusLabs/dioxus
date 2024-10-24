@@ -100,14 +100,11 @@ impl AssetManifest {
                 .filter(|c| !c.is_control())
                 .collect::<String>();
 
-            let stream = serde_json::Deserializer::from_str(&as_str).into_iter::<ResourceAsset>();
-
-            for as_resource in stream {
-                if let Ok(as_resource) = as_resource {
-                    // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
-                    self.assets
-                        .insert(as_resource.absolute.clone(), as_resource);
-                }
+            let assets = serde_json::Deserializer::from_str(&as_str).into_iter::<ResourceAsset>();
+            for as_resource in assets.flatten() {
+                // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
+                self.assets
+                    .insert(as_resource.absolute.clone(), as_resource);
             }
         }
 

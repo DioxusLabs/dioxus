@@ -13,22 +13,22 @@ pub(crate) enum Error {
     IO(#[from] std::io::Error),
 
     #[error("Format Error: {0}")]
-    FormatError(#[from] std::fmt::Error),
+    Format(#[from] std::fmt::Error),
 
     #[error("Format failed: {0}")]
-    ParseError(String),
+    Parse(String),
 
     #[error("Runtime Error: {0}")]
-    RuntimeError(String),
+    Runtime(String),
 
     #[error("Cargo Error: {0}")]
-    CargoError(#[from] CargoError),
+    Cargo(#[from] CargoError),
 
     #[error("Invalid proxy URL: {0}")]
     InvalidProxy(#[from] hyper::http::uri::InvalidUri),
 
     #[error("Failed to establish proxy: {0}")]
-    ProxySetupError(String),
+    ProxySetup(String),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -48,12 +48,12 @@ impl From<String> for Error {
 
 impl From<html_parser::Error> for Error {
     fn from(e: html_parser::Error) -> Self {
-        Self::ParseError(e.to_string())
+        Self::Parse(e.to_string())
     }
 }
 
 impl From<hyper::Error> for Error {
     fn from(e: hyper::Error) -> Self {
-        Self::RuntimeError(e.to_string())
+        Self::Runtime(e.to_string())
     }
 }

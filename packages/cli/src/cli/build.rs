@@ -1,5 +1,5 @@
 use super::*;
-use crate::{RequestBuilder, DioxusCrate, Platform, PROFILE_SERVER};
+use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -79,7 +79,7 @@ impl BuildArgs {
 
         self.resolve(&krate)?;
 
-        let bundle = RequestBuilder::start(&krate, self.clone())?.finish().await?;
+        let bundle = Builder::start(&krate, self.clone())?.finish().await?;
 
         println!(
             "Succesfully built! 💫\nBundle at {}",

@@ -150,7 +150,7 @@ impl WebServer {
                     drop(new_message);
 
                     // Update the socket with project info and current build status
-                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform.clone() });
+                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
                     if project_info.send_to(&mut new_socket).await.is_ok() {
                         _ = self.build_status.send_to(&mut new_socket).await;
                         self.build_status_sockets.push(new_socket);

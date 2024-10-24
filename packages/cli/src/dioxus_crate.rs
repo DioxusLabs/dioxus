@@ -84,10 +84,8 @@ impl DioxusCrate {
             return files;
         };
 
-        for entry in read_dir {
-            if let Ok(entry) = entry {
-                files.push(entry.path());
-            }
+        for entry in read_dir.flatten() {
+            files.push(entry.path());
         }
 
         files
@@ -368,11 +366,10 @@ impl DioxusCrate {
 
     /// Return the version of the wasm-bindgen crate if it exists
     pub fn wasm_bindgen_version(&self) -> Option<String> {
-        for krate in self.krates.krates_by_name("wasm-bindgen") {
-            return Some(krate.krate.version.to_string());
-        }
-
-        None
+        self.krates
+            .krates_by_name("wasm-bindgen")
+            .next()
+            .map(|krate| krate.krate.version.to_string())
     }
 
     pub(crate) fn default_platform(&self) -> Option<Platform> {

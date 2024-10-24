@@ -55,9 +55,7 @@ impl TraceController {
         let (tui_tx, tui_rx) = unbounded();
         TUI_ENABLED.store(true, Ordering::SeqCst);
         TUI_TX.set(tui_tx.clone()).unwrap();
-        return Self {
-            tui_rx: tui_rx.into(),
-        };
+        Self { tui_rx }
     }
 
     /// Wait for the internal logger to send a message
