@@ -23,7 +23,8 @@ pub fn provide_history_context(history: Rc<dyn History>) {
 }
 
 pub trait History {
-    /// Get the global path of the current URL. In nested routes, this will be the path of the parent route.
+    /// Take a route relative to the current router and return a route relative to the root router.
+    /// In nested routers, this will transform a relative route to the route used by the browser.
     ///
     /// **Must start** with `/`. **Must _not_ contain** the prefix.
     ///
@@ -31,26 +32,30 @@ pub trait History {
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }
-    /// # #[component]
-    /// # fn OtherPage() -> Element { VNode::empty() }
+    /// enum ChildRoute {
+    ///     #[route("/")]
+    ///     ChildIndex {},
+    /// }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
     ///     Index {},
-    ///     #[child]
+    ///     #[child("/child")]
     ///     OtherPage {
-    ///         child: OtherPage
+    ///         child: ChildRoute
     ///     },
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
-    /// assert_eq!(history.full_route_path().to_string(), "/");
-    ///
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.full_route_path().to_string(), "/some-other-page");
+    /// #[component]
+    /// fn ChildIndex() -> Element {
+    ///     // Even in a child router, format_as_root_route(current_route) will always return the url the browser would use
+    ///     let history = use_history();
+    ///     assert_eq!(history.format_as_root_route(&history.current_route()), "/child");
+    ///     VNode::empty()
+    /// }
     /// ```
     #[must_use]
-    fn full_route_path(&self) -> String {
-        self.current_route()
+    fn format_as_root_route(&self, route: &str) -> String {
+        route.to_string()
     }
 
     /// Get the path of the current URL.

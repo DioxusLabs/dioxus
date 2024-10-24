@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_history::{History, MemoryHistory};
+use dioxus_router::components::HistoryProvider;
 use std::{rc::Rc, str::FromStr};
 
 // Tests for regressions of <https://github.com/DioxusLabs/dioxus/issues/2549>

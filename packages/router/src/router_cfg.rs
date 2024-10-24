@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{components::FailureExternalNavigation, prelude::*};
 use dioxus_lib::prelude::*;
 use std::sync::Arc;
 

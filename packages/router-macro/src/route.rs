@@ -242,7 +242,27 @@ impl Route {
                 quote! {
                     #[allow(unused)]
                     (#last_index.., Self::#name { #field_name, .. }) => {
-                        #field_name.render(level - #last_index)
+                        rsx! {
+                            dioxus_router::components::ChildHistoryProvider {
+                                router: #field_name,
+                                // Try to parse the current route as a parent route, and then match it as a child route
+                                parent_to_child_route: |__route| if let Ok(__route) = __route.parse() {
+                                    if let Self::#name { #field_name, .. } = __route {
+                                        Some(#field_name.to_string())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                },
+                                // Try to parse the child route and turn it into a parent route
+                                child_to_parent_route: |__route| if let Ok(#field_name) = __route.parse() {
+                                    Self::#name { #field_name }.to_string()
+                                } else {
+                                    __route.to_string()
+                                }
+                            }
+                        }
                     }
                 }
             }

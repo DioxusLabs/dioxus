@@ -158,9 +158,9 @@ pub fn Link(props: LinkProps) -> Element {
         }
     };
 
-    let current_url = router.current_route_string();
+    let current_url = router.full_route_string();
     let href = match &to {
-        NavigationTarget::Internal(url) => url.clone(),
+        NavigationTarget::Internal(url) => router.format_as_root_route(url),
         NavigationTarget::External(route) => route.clone(),
     };
 

@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 use dioxus_history::{History, MemoryHistory};
+use dioxus_router::components::HistoryProvider;
 
 // Tests for regressions of <https://github.com/DioxusLabs/dioxus/issues/2468>
 #[test]

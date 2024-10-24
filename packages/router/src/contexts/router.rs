@@ -1,6 +1,5 @@
 use std::{
     collections::HashSet,
-    rc::Rc,
     sync::{Arc, Mutex},
 };
 
@@ -51,8 +50,6 @@ struct RouterContextInner {
     /// The current prefix.
     prefix: Option<String>,
 
-    history: Rc<dyn dioxus_history::History>,
-
     unresolved_error: Option<ExternalNavigationFailure>,
 
     subscribers: Arc<Mutex<HashSet<ReactiveContext>>>,
@@ -80,7 +77,8 @@ impl RouterContextInner {
     }
 
     fn external(&mut self, external: String) -> Option<ExternalNavigationFailure> {
-        match self.history.external(external.clone()) {
+        let history = history();
+        match history.external(external.clone()) {
             true => None,
             false => {
                 let failure = ExternalNavigationFailure(external);
@@ -109,7 +107,6 @@ impl RouterContext {
 
         let myself = RouterContextInner {
             prefix: Default::default(),
-            history: history(),
             unresolved_error: None,
 
             subscribers: subscribers.clone(),
@@ -136,7 +133,8 @@ impl RouterContext {
 
         // set the updater
         {
-            myself.history.updater(Arc::new(move || {
+            let history = history();
+            history.updater(Arc::new(move || {
                 for &rc in subscribers.lock().unwrap().iter() {
                     rc.mark_dirty();
                 }
@@ -151,19 +149,22 @@ impl RouterContext {
     /// Check if the router is running in a liveview context
     /// We do some slightly weird things for liveview because of the network boundary
     pub(crate) fn include_prevent_default(&self) -> bool {
-        self.inner.read().history.include_prevent_default()
+        let history = history();
+        history.include_prevent_default()
     }
 
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
-        self.inner.read().history.can_go_back()
+        let history = history();
+        history.can_go_back()
     }
 
     /// Check whether there is a future page to navigate forward to.
     #[must_use]
     pub fn can_go_forward(&self) -> bool {
-        self.inner.read().history.can_go_forward()
+        let history = history();
+        history.can_go_forward()
     }
 
     /// Go back to the previous location.
@@ -171,7 +172,8 @@ impl RouterContext {
     /// Will fail silently if there is no previous location to go to.
     pub fn go_back(&self) {
         {
-            self.inner.write_unchecked().history.go_back();
+            let history = history();
+            history.go_back();
         }
 
         self.change_route();
@@ -182,7 +184,8 @@ impl RouterContext {
     /// Will fail silently if there is no next location to go to.
     pub fn go_forward(&self) {
         {
-            self.inner.write_unchecked().history.go_forward();
+            let history = history();
+            history.go_forward();
         }
 
         self.change_route();
@@ -195,7 +198,10 @@ impl RouterContext {
         {
             let mut write = self.inner.write_unchecked();
             match target {
-                NavigationTarget::Internal(p) => write.history.push(p),
+                NavigationTarget::Internal(p) => {
+                    let history = history();
+                    history.push(p)
+                }
                 NavigationTarget::External(e) => return write.external(e),
             }
         }
@@ -214,7 +220,10 @@ impl RouterContext {
         {
             let mut write = self.inner.write_unchecked();
             match target {
-                NavigationTarget::Internal(p) => write.history.push(p),
+                NavigationTarget::Internal(p) => {
+                    let history = history();
+                    history.push(p)
+                }
                 NavigationTarget::External(e) => return write.external(e),
             }
         }
@@ -233,7 +242,10 @@ impl RouterContext {
         {
             let mut state = self.inner.write_unchecked();
             match target {
-                NavigationTarget::Internal(p) => state.history.replace(p),
+                NavigationTarget::Internal(p) => {
+                    let history = history();
+                    history.replace(p)
+                }
                 NavigationTarget::External(e) => return state.external(e),
             }
         }
@@ -245,16 +257,55 @@ impl RouterContext {
     pub fn current<R: Routable>(&self) -> R {
         let inner = self.inner.read();
         inner.subscribe_to_current_context();
-        R::from_str(&inner.history.current_route()).unwrap_or_else(|_| {
+        let history = history();
+        R::from_str(&history.current_route()).unwrap_or_else(|_| {
             panic!("route's display implementation must be parsable by FromStr")
         })
     }
 
-    /// The route that is currently active.
-    pub fn current_route_string(&self) -> String {
+    /// The full route that is currently active. If this is called from inside a child router, this will always return the parent's view of the route.
+    pub fn full_route_string(&self) -> String {
         let inner = self.inner.read();
         inner.subscribe_to_current_context();
-        inner.history.current_route()
+        let history = history();
+        let relative_route = history.current_route();
+        history.format_as_root_route(&relative_route)
+    }
+
+    /// Take a route relative to the current router and return a route relative to the root router.
+    /// In nested routers, this will transform a relative route to the route used by the browser.
+    ///
+    /// **Must start** with `/`. **Must _not_ contain** the prefix.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// # #[component]
+    /// # fn Index() -> Element { VNode::empty() }
+    /// enum ChildRoute {
+    ///     #[route("/")]
+    ///     ChildIndex {},
+    /// }
+    /// #[derive(Clone, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[child("/child")]
+    ///     OtherPage {
+    ///         child: ChildRoute
+    ///     },
+    /// }
+    /// #[component]
+    /// fn ChildIndex() -> Element {
+    ///     // Even in a child router, format_as_root_route(current_route) will always return the url the browser would use
+    ///     let router = use_router();
+    ///     assert_eq!(router.format_as_root_route("/"), "/child");
+    ///     VNode::empty()
+    /// }
+    /// ```
+    #[must_use]
+    pub fn format_as_root_route(&self, route: &str) -> String {
+        let history = history();
+        history.format_as_root_route(route)
     }
 
     /// Check if a route looks like an internal route
@@ -298,7 +349,10 @@ impl RouterContext {
             if let Some(new) = callback(myself) {
                 let mut self_write = self.inner.write_unchecked();
                 match new {
-                    NavigationTarget::Internal(p) => self_write.history.replace(p),
+                    NavigationTarget::Internal(p) => {
+                        let history = history();
+                        history.replace(p)
+                    }
                     NavigationTarget::External(e) => return self_write.external(e),
                 }
             }

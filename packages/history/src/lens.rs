@@ -6,16 +6,16 @@ use crate::History;
 pub struct LensHistory {
     parent_provider: Rc<dyn History>,
     // Take a parent route and return a child route or none if the route is not part of the child
-    parent_to_child_route: fn(String) -> Option<String>,
+    parent_to_child_route: fn(&str) -> Option<String>,
     // Take a child route and return a parent route
-    child_to_parent_route: fn(String) -> String,
+    child_to_parent_route: fn(&str) -> String,
 }
 
 impl LensHistory {
     pub fn new(
         parent_provider: Rc<dyn History>,
-        parent_to_child_route: fn(String) -> Option<String>,
-        child_to_parent_route: fn(String) -> String,
+        parent_to_child_route: fn(&str) -> Option<String>,
+        child_to_parent_route: fn(&str) -> String,
     ) -> Self {
         Self {
             parent_provider,
@@ -26,13 +26,14 @@ impl LensHistory {
 }
 
 impl History for LensHistory {
-    fn full_route_path(&self) -> String {
-        self.parent_provider.full_route_path()
+    fn format_as_root_route(&self, route: &str) -> String {
+        let parent_route = (self.child_to_parent_route)(route);
+        self.parent_provider.format_as_root_route(&parent_route)
     }
 
     fn current_route(&self) -> String {
         let parent_current_route = self.parent_provider.current_route();
-        (self.parent_to_child_route)(parent_current_route).unwrap_or_else(|| "/".to_string())
+        (self.parent_to_child_route)(&parent_current_route).unwrap_or_else(|| "/".to_string())
     }
 
     fn can_go_back(&self) -> bool {
@@ -52,12 +53,12 @@ impl History for LensHistory {
     }
 
     fn push(&self, new: String) {
-        let parent_route = (self.child_to_parent_route)(new.clone());
+        let parent_route = (self.child_to_parent_route)(&new);
         self.parent_provider.push(parent_route);
     }
 
     fn replace(&self, path: String) {
-        let parent_route = (self.child_to_parent_route)(path.clone());
+        let parent_route = (self.child_to_parent_route)(&path);
         self.parent_provider.replace(parent_route);
     }
 }
