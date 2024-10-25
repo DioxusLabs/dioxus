@@ -127,7 +127,7 @@ bundle = []
 # when releasing dioxus, we want to enable wasm-opt
 # and then also maybe developing it too.
 # making this optional cuts workspace deps down from 1000 to 500, so it's very nice for workspace adev
-optimization = ["wasm-opt", "asset-opt"]
+optimizations = ["wasm-opt", "asset-opt"]
 asset-opt = []
 wasm-opt = ["dep:wasm-opt"]
 

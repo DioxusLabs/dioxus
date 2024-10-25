@@ -686,7 +686,7 @@ impl AppBundle {
 
             tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
 
-            let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {
+            let mut options = match self.build.krate.config.web.wasm_opt.level {
                 WasmOptLevel::Z => {
                     wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
                 }
@@ -699,18 +699,18 @@ impl AppBundle {
             };
             let wasm_file = bindgen_outdir.join(format!(
                 "{}_bg.wasm",
-                self.dioxus_crate.dioxus_config.application.name
+                self.build.krate.config.application.name
             ));
             let old_size = wasm_file.metadata()?.len();
             options
                 // WASM bindgen relies on reference types
                 .enable_feature(wasm_opt::Feature::ReferenceTypes)
-                .debug_info(self.dioxus_crate.dioxus_config.web.wasm_opt.debug)
+                .debug_info(self.build.krate.config.web.wasm_opt.debug)
                 .run(&wasm_file, &wasm_file)
-                .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
+                .map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
 
             let new_size = wasm_file.metadata()?.len();
-            tracing::info!(
+            tracing::debug!(
                 dx_src = ?TraceSrc::Build,
                 "wasm-opt reduced WASM size from {} to {} ({:2}%)",
                 old_size,
