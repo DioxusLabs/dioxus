@@ -2,15 +2,10 @@
 #![deny(missing_docs)]
 
 use proc_macro::TokenStream;
-use proc_macro2::Ident;
-use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, quote_spanned, ToTokens};
-use serde::Serialize;
-use std::sync::atomic::AtomicBool;
-use syn::{parse::Parse, parse_macro_input, LitStr};
+use quote::{quote, ToTokens};
+use syn::parse_macro_input;
 
 pub(crate) mod asset;
-pub(crate) mod asset_options;
 pub(crate) mod linker;
 
 use linker::generate_link_section;
@@ -66,39 +61,4 @@ pub fn asset(input: TokenStream) -> TokenStream {
     let asset = parse_macro_input!(input as asset::AssetParser);
 
     quote! { #asset }.into_token_stream().into()
-}
-
-/// // You can also collect arbitrary key-value pairs. The meaning of these pairs is determined by the CLI that processes your assets
-/// ```rust
-/// const _: () = manganis::meta!("opt-level": "3");
-/// ```
-#[proc_macro]
-pub fn meta(input: TokenStream) -> TokenStream {
-    struct MetadataValue {
-        key: String,
-        value: String,
-    }
-
-    impl Parse for MetadataValue {
-        fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-            let key = input.parse::<Ident>()?.to_string();
-            input.parse::<syn::Token![:]>()?;
-            let value = input.parse::<LitStr>()?.value();
-            Ok(Self { key, value })
-        }
-    }
-
-    todo!()
-
-    // let md = parse_macro_input!(input as MetadataValue);
-    // let asset = MetadataAsset::new(md.key.as_str(), md.value.as_str());
-    // let link_section = generate_link_section(&asset);
-
-    // quote! {
-    //     {
-    //         #link_section
-    //     }
-    // }
-    // .into_token_stream()
-    // .into()
 }

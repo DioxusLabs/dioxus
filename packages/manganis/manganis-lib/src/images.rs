@@ -11,6 +11,8 @@ pub struct ImageAsset {
     preview: Option<&'static str>,
     /// A caption for the image
     caption: Option<&'static str>,
+    /// The format of the image
+    format: Option<ImageType>,
 }
 
 impl Asset {
@@ -27,6 +29,7 @@ impl ImageAsset {
             asset: path,
             preview: None,
             caption: None,
+            format: None,
         }
     }
 
@@ -56,8 +59,8 @@ impl ImageAsset {
     }
 
     /// Sets the format of the image
-    pub const fn format(self, format: ImageType) -> Self {
-        Self { ..self }
+    pub const fn format(self, format: Option<ImageType>) -> Self {
+        Self { format, ..self }
     }
 }
 

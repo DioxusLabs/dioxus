@@ -1,29 +1,17 @@
-use core::panic;
 use manganis_core::ResourceAsset;
-use proc_macro::TokenStream;
-use proc_macro2::Ident;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, quote_spanned, ToTokens};
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::File, path::Path, sync::atomic::AtomicBool};
-use std::{path::PathBuf, sync::atomic::Ordering};
+use quote::{quote, ToTokens};
 use syn::{
-    parenthesized,
     parse::{Parse, ParseStream},
-    parse_macro_input,
-    punctuated::Punctuated,
-    token::Token,
-    Expr, ExprLit, Lit, LitStr, PatLit, Token,
+    LitStr,
 };
 
-use crate::asset_options::MethodCallOption;
-
 pub struct AssetParser {
-    /// The source of the trailing builder pattern
-    option_source: TokenStream2,
-
     /// The asset itself
     asset: ResourceAsset,
+
+    /// The source of the trailing options
+    options: TokenStream2,
 }
 
 impl Parse for AssetParser {
@@ -46,44 +34,12 @@ impl Parse for AssetParser {
     //
     // But we need to decide the hint first before parsing the options
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        // Get the source of the macro, excluding the first token
-        let option_source = {
-            let fork = input.fork();
-            fork.parse::<LitStr>()?;
-            fork.parse::<TokenStream2>()?
-        };
-
         // And then parse the options
         let src = input.parse::<LitStr>()?;
-        let src = src.value();
-        let resource = ResourceAsset::parse_any(&src).unwrap();
+        let asset = ResourceAsset::parse_any(&src.value()).unwrap();
+        let options = input.parse()?;
 
-        fn parse_call(input: ParseStream) -> syn::Result<MethodCallOption> {
-            let method = input.parse::<syn::Ident>()?;
-            let content;
-            parenthesized!(content in input);
-
-            let args = Punctuated::<Lit, Token![,]>::parse_separated_nonempty(&content)?;
-
-            Ok(MethodCallOption { method, args })
-        }
-
-        let mut options = vec![];
-
-        while !input.is_empty() {
-            let option = parse_call(input);
-            if let Ok(option) = option {
-                options.push(option);
-            } else {
-                // todo: make sure we toss a warning in the output
-                let _remaining: TokenStream2 = input.parse()?;
-            }
-        }
-
-        Ok(Self {
-            option_source,
-            asset: resource,
-        })
+        Ok(Self { asset, options })
     }
 }
 
@@ -117,7 +73,7 @@ impl ToTokens for AssetParser {
         let bundled = self.asset.bundled.to_string();
 
         // 5. source tokens
-        let option_source = &self.option_source;
+        let option_source = &self.options;
 
         tokens.extend(quote! {
             Asset::new(
@@ -130,6 +86,7 @@ impl ToTokens for AssetParser {
                         // "/users/dioxus/dev/app/assets/blah.css"
                         local: #local,
 
+                        // "/blahcss123.css"
                         bundled: #bundled,
                     }
                 }
