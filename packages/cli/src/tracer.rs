@@ -270,20 +270,11 @@ struct FmtLogWriter {}
 
 impl Write for FmtLogWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        // // Handle selection between TUI or Terminal output.
-        // if !self.output_enabled.load(Ordering::SeqCst) {
-        //     self.stdout.write(buf)
-        // } else {
         Ok(buf.len())
-        // }
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        // if !self.output_enabled.load(Ordering::SeqCst) {
-        //     self.stdout.flush()
-        // } else {
         Ok(())
-        // }
     }
 }
 
@@ -308,6 +299,7 @@ pub struct TraceMsg {
 }
 
 #[derive(Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
 pub enum TraceContent {
     Cargo(CompilerMessage),
     Text(String),

@@ -5,6 +5,7 @@ use std::{path::PathBuf, process::ExitStatus};
 /// One fat enum to rule them all....
 ///
 /// Thanks to libraries like winit for the inspiration
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum ServeUpdate {
     NewConnection,
     WsMessage(WsMessage),
