@@ -33,7 +33,7 @@ pub(crate) enum Platform {
 
     /// Targeting windows desktop
     /// When running on windows, you can also use `--platform desktop` to build for the desktop
-    #[cfg_attr(target_os = "windows", clap(allias = "desktop"))]
+    #[cfg_attr(target_os = "windows", clap(alias = "desktop"))]
     #[clap(name = "windows")]
     #[serde(rename = "windows")]
     Windows,
