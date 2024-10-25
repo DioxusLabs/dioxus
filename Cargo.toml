@@ -78,7 +78,6 @@ members = [
     "packages/manganis/manganis",
     "packages/manganis/manganis-macro",
     "packages/manganis/manganis-core",
-    "packages/manganis/manganis-opt",
 
 
     # Full project examples
