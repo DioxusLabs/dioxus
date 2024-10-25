@@ -143,6 +143,6 @@ pkg-fmt = "tgz"
 pkg-fmt = "zip"
 
 [package.metadata.docs.rs]
-all-features = true
+all-features = false
 rustc-args = [ "--cfg", "docsrs" ]
 rustdoc-args = [ "--cfg", "docsrs" ]
