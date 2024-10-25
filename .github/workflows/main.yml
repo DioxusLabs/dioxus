@@ -39,7 +39,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   RUST_BACKTRACE: 1
-  rust_nightly: nightly-2024-10-01
+  rust_nightly: nightly-2024-10-20
 
 jobs:
   check-msrv:
@@ -152,7 +152,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
-          cargo +nightly doc --workspace --no-deps --all-features --document-private-items
+          cargo doc --workspace --no-deps --all-features --document-private-items
         env:
           RUSTFLAGS: --cfg docsrs
           RUSTDOCFLAGS: --cfg docsrs
