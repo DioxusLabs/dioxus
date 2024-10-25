@@ -3704,15 +3704,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-playwright-static-generation-test"
-version = "0.1.0"
-dependencies = [
- "dioxus",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "dioxus-playwright-web-test"
 version = "0.0.1"
 dependencies = [
