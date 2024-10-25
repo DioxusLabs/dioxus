@@ -91,35 +91,11 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
     //
     // If there's no asset root, we use the cargo manifest dir as the root, or the current dir
     if !uri_path.exists() || uri_path.starts_with("/assets/") {
-        uri_path = uri_path.strip_prefix("/").unwrap().to_path_buf();
-
-        let bundle_relative = get_asset_root().join(&uri_path);
-        println!("Bundle relative: {bundle_relative:?}");
-
-        // If the asset still doesn't exist, we're probably running under `cargo run` and manganis is
-        // giving us a mangled path (ie `/assets/blah-123.css`)
-        // We want to cut out the `-123` part and serve the asset from the CARGO_MANIFEST_DIR
-        if bundle_relative.exists() {
-            uri_path = bundle_relative;
-        } else {
-            if let Some(stem) = uri_path.file_stem() {
-                if let Some((unhashed, _hash)) = stem.to_string_lossy().rsplit_once('-') {
-                    let new_path = uri_path.with_file_name(format!(
-                        "{unhashed}.{}",
-                        uri_path.extension().unwrap_or_default().to_string_lossy()
-                    ));
-                    println!("Unhashed path: {new_path:?}");
-
-                    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-                        .map(PathBuf::from)
-                        .unwrap_or_else(|_| std::env::current_dir().unwrap());
-
-                    uri_path = manifest_dir.join(new_path);
-
-                    println!("New path: {uri_path:?}");
-                }
-            }
-        }
+        let bundle_root = get_asset_root();
+        let relative_path = uri_path.strip_prefix("/").unwrap();
+        uri_path = bundle_root.join(relative_path);
+        println!("bundle root: {bundle_root:?}");
+        println!("uri path: {uri_path:?}");
     }
 
     // If the asset exists, then we can serve it!
@@ -231,7 +207,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> PathBuf {
-    let cur_exe = std::env::current_exe().expect("Failed to get current exe");
+    let cur_exe = std::env::current_exe().unwrap();
 
     #[cfg(target_os = "macos")]
     {

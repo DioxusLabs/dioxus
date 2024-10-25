@@ -247,8 +247,8 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
-    _ = builder.abort_all();
-    _ = tracer.shutdown();
+    builder.abort_all();
+    tracer.shutdown();
 
     if let Err(err) = err {
         eprintln!("Exiting with error: {}", err);
