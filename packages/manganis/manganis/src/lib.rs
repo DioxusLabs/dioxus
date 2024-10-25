@@ -1,4 +1,5 @@
-#![doc = include_str!("../../../../README.md")]
+//! Manganis is a Rust library for bundling assets into a final binary.
+
 #![deny(missing_docs)]
 
 #[cfg(feature = "macro")]
