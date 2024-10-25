@@ -37,10 +37,10 @@ impl Parse for AssetParser {
     // To narrow the type, use a method call to get the refined type
     // ```
     // asset!(
-    //     "myfile.png"
-    //      .image()
-    //      .format(ImageType::Jpg)
-    //      .size(512, 512)
+    //     "myfile.png",
+    //      asset::image()
+    //        .format(ImageType::Jpg)
+    //        .size(512, 512)
     // )
     // ```
     //

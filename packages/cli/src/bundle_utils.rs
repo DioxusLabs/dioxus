@@ -1,6 +1,6 @@
 use crate::{
-    config::BundleConfig, DebianSettings, MacOsSettings, NSISInstallerMode, NsisSettings,
-    PackageType, WebviewInstallMode, WindowsSettings, WixSettings,
+    config::BundleConfig, CustomSignCommandSettings, DebianSettings, MacOsSettings,
+    NSISInstallerMode, NsisSettings, PackageType, WebviewInstallMode, WindowsSettings, WixSettings,
 };
 
 pub(crate) fn make_tauri_bundler_settings(
@@ -23,6 +23,7 @@ impl From<NsisSettings> for tauri_bundler::NsisSettings {
             compression: tauri_utils::config::NsisCompression::None,
             start_menu_folder: val.start_menu_folder,
             installer_hooks: val.installer_hooks,
+            minimum_webview2_version: val.minimum_webview2_version,
         }
     }
 }
@@ -99,6 +100,8 @@ impl From<WixSettings> for tauri_bundler::WixSettings {
             banner_path: val.banner_path,
             dialog_image_path: val.dialog_image_path,
             fips_compliant: val.fips_compliant,
+            version: val.version,
+            upgrade_code: val.upgrade_code,
         }
     }
 }
@@ -119,6 +122,7 @@ impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
     }
 }
 
+#[allow(deprecated)]
 impl From<WindowsSettings> for tauri_bundler::WindowsSettings {
     fn from(val: WindowsSettings) -> Self {
         tauri_bundler::WindowsSettings {
@@ -127,12 +131,12 @@ impl From<WindowsSettings> for tauri_bundler::WindowsSettings {
             timestamp_url: val.timestamp_url,
             tsp: val.tsp,
             wix: val.wix.map(Into::into),
-            icon_path: val.icon_path.unwrap_or("./icons/icon.ico".into()),
             webview_install_mode: val.webview_install_mode.into(),
-            webview_fixed_runtime_path: val.webview_fixed_runtime_path,
             allow_downgrades: val.allow_downgrades,
             nsis: val.nsis.map(Into::into),
-            sign_command: val.sign_command,
+            sign_command: val.sign_command.map(Into::into),
+
+            icon_path: val.icon_path.unwrap_or("./icons/icon.ico".into()),
         }
     }
 }
@@ -178,6 +182,15 @@ impl WebviewInstallMode {
             Self::FixedRuntime { path } => {
                 tauri_utils::config::WebviewInstallMode::FixedRuntime { path }
             }
+        }
+    }
+}
+
+impl From<CustomSignCommandSettings> for tauri_bundler::CustomSignCommandSettings {
+    fn from(val: CustomSignCommandSettings) -> Self {
+        tauri_bundler::CustomSignCommandSettings {
+            cmd: val.cmd,
+            args: val.args,
         }
     }
 }

@@ -74,6 +74,24 @@ pub(crate) struct WixSettings {
     pub(crate) banner_path: Option<PathBuf>,
     pub(crate) dialog_image_path: Option<PathBuf>,
     pub(crate) fips_compliant: bool,
+    /// MSI installer version in the format `major.minor.patch.build` (build is optional).
+    ///
+    /// Because a valid version is required for MSI installer, it will be derived from [`PackageSettings::version`] if this field is not set.
+    ///
+    /// The first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255.
+    /// The third and fourth fields have a maximum value of 65,535.
+    ///
+    /// See <https://learn.microsoft.com/en-us/windows/win32/msi/productversion> for more info.
+    pub version: Option<String>,
+    /// A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**,
+    /// otherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.
+    ///
+    /// By default, tauri generates this code by generating a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace.
+    /// You can use Tauri's CLI to generate and print this code for you by running `tauri inspect wix-upgrade-code`.
+    ///
+    /// It is recommended that you set this value in your tauri config file to avoid accidental changes in your upgrade code
+    /// whenever you want to change your product name.
+    pub upgrade_code: Option<uuid::Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -119,7 +137,7 @@ pub(crate) struct WindowsSettings {
     /// By Default we use `signtool.exe` which can be found only on Windows so
     /// if you are on another platform and want to cross-compile and sign you will
     /// need to use another tool like `osslsigncode`.
-    pub sign_command: Option<String>,
+    pub sign_command: Option<CustomSignCommandSettings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,6 +153,10 @@ pub(crate) struct NsisSettings {
     pub(crate) display_language_selector: bool,
     pub(crate) start_menu_folder: Option<String>,
     pub(crate) installer_hooks: Option<PathBuf>,
+    /// Try to ensure that the WebView2 version is equal to or newer than this version,
+    /// if the user's WebView2 is older than this version,
+    /// the installer will try to trigger a WebView2 update.
+    pub minimum_webview2_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,4 +191,14 @@ pub(crate) enum PackageType {
     AppImage,
     Dmg,
     Updater,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomSignCommandSettings {
+    /// The command to run to sign the binary.
+    pub cmd: String,
+    /// The arguments to pass to the command.
+    ///
+    /// "%1" will be replaced with the path to the binary to be signed.
+    pub args: Vec<String>,
 }

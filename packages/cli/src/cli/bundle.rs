@@ -3,7 +3,6 @@ use crate::DioxusCrate;
 use crate::{build::BuildArgs, PackageType};
 use anyhow::Context;
 use std::env::current_dir;
-use std::fs::create_dir_all;
 use std::str::FromStr;
 use tauri_bundler::{PackageSettings, SettingsBuilder};
 
@@ -61,20 +60,10 @@ impl Bundle {
                     .icon
                     .as_ref()
                     .and_then(|icons| icons.first());
-                let icon_path = if let Some(icon_path) = icon_path {
-                    icon_path.into()
-                } else {
-                    let path = PathBuf::from("./icons/icon.ico");
-                    // create the icon if it doesn't exist
-                    if !path.exists() {
-                        create_dir_all(path.parent().unwrap()).unwrap();
-                        let mut file = File::create(&path).unwrap();
-                        file.write_all(include_bytes!("../../assets/icon.ico"))
-                            .unwrap();
-                    }
-                    path
+
+                if let Some(icon_path) = icon_path {
+                    bundle_settings.icon = Some(vec![icon_path.into()]);
                 };
-                bundle_settings.windows.icon_path = icon_path;
             }
         }
 
