@@ -13,7 +13,7 @@ pub struct RustupShow {
     pub active_toolchain: String,
 }
 impl RustupShow {
-    /// Collect thie output of `rustup show` and parse it
+    /// Collect the output of `rustup show` and parse it
     pub async fn from_cli() -> Result<RustupShow> {
         let output = Command::new("rustup").args(["show"]).output().await?;
         let stdout =

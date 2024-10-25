@@ -35,7 +35,7 @@ impl Asset {
     /// Return a canonicalized path to the asset
     ///
     /// Attempts to resolve it against an `assets` folder in the current directory.
-    /// If that doesn't exist, it will resovle against the cargo manifest dir
+    /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
         // If the asset is relative, we resolve the asset at the current directory
         if !dioxus_core_types::is_bundled_app() {

@@ -46,7 +46,7 @@ pub(crate) struct BuildArgs {
 
     /// Build the fullstack variant of this app, using that as the fileserver and backend
     ///
-    /// This defaults to `false` but will be overriden to true if the `fullstack` feature is enabled.
+    /// This defaults to `false` but will be overridden to true if the `fullstack` feature is enabled.
     #[clap(long)]
     pub(crate) fullstack: bool,
 
@@ -82,7 +82,7 @@ impl BuildArgs {
         let bundle = Builder::start(&krate, self.clone())?.finish().await?;
 
         println!(
-            "Succesfully built! 💫\nBundle at {}",
+            "Successfully built! 💫\nBundle at {}",
             bundle.app_dir().display()
         );
 

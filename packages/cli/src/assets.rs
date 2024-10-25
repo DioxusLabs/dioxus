@@ -7,7 +7,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 /// A manifest of all assets collected from dependencies
 ///
-/// This will be filled in primarly by incremental compilation artifacts.
+/// This will be filled in primarily by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct AssetManifest {
     /// Map of bundled asset name to the asset itself

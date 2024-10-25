@@ -218,7 +218,7 @@ impl AppBundle {
     /// Windows does not provide an AppImage format, so instead we're going build the same folder
     /// structure as an AppImage, but when distributing, we'll create a .exe that embeds the resources
     /// as an embedded .zip file. When the app runs, it will implicitly unzip its resources into the
-    /// Program Files folder. Any subsquent launches of the parent .exe will simply call the AppRun.exe
+    /// Program Files folder. Any subsequent launches of the parent .exe will simply call the AppRun.exe
     /// entrypoint in the associated Program Files folder.
     ///
     /// This is, in essence, the same as an installer, so we might eventually just support something like msi/msix
@@ -292,7 +292,7 @@ impl AppBundle {
         create_dir_all(self.asset_dir())?;
 
         // we could download the templates from somewhere (github?) but after having banged my head against
-        // cargo-mobile2 for ages, I give up with that. We're literally just going to harcode the templates
+        // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
         // by writing them here.
         if let Platform::Android = self.build.build.platform() {}
 

@@ -10,7 +10,7 @@ pub struct AnsiStringBuffer {
 }
 
 // The sentinel character used to mark the end of the ansi string so when we dump it, we know where to stop
-// Not sure if we actualy still need this....
+// Not sure if we actually still need this....
 const SENTINEL: &str = "✆";
 
 impl AnsiStringBuffer {

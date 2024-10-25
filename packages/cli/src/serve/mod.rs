@@ -33,7 +33,7 @@ pub(crate) use watcher::*;
 /// - Mobile:      Basically the same as desktop.
 ///
 /// When fullstack is enabled, we'll also build for the `server` target and then hotreload the server.
-/// The "server" is special here since "fullstack" is functionaly just an addition to the regular client
+/// The "server" is special here since "fullstack" is functionally just an addition to the regular client
 /// setup.
 ///
 /// Todos(Jon):

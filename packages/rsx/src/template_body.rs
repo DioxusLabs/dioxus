@@ -157,7 +157,7 @@ impl ToTokens for TemplateBody {
                         __ORIGINAL_TEMPLATE.get().unwrap()
                     }
 
-                    static __NORAMLIZED_FILE: &'static str = {
+                    static __NORMALIZED_FILE: &'static str = {
                         const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
                         dioxus_core::const_format::str_replace!(PATH, '\\', "/")
                     };
@@ -166,7 +166,7 @@ impl ToTokens for TemplateBody {
                     // But the key is what's keeping it stable
                     let __template = GlobalSignal::with_location(
                         || None::<dioxus_core::internal::HotReloadedTemplate>,
-                        __NORAMLIZED_FILE,
+                        __NORMALIZED_FILE,
                         line!(),
                         column!(),
                         #index

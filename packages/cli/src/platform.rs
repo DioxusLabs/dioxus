@@ -24,21 +24,21 @@ pub(crate) enum Platform {
     #[default]
     Web,
 
-    /// Targetting macos desktop
+    /// Targeting macos desktop
     /// When running on macos, you can also use `--platform desktop` to build for the desktop
     #[cfg_attr(target_os = "macos", clap(alias = "desktop"))]
     #[clap(name = "macos")]
     #[serde(rename = "macos")]
     MacOS,
 
-    /// Targetting windows desktop
+    /// Targeting windows desktop
     /// When running on windows, you can also use `--platform desktop` to build for the desktop
     #[cfg_attr(target_os = "windows", clap(allias = "desktop"))]
     #[clap(name = "windows")]
     #[serde(rename = "windows")]
     Windows,
 
-    /// Targetting linux desktop
+    /// Targeting linux desktop
     /// When running on linux, you can also use `--platform desktop` to build for the desktop
     #[cfg_attr(target_os = "linux", clap(alias = "desktop"))]
     #[clap(name = "linux")]
@@ -57,7 +57,7 @@ pub(crate) enum Platform {
     #[serde(rename = "android")]
     Android,
 
-    /// Targetting the server platform using Axum and Dioxus-Fullstack
+    /// Targeting the server platform using Axum and Dioxus-Fullstack
     ///
     /// This is implicitly passed if `fullstack` is enabled as a feature. Using this variant simply
     /// means you're only building the server variant without the `.wasm` to serve.

@@ -851,7 +851,7 @@ impl Output {
 
         // Force a clear
         // Might've been triggered by insert_before already, but supposedly double-queuing is fine
-        // since this isn't a "real" syncronous clear
+        // since this isn't a "real" synchronous clear
         terminal.clear()?;
 
         Ok(())
@@ -954,49 +954,3 @@ fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
     let line_count = paragraph.line_count(term_width);
     AnsiStringBuffer::new(3000, line_count as u16).render(&paragraph)
 }
-
-#[test]
-fn how_long_is_a_tracemsg() {
-    use unicode_segmentation::UnicodeSegmentation;
-
-    // This log
-    // 11:52:27 [desktop] mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"
-    // Should be 136 characters
-    let log = TraceMsg::text(TraceSrc::App(Platform::MacOS), Level::INFO,
-        r#"mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"#.to_string()
-    );
-
-    let seq = tracemsg_to_ansi_string(log, 200);
-    let line = seq.lines().next().unwrap().to_string();
-
-    // Print the escaped version of the line
-    let expected_len = r#"11:52:27 [desktop] mime type: Ok("image/svg+xml") for "/Users/jonkelley/Development/Tinkering/hr-new-test/packages/app/assets/header.svg"#.len();
-
-    let mut count = 0;
-    for grapheme in line.graphemes(true) {
-        if grapheme != "\u{1b}" {
-            count += 1;
-        }
-        println!("{count} {grapheme:?}");
-    }
-
-    let resolved = console::strip_ansi_codes(&line).graphemes(true).count();
-    assert_eq!(resolved, expected_len);
-    assert_eq!(resolved, 136);
-}
-
-// // todo: re-enable
-// #[allow(unused)]
-// async fn rustc_version() -> String {
-//     tokio::process::Command::new("rustc")
-//         .arg("--version")
-//         .output()
-//         .await
-//         .ok()
-//         .map(|o| o.stdout)
-//         .and_then(|o| {
-//             let out = String::from_utf8(o).unwrap();
-//             out.split_ascii_whitespace().nth(1).map(|v| v.to_string())
-//         })
-//         .unwrap_or_else(|| "<unknown>".to_string())
-// }

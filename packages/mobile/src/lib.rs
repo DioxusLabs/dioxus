@@ -33,7 +33,7 @@ pub extern "C" fn start_app() {
     wry::android_binding!(com_example, wrytest, wry);
 }
 
-/// Call our `main` function to intialize the rust runtime and set the launch binding trampoline
+/// Call our `main` function to initialize the rust runtime and set the launch binding trampoline
 #[cfg(target_os = "android")]
 #[no_mangle]
 #[inline(never)]

@@ -71,7 +71,7 @@ impl HotreloadFilemap {
     /// Try to update the rsx in a file, returning the templates that were hotreloaded
     ///
     /// If the templates could not be hotreloaded, this will return an error. This error isn't fatal, per se,
-    /// but it does mean that we could not succesfully hotreload the file in-place.
+    /// but it does mean that we could not successfully hotreload the file in-place.
     ///
     /// It's expected that the file path you pass in is relative the crate root. We have no way of
     /// knowing if it's *not*, so we'll assume it is.

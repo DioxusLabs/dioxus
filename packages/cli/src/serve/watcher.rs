@@ -108,7 +108,7 @@ impl Watcher {
             }
         }
 
-        // Also watch the crates themselves, but not recrusively, such that we can pick up new folders
+        // Also watch the crates themselves, but not recursively, such that we can pick up new folders
         for krate in self.krate.all_watched_crates() {
             tracing::debug!("Watching path {krate:?}");
             if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {

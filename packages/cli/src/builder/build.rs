@@ -66,7 +66,7 @@ impl BuildRequest {
         Ok(Some(cloned.build_app().await?))
     }
 
-    /// Run `cargo`, returning the location of the final exectuable
+    /// Run `cargo`, returning the location of the final executable
     ///
     /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
     pub(crate) async fn build_cargo(&self) -> Result<PathBuf> {
@@ -92,7 +92,7 @@ impl BuildRequest {
         }
 
         // Android needs a special linker since the linker is actually tied to the android toolchain.
-        // For the sake of simplicitly, we're going to pass the linker here using ourselves as the linker,
+        // For the sake of simplicity, we're going to pass the linker here using ourselves as the linker,
         // but in reality we could simply use the android toolchain's linker as the path.
         //
         // We don't want to overwrite the user's .cargo/config.toml since that gets committed to git
