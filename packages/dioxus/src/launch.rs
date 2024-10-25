@@ -189,7 +189,7 @@ impl LaunchBuilder {
     }
 
     fn launch_inner(self, app: fn() -> Element) {
-        #[cfg(all(feature = "fullstack", not(feature = "server")))]
+        #[cfg(all(feature = "fullstack", any(feature = "desktop", feature = "mobile")))]
         {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
             if get_server_url().is_empty() {
