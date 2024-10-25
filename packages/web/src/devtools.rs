@@ -27,7 +27,10 @@ pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     let (tx, rx) = unbounded();
 
     // Wire up the websocket to the devserver
-    make_ws(tx, POLL_INTERVAL_MIN, false);
+    make_ws(tx.clone(), POLL_INTERVAL_MIN, false);
+
+    #[cfg(feature = "devtools-playground")]
+    playground(tx);
 
     rx
 }
@@ -236,4 +239,27 @@ pub(crate) fn invalidate_browser_asset_cache() {
             _ = link.set_attribute("href", &format!("{}?{}", href, noise));
         }
     }
+}
+
+/// Initialize required devtools for dioxus-playground.
+///
+/// This listens for window message events from other Windows (such as window.top when this is running in an iframe).
+#[cfg(feature = "devtools-playground")]
+fn playground(tx: UnboundedSender<HotReloadMsg>) {
+    let window = web_sys::window().unwrap();
+    window.set_onmessage(Some(
+        Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+            let Ok(text) = e.data().dyn_into::<JsString>() else {
+                return;
+            };
+            let string: String = text.into();
+            let Ok(hr_msg) = serde_json::from_str::<HotReloadMsg>(&string) else {
+                return;
+            };
+            _ = tx.unbounded_send(hr_msg);
+        })
+        .into_js_value()
+        .as_ref()
+        .unchecked_ref(),
+    ));
 }

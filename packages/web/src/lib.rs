@@ -43,7 +43,10 @@ pub use document::WebDocument;
 #[cfg(feature = "file_engine")]
 pub use file_engine::*;
 
-#[cfg(all(feature = "devtools", debug_assertions))]
+#[cfg(any(
+    all(feature = "devtools", debug_assertions),
+    feature = "devtools-playground"
+))]
 mod devtools;
 
 mod hydration;
@@ -71,7 +74,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         console_error_panic_hook::set_once();
     }
 
-    #[cfg(all(feature = "devtools", debug_assertions))]
+    #[cfg(any(
+        all(feature = "devtools", debug_assertions),
+        feature = "devtools-playground"
+    ))]
     let mut hotreload_rx = devtools::init();
 
     let runtime = virtual_dom.runtime();
