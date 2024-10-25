@@ -12,7 +12,7 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
 
         for template in &msg.templates {
             let value = template.template.clone();
-            let key = GlobalKey {
+            let key = GlobalKey::File {
                 file: template.key.file.as_str(),
                 line: template.key.line as _,
                 column: template.key.column as _,

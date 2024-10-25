@@ -140,7 +140,7 @@ where
     pub const fn with_name(constructor: fn() -> R, key: &'static str) -> Self {
         Self {
             constructor,
-            key: GlobalKey {
+            key: GlobalKey::File {
                 file: key,
                 line: 0,
                 column: 0,
@@ -163,7 +163,7 @@ where
     ) -> Self {
         Self {
             constructor,
-            key: GlobalKey {
+            key: GlobalKey::File {
                 file,
                 line: line as _,
                 column: column as _,
@@ -216,17 +216,30 @@ pub struct GlobalLazyContext {
 
 /// A key used to identify a signal in the global signal context
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct GlobalKey<'a> {
-    pub file: &'a str,
-    pub line: u32,
-    pub column: u32,
-    pub index: u32,
+pub enum GlobalKey<'a> {
+    /// A key derived from a `std::panic::Location` type
+    File {
+        /// The file name
+        file: &'a str,
+
+        /// The line number
+        line: u32,
+
+        /// The column number
+        column: u32,
+
+        /// The index of the signal in the file - used to disambiguate macro calls
+        index: u32,
+    },
+
+    /// A raw key derived just from a string
+    Raw(&'a str),
 }
 
 impl<'a> GlobalKey<'a> {
     /// Create a new key from a location
     pub const fn new(key: &'a Location<'a>) -> Self {
-        GlobalKey {
+        GlobalKey::File {
             file: key.file(),
             line: key.line(),
             column: key.column(),
