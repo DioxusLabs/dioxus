@@ -237,26 +237,6 @@ core-foundation = "0.10.0"
 objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 
-# cli, cli-config
-# dirs = "5.0.1"
-# cargo-config2 = "0.1.26"
-# criterion = { version = "0.5" }
-
-# # desktop
-# wry = { version = "0.43.0", default-features = false }
-# tao = { version = "0.30.0", features = ["rwh_05"] }
-# webbrowser = "1.0.1"
-# infer = "0.16.0"
-# dunce = "1.0.2"
-# urlencoding = "2.1.2"
-# global-hotkey = "0.6.0"
-# rfd = { version = "0.14", default-features = false }
-# muda = "0.14.0"
-# cocoa = "0.26"
-# core-foundation = "0.10.0"
-# objc = { version = "0.2.7", features = ["exception"] }
-# objc_id = "0.1.1"
-
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
 [profile.release]
