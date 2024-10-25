@@ -645,7 +645,7 @@ impl AppBundle {
 
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
-        let name = self.build.krate.config.application.name.clone();
+        let name = self.build.krate.executable_name().to_string();
         let keep_debug = self.build.krate.config.web.wasm_opt.debug || (!self.build.build.release);
 
         let start = std::time::Instant::now();

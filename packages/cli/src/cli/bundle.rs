@@ -23,18 +23,18 @@ pub struct Bundle {
 
 impl Bundle {
     pub(crate) async fn bundle(mut self) -> anyhow::Result<()> {
-        let dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
+        let krate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        self.build_arguments.resolve(&dioxus_crate)?;
+        self.build_arguments.resolve(&krate)?;
 
         // Build the app
-        self.build_arguments.build().await?;
+        let bundle = self.build_arguments.build().await?;
 
         // copy the binary to the out dir
-        let package = dioxus_crate.package();
+        let package = krate.package();
 
-        let mut name: PathBuf = dioxus_crate.executable_name().into();
+        let mut name: PathBuf = krate.executable_name().into();
         if cfg!(windows) {
             name.set_extension("exe");
         }
@@ -42,19 +42,14 @@ impl Bundle {
         // bundle the app
         let binaries = vec![
             tauri_bundler::BundleBinary::new(name.display().to_string(), true)
-                .set_src_path(Some(dioxus_crate.workspace_dir().display().to_string())),
+                .set_src_path(Some(krate.workspace_dir().display().to_string())),
         ];
 
-        let bundle_config = dioxus_crate.config.bundle.clone();
+        let bundle_config = krate.config.bundle.clone();
         let mut bundle_settings = make_tauri_bundler_settings(bundle_config);
 
         if cfg!(windows) {
-            let windows_icon_override = dioxus_crate
-                .config
-                .bundle
-                .windows
-                .as_ref()
-                .map(|w| &w.icon_path);
+            let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
             if windows_icon_override.is_none() {
                 let icon_path = bundle_settings
                     .icon
@@ -67,26 +62,12 @@ impl Bundle {
             }
         }
 
-        // Copy the assets in the dist directory to the bundle
-        let static_asset_output_dir = &dioxus_crate.config.application.out_dir;
-
-        // Make sure the dist directory is relative to the crate directory
-        let static_asset_output_dir = static_asset_output_dir
-            .strip_prefix(dioxus_crate.workspace_dir())
-            .unwrap_or(static_asset_output_dir);
-
-        let static_asset_output_dir = static_asset_output_dir.display().to_string();
-        println!("Adding assets from {} to bundle", static_asset_output_dir);
-
         // Don't copy the executable or the old bundle directory
-        let ignored_files = [
-            dioxus_crate
-                .bundle_dir(self.build_arguments.platform())
-                .join("bundle"),
-            // dioxus_crate.out_dir().join(name),
-        ];
+        let ignored_files = [krate
+            .bundle_dir(self.build_arguments.platform())
+            .join("bundle")];
 
-        for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
+        for entry in std::fs::read_dir(&bundle.asset_dir())?.flatten() {
             let path = entry.path().canonicalize()?;
             if ignored_files.iter().any(|f| path.starts_with(f)) {
                 continue;
@@ -116,14 +97,14 @@ impl Bundle {
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(dioxus_crate.bundle_dir(self.build_arguments.platform()))
+            .project_out_directory(krate.bundle_dir(self.build_arguments.platform()))
             .package_settings(PackageSettings {
-                product_name: dioxus_crate.config.application.name.clone(),
+                product_name: krate.executable_name().to_string(),
                 version: package.version.to_string(),
                 description: package.description.clone().unwrap_or_default(),
                 homepage: Some(package.homepage.clone().unwrap_or_default()),
                 authors: Some(package.authors.clone()),
-                default_run: Some(dioxus_crate.config.application.name.clone()),
+                default_run: Some(krate.executable_name().to_string()),
             })
             .binaries(binaries)
             .bundle_settings(bundle_settings);

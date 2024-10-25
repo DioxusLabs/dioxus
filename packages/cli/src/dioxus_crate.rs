@@ -109,7 +109,7 @@ impl DioxusCrate {
     /// target/dx/build/app/web/server.exe
     pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
         self.out_dir()
-            .join(self.config.application.name.clone())
+            .join(self.executable_name())
             .join(if release { "release" } else { "debug" })
             .join(platform.build_folder_name())
     }
@@ -120,7 +120,7 @@ impl DioxusCrate {
     /// target/dx/bundle/app/public/
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
         self.out_dir()
-            .join(self.config.application.name.clone())
+            .join(self.executable_name())
             .join("bundle")
             .join(platform.build_folder_name())
     }

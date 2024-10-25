@@ -20,14 +20,10 @@ pub(crate) struct DioxusConfig {
 
 impl Default for DioxusConfig {
     fn default() -> Self {
-        let name = default_name();
         Self {
             application: ApplicationConfig {
-                name: name.clone(),
                 default_platform: default_platform(),
-                out_dir: out_dir_default(),
                 asset_dir: asset_dir_default(),
-
                 sub_package: None,
             },
             web: WebConfig {
@@ -55,11 +51,7 @@ impl Default for DioxusConfig {
                 wasm_opt: Default::default(),
             },
             desktop: DesktopConfig::default(),
-            bundle: BundleConfig {
-                identifier: Some(format!("io.github.{name}")),
-                publisher: Some(name),
-                ..Default::default()
-            },
+            bundle: BundleConfig::default(),
         }
     }
 }
@@ -104,25 +96,10 @@ impl DioxusConfig {
             return Ok(None);
         };
 
-        let cfg = toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
+        toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
             .map_err(|err| {
                 anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}").into()
             })
-            .map(Some);
-
-        match cfg {
-            Ok(Some(mut cfg)) => {
-                let name = cfg.application.name.clone();
-                if cfg.bundle.identifier.is_none() {
-                    cfg.bundle.identifier = Some(format!("io.github.{name}"));
-                }
-                if cfg.bundle.publisher.is_none() {
-                    cfg.bundle.publisher = Some(name);
-                }
-
-                Ok(Some(cfg))
-            }
-            cfg => cfg,
-        }
+            .map(Some)
     }
 }

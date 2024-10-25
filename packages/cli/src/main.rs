@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
 
         Clean(opts) => opts.clean().context("🚫 Cleaning project failed:"),
 
-        Build(mut opts) => opts.build().await.context("🚫 Building project failed:"),
+        Build(mut opts) => opts.build_it().await.context("🚫 Building project failed:"),
 
         Serve(opts) => opts.serve().await.context("🚫 Serving project failed:"),
 

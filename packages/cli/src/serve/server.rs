@@ -119,7 +119,7 @@ impl WebServer {
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
-            application_name: krate.config.application.name.clone(),
+            application_name: krate.executable_name().to_string(),
             platform: args.build_arguments.platform(),
         })
     }
