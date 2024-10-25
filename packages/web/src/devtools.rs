@@ -2,6 +2,7 @@
 //!
 //! This sets up a websocket connection to the devserver and handles messages from it.
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
+#![allow(unused)]
 
 use std::fmt::Display;
 use std::time::Duration;
@@ -27,7 +28,8 @@ pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     let (tx, rx) = unbounded();
 
     // Wire up the websocket to the devserver
-    make_ws(tx.clone(), POLL_INTERVAL_MIN, false);
+    #[cfg(not(feature = "devtools-playground"))]
+    make_ws(tx, POLL_INTERVAL_MIN, false);
 
     #[cfg(feature = "devtools-playground")]
     playground(tx);
