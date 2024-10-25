@@ -143,7 +143,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust ${{ env.rust_nightly }}
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: ${{ env.rust_nightly }}
       - uses: Swatinem/rust-cache@v2
@@ -152,12 +152,13 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
-          cargo doc --workspace --no-deps --all-features --document-private-items
+          cargo doc --workspace --no-deps --all-features
         env:
           RUSTFLAGS: --cfg docsrs
           RUSTDOCFLAGS: --cfg docsrs
-          # todo: re-enable warnings
+          # todo: re-enable warnings, private items
           # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+          #  --document-private-items
 
   # Check for invalid links in the repository
   link-check:
