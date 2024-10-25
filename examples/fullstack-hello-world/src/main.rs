@@ -1,7 +1,7 @@
 //! Run with:
 //!
 //! ```sh
-//! dx serve --platform fullstack
+//! dx serve --platform web
 //! ```
 
 #![allow(non_snake_case, unused)]
