@@ -69,7 +69,7 @@ impl BuildRequest {
     }
 
     pub(crate) fn status_build_message(&self, line: String) {
-        tracing::debug!(dx_src = ?TraceSrc::Cargo, "Cargo build message: {line}");
+        tracing::trace!(dx_src = ?TraceSrc::Cargo, "{line}");
     }
 
     pub(crate) fn status_build_progress(
@@ -99,6 +99,7 @@ impl BuildRequest {
     }
 
     pub(crate) fn status_copying_asset(&self, current: usize, total: usize, path: PathBuf) {
+        tracing::trace!("Status copying asset {current}/{total} from {path:?}");
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::CopyingAssets {
                 current,

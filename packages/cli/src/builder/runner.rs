@@ -91,6 +91,8 @@ impl Builder {
             },
         };
 
+        tracing::trace!("Build update: {update:?}");
+
         // Update the internal stage of the build so the UI can render it
         match &update {
             BuildUpdate::Progress { stage } => {
@@ -135,8 +137,8 @@ impl Builder {
                         }
                     }
                     BuildStage::Bundling {} => {
+                        self.complete_compile();
                         self.bundling_progress = 0.0;
-                        self.compile_end = Some(Instant::now());
                         self.bundle_start = Some(Instant::now());
                     }
                     BuildStage::OptimizingWasm {} => {}
@@ -172,8 +174,7 @@ impl Builder {
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
 
-                self.compile_end = Some(Instant::now());
-                self.compile_end_server = Some(Instant::now());
+                self.complete_compile();
                 self.bundle_end = Some(Instant::now());
             }
             BuildUpdate::BuildFailed { .. } => {
@@ -228,6 +229,14 @@ impl Builder {
                 BuildUpdate::Progress { .. } => {}
                 BuildUpdate::CompilerMessage { .. } => {}
             }
+        }
+    }
+
+    fn complete_compile(&mut self) {
+        if self.compile_end.is_none() {
+            self.compiled_crates = self.expected_crates;
+            self.compile_end = Some(Instant::now());
+            self.compile_end_server = Some(Instant::now());
         }
     }
 

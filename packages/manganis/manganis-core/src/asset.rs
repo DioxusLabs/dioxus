@@ -24,12 +24,6 @@ pub struct ResourceAsset {
     pub bundled: String,
 }
 
-/// The maximum length of a path segment
-const MAX_PATH_LENGTH: usize = 128;
-
-/// The length of the hash in the output path
-const HASH_SIZE: usize = 16;
-
 #[derive(Debug)]
 pub struct AssetError {}
 
@@ -80,38 +74,12 @@ impl ResourceAsset {
         file_path.hash(&mut hash);
 
         let uuid = hash.finish();
+        let file_name = file_path.file_stem().unwrap().to_string_lossy();
         let extension = file_path
             .extension()
             .map(|f| f.to_string_lossy())
-            .map(|e| format!(".{e}"))
             .unwrap_or_default();
-        let file_name = Self::normalize_file_name(file_path);
 
-        let out = format!("{file_name}{uuid:x}{extension}");
-        assert!(out.len() <= MAX_PATH_LENGTH);
-        out
-    }
-
-    fn normalize_file_name(location: PathBuf) -> String {
-        let file_name = location.file_name().unwrap();
-        let last_segment = file_name.to_string_lossy();
-        let extension = location.extension();
-        let mut file_name = Self::to_alphanumeric_string_lossy(&last_segment);
-
-        let extension_len = extension.map(|e| e.len() + 1).unwrap_or_default();
-        let extension_and_hash_size = extension_len + HASH_SIZE;
-
-        // If the file name is too long, we need to truncate it
-        if file_name.len() + extension_and_hash_size > MAX_PATH_LENGTH {
-            file_name = file_name[..MAX_PATH_LENGTH - extension_and_hash_size].to_string();
-        }
-
-        file_name
-    }
-
-    fn to_alphanumeric_string_lossy(name: &str) -> String {
-        name.chars()
-            .filter(|c| c.is_alphanumeric())
-            .collect::<String>()
+        format!("{file_name}-{uuid:x}.{extension}")
     }
 }

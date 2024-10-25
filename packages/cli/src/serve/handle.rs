@@ -69,28 +69,12 @@ impl AppHandle {
         let mut envs = vec![
             ("DIOXUS_CLI_ENABLED", "true".to_string()),
             (
-                "CARGO_MANIFEST_DIR",
-                self.app.build.krate.crate_dir().display().to_string(),
-            ),
-            (
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
                 devserver_ip.to_string(),
             ),
-            // these are commented out since I'm not sure if we need or even want them.
-            //
-            // eg:
-            // developers should be setting their app title imperatively... which might not be practical for pure SPA
-            // cmd.env(dioxus_cli_config::APP_TITLE_ENV, app_title);
-            //
-            // eg:
-            // why even make always on top configurable?
-            // (
-            //     dioxus_cli_config::ALWAYS_ON_TOP_ENV,
-            //     serve.always_on_top.unwrap_or(true).to_string(),
-            // ),
-            //
-            // who uses this?
-            // cmd.env(dioxus_cli_config::OUT_DIR, out_dir.display().to_string());
+            // unset the cargo dirs in the event we're running `dx` locally
+            // since the child process will inherit the env vars, we don't want to confuse the downstream process
+            ("CARGO_MANIFEST_DIR", "".to_string()),
         ];
 
         if let Some(addr) = fullstack_address {

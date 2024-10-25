@@ -108,7 +108,7 @@ impl BuildRequest {
             );
         }
 
-        tracing::debug!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:?}", cmd);
+        tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:?}", cmd);
 
         let mut child = cmd
             .stdout(Stdio::piped())

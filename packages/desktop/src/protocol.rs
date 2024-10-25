@@ -22,6 +22,7 @@ const EVENTS_PATH: &str = "dioxus://index.html/__events";
 
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
+#[allow(clippy::too_many_arguments)] // just for now, should fix this eventually
 /// Handle a request from the webview
 ///
 /// - Tries to stream edits if they're requested.
@@ -39,7 +40,7 @@ pub(super) fn desktop_handler(
 ) {
     // Try to serve the index file first
     if let Some(index_bytes) =
-        index_request(&request, custom_head, custom_index, &root_name, headless)
+        index_request(&request, custom_head, custom_index, root_name, headless)
     {
         return responder.respond(index_bytes);
     }
@@ -90,13 +91,35 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
     //
     // If there's no asset root, we use the cargo manifest dir as the root, or the current dir
     if !uri_path.exists() || uri_path.starts_with("/assets/") {
-        let bundle_root = get_asset_root().unwrap_or_else(|| {
-            std::env::var("CARGO_MANIFEST_DIR")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| std::env::current_dir().unwrap())
-        });
-        let relative_path = uri_path.strip_prefix("/").unwrap();
-        uri_path = bundle_root.join(relative_path);
+        uri_path = uri_path.strip_prefix("/").unwrap().to_path_buf();
+
+        let bundle_relative = get_asset_root().join(&uri_path);
+        println!("Bundle relative: {bundle_relative:?}");
+
+        // If the asset still doesn't exist, we're probably running under `cargo run` and manganis is
+        // giving us a mangled path (ie `/assets/blah-123.css`)
+        // We want to cut out the `-123` part and serve the asset from the CARGO_MANIFEST_DIR
+        if bundle_relative.exists() {
+            uri_path = bundle_relative;
+        } else {
+            if let Some(stem) = uri_path.file_stem() {
+                if let Some((unhashed, _hash)) = stem.to_string_lossy().rsplit_once('-') {
+                    let new_path = uri_path.with_file_name(format!(
+                        "{unhashed}.{}",
+                        uri_path.extension().unwrap_or_default().to_string_lossy()
+                    ));
+                    println!("Unhashed path: {new_path:?}");
+
+                    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|_| std::env::current_dir().unwrap());
+
+                    uri_path = manifest_dir.join(new_path);
+
+                    println!("New path: {uri_path:?}");
+                }
+            }
+        }
     }
 
     // If the asset exists, then we can serve it!
@@ -108,9 +131,9 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
             .body(std::fs::read(uri_path)?)?);
     }
 
-    return Ok(Response::builder()
+    Ok(Response::builder()
         .status(StatusCode::NOT_FOUND)
-        .body(String::from("Not Found").into_bytes())?);
+        .body(String::from("Not Found").into_bytes())?)
 }
 
 /// Build the index.html file we use for bootstrapping a new app
@@ -201,53 +224,30 @@ fn module_loader(root_id: &str, headless: bool) -> String {
 /// Currently supports:
 /// - [x] macOS
 /// - [x] iOS
+/// - [x] Windows
+/// - [x] Linux (appimage)
 /// - [ ] Linux (rpm)
 /// - [ ] Linux (deb)
-/// - [ ] Windows
 /// - [ ] Android
 #[allow(unreachable_code)]
-fn get_asset_root() -> Option<PathBuf> {
-    // If the manifest_dir is set, we're in a cargo project and we can use that as the asset root
-    // This works with asset!() since asset!() is always relatif to the manifest dir, both in dev and bundled
-    // if let Some(cargo_dir) = std::env::var("CARGO_MANIFEST_DIR").map(PathBuf::from).ok() {
-    //     return Some(cargo_dir);
-    // if running_in_dev_mode() {
-    //     // todo: we don't want to canonicalize assets like this, but it will take longer to migrate, so we'll do it later
-    //     // we should just be parsing paths the way they are instead of relative to the "asset" dir
-    //     // manganis will eventually just dump the raw path to us, but until then, we need to canonicalize here
-    //     return dioxus_cli_config::base_path();
-    // }
-
-    let cur_exe = std::env::current_exe().ok()?;
+fn get_asset_root() -> PathBuf {
+    let cur_exe = std::env::current_exe().expect("Failed to get current exe");
 
     #[cfg(target_os = "macos")]
     {
-        return Some(
-            cur_exe
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .join("Resources"),
-        );
+        return cur_exe
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("Resources");
     }
 
-    #[cfg(target_os = "ios")]
-    {
-        return Some(cur_exe.parent().unwrap().to_path_buf());
-    }
-
-    // Use the prescence of the bundle to determine if we're in dev mode
-    // todo: for other platforms, we should check their bundles too. This currently only works for macOS and iOS
-    // #[cfg(any(target_os = "macos", target_os = "ios"))]
-    // {
-    //     // Note that this will return `target/debug` if you're in debug mode - not reliable check if we're in dev mode
-    //     if let Some(resources) = core_foundation::bundle::CFBundle::main_bundle().resources_path() {
-    //         return dunce::canonicalize(resources).ok();
-    //     }
-    // }
-
-    None
+    // For all others, the structure looks like this:
+    // app.(exe/appimage)
+    //   main.exe
+    //   assets/
+    cur_exe.parent().unwrap().to_path_buf()
 }
 
 /// Get the mime type from a path-like string

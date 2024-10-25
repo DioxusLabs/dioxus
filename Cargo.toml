@@ -75,7 +75,7 @@ members = [
     "packages/playwright-tests/nested-suspense",
 
     # manganis
-    "packages/manganis/manganis-lib",
+    "packages/manganis/manganis",
     "packages/manganis/manganis-macro",
     "packages/manganis/manganis-core",
     "packages/manganis/manganis-opt",
@@ -147,7 +147,7 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.3" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.3" }
 generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.3" }
 
-manganis  = { path = "packages/manganis/manganis-lib", version = "0.6.0-alpha.3" }
+manganis  = { path = "packages/manganis/manganis", version = "0.6.0-alpha.3" }
 manganis-macro  = { path = "packages/manganis/manganis-macro", version = "0.6.0-alpha.3" }
 manganis-core  = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.3" }
 

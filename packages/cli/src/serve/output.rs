@@ -398,14 +398,7 @@ impl Output {
     fn render_body_title(&self, frame: &mut Frame<'_>, area: Rect, _state: RenderState) {
         frame.render_widget(
             Line::from(vec![
-                // todo: re-enable open + clear
-                // "c:clear".gray(),
-                // "  ".gray(),
-                // "o:open".gray(),
-                // "  ".gray(),
                 " ".dark_gray(),
-                // "r:rebuild".dark_gray(),
-                // " ─ ".dark_gray(),
                 match self.more_modal_open {
                     true => "/:more".light_yellow(),
                     false => "/:more".dark_gray(),
@@ -601,7 +594,6 @@ impl Output {
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(1),
-            // Constraint::Length(1),
         ])
         .areas(area);
 

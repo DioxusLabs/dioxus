@@ -253,7 +253,12 @@ impl DioxusCrate {
         let dioxus_feature = platform.feature_name();
 
         package.features.iter().find_map(|(key, features)| {
-            // Find a feature that starts with dioxus/ or dioxus?/
+            // if the feature is just the name of the platform, we use that
+            if key == dioxus_feature {
+                return Some(key.clone());
+            }
+
+            // Otherwise look for the feature that starts with dioxus/ or dioxus?/ and matches the platform
             for feature in features {
                 if let Some((_, after_dioxus)) = feature.split_once("dioxus") {
                     if let Some(dioxus_feature_enabled) =
@@ -340,6 +345,9 @@ impl DioxusCrate {
             "dist",
             "*~",
             ".*",
+            "*.lock",
+            "*.log",
+            "*.rs",
         ]
     }
 
@@ -445,17 +453,13 @@ impl DioxusCrate {
 
         // Get a list of *all* the crates with Rust code that we need to watch.
         // This will end up being dependencies in the workspace and non-workspace dependencies on the user's computer.
-        let mut watched_crates = self.local_dependency_manifests();
-        watched_crates.push(self.crate_dir().join("Cargo.toml"));
+        let mut watched_crates = self.local_dependencies();
+        watched_crates.push(self.crate_dir());
 
         // Now, watch all the folders in the crates, but respecting their respective ignore files
-        for manifest in watched_crates {
-            let Some(krate_root) = manifest.parent() else {
-                continue;
-            };
-
+        for krate_root in watched_crates {
             // Build the ignore builder for this crate, but with our default ignore list as well
-            let ignore = self.ignore_for_krate(krate_root);
+            let ignore = self.ignore_for_krate(&krate_root);
 
             for entry in krate_root.read_dir().unwrap() {
                 let Ok(entry) = entry else {
@@ -498,7 +502,7 @@ impl DioxusCrate {
     /// - the assets directory - this is so we can hotreload CSS and other assets by default
     /// - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
     /// - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
-    pub(crate) fn local_dependency_manifests(&self) -> Vec<PathBuf> {
+    pub(crate) fn local_dependencies(&self) -> Vec<PathBuf> {
         let mut paths = vec![];
 
         for (dependency, _edge) in self.krates.get_deps(self.package) {
@@ -515,22 +519,34 @@ impl DioxusCrate {
                 continue;
             }
 
-            paths.push(krate.manifest_path.to_path_buf().into_std_path_buf());
+            paths.push(
+                krate
+                    .manifest_path
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+                    .into_std_path_buf(),
+            );
         }
 
         paths
     }
 
     pub(crate) fn all_watched_crates(&self) -> Vec<PathBuf> {
-        self.local_dependency_manifests()
+        let mut krates: Vec<PathBuf> = self
+            .local_dependencies()
             .into_iter()
             .map(|p| {
                 p.parent()
                     .expect("Local manifest to exist and have a parent")
                     .to_path_buf()
             })
-            .chain(Some(self.crate_dir().parent().unwrap().to_path_buf()))
-            .collect()
+            .chain(Some(self.crate_dir()))
+            .collect();
+
+        krates.dedup();
+
+        krates
     }
 }
 

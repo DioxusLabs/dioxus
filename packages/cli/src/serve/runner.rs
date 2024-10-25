@@ -37,6 +37,9 @@ impl AppRunner {
             should_full_rebuild: true,
         };
 
+        // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
+        // we could spawn a thread to search the FS and then when it returns we can fill the filemap
+        // in testing, if this hits a massive directory, it might take several seconds with no feedback.
         for krate in krate.all_watched_crates() {
             runner.fill_filemap(krate);
         }

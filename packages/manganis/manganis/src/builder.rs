@@ -12,7 +12,7 @@ pub struct Asset {
 
     /// The asset location after its been bundled
     ///
-    /// `blah123.css``
+    /// `blah-123.css``
     pub bundled: &'static str,
 }
 
@@ -29,11 +29,20 @@ impl Asset {
 
     /// Get the path to the asset
     pub fn relative_path(&self) -> PathBuf {
-        PathBuf::from(self.input.trim_start_matches("/").to_string())
+        PathBuf::from(self.input.trim_start_matches('/').to_string())
     }
 
     /// Return a canonicalized path to the asset
+    ///
+    /// Attempts to resolve it against an `assets` folder in the current directory.
+    /// If that doesn't exist, it will resovle against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
+        // If the asset is relative, we resolve the asset at the current directory
+        if !dioxus_core_types::is_bundled_app() {
+            return PathBuf::from(self.local);
+        }
+
+        // Otherwise presumably we're bundled and we can use the bundled path
         PathBuf::from("/assets/").join(PathBuf::from(self.bundled.trim_start_matches('/')))
     }
 }

@@ -46,9 +46,9 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;
     let mut devserver = WebServer::start(&krate, &args)?;
-    let mut screen = Output::start(&args)?;
     let mut watcher = Watcher::start(&krate, &args);
     let mut runner = AppRunner::start(&krate);
+    let mut screen = Output::start(&args)?;
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
@@ -247,8 +247,8 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
-    builder.abort_all();
-    tracer.shutdown();
+    _ = builder.abort_all();
+    _ = tracer.shutdown();
 
     if let Err(err) = err {
         eprintln!("Exiting with error: {}", err);

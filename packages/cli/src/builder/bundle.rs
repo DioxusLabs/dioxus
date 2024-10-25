@@ -430,7 +430,7 @@ impl AppBundle {
             }
 
             self.build.status_copying_asset(
-                assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
                 asset_count,
                 from.clone(),
             );
