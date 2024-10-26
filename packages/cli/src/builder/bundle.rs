@@ -697,10 +697,8 @@ impl AppBundle {
                 WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
                 WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
             };
-            let wasm_file = bindgen_outdir.join(format!(
-                "{}_bg.wasm",
-                self.build.krate.config.application.name
-            ));
+            let wasm_file =
+                bindgen_outdir.join(format!("{}_bg.wasm", self.build.krate.executable_name()));
             let old_size = wasm_file.metadata()?.len();
             options
                 // WASM bindgen relies on reference types
