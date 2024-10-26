@@ -706,7 +706,7 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Video tutorials: ".gray(),
-                "https://youtube.com/dioxuslabs".blue(),
+                "https://youtube.com/@DioxusLabs".blue(),
             ])),
             links_list[1],
         );
