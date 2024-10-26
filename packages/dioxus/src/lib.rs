@@ -132,7 +132,7 @@ pub mod prelude {
 
     #[cfg(feature = "asset")]
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
-    pub use manganis::{self, classes, mg as asset, ImageAsset, ImageType};
+    pub use manganis::{self, asset, Asset, ImageAsset, ImageType};
 }
 
 #[cfg(feature = "web")]

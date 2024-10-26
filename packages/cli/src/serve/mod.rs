@@ -1,253 +1,258 @@
-use std::future::{poll_fn, Future, IntoFuture};
-use std::task::Poll;
-
-use crate::builder::OpenArguments;
-use crate::cli::serve::Serve;
-use crate::dioxus_crate::DioxusCrate;
-use crate::tracer::CLILogControl;
-use crate::Result;
 use crate::{
-    builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage},
+    BuildUpdate, Builder, DioxusCrate, Error, Platform, Result, ServeArgs, TraceController,
     TraceSrc,
 };
-use futures_util::FutureExt;
-use tokio::task::yield_now;
 
-mod builder;
-mod hot_reloading_file_map;
-mod logs_tab;
+mod ansi_buffer;
+mod detect;
+mod handle;
 mod output;
 mod proxy;
-mod render;
+mod runner;
 mod server;
+mod update;
 mod watcher;
 
-use builder::*;
-use output::*;
-use server::*;
-use watcher::*;
+pub(crate) use handle::*;
+pub(crate) use output::*;
+pub(crate) use runner::*;
+pub(crate) use server::*;
+pub(crate) use update::*;
+pub(crate) use watcher::*;
 
-/// For *all* builds the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
+/// For *all* builds, the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
 ///
 /// This includes web, desktop, mobile, fullstack, etc.
 ///
 /// Platform specifics:
-/// - Web:       we need to attach a filesystem server to our devtools webserver to serve the project. We
-///              want to emulate GithubPages here since most folks are deploying there and expect things like
-///              basepath to match.
-/// - Fullstack: We spin up the same dev server but in this case the fullstack server itself needs to
-///              proxy all dev requests to our dev server
-/// - Desktop:   We spin up the dev server but without a filesystem server.
-/// - Mobile:    Basically the same as desktop.
+/// -------------------
+/// - Web:         we need to attach a filesystem server to our devtools webserver to serve the project. We
+///                want to emulate GithubPages here since most folks are deploying there and expect things like
+///                basepath to match.
+/// - Desktop:     We spin up the dev server but without a filesystem server.
+/// - Mobile:      Basically the same as desktop.
 ///
-/// Notes:
-/// - All filesystem changes are tracked here
-/// - We send all updates to connected websocket connections. Even desktop connects via the websocket
-/// - Right now desktop compiles tokio-tungstenite to do the connection but we could in theory reuse
-///   the websocket logic from the webview for thinner builds.
+/// When fullstack is enabled, we'll also build for the `server` target and then hotreload the server.
+/// The "server" is special here since "fullstack" is functionally just an addition to the regular client
+/// setup.
 ///
 /// Todos(Jon):
-/// - I'd love to be able to configure the CLI while it's running so we can change settingaon the fly.
-///   This would require some light refactoring and potentially pulling in something like ratatui.
-/// - Build a custom subscriber for logs by tools within this
-/// - Handle logs from the build engine separately?
-/// - Consume logs from the wasm for web/fullstack
+/// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub async fn serve_all(
-    serve: Serve,
-    dioxus_crate: DioxusCrate,
-    log_control: CLILogControl,
-) -> Result<()> {
-    // Start the screen first so we collect build logs.
-    let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
-    let mut builder = Builder::new(&dioxus_crate, &serve);
+pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
+    let mut tracer = TraceController::redirect();
 
-    // Start the first build
-    builder.build()?;
+    // Note that starting the builder will queue up a build immediately
+    let mut builder = Builder::start(&krate, args.build_args())?;
+    let mut devserver = WebServer::start(&krate, &args)?;
+    let mut watcher = Watcher::start(&krate, &args);
+    let mut runner = AppRunner::start(&krate);
+    let mut screen = Output::start(&args)?;
 
-    let mut server = Server::start(&serve, &dioxus_crate);
-    let mut watcher = Watcher::start(&serve, &dioxus_crate);
+    // This is our default splash screen. We might want to make this a fancier splash screen in the future
+    // Also, these commands might not be the most important, but it's all we've got enabled right now
+    tracing::info!(
+        r#"Serving your Dioxus app: {} 🚀
 
-    let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
+               - Press `ctrl+c` to exit the server
+               - Press `r` to rebuild the app
+               - Press `o` to open the app
+               - Press `t` to toggle cargo output
+               - Press `/` for more commands and shortcuts
 
-    loop {
-        // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
-        yield_now().await;
+               Learn more at https://dioxuslabs.com/learn/0.6/getting_started"#,
+        krate.executable_name()
+    );
 
+    let err: Result<(), Error> = loop {
         // Draw the state of the server to the screen
-        screen.render(&serve, &dioxus_crate, &builder, &server, &watcher);
+        screen.render(&args, &krate, &builder, &devserver, &watcher);
 
         // And then wait for any updates before redrawing
-        tokio::select! {
-            // rebuild the project or hotreload it
-            _ = watcher.wait(), if is_hot_reload => {
-                if !watcher.pending_changes() {
-                    continue
+        let msg = tokio::select! {
+            msg = builder.wait() => ServeUpdate::BuildUpdate(msg),
+            msg = watcher.wait() => msg,
+            msg = devserver.wait() => msg,
+            msg = screen.wait() => msg,
+            msg = runner.wait() => msg,
+            msg = tracer.wait() => msg,
+        };
+
+        match msg {
+            ServeUpdate::FilesChanged { files } => {
+                if files.is_empty() || !args.should_hotreload() {
+                    continue;
                 }
 
-                let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
-                let changed = changed_files.first().cloned();
+                let file = files[0].display().to_string();
+                let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = watcher.attempt_hot_reload(&dioxus_crate, changed_files) {
+                if let Some(hr) = runner.attempt_hot_reload(files) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                    if hr.templates.is_empty() && hr.assets.is_empty() && hr.unknown_files.is_empty() {
-                        continue
+                    if hr.templates.is_empty()
+                        && hr.assets.is_empty()
+                        && hr.unknown_files.is_empty()
+                    {
+                        tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+                        continue;
                     }
 
-                    if let Some(changed_path) = changed {
-                        let path_relative = changed_path.strip_prefix(dioxus_crate.crate_dir()).map(|p| p.display().to_string()).unwrap_or_else(|_| changed_path.display().to_string());
-                        tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloaded {}", path_relative);
-                    }
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
 
-                    server.send_hotreload(hr).await;
-                } else {
-                    // If the change is not binary patchable, rebuild the project
+                    devserver.send_hotreload(hr).await;
+                } else if runner.should_full_rebuild {
+                    tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
+
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    builder.build()?;
+                    builder.rebuild(args.build_arguments.clone());
 
-                    // Clear the hot reload changes
-                    watcher.clear_hot_reload_changes();
+                    // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
+                    runner.clear_hot_reload_changes();
+                    runner.file_map.force_rebuild();
 
                     // Tell the server to show a loading page for any new requests
-                    server.start_build().await;
+                    devserver.start_build().await;
+                } else {
+                    tracing::warn!(
+                        "Rebuild required but is currently paused - press `r` to rebuild manually"
+                    )
                 }
             }
 
-            // reload the page
-            msg = server.wait() => {
-                // Run the server in the background
-                // Waiting for updates here lets us tap into when clients are added/removed
-                match msg {
-                    Some(ServerUpdate::NewConnection) => {
-                        if let Some(msg) = watcher.applied_hot_reload_changes() {
-                            server.send_hotreload(msg).await;
-                        }
-                    }
-                    Some(ServerUpdate::Message(msg)) => {
-                        screen.new_ws_message(TargetPlatform::Web, msg);
-                    }
-                    None => {}
-                }
+            // Run the server in the background
+            // Waiting for updates here lets us tap into when clients are added/removed
+            ServeUpdate::NewConnection => {
+                devserver
+                    .send_hotreload(runner.applied_hot_reload_changes())
+                    .await;
+
+                runner.client_connected().await;
             }
 
-            // Handle updates from the build engine
-            application = builder.wait() => {
-                // Wait for logs from the build engine
-                // These will cause us to update the screen
-                // We also can check the status of the builds here in case we have multiple ongoing builds
-                match application {
-                    Ok(BuilderUpdate::Progress { platform, update }) => {
-                        let update_clone = update.clone();
-                        screen.new_build_progress(platform, update_clone);
-                        server.update_build_status(screen.build_progress.progress(), update.stage.to_string()).await;
+            // Received a message from the devtools server - currently we only use this for
+            // logging, so we just forward it the tui
+            ServeUpdate::WsMessage(msg) => {
+                screen.push_ws_message(Platform::Web, msg);
+            }
 
-                        match update {
-                            // Send rebuild start message.
-                            UpdateBuildProgress { stage: Stage::Compiling, update: UpdateStage::Start } => server.send_reload_start().await,
-                            // Send rebuild failed message.
-                            UpdateBuildProgress { stage: Stage::Finished, update: UpdateStage::Failed(_) } => server.send_reload_failed().await,
-                            _ => {},
-                        }
+            // Wait for logs from the build engine
+            // These will cause us to update the screen
+            // We also can check the status of the builds here in case we have multiple ongoing builds
+            ServeUpdate::BuildUpdate(update) => {
+                // Queue any logs to be printed if need be
+                screen.new_build_update(&update);
+
+                // And then update the websocketed clients with the new build status in case they want it
+                devserver.new_build_update(&update).await;
+
+                // And then open the app if it's ready
+                // todo: there might be more things to do here that require coordination with other pieces of the CLI
+                // todo: maybe we want to shuffle the runner around to send an "open" command instead of doing that
+                match update {
+                    BuildUpdate::Progress { .. } => {}
+                    BuildUpdate::CompilerMessage { message } => {
+                        screen.push_cargo_log(message);
                     }
-                    Ok(BuilderUpdate::Ready { results }) => {
-                        if !results.is_empty() {
-                            builder.children.clear();
-                        }
-
-                        // If we have a build result, open it
-                        for build_result in results.iter() {
-                            let child = build_result.open(
-                                OpenArguments::new(
-                                &serve.server_arguments,
-                                server.fullstack_address(),
-                                &dioxus_crate
+                    BuildUpdate::BuildFailed { err } => {
+                        tracing::error!("Build failed: {}", err);
+                    }
+                    BuildUpdate::BuildReady { bundle } => {
+                        let handle = runner
+                            .open(
+                                bundle,
+                                devserver.devserver_address(),
+                                devserver.proxied_server_address(),
+                                args.open.unwrap_or(false),
                             )
-                            );
-                            match child {
-                                Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
-                                Err(e) => {
-                                    tracing::error!(dx_src = ?TraceSrc::Build, "Failed to open build result: {e}");
-                                    break;
-                                },
-                                _ => {}
+                            .await;
+
+                        match handle {
+                            // Update the screen + devserver with the new handle info
+                            Ok(_handle) => {
+                                devserver.send_reload_command().await;
                             }
+
+                            Err(e) => tracing::error!("Failed to open app: {}", e),
                         }
-
-                        // Make sure we immediately capture the stdout/stderr of the executable -
-                        // otherwise it'll clobber our terminal output
-                        screen.new_ready_app(&mut builder, results);
-
-                        // And then finally tell the server to reload
-                        server.send_reload_command().await;
-                    },
-
-                    // If the desktop process exited *cleanly*, we can exit
-                    Ok(BuilderUpdate::ProcessExited { status, target_platform }) => {
-                        // Then remove the child process
-                        builder.children.retain(|(platform, _)| *platform != target_platform);
-                        match (target_platform, status) {
-                            (TargetPlatform::Desktop, Ok(status)) => {
-                                if status.success() {
-                                    break;
-                                }
-                                else {
-                                    tracing::error!(dx_src = ?TraceSrc::Dev, "Application exited with status: {status}");
-                                }
-                            },
-                            // Ignore the static generation platform exiting
-                            (_ , Ok(_)) => {},
-                            (_, Err(e)) => {
-                                tracing::error!(dx_src = ?TraceSrc::Dev, "Application exited with error: {e}");
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        server.send_build_error(err).await;
                     }
                 }
             }
 
-            // Handle input from the user using our settings
-            res = screen.wait() => {
-                match res {
-                    Ok(false) => {}
-                    // Request a rebuild.
-                    Ok(true) => {
-                        builder.build()?;
-                        server.start_build().await
-                    },
-                    // Shutdown the server.
-                    Err(_) => break,
+            // If the process exited *cleanly*, we can exit
+            ServeUpdate::ProcessExited { status, platform } => {
+                if !status.success() {
+                    tracing::error!("Application [{platform}] exited with error: {status}");
+                } else {
+                    tracing::info!(
+                        r#"Application [{platform}] exited gracefully.
+               - To restart the app, press `r` to rebuild or `o` to open
+               - To exit the server, press `ctrl+c`"#
+                    );
                 }
+
+                runner.kill(platform);
             }
+
+            ServeUpdate::StdoutReceived { platform, msg } => {
+                screen.push_stdio(platform, msg, tracing::Level::INFO);
+            }
+
+            ServeUpdate::StderrReceived { platform, msg } => {
+                screen.push_stdio(platform, msg, tracing::Level::ERROR);
+            }
+
+            ServeUpdate::TracingLog { log } => {
+                screen.push_log(log);
+            }
+
+            ServeUpdate::RequestRebuild => {
+                // The spacing here is important-ish: we want
+                // `Full rebuild:` to line up with
+                // `Hotreloading:` to keep the alignment during long edit sessions
+                tracing::info!("Full rebuild: triggered manually");
+                builder.rebuild(args.build_arguments.clone());
+                runner.file_map.force_rebuild();
+                devserver.start_build().await
+            }
+
+            ServeUpdate::OpenApp => {
+                runner.open_existing(&devserver).await;
+            }
+
+            ServeUpdate::Redraw => {
+                // simply returning will cause a redraw
+            }
+
+            ServeUpdate::ToggleShouldRebuild => {
+                runner.should_full_rebuild = !runner.should_full_rebuild;
+                tracing::info!(
+                    "Automatic rebuilds are currently: {}",
+                    if runner.should_full_rebuild {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
+                )
+            }
+
+            ServeUpdate::Exit { error } => match error {
+                Some(err) => break Err(anyhow::anyhow!("{}", err).into()),
+                None => break Ok(()),
+            },
         }
+    };
+
+    _ = devserver.shutdown().await;
+    _ = screen.shutdown();
+    builder.abort_all();
+    tracer.shutdown();
+
+    if let Err(err) = err {
+        eprintln!("Exiting with error: {}", err);
     }
 
-    // Run our cleanup logic here - maybe printing as we go?
-    // todo: more printing, logging, error handling in this phase
-    _ = screen.shutdown();
-    _ = server.shutdown().await;
-    builder.shutdown();
-
     Ok(())
-}
-
-// Grab the output of a future that returns an option or wait forever
-pub(crate) fn next_or_pending<F, T>(f: F) -> impl Future<Output = T>
-where
-    F: IntoFuture<Output = Option<T>>,
-{
-    let pinned = f.into_future().fuse();
-    let mut pinned = Box::pin(pinned);
-    poll_fn(move |cx| {
-        let next = pinned.as_mut().poll(cx);
-        match next {
-            Poll::Ready(Some(next)) => Poll::Ready(next),
-            _ => Poll::Pending,
-        }
-    })
-    .fuse()
 }

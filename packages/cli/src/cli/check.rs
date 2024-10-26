@@ -1,29 +1,26 @@
-use crate::build::TargetArgs;
+use super::*;
+use crate::DioxusCrate;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::Path, process::exit};
-
-use crate::DioxusCrate;
-
-use super::*;
 
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
-pub struct Check {
+pub(crate) struct Check {
     /// Input file
     #[clap(short, long)]
-    pub file: Option<PathBuf>,
+    pub(crate) file: Option<PathBuf>,
 
     /// Information about the target to check
     #[clap(flatten)]
-    pub target_args: TargetArgs,
+    pub(crate) target_args: TargetArgs,
 }
 
 impl Check {
     // Todo: check the entire crate
-    pub async fn check(self) -> Result<()> {
+    pub(crate) async fn check(self) -> Result<()> {
         match self.file {
             // Default to checking the project
             None => {

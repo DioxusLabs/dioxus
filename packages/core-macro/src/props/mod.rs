@@ -190,7 +190,7 @@ mod field_info {
         pub builder_attr: FieldBuilderAttr,
     }
 
-    impl<'a> FieldInfo<'a> {
+    impl FieldInfo<'_> {
         pub fn new(
             ordinal: usize,
             field: &syn::Field,
@@ -1018,11 +1018,11 @@ Finally, call `.build()` to create the instance of `{name}`.
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
-                    fn push_attribute(
+                    fn push_attribute<L>(
                         mut self,
                         ____name: &'static str,
                         ____ns: Option<&'static str>,
-                        ____attr: impl dioxus_core::prelude::IntoAttributeValue,
+                        ____attr: impl dioxus_core::prelude::IntoAttributeValue<L>,
                         ____volatile: bool
                     ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;

@@ -56,13 +56,13 @@ impl ProxyClient {
 /// - the exact path of the proxy config's backend URL, e.g. /api
 /// - the exact path with a trailing slash, e.g. /api/
 /// - any subpath of the backend URL, e.g. /api/foo/bar
-pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
+pub(crate) fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     let url: Uri = proxy.backend.parse()?;
     let path = url.path().to_string();
     let trimmed_path = path.trim_start_matches('/');
 
     if trimmed_path.is_empty() {
-        return Err(crate::Error::ProxySetupError(format!(
+        return Err(crate::Error::ProxySetup(format!(
             "Proxy backend URL must have a non-empty path, e.g. {}/api instead of {}",
             proxy.backend.trim_end_matches('/'),
             proxy.backend
@@ -142,6 +142,9 @@ pub(crate) fn proxy_to(
         }
 
         let uri = req.uri().clone();
+
+        // retry with backoff
+
         let res = client.send(req).await.map_err(handle_error);
 
         match res {
@@ -150,6 +153,7 @@ pub(crate) fn proxy_to(
                 if uri.path().starts_with("/assets")
                     || uri.path().starts_with("/_dioxus")
                     || uri.path().starts_with("/public")
+                    || uri.path().starts_with("/wasm")
                 {
                     tracing::trace!(dx_src = ?TraceSrc::Dev, "[{}] {}", res.status().as_u16(), uri);
                 } else {
@@ -284,7 +288,7 @@ mod test {
         };
         let router = super::add_proxy(Router::new(), &config);
         match router.unwrap_err() {
-            crate::Error::ProxySetupError(e) => {
+            crate::Error::ProxySetup(e) => {
                 assert_eq!(
                     e,
                     "Proxy backend URL must have a non-empty path, e.g. http://localhost:8000/api instead of http://localhost:8000"

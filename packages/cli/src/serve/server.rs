@@ -1,183 +1,183 @@
-use crate::config::{Platform, WebHttpsConfig};
-use crate::serve::{next_or_pending, Serve};
-use crate::{dioxus_crate::DioxusCrate, TraceSrc};
-use crate::{Error, Result};
-use axum::extract::{Request, State};
-use axum::middleware::{self, Next};
+use crate::{
+    config::WebHttpsConfig,
+    serve::{ServeArgs, ServeUpdate},
+    BuildStage, BuildUpdate, DioxusCrate, Platform, Result, TraceSrc,
+};
+use anyhow::Context;
 use axum::{
     body::Body,
     extract::{
         ws::{Message, WebSocket},
-        WebSocketUpgrade,
+        Request, State, WebSocketUpgrade,
     },
     http::{
         header::{HeaderName, HeaderValue, CACHE_CONTROL, EXPIRES, PRAGMA},
         Method, Response, StatusCode,
     },
+    middleware::{self, Next},
     response::IntoResponse,
     routing::{get, get_service},
     Extension, Router,
 };
-use axum_server::tls_rustls::RustlsConfig;
-use dioxus_devtools::{DevserverMsg, HotReloadMsg};
+use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::stream;
-use futures_util::{stream::FuturesUnordered, StreamExt};
-use hyper::header::ACCEPT;
+use futures_util::{
+    future,
+    stream::{self, FuturesUnordered},
+    StreamExt,
+};
 use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
-use std::net::TcpListener;
-use std::path::Path;
-use std::sync::Arc;
-use std::sync::RwLock;
 use std::{
     convert::Infallible,
     fs, io,
-    net::{IpAddr, SocketAddr},
-    process::Command,
+    net::{IpAddr, SocketAddr, TcpListener},
+    path::Path,
+    sync::Arc,
+    sync::RwLock,
 };
-use tokio::task::JoinHandle;
-use tower::ServiceBuilder;
 use tower_http::{
-    cors::{Any, CorsLayer},
+    cors::Any,
     services::fs::{ServeDir, ServeFileSystemResponseBody},
     ServiceBuilderExt,
 };
 
-pub enum ServerUpdate {
-    NewConnection,
-    Message(Message),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "data")]
-enum Status {
-    ClientInit {
-        application_name: String,
-        platform: String,
-    },
-    Building {
-        progress: f64,
-        build_message: String,
-    },
-    BuildError {
-        error: String,
-    },
-    Ready,
-}
-
-#[derive(Debug, Clone)]
-struct SharedStatus(Arc<RwLock<Status>>);
-
-impl SharedStatus {
-    fn new(status: Status) -> Self {
-        Self(Arc::new(RwLock::new(status)))
-    }
-
-    fn set(&self, status: Status) {
-        *self.0.write().unwrap() = status;
-    }
-
-    fn get(&self) -> Status {
-        self.0.read().unwrap().clone()
-    }
-}
-
-pub(crate) struct Server {
-    pub hot_reload_sockets: Vec<WebSocket>,
-    pub build_status_sockets: Vec<WebSocket>,
-    pub ip: SocketAddr,
-    pub new_hot_reload_sockets: UnboundedReceiver<WebSocket>,
-    pub new_build_status_sockets: UnboundedReceiver<WebSocket>,
-    _server_task: JoinHandle<Result<()>>,
-    /// We proxy (not hot reloading) fullstack requests to this port
-    pub fullstack_port: Option<u16>,
-
+/// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
+/// communication layer that we use to send status updates and hotreloads to the client.
+///
+/// todo(jon): we should merge the build status and hotreload sockets into just a "devtools" socket
+/// which carries all the message types. This would make it easier for us to add more message types
+/// and better tooling on the pages that we serve.
+pub(crate) struct WebServer {
+    devserver_ip: IpAddr,
+    devserver_port: u16,
+    proxied_port: Option<u16>,
+    hot_reload_sockets: Vec<WebSocket>,
+    build_status_sockets: Vec<WebSocket>,
+    new_hot_reload_sockets: UnboundedReceiver<WebSocket>,
+    new_build_status_sockets: UnboundedReceiver<WebSocket>,
     build_status: SharedStatus,
     application_name: String,
-    platform: String,
+    platform: Platform,
 }
 
-impl Server {
-    pub fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
+impl WebServer {
+    /// Start the development server.
+    /// This will set up the default http server if there's no server specified (usually via fullstack).
+    ///
+    /// This will also start the websocket server that powers the devtools. If you want to communicate
+    /// with connected devtools clients, this is the place to do it.
+    pub(crate) fn start(krate: &DioxusCrate, args: &ServeArgs) -> Result<Self> {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
-        let build_status = SharedStatus::new(Status::Building {
-            progress: 0.0,
-            build_message: "Starting the build...".to_string(),
-        });
+        let devserver_ip = args.address.addr;
+        let devserver_port = args.address.port;
+        let devserver_address = SocketAddr::new(devserver_ip, devserver_port);
 
-        let addr = serve.server_arguments.address.address();
-        let start_browser = serve.server_arguments.open.unwrap_or_default();
+        // All servers will end up behind us (the devserver) but on a different port
+        // This is so we can serve a loading screen as well as devtools without anything particularly fancy
+        let proxied_port = args
+            .should_proxy_build()
+            .then(|| get_available_port(devserver_ip))
+            .flatten();
 
-        // If we're serving a fullstack app, we need to find a port to proxy to
-        let fullstack_port = if matches!(
-            serve.build_arguments.platform(),
-            Platform::Liveview | Platform::Fullstack
-        ) {
-            get_available_port(addr.ip())
-        } else {
-            None
-        };
+        let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_ip, port));
 
-        let fullstack_address = fullstack_port.map(|port| SocketAddr::new(addr.ip(), port));
-
-        let router = setup_router(
-            serve,
-            cfg,
+        // Set up the router with some shared state that we'll update later to reflect the current state of the build
+        let build_status = SharedStatus::new_with_starting_build();
+        let router = build_devserver_router(
+            args,
+            krate,
             hot_reload_sockets_tx,
             build_status_sockets_tx,
-            fullstack_address,
+            proxied_address,
             build_status.clone(),
-        )
-        .unwrap();
+        )?;
 
-        // Actually just start the server, cloning in a few bits of config
-        let web_config = cfg.dioxus_config.web.https.clone();
-        let base_path = cfg.dioxus_config.web.app.base_path.clone();
-        let platform = serve.platform();
-        let _server_task = tokio::spawn(async move {
-            let web_config = web_config.clone();
-            // HTTPS
-            // Before console info so it can stop if mkcert isn't installed or fails
-            // todo: this is the only async thing here - might be nice to
-            let rustls: Option<RustlsConfig> = get_rustls(&web_config).await.unwrap();
+        // Create the listener that we'll pass into the devserver, but save its IP here so
+        // we can display it to the user in the tui
+        let listener = std::net::TcpListener::bind(devserver_address).with_context(|| {
+            anyhow::anyhow!(
+                "Failed to bind server to: {devserver_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
+            )
+        })?;
 
-            // Open the browser
-            if start_browser && platform != Platform::Desktop {
-                open_browser(base_path, addr, rustls.is_some());
-            }
+        // And finally, start the server mainloop
+        tokio::spawn(devserver_mainloop(
+            krate.config.web.https.clone(),
+            listener,
+            router,
+        ));
 
-            // Start the server with or without rustls
-            if let Some(rustls) = rustls {
-                axum_server::bind_rustls(addr, rustls)
-                    .serve(router.into_make_service())
-                    .await?
-            } else {
-                // Create a TCP listener bound to the address
-                axum::serve(
-                    tokio::net::TcpListener::bind(&addr).await?,
-                    router.into_make_service(),
-                )
-                .await?
-            }
-
-            Ok(())
-        });
-
-        Self {
+        Ok(Self {
+            build_status,
+            proxied_port,
+            devserver_ip,
+            devserver_port,
             hot_reload_sockets: Default::default(),
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
-            _server_task,
-            ip: addr,
-            fullstack_port,
+            application_name: krate.executable_name().to_string(),
+            platform: args.build_arguments.platform(),
+        })
+    }
 
-            build_status,
-            application_name: cfg.dioxus_config.application.name.clone(),
-            platform: serve.build_arguments.platform().to_string(),
+    /// Wait for new clients to be connected and then save them
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
+        let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
+        let mut new_build_status_socket = self.new_build_status_sockets.next();
+        let mut new_message = self
+            .hot_reload_sockets
+            .iter_mut()
+            .enumerate()
+            .map(|(idx, socket)| async move { (idx, socket.next().await) })
+            .collect::<FuturesUnordered<_>>();
+
+        tokio::select! {
+            new_hot_reload_socket = &mut new_hot_reload_socket => {
+                if let Some(new_socket) = new_hot_reload_socket {
+                    drop(new_message);
+                    self.hot_reload_sockets.push(new_socket);
+                    return ServeUpdate::NewConnection;
+                } else {
+                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                }
+            }
+            new_build_status_socket = &mut new_build_status_socket => {
+                if let Some(mut new_socket) = new_build_status_socket {
+                    drop(new_message);
+
+                    // Update the socket with project info and current build status
+                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
+                    if project_info.send_to(&mut new_socket).await.is_ok() {
+                        _ = self.build_status.send_to(&mut new_socket).await;
+                        self.build_status_sockets.push(new_socket);
+                    }
+                    return future::pending::<ServeUpdate>().await;
+                } else {
+                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                }
+            }
+            Some((idx, message)) = new_message.next() => {
+                match message {
+                    Some(Ok(message)) => return ServeUpdate::WsMessage(message),
+                    _ => {
+                        drop(new_message);
+                        _ = self.hot_reload_sockets.remove(idx);
+                    }
+                }
+            }
+        }
+
+        future::pending().await
+    }
+
+    pub(crate) async fn shutdown(&mut self) {
+        self.send_shutdown().await;
+        for socket in self.hot_reload_sockets.drain(..) {
+            _ = socket.close().await;
         }
     }
 
@@ -186,10 +186,7 @@ impl Server {
         let mut i = 0;
         while i < self.build_status_sockets.len() {
             let socket = &mut self.build_status_sockets[i];
-            if send_build_status_to(&self.build_status, socket)
-                .await
-                .is_err()
-            {
+            if self.build_status.send_to(socket).await.is_err() {
                 self.build_status_sockets.remove(i);
             } else {
                 i += 1;
@@ -198,7 +195,7 @@ impl Server {
     }
 
     /// Sends a start build message to all clients.
-    pub async fn start_build(&mut self) {
+    pub(crate) async fn start_build(&mut self) {
         self.build_status.set(Status::Building {
             progress: 0.0,
             build_message: "Starting the build...".to_string(),
@@ -207,19 +204,54 @@ impl Server {
     }
 
     /// Sends an updated build status to all clients.
-    pub async fn update_build_status(&mut self, progress: f64, build_message: String) {
-        if !matches!(self.build_status.get(), Status::Building { .. }) {
-            return;
+    pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate) {
+        match update {
+            BuildUpdate::Progress { stage } => {
+                // Todo(miles): wire up more messages into the splash screen UI
+                match stage {
+                    BuildStage::Success => {}
+                    BuildStage::Failed => self.send_reload_failed().await,
+                    BuildStage::Restarting => self.send_reload_start().await,
+                    BuildStage::Initializing => {}
+                    BuildStage::InstallingTooling {} => {}
+                    BuildStage::Compiling {
+                        current,
+                        total,
+                        krate,
+                        ..
+                    } => {
+                        self.build_status.set(Status::Building {
+                            progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
+                            build_message: format!("{krate} compiling"),
+                        });
+                        self.send_build_status().await;
+                    }
+                    BuildStage::OptimizingWasm {} => {}
+                    BuildStage::Aborted => {}
+                    BuildStage::CopyingAssets { .. } => {}
+                    _ => {}
+                }
+            }
+            BuildUpdate::CompilerMessage { .. } => {}
+            BuildUpdate::BuildReady { .. } => {}
+            BuildUpdate::BuildFailed { err } => {
+                let error = err.to_string();
+                self.build_status.set(Status::BuildError {
+                    error: ansi_to_html::convert(&error).unwrap_or(error),
+                });
+                self.send_build_status().await;
+            }
         }
-        self.build_status.set(Status::Building {
-            progress,
-            build_message,
-        });
-        self.send_build_status().await;
     }
 
     /// Sends hot reloadable changes to all clients.
-    pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
+    pub(crate) async fn send_hotreload(&mut self, reload: HotReloadMsg) {
+        if reload.is_empty() {
+            return;
+        }
+
+        tracing::debug!("Sending hotreload to clients {:?}", reload);
+
         let msg = DevserverMsg::HotReload(reload);
         let msg = serde_json::to_string(&msg).unwrap();
 
@@ -235,80 +267,22 @@ impl Server {
         }
     }
 
-    /// Wait for new clients to be connected and then save them
-    pub async fn wait(&mut self) -> Option<ServerUpdate> {
-        let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
-        let mut new_build_status_socket = self.new_build_status_sockets.next();
-        let mut new_message = self
-            .hot_reload_sockets
-            .iter_mut()
-            .enumerate()
-            .map(|(idx, socket)| async move { (idx, socket.next().await) })
-            .collect::<FuturesUnordered<_>>();
-        let next_new_message = next_or_pending(new_message.next());
-
-        tokio::select! {
-            new_hot_reload_socket = &mut new_hot_reload_socket => {
-                if let Some(new_socket) = new_hot_reload_socket {
-                    drop(new_message);
-                    self.hot_reload_sockets.push(new_socket);
-                    return Some(ServerUpdate::NewConnection);
-                } else {
-                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
-                }
-            }
-            new_build_status_socket = &mut new_build_status_socket => {
-                if let Some(mut new_socket) = new_build_status_socket {
-                    drop(new_message);
-
-                    // Update the socket with project info and current build status
-                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform.clone() });
-                    if send_build_status_to(&project_info, &mut new_socket).await.is_ok() {
-                        _ = send_build_status_to(&self.build_status, &mut new_socket).await;
-                        self.build_status_sockets.push(new_socket);
-                    }
-                    return None;
-                } else {
-                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
-                }
-            }
-            (idx, message) = next_new_message => {
-                match message {
-                    Some(Ok(message)) => return Some(ServerUpdate::Message(message)),
-                    _ => {
-                        drop(new_message);
-                        _ = self.hot_reload_sockets.remove(idx);
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
-    /// Converts a `cargo` error to HTML and sends it to clients.
-    pub async fn send_build_error(&mut self, error: Error) {
-        let error = error.to_string();
-        self.build_status.set(Status::BuildError {
-            error: ansi_to_html::convert(&error).unwrap_or(error),
-        });
-        self.send_build_status().await;
-    }
-
     /// Tells all clients that a full rebuild has started.
-    pub async fn send_reload_start(&mut self) {
+    pub(crate) async fn send_reload_start(&mut self) {
         self.send_devserver_message(DevserverMsg::FullReloadStart)
             .await;
     }
 
     /// Tells all clients that a full rebuild has failed.
-    pub async fn send_reload_failed(&mut self) {
+    pub(crate) async fn send_reload_failed(&mut self) {
         self.send_devserver_message(DevserverMsg::FullReloadFailed)
             .await;
     }
 
     /// Tells all clients to reload if possible for new changes.
-    pub async fn send_reload_command(&mut self) {
+    pub(crate) async fn send_reload_command(&mut self) {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
         self.send_devserver_message(DevserverMsg::FullReloadCommand)
@@ -316,7 +290,7 @@ impl Server {
     }
 
     /// Send a shutdown message to all connected clients.
-    pub async fn send_shutdown(&mut self) {
+    pub(crate) async fn send_shutdown(&mut self) {
         self.send_devserver_message(DevserverMsg::Shutdown).await;
     }
 
@@ -329,18 +303,48 @@ impl Server {
         }
     }
 
-    pub async fn shutdown(&mut self) {
-        self.send_shutdown().await;
-        for socket in self.hot_reload_sockets.drain(..) {
-            _ = socket.close().await;
-        }
+    /// Get the address the devserver should run on
+    pub fn devserver_address(&self) -> SocketAddr {
+        SocketAddr::new(self.devserver_ip, self.devserver_port)
     }
 
-    /// Get the address the fullstack server should run on if we're serving a fullstack app
-    pub fn fullstack_address(&self) -> Option<SocketAddr> {
-        self.fullstack_port
-            .map(|port| SocketAddr::new(self.ip.ip(), port))
+    // Get the address the server should run on if we're serving the user's server
+    pub fn proxied_server_address(&self) -> Option<SocketAddr> {
+        self.proxied_port
+            .map(|port| SocketAddr::new(self.devserver_ip, port))
     }
+
+    pub fn server_address(&self) -> Option<SocketAddr> {
+        match self.platform {
+            Platform::Web | Platform::Server => Some(self.devserver_address()),
+            _ => self.proxied_server_address(),
+        }
+    }
+}
+
+async fn devserver_mainloop(
+    https_cfg: WebHttpsConfig,
+    listener: TcpListener,
+    router: Router,
+) -> Result<()> {
+    // We have a native listener that we're going to give to tokio, so we need to make it non-blocking
+    let _ = listener.set_nonblocking(true);
+
+    // If we're not using rustls, just use regular axum
+    if https_cfg.enabled != Some(true) {
+        axum::serve(listener.try_into().unwrap(), router.into_make_service()).await?;
+        return Ok(());
+    }
+
+    // If we're using rustls, we need to get the cert/key paths and then set up rustls
+    let (cert_path, key_path) = get_rustls(&https_cfg).await?;
+    let rustls = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path).await?;
+
+    axum_server::from_tcp_rustls(listener, rustls)
+        .serve(router.into_make_service())
+        .await?;
+
+    Ok(())
 }
 
 /// Sets up and returns a router
@@ -350,45 +354,25 @@ impl Server {
 /// - Setting up the proxy to the endpoint specified in the config
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
-fn setup_router(
-    serve: &Serve,
-    config: &DioxusCrate,
+fn build_devserver_router(
+    args: &ServeArgs,
+    krate: &DioxusCrate,
     hot_reload_sockets: UnboundedSender<WebSocket>,
     build_status_sockets: UnboundedSender<WebSocket>,
     fullstack_address: Option<SocketAddr>,
     build_status: SharedStatus,
 ) -> Result<Router> {
     let mut router = Router::new();
-    let platform = serve.build_arguments.platform();
 
     // Setup proxy for the endpoint specified in the config
-    for proxy_config in config.dioxus_config.web.proxy.iter() {
+    for proxy_config in krate.config.web.proxy.iter() {
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
-    // server the dir if it's web, otherwise let the fullstack server itself handle it
-    match platform {
-        Platform::Web | Platform::StaticGeneration => {
-            // Route file service to output the .wasm and assets if this is a web build
-            let base_path = format!(
-                "/{}",
-                config
-                    .dioxus_config
-                    .web
-                    .app
-                    .base_path
-                    .as_deref()
-                    .unwrap_or_default()
-                    .trim_matches('/')
-            );
-
-            router = router.nest_service(&base_path, build_serve_dir(serve, config, platform));
-        }
-        Platform::Liveview | Platform::Fullstack => {
-            // For fullstack and static generation, forward all requests to the server
-            let address = fullstack_address.unwrap();
-
-            router = router.nest_service("/",super::proxy::proxy_to(
+    if args.should_proxy_build() {
+        // For fullstack, liveview, and server, forward all requests to the inner server
+        let address = fullstack_address.unwrap();
+        router = router.nest_service("/",super::proxy::proxy_to(
                 format!("http://{address}").parse().unwrap(),
                 true,
                 |error| {
@@ -401,8 +385,22 @@ fn setup_router(
                         .unwrap()
                 },
             ));
-        }
-        _ => {}
+    } else {
+        // Otherwise, just serve the dir ourselves
+        // Route file service to output the .wasm and assets if this is a web build
+        let base_path = format!(
+            "/{}",
+            krate
+                .config
+                .web
+                .app
+                .base_path
+                .as_deref()
+                .unwrap_or_default()
+                .trim_matches('/')
+        );
+
+        router = router.nest_service(&base_path, build_serve_dir(args, krate));
     }
 
     // Setup middleware to intercept html requests if the build status is "Building"
@@ -419,7 +417,7 @@ fn setup_router(
                 "/",
                 get(
                     |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                        tracing::info!("Incoming hotreload websocket request: {ws:?}");
+                        tracing::debug!("New devtool websocket connection");
                         ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
                     },
                 ),
@@ -438,7 +436,7 @@ fn setup_router(
 
     // Setup cors
     router = router.layer(
-        CorsLayer::new()
+        tower_http::cors::CorsLayer::new()
             // allow `GET` and `POST` when accessing the resource
             .allow_methods([Method::GET, Method::POST])
             // allow requests from any origin
@@ -449,11 +447,9 @@ fn setup_router(
     Ok(router)
 }
 
-fn build_serve_dir(
-    serve: &Serve,
-    cfg: &DioxusCrate,
-    platform: Platform,
-) -> axum::routing::MethodRouter {
+fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
+    use tower::ServiceBuilder;
+
     static CORS_UNSAFE: (HeaderValue, HeaderValue) = (
         HeaderValue::from_static("unsafe-none"),
         HeaderValue::from_static("unsafe-none"),
@@ -464,17 +460,15 @@ fn build_serve_dir(
         HeaderValue::from_static("same-origin"),
     );
 
-    let (coep, coop) = match serve.server_arguments.cross_origin_policy {
+    let (coep, coop) = match args.cross_origin_policy {
         true => CORS_REQUIRE.clone(),
         false => CORS_UNSAFE.clone(),
     };
 
-    let out_dir = match platform {
-        // Static generation only serves files from the public directory
-        Platform::StaticGeneration => cfg.out_dir().join("public"),
-        _ => cfg.out_dir(),
-    };
-    let index_on_404 = cfg.dioxus_config.web.watcher.index_on_404;
+    let out_dir = cfg
+        .build_dir(Platform::Web, args.build_arguments.release)
+        .join("public");
+    let index_on_404 = cfg.config.web.watcher.index_on_404;
 
     get_service(
         ServiceBuilder::new()
@@ -508,18 +502,23 @@ fn no_cache(
     // If there's a 404 and we're supposed to index on 404, upgrade that failed request to the index.html
     // We might want to isnert a header here saying we *did* that but oh well
     if response.status() == StatusCode::NOT_FOUND && index_on_404 {
-        // First try to find a 404.html or 404/index.html file
-        let out_dir_404_html = out_dir.join("404.html");
-        let out_dir_404_index_html = out_dir.join("404").join("index.html");
-        let path = if out_dir_404_html.exists() {
-            out_dir_404_html
-        } else if out_dir_404_index_html.exists() {
-            out_dir_404_index_html
-        } else {
-            // If we can't find a 404.html or 404/index.html, just use the index.html
-            out_dir.join("index.html")
-        };
-        let body = Body::from(std::fs::read_to_string(path).unwrap());
+        let fallback = out_dir.join("index.html");
+        let contents = std::fs::read_to_string(fallback).unwrap_or_else(|_| {
+            String::from(
+                r#"
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>Err 404 - dx is not serving a web app</title>
+                </head>
+                <body>
+                <p>Err 404 - dioxus is not currently serving a web app</p>
+                </body>
+            </html>
+            "#,
+            )
+        });
+        let body = Body::from(contents);
 
         response = Response::builder()
             .status(StatusCode::OK)
@@ -528,32 +527,28 @@ fn no_cache(
     };
 
     insert_no_cache_headers(response.headers_mut());
+
     response
 }
 
-pub fn insert_no_cache_headers(headers: &mut HeaderMap) {
+pub(crate) fn insert_no_cache_headers(headers: &mut HeaderMap) {
     headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
     headers.insert(PRAGMA, HeaderValue::from_static("no-cache"));
     headers.insert(EXPIRES, HeaderValue::from_static("0"));
 }
 
-/// Returns an enum of rustls config
-pub async fn get_rustls(web_config: &WebHttpsConfig) -> Result<Option<RustlsConfig>> {
-    if web_config.enabled != Some(true) {
-        return Ok(None);
+async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
+    // If we're not using mkcert, just use the cert/key paths given to use in the config
+    if !web_config.mkcert.unwrap_or(false) {
+        if let (Some(key), Some(cert)) = (web_config.key_path.clone(), web_config.cert_path.clone())
+        {
+            return Ok((cert, key));
+        } else {
+            // missing cert or key
+            return Err("https is enabled but cert or key path is missing".into());
+        }
     }
 
-    let (cert_path, key_path) = match web_config.mkcert {
-        Some(true) => get_rustls_with_mkcert(web_config)?,
-        _ => get_rustls_without_mkcert(web_config)?,
-    };
-
-    Ok(Some(
-        RustlsConfig::from_pem_file(cert_path, key_path).await?,
-    ))
-}
-
-pub fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
     const DEFAULT_KEY_PATH: &str = "ssl/key.pem";
     const DEFAULT_CERT_PATH: &str = "ssl/cert.pem";
 
@@ -573,7 +568,7 @@ pub fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, St
         _ = fs::create_dir("ssl");
     }
 
-    let cmd = Command::new("mkcert")
+    let cmd = tokio::process::Command::new("mkcert")
         .args([
             "-install",
             "-key-file",
@@ -599,33 +594,18 @@ pub fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, St
             return Err("failed to generate mkcert certificates".into());
         }
         Ok(mut cmd) => {
-            cmd.wait()?;
+            cmd.wait().await?;
         }
     }
 
     Ok((cert_path, key_path))
 }
-
-pub fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
-    // get paths to cert & key
-    if let (Some(key), Some(cert)) = (web_config.key_path.clone(), web_config.cert_path.clone()) {
-        Ok((cert, key))
-    } else {
-        // missing cert or key
-        Err("https is enabled but cert or key path is missing".into())
-    }
-}
-
-/// Open the browser to the address
-pub(crate) fn open_browser(base_path: Option<String>, address: SocketAddr, https: bool) {
-    let protocol = if https { "https" } else { "http" };
-    let base_path = match base_path.as_deref() {
-        Some(base_path) => format!("/{}", base_path.trim_matches('/')),
-        None => "".to_owned(),
-    };
-    _ = open::that(format!("{protocol}://{address}{base_path}"));
-}
-
+/// Bind a listener to any point and return it
+/// When the listener is dropped, the socket will be closed, but we'll still have a port that we
+/// can bind our proxy to.
+///
+/// Todo: we might want to do this on every new build in case the OS tries to bind things to this port
+/// and we don't already have something bound to it. There's no great way of "reserving" a port.
 fn get_available_port(address: IpAddr) -> Option<u16> {
     TcpListener::bind((address, 0))
         .map(|listener| listener.local_addr().unwrap().port())
@@ -639,7 +619,7 @@ async fn build_status_middleware(
     next: Next,
 ) -> axum::response::Response {
     // If the request is for html, and the status is "Building", return the loading page instead of the contents of the response
-    let accepts = request.headers().get(ACCEPT);
+    let accepts = request.headers().get(hyper::header::ACCEPT);
     let accepts_html = accepts
         .and_then(|v| v.to_str().ok())
         .map(|v| v.contains("text/html"));
@@ -647,7 +627,7 @@ async fn build_status_middleware(
     if let Some(true) = accepts_html {
         let status = state.get();
         if status != Status::Ready {
-            let html = include_str!("../../assets/loading.html");
+            let html = include_str!("../../assets/web/loading.html");
             return axum::response::Response::builder()
                 .status(StatusCode::OK)
                 // Load the html loader then keep loading forever
@@ -663,10 +643,48 @@ async fn build_status_middleware(
     next.run(request).await
 }
 
-async fn send_build_status_to(
-    build_status: &SharedStatus,
-    socket: &mut WebSocket,
-) -> Result<(), axum::Error> {
-    let msg = serde_json::to_string(&build_status.get()).unwrap();
-    socket.send(Message::Text(msg)).await
+#[derive(Debug, Clone)]
+struct SharedStatus(Arc<RwLock<Status>>);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+enum Status {
+    ClientInit {
+        application_name: String,
+        platform: Platform,
+    },
+    Building {
+        progress: f64,
+        build_message: String,
+    },
+    BuildError {
+        error: String,
+    },
+    Ready,
+}
+
+impl SharedStatus {
+    fn new(status: Status) -> Self {
+        Self(Arc::new(RwLock::new(status)))
+    }
+
+    fn new_with_starting_build() -> Self {
+        Self::new(Status::Building {
+            progress: 0.0,
+            build_message: "Starting the build...".to_string(),
+        })
+    }
+
+    fn set(&self, status: Status) {
+        *self.0.write().unwrap() = status;
+    }
+
+    fn get(&self) -> Status {
+        self.0.read().unwrap().clone()
+    }
+
+    async fn send_to(&self, socket: &mut WebSocket) -> Result<(), axum::Error> {
+        let msg = serde_json::to_string(&self.get()).unwrap();
+        socket.send(Message::Text(msg)).await
+    }
 }

@@ -1,35 +1,32 @@
-use std::{io::IsTerminal as _, process::exit};
-
-use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
-
-use crate::TraceSrc;
-
 use super::*;
+use crate::{Result, TraceSrc};
+use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
+use std::{io::IsTerminal as _, process::exit};
 
 /// Translate some source file into Dioxus code
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "translate")]
-pub struct Translate {
+pub(crate) struct Translate {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name
     #[clap(short, long)]
-    pub component: bool,
+    pub(crate) component: bool,
 
     /// Input file
     #[clap(short, long)]
-    pub file: Option<String>,
+    pub(crate) file: Option<String>,
 
     /// Input file
     #[clap(short, long)]
-    pub raw: Option<String>,
+    pub(crate) raw: Option<String>,
 
     /// Output file, stdout if not present
     #[arg(short, long)]
-    pub output: Option<PathBuf>,
+    pub(crate) output: Option<PathBuf>,
 }
 
 impl Translate {
-    pub fn translate(self) -> Result<()> {
+    pub(crate) fn translate(self) -> Result<()> {
         // Get the right input for the translation
         let contents = determine_input(self.file, self.raw)?;
 
@@ -85,7 +82,7 @@ fn write_svg_section(out: &mut String, svgs: Vec<BodyNode>) {
     for (idx, icon) in svgs.into_iter().enumerate() {
         let raw =
             dioxus_autofmt::write_block_out(&CallBody::new(TemplateBody::new(vec![icon]))).unwrap();
-        out.push_str("\n\n    pub fn icon_");
+        out.push_str("\n\n    pub(crate) fn icon_");
         out.push_str(&idx.to_string());
         out.push_str("() -> Element {\n        rsx! {");
         indent_and_write(&raw, 2, out);
@@ -122,7 +119,7 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
 
     // If neither exist, we try to read from stdin
     if std::io::stdin().is_terminal() {
-        return custom_error!("No input file, source, or stdin to translate from.");
+        return Err(anyhow::anyhow!("No input file, source, or stdin to translate from.").into());
     }
 
     let mut buffer = String::new();

@@ -1,12 +1,7 @@
+use crate::{Result, TraceSrc};
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    io::{Error, ErrorKind},
-    path::PathBuf,
-};
+use std::{fs, path::PathBuf};
 use tracing::{debug, error, warn};
-
-use crate::{CrateConfigError, TraceSrc};
 
 const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
 
@@ -18,26 +13,26 @@ const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
 ///
 /// This allows users to control the cli settings with ease.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct CliSettings {
+pub(crate) struct CliSettings {
     /// Describes whether hot reload should always be on.
-    pub always_hot_reload: Option<bool>,
+    pub(crate) always_hot_reload: Option<bool>,
     /// Describes whether the CLI should always open the browser for Web targets.
-    pub always_open_browser: Option<bool>,
+    pub(crate) always_open_browser: Option<bool>,
     /// Describes whether desktop apps in development will be pinned always-on-top.
-    pub always_on_top: Option<bool>,
+    pub(crate) always_on_top: Option<bool>,
     /// Describes the interval in seconds that the CLI should poll for file changes on WSL.
     #[serde(default = "default_wsl_file_poll_interval")]
-    pub wsl_file_poll_interval: Option<u16>,
+    pub(crate) wsl_file_poll_interval: Option<u16>,
 }
 
 impl CliSettings {
     /// Load the settings from the local, global, or default config in that order
-    pub fn load() -> Self {
+    pub(crate) fn load() -> Self {
         Self::from_global().unwrap_or_default()
     }
 
     /// Get the current settings structure from global.
-    pub fn from_global() -> Option<Self> {
+    pub(crate) fn from_global() -> Option<Self> {
         let Some(path) = dirs::data_local_dir() else {
             warn!("failed to get local data directory, some config keys may be missing");
             return None;
@@ -63,18 +58,15 @@ impl CliSettings {
 
     /// Save the current structure to the global settings toml.
     /// This does not save to project-level settings.
-    pub fn save(self) -> Result<Self, CrateConfigError> {
+    pub(crate) fn save(self) -> Result<Self> {
         let path = Self::get_settings_path().ok_or_else(|| {
             error!(dx_src = ?TraceSrc::Dev, "failed to get settings path");
-            CrateConfigError::Io(Error::new(
-                ErrorKind::NotFound,
-                "failed to get settings path",
-            ))
+            anyhow::anyhow!("failed to get settings path")
         })?;
 
         let data = toml::to_string_pretty(&self).map_err(|e| {
             error!(dx_src = ?TraceSrc::Dev, ?self, "failed to parse config into toml");
-            CrateConfigError::Io(Error::new(ErrorKind::Other, e.to_string()))
+            anyhow::anyhow!("failed to parse config into toml: {e}")
         })?;
 
         // Create the directory structure if it doesn't exist.
@@ -86,21 +78,23 @@ impl CliSettings {
                 ?path,
                 "failed to create directories for settings file"
             );
-            return Err(CrateConfigError::Io(e));
+            return Err(
+                anyhow::anyhow!("failed to create directories for settings file: {e}").into(),
+            );
         }
 
         // Write the data.
         let result = fs::write(&path, data.clone());
         if let Err(e) = result {
             error!(?data, ?path, "failed to save global cli settings");
-            return Err(CrateConfigError::Io(e));
+            return Err(anyhow::anyhow!("failed to save global cli settings: {e}").into());
         }
 
         Ok(self)
     }
 
     /// Get the path to the settings toml file.
-    pub fn get_settings_path() -> Option<PathBuf> {
+    pub(crate) fn get_settings_path() -> Option<PathBuf> {
         let Some(path) = dirs::data_local_dir() else {
             warn!("failed to get local data directory, some config keys may be missing");
             return None;
@@ -110,7 +104,7 @@ impl CliSettings {
     }
 
     /// Modify the settings toml file
-    pub fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<(), CrateConfigError> {
+    pub(crate) fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<()> {
         let mut settings = Self::load();
         with(&mut settings);
         settings.save()?;

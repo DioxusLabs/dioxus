@@ -10,19 +10,25 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 rust-version = "1.79.0"
 
 [dependencies]
-# cli core
-clap = { version = "4.2", features = ["derive", "cargo"] }
+dioxus-autofmt = { workspace = true }
+dioxus-check = { workspace = true }
+dioxus-rsx-rosetta = { workspace = true }
+dioxus-rsx = { workspace = true }
+dioxus-rsx-hotreload = { workspace = true }
+dioxus-html = { workspace = true, features = ["hot-reload-context"] }
+dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-core-types = { workspace = true }
+dioxus-devtools-types = { workspace = true }
+dioxus-cli-config = { workspace = true }
+dioxus-fullstack = { workspace = true }
+
+clap = { workspace = true, features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 wasm-bindgen-shared = "0.2"
-colored = "2.0.0"
-dioxus-cli-config = { workspace = true }
-
-# features
-log = "0.4.14"
-fern = { version = "0.6.0", features = ["colored"] }
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
+uuid = { version = "1.3.0", features = ["v4"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 toml = { workspace = true }
 fs_extra = "1.2.0"
 cargo_toml = { workspace = true }
@@ -30,7 +36,7 @@ futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { workspace = true, features = ["serde"] }
 html_parser = { workspace = true }
 cargo_metadata = "0.18.1"
-tokio = { workspace = true, features = ["fs", "sync", "rt", "macros", "process", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"
 chrono = "0.4.19"
 anyhow = "1"
@@ -38,12 +44,12 @@ hyper = { workspace = true }
 hyper-util = "0.1.3"
 hyper-rustls = { workspace = true }
 rustls = { workspace = true }
-subprocess = "0.2.9"
 rayon = "1.8.0"
 console = "0.15.8"
 ctrlc = "3.2.3"
 futures-channel = { workspace = true }
 krates = { version = "0.17.0" }
+cargo-config2 = { workspace = true, optional = true }
 regex = "1.10.6"
 
 axum = { workspace = true, features = ["ws"] }
@@ -53,7 +59,7 @@ tower-http = { workspace = true, features = ["full"] }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
 
-headers = "0.3.7"
+headers = "0.4.0"
 walkdir = "2"
 
 # tools download
@@ -75,42 +81,39 @@ open = "5.0.1"
 cargo-generate = "=0.21.3"
 toml_edit = "0.22.20"
 
-# bundling
-tauri-bundler = { workspace = true }
-tauri-utils = { workspace = true }
-
 # formatting
 # syn = { workspace = true }
 prettyplease = { workspace = true }
 
 # Assets
-manganis-cli-support = { workspace = true, features = ["html"] }
 brotli = "6.0.0"
-
-dioxus-autofmt = { workspace = true }
-dioxus-check = { workspace = true }
-dioxus-rsx-rosetta = { workspace = true }
-dioxus-rsx = { workspace = true }
-dioxus-rsx-hotreload = { workspace = true }
-dioxus-html = { workspace = true, features = ["hot-reload-context"] }
-dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-core-types = { workspace = true }
-dioxus-devtools = { workspace = true }
 ignore = "0.4.22"
-env_logger = "0.11.3"
+env_logger = { workspace = true }
 
 tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
 console-subscriber = { version = "0.3.0", optional = true }
 tracing = { workspace = true }
 wasm-opt = { version = "0.116.1", optional = true }
-ratatui = { version = "0.27.0", features = ["crossterm", "unstable"] }
-crossterm = { version = "0.27.0", features = ["event-stream"] }
-ansi-to-tui = "=5.0.0-rc.1"
+crossterm = { version = "0.28.0", features = ["event-stream"] }
+ansi-to-tui = "6.0"
 ansi-to-html = "0.2.1"
+ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
 
-# on macos, we need to specify the vendored feature on ssl when cross compiling
-# [target.'cfg(target_os = "macos")'.dependencies]
-# openssl = { version = "0.10", features = ["vendored"] }
+# link intercept
+tempfile = "3.3"
+manganis-core = { workspace = true }
+
+# Extracting data from an executable
+object = {version="0.36.0", features=["wasm"]}
+tokio-util = { version = "0.7.11", features = ["full"] }
+itertools = "0.13.0"
+throbber-widgets-tui = "0.7.0"
+unicode-segmentation = "1.12.0"
+handlebars = "6.1.0"
+strum = { version = "0.26.3", features = ["derive"] }
+
+tauri-utils = { workspace = true }
+tauri-bundler = { workspace = true }
 
 [build-dependencies]
 built = { version = "=0.7.4", features = ["git2"] }
@@ -119,24 +122,27 @@ built = { version = "=0.7.4", features = ["git2"] }
 default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
-optimizations = ["dep:wasm-opt"]
+bundle = []
+
+# when releasing dioxus, we want to enable wasm-opt
+# and then also maybe developing it too.
+# making this optional cuts workspace deps down from 1000 to 500, so it's very nice for workspace adev
+optimizations = ["wasm-opt", "asset-opt"]
+asset-opt = []
+wasm-opt = ["dep:wasm-opt"]
 
 [[bin]]
 path = "src/main.rs"
 name = "dx"
 
-[dev-dependencies]
-tempfile = "3.3"
-
 [package.metadata.binstall]
-# temporarily, we're going to use the 0.5.0 download page for all binaries
 pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-v{ version }{ archive-suffix }"
-
-# the old one...
-# pkg-url = "{ repo }/releases/download/v0.5.0/dx-{ target }-v{ version }{ archive-suffix }"
-
-# pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
 pkg-fmt = "tgz"
 
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"
+
+[package.metadata.docs.rs]
+all-features = false
+rustc-args = [ "--cfg", "docsrs" ]
+rustdoc-args = [ "--cfg", "docsrs" ]

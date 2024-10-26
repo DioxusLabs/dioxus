@@ -29,7 +29,10 @@ fn app() -> Element {
     let mut state = use_signal(Calculator::new);
 
     rsx! {
-        document::Link { rel: "stylesheet", href: asset!("./examples/assets/calculator.css") }
+        document::Link {
+            rel: "stylesheet",
+            href: asset!("./examples/assets/calculator.css"),
+        }
         div { id: "wrapper",
             div { class: "app",
                 div {
@@ -39,15 +42,37 @@ fn app() -> Element {
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
-                                CalculatorKey { name: "key-clear", onclick: move |_| state.write().clear_display(),
-                                    if state.read().display_value == "0" { "C" } else { "AC" }
+                                CalculatorKey {
+                                    name: "key-clear",
+                                    onclick: move |_| state.write().clear_display(),
+                                    if state.read().display_value == "0" {
+                                        "C"
+                                    } else {
+                                        "AC"
+                                    }
                                 }
-                                CalculatorKey { name: "key-sign", onclick: move |_| state.write().toggle_sign(), "±" }
-                                CalculatorKey { name: "key-percent", onclick: move |_| state.write().toggle_percent(), "%" }
+                                CalculatorKey {
+                                    name: "key-sign",
+                                    onclick: move |_| state.write().toggle_sign(),
+                                    "±"
+                                }
+                                CalculatorKey {
+                                    name: "key-percent",
+                                    onclick: move |_| state.write().toggle_percent(),
+                                    "%"
+                                }
                             }
                             div { class: "digit-keys",
-                                CalculatorKey { name: "key-0", onclick: move |_| state.write().input_digit(0), "0" }
-                                CalculatorKey { name: "key-dot", onclick: move |_| state.write().input_dot(), "●" }
+                                CalculatorKey {
+                                    name: "key-0",
+                                    onclick: move |_| state.write().input_digit(0),
+                                    "0"
+                                }
+                                CalculatorKey {
+                                    name: "key-dot",
+                                    onclick: move |_| state.write().input_dot(),
+                                    "●"
+                                }
                                 for k in 1..10 {
                                     CalculatorKey {
                                         key: "{k}",
@@ -74,8 +99,16 @@ fn app() -> Element {
                                 onclick: move |_| state.write().set_operator(Operator::Sub),
                                 "−"
                             }
-                            CalculatorKey { name: "key-add", onclick: move |_| state.write().set_operator(Operator::Add), "+" }
-                            CalculatorKey { name: "key-equals", onclick: move |_| state.write().perform_operation(), "=" }
+                            CalculatorKey {
+                                name: "key-add",
+                                onclick: move |_| state.write().set_operator(Operator::Add),
+                                "+"
+                            }
+                            CalculatorKey {
+                                name: "key-equals",
+                                onclick: move |_| state.write().perform_operation(),
+                                "="
+                            }
                         }
                     }
                 }

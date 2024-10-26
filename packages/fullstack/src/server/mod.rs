@@ -214,6 +214,10 @@ where
 
         let public_path = crate::public_path();
 
+        if !public_path.exists() {
+            return self;
+        }
+
         // Serve all files in public folder except index.html
         let dir = std::fs::read_dir(&public_path).unwrap_or_else(|e| {
             panic!(
