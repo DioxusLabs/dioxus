@@ -67,7 +67,7 @@ impl Bundle {
             .bundle_dir(self.build_arguments.platform())
             .join("bundle")];
 
-        for entry in std::fs::read_dir(&bundle.asset_dir())?.flatten() {
+        for entry in std::fs::read_dir(bundle.asset_dir())?.flatten() {
             let path = entry.path().canonicalize()?;
             if ignored_files.iter().any(|f| path.starts_with(f)) {
                 continue;
