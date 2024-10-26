@@ -18,7 +18,7 @@ impl Serve {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         let serve_cfg = self.serve.clone();
 
-        // change the relase state.
+        // change the release state.
         let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
         crate_config.with_hot_reload(hot_reload);
         crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);

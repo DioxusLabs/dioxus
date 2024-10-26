@@ -249,6 +249,7 @@ fn start_desktop(
                 .clone()
                 .ok_or(anyhow::anyhow!("No executable found after desktop build"))?,
         )
+        .current_dir(config.out_dir())
         .env(active, "true")
         .spawn()?,
     );
