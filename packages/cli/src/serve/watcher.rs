@@ -154,8 +154,8 @@ fn create_notify_watcher(
             EventKind::Modify(ModifyKind::Name(_)) => true,
             // The primary modification event on WSL's poll watcher.
             EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)) => true,
-            // Catch-all for unknown event types.
-            EventKind::Modify(ModifyKind::Any) => false,
+            // Catch-all for unknown event types (windows)
+            EventKind::Modify(ModifyKind::Any) => true,
             EventKind::Modify(ModifyKind::Metadata(_)) => false,
             // Don't care about anything else.
             EventKind::Create(_) => true,
