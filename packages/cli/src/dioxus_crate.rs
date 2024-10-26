@@ -347,7 +347,6 @@ impl DioxusCrate {
             ".*",
             "*.lock",
             "*.log",
-            "*.rs",
         ]
     }
 
