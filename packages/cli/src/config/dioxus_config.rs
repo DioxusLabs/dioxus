@@ -22,7 +22,6 @@ impl Default for DioxusConfig {
     fn default() -> Self {
         Self {
             application: ApplicationConfig {
-                default_platform: default_platform(),
                 asset_dir: asset_dir_default(),
                 sub_package: None,
             },
