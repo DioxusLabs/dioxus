@@ -283,10 +283,6 @@ impl BuildRequest {
             }
         }
 
-        // if self.build.release {
-        //     cargo_args.push("--release".to_string());
-        // }
-
         if self.build.verbose {
             cargo_args.push("--verbose".to_string());
         } else {
