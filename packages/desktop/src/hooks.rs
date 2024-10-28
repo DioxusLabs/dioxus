@@ -45,14 +45,18 @@ pub fn use_wry_event_handler(
 pub fn use_muda_event_handler(
     mut handler: impl FnMut(&muda::MenuEvent) + 'static,
 ) -> WryEventHandler {
-    // move the runtime into the event handler closure
+    use dioxus_core::prelude::current_scope_id;
+
+    // Capture the current runtime and scope ID.
     let runtime = Runtime::current().unwrap();
+    let scope_id = current_scope_id().unwrap();
 
     use_wry_event_handler(move |event, _| {
-        let _runtime_guard = dioxus_core::prelude::RuntimeGuard::new(runtime.clone());
-        if let Event::UserEvent(UserWindowEvent::MudaMenuEvent(event)) = event {
-            handler(event);
-        }
+        runtime.on_scope(scope_id, || {
+            if let Event::UserEvent(UserWindowEvent::MudaMenuEvent(event)) = event {
+                handler(event);
+            }
+        });
     })
 }
 
