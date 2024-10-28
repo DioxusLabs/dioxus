@@ -74,9 +74,6 @@ impl ServeArgs {
         // Resolve the build arguments
         self.build_arguments.resolve(&krate)?;
 
-        // Give us some space before we start printing things...
-        println!();
-
         crate::serve::serve_all(self, krate).await
     }
 
