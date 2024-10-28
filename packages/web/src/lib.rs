@@ -61,8 +61,6 @@ pub use hydration::*;
 /// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
 pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
-    tracing::info!("Starting up");
-
     #[cfg(feature = "document")]
     virtual_dom.in_runtime(document::init_document);
 
