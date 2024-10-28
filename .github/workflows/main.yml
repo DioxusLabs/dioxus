@@ -58,6 +58,7 @@ jobs:
   # we get to reuse the cache for everything.
   end-to-end:
     if: github.event.pull_request.draft == false
+    runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
         platform:
@@ -68,11 +69,16 @@ jobs:
       CARGO_INCREMENTAL: "1"
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: install stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.79.0"
+          targets: ${{ matrix.platform.target }}
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          shared-key: "end-to-end"
+          key: "${{ matrix.platform.target }}"
 
       - uses: actions/setup-node@v4
         with:
