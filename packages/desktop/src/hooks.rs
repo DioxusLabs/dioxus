@@ -63,11 +63,7 @@ pub fn use_muda_event_handler(
 pub fn use_tray_menu_event_handler(
     mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + 'static,
 ) -> WryEventHandler {
-    // move the runtime into the event handler closure
-    let runtime = Runtime::current().unwrap();
-
     use_wry_event_handler(move |event, _| {
-        let _runtime_guard = dioxus_core::prelude::RuntimeGuard::new(runtime.clone());
         if let Event::UserEvent(UserWindowEvent::TrayMenuEvent(event)) = event {
             handler(event);
         }
@@ -85,11 +81,7 @@ pub fn use_tray_menu_event_handler(
 pub fn use_tray_icon_event_handler(
     mut handler: impl FnMut(&tray_icon::TrayIconEvent) + 'static,
 ) -> WryEventHandler {
-    // move the runtime into the event handler closure
-    let runtime = Runtime::current().unwrap();
-
     use_wry_event_handler(move |event, _| {
-        let _runtime_guard = dioxus_core::prelude::RuntimeGuard::new(runtime.clone());
         if let Event::UserEvent(UserWindowEvent::TrayIconEvent(event)) = event {
             handler(event);
         }
