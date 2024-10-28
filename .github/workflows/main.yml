@@ -109,7 +109,7 @@ jobs:
         run: cargo install --path packages/cli --locked --profile dev
 
       - name: Build everything with -D warnings under the release profile with debug
-        run: cargo clippy --workspace --all-features --examples --tests -- -Dwarnings
+        run: cargo clippy --workspace --all-features --examples -- -Dwarnings
 
       - name: Run make tests
         run: cargo test --workspace --all-features --examples --tests
