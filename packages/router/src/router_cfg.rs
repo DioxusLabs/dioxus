@@ -24,7 +24,7 @@ use std::sync::Arc;
 ///     }
 /// }
 ///
-/// let cfg = RouterConfig::default().failure_external_navigation(ExternalNavigationFailure);
+/// let cfg = RouterConfig::<Route>::default().failure_external_navigation(ExternalNavigationFailure);
 /// ```
 pub struct RouterConfig<R> {
     pub(crate) failure_external_navigation: fn() -> Element,

@@ -1,4 +1,4 @@
-use dioxus_core::prelude::provide_context;
+use dioxus_core::prelude::{provide_context, provide_root_context};
 use std::{rc::Rc, sync::Arc};
 
 mod memory;
@@ -9,7 +9,8 @@ pub fn history() -> Rc<dyn History> {
     match dioxus_core::prelude::try_consume_context::<Rc<dyn History>>() {
         Some(history) => history,
         None => {
-            panic!("Unable to find a history provider in the renderer. Make sure your renderer supports the Router");
+            tracing::error!("Unable to find a history provider in the renderer. Make sure your renderer supports the Router. Falling back to the in-memory history provider.");
+            provide_root_context(Rc::new(MemoryHistory::default()))
         }
     }
 }
