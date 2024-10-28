@@ -243,12 +243,12 @@ impl Route {
                     #[allow(unused)]
                     (#last_index.., Self::#name { #field_name, .. }) => {
                         rsx! {
-                            dioxus_router::components::ChildHistoryProvider {
-                                router: #field_name,
+                            dioxus_router::components::child_router::ChildRouter {
+                                route: #field_name,
                                 // Try to parse the current route as a parent route, and then match it as a child route
-                                parent_to_child_route: |__route| if let Ok(__route) = __route.parse() {
+                                parse_route_from_root_route: |__route| if let Ok(__route) = __route.parse() {
                                     if let Self::#name { #field_name, .. } = __route {
-                                        Some(#field_name.to_string())
+                                        Some(#field_name)
                                     } else {
                                         None
                                     }
@@ -256,11 +256,7 @@ impl Route {
                                     None
                                 },
                                 // Try to parse the child route and turn it into a parent route
-                                child_to_parent_route: |__route| if let Ok(#field_name) = __route.parse() {
-                                    Self::#name { #field_name }.to_string()
-                                } else {
-                                    __route.to_string()
-                                }
+                                format_route_as_root_route: |#field_name| Self::#name { #field_name: #field_name }.to_string(),
                             }
                         }
                     }

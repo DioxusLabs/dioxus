@@ -50,7 +50,7 @@ pub struct LinkProps {
 
     /// The navigation target. Roughly equivalent to the href attribute of an HTML anchor tag.
     #[props(into)]
-    pub to: NavigationTarget<String>,
+    pub to: NavigationTarget,
 
     #[props(extends = GlobalAttributes)]
     attributes: Vec<Attribute>,
@@ -160,7 +160,7 @@ pub fn Link(props: LinkProps) -> Element {
 
     let current_url = router.full_route_string();
     let href = match &to {
-        NavigationTarget::Internal(url) => router.format_as_root_route(url),
+        NavigationTarget::Internal(url) => url.clone(),
         NavigationTarget::External(route) => route.clone(),
     };
 

@@ -7,8 +7,8 @@ use dioxus_history::history;
 use dioxus_lib::prelude::*;
 
 use crate::{
-    navigation::NavigationTarget, prelude::SiteMapSegment, routable::Routable,
-    router_cfg::RouterConfig,
+    components::child_router::consume_child_route_mapping, navigation::NavigationTarget,
+    prelude::SiteMapSegment, routable::Routable, router_cfg::RouterConfig,
 };
 
 /// This context is set in the root of the virtual dom if there is a router present.
@@ -44,7 +44,7 @@ pub struct ExternalNavigationFailure(pub String);
 /// A function the router will call after every routing update.
 pub(crate) type RoutingCallback<R> =
     Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
-pub(crate) type AnyRoutingCallback = Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<String>>>;
+pub(crate) type AnyRoutingCallback = Arc<dyn Fn(RouterContext) -> Option<NavigationTarget>>;
 
 struct RouterContextInner {
     /// The current prefix.
@@ -104,6 +104,7 @@ impl RouterContext {
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
         let subscribers = Arc::new(Mutex::new(HashSet::new()));
+        let mapping = consume_child_route_mapping();
 
         let myself = RouterContextInner {
             prefix: Default::default(),
@@ -118,10 +119,15 @@ impl RouterContext {
                         _marker: std::marker::PhantomData,
                     };
                     update(ctx).map(|t| match t {
-                        NavigationTarget::Internal(r) => NavigationTarget::Internal(r.to_string()),
+                        NavigationTarget::Internal(r) => match mapping.as_ref() {
+                            Some(mapping) => {
+                                NavigationTarget::Internal(mapping.format_route_as_root_route(r))
+                            }
+                            None => NavigationTarget::Internal(r.to_string()),
+                        },
                         NavigationTarget::External(s) => NavigationTarget::External(s),
                     })
-                }) as Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<String>>>
+                }) as Arc<dyn Fn(RouterContext) -> Option<NavigationTarget>>
             }),
 
             failure_external_navigation: cfg.failure_external_navigation,
@@ -191,10 +197,7 @@ impl RouterContext {
         self.change_route();
     }
 
-    pub(crate) fn push_any(
-        &self,
-        target: NavigationTarget<String>,
-    ) -> Option<ExternalNavigationFailure> {
+    pub(crate) fn push_any(&self, target: NavigationTarget) -> Option<ExternalNavigationFailure> {
         {
             let mut write = self.inner.write_unchecked();
             match target {
@@ -212,10 +215,7 @@ impl RouterContext {
     /// Push a new location.
     ///
     /// The previous location will be available to go back to.
-    pub fn push(
-        &self,
-        target: impl Into<NavigationTarget<String>>,
-    ) -> Option<ExternalNavigationFailure> {
+    pub fn push(&self, target: impl Into<NavigationTarget>) -> Option<ExternalNavigationFailure> {
         let target = target.into();
         {
             let mut write = self.inner.write_unchecked();
@@ -236,7 +236,7 @@ impl RouterContext {
     /// The previous location will **not** be available to go back to.
     pub fn replace(
         &self,
-        target: impl Into<NavigationTarget<String>>,
+        target: impl Into<NavigationTarget>,
     ) -> Option<ExternalNavigationFailure> {
         let target = target.into();
         {
@@ -255,12 +255,19 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current<R: Routable>(&self) -> R {
-        let inner = self.inner.read();
-        inner.subscribe_to_current_context();
-        let history = history();
-        R::from_str(&history.current_route()).unwrap_or_else(|_| {
-            panic!("route's display implementation must be parsable by FromStr")
-        })
+        let absolute_route = self.full_route_string();
+        // If this is a child route, map the absolute route to the child route before parsing
+        let mapping = consume_child_route_mapping::<R>();
+        match mapping.as_ref() {
+            Some(mapping) => mapping
+                .parse_route_from_root_route(&absolute_route)
+                .unwrap_or_else(|| {
+                    panic!("route's display implementation must be parsable by FromStr")
+                }),
+            None => R::from_str(&absolute_route).unwrap_or_else(|_| {
+                panic!("route's display implementation must be parsable by FromStr")
+            }),
+        }
     }
 
     /// The full route that is currently active. If this is called from inside a child router, this will always return the parent's view of the route.
@@ -268,49 +275,7 @@ impl RouterContext {
         let inner = self.inner.read();
         inner.subscribe_to_current_context();
         let history = history();
-        let relative_route = history.current_route();
-        history.format_as_root_route(&relative_route)
-    }
-
-    /// Take a route relative to the current router and return a route relative to the root router.
-    /// In nested routers, this will transform a relative route to the route used by the browser.
-    ///
-    /// **Must start** with `/`. **Must _not_ contain** the prefix.
-    ///
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// # #[component]
-    /// # fn Index() -> Element { VNode::empty() }
-    /// enum ChildRoute {
-    ///     #[route("/")]
-    ///     ChildIndex {},
-    /// }
-    /// #[derive(Clone, Routable, Debug, PartialEq)]
-    /// enum Route {
-    ///     #[route("/")]
-    ///     Index {},
-    ///     #[child("/child")]
-    ///     OtherPage {
-    ///         child: ChildRoute
-    ///     },
-    /// }
-    /// #[component]
-    /// fn ChildIndex() -> Element {
-    ///     // Even in a child router, format_as_root_route(current_route) will always return the url the browser would use
-    ///     let router = use_router();
-    ///     assert_eq!(router.format_as_root_route("/"), "/child");
-    ///     VNode::empty()
-    /// }
-    /// ```
-    #[must_use]
-    pub fn format_as_root_route(&self, route: &str) -> String {
-        let history = history();
-        history.format_as_root_route(route)
-    }
-
-    /// Check if a route looks like an internal route
-    pub(crate) fn internal_route(&self, route: &str) -> bool {
-        (self.inner.read().internal_route)(route)
+        history.current_route()
     }
 
     /// The prefix that is currently active.
@@ -361,6 +326,10 @@ impl RouterContext {
         self.inner.read().update_subscribers();
 
         None
+    }
+
+    pub(crate) fn internal_route(&self, route: &str) -> bool {
+        (self.inner.read().internal_route)(route)
     }
 }
 

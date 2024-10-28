@@ -48,10 +48,7 @@ impl Navigator {
     /// Push a new location.
     ///
     /// The previous location will be available to go back to.
-    pub fn push(
-        &self,
-        target: impl Into<NavigationTarget<String>>,
-    ) -> Option<ExternalNavigationFailure> {
+    pub fn push(&self, target: impl Into<NavigationTarget>) -> Option<ExternalNavigationFailure> {
         self.0.push(target)
     }
 
@@ -60,7 +57,7 @@ impl Navigator {
     /// The previous location will **not** be available to go back to.
     pub fn replace(
         &self,
-        target: impl Into<NavigationTarget<String>>,
+        target: impl Into<NavigationTarget>,
     ) -> Option<ExternalNavigationFailure> {
         self.0.replace(target)
     }

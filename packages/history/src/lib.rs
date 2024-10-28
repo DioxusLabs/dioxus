@@ -1,10 +1,7 @@
+use dioxus_core::prelude::provide_context;
 use std::{rc::Rc, sync::Arc};
 
-mod lens;
 mod memory;
-
-use dioxus_core::prelude::provide_context;
-pub use lens::*;
 pub use memory::*;
 
 /// Get the history provider for the current platform if the platform doesn't implement a history functionality.
@@ -23,41 +20,6 @@ pub fn provide_history_context(history: Rc<dyn History>) {
 }
 
 pub trait History {
-    /// Take a route relative to the current router and return a route relative to the root router.
-    /// In nested routers, this will transform a relative route to the route used by the browser.
-    ///
-    /// **Must start** with `/`. **Must _not_ contain** the prefix.
-    ///
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// # #[component]
-    /// # fn Index() -> Element { VNode::empty() }
-    /// enum ChildRoute {
-    ///     #[route("/")]
-    ///     ChildIndex {},
-    /// }
-    /// #[derive(Clone, Routable, Debug, PartialEq)]
-    /// enum Route {
-    ///     #[route("/")]
-    ///     Index {},
-    ///     #[child("/child")]
-    ///     OtherPage {
-    ///         child: ChildRoute
-    ///     },
-    /// }
-    /// #[component]
-    /// fn ChildIndex() -> Element {
-    ///     // Even in a child router, format_as_root_route(current_route) will always return the url the browser would use
-    ///     let history = use_history();
-    ///     assert_eq!(history.format_as_root_route(&history.current_route()), "/child");
-    ///     VNode::empty()
-    /// }
-    /// ```
-    #[must_use]
-    fn format_as_root_route(&self, route: &str) -> String {
-        route.to_string()
-    }
-
     /// Get the path of the current URL.
     ///
     /// **Must start** with `/`. **Must _not_ contain** the prefix.

@@ -7,11 +7,23 @@ use std::{
 
 use url::{ParseError, Url};
 
-use crate::{routable::Routable, router};
+use crate::{components::child_router::consume_child_route_mapping, routable::Routable, router};
+
+impl<R: Routable> From<R> for NavigationTarget {
+    fn from(value: R) -> Self {
+        // If this is a child route, map it to the root route first
+        let mapping = consume_child_route_mapping();
+        match mapping.as_ref() {
+            Some(mapping) => NavigationTarget::Internal(mapping.format_route_as_root_route(value)),
+            // Otherwise, just use the internal route
+            None => NavigationTarget::Internal(value.to_string()),
+        }
+    }
+}
 
 /// A target for the router to navigate to.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum NavigationTarget<R> {
+pub enum NavigationTarget<R = String> {
     /// An internal path that the router can navigate to by itself.
     ///
     /// ```rust
@@ -80,40 +92,30 @@ impl<R: Routable> From<R> for NavigationTarget<R> {
     }
 }
 
-impl From<&str> for NavigationTarget<String> {
+impl From<&str> for NavigationTarget {
     fn from(value: &str) -> Self {
         let router = router();
-        let internal_route = router.internal_route(value);
-        if internal_route {
-            NavigationTarget::Internal(value.to_string())
-        } else {
-            NavigationTarget::External(value.to_string())
+        match router.internal_route(value) {
+            true => NavigationTarget::Internal(value.to_string()),
+            false => NavigationTarget::External(value.to_string()),
         }
     }
 }
 
-impl From<String> for NavigationTarget<String> {
+impl From<String> for NavigationTarget {
     fn from(value: String) -> Self {
         let router = router();
-        let internal_route = router.internal_route(&value);
-        if internal_route {
-            NavigationTarget::Internal(value)
-        } else {
-            NavigationTarget::External(value)
+        match router.internal_route(&value) {
+            true => NavigationTarget::Internal(value),
+            false => NavigationTarget::External(value),
         }
     }
 }
 
-impl<R: Routable> From<R> for NavigationTarget<String> {
-    fn from(value: R) -> Self {
-        Self::Internal(value.to_string())
-    }
-}
-
-impl<R: Routable> From<NavigationTarget<R>> for NavigationTarget<String> {
+impl<R: Routable> From<NavigationTarget<R>> for NavigationTarget {
     fn from(value: NavigationTarget<R>) -> Self {
         match value {
-            NavigationTarget::Internal(r) => Self::Internal(r.to_string()),
+            NavigationTarget::Internal(r) => r.into(),
             NavigationTarget::External(s) => Self::External(s),
         }
     }
