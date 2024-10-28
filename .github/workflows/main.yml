@@ -1,6 +1,18 @@
 # Whenever an open PR is updated, the workflow will be triggered
 #
 # This can get expensive, so we do a lot of caching and checks to prevent unnecessary runs
+#
+# We take a bit of a "weird" approach.
+#
+# Our product stresses multiple platforms and we want CI to be quick, so we need to run an end-to-end matrix of tests.
+# Github runners have multiple cores but traditional harnesses don't take advantage of this.
+#
+# per-platform-matrix:
+# - build CLI with -D warnings (implicit check)
+# - & clippy
+# - & test
+# - & test --release
+# - $ playwright
 
 name: Rust CI
 
@@ -37,32 +49,70 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: "0"
+  CARGO_INCREMENTAL: "1"
   RUST_BACKTRACE: 1
   rust_nightly: nightly-2024-10-20
 
 jobs:
-  check-msrv:
+  # Do everything end-to-end. This provides less parallelism across runners but is still faster since
+  # we get to reuse the cache for everything.
+  end-to-end:
     if: github.event.pull_request.draft == false
-    name: Check MSRV
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform:
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+    env:
+      CARGO_INCREMENTAL: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
-      - name: install_cargo_msrv
-        run: cargo install cargo-msrv --all-features
-      - name: version_of_cargo_msrv
-        run: cargo msrv --version
-      - name: run_cargo_msrv
-        run: cargo msrv --output-format json verify -- cargo check
-      - name: run_cargo_msrv_on_verify_failure
-        if: ${{ failure() }}
-        run: cargo msrv --output-format json -- cargo check
+          shared-key: "end-to-end"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - uses: davidB/rust-cargo-make@v1
+      - uses: browser-actions/setup-firefox@latest
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
+      - name: linux deps
+        if: ${{ matrix.platform.cross == true }}
+        run: sudo apt-get update
+        run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+
+      - name: Check for formatting
+        run: cargo fmt --all -- --check
+
+      - name: Build everything with -D warnings under the release profile with debug
+        run: cargo clippy --workspace --all-features --examples --tests --all-features --profile release-unoptimized -- -Dwarnings
+
+      - name: Install CLI now that cache is hot
+        run: cargo install --path packages/cli --locked --profile release-unoptimized
+
+      - name: Run playwright tests
+        working-directory: ./packages/playwright-tests
+        run: npm ci
+        run: npm install -D @playwright/test
+        run: npx playwright install --with-deps
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
 
   test:
     if: github.event.pull_request.draft == false
@@ -112,21 +162,6 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - run: cargo test --profile release-unoptimized --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile
 
-  fmt:
-    if: github.event.pull_request.draft == false
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo fmt --all -- --check
-
   typos:
     if: github.event.pull_request.draft == false
     name: Check for typos
@@ -136,31 +171,6 @@ jobs:
       - name: Check for typos
         uses: crate-ci/typos@master
 
-  docs:
-    if: github.event.pull_request.draft == false
-    name: Docs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - name: Install Rust ${{ env.rust_nightly }}
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: ${{ env.rust_nightly }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: "doc --lib --all-features"
-        run: |
-          cargo doc --workspace --no-deps --all-features --document-private-items
-        # env:
-        #   RUSTFLAGS: --cfg docsrs
-        #   RUSTDOCFLAGS: --cfg docsrs
-        # todo: re-enable warnings, private items
-        # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
-        #  --document-private-items
 
   # Check for invalid links in the repository
   link-check:
@@ -181,37 +191,148 @@ jobs:
           args: --base . --config ./lychee.toml './**/*.md'
           fail: true
 
-  check:
-    if: github.event.pull_request.draft == false
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo check --workspace --all-features --all-targets
+  # docs:
+  #   if: github.event.pull_request.draft == false
+  #   name: Docs
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: sudo apt-get update
+  #     - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+  #     - name: Install Rust ${{ env.rust_nightly }}
+  #       uses: dtolnay/rust-toolchain@nightly
+  #       with:
+  #         toolchain: ${{ env.rust_nightly }}
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/main' }}
+  #     - name: "doc --lib --all-features"
+  #       run: |
+  #         cargo doc --workspace --no-deps --all-features --document-private-items
+  #       # env:
+  #       #   RUSTFLAGS: --cfg docsrs
+  #       #   RUSTDOCFLAGS: --cfg docsrs
+  #       # todo: re-enable warnings, private items
+  #       # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+  #       #  --document-private-items
 
-  clippy:
-    if: github.event.pull_request.draft == false
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
+
+  # check:
+  #   if: github.event.pull_request.draft == false
+  #   name: Check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: sudo apt-get update
+  #     - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/main' }}
+  #     - run: cargo check --workspace --all-features --all-targets
+
+  # clippy:
+  #   if: github.event.pull_request.draft == false
+  #   name: Clippy
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: sudo apt-get update
+  #     - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+  #     - uses: dtolnay/rust-toolchain@stable
+  #       with:
+  #         components: rustfmt, clippy
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/main' }}
+  #     - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
+
+
+  # matrix_test:
+  #   runs-on: ${{ matrix.platform.os }}
+  #   if: github.event.pull_request.draft == false
+  #   env:
+  #     RUST_CARGO_COMMAND: ${{ matrix.platform.cross == true && 'cross' || 'cargo' }}
+  #   strategy:
+  #     matrix:
+  #       platform:
+  #         - {
+  #             target: x86_64-pc-windows-msvc,
+  #             os: windows-latest,
+  #             toolchain: "1.79.0",
+  #             cross: false,
+  #             command: "test",
+  #             args: "--all --tests",
+  #           }
+  #         - {
+  #             target: aarch64-apple-darwin,
+  #             os: macos-latest,
+  #             toolchain: "1.79.0",
+  #             cross: false,
+  #             command: "test",
+  #             args: "--all --tests",
+  #           }
+  #         - {
+  #             target: x86_64-apple-darwin,
+  #             os: macos-13,
+  #             toolchain: "1.79.0",
+  #             cross: false,
+  #             command: "test",
+  #             args: "--all --tests",
+  #           }
+  #         - {
+  #             target: aarch64-apple-ios,
+  #             os: macos-latest,
+  #             toolchain: "1.79.0",
+  #             cross: false,
+  #             command: "build",
+  #             args: "--package dioxus-mobile",
+  #           }
+  #         - {
+  #             target: aarch64-linux-android,
+  #             os: ubuntu-latest,
+  #             toolchain: "1.79.0",
+  #             cross: true,
+  #             command: "build",
+  #             args: "--package dioxus-mobile",
+  #           }
+
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Free Disk Space (Ubuntu)
+  #       if: ${{ matrix.platform.os == 'ubuntu-latest' }}
+  #       uses: jlumbroso/free-disk-space@v1.3.1
+  #       with: # speed things up a bit
+  #         large-packages: false
+  #         docker-images: false
+  #         swap-storage: false
+  #     - name: install stable
+  #       uses: dtolnay/rust-toolchain@master
+  #       with:
+  #         toolchain: ${{ matrix.platform.toolchain }}
+  #         targets: ${{ matrix.platform.target }}
+  #         components: rustfmt
+
+  #     - name: Install nasm for windows (tls)
+  #       if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
+  #       uses: ilammy/setup-nasm@v1
+
+  #     - name: Install cross
+  #       if: ${{ matrix.platform.cross == true }}
+  #       uses: taiki-e/install-action@cross
+
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         key: "${{ matrix.platform.target }}"
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/main' }}
+
+  #     - name: test
+  #       run: |
+  #         ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
 
   # Only run semver checks if the PR is not a draft and does not have the breaking label
   # Breaking PRs don't need to follow semver since they are breaking changes
@@ -240,135 +361,90 @@ jobs:
   #         manifest-path: ./Cargo.toml
   #         exclude: "dioxus-cli, dioxus-ext"
 
-  playwright:
-    if: github.event.pull_request.draft == false
-    name: Playwright Tests
-    runs-on: ubuntu-latest
-    steps:
-      # Do our best to cache the toolchain and node install steps
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 16
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-          targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+# check-msrv:
+#     if: github.event.pull_request.draft == false
+#     name: Check MSRV
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: dtolnay/rust-toolchain@stable
+#       - uses: Swatinem/rust-cache@v2
+#         with:
+#           cache-all-crates: "true"
+#           save-if: ${{ github.ref == 'refs/heads/main' }}
+#       # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
+#       - name: install_cargo_msrv
+#         run: cargo install cargo-msrv --all-features
+#       - name: version_of_cargo_msrv
+#         run: cargo msrv --version
+#       - name: run_cargo_msrv
+#         run: cargo msrv --output-format json verify -- cargo check
+#       - name: run_cargo_msrv_on_verify_failure
+#         if: ${{ failure() }}
+#         run: cargo msrv --output-format json -- cargo check
 
-      - name: Install dependencies
-        run: npm ci
-        working-directory: ./packages/playwright-tests
 
-      - name: Install Playwright
-        run: npm install -D @playwright/test
-        working-directory: ./packages/playwright-tests
+  # playwright:
+  #   if: github.event.pull_request.draft == false
+  #   name: Playwright Tests
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     # Do our best to cache the toolchain and node install steps
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 16
+  #     - name: Free Disk Space (Ubuntu)
+  #       uses: jlumbroso/free-disk-space@v1.3.1
+  #       with: # speed things up a bit
+  #         large-packages: false
+  #         docker-images: false
+  #         swap-storage: false
+  #     - name: Install Rust
+  #       uses: dtolnay/rust-toolchain@master
+  #       with:
+  #         toolchain: stable
+  #         targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-        working-directory: ./packages/playwright-tests
+  #     - name: Install dependencies
+  #       run: npm ci
+  #       working-directory: ./packages/playwright-tests
 
-      - name: Run Playwright tests
-        run: npx playwright test
-        working-directory: ./packages/playwright-tests
+  #     - name: Install Playwright
+  #       run: npm install -D @playwright/test
+  #       working-directory: ./packages/playwright-tests
 
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
+  #     - name: Install Playwright Browsers
+  #       run: npx playwright install --with-deps
+  #       working-directory: ./packages/playwright-tests
 
-  matrix_test:
-    runs-on: ${{ matrix.platform.os }}
-    if: github.event.pull_request.draft == false
-    env:
-      RUST_CARGO_COMMAND: ${{ matrix.platform.cross == true && 'cross' || 'cargo' }}
-    strategy:
-      matrix:
-        platform:
-          - {
-              target: x86_64-pc-windows-msvc,
-              os: windows-latest,
-              toolchain: "1.79.0",
-              cross: false,
-              command: "test",
-              args: "--all --tests",
-            }
-          - {
-              target: aarch64-apple-darwin,
-              os: macos-latest,
-              toolchain: "1.79.0",
-              cross: false,
-              command: "test",
-              args: "--all --tests",
-            }
-          - {
-              target: x86_64-apple-darwin,
-              os: macos-13,
-              toolchain: "1.79.0",
-              cross: false,
-              command: "test",
-              args: "--all --tests",
-            }
-          - {
-              target: aarch64-apple-ios,
-              os: macos-latest,
-              toolchain: "1.79.0",
-              cross: false,
-              command: "build",
-              args: "--package dioxus-mobile",
-            }
-          - {
-              target: aarch64-linux-android,
-              os: ubuntu-latest,
-              toolchain: "1.79.0",
-              cross: true,
-              command: "build",
-              args: "--package dioxus-mobile",
-            }
+  #     - name: Run Playwright tests
+  #       run: npx playwright test
+  #       working-directory: ./packages/playwright-tests
 
-    steps:
-      - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        if: ${{ matrix.platform.os == 'ubuntu-latest' }}
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-      - name: install stable
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.platform.toolchain }}
-          targets: ${{ matrix.platform.target }}
-          components: rustfmt
+  #     - uses: actions/upload-artifact@v4
+  #       if: always()
+  #       with:
+  #         name: playwright-report
+  #         path: playwright-report/
+  #         retention-days: 30
 
-      - name: Install nasm for windows (tls)
-        if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
-        uses: ilammy/setup-nasm@v1
 
-      - name: Install cross
-        if: ${{ matrix.platform.cross == true }}
-
-        uses: taiki-e/install-action@cross
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: "${{ matrix.platform.target }}"
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: test
-        run: |
-          ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
+  # fmt:
+  #   if: github.event.pull_request.draft == false
+  #   name: Rustfmt
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #       with:
+  #         components: rustfmt
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/main' }}
+  #     - run: cargo fmt --all -- --check

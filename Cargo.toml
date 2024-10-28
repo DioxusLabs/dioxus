@@ -245,6 +245,7 @@ debug = 0
 [profile.release-unoptimized]
 inherits = "dev"
 debug-assertions = false
+incremental = true
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
