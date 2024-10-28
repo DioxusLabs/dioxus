@@ -105,11 +105,14 @@ jobs:
       - name: Check for formatting
         run: cargo fmt --all -- --check
 
+      - name: Install CLI
+        run: cargo install --path packages/cli --locked --profile dev
+
       - name: Build everything with -D warnings under the release profile with debug
         run: cargo clippy --workspace --all-features --examples --tests -- -Dwarnings
 
-      - name: Install CLI now that cache is hot
-        run: cargo install --path packages/cli --locked --profile dev
+      - name: Run make tests
+        run: cargo test --workspace --all-features --examples --tests
 
       - name: Run playwright tests
         working-directory: ./packages/playwright-tests
