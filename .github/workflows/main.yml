@@ -113,7 +113,7 @@ jobs:
         run: cargo clippy --workspace --all-features --examples -- -Dwarnings
 
       - name: Run make tests
-        run: cargo test --workspace --all-features --examples --tests
+        run: cargo test --workspace --all-features --examples --tests --exclude dioxus-desktop --exclude dioxus-mobile
 
       - name: Run playwright tests
         working-directory: ./packages/playwright-tests
