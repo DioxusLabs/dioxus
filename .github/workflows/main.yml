@@ -93,10 +93,14 @@ jobs:
           swap-storage: false
 
       - name: linux deps
-        if: ${{ matrix.platform.cross == true }}
+        if: ${{ matrix.platform.target == 'x86_64-unknown-linux-gnu' }}
         run: |
           sudo apt-get update
           sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+
+      - name: Install nasm for windows (tls)
+        if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
+        uses: ilammy/setup-nasm@v1
 
       - name: Check for formatting
         run: cargo fmt --all -- --check
