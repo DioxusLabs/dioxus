@@ -232,7 +232,7 @@ jobs:
   playwright:
     if: github.event.pull_request.draft == false
     name: Playwright Tests
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
@@ -255,21 +255,13 @@ jobs:
           cache-all-crates: "true"
           cache-on-failure: "true"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Playwright
         working-directory: ./packages/playwright-tests
-
-      - name: Install Playwright
-        run: npm install -D @playwright/test
-        working-directory: ./packages/playwright-tests
-
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-        working-directory: ./packages/playwright-tests
-
-      - name: Run Playwright tests
-        run: npx playwright test
-        working-directory: ./packages/playwright-tests
+        run: |
+          npm ci
+          npm install -D @playwright/test
+          npx playwright install --with-deps
+          npx playwright test
 
       - uses: actions/upload-artifact@v4
         if: always()
