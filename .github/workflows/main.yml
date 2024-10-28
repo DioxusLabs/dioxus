@@ -107,7 +107,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Install CLI
-        run: cargo install --path packages/cli --locked --profile dev
+        run: cargo install --path packages/cli --locked --profile dev --force
 
       - name: Build everything with -D warnings under the release profile with debug
         run: cargo clippy --workspace --all-features --examples -- -Dwarnings
