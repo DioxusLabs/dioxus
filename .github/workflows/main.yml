@@ -102,7 +102,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Build everything with -D warnings under the release profile with debug
-        run: cargo clippy --workspace --all-features --examples --tests --all-features --profile release-unoptimized -- -Dwarnings
+        run: cargo clippy --workspace --all-features --examples --tests --profile release-unoptimized -- -Dwarnings
 
       - name: Install CLI now that cache is hot
         run: cargo install --path packages/cli --locked --profile release-unoptimized
