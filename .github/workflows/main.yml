@@ -74,7 +74,7 @@ jobs:
         with:
           toolchain: "1.79.0"
           targets: ${{ matrix.platform.target }}
-          components: rustfmt
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
