@@ -289,6 +289,10 @@ impl BuildRequest {
             cargo_args.push("--quiet".to_string());
         }
 
+        if self.build.target_args.no_default_features {
+            cargo_args.push("--no-default-features".to_string());
+        }
+
         let features = self.target_features();
 
         if !features.is_empty() {
