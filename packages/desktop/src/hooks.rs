@@ -5,7 +5,7 @@ use crate::{
     ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
 use dioxus_core::{
-    prelude::{consume_context, use_hook_with_cleanup, RuntimeGuard},
+    prelude::{consume_context, use_hook_with_cleanup},
     use_hook, Runtime,
 };
 
@@ -22,14 +22,16 @@ pub fn use_window() -> DesktopContext {
 pub fn use_wry_event_handler(
     mut handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
 ) -> WryEventHandler {
-    // move the runtime into the event handler closure
+    use dioxus_core::prelude::current_scope_id;
+
+    // Capture the current runtime and scope ID.
     let runtime = Runtime::current().unwrap();
+    let scope_id = current_scope_id().unwrap();
 
     use_hook_with_cleanup(
         move || {
             window().create_wry_event_handler(move |event, target| {
-                let _runtime_guard = RuntimeGuard::new(runtime.clone());
-                handler(event, target)
+                runtime.on_scope(scope_id, || handler(event, target))
             })
         },
         move |handler| handler.remove(),
@@ -45,11 +47,7 @@ pub fn use_wry_event_handler(
 pub fn use_muda_event_handler(
     mut handler: impl FnMut(&muda::MenuEvent) + 'static,
 ) -> WryEventHandler {
-    // move the runtime into the event handler closure
-    let runtime = Runtime::current().unwrap();
-
     use_wry_event_handler(move |event, _| {
-        let _runtime_guard = dioxus_core::prelude::RuntimeGuard::new(runtime.clone());
         if let Event::UserEvent(UserWindowEvent::MudaMenuEvent(event)) = event {
             handler(event);
         }
