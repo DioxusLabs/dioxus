@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
 

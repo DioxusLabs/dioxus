@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use dioxus::prelude::*;
 use dioxus_desktop::window;
 use serde::Deserialize;
@@ -6,7 +8,6 @@ use serde::Deserialize;
 mod utils;
 
 pub fn main() {
-    #[cfg(not(windows))]
     utils::check_app_exits(app);
 }
 

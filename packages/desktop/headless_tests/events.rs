@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::collections::HashMap;
 
 use dioxus::html::geometry::euclid::Vector3D;
@@ -8,7 +10,6 @@ use dioxus_desktop::DesktopContext;
 mod utils;
 
 pub fn main() {
-    #[cfg(not(windows))]
     utils::check_app_exits(app);
 }
 
