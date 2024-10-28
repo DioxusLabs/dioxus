@@ -77,8 +77,9 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: "true"
           cache-all-crates: "true"
-          key: "${{ matrix.platform.target }}"
+          key: "${{ matrix.platform.target }}" #todo: add the current PR or something?
 
       - uses: actions/setup-node@v4
         with:
