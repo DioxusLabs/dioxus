@@ -145,6 +145,9 @@ dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.1" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.0" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.0", default-features = false }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.0" }
+manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.0" }
+manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.0" }
+manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.0-alpha.0" }
 
 warnings = { version = "0.2.0" }
 
