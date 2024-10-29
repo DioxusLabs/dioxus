@@ -130,14 +130,14 @@ impl Document for NoOpDocument {
         impl Evaluator for NoOpEvaluator {
             fn poll_join(
                 &mut self,
-                _cx: &mut std::task::Context<'_>,
+                _: &mut std::task::Context<'_>,
             ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
                 std::task::Poll::Ready(Err(EvalError::Unsupported))
             }
 
             fn poll_recv(
                 &mut self,
-                context: &mut std::task::Context<'_>,
+                _: &mut std::task::Context<'_>,
             ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
                 std::task::Poll::Ready(Err(EvalError::Unsupported))
             }
