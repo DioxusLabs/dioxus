@@ -272,6 +272,12 @@ pub fn Link(props: LinkProps) -> Element {
         if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
             return;
         }
+
+        // todo(jon): this is extra hacky for no reason - we should fix prevent default on Links
+        if do_default && is_external && cfg!(target_arch = "wasm32") {
+            return;
+        }
+
         event.prevent_default();
 
         if do_default && is_router_nav {
@@ -296,7 +302,7 @@ pub fn Link(props: LinkProps) -> Element {
         // If the event is a click with the left mouse button and no modifiers, prevent the default action
         // and navigate to the href with client side routing
         router.is_liveview().then_some(
-            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"   
+            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"
         )
     };
 
