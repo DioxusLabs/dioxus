@@ -19,10 +19,16 @@ pub mod server;
 mod render;
 
 #[cfg(feature = "server")]
+mod template;
+
+#[cfg(feature = "server")]
 mod streaming;
 
 #[cfg(feature = "server")]
 mod serve_config;
+
+#[cfg(feature = "server")]
+mod stream;
 
 #[cfg(feature = "server")]
 pub use serve_config::*;
@@ -39,28 +45,28 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use crate::server::*;
 
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::render::{FullstackHTMLTemplate, SSRState};
+    // #[cfg(feature = "server")]
+    // #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+    // pub use crate::render::{FullstackHTMLTemplate, SSRState};
 
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
+    // #[cfg(feature = "server")]
+    // #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+    // pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
 
-    #[cfg(all(feature = "server", feature = "axum"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "axum"))))]
-    pub use crate::server_context::Axum;
+    // #[cfg(all(feature = "server", feature = "axum"))]
+    // #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "axum"))))]
+    // pub use crate::server_context::Axum;
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::server_context::{
-        extract, server_context, with_server_context, DioxusServerContext, FromContext,
-        FromServerContext, ProvideServerContext,
+        extract, server_context, DioxusServerContext, FromContext, FromServerContext,
+        ProvideServerContext,
     };
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use dioxus_isrg::{IncrementalRenderer, IncrementalRendererConfig};
+    pub use dioxus_isrg::{IncrementalRenderer, IsrConfig};
 
     pub use dioxus_server_macro::*;
     pub use server_fn::{self, ServerFn as _, ServerFnError};

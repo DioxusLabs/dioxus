@@ -20,6 +20,7 @@ members = [
     "packages/desktop",
     "packages/mobile",
     "packages/interpreter",
+    "packages/server",
     "packages/liveview",
     "packages/autofmt",
     "packages/check",
@@ -94,6 +95,7 @@ members = [
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
+    "packages/server",
 ]
 
 [workspace.package]

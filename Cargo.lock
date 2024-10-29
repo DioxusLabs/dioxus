@@ -3496,12 +3496,10 @@ dependencies = [
  "ciborium",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-desktop",
- "dioxus-devtools",
+ "dioxus-core",
  "dioxus-interpreter-js",
  "dioxus-isrg",
  "dioxus-lib",
- "dioxus-mobile",
  "dioxus-ssr",
  "dioxus-web",
  "dioxus_server_macro",
@@ -3806,6 +3804,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.85",
+]
+
+[[package]]
+name = "dioxus-server"
+version = "0.6.0-alpha.3"
+dependencies = [
+ "axum 0.7.7",
+ "tower-http",
 ]
 
 [[package]]

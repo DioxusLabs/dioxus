@@ -66,6 +66,7 @@ where
     #[cfg(feature = "server")]
     let serialize_context = crate::html_storage::use_serialize_context();
     // We always create a storage entry, even if the data isn't ready yet to make it possible to deserialize pending server futures on the client
+
     #[cfg(feature = "server")]
     let server_storage_entry = use_hook(|| serialize_context.create_entry());
 

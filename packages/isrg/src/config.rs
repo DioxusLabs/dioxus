@@ -13,7 +13,7 @@ use std::{
 
 /// A configuration for the incremental renderer.
 #[derive(Clone)]
-pub struct IncrementalRendererConfig {
+pub struct IsrConfig {
     static_dir: PathBuf,
     memory_cache_limit: usize,
     invalidate_after: Option<Duration>,
@@ -24,13 +24,13 @@ pub struct IncrementalRendererConfig {
     map_path: Option<PathMapFn>,
 }
 
-impl Default for IncrementalRendererConfig {
+impl Default for IsrConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl IncrementalRendererConfig {
+impl IsrConfig {
     /// Create a new incremental renderer configuration.
     pub fn new() -> Self {
         Self {

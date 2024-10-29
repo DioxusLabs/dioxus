@@ -13,7 +13,7 @@ pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
-    pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) incremental: Option<dioxus_isrg::IsrConfig>,
 }
 
 impl LaunchConfig for ServeConfigBuilder {}
@@ -48,7 +48,7 @@ impl ServeConfigBuilder {
     ///     .with_cfg(cfg)
     ///     .launch(app);
     /// ```
-    pub fn incremental(mut self, cfg: dioxus_isrg::IncrementalRendererConfig) -> Self {
+    pub fn incremental(mut self, cfg: dioxus_isrg::IsrConfig) -> Self {
         self.incremental = Some(cfg);
         self
     }
@@ -240,7 +240,7 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
-    pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) incremental: Option<dioxus_isrg::IsrConfig>,
 }
 
 impl LaunchConfig for ServeConfig {}

@@ -6,9 +6,10 @@
 //! use dioxus::prelude::*;
 //!
 //! fn main() {
-//!     #[cfg(feature = "web")]
 //!     // Hydrate the application on the client
+//!     #[cfg(feature = "web")]
 //!     dioxus::launch(app);
+//!
 //!     #[cfg(feature = "server")]
 //!     {
 //!         tokio::runtime::Runtime::new()
@@ -51,7 +52,6 @@
 //!     Ok("Hello from the server!".to_string())
 //! }
 //! ```
-
 pub mod launch;
 
 #[allow(unused)]
@@ -67,10 +67,11 @@ use axum::{
 };
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
+use parking_lot::RwLock;
 
 use std::sync::Arc;
 
-use crate::prelude::*;
+use crate::{prelude::*, render::SSRState, ServeConfig};
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
@@ -277,16 +278,6 @@ where
     }
 }
 
-fn apply_request_parts_to_response<B>(
-    headers: hyper::header::HeaderMap,
-    response: &mut axum::response::Response<B>,
-) {
-    let mut_headers = response.headers_mut();
-    for (key, value) in headers.iter() {
-        mut_headers.insert(key, value.clone());
-    }
-}
-
 /// State used by [`render_handler`] to render a dioxus component with axum
 #[derive(Clone)]
 pub struct RenderHandleState {
@@ -375,50 +366,45 @@ pub async fn render_handler(
 ) -> impl IntoResponse {
     // Only respond to requests for HTML
     if let Some(mime) = request.headers().get("Accept") {
-        let mime = mime.to_str().map(|mime| mime.to_ascii_lowercase());
-        match mime {
+        match mime.to_str().map(|mime| mime.to_ascii_lowercase()) {
             Ok(accepts) if accepts.contains("text/html") => {}
-            _ => return Err(StatusCode::NOT_ACCEPTABLE),
+            _ => return Err(StatusCode::NOT_ACCEPTABLE.into_response()),
         }
     }
 
-    let cfg = &state.config;
-    let ssr_state = state.ssr_state();
-    let build_virtual_dom = state.build_virtual_dom.clone();
-
-    let (parts, _) = request.into_parts();
+    let parts = request.into_parts().0;
     let url = parts
         .uri
         .path_and_query()
-        .ok_or(StatusCode::BAD_REQUEST)?
+        .ok_or(StatusCode::BAD_REQUEST.into_response())?
         .to_string();
-    let parts: Arc<parking_lot::RwLock<http::request::Parts>> =
-        Arc::new(parking_lot::RwLock::new(parts));
-    let server_context = DioxusServerContext::from_shared_parts(parts.clone());
 
-    match ssr_state
-        .render(url, cfg, move || build_virtual_dom(), &server_context)
+    let server_context = DioxusServerContext::from_shared_parts(Arc::new(RwLock::new(parts)));
+    let build_virtual_dom = state.build_virtual_dom.clone();
+
+    let stream = state
+        .ssr_state()
+        .render(
+            url,
+            state.config.clone(),
+            move || build_virtual_dom(),
+            server_context.clone(),
+        )
         .await
-    {
-        Ok((freshness, rx)) => {
-            let mut response = axum::response::Html::from(Body::from_stream(rx)).into_response();
-            freshness.write(response.headers_mut());
-            let headers = server_context.response_parts().headers.clone();
-            apply_request_parts_to_response(headers, &mut response);
-            Ok(response)
-        }
-        Err(e) => {
-            tracing::error!("Failed to render page: {}", e);
-            Ok(report_err(e).into_response())
-        }
-    }
-}
+        .map_err(|err| {
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(body::Body::new(format!("Error: {}", err)))
+                .unwrap()
+        })?;
 
-fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
-    Response::builder()
-        .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(body::Body::new(format!("Error: {}", e)))
-        .unwrap()
+    let mut response = stream.into_response();
+
+    for (key, value) in server_context.response_parts().headers.iter() {
+        response.headers_mut().insert(key, value.clone());
+    }
+
+    Ok(response)
 }
 
 /// A handler for Dioxus server functions. This will run the server function and return the result.

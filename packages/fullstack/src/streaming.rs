@@ -65,7 +65,7 @@ pub(crate) struct StreamingRenderer<E = std::convert::Infallible> {
 
 impl<E> StreamingRenderer<E> {
     /// Create a new streaming renderer with the given head that renders into a channel
-    pub(crate) fn new(
+    pub(crate) fn start(
         before_body: impl Display,
         mut render_into: Sender<Result<String, E>>,
     ) -> Self {

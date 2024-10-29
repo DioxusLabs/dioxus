@@ -36,8 +36,8 @@ pub struct IncrementalRenderer {
 
 impl IncrementalRenderer {
     /// Create a new incremental renderer builder.
-    pub fn builder() -> IncrementalRendererConfig {
-        IncrementalRendererConfig::new()
+    pub fn builder() -> IsrConfig {
+        IsrConfig::new()
     }
 
     /// Remove a route from the cache.
@@ -63,11 +63,7 @@ impl IncrementalRenderer {
     /// let response = b"<html><body>Hello world</body></html>";
     /// renderer.cache(route, response).unwrap();
     /// ```
-    pub fn cache(
-        &mut self,
-        route: String,
-        html: impl Into<Vec<u8>>,
-    ) -> Result<RenderFreshness, IncrementalRendererError> {
+    pub fn cache(&mut self, route: String, html: impl Into<Vec<u8>>) -> Result<RenderFreshness> {
         let timestamp = Utc::now();
         let html = html.into();
         #[cfg(not(target_arch = "wasm32"))]
@@ -102,10 +98,7 @@ impl IncrementalRenderer {
     /// let response = renderer.get(route).unwrap();
     /// assert!(response.is_none());
     /// ```
-    pub fn get<'a>(
-        &'a mut self,
-        route: &str,
-    ) -> Result<Option<CachedRender<'a>>, IncrementalRendererError> {
+    pub fn get<'a>(&'a mut self, route: &str) -> Result<Option<CachedRender<'a>>> {
         let Self {
             memory_cache,
             #[cfg(not(target_arch = "wasm32"))]
@@ -145,6 +138,8 @@ impl IncrementalRenderer {
         }
     }
 }
+
+pub type Result<T> = std::result::Result<T, IncrementalRendererError>;
 
 /// An error that can occur while rendering a route or retrieving a cached route.
 #[derive(Debug, thiserror::Error)]

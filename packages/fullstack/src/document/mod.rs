@@ -2,7 +2,9 @@
 
 #[cfg(feature = "server")]
 pub mod server;
+
 #[cfg(feature = "server")]
 pub use server::ServerDocument;
+
 #[cfg(all(feature = "web", feature = "document"))]
 pub mod web;

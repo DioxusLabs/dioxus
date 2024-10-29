@@ -259,6 +259,19 @@ mod server_fn_impl {
         pub async fn extract<M, T: FromServerContext<M>>(&self) -> Result<T, T::Rejection> {
             T::from_request(self).await
         }
+
+        /// Run a function inside of the server context.
+        pub fn run_with<O>(&self, f: impl FnOnce() -> O) -> O {
+            let context = self.clone();
+
+            // before polling the future, we need to set the context
+            let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(Box::new(context)));
+            // poll the future, which may call server_context()
+            let result = f();
+            // after polling the future, we need to restore the context
+            SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
+            result
+        }
     }
 }
 
@@ -278,17 +291,6 @@ pub fn server_context() -> DioxusServerContext {
 /// This function will only provide the current server context if it is called from a server function or on the server rendering a request.
 pub async fn extract<E: FromServerContext<I>, I>() -> Result<E, E::Rejection> {
     E::from_request(&server_context()).await
-}
-
-/// Run a function inside of the server context.
-pub fn with_server_context<O>(context: DioxusServerContext, f: impl FnOnce() -> O) -> O {
-    // before polling the future, we need to set the context
-    let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(Box::new(context)));
-    // poll the future, which may call server_context()
-    let result = f();
-    // after polling the future, we need to restore the context
-    SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
-    result
 }
 
 /// A future that provides the server context to the inner future
@@ -315,7 +317,7 @@ impl<F: std::future::Future> std::future::Future for ProvideServerContext<F> {
     ) -> std::task::Poll<Self::Output> {
         let this = self.project();
         let context = this.context.clone();
-        with_server_context(context, || this.f.poll(cx))
+        context.run_with(|| this.f.poll(cx))
     }
 }
 
