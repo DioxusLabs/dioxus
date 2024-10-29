@@ -202,6 +202,12 @@ pub fn Link(props: LinkProps) -> Element {
         if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
             return;
         }
+
+        // todo(jon): this is extra hacky for no reason - we should fix prevent default on Links
+        if do_default && is_external && cfg!(target_arch = "wasm32") {
+            return;
+        }
+
         event.prevent_default();
 
         if do_default && is_router_nav {

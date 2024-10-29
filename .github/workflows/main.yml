@@ -254,6 +254,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-on-failure: "true"
+          key: "playwright-tests"
 
       - name: Playwright
         working-directory: ./packages/playwright-tests
@@ -346,7 +347,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: "${{ matrix.platform.target }}"
+          key: "matrix-${{ matrix.platform.target }}"
           cache-all-crates: "true"
           cache-on-failure: "true"
 
