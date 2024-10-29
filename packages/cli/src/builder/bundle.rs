@@ -99,7 +99,7 @@ impl AppBundle {
     /// ## Web:
     /// Create a folder that is somewhat similar to an app-image (exe + asset)
     /// The server is dropped into the `web` folder, even if there's no `public` folder.
-    /// If there's no server (SPA/static-gen), we still use the `web` folder, but it only contains the
+    /// If there's no server (SPA), we still use the `web` folder, but it only contains the
     /// public folder.
     /// ```
     /// web/

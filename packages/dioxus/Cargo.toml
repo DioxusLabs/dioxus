@@ -87,6 +87,5 @@ features = [
     "hooks",
     "html",
     "liveview",
-    "static-generation",
     "server"
 ]
