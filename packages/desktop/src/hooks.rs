@@ -71,7 +71,7 @@ pub fn use_tray_menu_event_handler(
 }
 
 /// Register an event handler that runs when a tray icon event is processed.
-/// This is only for tray icon and not it's menues.
+/// This is only for tray icon and not it's menus.
 /// If you want to register tray icon menus handler use `use_tray_menu_event_handler` instead.
 #[cfg_attr(
     docsrs,

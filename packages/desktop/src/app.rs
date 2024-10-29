@@ -145,23 +145,20 @@ impl App {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub fn handle_tray_icon_event(&mut self, event: tray_icon::TrayIconEvent) {
-        match event {
-            tray_icon::TrayIconEvent::Click {
-                id: _,
-                position: _,
-                rect: _,
-                button,
-                button_state: _,
-            } => match button {
-                tray_icon::MouseButton::Left => {
-                    for webview in self.webviews.values() {
-                        webview.desktop_context.window.set_visible(true);
-                        webview.desktop_context.window.set_focus();
-                    }
+        if let tray_icon::TrayIconEvent::Click {
+            id: _,
+            position: _,
+            rect: _,
+            button,
+            button_state: _,
+        } = event
+        {
+            if button == tray_icon::MouseButton::Left {
+                for webview in self.webviews.values() {
+                    webview.desktop_context.window.set_visible(true);
+                    webview.desktop_context.window.set_focus();
                 }
-                _ => {}
-            },
-            _ => {}
+            }
         }
     }
 
@@ -403,7 +400,7 @@ impl App {
             _ = receiver.send_event(UserWindowEvent::TrayIconEvent(t));
         }));
 
-        // for whatever reason they had to make it seperate
+        // for whatever reason they had to make it separate
         let receiver = self.shared.proxy.clone();
         tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
