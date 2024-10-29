@@ -71,7 +71,7 @@ use parking_lot::RwLock;
 
 use std::sync::Arc;
 
-use crate::{prelude::*, render::SSRState, ServeConfig};
+use crate::{prelude::*, render::SsrRenderer, ServeConfig};
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
@@ -264,7 +264,7 @@ where
 
         match cfg.try_into() {
             Ok(cfg) => {
-                let ssr_state = SSRState::new(&cfg);
+                let ssr_state = SsrRenderer::shared(cfg.incremental.clone());
                 server.fallback(
                     get(render_handler)
                         .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
@@ -283,7 +283,7 @@ where
 pub struct RenderHandleState {
     config: ServeConfig,
     build_virtual_dom: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
-    ssr_state: once_cell::sync::OnceCell<SSRState>,
+    ssr_state: once_cell::sync::OnceCell<Arc<SsrRenderer>>,
 }
 
 impl RenderHandleState {
@@ -315,7 +315,7 @@ impl RenderHandleState {
     }
 
     /// Set the [`SSRState`] for this [`RenderHandleState`]. Sharing a [`SSRState`] between multiple [`RenderHandleState`]s is more efficient than creating a new [`SSRState`] for each [`RenderHandleState`].
-    pub fn with_ssr_state(mut self, ssr_state: SSRState) -> Self {
+    pub fn with_ssr_state(mut self, ssr_state: Arc<SsrRenderer>) -> Self {
         self.ssr_state = once_cell::sync::OnceCell::new();
         if self.ssr_state.set(ssr_state).is_err() {
             panic!("SSRState already set");
@@ -323,8 +323,10 @@ impl RenderHandleState {
         self
     }
 
-    fn ssr_state(&self) -> &SSRState {
-        self.ssr_state.get_or_init(|| SSRState::new(&self.config))
+    fn ssr_state(&self) -> Arc<SsrRenderer> {
+        self.ssr_state
+            .get_or_init(|| SsrRenderer::shared(self.config.incremental.clone()))
+            .clone()
     }
 }
 
@@ -384,9 +386,9 @@ pub async fn render_handler(
 
     let stream = state
         .ssr_state()
-        .render(
-            url,
+        .render_to(
             state.config.clone(),
+            url,
             move || build_virtual_dom(),
             server_context.clone(),
         )

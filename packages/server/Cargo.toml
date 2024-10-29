@@ -4,5 +4,44 @@ edition = "2021"
 version.workspace = true
 
 [dependencies]
-axum = { workspace = true, features = ["ws", "macros"], optional = true }
-tower-http = { workspace = true, optional = true, features = ["fs"] }
+axum = { workspace = true, features = ["ws", "macros"], optional = true}
+tower-http = { workspace = true, features = ["fs"], optional = true}
+chrono = { workspace = true }
+http = { workspace = true }
+thiserror = { workspace = true }
+rustc-hash = { workspace = true }
+lru  = { workspace = true }
+tracing = { workspace = true }
+
+dioxus-ssr = { workspace = true }
+dioxus-lib = { workspace = true }
+tracing-futures = { workspace = true }
+once_cell = { workspace = true }
+tokio-util = { version = "0.7.8", features = ["rt"] }
+async-trait = { version = "0.1.58" }
+pin-project = { version = "1.1.2" }
+serde = "1.0.159"
+tokio-stream = { version = "0.1.12", features = ["sync"] }
+futures-util = { workspace = true }
+futures-channel = { workspace = true }
+ciborium = { workspace = true }
+base64 = { workspace = true }
+rustls = { workspace = true, optional = true }
+hyper-rustls = { workspace = true, optional = true }
+
+bytes = "1.4.0"
+tower = { workspace = true, features = ["util"] }
+tower-layer = { version = "0.3.2" }
+parking_lot = { version = "0.12.1", features = ["send_guard"] }
+
+dioxus-cli-config = { workspace = true }
+aws-lc-rs = { version = "1.8.1", optional = true}
+
+server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
+dioxus_server_macro = { workspace = true }
+
+[features]
+axum = ["dep:axum", "dep:tower-http", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
+default-tls = ["server_fn/default-tls"]
+rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
+aws-lc-rs = ["dep:aws-lc-rs"]

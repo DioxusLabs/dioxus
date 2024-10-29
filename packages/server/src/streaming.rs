@@ -90,8 +90,8 @@ impl<E> StreamingRenderer<E> {
     /// Render a new chunk of html that may change
     pub(crate) fn render_placeholder<W: Write + ?Sized>(
         &self,
-        html: impl FnOnce(&mut W) -> std::fmt::Result,
         into: &mut W,
+        html: impl FnOnce(&mut W) -> std::fmt::Result,
     ) -> Result<Mount, std::fmt::Error> {
         let id = self.current_path.read().unwrap().clone();
         // Increment the id for the next placeholder

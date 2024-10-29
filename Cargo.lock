@@ -3488,17 +3488,12 @@ dependencies = [
 name = "dioxus-fullstack"
 version = "0.6.0-alpha.3"
 dependencies = [
- "async-trait",
- "aws-lc-rs",
  "axum 0.7.7",
  "base64 0.22.1",
- "bytes",
  "ciborium",
  "dioxus",
- "dioxus-cli-config",
  "dioxus-core",
  "dioxus-interpreter-js",
- "dioxus-isrg",
  "dioxus-lib",
  "dioxus-ssr",
  "dioxus-web",
@@ -3508,22 +3503,13 @@ dependencies = [
  "generational-box",
  "http 1.1.0",
  "hyper 1.5.0",
- "hyper-rustls 0.27.3",
  "once_cell",
  "parking_lot",
- "pin-project",
- "rustls 0.23.15",
  "serde",
  "server_fn",
- "thiserror",
  "tokio",
- "tokio-stream",
- "tokio-util",
- "tower 0.4.13",
  "tower-http",
- "tower-layer",
  "tracing",
- "tracing-futures",
  "web-sys",
 ]
 
@@ -3602,18 +3588,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "dioxus-isrg"
-version = "0.6.0-alpha.3"
-dependencies = [
- "chrono",
- "http 1.1.0",
- "lru",
- "rustc-hash 1.1.0",
- "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -3810,8 +3784,37 @@ dependencies = [
 name = "dioxus-server"
 version = "0.6.0-alpha.3"
 dependencies = [
+ "async-trait",
+ "aws-lc-rs",
  "axum 0.7.7",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "ciborium",
+ "dioxus-cli-config",
+ "dioxus-lib",
+ "dioxus-ssr",
+ "dioxus_server_macro",
+ "futures-channel",
+ "futures-util",
+ "http 1.1.0",
+ "hyper-rustls 0.27.3",
+ "lru",
+ "once_cell",
+ "parking_lot",
+ "pin-project",
+ "rustc-hash 1.1.0",
+ "rustls 0.23.15",
+ "serde",
+ "server_fn",
+ "thiserror",
+ "tokio-stream",
+ "tokio-util",
+ "tower 0.4.13",
  "tower-http",
+ "tower-layer",
+ "tracing",
+ "tracing-futures",
 ]
 
 [[package]]

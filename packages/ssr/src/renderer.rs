@@ -31,6 +31,12 @@ impl Renderer {
         Self::default()
     }
 
+    pub fn prerenderer() -> Self {
+        let mut _self = Self::default();
+        _self.pre_render = true;
+        _self
+    }
+
     /// Set the callback that the renderer uses to render components
     pub fn set_render_components(
         &mut self,
@@ -336,9 +342,7 @@ fn empty_for_loop_works() {
     fn app() -> Element {
         rsx! {
             div { class: "asdasdasd",
-                for _ in (0..5) {
-
-                }
+                for _ in (0..5) {}
             }
         }
     }

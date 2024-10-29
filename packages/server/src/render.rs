@@ -7,61 +7,32 @@ use crate::{
     streaming::{Mount, StreamingRenderer},
     template::FullstackHTMLTemplate,
 };
-use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{
-    CachedRender, IncrementalRenderer, IncrementalRendererError, IsrConfig as IsrgConfig,
-    RenderFreshness,
+    IncrementalRenderer, IncrementalRendererError, IsrConfig as IsrgConfig, RenderFreshness,
 };
 use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
-use futures_util::{Stream, StreamExt};
-use std::sync::Arc;
 use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
+use std::{rc::Rc, sync::Arc};
 use tokio::task::JoinHandle;
 
 use crate::prelude::*;
 use dioxus_lib::prelude::*;
 
-/// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.
-#[derive(Clone)]
-pub struct SSRState {
-    // We keep a pool of renderers to avoid re-creating them on every request. They are boxed to make them very cheap to move
-    renderers: Arc<SsrRenderer>,
-}
-
-impl SSRState {
-    /// Create a new [`SSRState`].
-    pub fn new(cfg: &ServeConfig) -> Self {
-        Self {
-            renderers: Arc::new(SsrRenderer::new(4, cfg.incremental.clone())),
-        }
-    }
-
-    /// Render the application to HTML.
-    pub async fn render<'a>(
-        &'a self,
-        route: String,
-        cfg: ServeConfig,
-        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
-        server_context: DioxusServerContext,
-    ) -> Result<StreamingResponse, IncrementalRendererError> {
-        self.renderers
-            .clone()
-            .render_to(cfg, route, virtual_dom_factory, server_context)
-            .await
-    }
-}
-
-struct SsrRenderer {
+pub struct SsrRenderer {
     renderers: RwLock<Vec<Renderer>>,
     incremental_cache: Option<RwLock<IncrementalRenderer>>,
 }
 
 impl SsrRenderer {
+    pub fn shared(incremental: Option<IsrgConfig>) -> Arc<Self> {
+        Arc::new(Self::new(4, incremental))
+    }
+
     fn new(initial_size: usize, incremental: Option<IsrgConfig>) -> Self {
-        let renderers = RwLock::new((0..initial_size).map(|_| pre_renderer()).collect());
+        let renderers = RwLock::new((0..initial_size).map(|_| Renderer::prerenderer()).collect());
         let incremental_cache = incremental.map(|cache| RwLock::new(cache.build()));
 
         Self {
@@ -70,32 +41,13 @@ impl SsrRenderer {
         }
     }
 
-    /// Look for a cached route in the incremental cache and send it into the render channel if it exists
-    fn check_cached_route(
-        &self,
-        route: &str,
-        render_into: &mut Sender<Result<String, IncrementalRendererError>>,
-    ) -> Option<RenderFreshness> {
-        let incremental = self.incremental_cache.as_ref()?;
-        let mut incremental = incremental.write().ok()?;
-
-        let cached = incremental.get(route).ok().flatten()?;
-
-        _ = render_into.start_send(
-            String::from_utf8(cached.response.to_vec())
-                .map_err(|err| IncrementalRendererError::Other(Box::new(err))),
-        );
-
-        Some(cached.freshness)
-    }
-
     /// Render a virtual dom into a stream. This method will return immediately and continue streaming the result in the background
     /// The streaming is canceled when the stream the function returns is dropped
-    async fn render_to(
+    pub async fn render_to(
         self: Arc<Self>,
         cfg: ServeConfig,
         route: String,
-        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
+        new_vdom: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: DioxusServerContext,
     ) -> Result<StreamingResponse, IncrementalRendererError> {
         let (mut into, rx) =
@@ -106,10 +58,14 @@ impl SsrRenderer {
             return Ok(StreamingResponse::new(rx, freshness, None));
         }
 
-        let wrapper = FullstackHTMLTemplate { cfg };
-
         let join_handle = spawn_platform(move || {
-            self.respond(virtual_dom_factory, server_context, wrapper, into, route)
+            self.respond(
+                new_vdom(),
+                server_context,
+                FullstackHTMLTemplate { cfg },
+                into,
+                route,
+            )
         });
 
         Ok(StreamingResponse::new(
@@ -121,7 +77,7 @@ impl SsrRenderer {
 
     async fn respond(
         self: Arc<Self>,
-        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + '_,
+        mut virtual_dom: VirtualDom,
         server_context: DioxusServerContext,
         wrapper: FullstackHTMLTemplate,
         mut sender: Sender<Result<String, IncrementalRendererError>>,
@@ -132,13 +88,11 @@ impl SsrRenderer {
             .write()
             .unwrap()
             .pop()
-            .unwrap_or_else(pre_renderer);
+            .unwrap_or_else(Renderer::prerenderer);
 
-        let mut virtual_dom = virtual_dom_factory();
-
-        let document = std::rc::Rc::new(ServerDocument::default());
+        let document = Rc::new(ServerDocument::default());
         virtual_dom.provide_root_context(document.clone());
-        virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
+        virtual_dom.provide_root_context(document.clone() as Rc<dyn Document>);
         server_context.run_with(|| virtual_dom.rebuild_in_place());
 
         let mut pre_body = String::new();
@@ -170,22 +124,19 @@ impl SsrRenderer {
                     return Ok(());
                 }
 
-                let mount = stream.render_placeholder(
-                    |to| {
-                        {
-                            pending_suspense_boundaries_stack
-                                .write()
-                                .unwrap()
-                                .push(scope);
-                        }
-                        let out = renderer.render_scope(to, vdom, scope);
-                        {
-                            pending_suspense_boundaries_stack.write().unwrap().pop();
-                        }
-                        out
-                    },
-                    &mut *to,
-                )?;
+                let mount = stream.render_placeholder(&mut *to, |to| {
+                    {
+                        pending_suspense_boundaries_stack
+                            .write()
+                            .unwrap()
+                            .push(scope);
+                    }
+                    let out = renderer.render_scope(to, vdom, scope);
+                    {
+                        pending_suspense_boundaries_stack.write().unwrap().pop();
+                    }
+                    out
+                })?;
 
                 // Add the suspense boundary to the list of pending suspense boundaries
                 // We will replace the mount with the resolved contents later once the suspense boundary is resolved
@@ -209,9 +160,7 @@ impl SsrRenderer {
                     parent.children.push(scope);
                 } else {
                     // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
-                    vdom.in_runtime(|| {
-                        start_capturing_errors(scope);
-                    });
+                    vdom.in_runtime(|| scope.in_runtime(provide_error_boundary));
                 }
 
                 Ok(())
@@ -231,18 +180,14 @@ impl SsrRenderer {
             )
             .await;
 
-        let post_streaming = match post_streaming {
-            Ok(post_streaming) => post_streaming,
-            Err(err) => {
-                stream.close_with_error(err);
-                return;
+        match post_streaming {
+            Ok(after) => {
+                stream.render(after);
+                renderer.reset_render_components();
+                self.renderers.write().unwrap().push(renderer);
             }
+            Err(err) => stream.close_with_error(err),
         };
-
-        stream.render(post_streaming);
-        renderer.reset_render_components();
-
-        self.renderers.write().unwrap().push(renderer);
     }
 
     async fn unqueue_suspense(
@@ -313,7 +258,7 @@ impl SsrRenderer {
                     // we need to capture the errors and send them to the client as it resolves
                     virtual_dom.in_runtime(|| {
                         for &suspense_scope in pending_suspense_boundary.children.iter() {
-                            start_capturing_errors(suspense_scope);
+                            suspense_scope.in_runtime(provide_error_boundary);
                         }
                     });
                 }
@@ -337,19 +282,24 @@ impl SsrRenderer {
 
         Ok(post_streaming)
     }
-}
 
-/// Start capturing errors at a suspense boundary. If the parent suspense boundary is frozen, we need to capture the errors in the suspense boundary
-/// and send them to the client to continue bubbling up
-fn start_capturing_errors(suspense_scope: ScopeId) {
-    // Add an error boundary to the scope
-    suspense_scope.in_runtime(provide_error_boundary);
-}
+    /// Look for a cached route in the incremental cache and send it into the render channel if it exists
+    fn check_cached_route(
+        &self,
+        route: &str,
+        render_into: &mut Sender<Result<String, IncrementalRendererError>>,
+    ) -> Option<RenderFreshness> {
+        let incremental = self.incremental_cache.as_ref()?;
+        let mut incremental = incremental.write().ok()?;
+        let cached = incremental.get(route).ok().flatten()?;
 
-fn pre_renderer() -> Renderer {
-    let mut renderer = Renderer::default();
-    renderer.pre_render = true;
-    renderer
+        _ = render_into.start_send(
+            String::from_utf8(cached.response.to_vec())
+                .map_err(|err| IncrementalRendererError::Other(Box::new(err))),
+        );
+
+        Some(cached.freshness)
+    }
 }
 
 /// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime

@@ -14,6 +14,7 @@ resolver = "2"
 # server functions
 server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
 dioxus_server_macro = { workspace = true }
+once_cell = { workspace = true }
 
 # axum
 axum = { workspace = true, features = ["ws", "macros"], optional = true }
@@ -21,11 +22,11 @@ tower-http = { workspace = true, optional = true, features = ["fs"] }
 
 dioxus-lib = { workspace = true }
 generational-box = { workspace = true }
+serde = "1.0.159"
 
 # Dioxus + SSR
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-ssr = { workspace = true, optional = true }
-dioxus-isrg = { workspace = true, optional = true }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 
@@ -33,33 +34,16 @@ http = { workspace = true, optional = true }
 dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
 dioxus-interpreter-js = { workspace = true, optional = true }
 
-tracing = { workspace = true }
-tracing-futures = { workspace = true, optional = true }
-once_cell = { workspace = true }
-tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
-async-trait = { version = "0.1.58", optional = true }
-pin-project = { version = "1.1.2", optional = true }
-serde = "1.0.159"
-tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
 ciborium = { workspace = true }
 base64 = { workspace = true }
-rustls = { workspace = true, optional = true }
-hyper-rustls = { workspace = true, optional = true }
-
-thiserror = { workspace = true, optional = true }
-bytes = "1.4.0"
-tower = { workspace = true, features = ["util"], optional = true }
-tower-layer = { version = "0.3.2", optional = true }
-parking_lot = { version = "0.12.1", features = ["send_guard"], optional = true }
-web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
-
-dioxus-cli-config = { workspace = true, optional = true }
-aws-lc-rs = { version = "1.8.1", optional = true }
+tracing = { workspace = true }
+parking_lot = { version = "0.12.1", features = ["send_guard"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
+web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"], optional = true}
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
@@ -71,30 +55,8 @@ dioxus = { workspace = true, features = ["fullstack"] }
 default = ["document"]
 document = ["dioxus-web?/document"]
 web = ["dep:dioxus-web", "dep:web-sys"]
-server = [
-    "server_fn/ssr",
-    "dioxus_server_macro/server",
-    "dep:tokio",
-    "dep:tokio-util",
-    "dep:tokio-stream",
-    "dep:dioxus-ssr",
-    "dep:dioxus-isrg",
-    "dep:tower",
-    "dep:hyper",
-    "dep:http",
-    "dep:tower-layer",
-    "dep:pin-project",
-    "dep:thiserror",
-    "dep:dioxus-cli-config",
-    "dep:async-trait",
-    "dep:parking_lot",
-    "dioxus-interpreter-js",
-]
-axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
-default-tls = ["server_fn/default-tls"]
-rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
-aws-lc-rs = ["dep:aws-lc-rs"]
+server = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-features = ["axum", "web", "aws-lc-rs"]
+features = ["web"]

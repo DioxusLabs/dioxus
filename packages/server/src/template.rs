@@ -21,13 +21,6 @@ pub struct FullstackHTMLTemplate {
 }
 
 impl FullstackHTMLTemplate {
-    /// Create a new [`FullstackHTMLTemplate`].
-    pub fn new(cfg: &ServeConfig) -> Self {
-        Self { cfg: cfg.clone() }
-    }
-}
-
-impl FullstackHTMLTemplate {
     /// Render any content before the head of the page.
     pub fn render_head<R: std::fmt::Write>(
         &self,

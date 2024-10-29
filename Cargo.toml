@@ -58,7 +58,7 @@ members = [
     "packages/cli-config",
     "packages/devtools",
     "packages/devtools-types",
-    "packages/isrg",
+    "packages/server",
     "packages/rsx-hotreload",
 
     # Playwright tests
@@ -131,7 +131,7 @@ dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.3" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.3" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.3", default-features = false }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.3", default-features = false }
-dioxus-isrg = { path = "packages/isrg", version = "0.6.0-alpha.3" }
+dioxus-server = { path = "packages/server", version = "0.6.0-alpha.3" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.3" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.3" }
 generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.3" }
