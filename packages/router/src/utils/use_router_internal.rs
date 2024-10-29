@@ -11,5 +11,5 @@ use crate::prelude::*;
 /// - [`None`], when the current component isn't a descendant of a [`Router`] component.
 /// - Otherwise [`Some`].
 pub(crate) fn use_router_internal() -> Option<RouterContext> {
-    use_hook(|| try_consume_context::<RouterContext>())
+    use_hook(try_consume_context)
 }

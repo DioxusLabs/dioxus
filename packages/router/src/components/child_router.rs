@@ -30,8 +30,8 @@ pub(crate) fn consume_child_route_mapping<R: Routable>() -> Option<ChildRouteMap
 impl<R> Clone for ChildRouteMapping<R> {
     fn clone(&self) -> Self {
         Self {
-            format_route_as_root_route: self.format_route_as_root_route.clone(),
-            parse_route_from_root_route: self.parse_route_from_root_route.clone(),
+            format_route_as_root_route: self.format_route_as_root_route,
+            parse_route_from_root_route: self.parse_route_from_root_route,
         }
     }
 }
