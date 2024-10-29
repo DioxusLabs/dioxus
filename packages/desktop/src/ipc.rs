@@ -15,11 +15,19 @@ pub enum UserWindowEvent {
     Poll(WindowId),
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview
-    Ipc { id: WindowId, msg: IpcMessage },
+    Ipc {
+        id: WindowId,
+        msg: IpcMessage,
+    },
 
     /// Handle a hotreload event, basically telling us to update our templates
     #[cfg(all(feature = "devtools", debug_assertions))]
     HotReloadEvent(dioxus_devtools::DevserverMsg),
+
+    // Windows-only drag-n-drop fix events.
+    WindowsDragDrop(WindowId),
+    WindowsDragOver(WindowId, i32, i32),
+    WindowsDragLeave(WindowId),
 
     /// Create a new window
     NewWindow,

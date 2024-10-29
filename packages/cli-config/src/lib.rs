@@ -12,11 +12,6 @@ pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
 pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
 
-/// todo: this is not implemented but we're going to reserve this
-///
-/// technically this is only passed on "launch" so if you close the app, this will be lost
-pub const IOS_DEVSERVER_ADDR_ENV: &str = "SIMCTL_CHILD_DIOXUS_DEVSERVER_ADDR";
-
 /// Get the address of the devserver for use over a raw socket
 ///
 /// This is not a websocket! There's no protocol!

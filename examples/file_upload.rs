@@ -8,10 +8,10 @@ use std::sync::Arc;
 use dioxus::prelude::*;
 use dioxus::{html::HasFileData, prelude::dioxus_elements::FileEngine};
 
-const STYLE: &str = asset!("./examples/assets/file_upload.css");
+const STYLE: Asset = asset!("/examples/assets/file_upload.css");
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 struct UploadedFile {

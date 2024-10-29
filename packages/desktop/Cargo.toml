@@ -28,7 +28,7 @@ serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { version = "0.43.0", default-features = false, features = [
+wry = { workspace = true, default-features = false, features = [
     "os-webview",
     "protocol",
     "drag-drop",
@@ -41,6 +41,7 @@ tokio = { workspace = true, features = [
     "time",
     "macros",
     "fs",
+    "io-util",
 ], optional = true }
 webbrowser = "0.8.0"
 infer = "0.11.0"
@@ -51,7 +52,7 @@ dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
-tao = { version = "0.26.1", features = ["rwh_05"] }
+tao = { workspace = true, features = ["rwh_05"] }
 dioxus-history.workspace = true
 
 
@@ -59,7 +60,7 @@ dioxus-history.workspace = true
 signal-hook = "0.3.17"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-wry = { version = "0.43.0", features = [
+wry = { workspace = true, features = [
     "os-webview",
     "protocol",
     "drag-drop",

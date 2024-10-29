@@ -17,5 +17,5 @@ reqwest = { workspace = true }
 
 [features]
 default = []
-server = ["dioxus/axum"]
+server = ["dioxus/server"]
 web = ["dioxus/web"]

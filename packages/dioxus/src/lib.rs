@@ -34,8 +34,7 @@ mod launch;
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
-#[allow(deprecated)]
-pub use launch::launch;
+pub use crate::launch::*;
 
 #[cfg(feature = "hooks")]
 #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
@@ -133,7 +132,7 @@ pub mod prelude {
 
     #[cfg(feature = "asset")]
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
-    pub use manganis::{self, classes, mg as asset, ImageAsset, ImageType};
+    pub use manganis::{self, asset, Asset, ImageAsset, ImageType};
 }
 
 #[cfg(feature = "web")]

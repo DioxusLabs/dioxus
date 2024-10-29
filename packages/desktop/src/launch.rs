@@ -1,9 +1,10 @@
-pub use crate::Config;
+use crate::Config;
 use crate::{
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
 };
 use dioxus_core::*;
+use dioxus_document::eval;
 use std::any::Any;
 use tao::event::{Event, StartCause, WindowEvent};
 
@@ -44,6 +45,44 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 #[cfg(all(feature = "devtools", debug_assertions))]
                 UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
 
+                // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
+                UserWindowEvent::WindowsDragDrop(id) => {
+                    if let Some(webview) = app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                eval("window.interpreter.handleWindowsDragDrop();");
+                            });
+                        });
+                    }
+                }
+                UserWindowEvent::WindowsDragLeave(id) => {
+                    if let Some(webview) = app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                eval("window.interpreter.handleWindowsDragLeave();");
+                            });
+                        });
+                    }
+                }
+                UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
+                    if let Some(webview) = app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                let e = eval(
+                                    r#" 
+                                    const xPos = await dioxus.recv();
+                                    const yPos = await dioxus.recv();
+                                    window.interpreter.handleWindowsDragOver(xPos, yPos)
+                                    "#,
+                                );
+
+                                _ = e.send(x_pos);
+                                _ = e.send(y_pos);
+                            });
+                        });
+                    }
+                }
+
                 UserWindowEvent::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),
                     IpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),
@@ -82,14 +121,19 @@ pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! 
 /// Launches the WebView and runs the event loop, with configuration and root props.
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
-    platform_config: Config,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    platform_config: Vec<Box<dyn Any>>,
 ) -> ! {
     let mut virtual_dom = VirtualDom::new(root);
 
     for context in contexts {
         virtual_dom.insert_any_root_context(context());
     }
+
+    let platform_config = *platform_config
+        .into_iter()
+        .find_map(|cfg| cfg.downcast::<Config>().ok())
+        .unwrap_or_default();
 
     launch_virtual_dom(virtual_dom, platform_config)
 }

@@ -14,108 +14,106 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::builder::TargetPlatform;
-use console::strip_ansi_codes;
+use crate::{serve::ServeUpdate, Platform as TargetPlatform};
+use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use std::fmt::Display;
+use once_cell::sync::OnceCell;
 use std::{
     collections::HashMap,
     env,
-    fmt::{Debug, Write as _},
+    fmt::{Debug, Display, Write as _},
     fs,
     io::{self, Write},
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Mutex,
     },
 };
-use tracing::Level;
-use tracing::{field::Visit, Subscriber};
-use tracing_subscriber::{
-    filter::filter_fn, fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer,
-};
+use tracing::{field::Visit, Level, Subscriber};
+use tracing_subscriber::{fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer};
 
 const LOG_ENV: &str = "DIOXUS_LOG";
 const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
-const DX_NO_FMT_FLAG: &str = "dx_no_fmt";
 
 pub fn log_path() -> PathBuf {
     let tmp_dir = std::env::temp_dir();
     tmp_dir.join(LOG_FILE_NAME)
 }
 
-/// Build tracing infrastructure.
-pub fn build_tracing() -> CLILogControl {
-    let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
-    if env::var(LOG_ENV).is_ok() {
-        filter = EnvFilter::from_env(LOG_ENV);
+static TUI_ENABLED: AtomicBool = AtomicBool::new(false);
+static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
+
+pub(crate) struct TraceController {
+    pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
+}
+
+impl TraceController {
+    /// Get a handle to the trace controller.
+    pub fn redirect() -> Self {
+        let (tui_tx, tui_rx) = unbounded();
+        TUI_ENABLED.store(true, Ordering::SeqCst);
+        TUI_TX.set(tui_tx.clone()).unwrap();
+        Self { tui_rx }
     }
 
-    // Log file
-    let log_path = log_path();
-    _ = std::fs::write(&log_path, "");
-    let file_append_layer = match FileAppendLayer::new(log_path) {
-        Ok(f) => Some(f),
-        Err(e) => {
-            tracing::error!(dx_src = ?TraceSrc::Dev, err = ?e, "failed to init log file");
-            None
+    /// Wait for the internal logger to send a message
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
+        use futures_util::StreamExt;
+        let log = self.tui_rx.next().await.expect("tracer should never die");
+        ServeUpdate::TracingLog { log }
+    }
+
+    pub(crate) fn shutdown(&self) {
+        TUI_ENABLED.store(false, Ordering::SeqCst);
+    }
+
+    /// Build tracing infrastructure.
+    pub fn initialize() {
+        let mut filter =
+            EnvFilter::new("error,dx=trace,dioxus-cli=debug,manganis-cli-support=debug");
+
+        if env::var(LOG_ENV).is_ok() {
+            filter = EnvFilter::from_env(LOG_ENV);
         }
-    };
 
-    // Create writer controller and custom writer.
-    let (output_tx, output_rx) = unbounded();
-    let output_enabled = Arc::new(AtomicBool::new(false));
-    let writer_control = CLILogControl {
-        output_rx,
-        output_enabled: output_enabled.clone(),
-    };
-
-    // Build CLI layer
-    let cli_layer = CLILayer::new(output_enabled.clone(), output_tx);
-
-    // Build fmt layer
-    let formatter = format::debug_fn(|writer, field, value| {
-        write!(writer, "{}", format_field(field.name(), value))
-    })
-    .delimited(" ");
-
-    // Format subscriber
-    let fmt_writer = Mutex::new(FmtLogWriter::new(output_enabled));
-    let fmt_layer = tracing_subscriber::fmt::layer()
-        .fmt_fields(formatter)
-        .with_writer(fmt_writer)
-        .without_time()
-        .with_filter(filter_fn(|meta| {
-            // Filter any logs with "dx_no_fmt" or is not user facing (no dx_src)
-            let mut fields = meta.fields().iter();
-            let has_src_flag = fields.any(|f| f.name() == DX_SRC_FLAG);
-
-            if !has_src_flag {
-                return false;
+        // Log file
+        let log_path = log_path();
+        _ = std::fs::write(&log_path, "");
+        let file_append_layer = match FileAppendLayer::new(log_path) {
+            Ok(f) => Some(f),
+            Err(e) => {
+                tracing::error!(dx_src = ?TraceSrc::Dev, err = ?e, "failed to init log file");
+                None
             }
+        };
 
-            let has_fmt_flag = fields.any(|f| f.name() == DX_NO_FMT_FLAG);
-            if has_fmt_flag {
-                return false;
-            }
+        // Build CLI layer
+        let cli_layer = CLILayer;
 
-            true
-        }));
+        // Build fmt layer
+        let fmt_layer = tracing_subscriber::fmt::layer()
+            .fmt_fields(
+                format::debug_fn(|writer, field, value| {
+                    write!(writer, "{}", format_field(field.name(), value))
+                })
+                .delimited(" "),
+            )
+            .with_writer(Mutex::new(FmtLogWriter {}))
+            .with_timer(tracing_subscriber::fmt::time::time());
 
-    let sub = tracing_subscriber::registry()
-        .with(filter)
-        .with(file_append_layer)
-        .with(cli_layer)
-        .with(fmt_layer);
+        let sub = tracing_subscriber::registry()
+            .with(filter)
+            .with(file_append_layer)
+            .with(cli_layer)
+            .with(fmt_layer);
 
-    #[cfg(feature = "tokio-console")]
-    let sub = sub.with(console_subscriber::spawn());
+        #[cfg(feature = "tokio-console")]
+        let sub = sub.with(console_subscriber::spawn());
 
-    sub.init();
-
-    writer_control
+        sub.init();
+    }
 }
 
 /// A logging layer that appends to a file.
@@ -148,9 +146,7 @@ where
         let mut visitor = CollectVisitor::new();
         event.record(&mut visitor);
 
-        let new_line = if visitor.source == TraceSrc::Cargo
-            || event.fields().any(|f| f.name() == DX_NO_FMT_FLAG)
-        {
+        let new_line = if visitor.source == TraceSrc::Cargo {
             visitor.message
         } else {
             let meta = event.metadata();
@@ -172,7 +168,7 @@ where
         };
 
         // Append logs
-        let new_data = strip_ansi_codes(&new_line).to_string();
+        let new_data = console::strip_ansi_codes(&new_line).to_string();
 
         if let Ok(mut buf) = self.buffer.lock() {
             *buf += &new_data;
@@ -183,22 +179,7 @@ where
 }
 
 /// This is our "subscriber" (layer) that records structured data for the tui output.
-struct CLILayer {
-    internal_output_enabled: Arc<AtomicBool>,
-    output_tx: UnboundedSender<TraceMsg>,
-}
-
-impl CLILayer {
-    pub fn new(
-        internal_output_enabled: Arc<AtomicBool>,
-        output_tx: UnboundedSender<TraceMsg>,
-    ) -> Self {
-        Self {
-            internal_output_enabled,
-            output_tx,
-        }
-    }
-}
+struct CLILayer;
 
 impl<S> Layer<S> for CLILayer
 where
@@ -210,21 +191,13 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        // We only care about user-facing logs.
-        let has_src_flag = event.fields().any(|f| f.name() == DX_SRC_FLAG);
-        if !has_src_flag {
-            return;
-        }
-
         let mut visitor = CollectVisitor::new();
         event.record(&mut visitor);
 
         // If the TUI output is disabled we let fmt subscriber handle the logs
         // EXCEPT for cargo logs which we just print.
-        if !self.internal_output_enabled.load(Ordering::SeqCst) {
-            if visitor.source == TraceSrc::Cargo
-                || event.fields().any(|f| f.name() == DX_NO_FMT_FLAG)
-            {
+        if !TUI_ENABLED.load(Ordering::SeqCst) {
+            if visitor.source == TraceSrc::Cargo {
                 println!("{}", visitor.message);
             }
             return;
@@ -244,8 +217,10 @@ where
             visitor.source = TraceSrc::Dev;
         }
 
-        self.output_tx
-            .unbounded_send(TraceMsg::new(visitor.source, *level, final_msg))
+        TUI_TX
+            .get()
+            .unwrap()
+            .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg))
             .unwrap();
     }
 
@@ -256,7 +231,6 @@ where
 struct CollectVisitor {
     message: String,
     source: TraceSrc,
-    dx_user_msg: bool,
     fields: HashMap<String, String>,
 }
 
@@ -265,7 +239,7 @@ impl CollectVisitor {
         Self {
             message: String::new(),
             source: TraceSrc::Unknown,
-            dx_user_msg: false,
+
             fields: HashMap::new(),
         }
     }
@@ -285,7 +259,6 @@ impl Visit for CollectVisitor {
 
         if name == DX_SRC_FLAG {
             self.source = TraceSrc::from(value_string);
-            self.dx_user_msg = true;
             return;
         }
 
@@ -293,42 +266,15 @@ impl Visit for CollectVisitor {
     }
 }
 
-// Contains the sync primitives to control the CLIWriter.
-pub struct CLILogControl {
-    pub output_rx: UnboundedReceiver<TraceMsg>,
-    pub output_enabled: Arc<AtomicBool>,
-}
-
-struct FmtLogWriter {
-    stdout: io::Stdout,
-    output_enabled: Arc<AtomicBool>,
-}
-
-impl FmtLogWriter {
-    pub fn new(output_enabled: Arc<AtomicBool>) -> Self {
-        Self {
-            stdout: io::stdout(),
-            output_enabled,
-        }
-    }
-}
+struct FmtLogWriter {}
 
 impl Write for FmtLogWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        // Handle selection between TUI or Terminal output.
-        if !self.output_enabled.load(Ordering::SeqCst) {
-            self.stdout.write(buf)
-        } else {
-            Ok(buf.len())
-        }
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if !self.output_enabled.load(Ordering::SeqCst) {
-            self.stdout.flush()
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 }
 
@@ -336,8 +282,6 @@ impl Write for FmtLogWriter {
 fn format_field(field_name: &str, value: &dyn Debug) -> String {
     let mut out = String::new();
     match field_name {
-        DX_SRC_FLAG => write!(out, ""),
-        DX_NO_FMT_FLAG => write!(out, ""),
         "message" => write!(out, "{:?}", value),
         _ => write!(out, "{}={:?}", field_name, value),
     }
@@ -350,15 +294,44 @@ fn format_field(field_name: &str, value: &dyn Debug) -> String {
 pub struct TraceMsg {
     pub source: TraceSrc,
     pub level: Level,
-    pub content: String,
+    pub content: TraceContent,
+    pub timestamp: chrono::DateTime<chrono::Local>,
+}
+
+#[derive(Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)]
+pub enum TraceContent {
+    Cargo(CompilerMessage),
+    Text(String),
 }
 
 impl TraceMsg {
-    pub fn new(source: TraceSrc, level: Level, content: String) -> Self {
+    pub fn text(source: TraceSrc, level: Level, content: String) -> Self {
         Self {
             source,
             level,
-            content,
+            content: TraceContent::Text(content),
+            timestamp: chrono::Local::now(),
+        }
+    }
+
+    /// Create a new trace message from a cargo compiler message
+    ///
+    /// All `cargo` messages are logged at the `TRACE` level since they get *very* noisy during development
+    pub fn cargo(content: CompilerMessage) -> Self {
+        Self {
+            level: match content.message.level {
+                DiagnosticLevel::Ice => Level::ERROR,
+                DiagnosticLevel::Error => Level::ERROR,
+                DiagnosticLevel::FailureNote => Level::ERROR,
+                DiagnosticLevel::Warning => Level::TRACE,
+                DiagnosticLevel::Note => Level::TRACE,
+                DiagnosticLevel::Help => Level::TRACE,
+                _ => Level::TRACE,
+            },
+            timestamp: chrono::Local::now(),
+            source: TraceSrc::Cargo,
+            content: TraceContent::Cargo(content),
         }
     }
 }
@@ -368,9 +341,8 @@ pub enum TraceSrc {
     App(TargetPlatform),
     Dev,
     Build,
-    /// Provides no formatting.
+    Bundle,
     Cargo,
-    /// Avoid using this
     Unknown,
 }
 
@@ -385,12 +357,13 @@ impl From<String> for TraceSrc {
     fn from(value: String) -> Self {
         match value.as_str() {
             "dev" => Self::Dev,
-            "build" => Self::Build,
+            "bld" => Self::Build,
             "cargo" => Self::Cargo,
-            "web" => Self::App(TargetPlatform::Web),
-            "desktop" => Self::App(TargetPlatform::Desktop),
+            "app" => Self::App(TargetPlatform::Web),
+            "windows" => Self::App(TargetPlatform::Windows),
+            "macos" => Self::App(TargetPlatform::MacOS),
+            "linux" => Self::App(TargetPlatform::Linux),
             "server" => Self::App(TargetPlatform::Server),
-            "liveview" => Self::App(TargetPlatform::Liveview),
             _ => Self::Unknown,
         }
     }
@@ -401,14 +374,19 @@ impl Display for TraceSrc {
         match self {
             Self::App(platform) => match platform {
                 TargetPlatform::Web => write!(f, "web"),
-                TargetPlatform::Desktop => write!(f, "desktop"),
+                TargetPlatform::MacOS => write!(f, "macos"),
+                TargetPlatform::Windows => write!(f, "windows"),
+                TargetPlatform::Linux => write!(f, "linux"),
                 TargetPlatform::Server => write!(f, "server"),
-                TargetPlatform::Liveview => write!(f, "server"),
+                TargetPlatform::Ios => write!(f, "ios"),
+                TargetPlatform::Android => write!(f, "android"),
+                TargetPlatform::Liveview => write!(f, "liveview"),
             },
             Self::Dev => write!(f, "dev"),
             Self::Build => write!(f, "build"),
             Self::Cargo => write!(f, "cargo"),
             Self::Unknown => write!(f, "n/a"),
+            Self::Bundle => write!(f, "bundle"),
         }
     }
 }

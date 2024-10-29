@@ -615,6 +615,20 @@ impl IfAttributeValue {
             then_value,
             else_value,
         } = self;
+
+        // Quote an attribute value and convert the value to a string if it is formatted
+        // We always quote formatted segments as strings inside if statements so they have a consistent type
+        // This fixes https://github.com/DioxusLabs/dioxus/issues/2997
+        fn quote_attribute_value_string(value: &AttributeValue) -> TokenStream2 {
+            if matches!(value, AttributeValue::AttrLiteral(HotLiteral::Fmted(_))) {
+                quote! { #value.to_string() }
+            } else {
+                value.to_token_stream()
+            }
+        }
+
+        let then_value = quote_attribute_value_string(then_value);
+
         let then_value = if terminated {
             quote! { #then_value }
         }
@@ -630,6 +644,7 @@ impl IfAttributeValue {
                 tokens
             }
             Some(other) => {
+                let other = quote_attribute_value_string(other);
                 if terminated {
                     quote! { #other }
                 } else {

@@ -1,209 +1,113 @@
-use crate::builder::{BuildRequest, Stage, UpdateBuildProgress, UpdateStage};
-use crate::Result;
-use crate::TraceSrc;
 use anyhow::Context;
-use brotli::enc::BrotliEncoderParams;
-use futures_channel::mpsc::UnboundedSender;
-use manganis_cli_support::{process_file, AssetManifest, AssetManifestExt, AssetType};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use std::fs;
+use manganis_core::{LinkSection, ResourceAsset};
+use object::{read::archive::ArchiveFile, File as ObjectFile, Object, ObjectSection};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
-use std::sync::atomic::AtomicUsize;
-use std::sync::Arc;
-use std::{ffi::OsString, path::PathBuf};
-use std::{fs::File, io::Write};
-use walkdir::WalkDir;
+use std::{collections::HashMap, path::PathBuf};
 
-/// The temp file name for passing manganis json from linker to current exec.
-pub const MG_JSON_OUT: &str = "mg-out";
-
-pub fn asset_manifest(build: &BuildRequest) -> Option<AssetManifest> {
-    let file_path = build.target_out_dir().join(MG_JSON_OUT);
-    let read = fs::read_to_string(&file_path).ok()?;
-    _ = fs::remove_file(file_path);
-    let json: Vec<String> = serde_json::from_str(&read).unwrap();
-
-    Some(AssetManifest::load(json))
+/// A manifest of all assets collected from dependencies
+///
+/// This will be filled in primarily by incremental compilation artifacts.
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
+pub(crate) struct AssetManifest {
+    /// Map of bundled asset name to the asset itself
+    pub(crate) assets: HashMap<PathBuf, ResourceAsset>,
 }
 
-/// Create a head file that contains all of the imports for assets that the user project uses
-pub fn create_assets_head(build: &BuildRequest, manifest: &AssetManifest) -> Result<()> {
-    let out_dir = build.target_out_dir();
-    std::fs::create_dir_all(&out_dir)?;
-    let mut file = File::create(out_dir.join("__assets_head.html"))?;
-    file.write_all(manifest.head().as_bytes())?;
-    Ok(())
-}
+impl AssetManifest {
+    pub(crate) fn load_from_file(path: &Path) -> anyhow::Result<Self> {
+        let src = std::fs::read_to_string(path)
+            .context("Failed to read asset manifest from filesystem")?;
+        serde_json::from_str(&src)
+            .with_context(|| format!("Failed to parse asset manifest from {path:?}\n{src}"))
+    }
 
-/// Process any assets collected from the binary
-pub(crate) fn process_assets(
-    build: &BuildRequest,
-    manifest: &AssetManifest,
-    progress: &mut UnboundedSender<UpdateBuildProgress>,
-) -> anyhow::Result<()> {
-    let static_asset_output_dir = build.target_out_dir();
-
-    std::fs::create_dir_all(&static_asset_output_dir)
-        .context("Failed to create static asset output directory")?;
-
-    let assets_finished = Arc::new(AtomicUsize::new(0));
-    let assets = manifest.assets();
-    let asset_count = assets.len();
-    assets.par_iter().try_for_each_init(
-        || progress.clone(),
-        move |progress, asset| {
-            if let AssetType::File(file_asset) = asset {
-                match process_file(file_asset, &static_asset_output_dir) {
-                    Ok(_) => {
-                        // Update the progress
-                        tracing::info!(dx_src = ?TraceSrc::Build, "Optimized static asset {file_asset}");
-                        let assets_finished =
-                            assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        _ = progress.start_send(UpdateBuildProgress {
-                            stage: Stage::OptimizingAssets,
-                            update: UpdateStage::SetProgress(
-                                assets_finished as f64 / asset_count as f64,
-                            ),
-                        });
-                    }
-                    Err(err) => {
-                        tracing::error!(dx_src = ?TraceSrc::Build, "Failed to copy static asset: {}", err);
-                        return Err(err);
-                    }
-                }
-            }
-            Ok::<(), anyhow::Error>(())
-        },
-    )?;
-
-    Ok(())
-}
-
-/// A guard that sets up the environment for the web renderer to compile in. This guard sets the location that assets will be served from
-pub(crate) struct AssetConfigDropGuard;
-
-impl AssetConfigDropGuard {
-    pub fn new(base_path: Option<&str>) -> Self {
-        // Set up the collect asset config
-        let base = match base_path {
-            Some(base) => format!("/{}/", base.trim_matches('/')),
-            None => "/".to_string(),
+    /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
+    pub(crate) fn add_from_object_path(&mut self, path: PathBuf) -> anyhow::Result<()> {
+        let Some(ext) = path.extension() else {
+            return Ok(());
         };
-        manganis_cli_support::Config::default()
-            .with_assets_serve_location(base)
-            .save();
-        Self {}
-    }
-}
 
-impl Drop for AssetConfigDropGuard {
-    fn drop(&mut self) {
-        // Reset the config
-        manganis_cli_support::Config::default().save();
-    }
-}
+        let Some(ext) = ext.to_str() else {
+            return Ok(());
+        };
 
-pub(crate) fn copy_dir_to(
-    src_dir: PathBuf,
-    dest_dir: PathBuf,
-    pre_compress: bool,
-) -> std::io::Result<()> {
-    let entries = std::fs::read_dir(&src_dir)?;
-    let mut children: Vec<std::thread::JoinHandle<std::io::Result<()>>> = Vec::new();
+        let data = std::fs::read(path.clone())?;
 
-    for entry in entries.flatten() {
-        let entry_path = entry.path();
-        let path_relative_to_src = entry_path.strip_prefix(&src_dir).unwrap();
-        let output_file_location = dest_dir.join(path_relative_to_src);
-        children.push(std::thread::spawn(move || {
-            if entry.file_type()?.is_dir() {
-                // If the file is a directory, recursively copy it into the output directory
-                if let Err(err) =
-                    copy_dir_to(entry_path.clone(), output_file_location, pre_compress)
-                {
-                    tracing::error!(
-                        dx_src = ?TraceSrc::Build,
-                        "Failed to pre-compress directory {}: {}",
-                        entry_path.display(),
-                        err
-                    );
-                }
-            } else {
-                // Make sure the directory exists
-                std::fs::create_dir_all(output_file_location.parent().unwrap())?;
-                // Copy the file to the output directory
-                std::fs::copy(&entry_path, &output_file_location)?;
-
-                // Then pre-compress the file if needed
-                if pre_compress {
-                    if let Err(err) = pre_compress_file(&output_file_location) {
-                        tracing::error!(
-                            dx_src = ?TraceSrc::Build,
-                            "Failed to pre-compress static assets {}: {}",
-                            output_file_location.display(),
-                            err
-                        );
-                    }
-                    // If pre-compression isn't enabled, we should remove the old compressed file if it exists
-                } else if let Some(compressed_path) = compressed_path(&output_file_location) {
-                    _ = std::fs::remove_file(compressed_path);
+        match ext {
+            // Parse an unarchived object file
+            "o" => {
+                if let Ok(object) = object::File::parse(&*data) {
+                    self.add_from_object_file(&object)?;
                 }
             }
 
-            Ok(())
-        }));
-    }
-    for child in children {
-        child.join().unwrap()?;
-    }
-    Ok(())
-}
-
-/// Get the path to the compressed version of a file
-fn compressed_path(path: &Path) -> Option<PathBuf> {
-    let new_extension = match path.extension() {
-        Some(ext) => {
-            if ext.to_string_lossy().to_lowercase().ends_with("br") {
-                return None;
+            // Parse an rlib as a collection of objects
+            "rlib" => {
+                if let Ok(archive) = object::read::archive::ArchiveFile::parse(&*data) {
+                    self.add_from_archive_file(&archive, &data)?;
+                }
             }
-            let mut ext = ext.to_os_string();
-            ext.push(".br");
-            ext
+            _ => {}
         }
-        None => OsString::from("br"),
-    };
-    Some(path.with_extension(new_extension))
-}
 
-/// pre-compress a file with brotli
-pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
-    let Some(compressed_path) = compressed_path(path) else {
-        return Ok(());
-    };
-    let file = std::fs::File::open(path)?;
-    let mut stream = std::io::BufReader::new(file);
-    let mut buffer = std::fs::File::create(compressed_path)?;
-    let params = BrotliEncoderParams::default();
-    brotli::BrotliCompress(&mut stream, &mut buffer, &params)?;
-    Ok(())
-}
+        Ok(())
+    }
 
-/// pre-compress all files in a folder
-pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::Result<()> {
-    let walk_dir = WalkDir::new(path);
-    for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
-        let entry_path = entry.path();
-        if entry_path.is_file() {
-            if pre_compress {
-                if let Err(err) = pre_compress_file(entry_path) {
-                    tracing::error!(dx_src = ?TraceSrc::Build, "Failed to pre-compress file {entry_path:?}: {err}");
-                }
-            }
-            // If pre-compression isn't enabled, we should remove the old compressed file if it exists
-            else if let Some(compressed_path) = compressed_path(entry_path) {
-                _ = std::fs::remove_file(compressed_path);
+    /// Fill this manifest from an rlib / ar file that contains many object files and their entryies
+    fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) -> object::Result<()> {
+        // Look through each archive member for object files.
+        // Read the archive member's binary data (we know it's an object file)
+        // And parse it with the normal `object::File::parse` to find the manganis string.
+        for member in archive.members() {
+            let member = member?;
+            let name = String::from_utf8_lossy(member.name()).to_string();
+
+            // Check if the archive member is an object file and parse it.
+            if name.ends_with(".o") {
+                let data = member.data(data)?;
+                let object = object::File::parse(data)?;
+                _ = self.add_from_object_file(&object);
             }
         }
+
+        Ok(())
     }
-    Ok(())
+
+    /// Fill this manifest with whatever tables might come from the object file
+    fn add_from_object_file(&mut self, obj: &ObjectFile) -> anyhow::Result<()> {
+        for section in obj.sections() {
+            let Ok(section_name) = section.name() else {
+                continue;
+            };
+
+            // Check if the link section matches the asset section for one of the platforms we support. This may not be the current platform if the user is cross compiling
+            let matches = LinkSection::ALL
+                .iter()
+                .any(|x| x.link_section == section_name);
+
+            if !matches {
+                continue;
+            }
+
+            let bytes = section
+                .uncompressed_data()
+                .context("Could not read uncompressed data from object file")?;
+
+            let as_str = std::str::from_utf8(&bytes)
+                .context("object file contained non utf8 encoding")?
+                .chars()
+                .filter(|c| !c.is_control())
+                .collect::<String>();
+
+            let assets = serde_json::Deserializer::from_str(&as_str).into_iter::<ResourceAsset>();
+            for as_resource in assets.flatten() {
+                // Some platforms (e.g. macOS) start the manganis section with a null byte, we need to filter that out before we deserialize the JSON
+                self.assets
+                    .insert(as_resource.absolute.clone(), as_resource);
+            }
+        }
+
+        Ok(())
+    }
 }

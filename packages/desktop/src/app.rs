@@ -226,8 +226,9 @@ impl App {
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let view = self.webviews.get_mut(&id).unwrap();
 
-        view.dom
-            .rebuild(&mut *view.edits.wry_queue.mutation_state_mut());
+        view.edits
+            .wry_queue
+            .with_mutation_state_mut(|f| view.dom.rebuild(f));
 
         view.edits.wry_queue.send_edits();
 
@@ -308,11 +309,13 @@ impl App {
         let view = self.webviews.get_mut(&window).unwrap();
 
         let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
+
+        let runtime = view.dom.runtime();
         if event_name == "change&input" {
-            view.dom.runtime().handle_event("input", event.clone(), id);
-            view.dom.runtime().handle_event("change", event, id);
+            runtime.handle_event("input", event.clone(), id);
+            runtime.handle_event("change", event, id);
         } else {
-            view.dom.runtime().handle_event(event_name, event, id);
+            runtime.handle_event(event_name, event, id);
         }
     }
 

@@ -1,13 +1,11 @@
-use crate::build::TargetArgs;
+use super::*;
 use crate::TraceSrc;
 use crate::{metadata::crate_root, CliSettings};
-
-use super::*;
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
 #[clap(name = "config")]
-pub enum Config {
+pub(crate) enum Config {
     /// Init `Dioxus.toml` for project/folder.
     Init {
         /// Init project name
@@ -22,8 +20,10 @@ pub enum Config {
         #[clap(long, default_value = "web")]
         platform: String,
     },
+
     /// Format print Dioxus config.
     FormatPrint {},
+
     /// Create a custom html file.
     CustomHtml {},
 
@@ -36,7 +36,7 @@ pub enum Config {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Subcommand)]
-pub enum Setting {
+pub(crate) enum Setting {
     /// Set the value of the always-hot-reload setting.
     AlwaysHotReload { value: BoolValue },
     /// Set the value of the always-open-browser setting.
@@ -61,7 +61,7 @@ impl Display for Setting {
 // Clap complains if we use a bool directly and I can't find much info about it.
 // "Argument 'value` is positional and it must take a value but action is SetTrue"
 #[derive(Debug, Clone, Copy, Deserialize, clap::ValueEnum)]
-pub enum BoolValue {
+pub(crate) enum BoolValue {
     True,
     False,
 }
@@ -76,7 +76,7 @@ impl From<BoolValue> for bool {
 }
 
 impl Config {
-    pub fn config(self) -> Result<()> {
+    pub(crate) fn config(self) -> Result<()> {
         let crate_root = crate_root()?;
         match self {
             Config::Init {
@@ -101,13 +101,13 @@ impl Config {
             Config::FormatPrint {} => {
                 println!(
                     "{:#?}",
-                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())?.dioxus_config
+                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())?.config
                 );
             }
             Config::CustomHtml {} => {
                 let html_path = crate_root.join("index.html");
                 let mut file = File::create(html_path)?;
-                let content = include_str!("../../assets/index.html");
+                let content = include_str!("../../assets/web/index.html");
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }

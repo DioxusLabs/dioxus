@@ -9,6 +9,7 @@ use dioxus_rsx::{
     HotLiteral, TemplateBody, TextNode,
 };
 pub use html_parser::{Dom, Node};
+use htmlentity::entity::ICodedDataTrait;
 use proc_macro2::{Ident, Span};
 use syn::{punctuated::Punctuated, LitStr};
 
@@ -33,7 +34,11 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
     use AttributeValue::*;
 
     match node {
-        Node::Text(text) => Some(BodyNode::Text(TextNode::from_text(text))),
+        Node::Text(text) => Some(BodyNode::Text(TextNode::from_text(
+            &htmlentity::entity::decode(text.as_bytes())
+                .to_string()
+                .ok()?,
+        ))),
 
         Node::Element(el) => {
             let el_name = if let Some(name) = map_html_element_to_rsx(&el.name) {

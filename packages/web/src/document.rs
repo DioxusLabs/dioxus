@@ -98,10 +98,8 @@ impl WebEvaluator {
     fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         let owner = UnsyncStorage::owner();
 
-        let generational_box = owner.invalid();
-
         // add the drop handler to DioxusChannel so that it gets dropped when the channel is dropped in js
-        let channels = WebDioxusChannel::new(JSOwner::new(owner));
+        let channels = WebDioxusChannel::new(JSOwner::new(owner.clone()));
 
         // The Rust side of the channel is a weak reference to the DioxusChannel
         let weak_channels = channels.weak();
@@ -134,13 +132,11 @@ impl WebEvaluator {
             )),
         };
 
-        generational_box.set(Box::new(Self {
+        owner.insert(Box::new(Self {
             channels: weak_channels,
             result: Some(result),
             next_future: None,
-        }) as Box<dyn Evaluator>);
-
-        generational_box
+        }) as Box<dyn Evaluator>)
     }
 }
 

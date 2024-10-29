@@ -1,822 +1,956 @@
-use crate::config::{AddressArguments, Platform};
 use crate::{
-    builder::{BuildResult, UpdateStage},
-    builder::{Stage, TargetPlatform, UpdateBuildProgress},
-    dioxus_crate::DioxusCrate,
-    serve::next_or_pending,
-    serve::Serve,
-    serve::{Builder, Server, Watcher},
-    tracer::CLILogControl,
-    TraceMsg, TraceSrc,
+    serve::{ansi_buffer::AnsiStringBuffer, Builder, ServeUpdate, Watcher, WebServer},
+    BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
-    event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers},
-    terminal::{
-        disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
-        LeaveAlternateScreen,
+    event::{
+        DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange, Event,
+        EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
     },
-    tty::IsTty,
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
     ExecutableCommand,
 };
-use dioxus_devtools::ClientMsg;
-use futures_util::{future::select_all, Future, FutureExt, StreamExt};
-use ratatui::{prelude::*, TerminalOptions, Viewport};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, BorderType, Borders, LineGauge, Paragraph, Wrap},
+    TerminalOptions, Viewport,
+};
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::VecDeque,
     io::{self, stdout},
     rc::Rc,
-    sync::atomic::Ordering,
-    time::{Duration, Instant},
-};
-use tokio::{
-    io::{AsyncBufReadExt, BufReader, Lines},
-    process::{ChildStderr, ChildStdout},
+    time::Duration,
 };
 use tracing::Level;
 
-use super::render;
+const TICK_RATE_MS: u64 = 100;
+const VIEWPORT_MAX_WIDTH: u16 = 100;
+const VIEWPORT_HEIGHT_SMALL: u16 = 5;
+const VIEWPORT_HEIGHT_BIG: u16 = 12;
 
-// How many lines should be scroll on each mouse scroll or arrow key input.
-const SCROLL_SPEED: u16 = 2;
-// Speed added to `SCROLL_SPEED` when the modifier key is held during scroll.
-const SCROLL_MODIFIER: u16 = 4;
-// Scroll modifier key.
-const SCROLL_MODIFIER_KEY: KeyModifiers = KeyModifiers::SHIFT;
-
-#[derive(Default)]
-pub struct BuildProgress {
-    pub(crate) current_builds: HashMap<TargetPlatform, ActiveBuild>,
-}
-
-impl BuildProgress {
-    pub fn progress(&self) -> f64 {
-        self.current_builds
-            .values()
-            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|build| match build.stage {
-                Stage::Initializing => 0.0,
-                Stage::InstallingWasmTooling => 0.0,
-                Stage::Compiling => build.progress,
-                Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
-            })
-            .unwrap_or_default()
-    }
-}
-
+/// The TUI that drives the console output.
+///
+/// We try not to store too much state about the world here, just the state about the tui itself.
+/// This is to prevent out-of-sync issues with the rest of the build engine and to use the components
+/// of the serve engine as the source of truth.
+///
+/// Please please, do not add state here that does not belong here. We should only be storing state
+/// here that is used to change how we display *other* state. Things like throbbers, modals, etc.
 pub struct Output {
-    term: Rc<RefCell<Option<TerminalBackend>>>,
-    log_control: CLILogControl,
-
-    // optional since when there's no tty there's no eventstream to read from - just stdin
+    term: Rc<RefCell<Option<Terminal<CrosstermBackend<io::Stdout>>>>>,
     events: Option<EventStream>,
 
-    pub(crate) build_progress: BuildProgress,
-    running_apps: HashMap<TargetPlatform, RunningApp>,
-
     // A list of all messages from build, dev, app, and more.
-    messages: Vec<TraceMsg>,
-
-    num_lines_wrapping: u16,
-    scroll_position: u16,
-    console_width: u16,
-    console_height: u16,
-
     more_modal_open: bool,
-    anim_start: Instant,
-
     interactive: bool,
-    _is_cli_release: bool,
     platform: Platform,
-    addr: AddressArguments,
 
-    // Filters
-    show_filter_menu: bool,
-    filters: Vec<(String, bool)>,
-    selected_filter_index: usize,
-    filter_search_mode: bool,
-    filter_search_input: Option<String>,
+    // Whether to show verbose logs or not
+    // We automatically hide "debug" logs if verbose is false (only showing "info" / "warn" / "error")
+    verbose: bool,
+    trace: bool,
 
-    _rustc_version: String,
-    _rustc_nightly: bool,
-    _dx_version: String,
+    // Pending logs
+    pending_logs: VecDeque<TraceMsg>,
+
+    dx_version: String,
+    tick_animation: bool,
+
+    tick_interval: tokio::time::Interval,
+
+    // ! needs to be wrapped in an &mut since `render stateful widget` requires &mut... but our
+    // "render" method only borrows &self (for no particular reason at all...)
+    throbber: RefCell<throbber_widgets_tui::ThrobberState>,
 }
 
-type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
+#[allow(unused)]
+#[derive(Clone, Copy)]
+struct RenderState<'a> {
+    opts: &'a ServeArgs,
+    krate: &'a DioxusCrate,
+    build_engine: &'a Builder,
+    server: &'a WebServer,
+    watcher: &'a Watcher,
+}
 
 impl Output {
-    pub fn start(cfg: &Serve, log_control: CLILogControl) -> io::Result<Self> {
-        let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
-
-        let mut events = None;
-
-        if interactive {
-            log_control.output_enabled.store(true, Ordering::SeqCst);
-            enable_raw_mode()?;
-            stdout().execute(EnterAlternateScreen)?.execute(Hide)?;
-
-            // workaround for ci where the terminal is not fully initialized
-            // this stupid bug
-            // https://github.com/crossterm-rs/crossterm/issues/659
-            events = Some(EventStream::new());
-        };
-
-        // set the panic hook to fix the terminal
-        set_fix_term_hook();
-
-        // Fix the vscode scrollback issue
-        fix_xtermjs_scrollback();
-
-        let term: Option<TerminalBackend> = Terminal::with_options(
-            CrosstermBackend::new(stdout()),
-            TerminalOptions {
-                viewport: Viewport::Fullscreen,
-            },
-        )
-        .ok();
-
-        // todo: re-enable rustc version
-        // let rustc_version = rustc_version().await;
-        // let rustc_nightly = rustc_version.contains("nightly") || cfg.target_args.nightly;
-        let _rustc_version = String::from("1.0.0");
-        let _rustc_nightly = false;
-
-        let mut dx_version = String::new();
-
-        dx_version.push_str(env!("CARGO_PKG_VERSION"));
-
-        // todo: we want the binstalls / cargo installs to be exempt, but installs from git are not
-        let is_cli_release = crate::dx_build_info::PROFILE == "release";
-        if !is_cli_release {
-            if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
-                let hash = &hash.trim_start_matches('g')[..4];
-                dx_version.push('-');
-                dx_version.push_str(hash);
-            }
-        }
-
-        let platform = cfg.build_arguments.platform.expect("To be resolved by now");
-
-        Ok(Self {
-            term: Rc::new(RefCell::new(term)),
-            log_control,
-            events,
-            _rustc_version,
-            _rustc_nightly,
-            _dx_version: dx_version,
-            interactive,
-            _is_cli_release: is_cli_release,
-            platform,
-            messages: Vec::new(),
+    pub(crate) fn start(cfg: &ServeArgs) -> io::Result<Self> {
+        let mut output = Self {
+            term: Rc::new(RefCell::new(
+                Terminal::with_options(
+                    CrosstermBackend::new(stdout()),
+                    TerminalOptions {
+                        viewport: Viewport::Inline(VIEWPORT_HEIGHT_SMALL),
+                    },
+                )
+                .ok(),
+            )),
+            interactive: cfg.is_interactive_tty(),
+            dx_version: format!(
+                "{}-{}",
+                env!("CARGO_PKG_VERSION"),
+                crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("main")
+            ),
+            platform: cfg.build_arguments.platform.expect("To be resolved by now"),
+            events: None,
+            // messages: Vec::new(),
             more_modal_open: false,
-            build_progress: Default::default(),
-            running_apps: HashMap::new(),
-            scroll_position: 0,
-            num_lines_wrapping: 0,
-            console_width: 0,
-            console_height: 0,
-            anim_start: Instant::now(),
-            addr: cfg.server_arguments.address.clone(),
-
-            // Filter
-            show_filter_menu: false,
-            filters: Vec::new(),
-            selected_filter_index: 0,
-            filter_search_input: None,
-            filter_search_mode: false,
-        })
-    }
-
-    /// Add a message from stderr to the logs
-    fn push_stderr(&mut self, platform: TargetPlatform, stderr: String) {
-        self.running_apps
-            .get_mut(&platform)
-            .unwrap()
-            .output
-            .as_mut()
-            .unwrap()
-            .stderr_line
-            .push_str(&stderr);
-
-        self.messages.push(TraceMsg {
-            source: TraceSrc::App(platform),
-            level: Level::ERROR,
-            content: stderr,
-        });
-
-        if self.is_snapped() {
-            self.scroll_to_bottom();
-        }
-    }
-
-    /// Add a message from stdout to the logs
-    fn push_stdout(&mut self, platform: TargetPlatform, stdout: String) {
-        self.running_apps
-            .get_mut(&platform)
-            .unwrap()
-            .output
-            .as_mut()
-            .unwrap()
-            .stdout_line
-            .push_str(&stdout);
-
-        self.messages.push(TraceMsg {
-            source: TraceSrc::App(platform),
-            level: Level::INFO,
-            content: stdout,
-        });
-
-        if self.is_snapped() {
-            self.scroll_to_bottom();
-        }
-    }
-
-    /// Wait for either the ctrl_c handler or the next event
-    ///
-    /// Why is the ctrl_c handler here?
-    ///
-    /// Also tick animations every few ms
-    pub async fn wait(&mut self) -> io::Result<bool> {
-        fn ok_and_some<F, T, E>(f: F) -> impl Future<Output = T>
-        where
-            F: Future<Output = Result<Option<T>, E>>,
-        {
-            next_or_pending(async move { f.await.ok().flatten() })
-        }
-        let user_input = async {
-            let events = self.events.as_mut()?;
-            events.next().await
-        };
-        let user_input = ok_and_some(user_input.map(|e| e.transpose()));
-
-        let has_running_apps = !self.running_apps.is_empty();
-        let next_stdout = self.running_apps.values_mut().map(|app| {
-            let future = async move {
-                let (stdout, stderr) = match &mut app.output {
-                    Some(out) => (
-                        ok_and_some(out.stdout.next_line()),
-                        ok_and_some(out.stderr.next_line()),
-                    ),
-                    None => return futures_util::future::pending().await,
-                };
-
-                tokio::select! {
-                    line = stdout => (app.result.target_platform, Some(line), None),
-                    line = stderr => (app.result.target_platform, None, Some(line)),
-                }
-            };
-            Box::pin(future)
-        });
-
-        let next_stdout = async {
-            if has_running_apps {
-                select_all(next_stdout).await.0
-            } else {
-                futures_util::future::pending().await
-            }
-        };
-
-        let tui_log_rx = &mut self.log_control.output_rx;
-        let next_tui_log = next_or_pending(tui_log_rx.next());
-
-        tokio::select! {
-            (platform, stdout, stderr) = next_stdout => {
-                if let Some(stdout) = stdout {
-                    self.push_stdout(platform, stdout);
-                }
-                if let Some(stderr) = stderr {
-                    self.push_stderr(platform, stderr);
-                }
+            pending_logs: VecDeque::new(),
+            throbber: RefCell::new(throbber_widgets_tui::ThrobberState::default()),
+            trace: cfg.trace,
+            verbose: cfg.verbose,
+            tick_animation: false,
+            tick_interval: {
+                let mut interval = tokio::time::interval(Duration::from_millis(TICK_RATE_MS));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                interval
             },
+        };
 
-            // Handle internal CLI tracing logs.
-            log = next_tui_log => {
-                self.push_log(log);
-            }
+        output.startup()?;
 
-            event = user_input => {
-                if self.handle_events(event).await? {
-                    return Ok(true)
-                }
-            }
-        }
-
-        Ok(false)
+        Ok(output)
     }
 
-    pub fn shutdown(&mut self) -> io::Result<()> {
-        // if we're a tty then we need to disable the raw mode
+    /// Call the startup functions that might mess with the terminal settings.
+    /// This is meant to be paired with "shutdown" to restore the terminal to its original state.
+    fn startup(&mut self) -> io::Result<()> {
         if self.interactive {
-            self.log_control
-                .output_enabled
-                .store(false, Ordering::SeqCst);
-            disable_raw_mode()?;
-            stdout().execute(LeaveAlternateScreen)?.execute(Show)?;
-            self.drain_print_logs();
+            // set the panic hook to fix the terminal in the event of a panic
+            // The terminal might be left in a wonky state if a panic occurs, and we don't want it to be completely broken
+            let original_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                _ = disable_raw_mode();
+                _ = stdout().execute(Show);
+                original_hook(info);
+            }));
+
+            enable_raw_mode()?;
+            stdout()
+                .execute(Hide)?
+                .execute(EnableFocusChange)?
+                .execute(EnableBracketedPaste)?;
+
+            // Initialize the event stream here - this is optional because an EvenStream in a non-interactive
+            // terminal will cause a panic instead of simply doing nothing.
+            // https://github.com/crossterm-rs/crossterm/issues/659
+            self.events = Some(EventStream::new());
         }
 
         Ok(())
     }
 
-    /// Emit the build logs as println! statements such that the terminal has the same output as cargo
-    ///
-    /// This is used when the terminal is shutdown and we want the build logs in the terminal. Old
-    /// versions of the cli would just eat build logs making debugging issues harder than they needed
-    /// to be.
-    fn drain_print_logs(&mut self) {
-        let messages = self.messages.drain(..);
+    /// Call the shutdown functions that might mess with the terminal settings - see the related code
+    /// in "startup" for more details about what we need to unset
+    pub(crate) fn shutdown(&self) -> io::Result<()> {
+        if self.interactive {
+            stdout()
+                .execute(Show)?
+                .execute(DisableFocusChange)?
+                .execute(DisableBracketedPaste)?;
+            disable_raw_mode()?;
 
-        for msg in messages {
-            // TODO: Better formatting for different content lengths.
-            if msg.source != TraceSrc::Cargo {
-                println!("[{}] {}: {}", msg.source, msg.level, msg.content);
-            } else {
-                println!("{}", msg.content);
+            // print a few lines to not cut off the output
+            for _ in 0..3 {
+                println!();
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
+        use futures_util::future::OptionFuture;
+        use futures_util::StreamExt;
+
+        // Wait for the next user event or animation tick
+        loop {
+            let next = OptionFuture::from(self.events.as_mut().map(|f| f.next()));
+            let event = tokio::select! {
+                biased; // Always choose the event over the animation tick to not lose the event
+                Some(Some(Ok(event))) = next => event,
+                _ = self.tick_interval.tick(), if self.tick_animation => {
+                    self.throbber.borrow_mut().calc_next();
+                    return ServeUpdate::Redraw
+                },
+                else => futures_util::future::pending().await
+            };
+
+            match self.handle_input(event) {
+                Ok(Some(update)) => return update,
+                Err(ee) => {
+                    return ServeUpdate::Exit {
+                        error: Some(Box::new(ee)),
+                    }
+                }
+                Ok(None) => {}
             }
         }
     }
 
     /// Handle an input event, returning `true` if the event should cause the program to restart.
-    pub fn handle_input(&mut self, input: Event) -> io::Result<bool> {
+    fn handle_input(&mut self, input: Event) -> io::Result<Option<ServeUpdate>> {
         // handle ctrlc
         if let Event::Key(key) = input {
             if let KeyCode::Char('c') = key.code {
                 if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    return Err(io::Error::new(io::ErrorKind::Interrupted, "Ctrl-C"));
+                    return Ok(Some(ServeUpdate::Exit { error: None }));
                 }
-            }
-        }
-
-        // If we're in filter search mode we must capture all key inputs.
-        // This also handles when a filter is submitted.
-        if self.filter_search_mode {
-            if let Event::Key(key) = input {
-                if key.kind != KeyEventKind::Press {
-                    return Ok(false);
-                }
-
-                match key.code {
-                    KeyCode::Char(c) => {
-                        if let Some(input) = self.filter_search_input.as_mut() {
-                            input.push(c);
-                        } else {
-                            self.filter_search_input = Some(String::from(c));
-                        }
-                    }
-                    KeyCode::Enter => {
-                        if let Some(search) = &self.filter_search_input {
-                            self.filters.push((search.to_string(), true));
-                        }
-                        self.filter_search_input = None;
-                        self.filter_search_mode = false;
-                    }
-                    KeyCode::Backspace => {
-                        if let Some(search) = self.filter_search_input.as_mut() {
-                            search.pop();
-                            if search.is_empty() {
-                                self.filter_search_input = None;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                return Ok(false);
             }
         }
 
         match input {
-            Event::Key(key) if key.code == KeyCode::Up && key.kind == KeyEventKind::Press => {
-                // Select filter list item if filter is showing, otherwise scroll console.
-                if self.show_filter_menu {
-                    self.selected_filter_index = self.selected_filter_index.saturating_sub(1);
-                } else {
-                    // Scroll up
-                    let mut scroll_speed = SCROLL_SPEED;
-                    if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
-                        scroll_speed += SCROLL_MODIFIER;
-                    }
-                    self.scroll_position = self.scroll_position.saturating_sub(scroll_speed);
-                }
+            Event::Key(key) if key.kind == KeyEventKind::Press => self.handle_keypress(key),
+            _ => Ok(Some(ServeUpdate::Redraw)),
+        }
+    }
+
+    fn handle_keypress(&mut self, key: KeyEvent) -> io::Result<Option<ServeUpdate>> {
+        match key.code {
+            KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
+            KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
+            KeyCode::Char('p') => return Ok(Some(ServeUpdate::ToggleShouldRebuild)),
+            KeyCode::Char('v') => {
+                self.verbose = !self.verbose;
+                tracing::info!(
+                    "Verbose logging is now {}",
+                    if self.verbose { "on" } else { "off" }
+                );
             }
-            Event::Key(key) if key.code == KeyCode::Down && key.kind == KeyEventKind::Press => {
-                // Select filter list item if filter is showing, otherwise scroll console.
-                if self.show_filter_menu {
-                    let list_len = self.filters.len();
-                    if self.selected_filter_index + 1 < list_len {
-                        self.selected_filter_index += 1;
-                    }
-                } else {
-                    // Scroll down
-                    let mut scroll_speed = SCROLL_SPEED;
-                    if key.modifiers.contains(SCROLL_MODIFIER_KEY) {
-                        scroll_speed += SCROLL_MODIFIER;
-                    }
-                    self.scroll_position += scroll_speed;
-                }
-            }
-            Event::Key(key) if key.code == KeyCode::Left && key.kind == KeyEventKind::Press => {
-                // Remove selected filter if filter menu is shown.
-                if self.show_filter_menu {
-                    let index = self.selected_filter_index;
-                    if self.filters.get(index).is_some() {
-                        self.filters.remove(index);
-                    }
-                }
-            }
-            Event::Key(key) if key.code == KeyCode::Right && key.kind == KeyEventKind::Press => {
-                // Toggle filter if filter menu is shown.
-                if self.show_filter_menu {
-                    let index = self.selected_filter_index;
-                    self.filters.reverse();
-                    if let Some(item) = self.filters.get_mut(index) {
-                        item.1 = !item.1;
-                    }
-                    self.filters.reverse();
-                }
-            }
-            Event::Key(key) if key.code == KeyCode::Enter && key.kind == KeyEventKind::Press => {
-                // We only need to listen to the enter key when not in search mode
-                // as there is other logic that handles adding filters and disabling the mode.
-                if self.show_filter_menu {
-                    self.filter_search_mode = !self.filter_search_mode;
-                }
-            }
-            Event::Key(key)
-                if key.code == KeyCode::Char('r') && key.kind == KeyEventKind::Press =>
-            {
-                // Reload the app
-                return Ok(true);
-            }
-            Event::Key(key)
-                if key.code == KeyCode::Char('o') && key.kind == KeyEventKind::Press =>
-            {
-                // Open the running app.
-                open::that(format!("http://{}:{}", self.addr.addr, self.addr.port))?;
+            KeyCode::Char('t') => {
+                self.trace = !self.trace;
+                tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
             }
 
-            Event::Key(key)
-                if key.code == KeyCode::Char('f') && key.kind == KeyEventKind::Press =>
-            {
-                // Show filter menu and enable filter selection mode.
-                if self.show_filter_menu {
-                    // Reset inputs when filter menu is closed.
-                    self.filter_search_mode = false;
-                    self.filter_search_input = None;
+            KeyCode::Char('c') => {
+                stdout()
+                    .execute(Clear(ClearType::All))?
+                    .execute(Clear(ClearType::Purge))?;
+                _ = self.term.borrow_mut().as_mut().map(|t| t.clear());
+            }
+
+            // Toggle the more modal by swapping the the terminal with a new one
+            // This is a bit of a hack since crossterm doesn't technically support changing the
+            // size of an inline viewport.
+            KeyCode::Char('/') => {
+                if let Some(terminal) = self.term.borrow_mut().as_mut() {
+                    // Toggle the more modal, which will change our current viewport height
+                    self.more_modal_open = !self.more_modal_open;
+
+                    // Clear the terminal before resizing it, such that it doesn't tear
+                    terminal.clear()?;
+
+                    // And then set the new viewport, which essentially mimics a resize
+                    *terminal = Terminal::with_options(
+                        CrosstermBackend::new(stdout()),
+                        TerminalOptions {
+                            viewport: Viewport::Inline(self.viewport_current_height()),
+                        },
+                    )?;
                 }
-                self.show_filter_menu = !self.show_filter_menu;
             }
-            Event::Key(key)
-                if key.code == KeyCode::Char('/') && key.kind == KeyEventKind::Press =>
-            {
-                // Toggle more modal
-                self.more_modal_open = !self.more_modal_open;
-            }
-            Event::Resize(_width, _height) => {
-                // nothing, it should take care of itself
-            }
+
             _ => {}
         }
 
-        if self.scroll_position > self.num_lines_wrapping.saturating_sub(self.console_height) {
-            self.scroll_to_bottom();
-        }
-
-        Ok(false)
+        // Out of safety, we always redraw, since it's relatively cheap operation
+        Ok(Some(ServeUpdate::Redraw))
     }
 
-    pub fn new_ws_message(
-        &mut self,
-        platform: TargetPlatform,
-        message: axum::extract::ws::Message,
-    ) {
-        // Deccode the message and push it to our logs.
-        if let axum::extract::ws::Message::Text(text) = message {
-            let msg = serde_json::from_str::<ClientMsg>(text.as_str());
-            match msg {
-                Ok(ClientMsg::Log { level, messages }) => {
-                    let level = match level.as_str() {
-                        "trace" => Level::TRACE,
-                        "debug" => Level::DEBUG,
-                        "info" => Level::INFO,
-                        "warn" => Level::WARN,
-                        "error" => Level::ERROR,
-                        _ => Level::INFO,
-                    };
-
-                    let content = messages.first().unwrap_or(&String::new()).clone();
-
-                    // We don't care about logging the app's message so we directly push it instead of using tracing.
-                    self.push_log(TraceMsg::new(TraceSrc::App(platform), level, content));
-                }
-                Err(err) => {
-                    tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
-                }
-            }
-        }
-    }
-
-    fn is_snapped(&self) -> bool {
-        true
-    }
-
-    pub fn scroll_to_bottom(&mut self) {
-        self.scroll_position = self.num_lines_wrapping.saturating_sub(self.console_height);
-    }
-
+    /// Push a TraceMsg to be printed on the next render
     pub fn push_log(&mut self, message: TraceMsg) {
-        self.messages.push(message);
+        self.pending_logs.push_front(message);
+    }
 
-        if self.is_snapped() {
-            self.scroll_to_bottom();
+    pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
+        use cargo_metadata::diagnostic::DiagnosticLevel;
+
+        if self.trace
+            || matches!(
+                message.message.level,
+                DiagnosticLevel::Error | DiagnosticLevel::FailureNote
+            )
+        {
+            self.push_log(TraceMsg::cargo(message));
         }
     }
 
-    pub fn new_build_progress(&mut self, platform: TargetPlatform, update: UpdateBuildProgress) {
-        self.build_progress
-            .current_builds
-            .entry(platform)
-            .or_default()
-            .update(update);
-
-        if self.is_snapped() {
-            self.scroll_to_bottom();
-        }
+    /// Add a message from stderr to the logs
+    /// This will queue the stderr message as a TraceMsg and print it on the next render
+    /// We'll use the `App` TraceSrc for the msg, and whatever level is provided
+    pub fn push_stdio(&mut self, platform: Platform, msg: String, level: Level) {
+        self.push_log(TraceMsg::text(TraceSrc::App(platform), level, msg));
     }
 
-    pub fn new_ready_app(&mut self, build_engine: &mut Builder, results: Vec<BuildResult>) {
-        for result in results {
-            let out = build_engine
-                .children
-                .iter_mut()
-                .find_map(|(platform, child)| {
-                    if platform == &result.target_platform {
-                        let stdout = child.stdout.take().unwrap();
-                        let stderr = child.stderr.take().unwrap();
-                        Some((stdout, stderr))
-                    } else {
-                        None
-                    }
-                });
+    /// Push a message from the websocket to the logs
+    pub fn push_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
+        use dioxus_devtools_types::ClientMsg;
 
-            let platform = result.target_platform;
+        // We can only handle text messages from the websocket...
+        let axum::extract::ws::Message::Text(text) = message else {
+            return;
+        };
 
-            let stdout = out.map(|(stdout, stderr)| RunningAppOutput {
-                stdout: BufReader::new(stdout).lines(),
-                stderr: BufReader::new(stderr).lines(),
-                stdout_line: String::new(),
-                stderr_line: String::new(),
-            });
+        // ...and then decode them into a ClientMsg
+        let res = serde_json::from_str::<ClientMsg>(text.as_str());
 
-            let app = RunningApp {
-                result,
-                output: stdout,
-            };
-
-            self.running_apps.insert(platform, app);
-
-            // Finish the build progress for the platform that just finished building
-            if let Some(build) = self.build_progress.current_builds.get_mut(&platform) {
-                build.stage = Stage::Finished;
+        // Client logs being errors aren't fatal, but we should still report them them
+        let ClientMsg::Log { level, messages } = match res {
+            Ok(msg) => msg,
+            Err(err) => {
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
+                return;
             }
+        };
+
+        // FIXME(jon): why are we pulling only the first message here?
+        let content = messages.first().unwrap_or(&String::new()).clone();
+
+        let level = match level.as_str() {
+            "trace" => Level::TRACE,
+            "debug" => Level::DEBUG,
+            "info" => Level::INFO,
+            "warn" => Level::WARN,
+            "error" => Level::ERROR,
+            _ => Level::INFO,
+        };
+
+        // We don't care about logging the app's message so we directly push it instead of using tracing.
+        self.push_log(TraceMsg::text(TraceSrc::App(platform), level, content));
+    }
+
+    /// Change internal state based on the build engine's update
+    ///
+    /// We want to keep internal state as limited as possible, so currently we're only setting our
+    /// animation tick. We could, in theory, just leave animation running and have no internal state,
+    /// but that seems a bit wasteful. We might eventually change this to be more of a "requestAnimationFrame"
+    /// approach, but then we'd need to do that *everywhere* instead of simply performing a react-like
+    /// re-render when external state changes. Ratatui will diff the intermediate buffer, so we at least
+    /// we won't be drawing it.
+    pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
+        match update {
+            BuildUpdate::CompilerMessage { .. } => {}
+            BuildUpdate::Progress { .. } => self.tick_animation = true,
+            BuildUpdate::BuildReady { .. } => self.tick_animation = false,
+            BuildUpdate::BuildFailed { .. } => self.tick_animation = false,
         }
     }
 
+    /// Render the current state of everything to the console screen
     pub fn render(
         &mut self,
-        _opts: &Serve,
-        _config: &DioxusCrate,
-        _build_engine: &Builder,
-        _server: &Server,
-        _watcher: &Watcher,
+        opts: &ServeArgs,
+        config: &DioxusCrate,
+        build_engine: &Builder,
+        server: &WebServer,
+        watcher: &Watcher,
     ) {
-        // just drain the build logs
         if !self.interactive {
-            self.drain_print_logs();
             return;
         }
 
-        // Keep the animation track in terms of 100ms frames - the frame should be a number between 0 and 10
-        // todo: we want to use this somehow to animate things...
-        let elapsed = self.anim_start.elapsed().as_millis() as f32;
-        let num_frames = elapsed / 100.0;
-        let _frame_step = (num_frames % 10.0) as usize;
-
-        _ = self
-            .term
-            .clone()
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .draw(|frame| {
-                let mut layout = render::TuiLayout::new(frame.size(), self.show_filter_menu);
-                let (console_width, console_height) = layout.get_console_size();
-                self.console_width = console_width;
-                self.console_height = console_height;
-
-                // Render the decor first as some of it (such as backgrounds) may be rendered on top of.
-                layout.render_decor(frame, self.show_filter_menu);
-
-                // Get only the enabled filters.
-                let mut enabled_filters = self.filters.clone();
-                enabled_filters.retain(|f| f.1);
-                let enabled_filters = enabled_filters
-                    .iter()
-                    .map(|f| f.0.clone())
-                    .collect::<Vec<String>>();
-
-                // Render console, we need the number of wrapping lines for scroll.
-                self.num_lines_wrapping = layout.render_console(
-                    frame,
-                    self.scroll_position,
-                    &self.messages,
-                    &enabled_filters,
-                );
-
-                if self.show_filter_menu {
-                    layout.render_filter_menu(
-                        frame,
-                        &self.filters,
-                        self.selected_filter_index,
-                        self.filter_search_mode,
-                        self.filter_search_input.as_ref(),
-                    );
-                }
-
-                layout.render_status_bar(
-                    frame,
-                    self.platform,
-                    &self.build_progress,
-                    self.more_modal_open,
-                    self.show_filter_menu,
-                    &self._dx_version,
-                );
-
-                if self.more_modal_open {
-                    layout.render_more_modal(frame);
-                }
-
-                layout.render_current_scroll(
-                    self.scroll_position,
-                    self.num_lines_wrapping,
-                    self.console_height,
-                    frame,
-                );
-            });
-    }
-
-    async fn handle_events(&mut self, event: Event) -> io::Result<bool> {
-        let mut events = vec![event];
-
-        // Collect all the events within the next 10ms in one stream
-        let collect_events = async {
-            loop {
-                let Some(Ok(next)) = self.events.as_mut().unwrap().next().await else {
-                    break;
-                };
-                events.push(next);
-            }
-        };
-        tokio::select! {
-            _ = collect_events => {},
-            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
-        }
-
-        // Debounce events within the same frame
-        let mut handled = HashSet::new();
-        for event in events {
-            if !handled.contains(&event) {
-                if self.handle_input(event.clone())? {
-                    // Restart the running app.
-                    return Ok(true);
-                }
-                handled.insert(event);
-            }
-        }
-
-        Ok(false)
-    }
-}
-
-#[derive(Default, Debug, PartialEq)]
-pub struct ActiveBuild {
-    pub stage: Stage,
-    pub progress: f64,
-    pub failed: Option<String>,
-}
-
-impl ActiveBuild {
-    fn update(&mut self, update: UpdateBuildProgress) {
-        match update.update {
-            UpdateStage::Start => {
-                // If we are already past the stage, don't roll back, but allow a fresh build to update.
-                if self.stage > update.stage && self.stage < Stage::Finished {
-                    return;
-                }
-                self.stage = update.stage;
-                self.progress = 0.0;
-                self.failed = None;
-            }
-            UpdateStage::SetProgress(progress) => {
-                self.progress = progress;
-            }
-            UpdateStage::Failed(failed) => {
-                self.stage = Stage::Finished;
-                self.failed = Some(failed.clone());
-            }
-        }
-    }
-
-    pub fn make_spans(&self, area: Rect) -> Vec<Span> {
-        let mut spans = Vec::new();
-
-        let message = match self.stage {
-            Stage::Initializing => "Initializing...",
-            Stage::InstallingWasmTooling => "Configuring...",
-            Stage::Compiling => "Compiling...",
-            Stage::OptimizingWasm => "Optimizing...",
-            Stage::OptimizingAssets => "Copying Assets...",
-            Stage::Finished => "Build finished! 🎉 ",
+        // Get a handle to the terminal with a different lifetime so we can continue to call &self methods
+        let owned_term = self.term.clone();
+        let mut term = owned_term.borrow_mut();
+        let Some(term) = term.as_mut() else {
+            return;
         };
 
-        let progress = format!(" {}%", (self.progress * 100.0) as u8);
+        // First, dequeue any logs that have built up from event handling
+        _ = self.drain_logs(term);
 
-        if area.width >= self.max_layout_size() {
-            match self.stage {
-                Stage::Finished => spans.push(Span::from(message).light_yellow()),
-                _ => spans.push(Span::from(message).light_yellow()),
-            }
+        // Then, draw the frame, passing along all the state of the TUI so we can render it properly
+        _ = term.draw(|frame| {
+            self.render_frame(
+                frame,
+                RenderState {
+                    opts,
+                    krate: config,
+                    build_engine,
+                    server,
+                    watcher,
+                },
+            );
+        });
+    }
 
-            if self.stage != Stage::Finished {
-                spans.push(Span::from(progress).white());
-            }
+    fn render_frame(&self, frame: &mut Frame, state: RenderState) {
+        // Use the max size of the viewport, but shrunk to a sensible max width
+        let mut area = frame.area();
+        area.width = area.width.clamp(0, VIEWPORT_MAX_WIDTH);
+
+        let [_top, body, bottom] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ])
+        .horizontal_margin(1)
+        .areas(area);
+
+        self.render_borders(frame, area);
+        self.render_body(frame, body, state);
+        self.render_bottom_row(frame, bottom, state);
+        self.render_body_title(frame, _top, state);
+    }
+
+    fn render_body_title(&self, frame: &mut Frame<'_>, area: Rect, _state: RenderState) {
+        frame.render_widget(
+            Line::from(vec![
+                " ".dark_gray(),
+                match self.more_modal_open {
+                    true => "/:more".light_yellow(),
+                    false => "/:more".dark_gray(),
+                },
+                " ".dark_gray(),
+            ])
+            .right_aligned(),
+            area,
+        );
+    }
+
+    fn render_body(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        let [_title, body, more, _foot] = Layout::vertical([
+            Constraint::Length(0),
+            Constraint::Length(VIEWPORT_HEIGHT_SMALL - 2),
+            Constraint::Fill(1),
+            Constraint::Length(0),
+        ])
+        .horizontal_margin(1)
+        .areas(area);
+
+        let [col1, col2] = Layout::horizontal([Constraint::Length(50), Constraint::Fill(1)])
+            .horizontal_margin(1)
+            .areas(body);
+
+        self.render_gauges(frame, col1, state);
+        self.render_stats(frame, col2, state);
+
+        if self.more_modal_open {
+            self.render_more_modal(frame, more, state);
+        }
+    }
+
+    fn render_gauges(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        let [gauge_area, _margin] =
+            Layout::horizontal([Constraint::Fill(1), Constraint::Length(3)]).areas(area);
+
+        let [app_progress, second_progress, status_line]: [_; 3] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .areas(gauge_area);
+
+        self.render_single_gauge(
+            frame,
+            app_progress,
+            state.build_engine.compile_progress(),
+            "App:    ",
+            state,
+            state.build_engine.compile_duration(),
+        );
+
+        if state.build_engine.request.build.fullstack {
+            self.render_single_gauge(
+                frame,
+                second_progress,
+                state.build_engine.server_compile_progress(),
+                "Server: ",
+                state,
+                state.build_engine.compile_duration(),
+            );
         } else {
-            spans.push(Span::from(progress).white());
+            self.render_single_gauge(
+                frame,
+                second_progress,
+                state.build_engine.bundle_progress(),
+                "Bundle: ",
+                state,
+                state.build_engine.bundle_duration(),
+            );
         }
 
-        spans
+        let mut lines = vec!["Status:  ".white()];
+        match &state.build_engine.stage {
+            BuildStage::Initializing => lines.push("Initializing".yellow()),
+            BuildStage::Starting { .. } => lines.push("Starting build".yellow()),
+            BuildStage::InstallingTooling {} => lines.push("Installing tooling".yellow()),
+            BuildStage::Compiling {
+                current,
+                total,
+                krate,
+                ..
+            } => {
+                lines.push("Compiling ".yellow());
+                lines.push(format!("{current}/{total} ").gray());
+                lines.push(krate.as_str().dark_gray())
+            }
+            BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
+            BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
+            BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
+            BuildStage::CopyingAssets {
+                current,
+                total,
+                path,
+            } => {
+                lines.push("Copying asset ".yellow());
+                lines.push(format!("{current}/{total} ").gray());
+                if let Some(name) = path.file_name().and_then(|f| f.to_str()) {
+                    lines.push(name.dark_gray())
+                }
+            }
+            BuildStage::Success => {
+                lines.push("Serving ".yellow());
+                lines.push(state.krate.executable_name().white());
+                lines.push(" 🚀 ".green());
+                if let Some(comp_time) = state.build_engine.total_build_time() {
+                    lines.push(format!("{:.1}s", comp_time.as_secs_f32()).dark_gray());
+                }
+            }
+            BuildStage::Failed => lines.push("Failed".red()),
+            BuildStage::Aborted => lines.push("Aborted".red()),
+            BuildStage::Restarting => lines.push("Restarting".yellow()),
+        };
+
+        frame.render_widget(Line::from(lines), status_line);
     }
 
-    pub fn max_layout_size(&self) -> u16 {
-        let progress_size = 4;
-        let stage_size = self.stage.to_string().len() as u16;
-        let brace_size = 2;
+    fn render_single_gauge(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        value: f64,
+        label: &str,
+        state: RenderState,
+        time_taken: Option<Duration>,
+    ) {
+        let failed = state.build_engine.stage == BuildStage::Failed;
+        let value = if failed { 1.0 } else { value.clamp(0.0, 1.0) };
 
-        progress_size + stage_size + brace_size
+        let [gauge_row, _, icon] = Layout::horizontal([
+            Constraint::Fill(1),
+            Constraint::Length(2),
+            Constraint::Length(10),
+        ])
+        .areas(area);
+
+        frame.render_widget(
+            LineGauge::default()
+                .filled_style(Style::default().fg(match value {
+                    1.0 if failed => Color::Red,
+                    1.0 => Color::Green,
+                    _ => Color::Yellow,
+                }))
+                .unfilled_style(Style::default().fg(Color::DarkGray))
+                .label(label.gray())
+                .line_set(symbols::line::THICK)
+                .ratio(if !failed { value } else { 1.0 }),
+            gauge_row,
+        );
+
+        let [throbber_frame, time_frame] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(3), Constraint::Fill(1)])
+            .areas(icon);
+
+        if value != 1.0 {
+            let throb = throbber_widgets_tui::Throbber::default()
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
+                .throbber_style(
+                    ratatui::style::Style::default()
+                        .fg(ratatui::style::Color::White)
+                        .add_modifier(ratatui::style::Modifier::BOLD),
+                )
+                .throbber_set(throbber_widgets_tui::BLACK_CIRCLE)
+                .use_type(throbber_widgets_tui::WhichUse::Spin);
+            frame.render_stateful_widget(throb, throbber_frame, &mut self.throbber.borrow_mut());
+        } else {
+            frame.render_widget(
+                Line::from(vec![if failed {
+                    "❌ ".white()
+                } else {
+                    "🎉 ".white()
+                }])
+                .left_aligned(),
+                throbber_frame,
+            );
+        }
+
+        if let Some(time_taken) = time_taken {
+            if !failed {
+                frame.render_widget(
+                    Line::from(vec![format!("{:.1}s", time_taken.as_secs_f32()).dark_gray()])
+                        .left_aligned(),
+                    time_frame,
+                );
+            }
+        }
+    }
+
+    fn render_stats(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        let [current_platform, app_features, serve_address]: [_; 3] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Platform: ".gray(),
+                self.platform.expected_name().yellow(),
+                if state.opts.build_arguments.fullstack {
+                    " + fullstack".yellow()
+                } else {
+                    " ".dark_gray()
+                },
+            ]))
+            .wrap(Wrap { trim: false }),
+            current_platform,
+        );
+
+        self.render_feature_list(frame, app_features, state);
+
+        // todo(jon) should we write https ?
+        let address = match state.server.server_address() {
+            Some(address) => format!("http://{}", address).blue(),
+            None => "no server address".dark_gray(),
+        };
+
+        frame.render_widget_ref(
+            Paragraph::new(Line::from(vec![
+                if self.platform == Platform::Web {
+                    "Serving at: ".gray()
+                } else {
+                    "ServerFns at: ".gray()
+                },
+                address,
+            ]))
+            .wrap(Wrap { trim: false }),
+            serve_address,
+        );
+    }
+
+    fn render_feature_list(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        frame.render_widget(
+            Paragraph::new(Line::from({
+                let mut lines = vec!["App features: ".gray(), "[".yellow()];
+
+                let feature_list: Vec<String> = state.build_engine.request.all_target_features();
+                let num_features = feature_list.len();
+
+                for (idx, feature) in feature_list.into_iter().enumerate() {
+                    lines.push("\"".yellow());
+                    lines.push(feature.yellow());
+                    lines.push("\"".yellow());
+                    if idx != num_features - 1 {
+                        lines.push(", ".dark_gray());
+                    }
+                }
+
+                lines.push("]".yellow());
+
+                lines
+            }))
+            .wrap(Wrap { trim: false }),
+            area,
+        );
+    }
+
+    fn render_more_modal(&self, frame: &mut Frame<'_>, area: Rect, _state: RenderState) {
+        let [top, bottom] = Layout::vertical([Constraint::Fill(1), Constraint::Length(2)])
+            .horizontal_margin(1)
+            .areas(area);
+
+        let meta_list: [_; 5] = Layout::vertical([
+            Constraint::Length(1), // spacing
+            Constraint::Length(1), // item 1
+            Constraint::Length(1), // item 2
+            Constraint::Length(1), // item 3
+            Constraint::Length(1), // Spacing
+        ])
+        .areas(top);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "dx version: ".gray(),
+                self.dx_version.as_str().yellow(),
+            ])),
+            meta_list[1],
+        );
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "rustc: ".gray(),
+                "1.79.9 (nightly)".yellow(),
+            ])),
+            meta_list[2],
+        );
+        frame.render_widget(
+            Paragraph::new(Line::from(vec!["Hotreload: ".gray(), "rsx only".yellow()])),
+            meta_list[3],
+        );
+
+        let links_list: [_; 2] =
+            Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(bottom);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Read the docs: ".gray(),
+                "https://dioxuslabs.com/0.6/docs".blue(),
+            ])),
+            links_list[0],
+        );
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                "Video tutorials: ".gray(),
+                "https://youtube.com/@DioxusLabs".blue(),
+            ])),
+            links_list[1],
+        );
+    }
+
+    /// Render the version number on the bottom right
+    fn render_bottom_row(&self, frame: &mut Frame, area: Rect, _state: RenderState) {
+        // Split the area into two chunks
+        let row = Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).split(area);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                // "🧬 dx".dark_gray(),
+                // " ".dark_gray(),
+                // self.dx_version.as_str().dark_gray(),
+                // " ".dark_gray(),
+            ]))
+            .right_aligned(),
+            row[1],
+        );
+    }
+
+    /// Render borders around the terminal, forcing an inner clear while we're at it
+    fn render_borders(&self, frame: &mut Frame, area: Rect) {
+        frame.render_widget(ratatui::widgets::Clear, area);
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::DarkGray)),
+            area,
+        );
+    }
+
+    /// Print logs to the terminal as close to a regular "println!()" as possible.
+    ///
+    /// We don't want alternate screens or other terminal tricks because we want these logs to be as
+    /// close to real as possible. Once the log is printed, it is lost, so we need to be very careful
+    /// here to not print it incorrectly.
+    ///
+    /// This method works by printing lines at the top of the viewport frame, and then scrolling up
+    /// the viewport accordingly, such that our final call to "clear"  will cause the terminal the viewport
+    /// to be comlpetely erased and rewritten. This is slower since we're going around ratatui's diff
+    /// logic, but it's the only way to do this that gives us "true println!" semantics.
+    ///
+    /// In the future, Ratatui's insert_before method will get scroll regions, which will make this logic
+    /// much simpler. In that future, we'll simply insert a line into the scrollregion which should automatically
+    /// force that portion of the terminal to scroll up.
+    ///
+    /// TODO(jon): we could look into implementing scroll regions ourselves, but I think insert_before will
+    /// land in a reasonable amount of time.
+    #[deny(clippy::manual_saturating_arithmetic)]
+    fn drain_logs(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> io::Result<()> {
+        use unicode_segmentation::UnicodeSegmentation;
+
+        let Some(log) = self.pending_logs.pop_back() else {
+            return Ok(());
+        };
+
+        // Only show debug logs if verbose is enabled
+        if log.level == Level::DEBUG && !self.verbose {
+            return Ok(());
+        }
+
+        if log.level == Level::TRACE && !self.trace {
+            return Ok(());
+        }
+
+        // Grab out the size and location of the terminal and its viewport before we start messing with it
+        let frame_rect = terminal.get_frame().area();
+        let term_size = terminal.size().unwrap();
+
+        // Render the log into an ansi string
+        // We're going to add some metadata to it like the timestamp and source and then dump it to the raw ansi sequences we need to send to crossterm
+        let output_sequence = tracemsg_to_ansi_string(log, term_size.width);
+
+        // Get the lines of the output sequence and their overflow
+        let lines = output_sequence.lines().collect::<Vec<_>>();
+        let lines_printed = lines
+            .iter()
+            .map(|line| {
+                // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
+                let grapheme_count = console::strip_ansi_codes(line).graphemes(true).count() as u16;
+                grapheme_count.max(1).div_ceil(term_size.width)
+            })
+            .sum::<u16>();
+
+        // The viewport might be clipped, but the math still needs to work out.
+        let actual_vh_height = self.viewport_current_height().min(term_size.height);
+
+        // We don't need to add any pushback if the frame is in the middle of the viewport
+        // We'll then add some pushback to ensure the log scrolls up above the viewport.
+        let max_scrollback = lines_printed.min(actual_vh_height.saturating_sub(1));
+
+        // Move the terminal's cursor down to the number of lines printed
+        let remaining_space = term_size
+            .height
+            .saturating_sub(frame_rect.y + frame_rect.height);
+
+        // Calculate how many lines we need to push back
+        let to_push = max_scrollback.saturating_sub(remaining_space + 1);
+
+        // Wipe the viewport clean so it doesn't tear
+        crossterm::queue!(
+            std::io::stdout(),
+            crossterm::cursor::MoveTo(0, frame_rect.y),
+            crossterm::terminal::Clear(ClearType::FromCursorDown),
+        )?;
+
+        // The only reliable way we can force the terminal downards is through "insert_before"
+        // If we need to push the terminal down, we'll use this method with the number of lines
+        // Ratatui will handle this rest.
+        // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
+        if to_push == 0 {
+            terminal.insert_before(lines_printed.saturating_sub(1), |_| {})?;
+        }
+
+        // Start printing the log by writing on top of the topmost line
+        for (idx, line) in lines.into_iter().enumerate() {
+            // Move the cursor to the correct line offset but don't go past the bottom of the terminal
+            let start = frame_rect.y + idx as u16;
+            let start = start.min(term_size.height - 1);
+            crossterm::queue!(
+                std::io::stdout(),
+                crossterm::cursor::MoveTo(0, start),
+                crossterm::style::Print(line),
+                crossterm::style::Print("\n"),
+            )?;
+        }
+
+        // Scroll the terminal if we need to
+        for _ in 0..to_push {
+            crossterm::queue!(
+                std::io::stdout(),
+                crossterm::cursor::MoveTo(0, term_size.height - 1),
+                crossterm::style::Print("\n"),
+            )?;
+        }
+
+        // Force a clear
+        // Might've been triggered by insert_before already, but supposedly double-queuing is fine
+        // since this isn't a "real" synchronous clear
+        terminal.clear()?;
+
+        Ok(())
+    }
+
+    fn viewport_current_height(&self) -> u16 {
+        match self.more_modal_open {
+            true => VIEWPORT_HEIGHT_BIG,
+            false => VIEWPORT_HEIGHT_SMALL,
+        }
     }
 }
 
-impl PartialOrd for ActiveBuild {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(
-            self.stage
-                .cmp(&other.stage)
-                .then(self.progress.partial_cmp(&other.progress).unwrap()),
-        )
-    }
-}
+fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
+    let rendered = match log.content {
+        TraceContent::Cargo(msg) => msg.message.rendered.unwrap_or_default(),
+        TraceContent::Text(text) => text,
+    };
 
-fn set_fix_term_hook() {
-    let original_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        _ = disable_raw_mode();
-        let mut stdout = stdout();
-        _ = stdout.execute(LeaveAlternateScreen);
-        _ = stdout.execute(Show);
-        original_hook(info);
-    }));
-}
+    // Create a paragraph widget using the log line itself
+    // From here on out, we want to work with the escaped ansi string and the "real lines" to be printed
+    //
+    // We make a special case for lines that look like frames (ie ==== or ---- or ------) and make them
+    // dark gray, just for readability.
+    //
+    // todo(jon): refactor this out to accept any widget, not just paragraphs
+    let paragraph = Paragraph::new({
+        use ansi_to_tui::IntoText;
+        use chrono::Timelike;
 
-/// clearing and writing a new line fixes the xtermjs scrollback issue
-fn fix_xtermjs_scrollback() {
-    _ = crossterm::execute!(std::io::stdout(), Clear(ClearType::All));
-    println!();
-}
+        let mut text = Text::default();
 
-// todo: re-enable
-#[allow(unused)]
-async fn rustc_version() -> String {
-    tokio::process::Command::new("rustc")
-        .arg("--version")
-        .output()
-        .await
-        .ok()
-        .map(|o| o.stdout)
-        .and_then(|o| {
-            let out = String::from_utf8(o).unwrap();
-            out.split_ascii_whitespace().nth(1).map(|v| v.to_string())
-        })
-        .unwrap_or_else(|| "<unknown>".to_string())
-}
+        for (idx, raw_line) in rendered.lines().enumerate() {
+            let line_as_text = raw_line.into_text().unwrap();
+            let is_pretending_to_be_frame = raw_line
+                .chars()
+                .all(|c| c == '=' || c == '-' || c == ' ' || c == '─');
 
-pub struct RunningApp {
-    result: BuildResult,
-    output: Option<RunningAppOutput>,
-}
+            for (subline_idx, line) in line_as_text.lines.into_iter().enumerate() {
+                let mut out_line = if idx == 0 && subline_idx == 0 {
+                    let mut formatted_line = Line::default();
 
-struct RunningAppOutput {
-    stdout: Lines<BufReader<ChildStdout>>,
-    stderr: Lines<BufReader<ChildStderr>>,
-    stdout_line: String,
-    stderr_line: String,
+                    formatted_line.push_span(
+                        Span::raw(format!(
+                            "{:02}:{:02}:{:02} ",
+                            log.timestamp.hour(),
+                            log.timestamp.minute(),
+                            log.timestamp.second()
+                        ))
+                        .dark_gray(),
+                    );
+                    formatted_line.push_span(
+                        Span::raw(format!(
+                            "[{src}] {padding}",
+                            src = log.source,
+                            padding =
+                                " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
+                        ))
+                        .style(match log.source {
+                            TraceSrc::App(_platform) => Style::new().blue(),
+                            TraceSrc::Dev => Style::new().magenta(),
+                            TraceSrc::Build => Style::new().yellow(),
+                            TraceSrc::Bundle => Style::new().magenta(),
+                            TraceSrc::Cargo => Style::new().yellow(),
+                            TraceSrc::Unknown => Style::new().gray(),
+                        }),
+                    );
+
+                    for span in line.spans {
+                        formatted_line.push_span(span);
+                    }
+
+                    formatted_line
+                } else {
+                    line
+                };
+
+                if is_pretending_to_be_frame {
+                    out_line = out_line.dark_gray();
+                }
+
+                text.lines.push(out_line);
+            }
+        }
+
+        text
+    });
+
+    // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
+    //
+    // This is important because the line_count method on paragraph takes into account the width of these codes
+    // the 3000 clip width is to bound log lines to a reasonable memory usage
+    // We could consider reusing this buffer since it's a lot to allocate, but log printing is not the
+    // slowest thing in the world and allocating is pretty fast...
+    //
+    // After we've dumped the ascii out, we want to call "trim_end" which ensures we don't attempt
+    // to print extra characters as lines, since AnsiStringBuffer will in fact attempt to print empty
+    // cells as characters. That might not actually be important, but we want to shrink the buffer
+    // before printing it
+    let line_count = paragraph.line_count(term_width);
+    AnsiStringBuffer::new(3000, line_count as u16).render(&paragraph)
 }

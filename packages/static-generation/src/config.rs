@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use dioxus_lib::prelude::dioxus_core::LaunchConfig;
+
 /// Settings for a statically generated site that may be hydrated in the browser
 pub struct Config {
     #[cfg(feature = "server")]
@@ -25,11 +27,9 @@ pub struct Config {
 
     #[cfg(feature = "server")]
     pub(crate) github_pages: bool,
-
-    #[cfg(feature = "web")]
-    #[allow(unused)]
-    pub(crate) web_cfg: dioxus_web::Config,
 }
+
+impl LaunchConfig for Config {}
 
 #[allow(clippy::derivable_impls)]
 impl Default for Config {
@@ -49,8 +49,6 @@ impl Default for Config {
             additional_routes: vec!["/".to_string()],
             #[cfg(feature = "server")]
             github_pages: false,
-            #[cfg(feature = "web")]
-            web_cfg: dioxus_web::Config::default(),
         }
     }
 }
@@ -143,16 +141,6 @@ impl Config {
             myself.github_pages = true;
         }
         myself
-    }
-
-    /// Set the web config.
-    ///
-    /// This method will only effect the hydrated web renderer.
-    #[cfg(feature = "web")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
-    pub fn web_cfg(self, web_cfg: dioxus_web::Config) -> Self {
-        #[allow(clippy::needless_update)]
-        Self { web_cfg, ..self }
     }
 }
 

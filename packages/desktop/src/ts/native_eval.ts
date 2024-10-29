@@ -86,5 +86,5 @@ export class NativeDioxusChannel extends DioxusChannel {
   }
 
   // Receive data sent from javascript in rust. This is a no-op in the native interpreter because the rust code runs remotely
-  async rustRecv(): Promise<any> {}
+  async rustRecv(): Promise<any> { }
 }
