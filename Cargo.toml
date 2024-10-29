@@ -53,18 +53,12 @@ members = [
     "packages/server-macro",
     "packages/signals",
     "packages/ssr",
-    "packages/static-generation",
     "packages/lazy-js-bundle",
     "packages/cli-config",
     "packages/devtools",
     "packages/devtools-types",
     "packages/isrg",
     "packages/rsx-hotreload",
-
-    # Static generation examples
-    # "packages/static-generation/examples/simple",
-    # "packages/static-generation/examples/router",
-    # "packages/static-generation/examples/github-pages",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -93,9 +87,6 @@ members = [
     "examples/fullstack-streaming",
     "examples/fullstack-desktop",
     "examples/fullstack-auth",
-    "examples/ssg-simple",
-    "examples/ssg-router",
-    "examples/ssg-github-pages",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -137,7 +128,6 @@ dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.3" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.3" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.3" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.3", default-features = false }
-dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.3" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.3", default-features = false }
 dioxus-isrg = { path = "packages/isrg", version = "0.6.0-alpha.3" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.3" }

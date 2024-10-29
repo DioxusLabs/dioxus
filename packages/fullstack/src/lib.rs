@@ -8,20 +8,22 @@ pub use once_cell;
 
 mod html_storage;
 
+pub mod document;
+mod hooks;
+
 #[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 pub mod server;
 
-mod hooks;
-
-pub mod document;
 #[cfg(feature = "server")]
 mod render;
+
 #[cfg(feature = "server")]
 mod streaming;
 
 #[cfg(feature = "server")]
 mod serve_config;
+
 #[cfg(feature = "server")]
 pub use serve_config::*;
 
