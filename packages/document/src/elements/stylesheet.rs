@@ -5,12 +5,12 @@ use super::*;
 ///
 ///
 /// # Example
-/// ```rust, no_run
+/// ```rust
 /// # use dioxus::prelude::*;
 /// fn RedBackground() -> Element {
 ///     rsx! {
 ///         document::Stylesheet {
-///             src: asset!("/assets/style.css")
+///             href: asset!("/assets/style.css")
 ///         }
 ///     }
 /// }
@@ -22,9 +22,8 @@ use super::*;
 ///
 /// </div>
 #[component]
-pub fn Stylesheet(props: LinkProps, src: Option<String>) -> Element {
+pub fn Stylesheet(props: LinkProps) -> Element {
     super::Link(LinkProps {
-        href: src.or_else(|| props.href.clone()),
         rel: Some("stylesheet".into()),
         r#type: Some("text/css".into()),
         ..props
