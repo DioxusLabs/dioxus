@@ -10,7 +10,7 @@ use super::*;
 /// fn RedBackground() -> Element {
 ///     rsx! {
 ///         document::Stylesheet {
-///             src: asset!("./assets/style.css")
+///             src: asset!("/assets/style.css")
 ///         }
 ///     }
 /// }
