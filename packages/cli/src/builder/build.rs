@@ -321,6 +321,7 @@ impl BuildRequest {
         cargo_args
     }
 
+    #[allow(dead_code)]
     pub(crate) fn rust_flags(&self) -> String {
         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
 
