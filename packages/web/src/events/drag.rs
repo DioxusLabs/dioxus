@@ -1,91 +1,84 @@
+use super::{Synthetic, WebEventExt};
 use dioxus_html::{
+    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
+    input_data::{decode_mouse_button_set, MouseButton},
     prelude::{
-        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
+        InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
+        PointerInteraction,
     },
     HasDragData, HasFileData, HasMouseData,
 };
-use wasm_bindgen::JsCast;
-use web_sys::{DragEvent, MouseEvent};
+use web_sys::DragEvent;
 
-use super::{Synthetic, WebEventExt};
+impl InteractionLocation for Synthetic<DragEvent> {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.event.client_x().into(), self.event.client_y().into())
+    }
 
-pub(crate) struct WebDragData {
-    drag: Synthetic<DragEvent>,
-    mouse: Synthetic<MouseEvent>,
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.event.page_x().into(), self.event.page_y().into())
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.event.screen_x().into(), self.event.screen_y().into())
+    }
 }
 
-impl WebDragData {
-    pub fn new(raw: DragEvent) -> Self {
-        let mouse = raw
-            .clone()
-            .dyn_into::<MouseEvent>()
-            .expect("Inconceivable! DragEvent is not MouseEvent?");
-        Self {
-            drag: Synthetic::new(raw),
-            mouse: Synthetic::new(mouse),
+impl InteractionElementOffset for Synthetic<DragEvent> {
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.event.offset_x().into(), self.event.offset_y().into())
+    }
+}
+
+impl ModifiersInteraction for Synthetic<DragEvent> {
+    fn modifiers(&self) -> Modifiers {
+        let mut modifiers = Modifiers::empty();
+
+        if self.event.alt_key() {
+            modifiers.insert(Modifiers::ALT);
         }
+        if self.event.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if self.event.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if self.event.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        modifiers
     }
 }
 
-impl HasDragData for WebDragData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.drag as &dyn std::any::Any
-    }
-}
-
-impl HasMouseData for WebDragData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.mouse as &dyn std::any::Any
-    }
-}
-
-impl PointerInteraction for WebDragData {
-    fn trigger_button(&self) -> Option<dioxus_html::input_data::MouseButton> {
-        self.mouse.trigger_button()
-    }
-
+impl PointerInteraction for Synthetic<DragEvent> {
     fn held_buttons(&self) -> dioxus_html::input_data::MouseButtonSet {
-        self.mouse.held_buttons()
+        decode_mouse_button_set(self.event.buttons())
+    }
+
+    fn trigger_button(&self) -> Option<MouseButton> {
+        Some(MouseButton::from_web_code(self.event.button()))
     }
 }
 
-impl ModifiersInteraction for WebDragData {
-    fn modifiers(&self) -> dioxus_html::prelude::Modifiers {
-        self.mouse.modifiers()
+impl HasMouseData for Synthetic<DragEvent> {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
-impl InteractionElementOffset for WebDragData {
-    fn coordinates(&self) -> dioxus_html::geometry::Coordinates {
-        self.mouse.coordinates()
-    }
-
-    fn element_coordinates(&self) -> dioxus_html::geometry::ElementPoint {
-        self.mouse.element_coordinates()
+impl HasDragData for Synthetic<DragEvent> {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
-impl InteractionLocation for WebDragData {
-    fn client_coordinates(&self) -> dioxus_html::geometry::ClientPoint {
-        self.mouse.client_coordinates()
-    }
-
-    fn screen_coordinates(&self) -> dioxus_html::geometry::ScreenPoint {
-        self.mouse.screen_coordinates()
-    }
-
-    fn page_coordinates(&self) -> dioxus_html::geometry::PagePoint {
-        self.mouse.page_coordinates()
-    }
-}
-
-impl HasFileData for WebDragData {
+impl HasFileData for Synthetic<DragEvent> {
     #[cfg(feature = "file_engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
         use wasm_bindgen::JsCast;
 
         let files = self
-            .drag
             .event
             .dyn_ref::<web_sys::DragEvent>()
             .and_then(|drag_event| {
@@ -108,8 +101,7 @@ impl WebEventExt for dioxus_html::DragData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::DragEvent> {
-        self.downcast::<WebDragData>()
-            .map(|data| &data.drag.event)
-            .cloned()
+        self.downcast::<Synthetic<DragEvent>>()
+            .map(|data| data.event.clone())
     }
 }
