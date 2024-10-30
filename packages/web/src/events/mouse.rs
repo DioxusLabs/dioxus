@@ -64,7 +64,7 @@ impl PointerInteraction for Synthetic<MouseEvent> {
 
 impl HasMouseData for Synthetic<MouseEvent> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 
@@ -72,7 +72,7 @@ impl HasFileData for Synthetic<MouseEvent> {}
 
 impl HasDragData for Synthetic<MouseEvent> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

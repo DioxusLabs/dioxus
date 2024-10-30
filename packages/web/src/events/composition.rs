@@ -9,7 +9,7 @@ impl HasCompositionData for Synthetic<CompositionEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

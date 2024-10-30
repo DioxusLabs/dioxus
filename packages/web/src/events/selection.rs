@@ -1,10 +1,9 @@
-use dioxus_html::HasSelectionData;
-
 use super::{Synthetic, WebEventExt};
+use dioxus_html::HasSelectionData;
 
 impl HasSelectionData for Synthetic<web_sys::Event> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 
