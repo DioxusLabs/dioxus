@@ -34,13 +34,23 @@ tower = { workspace = true, features = ["util"] }
 tower-layer = { version = "0.3.2" }
 parking_lot = { version = "0.12.1", features = ["send_guard"] }
 
+dioxus-interpreter-js = { workspace = true }
 dioxus-cli-config = { workspace = true }
 aws-lc-rs = { version = "1.8.1", optional = true}
 
 server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
 dioxus_server_macro = { workspace = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { workspace = true, features = ["rt", "sync"] }
+web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"]}
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"] }
+
+
 [features]
+default = ["axum"]
 axum = ["dep:axum", "dep:tower-http", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]

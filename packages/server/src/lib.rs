@@ -3,14 +3,34 @@
 #![allow(non_snake_case)]
 
 mod config;
-mod freshness;
-
 mod document;
+mod error;
+mod freshness;
 #[cfg(not(target_arch = "wasm32"))]
 mod fs_cache;
+pub mod launch;
 mod memory_cache;
-
+pub use error::*;
+mod template;
+pub use template::*;
+mod stream;
+pub use stream::*;
+mod streaming;
+pub use streaming::*;
+mod render;
+pub use render::*;
+mod server;
+pub use server::*;
+mod serve_config;
+pub use serve_config::*;
+mod server_context;
+pub use server_context::*;
 use std::time::Duration;
+
+pub mod prelude {
+    // pub use super::*;
+    pub use super::IncrementalRendererConfig;
+}
 
 use chrono::Utc;
 pub use config::*;
@@ -38,8 +58,8 @@ pub struct IncrementalRenderer {
 
 impl IncrementalRenderer {
     /// Create a new incremental renderer builder.
-    pub fn builder() -> IsrConfig {
-        IsrConfig::new()
+    pub fn builder() -> IncrementalRendererConfig {
+        IncrementalRendererConfig::new()
     }
 
     /// Remove a route from the cache.
@@ -139,21 +159,4 @@ impl IncrementalRenderer {
             Err(FsGetError::Error(e)) => Err(e),
         }
     }
-}
-
-pub type Result<T> = std::result::Result<T, IncrementalRendererError>;
-
-/// An error that can occur while rendering a route or retrieving a cached route.
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-pub enum IncrementalRendererError {
-    /// An formatting error occurred while rendering a route.
-    #[error("RenderError: {0}")]
-    RenderError(#[from] std::fmt::Error),
-    /// An IO error occurred while rendering a route.
-    #[error("IoError: {0}")]
-    IoError(#[from] std::io::Error),
-    /// An IO error occurred while rendering a route.
-    #[error("Other: {0}")]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }

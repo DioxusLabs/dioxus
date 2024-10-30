@@ -34,7 +34,7 @@ pub fn launch(
             // and we use the generated address the CLI gives us
             let address = dioxus_cli_config::fullstack_address_or_localhost();
 
-            use crate::server::DioxusRouterExt;
+            use crate::DioxusRouterExt;
 
             struct TryIntoResult(Result<ServeConfig, crate::UnableToLoadIndex>);
 

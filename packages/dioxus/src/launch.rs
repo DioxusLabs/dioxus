@@ -83,9 +83,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(all(feature = "fullstack", feature = "server"))))]
     pub fn server() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| {
-                dioxus_fullstack::server::launch::launch(root, contexts, cfg)
-            },
+            launch_fn: |root, contexts, cfg| dioxus_server::launch::launch(root, contexts, cfg),
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -206,7 +204,7 @@ impl LaunchBuilder {
 /// - `liveview`
 mod current_platform {
     #[cfg(all(feature = "fullstack", feature = "server"))]
-    pub use dioxus_fullstack::server::launch::*;
+    pub use dioxus_server::launch::*;
 
     #[cfg(all(
         feature = "desktop",
@@ -305,13 +303,13 @@ fn web_launch(
             }
             #[cfg(feature = "document")]
             {
-                #[cfg(feature = "fullstack")]
-                use dioxus_fullstack::document;
-                #[cfg(all(not(feature = "fullstack")))]
-                use dioxus_static_site_generation::document;
-                let document = std::rc::Rc::new(document::web::FullstackWebDocument)
-                    as std::rc::Rc<dyn crate::prelude::document::Document>;
-                vdom.provide_root_context(document);
+                // #[cfg(feature = "fullstack")]
+                // use dioxus_fullstack::document;
+                // #[cfg(all(not(feature = "fullstack")))]
+                // use dioxus_static_site_generation::document;
+                // let document = std::rc::Rc::new(document::web::FullstackWebDocument)
+                //     as std::rc::Rc<dyn crate::prelude::document::Document>;
+                // vdom.provide_root_context(document);
             }
             vdom
         };

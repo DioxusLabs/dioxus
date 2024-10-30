@@ -123,23 +123,23 @@ where
         WebHistory::<R>::default(),
     ));
 
-    // If we're using fullstack and server side rendering, use the memory history provider
-    #[cfg(all(feature = "fullstack", feature = "ssr"))]
-    return Box::new(AnyHistoryProviderImplWrapper::new(
-        MemoryHistory::<R>::with_initial_path(
-            dioxus_fullstack::prelude::server_context()
-                .request_parts()
-                .uri
-                .to_string()
-                .parse()
-                .unwrap_or_else(|err| {
-                    tracing::error!("Failed to parse uri: {}", err);
-                    "/".parse().unwrap_or_else(|err| {
-                        panic!("Failed to parse uri: {}", err);
-                    })
-                }),
-        ),
-    ));
+    // // If we're using fullstack and server side rendering, use the memory history provider
+    // #[cfg(all(feature = "fullstack", feature = "ssr"))]
+    // return Box::new(AnyHistoryProviderImplWrapper::new(
+    //     MemoryHistory::<R>::with_initial_path(
+    //         dioxus_fullstack::prelude::server_context()
+    //             .request_parts()
+    //             .uri
+    //             .to_string()
+    //             .parse()
+    //             .unwrap_or_else(|err| {
+    //                 tracing::error!("Failed to parse uri: {}", err);
+    //                 "/".parse().unwrap_or_else(|err| {
+    //                     panic!("Failed to parse uri: {}", err);
+    //                 })
+    //             }),
+    //     ),
+    // ));
 
     // If liveview is enabled, use the liveview history provider
     #[cfg(feature = "liveview")]

@@ -150,9 +150,9 @@ mod server_fn_impl {
                 .insert((*value()).type_id(), ContextType::Factory(value));
         }
 
+        // #[doc = include_str!("../docs/request_origin.md")]
         /// Get the response parts from the server context
         ///
-        #[doc = include_str!("../docs/request_origin.md")]
         ///
         /// # Example
         ///
@@ -173,9 +173,9 @@ mod server_fn_impl {
             self.response_parts.read()
         }
 
+        // #[doc = include_str!("../docs/request_origin.md")]
         /// Get the response parts from the server context
         ///
-        #[doc = include_str!("../docs/request_origin.md")]
         ///
         /// # Example
         ///
@@ -194,9 +194,9 @@ mod server_fn_impl {
             self.response_parts.write()
         }
 
+        // #[doc = include_str!("../docs/request_origin.md")]
         /// Get the request parts
         ///
-        #[doc = include_str!("../docs/request_origin.md")]
         ///
         /// # Example
         ///
@@ -217,9 +217,9 @@ mod server_fn_impl {
             self.parts.read()
         }
 
+        // #[doc = include_str!("../docs/request_origin.md")]
         /// Get the request parts mutably
         ///
-        #[doc = include_str!("../docs/request_origin.md")]
         ///
         /// # Example
         ///
@@ -240,9 +240,9 @@ mod server_fn_impl {
             self.parts.write()
         }
 
+        // #[doc = include_str!("../docs/request_origin.md")]
         /// Extract part of the request.
         ///
-        #[doc = include_str!("../docs/request_origin.md")]
         ///
         /// # Example
         ///

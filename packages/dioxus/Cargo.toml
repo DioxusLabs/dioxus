@@ -25,6 +25,7 @@ dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
+dioxus-server = { workspace = true, optional = true }
 manganis = { workspace = true, optional = true }
 
 serde = { version = "1.0.136", optional = true }
@@ -57,7 +58,7 @@ fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde
 ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
 axum = ["server"]
-server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
+server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum", "dep:axum", "dioxus-server"]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []

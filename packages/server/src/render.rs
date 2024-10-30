@@ -1,14 +1,15 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::{
     document::ServerDocument, stream::StreamingResponse, template::serialize_server_data,
-    ServeConfig,
+    DioxusServerContext, ProvideServerContext, ServeConfig,
 };
 use crate::{
     streaming::{Mount, StreamingRenderer},
     template::FullstackHTMLTemplate,
 };
-use dioxus_isrg::{
-    IncrementalRenderer, IncrementalRendererError, IsrConfig as IsrgConfig, RenderFreshness,
+use crate::{
+    IncrementalRenderer, IncrementalRendererConfig as IsrgConfig, IncrementalRendererError,
+    RenderFreshness,
 };
 use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
@@ -18,7 +19,6 @@ use std::{collections::HashMap, future::Future};
 use std::{rc::Rc, sync::Arc};
 use tokio::task::JoinHandle;
 
-use crate::prelude::*;
 use dioxus_lib::prelude::*;
 
 pub struct SsrRenderer {
@@ -243,7 +243,7 @@ impl SsrRenderer {
                         resolved_data,
                         &mut resolved_chunk,
                     )
-                    .map_err(|err| dioxus_isrg::IncrementalRendererError::RenderError(err))?;
+                    .map_err(|err| IncrementalRendererError::RenderError(err))?;
 
                 stream.render(resolved_chunk);
 
@@ -273,6 +273,7 @@ impl SsrRenderer {
         if let Some(incremental) = &self.incremental_cache {
             let mut cached_render = String::new();
             wrapper.render_head(&mut cached_render, &virtual_dom)?;
+            println!("Post streaming: {post_streaming}");
             cached_render.push_str(&post_streaming);
 
             if let Ok(mut incremental) = incremental.write() {

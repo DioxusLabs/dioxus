@@ -7,13 +7,15 @@ use std::path::PathBuf;
 
 use dioxus_lib::prelude::dioxus_core::LaunchConfig;
 
+use crate::IncrementalRendererConfig;
+
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
-    pub(crate) incremental: Option<dioxus_isrg::IsrConfig>,
+    pub(crate) incremental: Option<IncrementalRendererConfig>,
 }
 
 impl LaunchConfig for ServeConfigBuilder {}
@@ -48,7 +50,7 @@ impl ServeConfigBuilder {
     ///     .with_cfg(cfg)
     ///     .launch(app);
     /// ```
-    pub fn incremental(mut self, cfg: dioxus_isrg::IsrConfig) -> Self {
+    pub fn incremental(mut self, cfg: IncrementalRendererConfig) -> Self {
         self.incremental = Some(cfg);
         self
     }
@@ -240,7 +242,7 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
-    pub(crate) incremental: Option<dioxus_isrg::IsrConfig>,
+    pub(crate) incremental: Option<IncrementalRendererConfig>,
 }
 
 impl LaunchConfig for ServeConfig {}

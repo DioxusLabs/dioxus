@@ -1,8 +1,10 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::streaming::{Mount, StreamingRenderer};
 use crate::{document::ServerDocument, ServeConfig};
-use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-use dioxus_isrg::{CachedRender, IncrementalRenderer, RenderFreshness};
+use crate::{
+    streaming::{Mount, StreamingRenderer},
+    IncrementalRendererError,
+};
+use crate::{CachedRender, IncrementalRenderer, RenderFreshness};
 use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
@@ -26,7 +28,7 @@ impl FullstackHTMLTemplate {
         &self,
         to: &mut R,
         virtual_dom: &VirtualDom,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         let title = {
@@ -63,11 +65,13 @@ impl FullstackHTMLTemplate {
     fn render_before_body<R: std::fmt::Write>(
         &self,
         to: &mut R,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.close_head)?;
 
+        // todo!("streaming js");
+        use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
         write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
 
         Ok(())
@@ -78,7 +82,7 @@ impl FullstackHTMLTemplate {
         &self,
         to: &mut R,
         virtual_dom: &VirtualDom,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
@@ -97,7 +101,7 @@ impl FullstackHTMLTemplate {
     pub fn render_after_body<R: std::fmt::Write>(
         &self,
         to: &mut R,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.after_closing_body_tag)?;
@@ -111,7 +115,7 @@ impl FullstackHTMLTemplate {
         to: &mut R,
         virtual_dom: &VirtualDom,
         body: impl std::fmt::Display,
-    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
+    ) -> Result<(), IncrementalRendererError> {
         self.render_head(to, virtual_dom)?;
         write!(to, "{body}")?;
         self.render_after_main(to, virtual_dom)?;
@@ -122,11 +126,13 @@ impl FullstackHTMLTemplate {
 }
 
 pub fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> String {
-    // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
-    // Extract any data we serialized for hydration (from server futures)
-    let html_data =
-        crate::html_storage::HTMLData::extract_from_suspense_boundary(virtual_dom, scope);
+    "extract shared serialize out".to_string()
+    // todo!("extract shared serialize out")
+    // // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
+    // // Extract any data we serialized for hydration (from server futures)
+    // let html_data =
+    //     crate::html_storage::HTMLData::extract_from_suspense_boundary(virtual_dom, scope);
 
-    // serialize the server state into a base64 string
-    html_data.serialized()
+    // // serialize the server state into a base64 string
+    // html_data.serialized()
 }
