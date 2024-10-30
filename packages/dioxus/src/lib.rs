@@ -73,7 +73,7 @@ pub mod prelude {
 
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
-    pub use dioxus_history::History;
+    pub use dioxus_history::{history, History};
 
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
