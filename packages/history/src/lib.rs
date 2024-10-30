@@ -38,7 +38,7 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
     /// assert_eq!(history.current_route().to_string(), "/");
     ///
     /// history.push(Route::OtherPage {});
@@ -74,7 +74,7 @@ pub trait History {
     ///     #[route("/other")]
     ///     Other {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
     /// assert_eq!(history.can_go_back(), false);
     ///
     /// history.push(Route::Other {});
@@ -103,7 +103,7 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
     /// assert_eq!(history.current_route().to_string(), "/");
     ///
     /// history.go_back();
@@ -134,7 +134,7 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
     /// assert_eq!(history.can_go_forward(), false);
     ///
     /// history.push(Route::OtherPage {});
@@ -166,7 +166,7 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
     /// history.push(Route::OtherPage {});
     /// assert_eq!(history.current_route(), Route::OtherPage {});
     ///
@@ -198,7 +198,7 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
     /// assert_eq!(history.current_route(), Route::Index {});
     ///
     /// history.push(Route::OtherPage {});
@@ -226,7 +226,7 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
     /// assert_eq!(history.current_route(), Route::Index {});
     ///
     /// history.replace(Route::OtherPage {});

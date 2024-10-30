@@ -37,7 +37,7 @@ fn Test() -> Element {
 fn App(path: Route) -> Element {
     rsx! {
         HistoryProvider {
-            history:  move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+            history:  move |_| Rc::new(MemoryHistory::with_initial_path(path)) as Rc<dyn History>,
             Router::<Route> {}
         }
     }
