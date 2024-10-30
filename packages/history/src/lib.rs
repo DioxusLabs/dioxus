@@ -38,11 +38,11 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
-    /// assert_eq!(history.current_route().to_string(), "/");
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// assert_eq!(history.current_route(), "/");
     ///
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.current_route().to_string(), "/some-other-page");
+    /// history.push(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), "/some-other-page");
     /// ```
     #[must_use]
     fn current_route(&self) -> String;
@@ -74,10 +74,10 @@ pub trait History {
     ///     #[route("/other")]
     ///     Other {},
     /// }
-    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::default();
     /// assert_eq!(history.can_go_back(), false);
     ///
-    /// history.push(Route::Other {});
+    /// history.push(Route::Other {}.to_string());
     /// assert_eq!(history.can_go_back(), true);
     /// ```
     #[must_use]
@@ -103,17 +103,17 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
-    /// assert_eq!(history.current_route().to_string(), "/");
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// assert_eq!(history.current_route(), "/");
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_route().to_string(), "/");
+    /// assert_eq!(history.current_route(), "/");
     ///
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.current_route().to_string(), "/some-other-page");
+    /// history.push(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), "/some-other-page");
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_route().to_string(), "/");
+    /// assert_eq!(history.current_route(), "/");
     /// ```
     fn go_back(&self);
 
@@ -134,10 +134,10 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::default();
     /// assert_eq!(history.can_go_forward(), false);
     ///
-    /// history.push(Route::OtherPage {});
+    /// history.push(Route::OtherPage {}.to_string());
     /// assert_eq!(history.can_go_forward(), false);
     ///
     /// history.go_back();
@@ -166,15 +166,15 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.current_route(), Route::OtherPage {});
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// history.push(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), Route::OtherPage {}.to_string());
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_route(), Route::Index {});
+    /// assert_eq!(history.current_route(), Route::Index {}.to_string());
     ///
     /// history.go_forward();
-    /// assert_eq!(history.current_route(), Route::OtherPage {});
+    /// assert_eq!(history.current_route(), Route::OtherPage {}.to_string());
     /// ```
     fn go_forward(&self);
 
@@ -198,11 +198,11 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
-    /// assert_eq!(history.current_route(), Route::Index {});
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// assert_eq!(history.current_route(), Route::Index {}.to_string());
     ///
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.current_route(), Route::OtherPage {});
+    /// history.push(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), Route::OtherPage {}.to_string());
     /// assert!(history.can_go_back());
     /// ```
     fn push(&self, route: String);
@@ -226,11 +226,11 @@ pub trait History {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = dioxus::history::MemoryHistory::<Route>::default();
-    /// assert_eq!(history.current_route(), Route::Index {});
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// assert_eq!(history.current_route(), Route::Index {}.to_string());
     ///
-    /// history.replace(Route::OtherPage {});
-    /// assert_eq!(history.current_route(), Route::OtherPage {});
+    /// history.replace(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), Route::OtherPage {}.to_string());
     /// assert!(!history.can_go_back());
     /// ```
     fn replace(&self, path: String);

@@ -37,8 +37,8 @@ impl MemoryHistory {
     ///     OtherPage {},
     /// }
     ///
-    /// let mut history = MemoryHistory::<Route>::with_initial_path(Route::Index {});
-    /// assert_eq!(history.current_route(), Route::Index {});
+    /// let mut history = dioxus_history::MemoryHistory::with_initial_path(Route::Index {});
+    /// assert_eq!(history.current_route(), Route::Index {}.to_string());
     /// assert_eq!(history.can_go_back(), false);
     /// ```
     pub fn with_initial_path(path: impl ToString) -> Self {
