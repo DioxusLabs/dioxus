@@ -18,8 +18,6 @@ pub struct ServeConfigBuilder {
     pub(crate) incremental: Option<IncrementalRendererConfig>,
 }
 
-impl LaunchConfig for ServeConfigBuilder {}
-
 impl ServeConfigBuilder {
     /// Create a new ServeConfigBuilder with incremental static generation disabled and the default index.html settings
     pub fn new() -> Self {
@@ -140,14 +138,6 @@ impl ServeConfigBuilder {
             index,
             incremental: self.incremental,
         })
-    }
-}
-
-impl TryInto<ServeConfig> for ServeConfigBuilder {
-    type Error = UnableToLoadIndex;
-
-    fn try_into(self) -> Result<ServeConfig, Self::Error> {
-        self.build()
     }
 }
 

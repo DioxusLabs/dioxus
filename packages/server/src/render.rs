@@ -12,7 +12,7 @@ use crate::{
 };
 use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
-use futures_channel::mpsc::Sender;
+use futures_channel::mpsc::UnboundedSender;
 use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
 use std::{rc::Rc, sync::Arc};
@@ -49,10 +49,10 @@ impl SsrRenderer {
         new_vdom: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: DioxusServerContext,
     ) -> Result<StreamingResponse> {
-        let (mut into, rx) = futures_channel::mpsc::channel::<Result<String>>(1000);
+        let (mut tx, rx) = futures_channel::mpsc::unbounded::<Result<String>>();
 
         // before we even spawn anything, we can check synchronously if we have the route cached
-        if let Some(freshness) = self.check_cached_route(&route, &mut into) {
+        if let Some(freshness) = self.check_cached_route(&route, &mut tx) {
             return Ok(StreamingResponse::new(rx, freshness, None));
         }
 
@@ -61,7 +61,7 @@ impl SsrRenderer {
                 new_vdom(),
                 server_context,
                 FullstackHTMLTemplate { cfg },
-                into,
+                tx,
                 route,
             )
         });
@@ -78,7 +78,7 @@ impl SsrRenderer {
         mut virtual_dom: VirtualDom,
         server_context: DioxusServerContext,
         wrapper: FullstackHTMLTemplate,
-        mut sender: Sender<Result<String>>,
+        sender: UnboundedSender<Result<String>>,
         route: String,
     ) {
         let mut renderer = self
@@ -96,7 +96,7 @@ impl SsrRenderer {
         let mut pre_body = String::new();
 
         if let Err(err) = wrapper.render_head(&mut pre_body, &virtual_dom) {
-            _ = sender.start_send(Err(err));
+            _ = sender.unbounded_send(Err(err));
             return;
         }
 
@@ -206,6 +206,13 @@ impl SsrRenderer {
         // Along with the initial frame, we render the html after the main element, but before the body tag closes. This should include the script that starts loading the wasm bundle.
         wrapper.render_after_main(&mut initial_frame, &virtual_dom)?;
         println!("initial frame: {initial_frame}");
+
+        let mut cached_render = String::new();
+
+        if let Some(_incremental) = &self.incremental_cache {
+            cached_render.push_str(&initial_frame);
+        }
+
         stream.render(initial_frame);
 
         // After the initial render, we need to resolve suspense
@@ -273,9 +280,10 @@ impl SsrRenderer {
 
         // If incremental rendering is enabled, add the new render to the cache without the streaming bits
         if let Some(incremental) = &self.incremental_cache {
-            let mut cached_render = String::new();
-            wrapper.render_head(&mut cached_render, &virtual_dom)?;
-            println!("Post streaming: {post_streaming}");
+            // wrapper.render_head(&mut cached_render, &virtual_dom)?;
+            // we should put out the chunks...
+            // cached_render.push_str("hmmmm?");
+            // cached_render.push_str("</div>");
             cached_render.push_str(&post_streaming);
 
             if let Ok(mut incremental) = incremental.write() {
@@ -290,13 +298,13 @@ impl SsrRenderer {
     fn check_cached_route(
         &self,
         route: &str,
-        render_into: &mut Sender<Result<String>>,
+        render_into: &UnboundedSender<Result<String>>,
     ) -> Option<RenderFreshness> {
         let incremental = self.incremental_cache.as_ref()?;
         let mut incremental = incremental.write().ok()?;
         let cached = incremental.get(route).ok().flatten()?;
 
-        _ = render_into.start_send(
+        _ = render_into.unbounded_send(
             String::from_utf8(cached.response.to_vec())
                 .map_err(|err| IncrementalRendererError::Other(Box::new(err))),
         );

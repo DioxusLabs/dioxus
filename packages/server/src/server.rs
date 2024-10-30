@@ -198,16 +198,11 @@ pub async fn render_handler(
 
     let mut response = stream.into_response();
 
-    // let mut vdom = VirtualDom::new(state);
-    let stream = futures_util::stream::poll_fn(move |ctx| {
-        return Poll::Ready(None as Option<Result<String, IncrementalRendererError>>);
-    });
-
     for (key, value) in server_context.response_parts().headers.iter() {
         response.headers_mut().insert(key, value.clone());
     }
 
-    Ok(Body::from_stream(stream))
+    Ok(response)
 }
 
 /// A handler for Dioxus server functions. This will run the server function and return the result.

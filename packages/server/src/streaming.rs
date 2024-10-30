@@ -27,7 +27,7 @@
 //! ```
 
 use crate::Result;
-use futures_channel::mpsc::Sender;
+use futures_channel::mpsc::UnboundedSender;
 use std::{
     fmt::{Display, Write},
     sync::{Arc, RwLock},
@@ -59,18 +59,14 @@ impl Display for Mount {
 }
 
 pub(crate) struct StreamingRenderer {
-    channel: RwLock<Sender<Result<String>>>,
+    channel: UnboundedSender<Result<String>>,
     current_path: RwLock<Mount>,
 }
 
 impl StreamingRenderer {
     /// Create a new streaming renderer with the given head that renders into a channel
-    pub(crate) fn start(
-        before_body: impl Display,
-        mut render_into: Sender<Result<String>>,
-    ) -> Self {
-        let start_html = before_body.to_string();
-        _ = render_into.start_send(Ok(start_html));
+    pub(crate) fn start(before_body: String, render_into: UnboundedSender<Result<String>>) -> Self {
+        _ = render_into.unbounded_send(Ok(before_body));
 
         Self {
             channel: render_into.into(),
@@ -80,7 +76,7 @@ impl StreamingRenderer {
 
     /// Render a new chunk of html that will never change
     pub(crate) fn render(&self, html: String) {
-        _ = self.channel.write().unwrap().start_send(Ok(html));
+        _ = self.channel.unbounded_send(Ok(html));
     }
 
     /// Render a new chunk of html that may change
@@ -123,6 +119,6 @@ impl StreamingRenderer {
 
     /// Close the stream with an error
     pub(crate) fn close_with_error(&self, error: crate::Error) {
-        _ = self.channel.write().unwrap().start_send(Err(error));
+        _ = self.channel.unbounded_send(Err(error));
     }
 }

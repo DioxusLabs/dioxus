@@ -1,17 +1,18 @@
 use crate::{IncrementalRendererError, RenderFreshness};
 use axum::{body::Body, response::IntoResponse};
 use futures_channel::mpsc::Receiver;
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{Stream, StreamExt};
 
 pub struct StreamingResponse {
     pub freshness: RenderFreshness,
-    pub receiver: Receiver<Result<String, IncrementalRendererError>>,
+    pub receiver: UnboundedReceiver<Result<String, IncrementalRendererError>>,
     pub cancel_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl StreamingResponse {
     pub fn new(
-        receiver: Receiver<Result<String, IncrementalRendererError>>,
+        receiver: UnboundedReceiver<Result<String, IncrementalRendererError>>,
         freshness: RenderFreshness,
         cancel_task: Option<tokio::task::JoinHandle<()>>,
     ) -> Self {
