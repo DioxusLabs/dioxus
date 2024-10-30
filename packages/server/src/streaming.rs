@@ -26,8 +26,8 @@
 //! </script>
 //! ```
 
+use crate::Result;
 use futures_channel::mpsc::Sender;
-
 use std::{
     fmt::{Display, Write},
     sync::{Arc, RwLock},
@@ -35,12 +35,12 @@ use std::{
 
 /// Sections are identified by a unique id based on the suspense path. We only track the path of suspense boundaries because the client may render different components than the server.
 #[derive(Clone, Debug, Default)]
-struct MountPath {
-    parent: Option<Arc<MountPath>>,
-    id: usize,
+pub struct Mount {
+    pub parent: Option<Arc<Mount>>,
+    pub id: usize,
 }
 
-impl MountPath {
+impl Mount {
     fn child(&self) -> Self {
         Self {
             parent: Some(Arc::new(self.clone())),
@@ -49,7 +49,7 @@ impl MountPath {
     }
 }
 
-impl Display for MountPath {
+impl Display for Mount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(parent) = &self.parent {
             write!(f, "{},", parent)?;
@@ -58,16 +58,16 @@ impl Display for MountPath {
     }
 }
 
-pub(crate) struct StreamingRenderer<E = std::convert::Infallible> {
-    channel: RwLock<Sender<Result<String, E>>>,
-    current_path: RwLock<MountPath>,
+pub(crate) struct StreamingRenderer {
+    channel: RwLock<Sender<Result<String>>>,
+    current_path: RwLock<Mount>,
 }
 
-impl<E> StreamingRenderer<E> {
+impl StreamingRenderer {
     /// Create a new streaming renderer with the given head that renders into a channel
     pub(crate) fn start(
         before_body: impl Display,
-        mut render_into: Sender<Result<String, E>>,
+        mut render_into: Sender<Result<String>>,
     ) -> Self {
         let start_html = before_body.to_string();
         _ = render_into.start_send(Ok(start_html));
@@ -79,12 +79,8 @@ impl<E> StreamingRenderer<E> {
     }
 
     /// Render a new chunk of html that will never change
-    pub(crate) fn render(&self, html: impl Display) {
-        _ = self
-            .channel
-            .write()
-            .unwrap()
-            .start_send(Ok(html.to_string()));
+    pub(crate) fn render(&self, html: String) {
+        _ = self.channel.write().unwrap().start_send(Ok(html));
     }
 
     /// Render a new chunk of html that may change
@@ -92,7 +88,7 @@ impl<E> StreamingRenderer<E> {
         &self,
         into: &mut W,
         html: impl FnOnce(&mut W) -> std::fmt::Result,
-    ) -> Result<Mount, std::fmt::Error> {
+    ) -> Result<Mount> {
         let id = self.current_path.read().unwrap().clone();
         // Increment the id for the next placeholder
         self.current_path.write().unwrap().id += 1;
@@ -101,7 +97,7 @@ impl<E> StreamingRenderer<E> {
         html(into)?;
         // Restore the old path
         *self.current_path.write().unwrap() = old_path;
-        Ok(Mount { id })
+        Ok(id)
     }
 
     /// Replace a placeholder that was rendered previously
@@ -115,7 +111,7 @@ impl<E> StreamingRenderer<E> {
         // Then replace the suspense placeholder with the new content
         write!(into, r#"<div id="ds-{id}-r" hidden>"#)?;
         // While we are inside the placeholder, set the suspense path to the suspense boundary that we are rendering
-        let old_path = std::mem::replace(&mut *self.current_path.write().unwrap(), id.id.child());
+        let old_path = std::mem::replace(&mut *self.current_path.write().unwrap(), id.child());
         html(into)?;
         // Restore the old path
         *self.current_path.write().unwrap() = old_path;
@@ -126,19 +122,7 @@ impl<E> StreamingRenderer<E> {
     }
 
     /// Close the stream with an error
-    pub(crate) fn close_with_error(&self, error: E) {
+    pub(crate) fn close_with_error(&self, error: crate::Error) {
         _ = self.channel.write().unwrap().start_send(Err(error));
-    }
-}
-
-/// A mounted placeholder in the dom that may change in the future
-#[derive(Clone, Debug)]
-pub(crate) struct Mount {
-    id: MountPath,
-}
-
-impl Display for Mount {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.id)
     }
 }

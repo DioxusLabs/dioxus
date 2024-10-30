@@ -1,7 +1,6 @@
 use parking_lot::RwLock;
-use std::any::Any;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
+use std::{collections::HashMap, future::Future};
 
 type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
 
@@ -23,8 +22,8 @@ type SendSyncAnyMap = std::collections::HashMap<std::any::TypeId, ContextType>;
 /// ```
 #[derive(Clone)]
 pub struct DioxusServerContext {
-    shared_context: std::sync::Arc<RwLock<SendSyncAnyMap>>,
-    response_parts: std::sync::Arc<RwLock<http::response::Parts>>,
+    shared_context: Arc<RwLock<SendSyncAnyMap>>,
+    response_parts: Arc<RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
 }
 
@@ -46,11 +45,11 @@ impl ContextType {
 impl Default for DioxusServerContext {
     fn default() -> Self {
         Self {
-            shared_context: std::sync::Arc::new(RwLock::new(HashMap::new())),
-            response_parts: std::sync::Arc::new(RwLock::new(
+            shared_context: Arc::new(RwLock::new(HashMap::new())),
+            response_parts: Arc::new(RwLock::new(
                 http::response::Response::new(()).into_parts().0,
             )),
-            parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
+            parts: Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
         }
     }
 }
@@ -295,20 +294,20 @@ pub async fn extract<E: FromServerContext<I>, I>() -> Result<E, E::Rejection> {
 
 /// A future that provides the server context to the inner future
 #[pin_project::pin_project]
-pub struct ProvideServerContext<F: std::future::Future> {
+pub struct ProvideServerContext<F: Future> {
     context: DioxusServerContext,
     #[pin]
     f: F,
 }
 
-impl<F: std::future::Future> ProvideServerContext<F> {
+impl<F: Future> ProvideServerContext<F> {
     /// Create a new future that provides the server context to the inner future
     pub fn new(f: F, context: DioxusServerContext) -> Self {
         Self { f, context }
     }
 }
 
-impl<F: std::future::Future> std::future::Future for ProvideServerContext<F> {
+impl<F: Future> Future for ProvideServerContext<F> {
     type Output = F::Output;
 
     fn poll(

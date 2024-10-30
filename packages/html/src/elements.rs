@@ -627,6 +627,12 @@ macro_rules! builder_constructors {
 builder_constructors! {
     // Document metadata
 
+    /// Build an
+    /// [`<html>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/html)
+    /// element.
+    ///
+    html None {};
+
     /// Build a
     /// [`<base>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base)
     /// element.

@@ -1,15 +1,14 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::{
     document::ServerDocument, stream::StreamingResponse, template::serialize_server_data,
-    DioxusServerContext, ProvideServerContext, ServeConfig,
+    DioxusServerContext, IncrementalRendererError, ProvideServerContext, ServeConfig,
 };
 use crate::{
     streaming::{Mount, StreamingRenderer},
     template::FullstackHTMLTemplate,
 };
 use crate::{
-    IncrementalRenderer, IncrementalRendererConfig as IsrgConfig, IncrementalRendererError,
-    RenderFreshness,
+    IncrementalRenderer, IncrementalRendererConfig as IsrgConfig, RenderFreshness, Result,
 };
 use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
@@ -49,9 +48,8 @@ impl SsrRenderer {
         route: String,
         new_vdom: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: DioxusServerContext,
-    ) -> Result<StreamingResponse, IncrementalRendererError> {
-        let (mut into, rx) =
-            futures_channel::mpsc::channel::<Result<String, IncrementalRendererError>>(1000);
+    ) -> Result<StreamingResponse> {
+        let (mut into, rx) = futures_channel::mpsc::channel::<Result<String>>(1000);
 
         // before we even spawn anything, we can check synchronously if we have the route cached
         if let Some(freshness) = self.check_cached_route(&route, &mut into) {
@@ -80,7 +78,7 @@ impl SsrRenderer {
         mut virtual_dom: VirtualDom,
         server_context: DioxusServerContext,
         wrapper: FullstackHTMLTemplate,
-        mut sender: Sender<Result<String, IncrementalRendererError>>,
+        mut sender: Sender<Result<String>>,
         route: String,
     ) {
         let mut renderer = self
@@ -124,19 +122,21 @@ impl SsrRenderer {
                     return Ok(());
                 }
 
-                let mount = stream.render_placeholder(&mut *to, |to| {
-                    {
-                        pending_suspense_boundaries_stack
-                            .write()
-                            .unwrap()
-                            .push(scope);
-                    }
-                    let out = renderer.render_scope(to, vdom, scope);
-                    {
-                        pending_suspense_boundaries_stack.write().unwrap().pop();
-                    }
-                    out
-                })?;
+                let mount = stream
+                    .render_placeholder(&mut *to, |to| {
+                        {
+                            pending_suspense_boundaries_stack
+                                .write()
+                                .unwrap()
+                                .push(scope);
+                        }
+                        let out = renderer.render_scope(to, vdom, scope);
+                        {
+                            pending_suspense_boundaries_stack.write().unwrap().pop();
+                        }
+                        out
+                    })
+                    .map_err(|_err| std::fmt::Error)?;
 
                 // Add the suspense boundary to the list of pending suspense boundaries
                 // We will replace the mount with the resolved contents later once the suspense boundary is resolved
@@ -195,16 +195,17 @@ impl SsrRenderer {
         renderer: &mut Renderer,
         mut virtual_dom: VirtualDom,
         wrapper: FullstackHTMLTemplate,
-        stream: &Arc<StreamingRenderer<IncrementalRendererError>>,
+        stream: &Arc<StreamingRenderer>,
         server_context: DioxusServerContext,
         scope_to_mount_mapping: Arc<RwLock<HashMap<ScopeId, PendingSuspenseBoundary>>>,
         route: String,
-    ) -> Result<String, IncrementalRendererError> {
+    ) -> Result<String> {
         // Render the initial frame with loading placeholders
         let mut initial_frame = renderer.render(&virtual_dom);
 
         // Along with the initial frame, we render the html after the main element, but before the body tag closes. This should include the script that starts loading the wasm bundle.
         wrapper.render_after_main(&mut initial_frame, &virtual_dom)?;
+        println!("initial frame: {initial_frame}");
         stream.render(initial_frame);
 
         // After the initial render, we need to resolve suspense
@@ -245,6 +246,7 @@ impl SsrRenderer {
                     )
                     .map_err(|err| IncrementalRendererError::RenderError(err))?;
 
+                println!("resolved chunk: {resolved_chunk}");
                 stream.render(resolved_chunk);
 
                 // Freeze the suspense boundary to prevent future reruns of any child nodes of the suspense boundary
@@ -288,7 +290,7 @@ impl SsrRenderer {
     fn check_cached_route(
         &self,
         route: &str,
-        render_into: &mut Sender<Result<String, IncrementalRendererError>>,
+        render_into: &mut Sender<Result<String>>,
     ) -> Option<RenderFreshness> {
         let incremental = self.incremental_cache.as_ref()?;
         let mut incremental = incremental.write().ok()?;

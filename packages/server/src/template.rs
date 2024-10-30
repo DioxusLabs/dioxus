@@ -1,4 +1,6 @@
 //! A shared pool of renderers for efficient server side rendering.
+use crate::prelude::*;
+use crate::Result;
 use crate::{document::ServerDocument, ServeConfig};
 use crate::{
     streaming::{Mount, StreamingRenderer},
@@ -6,16 +8,14 @@ use crate::{
 };
 use crate::{CachedRender, IncrementalRenderer, RenderFreshness};
 use dioxus_lib::document::Document;
+use dioxus_lib::prelude::*;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use std::sync::Arc;
-use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
+use std::{fmt::Write, sync::RwLock};
+use std::{rc::Rc, sync::Arc};
 use tokio::task::JoinHandle;
-
-use crate::prelude::*;
-use dioxus_lib::prelude::*;
 
 /// The template that wraps the body of the HTML for a fullstack page. This template contains the data needed to hydrate server functions that were run on the server.
 pub struct FullstackHTMLTemplate {
@@ -24,15 +24,11 @@ pub struct FullstackHTMLTemplate {
 
 impl FullstackHTMLTemplate {
     /// Render any content before the head of the page.
-    pub fn render_head<R: std::fmt::Write>(
-        &self,
-        to: &mut R,
-        virtual_dom: &VirtualDom,
-    ) -> Result<(), IncrementalRendererError> {
+    pub fn render_head<R: Write>(&self, to: &mut R, virtual_dom: &VirtualDom) -> Result<()> {
         let ServeConfig { index, .. } = &self.cfg;
 
         let title = {
-            let document: Option<std::rc::Rc<ServerDocument>> =
+            let document: Option<Rc<ServerDocument>> =
                 virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
             // Collect any head content from the document provider and inject that into the head
             document.and_then(|document| document.title())
@@ -46,7 +42,7 @@ impl FullstackHTMLTemplate {
         }
         to.write_str(&index.head_after_title)?;
 
-        let document: Option<std::rc::Rc<ServerDocument>> =
+        let document: Option<Rc<ServerDocument>> =
             virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
         if let Some(document) = document {
             // Collect any head content from the document provider and inject that into the head
@@ -62,15 +58,11 @@ impl FullstackHTMLTemplate {
     }
 
     /// Render any content before the body of the page.
-    fn render_before_body<R: std::fmt::Write>(
-        &self,
-        to: &mut R,
-    ) -> Result<(), IncrementalRendererError> {
+    fn render_before_body<R: Write>(&self, to: &mut R) -> Result<()> {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.close_head)?;
 
-        // todo!("streaming js");
         use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
         write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
 
@@ -78,11 +70,7 @@ impl FullstackHTMLTemplate {
     }
 
     /// Render all content after the main element of the page.
-    pub fn render_after_main<R: std::fmt::Write>(
-        &self,
-        to: &mut R,
-        virtual_dom: &VirtualDom,
-    ) -> Result<(), IncrementalRendererError> {
+    pub fn render_after_main<R: Write>(&self, to: &mut R, virtual_dom: &VirtualDom) -> Result<()> {
         let ServeConfig { index, .. } = &self.cfg;
 
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
@@ -98,10 +86,7 @@ impl FullstackHTMLTemplate {
     }
 
     /// Render all content after the body of the page.
-    pub fn render_after_body<R: std::fmt::Write>(
-        &self,
-        to: &mut R,
-    ) -> Result<(), IncrementalRendererError> {
+    pub fn render_after_body<R: Write>(&self, to: &mut R) -> Result<()> {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.after_closing_body_tag)?;
@@ -110,12 +95,12 @@ impl FullstackHTMLTemplate {
     }
 
     /// Wrap a body in the template
-    pub fn wrap_body<R: std::fmt::Write>(
+    pub fn wrap_body<R: Write>(
         &self,
         to: &mut R,
         virtual_dom: &VirtualDom,
         body: impl std::fmt::Display,
-    ) -> Result<(), IncrementalRendererError> {
+    ) -> Result<()> {
         self.render_head(to, virtual_dom)?;
         write!(to, "{body}")?;
         self.render_after_main(to, virtual_dom)?;
