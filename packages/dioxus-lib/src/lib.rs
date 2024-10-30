@@ -29,6 +29,10 @@ pub use dioxus_rsx as rsx;
 pub use dioxus_core_macro as core_macro;
 
 pub mod prelude {
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    pub use dioxus_history::History;
+
     #[cfg(feature = "hooks")]
     pub use crate::hooks::*;
 

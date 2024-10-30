@@ -71,6 +71,10 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
     pub use dioxus_document as document;
 
+    #[cfg(feature = "document")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+    pub use dioxus_history::History;
+
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
     pub use crate::launch::*;
