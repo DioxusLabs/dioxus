@@ -70,15 +70,13 @@ impl RouterContextInner {
     }
 
     fn subscribe_to_current_context(&self) {
-        let rc = ReactiveContext::current();
-        if let Some(rc) = rc {
+        if let Some(rc) = ReactiveContext::current() {
             rc.subscribe(self.subscribers.clone());
         }
     }
 
     fn external(&mut self, external: String) -> Option<ExternalNavigationFailure> {
-        let history = history();
-        match history.external(external.clone()) {
+        match history().external(external.clone()) {
             true => None,
             false => {
                 let failure = ExternalNavigationFailure(external);
@@ -109,9 +107,7 @@ impl RouterContext {
         let myself = RouterContextInner {
             prefix: Default::default(),
             unresolved_error: None,
-
             subscribers: subscribers.clone(),
-
             routing_callback: cfg.on_update.map(|update| {
                 Arc::new(move |ctx| {
                     let ctx = GenericRouterContext {
@@ -138,14 +134,11 @@ impl RouterContext {
         };
 
         // set the updater
-        {
-            let history = history();
-            history.updater(Arc::new(move || {
-                for &rc in subscribers.lock().unwrap().iter() {
-                    rc.mark_dirty();
-                }
-            }));
-        }
+        history().updater(Arc::new(move || {
+            for &rc in subscribers.lock().unwrap().iter() {
+                rc.mark_dirty();
+            }
+        }));
 
         Self {
             inner: CopyValue::new_in_scope(myself, ScopeId::ROOT),
@@ -155,33 +148,26 @@ impl RouterContext {
     /// Check if the router is running in a liveview context
     /// We do some slightly weird things for liveview because of the network boundary
     pub(crate) fn include_prevent_default(&self) -> bool {
-        let history = history();
-        history.include_prevent_default()
+        history().include_prevent_default()
     }
 
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
-        let history = history();
-        history.can_go_back()
+        history().can_go_back()
     }
 
     /// Check whether there is a future page to navigate forward to.
     #[must_use]
     pub fn can_go_forward(&self) -> bool {
-        let history = history();
-        history.can_go_forward()
+        history().can_go_forward()
     }
 
     /// Go back to the previous location.
     ///
     /// Will fail silently if there is no previous location to go to.
     pub fn go_back(&self) {
-        {
-            let history = history();
-            history.go_back();
-        }
-
+        history().go_back();
         self.change_route();
     }
 
@@ -189,11 +175,7 @@ impl RouterContext {
     ///
     /// Will fail silently if there is no next location to go to.
     pub fn go_forward(&self) {
-        {
-            let history = history();
-            history.go_forward();
-        }
-
+        history().go_forward();
         self.change_route();
     }
 
@@ -201,10 +183,7 @@ impl RouterContext {
         {
             let mut write = self.inner.write_unchecked();
             match target {
-                NavigationTarget::Internal(p) => {
-                    let history = history();
-                    history.push(p)
-                }
+                NavigationTarget::Internal(p) => history().push(p),
                 NavigationTarget::External(e) => return write.external(e),
             }
         }

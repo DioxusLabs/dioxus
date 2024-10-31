@@ -18,7 +18,6 @@ fn app() -> Element {
     rsx! {
         document::Title { "hello axum! {count}" }
         h1 { "hello axum! {count}" }
-        document::Title { "hello axum! {count}" }
         button { class: "increment-button", onclick: move |_| count += 1, "Increment" }
         button {
             class: "server-button",
