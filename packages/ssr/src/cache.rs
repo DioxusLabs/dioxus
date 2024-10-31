@@ -61,41 +61,14 @@ pub(crate) enum Segment {
     InnerHtmlMarker,
     /// A marker for where to insert a node id for an attribute
     AttributeNodeMarker,
-    /// A marker for where to insert a node id for a root node
-    RootNodeMarker,
 }
 
 impl StringCache {
-    /// Add segments but only when hydration is enabled
-    fn if_hydration_enabled<O>(
-        &mut self,
-        during_prerender: impl FnOnce(&mut StringCache) -> O,
-    ) -> O {
-        // Insert a placeholder jump to the end of the hydration only segments
-        let jump_index = self.segments.len();
-        self.push(Segment::HydrationOnlySection(0));
-
-        let out = during_prerender(self);
-
-        // Go back and fill in where the placeholder jump should skip to
-        let after_hydration_only_section = self.segments.len();
-        // Don't add any text to static text in the hydration only section. This would cause the text to be skipped during non-hydration renders
-        self.add_text_to_last_segment = false;
-        self.segments[jump_index] = Segment::HydrationOnlySection(after_hydration_only_section);
-        out
-    }
-
-    /// Add a new segment
-    pub fn push(&mut self, segment: Segment) {
-        self.add_text_to_last_segment = matches!(segment, Segment::PreRendered(_));
-        self.segments.push(segment);
-    }
-
     /// Create a new string cache from a template. This intentionally does not include any settings about the render mode (hydration or not) so that we can reuse the cache for both hydration and non-hydration renders.
     pub fn from_template(template: &VNode) -> Result<Self, std::fmt::Error> {
         let mut cache = StringCache::default();
 
-        for (root_idx, root) in template.template.roots.iter().enumerate() {
+        for root in template.template.roots.iter() {
             cache.from_template_recursive(root, true)?;
         }
 
@@ -158,20 +131,21 @@ impl StringCache {
                     });
                     write!(self, "\"")?;
                 } else if has_dyn_attrs {
-                    self.push(Segment::StyleMarker {
-                        inside_style_tag: false,
-                    });
+                    // self.push(Segment::StyleMarker {
+                    //     inside_style_tag: false,
+                    // });
                 }
 
                 // write the id if we are prerendering and this is either a root node or a node with a dynamic attribute
                 if has_dyn_attrs || is_root {
                     self.if_hydration_enabled(|chain| {
                         write!(chain, " data-node-hydration=\"")?;
-                        if has_dyn_attrs {
+                        if has_dyn_attrs || is_root {
                             chain.push(Segment::AttributeNodeMarker);
-                        } else if is_root {
-                            chain.push(Segment::RootNodeMarker);
                         }
+                        // else if is_root {
+                        //     chain.push(Segment::RootNodeMarker);
+                        // }
                         write!(chain, "\"")?;
                         std::fmt::Result::Ok(())
                     })?;
@@ -200,7 +174,7 @@ impl StringCache {
                 if is_root {
                     self.if_hydration_enabled(|chain| {
                         write!(chain, "<!--node-id")?;
-                        chain.push(Segment::RootNodeMarker);
+                        chain.push(Segment::AttributeNodeMarker);
                         write!(chain, "-->")?;
                         std::fmt::Result::Ok(())
                     })?;
@@ -214,6 +188,31 @@ impl StringCache {
         }
 
         Ok(())
+    }
+
+    /// Add segments but only when hydration is enabled
+    fn if_hydration_enabled<O>(
+        &mut self,
+        during_prerender: impl FnOnce(&mut StringCache) -> O,
+    ) -> O {
+        // Insert a placeholder jump to the end of the hydration only segments
+        let jump_index = self.segments.len();
+        self.push(Segment::HydrationOnlySection(0));
+
+        let out = during_prerender(self);
+
+        // Go back and fill in where the placeholder jump should skip to
+        let after_hydration_only_section = self.segments.len();
+        // Don't add any text to static text in the hydration only section. This would cause the text to be skipped during non-hydration renders
+        self.add_text_to_last_segment = false;
+        self.segments[jump_index] = Segment::HydrationOnlySection(after_hydration_only_section);
+        out
+    }
+
+    /// Add a new segment
+    pub fn push(&mut self, segment: Segment) {
+        self.add_text_to_last_segment = matches!(segment, Segment::PreRendered(_));
+        self.segments.push(segment);
     }
 }
 

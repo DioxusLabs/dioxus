@@ -246,17 +246,83 @@ impl Renderer {
                         )?;
                     }
                 }
-
-                Segment::RootNodeMarker => {
-                    write!(buf, "{}", dynamic_node_id)?;
-                    dynamic_node_id += 1
-                }
             }
 
             index += 1;
         }
 
         Ok(())
+    }
+}
+
+pub(crate) const BOOL_ATTRS: &[&str] = &[
+    "allowfullscreen",
+    "allowpaymentrequest",
+    "async",
+    "autofocus",
+    "autoplay",
+    "checked",
+    "controls",
+    "default",
+    "defer",
+    "disabled",
+    "formnovalidate",
+    "hidden",
+    "ismap",
+    "itemscope",
+    "loop",
+    "multiple",
+    "muted",
+    "nomodule",
+    "novalidate",
+    "open",
+    "playsinline",
+    "readonly",
+    "required",
+    "reversed",
+    "selected",
+    "truespeed",
+    "webkitdirectory",
+];
+
+pub(crate) fn str_truthy(value: &str) -> bool {
+    !value.is_empty() && value != "0" && value.to_lowercase() != "false"
+}
+
+pub(crate) fn truthy(value: &AttributeValue) -> bool {
+    match value {
+        AttributeValue::Text(value) => str_truthy(value),
+        AttributeValue::Bool(value) => *value,
+        AttributeValue::Int(value) => *value != 0,
+        AttributeValue::Float(value) => *value != 0.0,
+        _ => false,
+    }
+}
+
+pub(crate) fn write_attribute<W: Write + ?Sized>(
+    buf: &mut W,
+    attr: &Attribute,
+) -> std::fmt::Result {
+    let name = &attr.name;
+    match &attr.value {
+        AttributeValue::Text(value) => write!(buf, " {name}=\"{value}\""),
+        AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
+        AttributeValue::Int(value) => write!(buf, " {name}={value}"),
+        AttributeValue::Float(value) => write!(buf, " {name}={value}"),
+        _ => Ok(()),
+    }
+}
+
+pub(crate) fn write_value_unquoted<W: Write + ?Sized>(
+    buf: &mut W,
+    value: &AttributeValue,
+) -> std::fmt::Result {
+    match value {
+        AttributeValue::Text(value) => write!(buf, "{}", value),
+        AttributeValue::Bool(value) => write!(buf, "{}", value),
+        AttributeValue::Int(value) => write!(buf, "{}", value),
+        AttributeValue::Float(value) => write!(buf, "{}", value),
+        _ => Ok(()),
     }
 }
 
@@ -351,7 +417,7 @@ fn empty_for_loop_works() {
                     PreRendered("<div class=\"asdasdasd\"".to_string()),
                     HydrationOnlySection(5), // jump to `>` if we don't need to hydrate
                     PreRendered(" data-node-hydration=\"".to_string()),
-                    RootNodeMarker,
+                    AttributeNodeMarker,
                     PreRendered("\"".to_string()),
                     PreRendered(">".to_string()),
                     Node(0),
@@ -388,73 +454,43 @@ fn empty_render_works() {
     assert_eq!(out, "");
 }
 
-pub(crate) const BOOL_ATTRS: &[&str] = &[
-    "allowfullscreen",
-    "allowpaymentrequest",
-    "async",
-    "autofocus",
-    "autoplay",
-    "checked",
-    "controls",
-    "default",
-    "defer",
-    "disabled",
-    "formnovalidate",
-    "hidden",
-    "ismap",
-    "itemscope",
-    "loop",
-    "multiple",
-    "muted",
-    "nomodule",
-    "novalidate",
-    "open",
-    "playsinline",
-    "readonly",
-    "required",
-    "reversed",
-    "selected",
-    "truespeed",
-    "webkitdirectory",
-];
+#[test]
+fn listeners() {
+    use dioxus::prelude::*;
 
-pub(crate) fn str_truthy(value: &str) -> bool {
-    !value.is_empty() && value != "0" && value.to_lowercase() != "false"
-}
-
-pub(crate) fn truthy(value: &AttributeValue) -> bool {
-    match value {
-        AttributeValue::Text(value) => str_truthy(value),
-        AttributeValue::Bool(value) => *value,
-        AttributeValue::Int(value) => *value != 0,
-        AttributeValue::Float(value) => *value != 0.0,
-        _ => false,
+    fn app() -> Element {
+        rsx! {
+            div {
+                onclick: move |_| {},
+                "onclick": "hmm1",
+                "Out"
+                div {
+                    onclick: move |_| {},
+                    "onclick": "hmm2",
+                    "In"
+                }
+                "Last"
+            }
+        }
     }
-}
 
-pub(crate) fn write_attribute<W: Write + ?Sized>(
-    buf: &mut W,
-    attr: &Attribute,
-) -> std::fmt::Result {
-    let name = &attr.name;
-    match &attr.value {
-        AttributeValue::Text(value) => write!(buf, " {name}=\"{value}\""),
-        AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
-        AttributeValue::Int(value) => write!(buf, " {name}={value}"),
-        AttributeValue::Float(value) => write!(buf, " {name}={value}"),
-        _ => Ok(()),
-    }
-}
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-pub(crate) fn write_value_unquoted<W: Write + ?Sized>(
-    buf: &mut W,
-    value: &AttributeValue,
-) -> std::fmt::Result {
-    match value {
-        AttributeValue::Text(value) => write!(buf, "{}", value),
-        AttributeValue::Bool(value) => write!(buf, "{}", value),
-        AttributeValue::Int(value) => write!(buf, "{}", value),
-        AttributeValue::Float(value) => write!(buf, "{}", value),
-        _ => Ok(()),
+    let mut renderer = Renderer::new();
+    renderer.pre_render = true;
+    let out = renderer.render(&dom);
+
+    for (template, item) in renderer.template_cache.iter() {
+        // if item.1.segments.len() > 10 {
+        // assert_eq!(item.1.segments, vec![]);
+        // }
+        println!("{item:#?}");
     }
+
+    println!("{out}");
+
+    // use Segment::*;
+
+    // assert_eq!(out, "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
 }
