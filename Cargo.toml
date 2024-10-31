@@ -96,6 +96,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/server",
+    "packages/fullstack-data",
 ]
 
 [workspace.package]

@@ -9,7 +9,7 @@ use dioxus_ssr::Renderer;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 
-static RENDERER: Lazy<RwLock<Renderer>> = Lazy::new(|| RwLock::new(Renderer::new()));
+// static RENDERER: Lazy<RwLock<Renderer>> = Lazy::new(|| RwLock::new(Renderer::new()));
 
 #[derive(Default)]
 struct ServerDocumentInner {
@@ -27,22 +27,30 @@ pub struct ServerDocument(RefCell<ServerDocumentInner>);
 impl ServerDocument {
     pub(crate) fn title(&self) -> Option<String> {
         let myself = self.0.borrow();
-        myself.title.as_ref().map(|title| {
-            RENDERER
-                .write()
-                .render_element(rsx! { title { "{title}" } })
-        })
+        // myself.title.as_ref().map(|title| {
+        //     // RENDERER.write().render_element(rsx! {
+        //     //     title { "{title}" }
+        //     // })
+        // })
+
+        todo!()
     }
 
     pub(crate) fn render(&self, to: &mut impl std::fmt::Write) -> std::fmt::Result {
         let myself = self.0.borrow();
         let element = rsx! {
-            {myself.meta.iter().map(|m| rsx! { {m} })}
-            {myself.link.iter().map(|l| rsx! { {l} })}
-            {myself.script.iter().map(|s| rsx! { {s} })}
+            {myself.meta.iter().map(|m| rsx! {
+                {m}
+            })}
+            {myself.link.iter().map(|l| rsx! {
+                {l}
+            })}
+            {myself.script.iter().map(|s| rsx! {
+                {s}
+            })}
         };
 
-        RENDERER.write().render_element_to(to, element)?;
+        // RENDERER.write().render_element_to(to, element)?;
 
         Ok(())
     }
@@ -90,7 +98,7 @@ impl Document for ServerDocument {
                 http_equiv: props.http_equiv,
                 content: props.content,
                 property: props.property,
-                ..props.additional_attributes
+                ..props.additional_attributes,
             }
         });
     }

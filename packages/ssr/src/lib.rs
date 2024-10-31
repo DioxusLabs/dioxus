@@ -3,7 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 mod cache;
-pub mod config;
+pub mod generic_renderer;
 pub mod renderer;
 pub mod template;
 

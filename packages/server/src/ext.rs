@@ -1,3 +1,58 @@
+//! Dioxus utilities for the [Axum](https://docs.rs/axum/latest/axum/index.html) server framework.
+//!
+//! # Example
+//! ```rust, no_run
+//! #![allow(non_snake_case)]
+//! use dioxus::prelude::*;
+//!
+//! fn main() {
+//!     // Hydrate the application on the client
+//!     #[cfg(feature = "web")]
+//!     dioxus::launch(app);
+//!
+//!     #[cfg(feature = "server")]
+//!     {
+//!         tokio::runtime::Runtime::new()
+//!             .unwrap()
+//!             .block_on(async move {
+//!                 let listener = tokio::net::TcpListener::bind("127.0.0.01:8080")
+//!                     .await
+//!                     .unwrap();
+//!                 axum::serve(
+//!                         listener,
+//!                         axum::Router::new()
+//!                             // Server side render the application, serve static assets, and register server functions
+//!                             .serve_dioxus_application(ServeConfigBuilder::default(), app)
+//!                             .into_make_service(),
+//!                     )
+//!                     .await
+//!                     .unwrap();
+//!             });
+//!      }
+//! }
+//!
+//! fn app() -> Element {
+//!     let mut text = use_signal(|| "...".to_string());
+//!
+//!     rsx! {
+//!         button {
+//!             onclick: move |_| async move {
+//!                 if let Ok(data) = get_server_data().await {
+//!                     text.set(data);
+//!                 }
+//!             },
+//!             "Run a server function"
+//!         }
+//!         "Server said: {text}"
+//!     }
+//! }
+//!
+//! #[server(GetServerData)]
+//! async fn get_server_data() -> Result<String, ServerFnError> {
+//!     Ok("Hello from the server!".to_string())
+//! }
+//! ```
+
 use axum::routing::*;
 use axum::{
     body::{self, Body},
@@ -13,7 +68,8 @@ use std::{sync::Arc, task::Poll};
 
 use crate::{
     handle_server_fns_inner, render_handler, ContextProviders, DioxusServerContext,
-    IncrementalRendererError, ProvideServerContext, RenderHandleState, ServeConfig, SsrRenderer,
+    IncrementalRendererError, ProvideServerContext, RenderHandleState, ServeConfig, ServerState,
+    SsrRenderer,
 };
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -109,10 +165,8 @@ pub trait DioxusRouterExt<S> {
     ///     rsx! { "Hello World" }
     /// }
     /// ```
-    fn serve_dioxus_application<Cfg, Error>(self, cfg: Cfg, app: fn() -> Element) -> Self
+    fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
     where
-        Cfg: TryInto<ServeConfig, Error = Error>,
-        Error: std::error::Error,
         Self: Sized;
 }
 
@@ -120,6 +174,12 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
+    fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self {
+        self.serve_static_assets()
+            .register_server_functions()
+            .fallback(get(render_handler).with_state(ServerState::new(cfg)))
+    }
+
     fn register_server_functions_with_context(
         mut self,
         context_providers: ContextProviders,
@@ -195,28 +255,5 @@ where
         }
 
         self
-    }
-
-    fn serve_dioxus_application<Cfg, Error>(self, cfg: Cfg, app: fn() -> Element) -> Self
-    where
-        Cfg: TryInto<ServeConfig, Error = Error>,
-        Error: std::error::Error,
-    {
-        // Add server functions and render index.html
-        let server = self.serve_static_assets().register_server_functions();
-
-        match cfg.try_into() {
-            Ok(cfg) => {
-                let ssr_state = SsrRenderer::shared(cfg.incremental.clone());
-                server.fallback(
-                    get(render_handler)
-                        .with_state(RenderHandleState::new(cfg, app).with_ssr_state(ssr_state)),
-                )
-            }
-            Err(err) => {
-                tracing::trace!("Failed to create render handler. This is expected if you are only using fullstack for desktop/mobile server functions: {}", err);
-                server
-            }
-        }
     }
 }

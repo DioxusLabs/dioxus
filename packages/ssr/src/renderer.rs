@@ -6,9 +6,8 @@ use rustc_hash::FxHashMap;
 use std::fmt::Write;
 use std::sync::Arc;
 
-type ComponentRenderCallback = Arc<
-    dyn Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result + Send + Sync,
->;
+type ComponentRenderCallback =
+    Arc<dyn Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result>;
 
 /// A virtualdom renderer that caches the templates it has seen for faster rendering
 #[derive(Default)]
@@ -21,9 +20,6 @@ pub struct Renderer {
 
     /// A cache of templates that have been rendered
     template_cache: FxHashMap<Template, Arc<StringCache>>,
-
-    /// The current dynamic node id for hydration
-    dynamic_node_id: usize,
 }
 
 impl Renderer {
@@ -41,8 +37,6 @@ impl Renderer {
     pub fn set_render_components(
         &mut self,
         callback: impl Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result
-            + Send
-            + Sync
             + 'static,
     ) {
         self.render_components = Some(Arc::new(callback));
@@ -64,7 +58,6 @@ impl Renderer {
         buf: &mut W,
         dom: &VirtualDom,
     ) -> std::fmt::Result {
-        self.reset_hydration();
         self.render_scope(buf, dom, ScopeId::ROOT)
     }
 
@@ -87,11 +80,6 @@ impl Renderer {
         let mut dom = VirtualDom::new_with_props(lazy_app, element);
         dom.rebuild_in_place();
         self.render_to(buf, &dom)
-    }
-
-    /// Reset the renderer hydration state
-    pub fn reset_hydration(&mut self) {
-        self.dynamic_node_id = 0;
     }
 
     pub fn render_scope<W: Write + ?Sized>(
@@ -128,6 +116,7 @@ impl Renderer {
 
         // We keep track of the index we are on manually so that we can jump forward to a new section quickly without iterating every item
         let mut index = 0;
+        let mut dynamic_node_id = 0;
 
         while let Some(segment) = entry.segments.get(index) {
             match segment {
@@ -179,8 +168,8 @@ impl Renderer {
                     DynamicNode::Text(text) => {
                         // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
                         if self.pre_render {
-                            write!(buf, "<!--node-id{}-->", self.dynamic_node_id)?;
-                            self.dynamic_node_id += 1;
+                            write!(buf, "<!--node-id{}-->", dynamic_node_id)?;
+                            dynamic_node_id += 1;
                         }
 
                         write!(
@@ -201,8 +190,8 @@ impl Renderer {
 
                     DynamicNode::Placeholder(_) => {
                         if self.pre_render {
-                            write!(buf, "<!--placeholder{}-->", self.dynamic_node_id)?;
-                            self.dynamic_node_id += 1;
+                            write!(buf, "<!--placeholder{}-->", dynamic_node_id)?;
+                            dynamic_node_id += 1;
                         }
                     }
                 },
@@ -244,8 +233,9 @@ impl Renderer {
 
                 Segment::AttributeNodeMarker => {
                     // first write the id
-                    write!(buf, "{}", self.dynamic_node_id)?;
-                    self.dynamic_node_id += 1;
+                    write!(buf, "{}", dynamic_node_id)?;
+                    dynamic_node_id += 1;
+
                     // then write any listeners
                     for name in accumulated_listeners.drain(..) {
                         write!(buf, ",{}:", &name[2..])?;
@@ -258,8 +248,8 @@ impl Renderer {
                 }
 
                 Segment::RootNodeMarker => {
-                    write!(buf, "{}", self.dynamic_node_id)?;
-                    self.dynamic_node_id += 1
+                    write!(buf, "{}", dynamic_node_id)?;
+                    dynamic_node_id += 1
                 }
             }
 

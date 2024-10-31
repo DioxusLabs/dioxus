@@ -36,7 +36,7 @@ impl FileSystemCache {
     }
 
     pub fn put(
-        &mut self,
+        &self,
         route: String,
         timestamp: DateTime<Utc>,
         data: Vec<u8>,
@@ -54,12 +54,12 @@ impl FileSystemCache {
         Ok(())
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear(&self) {
         // clear the static directory
         let _ = std::fs::remove_dir_all(&self.static_dir);
     }
 
-    pub fn invalidate(&mut self, route: &str) {
+    pub fn invalidate(&self, route: &str) {
         let file_path = self.find_file(route).unwrap().full_path;
         if let Err(err) = std::fs::remove_file(file_path) {
             tracing::error!("Failed to remove file: {}", err);

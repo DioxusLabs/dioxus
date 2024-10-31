@@ -3515,6 +3515,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-fullstack-data"
+version = "0.6.0-alpha.3"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+]
+
+[[package]]
 name = "dioxus-hooks"
 version = "0.6.0-alpha.3"
 dependencies = [

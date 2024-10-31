@@ -1,11 +1,8 @@
 //! A shared pool of renderers for efficient server side rendering.
+use crate::streaming::{Mount, StreamingRenderer};
 use crate::{
-    document::ServerDocument, stream::StreamingResponse, template::serialize_server_data,
-    DioxusServerContext, IncrementalRendererError, ProvideServerContext, ServeConfig,
-};
-use crate::{
-    streaming::{Mount, StreamingRenderer},
-    template::FullstackHTMLTemplate,
+    document::ServerDocument, stream::StreamingResponse, DioxusServerContext,
+    IncrementalRendererError, ProvideServerContext, ServeConfig,
 };
 use crate::{
     IncrementalRenderer, IncrementalRendererConfig as IsrgConfig, RenderFreshness, Result,
@@ -24,6 +21,8 @@ pub struct SsrRenderer {
     renderers: RwLock<Vec<Renderer>>,
     incremental_cache: Option<RwLock<IncrementalRenderer>>,
 }
+
+struct FullstackHTMLTemplate {}
 
 impl SsrRenderer {
     pub fn shared(incremental: Option<IsrgConfig>) -> Arc<Self> {
@@ -49,28 +48,29 @@ impl SsrRenderer {
         new_vdom: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: DioxusServerContext,
     ) -> Result<StreamingResponse> {
-        let (mut tx, rx) = futures_channel::mpsc::unbounded::<Result<String>>();
+        todo!()
+        // let (mut tx, rx) = futures_channel::mpsc::unbounded::<Result<String>>();
 
-        // before we even spawn anything, we can check synchronously if we have the route cached
-        if let Some(freshness) = self.check_cached_route(&route, &mut tx) {
-            return Ok(StreamingResponse::new(rx, freshness, None));
-        }
+        // // before we even spawn anything, we can check synchronously if we have the route cached
+        // if let Some(freshness) = self.check_cached_route(&route, &mut tx) {
+        //     return Ok(StreamingResponse::new(rx, freshness, None));
+        // }
 
-        let join_handle = spawn_platform(move || {
-            self.respond(
-                new_vdom(),
-                server_context,
-                FullstackHTMLTemplate { cfg },
-                tx,
-                route,
-            )
-        });
+        // let join_handle = spawn_platform(move || {
+        //     self.respond(
+        //         new_vdom(),
+        //         server_context,
+        //         FullstackHTMLTemplate { cfg },
+        //         tx,
+        //         route,
+        //     )
+        // });
 
-        Ok(StreamingResponse::new(
-            rx,
-            RenderFreshness::now(None),
-            Some(join_handle),
-        ))
+        // Ok(StreamingResponse::new(
+        //     rx,
+        //     RenderFreshness::now(None),
+        //     Some(join_handle),
+        // ))
     }
 
     async fn respond(

@@ -1,0 +1,8 @@
+[package]
+name = "dioxus-fullstack-data"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+base64.workspace = true
+serde = { workspace = true, features = ["derive"] }
