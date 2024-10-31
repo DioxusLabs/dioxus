@@ -14,6 +14,7 @@ use crate::{
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
+use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
@@ -392,9 +393,11 @@ impl WebviewInstance {
         // Provide the desktop context to the virtual dom and edit handler
         edits.set_desktop_context(desktop_context.clone());
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
+        let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
         dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
             ScopeId::ROOT.provide_context(provider);
+            ScopeId::ROOT.provide_context(history_provider);
         });
 
         WebviewInstance {

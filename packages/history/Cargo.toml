@@ -1,0 +1,11 @@
+[package]
+name = "dioxus-history"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+dioxus-core = { workspace = true }
+tracing.workspace = true
+
+[dev-dependencies]
+dioxus = { workspace = true, features = ["router"] }

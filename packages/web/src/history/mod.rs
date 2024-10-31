@@ -1,35 +1,24 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use scroll::ScrollPosition;
+use std::path::PathBuf;
+use wasm_bindgen::JsCast;
+use wasm_bindgen::{prelude::Closure, JsValue};
+use web_sys::{window, Window};
+use web_sys::{Event, History, ScrollRestoration};
 
-use gloo::{console::error, events::EventListener, render::AnimationFrame};
-
-use wasm_bindgen::JsValue;
-use web_sys::{window, History, ScrollRestoration, Window};
-
-use crate::routable::Routable;
-
-use super::{
-    web_history::{get_current, push_state_and_url, replace_state_with_url},
-    web_scroll::ScrollPosition,
-    HistoryProvider,
-};
+mod scroll;
 
 #[allow(dead_code)]
 fn base_path() -> Option<PathBuf> {
-    tracing::trace!(
-        "Using base_path from the CLI: {:?}",
-        dioxus_cli_config::base_path()
-    );
-    dioxus_cli_config::base_path()
+    let base_path = dioxus_cli_config::base_path();
+    tracing::trace!("Using base_path from the CLI: {:?}", base_path);
+    base_path
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
-fn update_scroll<R>(window: &Window, history: &History) {
+fn update_scroll(window: &Window, history: &History) {
     let scroll = ScrollPosition::of_window(window);
     if let Err(err) = replace_state_with_url(history, &[scroll.x, scroll.y], None) {
-        error!(err);
+        web_sys::console::error_1(&err);
     }
 }
 
@@ -45,50 +34,38 @@ fn update_scroll<R>(window: &Window, history: &History) {
 ///
 /// Application developers are responsible for not rendering the router if the prefix is not present
 /// in the URL. Otherwise, if a router navigation is triggered, the prefix will be added.
-pub struct WebHistory<R: Routable> {
+pub struct WebHistory {
     do_scroll_restoration: bool,
     history: History,
-    listener_navigation: Option<EventListener>,
-    listener_animation_frame: Arc<Mutex<Option<AnimationFrame>>>,
     prefix: Option<String>,
     window: Window,
-    phantom: std::marker::PhantomData<R>,
 }
 
-impl<R: Routable> Default for WebHistory<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
+impl Default for WebHistory {
     fn default() -> Self {
         Self::new(None, true)
     }
 }
 
-impl<R: Routable> WebHistory<R> {
+impl WebHistory {
     /// Create a new [`WebHistory`].
     ///
     /// If `do_scroll_restoration` is [`true`], [`WebHistory`] will take control of the history
     /// state. It'll also set the browsers scroll restoration to `manual`.
-    pub fn new(prefix: Option<String>, do_scroll_restoration: bool) -> Self
-    where
-        <R as std::str::FromStr>::Err: std::fmt::Display,
-    {
+    pub fn new(prefix: Option<String>, do_scroll_restoration: bool) -> Self {
         let myself = Self::new_inner(prefix, do_scroll_restoration);
 
-        let current_route = myself.current_route();
+        let current_route = dioxus_history::History::current_route(&myself);
         let current_route_str = current_route.to_string();
         let prefix_str = myself.prefix.as_deref().unwrap_or("");
         let current_url = format!("{prefix_str}{current_route_str}");
-        let state = myself.create_state(current_route);
+        let state = myself.create_state();
         let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));
 
         myself
     }
 
-    fn new_inner(prefix: Option<String>, do_scroll_restoration: bool) -> Self
-    where
-        <R as std::str::FromStr>::Err: std::fmt::Display,
-    {
+    fn new_inner(prefix: Option<String>, do_scroll_restoration: bool) -> Self {
         let window = window().expect("access to `window`");
         let history = window.history().expect("`window` has access to `history`");
 
@@ -111,11 +88,8 @@ impl<R: Routable> WebHistory<R> {
         Self {
             do_scroll_restoration,
             history,
-            listener_navigation: None,
-            listener_animation_frame: Default::default(),
             prefix,
             window,
-            phantom: Default::default(),
         }
     }
 
@@ -125,17 +99,14 @@ impl<R: Routable> WebHistory<R> {
             .unwrap_or_default()
     }
 
-    fn create_state(&self, _state: R) -> [f64; 2] {
+    fn create_state(&self) -> [f64; 2] {
         let scroll = self.scroll_pos();
         [scroll.x, scroll.y]
     }
 }
 
-impl<R: Routable> WebHistory<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
-    fn route_from_location(&self) -> R {
+impl WebHistory {
+    fn route_from_location(&self) -> String {
         let location = self.window.location();
         let path = location.pathname().unwrap_or_else(|_| "/".into())
             + &location.search().unwrap_or("".into())
@@ -148,12 +119,12 @@ where
         if path.is_empty() {
             path = "/"
         }
-        R::from_str(path).unwrap_or_else(|err| panic!("{}", err))
+        path.to_string()
     }
 
-    fn full_path(&self, state: &R) -> String {
+    fn full_path(&self, state: &String) -> String {
         match &self.prefix {
-            None => format!("{state}"),
+            None => state.to_string(),
             Some(prefix) => format!("{prefix}{state}"),
         }
     }
@@ -165,26 +136,30 @@ where
                     self.window.scroll_to_with_x_and_y(0.0, 0.0)
                 }
             }
-            Err(e) => error!("failed to change state: ", e),
+            Err(e) => {
+                web_sys::console::error_2(&JsValue::from_str("failed to change state: "), &e);
+            }
         }
     }
 
-    fn navigate_external(&mut self, url: String) -> bool {
+    fn navigate_external(&self, url: String) -> bool {
         match self.window.location().set_href(&url) {
             Ok(_) => true,
             Err(e) => {
-                error!("failed to navigate to external url (", url, "): ", e);
+                web_sys::console::error_4(
+                    &JsValue::from_str("failed to navigate to external url ("),
+                    &JsValue::from_str(&url),
+                    &JsValue::from_str("): "),
+                    &e,
+                );
                 false
             }
         }
     }
 }
 
-impl<R: Routable> HistoryProvider<R> for WebHistory<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
-    fn current_route(&self) -> R {
+impl dioxus_history::History for WebHistory {
+    fn current_route(&self) -> String {
         self.route_from_location()
     }
 
@@ -192,20 +167,20 @@ where
         self.prefix.clone()
     }
 
-    fn go_back(&mut self) {
+    fn go_back(&self) {
         if let Err(e) = self.history.back() {
-            error!("failed to go back: ", e)
+            web_sys::console::error_2(&JsValue::from_str("failed to go back: "), &e);
         }
     }
 
-    fn go_forward(&mut self) {
+    fn go_forward(&self) {
         if let Err(e) = self.history.forward() {
-            error!("failed to go forward: ", e)
+            web_sys::console::error_2(&JsValue::from_str("failed to go forward: "), &e);
         }
     }
 
-    fn push(&mut self, state: R) {
-        if state.to_string() == self.current_route().to_string() {
+    fn push(&self, state: String) {
+        if state == self.current_route() {
             // don't push the same state twice
             return;
         }
@@ -214,39 +189,82 @@ where
         let h = w.history().expect("`window` has access to `history`");
 
         // update the scroll position before pushing the new state
-        update_scroll::<R>(&w, &h);
+        update_scroll(&w, &h);
 
         let path = self.full_path(&state);
 
-        let state: [f64; 2] = self.create_state(state);
+        let state: [f64; 2] = self.create_state();
         self.handle_nav(push_state_and_url(&self.history, &state, path));
     }
 
-    fn replace(&mut self, state: R) {
+    fn replace(&self, state: String) {
         let path = self.full_path(&state);
 
-        let state = self.create_state(state);
+        let state = self.create_state();
         self.handle_nav(replace_state_with_url(&self.history, &state, Some(&path)));
     }
 
-    fn external(&mut self, url: String) -> bool {
+    fn external(&self, url: String) -> bool {
         self.navigate_external(url)
     }
 
-    fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
+    fn updater(&self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
         let w = self.window.clone();
         let h = self.history.clone();
-        let s = self.listener_animation_frame.clone();
         let d = self.do_scroll_restoration;
 
-        self.listener_navigation = Some(EventListener::new(&self.window, "popstate", move |_| {
+        let function = Closure::wrap(Box::new(move |_| {
             (*callback)();
             if d {
-                let mut s = s.lock().expect("unpoisoned scroll mutex");
                 if let Some([x, y]) = get_current(&h) {
-                    *s = Some(ScrollPosition { x, y }.scroll_to(w.clone()));
+                    ScrollPosition { x, y }.scroll_to(w.clone())
                 }
             }
-        }));
+        }) as Box<dyn FnMut(Event)>);
+        self.window
+            .add_event_listener_with_callback(
+                "popstate",
+                &function.into_js_value().unchecked_into(),
+            )
+            .unwrap();
     }
+}
+
+pub(crate) fn replace_state_with_url(
+    history: &History,
+    value: &[f64; 2],
+    url: Option<&str>,
+) -> Result<(), JsValue> {
+    let position = js_sys::Array::new();
+    position.push(&JsValue::from(value[0]));
+    position.push(&JsValue::from(value[1]));
+
+    history.replace_state_with_url(&position, "", url)
+}
+
+pub(crate) fn push_state_and_url(
+    history: &History,
+    value: &[f64; 2],
+    url: String,
+) -> Result<(), JsValue> {
+    let position = js_sys::Array::new();
+    position.push(&JsValue::from(value[0]));
+    position.push(&JsValue::from(value[1]));
+
+    history.push_state_with_url(&position, "", Some(&url))
+}
+
+pub(crate) fn get_current(history: &History) -> Option<[f64; 2]> {
+    use wasm_bindgen::JsCast;
+
+    let state = history.state();
+    if let Err(err) = &state {
+        web_sys::console::error_1(err);
+    }
+    state.ok().and_then(|state| {
+        let state = state.dyn_into::<js_sys::Array>().ok()?;
+        let x = state.get(0).as_f64()?;
+        let y = state.get(1).as_f64()?;
+        Some([x, y])
+    })
 }

@@ -1,57 +1,31 @@
-//! History Integration
-//!
-//! dioxus-router-core relies on [`HistoryProvider`]s to store the current Route, and possibly a
-//! history (i.e. a browsers back button) and future (i.e. a browsers forward button).
-//!
-//! To integrate dioxus-router with a any type of history, all you have to do is implement the
-//! [`HistoryProvider`] trait.
-//!
-//! dioxus-router contains two built in history providers:
-//! 1) [`MemoryHistory`] for desktop/mobile/ssr platforms
-//! 2) [`WebHistory`] for web platforms
-
-use std::{any::Any, rc::Rc, sync::Arc};
+use dioxus_core::prelude::{provide_context, provide_root_context};
+use std::{rc::Rc, sync::Arc};
 
 mod memory;
 pub use memory::*;
 
-#[cfg(feature = "web")]
-mod web;
-#[cfg(feature = "web")]
-pub use web::*;
-#[cfg(feature = "web")]
-pub(crate) mod web_history;
+/// Get the history provider for the current platform if the platform doesn't implement a history functionality.
+pub fn history() -> Rc<dyn History> {
+    match dioxus_core::prelude::try_consume_context::<Rc<dyn History>>() {
+        Some(history) => history,
+        None => {
+            tracing::error!("Unable to find a history provider in the renderer. Make sure your renderer supports the Router. Falling back to the in-memory history provider.");
+            provide_root_context(Rc::new(MemoryHistory::default()))
+        }
+    }
+}
 
-#[cfg(feature = "liveview")]
-mod liveview;
-#[cfg(feature = "liveview")]
-pub use liveview::*;
+/// Provide a history context to the current component.
+pub fn provide_history_context(history: Rc<dyn History>) {
+    provide_context(history);
+}
 
-// #[cfg(feature = "web")]
-// mod web_hash;
-// #[cfg(feature = "web")]
-// pub use web_hash::*;
-
-use crate::routable::Routable;
-
-#[cfg(feature = "web")]
-pub(crate) mod web_scroll;
-
-/// An integration with some kind of navigation history.
-///
-/// Depending on your use case, your implementation may deviate from the described procedure. This
-/// is fine, as long as both `current_route` and `current_query` match the described format.
-///
-/// However, you should document all deviations. Also, make sure the navigation is user-friendly.
-/// The described behaviors are designed to mimic a web browser, which most users should already
-/// know. Deviations might confuse them.
-pub trait HistoryProvider<R: Routable> {
+pub trait History {
     /// Get the path of the current URL.
     ///
     /// **Must start** with `/`. **Must _not_ contain** the prefix.
     ///
     /// ```rust
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }
@@ -64,14 +38,14 @@ pub trait HistoryProvider<R: Routable> {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
-    /// assert_eq!(history.current_route().to_string(), "/");
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// assert_eq!(history.current_route(), "/");
     ///
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.current_route().to_string(), "/some-other-page");
+    /// history.push(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), "/some-other-page");
     /// ```
     #[must_use]
-    fn current_route(&self) -> R;
+    fn current_route(&self) -> String;
 
     /// Get the current path prefix of the URL.
     ///
@@ -89,7 +63,6 @@ pub trait HistoryProvider<R: Routable> {
     /// If a [`HistoryProvider`] cannot know this, it should return [`true`].
     ///
     /// ```rust
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }
@@ -101,10 +74,10 @@ pub trait HistoryProvider<R: Routable> {
     ///     #[route("/other")]
     ///     Other {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::default();
     /// assert_eq!(history.can_go_back(), false);
     ///
-    /// history.push(Route::Other {});
+    /// history.push(Route::Other {}.to_string());
     /// assert_eq!(history.can_go_back(), true);
     /// ```
     #[must_use]
@@ -118,7 +91,6 @@ pub trait HistoryProvider<R: Routable> {
     /// might be called, even if `can_go_back` returns [`false`].
     ///
     /// ```rust
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }
@@ -131,26 +103,25 @@ pub trait HistoryProvider<R: Routable> {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
-    /// assert_eq!(history.current_route().to_string(), "/");
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// assert_eq!(history.current_route(), "/");
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_route().to_string(), "/");
+    /// assert_eq!(history.current_route(), "/");
     ///
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.current_route().to_string(), "/some-other-page");
+    /// history.push(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), "/some-other-page");
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_route().to_string(), "/");
+    /// assert_eq!(history.current_route(), "/");
     /// ```
-    fn go_back(&mut self);
+    fn go_back(&self);
 
     /// Check whether there is a future page to navigate forward to.
     ///
     /// If a [`HistoryProvider`] cannot know this, it should return [`true`].
     ///
     /// ```rust
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }
@@ -163,10 +134,10 @@ pub trait HistoryProvider<R: Routable> {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
+    /// let mut history = dioxus::history::MemoryHistory::default();
     /// assert_eq!(history.can_go_forward(), false);
     ///
-    /// history.push(Route::OtherPage {});
+    /// history.push(Route::OtherPage {}.to_string());
     /// assert_eq!(history.can_go_forward(), false);
     ///
     /// history.go_back();
@@ -183,7 +154,6 @@ pub trait HistoryProvider<R: Routable> {
     /// might be called, even if `can_go_forward` returns [`false`].
     ///
     /// ```rust
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }
@@ -196,17 +166,17 @@ pub trait HistoryProvider<R: Routable> {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.current_route(), Route::OtherPage {});
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// history.push(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), Route::OtherPage {}.to_string());
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_route(), Route::Index {});
+    /// assert_eq!(history.current_route(), Route::Index {}.to_string());
     ///
     /// history.go_forward();
-    /// assert_eq!(history.current_route(), Route::OtherPage {});
+    /// assert_eq!(history.current_route(), Route::OtherPage {}.to_string());
     /// ```
-    fn go_forward(&mut self);
+    fn go_forward(&self);
 
     /// Go to another page.
     ///
@@ -216,7 +186,6 @@ pub trait HistoryProvider<R: Routable> {
     /// 3. Clear the navigation future.
     ///
     /// ```rust
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }
@@ -229,14 +198,14 @@ pub trait HistoryProvider<R: Routable> {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
-    /// assert_eq!(history.current_route(), Route::Index {});
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// assert_eq!(history.current_route(), Route::Index {}.to_string());
     ///
-    /// history.push(Route::OtherPage {});
-    /// assert_eq!(history.current_route(), Route::OtherPage {});
+    /// history.push(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), Route::OtherPage {}.to_string());
     /// assert!(history.can_go_back());
     /// ```
-    fn push(&mut self, route: R);
+    fn push(&self, route: String);
 
     /// Replace the current page with another one.
     ///
@@ -245,7 +214,6 @@ pub trait HistoryProvider<R: Routable> {
     /// untouched.
     ///
     /// ```rust
-    /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
     /// # fn Index() -> Element { VNode::empty() }
@@ -258,14 +226,14 @@ pub trait HistoryProvider<R: Routable> {
     ///     #[route("/some-other-page")]
     ///     OtherPage {},
     /// }
-    /// let mut history = MemoryHistory::<Route>::default();
-    /// assert_eq!(history.current_route(), Route::Index {});
+    /// let mut history = dioxus::history::MemoryHistory::default();
+    /// assert_eq!(history.current_route(), Route::Index {}.to_string());
     ///
-    /// history.replace(Route::OtherPage {});
-    /// assert_eq!(history.current_route(), Route::OtherPage {});
+    /// history.replace(Route::OtherPage {}.to_string());
+    /// assert_eq!(history.current_route(), Route::OtherPage {}.to_string());
     /// assert!(!history.can_go_back());
     /// ```
-    fn replace(&mut self, path: R);
+    fn replace(&self, path: String);
 
     /// Navigate to an external URL.
     ///
@@ -274,7 +242,7 @@ pub trait HistoryProvider<R: Routable> {
     ///
     /// Returning [`false`] will cause the router to handle the external navigation failure.
     #[allow(unused_variables)]
-    fn external(&mut self, url: String) -> bool {
+    fn external(&self, url: String) -> bool {
         false
     }
 
@@ -283,120 +251,11 @@ pub trait HistoryProvider<R: Routable> {
     /// Some [`HistoryProvider`]s may receive URL updates from outside the router. When such
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
-}
+    fn updater(&self, callback: Arc<dyn Fn() + Send + Sync>) {}
 
-pub(crate) trait AnyHistoryProvider {
-    fn parse_route(&self, route: &str) -> Result<Rc<dyn Any>, String>;
-
-    #[must_use]
-    fn current_route(&self) -> Rc<dyn Any>;
-
-    #[must_use]
-    fn can_go_back(&self) -> bool {
-        true
-    }
-
-    fn go_back(&mut self);
-
-    #[must_use]
-    fn can_go_forward(&self) -> bool {
-        true
-    }
-
-    fn go_forward(&mut self);
-
-    fn push(&mut self, route: Rc<dyn Any>);
-
-    fn replace(&mut self, path: Rc<dyn Any>);
-
-    #[allow(unused_variables)]
-    fn external(&mut self, url: String) -> bool {
+    /// Whether the router should include the legacy prevent default attribute instead of the new
+    /// prevent default method. This should only be used by liveview.
+    fn include_prevent_default(&self) -> bool {
         false
-    }
-
-    #[allow(unused_variables)]
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
-
-    #[cfg(feature = "liveview")]
-    fn is_liveview(&self) -> bool;
-}
-
-pub(crate) struct AnyHistoryProviderImplWrapper<R, H> {
-    inner: H,
-    _marker: std::marker::PhantomData<R>,
-}
-
-impl<R, H> AnyHistoryProviderImplWrapper<R, H> {
-    pub fn new(inner: H) -> Self {
-        Self {
-            inner,
-            _marker: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<R, H: Default> Default for AnyHistoryProviderImplWrapper<R, H> {
-    fn default() -> Self {
-        Self::new(H::default())
-    }
-}
-
-impl<R, H: 'static> AnyHistoryProvider for AnyHistoryProviderImplWrapper<R, H>
-where
-    R: Routable,
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-    H: HistoryProvider<R>,
-{
-    fn parse_route(&self, route: &str) -> Result<Rc<dyn Any>, String> {
-        R::from_str(route)
-            .map_err(|err| err.to_string())
-            .map(|route| Rc::new(route) as Rc<dyn Any>)
-    }
-
-    fn current_route(&self) -> Rc<dyn Any> {
-        let route = self.inner.current_route();
-        Rc::new(route)
-    }
-
-    fn can_go_back(&self) -> bool {
-        self.inner.can_go_back()
-    }
-
-    fn go_back(&mut self) {
-        self.inner.go_back()
-    }
-
-    fn can_go_forward(&self) -> bool {
-        self.inner.can_go_forward()
-    }
-
-    fn go_forward(&mut self) {
-        self.inner.go_forward()
-    }
-
-    fn push(&mut self, route: Rc<dyn Any>) {
-        self.inner
-            .push(route.downcast::<R>().unwrap().as_ref().clone())
-    }
-
-    fn replace(&mut self, route: Rc<dyn Any>) {
-        self.inner
-            .replace(route.downcast::<R>().unwrap().as_ref().clone())
-    }
-
-    fn external(&mut self, url: String) -> bool {
-        self.inner.external(url)
-    }
-
-    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
-        self.inner.updater(callback)
-    }
-
-    #[cfg(feature = "liveview")]
-    fn is_liveview(&self) -> bool {
-        use std::any::TypeId;
-
-        TypeId::of::<H>() == TypeId::of::<LiveviewHistory<R>>()
     }
 }

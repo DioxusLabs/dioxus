@@ -1,4 +1,4 @@
-use crate::prelude::{ExternalNavigationFailure, IntoRoutable, RouterContext};
+use crate::prelude::{ExternalNavigationFailure, NavigationTarget, RouterContext};
 
 /// Acquire the navigator without subscribing to updates.
 ///
@@ -48,14 +48,17 @@ impl Navigator {
     /// Push a new location.
     ///
     /// The previous location will be available to go back to.
-    pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
+    pub fn push(&self, target: impl Into<NavigationTarget>) -> Option<ExternalNavigationFailure> {
         self.0.push(target)
     }
 
     /// Replace the current location.
     ///
     /// The previous location will **not** be available to go back to.
-    pub fn replace(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
+    pub fn replace(
+        &self,
+        target: impl Into<NavigationTarget>,
+    ) -> Option<ExternalNavigationFailure> {
         self.0.replace(target)
     }
 }

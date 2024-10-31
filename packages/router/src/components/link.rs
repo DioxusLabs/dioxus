@@ -1,82 +1,13 @@
 #![allow(clippy::type_complexity)]
 
-use std::any::Any;
 use std::fmt::Debug;
-use std::rc::Rc;
 
 use dioxus_lib::prelude::*;
 
 use tracing::error;
 
 use crate::navigation::NavigationTarget;
-use crate::prelude::Routable;
 use crate::utils::use_router_internal::use_router_internal;
-
-use url::Url;
-
-/// Something that can be converted into a [`NavigationTarget`].
-#[derive(Clone)]
-pub enum IntoRoutable {
-    /// A raw string target.
-    FromStr(String),
-    /// A internal target.
-    Route(Rc<dyn Any>),
-}
-
-impl PartialEq for IntoRoutable {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (IntoRoutable::FromStr(a), IntoRoutable::FromStr(b)) => a == b,
-            (IntoRoutable::Route(a), IntoRoutable::Route(b)) => Rc::ptr_eq(a, b),
-            _ => false,
-        }
-    }
-}
-
-impl<R: Routable> From<R> for IntoRoutable {
-    fn from(value: R) -> Self {
-        IntoRoutable::Route(Rc::new(value) as Rc<dyn Any>)
-    }
-}
-
-impl<R: Routable> From<NavigationTarget<R>> for IntoRoutable {
-    fn from(value: NavigationTarget<R>) -> Self {
-        match value {
-            NavigationTarget::Internal(route) => IntoRoutable::Route(Rc::new(route) as Rc<dyn Any>),
-            NavigationTarget::External(url) => IntoRoutable::FromStr(url),
-        }
-    }
-}
-
-impl From<String> for IntoRoutable {
-    fn from(value: String) -> Self {
-        IntoRoutable::FromStr(value)
-    }
-}
-
-impl From<&String> for IntoRoutable {
-    fn from(value: &String) -> Self {
-        IntoRoutable::FromStr(value.to_string())
-    }
-}
-
-impl From<&str> for IntoRoutable {
-    fn from(value: &str) -> Self {
-        IntoRoutable::FromStr(value.to_string())
-    }
-}
-
-impl From<Url> for IntoRoutable {
-    fn from(url: Url) -> Self {
-        IntoRoutable::FromStr(url.to_string())
-    }
-}
-
-impl From<&Url> for IntoRoutable {
-    fn from(url: &Url) -> Self {
-        IntoRoutable::FromStr(url.to_string())
-    }
-}
 
 /// The properties for a [`Link`].
 #[derive(Props, Clone, PartialEq)]
@@ -119,7 +50,7 @@ pub struct LinkProps {
 
     /// The navigation target. Roughly equivalent to the href attribute of an HTML anchor tag.
     #[props(into)]
-    pub to: IntoRoutable,
+    pub to: NavigationTarget,
 
     #[props(extends = GlobalAttributes)]
     attributes: Vec<Attribute>,
@@ -227,12 +158,11 @@ pub fn Link(props: LinkProps) -> Element {
         }
     };
 
-    let current_url = router.current_route_string();
+    let current_url = router.full_route_string();
     let href = match &to {
-        IntoRoutable::FromStr(url) => url.to_string(),
-        IntoRoutable::Route(route) => router.any_route_to_string(&**route),
+        NavigationTarget::Internal(url) => url.clone(),
+        NavigationTarget::External(route) => route.clone(),
     };
-    let parsed_route: NavigationTarget<Rc<dyn Any>> = router.resolve_into_routable(to.clone());
 
     let mut class_ = String::new();
     if let Some(c) = class {
@@ -257,7 +187,7 @@ pub fn Link(props: LinkProps) -> Element {
 
     let tag_target = new_tab.then_some("_blank");
 
-    let is_external = matches!(parsed_route, NavigationTarget::External(_));
+    let is_external = matches!(to, NavigationTarget::External(_));
     let is_router_nav = !is_external && !new_tab;
     let rel = rel.or_else(|| is_external.then_some("noopener noreferrer".to_string()));
 
@@ -281,7 +211,7 @@ pub fn Link(props: LinkProps) -> Element {
         event.prevent_default();
 
         if do_default && is_router_nav {
-            router.push_any(router.resolve_into_routable(to.clone()));
+            router.push_any(to.clone());
         }
 
         if let Some(handler) = onclick {
@@ -301,8 +231,8 @@ pub fn Link(props: LinkProps) -> Element {
     let liveview_prevent_default = {
         // If the event is a click with the left mouse button and no modifiers, prevent the default action
         // and navigate to the href with client side routing
-        router.is_liveview().then_some(
-            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"
+        router.include_prevent_default().then_some(
+            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"   
         )
     };
 

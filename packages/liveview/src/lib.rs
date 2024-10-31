@@ -13,8 +13,9 @@ use dioxus_interpreter_js::NATIVE_JS;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
 mod config;
-mod eval;
+mod document;
 mod events;
+mod history;
 pub use config::*;
 #[cfg(feature = "axum")]
 pub mod launch;

@@ -3169,6 +3169,7 @@ dependencies = [
  "dioxus-devtools",
  "dioxus-document",
  "dioxus-fullstack",
+ "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-liveview",
@@ -3374,6 +3375,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-devtools",
  "dioxus-document",
+ "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-interpreter-js",
@@ -3531,6 +3533,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-history"
+version = "0.6.0-alpha.3"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "tracing",
+]
+
+[[package]]
 name = "dioxus-hooks"
 version = "0.6.0-alpha.3"
 dependencies = [
@@ -3628,6 +3639,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-macro",
  "dioxus-document",
+ "dioxus-history",
  "dioxus-hooks",
  "dioxus-html",
  "dioxus-rsx",
@@ -3644,6 +3656,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-devtools",
  "dioxus-document",
+ "dioxus-history",
  "dioxus-html",
  "dioxus-interpreter-js",
  "futures-channel",
@@ -3733,26 +3746,18 @@ dependencies = [
  "criterion",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-fullstack",
+ "dioxus-history",
  "dioxus-lib",
- "dioxus-liveview",
- "dioxus-router",
  "dioxus-router-macro",
  "dioxus-ssr",
  "gloo",
- "gloo-utils 0.1.7",
- "http 1.1.0",
- "js-sys",
  "rustversion",
  "serde",
- "serde_json",
  "tokio",
  "tracing",
  "url",
  "urlencoding",
- "wasm-bindgen",
  "wasm-bindgen-test",
- "web-sys",
 ]
 
 [[package]]
@@ -3880,10 +3885,12 @@ dependencies = [
  "ciborium",
  "console_error_panic_hook",
  "dioxus",
+ "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools",
  "dioxus-document",
+ "dioxus-history",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",
