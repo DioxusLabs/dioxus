@@ -156,15 +156,20 @@ impl ToTokens for TemplateBody {
                         }
                         __ORIGINAL_TEMPLATE.get().unwrap()
                     }
+
+                    static __NORMALIZED_FILE: &'static str = {
+                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                        dioxus_core::const_format::str_replace!(PATH, '\\', "/")
+                    };
+
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
-                    let __template = GlobalSignal::with_key(
+                    let __template = GlobalSignal::with_location(
                         || None::<dioxus_core::internal::HotReloadedTemplate>,
-                        {
-                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                            const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
-                            dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
-                        }
+                        __NORMALIZED_FILE,
+                        line!(),
+                        column!(),
+                        #index
                     );
 
                     // If the template has not been hot reloaded, we always use the original template
@@ -238,7 +243,7 @@ impl TemplateBody {
         self.roots.is_empty()
     }
 
-    pub(crate) fn implicit_key(&self) -> Option<&AttributeValue> {
+    pub fn implicit_key(&self) -> Option<&AttributeValue> {
         match self.roots.first() {
             Some(BodyNode::Element(el)) => el.key(),
             Some(BodyNode::Component(comp)) => comp.get_key(),
@@ -310,7 +315,7 @@ impl TemplateBody {
     }
 
     /// Iterate through the literal component properties of this rsx call in depth-first order
-    pub(crate) fn literal_component_properties(&self) -> impl Iterator<Item = &HotLiteral> + '_ {
+    pub fn literal_component_properties(&self) -> impl Iterator<Item = &HotLiteral> + '_ {
         self.dynamic_nodes()
             .filter_map(|node| {
                 if let BodyNode::Component(component) = node {
@@ -320,7 +325,7 @@ impl TemplateBody {
                 }
             })
             .flat_map(|component| {
-                component.fields.iter().filter_map(|field| {
+                component.component_props().filter_map(|field| {
                     if let AttributeValue::AttrLiteral(literal) = &field.value {
                         Some(literal)
                     } else {

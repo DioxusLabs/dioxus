@@ -1,22 +1,27 @@
+use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
-    DesktopContext, DesktopService,
+    app::SharedContext,
+    assets::AssetHandlerRegistry,
+    edits::WryQueue,
+    file_upload::{NativeFileEngine, NativeFileHover},
+    ipc::UserWindowEvent,
+    protocol,
+    waker::tao_waker,
+    Config, DesktopContext, DesktopService,
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
+use dioxus_document::Document;
+use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
-use dioxus_html::document::Document;
-use dioxus_html::native_bind::NativeFileEngine;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
-use dioxus_interpreter_js::SynchronousEventResponse;
 use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
-use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
+use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
@@ -51,10 +56,26 @@ impl WebviewEdits {
         &self,
         request: wry::http::Request<Vec<u8>>,
     ) -> Result<Vec<u8>, serde_json::Error> {
-        let response = match serde_json::from_slice(request.body()) {
-            Ok(event) => self.handle_html_event(event),
+        let data_from_header = request
+            .headers()
+            .get("dioxus-data")
+            .map(|f| f.as_bytes())
+            .expect("dioxus-data header is not a string");
+
+        let response = match serde_json::from_slice(data_from_header) {
+            Ok(event) => {
+                // we need to wait for the mutex lock to let us munge the main thread..
+                let _lock = crate::android_sync_lock::android_runtime_lock();
+                self.handle_html_event(event)
+            }
             Err(err) => {
-                tracing::error!("Error parsing user_event: {:?}", err);
+                tracing::error!("cannot decippher format of user event");
+                tracing::error!(
+                    "Error parsing user_event: {:?}.Contents: {:?}, raw: {:#?}",
+                    err,
+                    String::from_utf8(request.body().to_vec()),
+                    request
+                );
                 SynchronousEventResponse::new(false)
             }
         };
@@ -90,7 +111,7 @@ impl WebviewEdits {
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, desktop_context.clone(), query);
+                let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
             dioxus_html::EventData::Drag(ref drag) => {
@@ -147,9 +168,15 @@ impl WebviewInstance {
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
-        // tao makes small windows for some reason, make them bigger
-        if cfg.window.window.inner_size.is_none() {
-            window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+        // tao makes small windows for some reason, make them bigger on desktop
+        //
+        // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
+        // get a window that is not the size of the screen and weird black bars.
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            if cfg.window.window.inner_size.is_none() {
+                window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+            }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
@@ -182,7 +209,7 @@ impl WebviewInstance {
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
-        let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
+        let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
@@ -196,19 +223,16 @@ impl WebviewInstance {
                 edits
             ];
             move |request, responder: RequestAsyncResponder| {
-                // Try to serve the index file first
-                if let Some(index_bytes) = protocol::index_request(
-                    &request,
+                protocol::desktop_handler(
+                    request,
+                    asset_handlers.clone(),
+                    responder,
+                    &edits,
                     custom_head.clone(),
                     custom_index.clone(),
                     &root_name,
                     headless,
-                ) {
-                    return responder.respond(index_bytes);
-                }
-
-                // Otherwise, try to serve an asset, either from the user or the filesystem
-                protocol::desktop_handler(request, asset_handlers.clone(), responder, &edits);
+                )
             }
         };
 
@@ -226,10 +250,42 @@ impl WebviewInstance {
 
         let file_drop_handler = {
             to_owned![file_hover];
-            move |evt| {
+
+            #[cfg(windows)]
+            let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
+
+            move |evt: DragDropEvent| {
                 // Update the most recent file drop event - when the event comes in from the webview we can use the
                 // most recent event to build a new event with the files in it.
+                #[cfg(not(windows))]
                 file_hover.set(evt);
+
+                // Windows webview blocks HTML-native events when the drop handler is provided.
+                // The problem is that the HTML-native events don't provide the file, so we need this.
+                // Solution: this glue code to mimic drag drop events.
+                #[cfg(windows)]
+                {
+                    file_hover.set(evt.clone());
+
+                    match evt {
+                        wry::DragDropEvent::Drop {
+                            paths: _,
+                            position: _,
+                        } => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragDrop(window_id));
+                        }
+                        wry::DragDropEvent::Over { position } => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragOver(
+                                window_id, position.0, position.1,
+                            ));
+                        }
+                        wry::DragDropEvent::Leave => {
+                            _ = proxy.send_event(UserWindowEvent::WindowsDragLeave(window_id));
+                        }
+                        _ => {}
+                    }
+                }
+
                 false
             }
         };
@@ -317,10 +373,11 @@ impl WebviewInstance {
         let webview = webview.build().unwrap();
 
         let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
-            if let Some(menu) = &cfg.menu {
+            let menu_option = cfg.menu.into();
+            if let Some(menu) = &menu_option {
                 crate::menubar::init_menu_bar(menu, &window);
             }
-            cfg.menu
+            menu_option
         } else {
             None
         };
@@ -336,9 +393,11 @@ impl WebviewInstance {
         // Provide the desktop context to the virtual dom and edit handler
         edits.set_desktop_context(desktop_context.clone());
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
+        let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
         dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
             ScopeId::ROOT.provide_context(provider);
+            ScopeId::ROOT.provide_context(history_provider);
         });
 
         WebviewInstance {
@@ -374,13 +433,17 @@ impl WebviewInstance {
                 }
             }
 
-            self.dom
-                .render_immediate(&mut *self.edits.wry_queue.mutation_state_mut());
+            // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            let _lock = crate::android_sync_lock::android_runtime_lock();
+
+            self.edits
+                .wry_queue
+                .with_mutation_state_mut(|f| self.dom.render_immediate(f));
             self.edits.wry_queue.send_edits();
         }
     }
 
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn kick_stylsheets(&self) {
         // run eval in the webview to kick the stylesheets by appending a query string
         // we should do something less clunky than this
@@ -388,5 +451,20 @@ impl WebviewInstance {
             .desktop_context
             .webview
             .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
+    }
+}
+
+/// A synchronous response to a browser event which may prevent the default browser's action
+#[derive(serde::Serialize, Default)]
+pub struct SynchronousEventResponse {
+    #[serde(rename = "preventDefault")]
+    prevent_default: bool,
+}
+
+impl SynchronousEventResponse {
+    /// Create a new SynchronousEventResponse
+    #[allow(unused)]
+    pub fn new(prevent_default: bool) -> Self {
+        Self { prevent_default }
     }
 }

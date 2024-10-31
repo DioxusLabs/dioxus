@@ -11,17 +11,5 @@ use crate::prelude::*;
 /// - [`None`], when the current component isn't a descendant of a [`Router`] component.
 /// - Otherwise [`Some`].
 pub(crate) fn use_router_internal() -> Option<RouterContext> {
-    let router = try_consume_context::<RouterContext>()?;
-    let id = current_scope_id().expect("use_router_internal called outside of a component");
-    use_drop({
-        to_owned![router];
-        move || {
-            router.unsubscribe(id);
-        }
-    });
-    use_hook(move || {
-        router.subscribe(id);
-
-        Some(router)
-    })
+    use_hook(try_consume_context)
 }

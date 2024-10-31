@@ -1,6 +1,6 @@
 use crate::use_callback;
 use dioxus_core::prelude::*;
-use dioxus_signals::{Memo, Signal};
+use dioxus_signals::Memo;
 
 #[doc = include_str!("../docs/derived_state.md")]
 #[doc = include_str!("../docs/rules_of_hooks.md")]
@@ -8,6 +8,7 @@ use dioxus_signals::{Memo, Signal};
 #[track_caller]
 pub fn use_memo<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> Memo<R> {
     let callback = use_callback(move |_| f());
+    let caller = std::panic::Location::caller();
     #[allow(clippy::redundant_closure)]
-    use_hook(|| Signal::memo(move || callback(())))
+    use_hook(|| Memo::new_with_location(move || callback(()), caller))
 }

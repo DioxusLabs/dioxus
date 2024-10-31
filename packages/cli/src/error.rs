@@ -1,11 +1,10 @@
+use crate::metadata::CargoError;
 use thiserror::Error as ThisError;
 
-use crate::{metadata::CargoError, CrateConfigError, LoadDioxusConfigError};
-
-pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(ThisError, Debug)]
-pub enum Error {
+pub(crate) enum Error {
     /// Used when errors need to propagate but are too unique to be typed
     #[error("{0}")]
     Unique(String),
@@ -14,37 +13,22 @@ pub enum Error {
     IO(#[from] std::io::Error),
 
     #[error("Format Error: {0}")]
-    FormatError(#[from] std::fmt::Error),
+    Format(#[from] std::fmt::Error),
 
     #[error("Format failed: {0}")]
-    ParseError(String),
+    Parse(String),
 
     #[error("Runtime Error: {0}")]
-    RuntimeError(String),
-
-    #[error("Failed to write error")]
-    FailedToWrite,
-
-    #[error("Build Failed: {0}")]
-    BuildFailed(String),
+    Runtime(String),
 
     #[error("Cargo Error: {0}")]
-    CargoError(String),
-
-    #[error("Couldn't retrieve cargo metadata")]
-    CargoMetadata(#[source] cargo_metadata::Error),
-
-    #[error("{0}")]
-    CustomError(String),
+    Cargo(#[from] CargoError),
 
     #[error("Invalid proxy URL: {0}")]
     InvalidProxy(#[from] hyper::http::uri::InvalidUri),
 
     #[error("Failed to establish proxy: {0}")]
-    ProxySetupError(String),
-
-    #[error("Error proxying request: {0}")]
-    ProxyRequestError(hyper::Error),
+    ProxySetup(String),
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
@@ -64,43 +48,12 @@ impl From<String> for Error {
 
 impl From<html_parser::Error> for Error {
     fn from(e: html_parser::Error) -> Self {
-        Self::ParseError(e.to_string())
+        Self::Parse(e.to_string())
     }
 }
 
 impl From<hyper::Error> for Error {
     fn from(e: hyper::Error) -> Self {
-        Self::RuntimeError(e.to_string())
+        Self::Runtime(e.to_string())
     }
-}
-
-impl From<LoadDioxusConfigError> for Error {
-    fn from(e: LoadDioxusConfigError) -> Self {
-        Self::RuntimeError(e.to_string())
-    }
-}
-
-impl From<CargoError> for Error {
-    fn from(e: CargoError) -> Self {
-        Self::CargoError(e.to_string())
-    }
-}
-
-impl From<CrateConfigError> for Error {
-    fn from(e: CrateConfigError) -> Self {
-        Self::RuntimeError(e.to_string())
-    }
-}
-
-#[macro_export]
-macro_rules! custom_error {
-    ($msg:literal $(,)?) => {
-        Err(Error::CustomError(format!($msg)))
-    };
-    ($err:expr $(,)?) => {
-        Err(Error::from($err))
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        Err(Error::CustomError(format!($fmt, $($arg)*)))
-    };
 }

@@ -435,7 +435,7 @@ impl Runtime {
 /// }
 ///
 /// fn app() -> Element {
-///     rsx!{ Component { runtime: Runtime::current().unwrap() } }
+///     rsx! { Component { runtime: Runtime::current().unwrap() } }
 /// }
 ///
 /// // In a dynamic library

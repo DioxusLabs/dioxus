@@ -1,14 +1,14 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
 use dioxus_core::{ElementId, VirtualDom};
-use dioxus_html::{native_bind::NativeFileEngine, PlatformEventData};
+use dioxus_html::PlatformEventData;
 use std::{
     any::Any,
     cell::{Cell, RefCell},
@@ -85,13 +85,12 @@ impl App {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.set_menubar_receiver();
 
+        // Wire up the tray icon receiver - this way any component can key into the menubar actions
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        app.set_tray_icon_receiver();
+
         // Allow hotreloading to work - but only in debug mode
-        #[cfg(all(
-            feature = "hot-reload",
-            debug_assertions,
-            not(target_os = "android"),
-            not(target_os = "ios")
-        ))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         app.connect_hotreload();
 
         #[cfg(debug_assertions)]
@@ -139,26 +138,38 @@ impl App {
             _ => (),
         }
     }
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_tray_menu_event(&mut self, event: tray_icon::menu::MenuEvent) {
+        _ = event;
+    }
 
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
-    pub fn connect_hotreload(&self) {
-        let proxy = self.shared.proxy.clone();
-
-        tokio::task::spawn(async move {
-            let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
-            else {
-                return;
-            };
-
-            while let Some(Ok(msg)) = receiver.next().await {
-                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_tray_icon_event(&mut self, event: tray_icon::TrayIconEvent) {
+        if let tray_icon::TrayIconEvent::Click {
+            id: _,
+            position: _,
+            rect: _,
+            button,
+            button_state: _,
+        } = event
+        {
+            if button == tray_icon::MouseButton::Left {
+                for webview in self.webviews.values() {
+                    webview.desktop_context.window.set_visible(true);
+                    webview.desktop_context.window.set_focus();
+                }
             }
-        });
+        }
+    }
+
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub fn connect_hotreload(&self) {
+        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
+            let proxy = self.shared.proxy.clone();
+            dioxus_devtools::connect(endpoint, move |msg| {
+                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+            })
+        }
     }
 
     pub fn handle_new_window(&mut self) {
@@ -242,8 +253,9 @@ impl App {
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let view = self.webviews.get_mut(&id).unwrap();
 
-        view.dom
-            .rebuild(&mut *view.edits.wry_queue.mutation_state_mut());
+        view.edits
+            .wry_queue
+            .with_mutation_state_mut(|f| view.dom.rebuild(f));
 
         view.edits.wry_queue.send_edits();
 
@@ -276,19 +288,14 @@ impl App {
         view.desktop_context.query.send(result);
     }
 
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
-    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
-        use dioxus_hot_reload::DevserverMsg;
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+        use dioxus_devtools::DevserverMsg;
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
+                    dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
 
@@ -329,11 +336,13 @@ impl App {
         let view = self.webviews.get_mut(&window).unwrap();
 
         let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
+
+        let runtime = view.dom.runtime();
         if event_name == "change&input" {
-            view.dom.runtime().handle_event("input", event.clone(), id);
-            view.dom.runtime().handle_event("change", event, id);
+            runtime.handle_event("input", event.clone(), id);
+            runtime.handle_event("change", event, id);
         } else {
-            view.dom.runtime().handle_event(event_name, event, id);
+            runtime.handle_event(event_name, event, id);
         }
     }
 
@@ -375,6 +384,27 @@ impl App {
         muda::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
             _ = receiver.send_event(UserWindowEvent::MudaMenuEvent(t));
+        }));
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    fn set_tray_icon_receiver(&self) {
+        let receiver = self.shared.proxy.clone();
+
+        // The event loop becomes the menu receiver
+        // This means we don't need to poll the receiver on every tick - we just get the events as they come in
+        // This is a bit more efficient than the previous implementation, but if someone else sets a handler, the
+        // receiver will become inert.
+        tray_icon::TrayIconEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::TrayIconEvent(t));
+        }));
+
+        // for whatever reason they had to make it separate
+        let receiver = self.shared.proxy.clone();
+        tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::TrayMenuEvent(t));
         }));
     }
 

@@ -11,20 +11,29 @@ pub enum UserWindowEvent {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     MudaMenuEvent(muda::MenuEvent),
 
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    TrayIconEvent(tray_icon::TrayIconEvent),
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    TrayMenuEvent(tray_icon::menu::MenuEvent),
+
     /// Poll the virtualdom
     Poll(WindowId),
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview
-    Ipc { id: WindowId, msg: IpcMessage },
+    Ipc {
+        id: WindowId,
+        msg: IpcMessage,
+    },
 
     /// Handle a hotreload event, basically telling us to update our templates
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
-    HotReloadEvent(dioxus_hot_reload::DevserverMsg),
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    HotReloadEvent(dioxus_devtools::DevserverMsg),
+
+    // Windows-only drag-n-drop fix events.
+    WindowsDragDrop(WindowId),
+    WindowsDragOver(WindowId, i32, i32),
+    WindowsDragLeave(WindowId),
 
     /// Create a new window
     NewWindow,

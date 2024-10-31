@@ -269,7 +269,7 @@ impl VirtualDom {
     /// }
     ///
     /// fn Example(cx: SomeProps) -> Element  {
-    ///     rsx!{ div { "hello {cx.name}" } }
+    ///     rsx! { div { "hello {cx.name}" } }
     /// }
     ///
     /// let dom = VirtualDom::new_with_props(Example, SomeProps { name: "world" });
@@ -285,7 +285,7 @@ impl VirtualDom {
     /// #     name: &'static str
     /// # }
     /// # fn Example(cx: SomeProps) -> Element  {
-    /// #     rsx!{ div { "hello {cx.name}" } }
+    /// #     rsx! { div { "hello {cx.name}" } }
     /// # }
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// dom.rebuild_in_place();

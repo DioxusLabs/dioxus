@@ -1,4 +1,5 @@
 use super::*;
+use crate::TraceSrc;
 use cargo_generate::{GenerateArgs, TemplatePath};
 use cargo_metadata::Metadata;
 use std::path::Path;
@@ -7,7 +8,7 @@ pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
-pub struct Create {
+pub(crate) struct Create {
     /// Project name (required when `--yes` is used)
     name: Option<String>,
 
@@ -38,7 +39,7 @@ pub struct Create {
 }
 
 impl Create {
-    pub fn create(mut self) -> Result<()> {
+    pub(crate) fn create(mut self) -> Result<()> {
         let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
 
         // If we're getting pass a `.` name, that's actually a path
@@ -111,7 +112,7 @@ impl Create {
 
 /// Post-creation actions for newly setup crates.
 // Also used by `init`.
-pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
+pub(crate) fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     // 1. Add the new project to the workspace, if it exists.
     //    This must be executed first in order to run `cargo fmt` on the new project.
     metadata.and_then(|metadata| {
@@ -134,9 +135,9 @@ pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     let cmd = cmd.arg("fmt").current_dir(path);
     let output = cmd.output().expect("failed to execute process");
     if !output.status.success() {
-        tracing::error!("cargo fmt failed");
-        tracing::error!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-        tracing::error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        tracing::error!(dx_src = ?TraceSrc::Dev, "cargo fmt failed");
+        tracing::error!(dx_src = ?TraceSrc::Build, "stdout: {}", String::from_utf8_lossy(&output.stdout));
+        tracing::error!(dx_src = ?TraceSrc::Build, "stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     // 3. Format the `Cargo.toml` and `Dioxus.toml` files.
@@ -166,7 +167,7 @@ pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
-    tracing::info!("Generated project at {}", path.display());
+    tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}", path.display());
 
     Ok(())
 }

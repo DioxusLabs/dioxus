@@ -517,7 +517,7 @@ fn nested_suspense_resolves_client() {
         let title = use_resource(move || async_content(0)).suspend()?();
 
         rsx! {
-            Title { "{title.title}" }
+            document::Title { "{title.title}" }
         }
     }
 
@@ -623,37 +623,37 @@ fn nested_suspense_resolves_client() {
 
                     // Load the title
                     LoadTemplate {  index: 0, id: ElementId(2,) },
-                    CreateTextNode { value: "The robot says hello world".to_string(), id: ElementId(4,) },
-                    ReplacePlaceholder { path: &[0,], m: 1 },
                     SetAttribute {
                         name: "id",
                         ns: None,
                         value: AttributeValue::Text("title-0".to_string()),
                         id: ElementId(2,),
                     },
+                    CreateTextNode { value: "The robot says hello world".to_string(), id: ElementId(4,) },
+                    ReplacePlaceholder { path: &[0,], m: 1 },
 
                     // Then load the body
                     LoadTemplate {  index: 1, id: ElementId(5,) },
-                    CreateTextNode { value: "The robot becomes sentient and says hello world".to_string(), id: ElementId(6,) },
-                    ReplacePlaceholder { path: &[0,], m: 1 },
                     SetAttribute {
                         name: "id",
                         ns: None,
                         value: AttributeValue::Text("body-0".to_string()),
                         id: ElementId(5,),
                     },
+                    CreateTextNode { value: "The robot becomes sentient and says hello world".to_string(), id: ElementId(6,) },
+                    ReplacePlaceholder { path: &[0,], m: 1 },
 
                     // Then load the suspended children
                     LoadTemplate {  index: 2, id: ElementId(7,) },
-                    CreateTextNode { value: "Loading 1...".to_string(), id: ElementId(8,) },
-                    CreateTextNode { value: "Loading 2...".to_string(), id: ElementId(9,) },
-                    ReplacePlaceholder { path: &[0,], m: 2 },
                     SetAttribute {
                         name: "id",
                         ns: None,
                         value: AttributeValue::Text("children-0".to_string()),
                         id: ElementId(7,),
                     },
+                    CreateTextNode { value: "Loading 1...".to_string(), id: ElementId(8,) },
+                    CreateTextNode { value: "Loading 2...".to_string(), id: ElementId(9,) },
+                    ReplacePlaceholder { path: &[0,], m: 2 },
 
                     // Finally replace the loading placeholder in the body with the resolved children
                     ReplaceWith { id: ElementId(3,), m: 3 },
@@ -693,13 +693,6 @@ fn nested_suspense_resolves_client() {
                             8,
                         ),
                     },
-                    CreateTextNode { value: "The world says hello back".to_string(), id: ElementId(10,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
                     SetAttribute {
                         name: "id",
                         ns: None,
@@ -708,9 +701,23 @@ fn nested_suspense_resolves_client() {
                             8,
                         ),
                     },
+                    CreateTextNode { value: "The world says hello back".to_string(), id: ElementId(10,) },
+                    ReplacePlaceholder {
+                        path: &[
+                            0,
+                        ],
+                        m: 1,
+                    },
                     LoadTemplate {
-
                         index: 1,
+                        id: ElementId(
+                            11,
+                        ),
+                    },
+                    SetAttribute {
+                        name: "id",
+                        ns: None,
+                        value: AttributeValue::Text("body-1".to_string()),
                         id: ElementId(
                             11,
                         ),
@@ -722,16 +729,16 @@ fn nested_suspense_resolves_client() {
                         ],
                         m: 1,
                     },
+                    LoadTemplate {
+                        index: 2,
+                        id: ElementId(
+                            13,
+                        ),
+                    },
                     SetAttribute {
                         name: "id",
                         ns: None,
-                        value: AttributeValue::Text("body-1".to_string()),
-                        id: ElementId(
-                            11,
-                        ),
-                    },
-                    LoadTemplate {
-                        index: 2,
+                        value: AttributeValue::Text("children-1".to_string()),
                         id: ElementId(
                             13,
                         ),
@@ -742,14 +749,6 @@ fn nested_suspense_resolves_client() {
                             0,
                         ],
                         m: 1,
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("children-1".to_string()),
-                        id: ElementId(
-                            13,
-                        ),
                     },
                     ReplaceWith {
                         id: ElementId(
@@ -776,13 +775,6 @@ fn nested_suspense_resolves_client() {
                             9,
                         ),
                     },
-                    CreateTextNode { value: "Goodbye Robot".to_string(), id: ElementId(15,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
                     SetAttribute {
                         name: "id",
                         ns: None,
@@ -791,8 +783,23 @@ fn nested_suspense_resolves_client() {
                             9,
                         ),
                     },
+                    CreateTextNode { value: "Goodbye Robot".to_string(), id: ElementId(15,) },
+                    ReplacePlaceholder {
+                        path: &[
+                            0,
+                        ],
+                        m: 1,
+                    },
                     LoadTemplate {
                         index: 1,
+                        id: ElementId(
+                            16,
+                        ),
+                    },
+                    SetAttribute {
+                        name: "id",
+                        ns: None,
+                        value: AttributeValue::Text("body-2".to_string()),
                         id: ElementId(
                             16,
                         ),
@@ -804,14 +811,6 @@ fn nested_suspense_resolves_client() {
                         ],
                         m: 1,
                     },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("body-2".to_string()),
-                        id: ElementId(
-                            16,
-                        ),
-                    },
                     LoadTemplate {
 
                         index: 2,
@@ -819,9 +818,6 @@ fn nested_suspense_resolves_client() {
                             18,
                         ),
                     },
-                    // Create a placeholder for the resolved children
-                    CreateTextNode { value: "Loading 3...".to_string(), id: ElementId(19,) },
-                    ReplacePlaceholder { path: &[0,], m: 1 },
                     SetAttribute {
                         name: "id",
                         ns: None,
@@ -830,6 +826,9 @@ fn nested_suspense_resolves_client() {
                             18,
                         ),
                     },
+                    // Create a placeholder for the resolved children
+                    CreateTextNode { value: "Loading 3...".to_string(), id: ElementId(19,) },
+                    ReplacePlaceholder { path: &[0,], m: 1 },
 
                     // Replace the loading placeholder with the resolved children
                     ReplaceWith {
@@ -864,13 +863,6 @@ fn nested_suspense_resolves_client() {
                             19,
                         ),
                     },
-                    CreateTextNode { value: "Goodbye Robot again".to_string(), id: ElementId(20,) },
-                    ReplacePlaceholder {
-                        path: &[
-                            0,
-                        ],
-                        m: 1,
-                    },
                     SetAttribute {
                         name: "id",
                         ns: None,
@@ -879,8 +871,23 @@ fn nested_suspense_resolves_client() {
                             19,
                         ),
                     },
+                    CreateTextNode { value: "Goodbye Robot again".to_string(), id: ElementId(20,) },
+                    ReplacePlaceholder {
+                        path: &[
+                            0,
+                        ],
+                        m: 1,
+                    },
                     LoadTemplate {
                         index: 1,
+                        id: ElementId(
+                            21,
+                        ),
+                    },
+                    SetAttribute {
+                        name: "id",
+                        ns: None,
+                        value: AttributeValue::Text("body-3".to_string()),
                         id: ElementId(
                             21,
                         ),
@@ -892,16 +899,16 @@ fn nested_suspense_resolves_client() {
                         ],
                         m: 1,
                     },
+                    LoadTemplate {
+                        index: 2,
+                        id: ElementId(
+                            23,
+                        ),
+                    },
                     SetAttribute {
                         name: "id",
                         ns: None,
-                        value: AttributeValue::Text("body-3".to_string()),
-                        id: ElementId(
-                            21,
-                        ),
-                    },
-                    LoadTemplate {
-                        index: 2,
+                        value: AttributeValue::Text("children-3".to_string()),
                         id: ElementId(
                             23,
                         ),
@@ -912,14 +919,6 @@ fn nested_suspense_resolves_client() {
                             0
                         ],
                         m: 1,
-                    },
-                    SetAttribute {
-                        name: "id",
-                        ns: None,
-                        value: AttributeValue::Text("children-3".to_string()),
-                        id: ElementId(
-                            23,
-                        ),
                     },
                     ReplaceWith {
                         id: ElementId(

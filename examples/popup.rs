@@ -5,14 +5,14 @@ use dioxus::prelude::*;
 use std::rc::Rc;
 
 fn main() {
-    launch_desktop(app);
+    dioxus::LaunchBuilder::desktop().launch(app);
 }
 
 fn app() -> Element {
     let mut emails_sent = use_signal(|| Vec::new() as Vec<String>);
 
     // Wait for responses to the compose channel, and then push them to the emails_sent signal.
-    let handle = use_coroutine(|mut rx: UnboundedReceiver<String>| async move {
+    let handle = use_coroutine(move |mut rx: UnboundedReceiver<String>| async move {
         use futures_util::StreamExt;
         while let Some(message) = rx.next().await {
             emails_sent.write().push(message);

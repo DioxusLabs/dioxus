@@ -1,6 +1,10 @@
 #![allow(unused)]
 
+use std::rc::Rc;
+
 use dioxus::prelude::*;
+use dioxus_history::{History, MemoryHistory};
+use dioxus_router::components::HistoryProvider;
 use dioxus_router::prelude::*;
 
 fn prepare(path: impl Into<String>) -> VirtualDom {
@@ -38,10 +42,9 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     fn App(path: Route) -> Element {
         rsx! {
             h1 { "App" }
-            Router::<Route> {
-                config: move |_| {
-                    RouterConfig::default().history(MemoryHistory::with_initial_path(path.clone()))
-                }
+            HistoryProvider {
+                history:  move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+                Router::<Route> {}
             }
         }
     }

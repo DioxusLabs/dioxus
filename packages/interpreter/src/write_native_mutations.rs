@@ -1,6 +1,6 @@
 use crate::unified_bindings::Interpreter as Channel;
 use dioxus_core::{Template, TemplateAttribute, TemplateNode, WriteMutations};
-use dioxus_html::event_bubbles;
+use dioxus_core_types::event_bubbles;
 use rustc_hash::FxHashMap;
 
 /// The state needed to apply mutations to a channel. This state should be kept across all mutations for the app
@@ -190,25 +190,5 @@ impl WriteMutations for MutationState {
 
     fn push_root(&mut self, id: dioxus_core::ElementId) {
         self.channel.push_root(id.0 as _);
-    }
-}
-
-/// A synchronous response to a browser event which may prevent the default browser's action
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[derive(Default)]
-pub struct SynchronousEventResponse {
-    #[cfg(feature = "serialize")]
-    #[serde(rename = "preventDefault")]
-    prevent_default: bool,
-}
-
-impl SynchronousEventResponse {
-    /// Create a new SynchronousEventResponse
-    #[allow(unused)]
-    pub fn new(prevent_default: bool) -> Self {
-        Self {
-            #[cfg(feature = "serialize")]
-            prevent_default,
-        }
     }
 }

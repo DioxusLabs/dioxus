@@ -592,6 +592,12 @@ impl VNode {
 
                         // If this is an element, load in all of the placeholder or dynamic content under this root element too
                         if matches!(root, TemplateNode::Element { .. }) {
+                            // !!VERY IMPORTANT!!
+                            // Write out all attributes before we load the children. Loading the children will change paths we rely on
+                            // to assign ids to elements with dynamic attributes
+                            if let Some(to) = to.as_deref_mut() {
+                                self.write_attrs(mount, &mut attrs, root_idx as u8, dom, to);
+                            }
                             // This operation relies on the fact that the root node is the top node on the stack so we need to do it here
                             self.load_placeholders(
                                 mount,
@@ -600,10 +606,6 @@ impl VNode {
                                 dom,
                                 to.as_deref_mut(),
                             );
-                            // Now write out any attributes we need
-                            if let Some(to) = to.as_deref_mut() {
-                                self.write_attrs(mount, &mut attrs, root_idx as u8, dom, to);
-                            }
                         }
 
                         // This creates one node on the stack

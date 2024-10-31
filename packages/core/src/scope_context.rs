@@ -367,6 +367,46 @@ impl Scope {
     /// In order to clean up resources you would need to implement the [`Drop`] trait for an inner value stored in a RC or similar (Signals for instance),
     /// as these only drop their inner value once all references have been dropped, which only happens when the component is dropped.
     ///
+    /// <div class="warning">
+    ///
+    /// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](dioxus::prelude::use_signal) instead.
+    ///
+    /// ❌ Don't use `use_hook` with `Rc<RefCell<T>>` for state. It will not update the UI and other hooks when the state changes.
+    /// ```rust
+    /// use dioxus::prelude::*;
+    /// use std::rc::Rc;
+    /// use std::cell::RefCell;
+    ///
+    /// pub fn Comp() -> Element {
+    ///     let count = use_hook(|| Rc::new(RefCell::new(0)));
+    ///
+    ///     rsx! {
+    ///         button {
+    ///             onclick: move |_| *count.borrow_mut() += 1,
+    ///             "{count.borrow()}"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// ✅ Use `use_signal` instead.
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// pub fn Comp() -> Element {
+    ///     let mut count = use_signal(|| 0);
+    ///
+    ///     rsx! {
+    ///         button {
+    ///             onclick: move |_| count += 1,
+    ///             "{count}"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// </div>
+    ///
     /// # Example
     ///
     /// ```rust
@@ -424,6 +464,8 @@ impl Scope {
 
                 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
                 Functions prefixed with "use" should never be called conditionally.
+
+                Help: Run `dx check` to look for check for some common hook errors.
                 "#,
             )
     }
@@ -556,13 +598,13 @@ impl ScopeId {
     /// fn Component() -> Element {
     ///     let request = spawn(async move {
     ///         match reqwest::get("https://api.example.com").await {
-    ///             Ok(_) => todo!(),
+    ///             Ok(_) => unimplemented!(),
     ///             // You can explicitly throw an error into a scope with throw_error
     ///             Err(err) => ScopeId::APP.throw_error(err)
     ///         }
     ///     });
     ///
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
