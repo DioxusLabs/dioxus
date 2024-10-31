@@ -1,10 +1,9 @@
-use dioxus_html::HasMediaData;
-
 use super::{Synthetic, WebEventExt};
+use dioxus_html::HasMediaData;
 
 impl HasMediaData for Synthetic<web_sys::Event> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

@@ -1,7 +1,6 @@
 use dioxus_html::{
     DragData, FormData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
 };
-use drag::WebDragData;
 use form::WebFormData;
 use load::WebImageEvent;
 use wasm_bindgen::JsCast;
@@ -78,7 +77,9 @@ impl HtmlEventConverter for WebEventConverter {
     #[inline(always)]
     fn convert_drag_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::DragData {
         let event = downcast_event(event);
-        DragData::new(WebDragData::new(event.raw.clone().unchecked_into()))
+        DragData::new(Synthetic::new(
+            event.raw.clone().unchecked_into::<web_sys::DragEvent>(),
+        ))
     }
 
     #[inline(always)]

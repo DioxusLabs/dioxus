@@ -60,7 +60,7 @@ impl dioxus_html::events::HasTouchData for Synthetic<TouchEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 
@@ -82,7 +82,7 @@ impl HasTouchPointData for Synthetic<Touch> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

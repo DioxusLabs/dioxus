@@ -11,7 +11,7 @@ impl From<&Event> for Synthetic<Event> {
 
 impl HasClipboardData for Synthetic<Event> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

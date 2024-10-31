@@ -61,7 +61,7 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 
     fn scroll_to(
