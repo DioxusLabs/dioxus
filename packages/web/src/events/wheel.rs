@@ -22,13 +22,13 @@ impl HasWheelData for Synthetic<WheelEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 
 impl HasMouseData for Synthetic<WheelEvent> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 
@@ -85,7 +85,7 @@ impl PointerInteraction for Synthetic<WheelEvent> {
 
 impl HasScrollData for Synthetic<Event> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

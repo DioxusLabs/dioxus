@@ -22,7 +22,7 @@ impl From<&Event> for Synthetic<ResizeObserverEntry> {
 
 impl HasResizeData for Synthetic<ResizeObserverEntry> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 
     fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {

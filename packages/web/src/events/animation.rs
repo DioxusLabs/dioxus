@@ -17,7 +17,7 @@ impl HasAnimationData for Synthetic<AnimationEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

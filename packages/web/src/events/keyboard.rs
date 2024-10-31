@@ -31,7 +31,7 @@ impl HasKeyboardData for Synthetic<KeyboardEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

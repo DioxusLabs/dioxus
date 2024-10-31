@@ -188,7 +188,13 @@ impl AppRunner {
             };
 
             // And grabout the contents
-            let contents = std::fs::read_to_string(&rust_file).unwrap();
+            let Ok(contents) = std::fs::read_to_string(&rust_file) else {
+                tracing::debug!(
+                    "Failed to read rust file while hotreloading: {:?}",
+                    rust_file
+                );
+                continue;
+            };
 
             match self.file_map.update_rsx::<HtmlCtx>(path, contents) {
                 HotreloadResult::Rsx(new) => templates.extend(new),

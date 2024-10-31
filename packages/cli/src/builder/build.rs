@@ -84,8 +84,8 @@ impl BuildRequest {
             .current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
-            .args(self.build_arguments())
-            .env("RUSTFLAGS", self.rust_flags());
+            .args(self.build_arguments());
+        // .env("RUSTFLAGS", self.rust_flags());
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             cmd.env("CARGO_TARGET_DIR", target_dir);
@@ -321,6 +321,7 @@ impl BuildRequest {
         cargo_args
     }
 
+    #[allow(dead_code)]
     pub(crate) fn rust_flags(&self) -> String {
         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
 
