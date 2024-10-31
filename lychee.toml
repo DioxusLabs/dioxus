@@ -4,3 +4,5 @@ exclude_path = ['target']
 no_progress = false
 cache = true
 max_cache_age = "10d"
+# accept 404 as github pages returns it for invalid (server) but valid (client) dioxuslabs.com routes.
+accept = ["200", "404"]
