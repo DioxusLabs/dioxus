@@ -13,20 +13,20 @@ fn partially_formatted_conditional_attribute() {
 
     // And make sure it works if one of those branches is an expression
     // Regression test for https://github.com/DioxusLabs/dioxus/issues/3146
-    let opt = Some("button");
+    let opt = "button";
 
     _ = rsx! {
         input {
-            type: if opt.is_some() { opt.unwrap() } else { "text" },
+            type: if true { opt } else { "text" },
         }
         input {
-            type: if opt.is_some() { opt.unwrap().to_string() } else { "text with" },
+            type: if true { opt.to_string() } else { "text with" },
         }
         input {
-            type: if opt.is_some() { opt.unwrap().to_string() } else { "text with {width}" },
+            type: if true { opt.to_string() } else { "text with {width}" },
         }
         input {
-            type: if opt.is_some() { opt.unwrap().to_string() } else if true { "" } else { "text with {width}" },
+            type: if true { opt.to_string() } else if true { "" } else { "text with {width}" },
         }
     };
 }
