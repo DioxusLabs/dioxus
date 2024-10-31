@@ -95,7 +95,6 @@ impl StringCache {
                 let mut inner_html = None;
                 // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
                 let mut has_dyn_attrs = false;
-
                 for attr in *attrs {
                     match attr {
                         TemplateAttribute::Static {
@@ -157,7 +156,6 @@ impl StringCache {
                     for child in *children {
                         self.from_template_recursive(child, false)?;
                     }
-
                     write!(self, "</{tag}>")?;
                 }
             }

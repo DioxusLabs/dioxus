@@ -40,6 +40,7 @@ aws-lc-rs = { version = "1.8.1", optional = true}
 
 server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
 dioxus_server_macro = { workspace = true }
+quick_cache = "0.6.9"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"] }

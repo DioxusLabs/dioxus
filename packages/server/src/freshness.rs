@@ -1,82 +1,122 @@
-use std::time::Duration;
+// /// A render that was cached from a previous render.
+// pub struct CachedRender<'a> {
+//     /// The route that was rendered
+//     pub route: String,
+//     /// The freshness information for the rendered response
+//     pub freshness: RenderFreshness,
+//     /// The rendered response
+//     pub response: &'a [u8],
+// }
 
-use chrono::{DateTime, Utc};
+// /// An incremental renderer.
+// pub struct IncrementalRenderer {
+//     pub(crate) memory_cache: InMemoryCache,
+//     #[cfg(not(target_arch = "wasm32"))]
+//     pub(crate) file_system_cache: fs_cache::FileSystemCache,
+//     invalidate_after: Option<Duration>,
+// }
 
-/// Information about the freshness of a rendered response
-#[derive(Debug, Clone, Copy)]
-pub struct RenderFreshness {
-    /// The age of the rendered response
-    age: u64,
-    /// The maximum age of the rendered response
-    max_age: Option<u64>,
-    /// The time the response was rendered
-    timestamp: DateTime<Utc>,
-}
+// impl IncrementalRenderer {
+//     /// Create a new incremental renderer builder.
+//     pub fn builder() -> IncrementalRendererConfig {
+//         IncrementalRendererConfig::new()
+//     }
 
-impl RenderFreshness {
-    /// Create new freshness information
-    pub(crate) fn new(age: u64, max_age: u64, timestamp: DateTime<Utc>) -> Self {
-        Self {
-            age,
-            max_age: Some(max_age),
-            timestamp,
-        }
-    }
+//     /// Remove a route from the cache.
+//     pub fn invalidate(&mut self, route: &str) {
+//         self.memory_cache.invalidate(route);
+//         #[cfg(not(target_arch = "wasm32"))]
+//         self.file_system_cache.invalidate(route);
+//     }
 
-    /// Create new freshness information with only the age
-    pub(crate) fn new_age(age: u64, timestamp: DateTime<Utc>) -> Self {
-        Self {
-            age,
-            max_age: None,
-            timestamp,
-        }
-    }
+//     /// Remove all routes from the cache.
+//     pub fn invalidate_all(&mut self) {
+//         self.memory_cache.clear();
+//         #[cfg(not(target_arch = "wasm32"))]
+//         self.file_system_cache.clear();
+//     }
 
-    /// Create new freshness information from a timestamp
-    pub(crate) fn created_at(timestamp: DateTime<Utc>, max_age: Option<Duration>) -> Self {
-        Self {
-            age: timestamp
-                .signed_duration_since(Utc::now())
-                .num_seconds()
-                .unsigned_abs(),
-            max_age: max_age.map(|d| d.as_secs()),
-            timestamp,
-        }
-    }
+//     /// Cache a rendered response.
+//     ///
+//     /// ```rust
+//     /// # use dioxus_isrg::IncrementalRenderer;
+//     /// # let mut renderer = IncrementalRenderer::builder().build();
+//     /// let route = "/index".to_string();
+//     /// let response = b"<html><body>Hello world</body></html>";
+//     /// renderer.cache(route, response).unwrap();
+//     /// ```
+//     pub fn cache(&mut self, route: String, html: impl Into<Vec<u8>>) -> Result<RenderFreshness> {
+//         let timestamp = Utc::now();
+//         let html = html.into();
+//         #[cfg(not(target_arch = "wasm32"))]
+//         self.file_system_cache
+//             .put(route.clone(), timestamp, html.clone())?;
+//         self.memory_cache.put(route, timestamp, html);
+//         Ok(RenderFreshness::created_at(
+//             timestamp,
+//             self.invalidate_after,
+//         ))
+//     }
 
-    /// Create new freshness information at the current time
-    pub fn now(max_age: Option<Duration>) -> Self {
-        Self {
-            age: 0,
-            max_age: max_age.map(|d| d.as_secs()),
-            timestamp: Utc::now(),
-        }
-    }
+//     /// Try to get a cached response for a route.
+//     ///
+//     /// ```rust
+//     /// # use dioxus_isrg::IncrementalRenderer;
+//     /// # let mut renderer = IncrementalRenderer::builder().build();
+//     /// # let route = "/index".to_string();
+//     /// # let response = b"<html><body>Hello world</body></html>";
+//     /// # renderer.cache(route, response).unwrap();
+//     /// let route = "/index";
+//     /// let response = renderer.get(route).unwrap();
+//     /// assert_eq!(response.unwrap().response, b"<html><body>Hello world</body></html>");
+//     /// ```
+//     ///
+//     /// If the route is not cached, `None` is returned.
+//     ///
+//     /// ```rust
+//     /// # use dioxus_isrg::IncrementalRenderer;
+//     /// # let mut renderer = IncrementalRenderer::builder().build();
+//     /// let route = "/index";
+//     /// let response = renderer.get(route).unwrap();
+//     /// assert!(response.is_none());
+//     /// ```
+//     pub fn get<'a>(&'a mut self, route: &str) -> Result<Option<CachedRender<'a>>> {
+//         let Self {
+//             memory_cache,
+//             #[cfg(not(target_arch = "wasm32"))]
+//             file_system_cache,
+//             ..
+//         } = self;
 
-    /// Get the age of the rendered response in seconds
-    pub fn age(&self) -> u64 {
-        self.age
-    }
+//         #[allow(unused)]
+//         enum FsGetError {
+//             NotPresent,
+//             Error(IncrementalRendererError),
+//         }
 
-    /// Get the maximum age of the rendered response in seconds
-    pub fn max_age(&self) -> Option<u64> {
-        self.max_age
-    }
+//         // The borrow checker prevents us from simply using a match/if and returning early. Instead we need to use the more complex closure API
+//         // non lexical lifetimes will make this possible (it works with polonius)
+//         let or_insert = || {
+//             // check the file cache
+//             #[cfg(not(target_arch = "wasm32"))]
+//             return match file_system_cache.get(route) {
+//                 Ok(Some((freshness, bytes))) => Ok((freshness.timestamp(), bytes)),
+//                 Ok(None) => Err(FsGetError::NotPresent),
+//                 Err(e) => Err(FsGetError::Error(e)),
+//             };
 
-    /// Get the time the response was rendered
-    pub fn timestamp(&self) -> DateTime<Utc> {
-        self.timestamp
-    }
+//             #[allow(unreachable_code)]
+//             Err(FsGetError::NotPresent)
+//         };
 
-    /// Write the freshness to the response headers.
-    pub fn write(&self, headers: &mut http::HeaderMap<http::HeaderValue>) {
-        let age = self.age();
-        headers.insert(http::header::AGE, age.into());
-        if let Some(max_age) = self.max_age() {
-            headers.insert(
-                http::header::CACHE_CONTROL,
-                http::HeaderValue::from_str(&format!("max-age={}", max_age)).unwrap(),
-            );
-        }
-    }
-}
+//         match memory_cache.try_get_or_insert(route, or_insert) {
+//             Ok(Some((freshness, bytes))) => Ok(Some(CachedRender {
+//                 route: route.to_string(),
+//                 freshness,
+//                 response: bytes,
+//             })),
+//             Err(FsGetError::NotPresent) | Ok(None) => Ok(None),
+//             Err(FsGetError::Error(e)) => Err(e),
+//         }
+//     }
+// }

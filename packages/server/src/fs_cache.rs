@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 
-use super::{IncrementalRendererError, RenderFreshness};
+use super::IncrementalRendererError;
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
 pub(crate) type PathMapFn = Arc<dyn Fn(&str) -> PathBuf + Send + Sync>;

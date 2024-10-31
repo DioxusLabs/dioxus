@@ -148,7 +148,6 @@ impl Renderer {
                     DynamicNode::Component(node) => {
                         if let Some(render_components) = self.render_components.clone() {
                             let scope_id = node.mounted_scope_id(*idx, template, dom).unwrap();
-
                             render_components(self, &mut buf, dom, scope_id)?;
                         } else {
                             let scope = node.mounted_scope(*idx, template, dom).unwrap();
@@ -178,7 +177,6 @@ impl Renderer {
                             self.render_template(buf, dom, child)?;
                         }
                     }
-
                     DynamicNode::Placeholder(_) => {
                         if self.pre_render {
                             write!(buf, "<!--placeholder{}-->", dynamic_node_id)?;
@@ -221,6 +219,7 @@ impl Renderer {
                     }
                 }
 
+                Segment::HydrationNodeId { .. } if !self.pre_render => {}
                 Segment::HydrationNodeId { is_attribute } => {
                     match is_attribute {
                         true => write!(buf, " data-node-hydration=\"")?,
@@ -356,20 +355,19 @@ fn to_string_works() {
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
 
-    for item in renderer.template_cache.iter() {
-        if item.1.segments.len() > 10 {
+    for (_template, cache) in renderer.template_cache.iter() {
+        println!("{cache:#?}");
+
+        if cache.segments.len() > 8 {
             assert_eq!(
-                item.1.segments,
+                cache.segments,
                 vec![
                     PreRendered("<div class=\"asdasdasd asdasdasd\"".to_string()),
                     Attr(0),
                     StyleMarker {
                         inside_style_tag: false
                     },
-                    HydrationOnlySection(7), // jump to `>` if we don't need to hydrate
-                    PreRendered(" data-node-hydration=\"".to_string()),
-                    HydrationNodeId,
-                    PreRendered("\"".to_string()),
+                    HydrationNodeId { is_attribute: true },
                     PreRendered(">".to_string()),
                     InnerHtmlMarker,
                     PreRendered("Hello world 1 --&gt;".to_string()),
@@ -415,10 +413,7 @@ fn empty_for_loop_works() {
                 item.1.segments,
                 vec![
                     PreRendered("<div class=\"asdasdasd\"".to_string()),
-                    HydrationOnlySection(5), // jump to `>` if we don't need to hydrate
-                    PreRendered(" data-node-hydration=\"".to_string()),
-                    HydrationNodeId,
-                    PreRendered("\"".to_string()),
+                    HydrationNodeId { is_attribute: true },
                     PreRendered(">".to_string()),
                     Node(0),
                     PreRendered("</div>".to_string())

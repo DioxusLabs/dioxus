@@ -1,10 +1,10 @@
-use crate::document::ServerDocument;
 use crate::prelude::*;
+use crate::{document::ServerDocument, CachedPages};
 use crate::{
     streaming::{Mount, StreamingRenderer},
     IncrementalRendererError,
 };
-use crate::{CachedRender, IncrementalRenderer, RenderFreshness};
+// use crate::{CachedRender, IncrementalRenderer, RenderFreshness};
 use crate::{DioxusServerContext, Error, IndexHtml, RenderChunk, StreamingResponse};
 use crate::{Result, ServeConfig};
 use axum::{
@@ -28,9 +28,10 @@ use std::{fmt::Write, sync::RwLock};
 use tokio::task::JoinHandle;
 
 pub struct ServerState {
-    vdom_factory: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
-    index: IndexHtml,
     cfg: ServeConfig,
+    index: IndexHtml,
+    vdom_factory: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
+    cache: CachedPages,
 }
 
 pub type SharedServerState = Arc<ServerState>;
@@ -85,28 +86,30 @@ impl ServerState {
         Ok(response)
     }
 
-    pub async fn stream(&self, request: Request<Body>, tx: ChunkTx) -> Result<()> {
+    async fn stream(&self, request: Request<Body>, tx: ChunkTx) -> Result<()> {
         let (parts, _body) = request.into_parts();
         let url = parts
             .uri
             .path_and_query()
             .ok_or_else(|| Error::Http(StatusCode::BAD_REQUEST))?;
 
-        let ctx = DioxusServerContext::new(parts);
+        // Retrieve the cached page if it exists
+        // todo(jon): probably want a much more sophisticated caching strategy here
+        let mut should_cache_page = false;
+        if let Some(page) = self.cache.get(url.as_str()) {
+            if page.is_fresh() {
+                tx.unbounded_send(Ok(page.to_chunk()));
+                return Ok(());
+            }
 
+            should_cache_page = true;
+        }
+
+        let ctx = DioxusServerContext::new(parts);
         let mut virtualdom = self.new_vdom();
         ctx.run_with(|| virtualdom.rebuild_in_place());
 
-        // let server_context = DioxusServerContext::from_shared_parts(Arc::new(RwLock::new(parts)));
-
-        // .ssr_state()
-        // .render_to(
-        //     state.config.clone(),
-        //     url,
-        //     move || build_virtual_dom(),
-        //     server_context.clone(),
-        // )
-        // .await
+        // Wait for suspense boundaries to resolve until we receive a router
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-use crate::{IncrementalRendererError, RenderFreshness};
+use crate::IncrementalRendererError;
 use crate::{RenderChunk, Result};
 use axum::{body::Body, response::IntoResponse};
 use futures_channel::mpsc::Receiver;

@@ -3813,6 +3813,7 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "pin-project",
+ "quick_cache",
  "rustc-hash 1.1.0",
  "rustls 0.23.15",
  "serde",
@@ -8819,6 +8820,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d3a6e5838b60e0e8fa7a43f22ade549a37d61f8bdbe636d0d7816191de969c2"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "quick_cache"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d7c94f8935a9df96bb6380e8592c70edf497a643f94bd23b2f76b399385dbf4"
+dependencies = [
+ "ahash 0.8.11",
+ "equivalent",
+ "hashbrown 0.14.5",
+ "parking_lot",
 ]
 
 [[package]]

@@ -4,9 +4,7 @@ use crate::{
     document::ServerDocument, stream::StreamingResponse, DioxusServerContext,
     IncrementalRendererError, ProvideServerContext, ServeConfig,
 };
-use crate::{
-    IncrementalRenderer, IncrementalRendererConfig as IsrgConfig, RenderFreshness, Result,
-};
+use crate::{IncrementalRendererConfig as IsrgConfig, Result};
 use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::UnboundedSender;
@@ -19,7 +17,7 @@ use dioxus_lib::prelude::*;
 
 pub struct SsrRenderer {
     renderers: RwLock<Vec<Renderer>>,
-    incremental_cache: Option<RwLock<IncrementalRenderer>>,
+    // incremental_cache: Option<RwLock<IncrementalRenderer>>,
 }
 
 struct FullstackHTMLTemplate {}
@@ -35,7 +33,7 @@ impl SsrRenderer {
 
         Self {
             renderers,
-            incremental_cache,
+            // incremental_cache,
         }
     }
 
@@ -292,50 +290,6 @@ impl SsrRenderer {
         }
 
         Ok(post_streaming)
-    }
-
-    /// Look for a cached route in the incremental cache and send it into the render channel if it exists
-    fn check_cached_route(
-        &self,
-        route: &str,
-        render_into: &UnboundedSender<Result<String>>,
-    ) -> Option<RenderFreshness> {
-        let incremental = self.incremental_cache.as_ref()?;
-        let mut incremental = incremental.write().ok()?;
-        let cached = incremental.get(route).ok().flatten()?;
-
-        _ = render_into.unbounded_send(
-            String::from_utf8(cached.response.to_vec())
-                .map_err(|err| IncrementalRendererError::Other(Box::new(err))),
-        );
-
-        Some(cached.freshness)
-    }
-}
-
-/// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
-fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
-where
-    Fut: Future + 'static,
-    Fut::Output: Send + 'static,
-{
-    #[cfg(target_arch = "wasm32")]
-    {
-        tokio::task::spawn_local(f())
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use tokio_util::task::LocalPoolHandle;
-        static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
-
-        let pool = TASK_POOL.get_or_init(|| {
-            let threads = std::thread::available_parallelism()
-                .unwrap_or(std::num::NonZeroUsize::new(1).unwrap());
-            LocalPoolHandle::new(threads.into())
-        });
-
-        pool.spawn_pinned(f)
     }
 }
 
