@@ -11,10 +11,11 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 fn main() {
-    dioxus::launch(app);
+    dioxus::launch(App);
 }
 
-fn app() -> Element {
+#[component]
+fn App() -> Element {
     // Breed is a signal that will be updated when the user clicks a breed in the list
     // `shiba` is just a default that we know will exist. We could also use a `None` instead
     let mut breed = use_signal(|| "shiba".to_string());
