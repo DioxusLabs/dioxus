@@ -43,7 +43,6 @@ let dioxus = {
 }"#;
 
 /// Tracks what query ids are currently active
-
 pub(crate) struct SharedSlab<T = ()> {
     pub(crate) slab: Rc<RefCell<Slab<T>>>,
 }

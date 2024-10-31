@@ -14,6 +14,7 @@ rust-version = "1.79.0"
 dioxus-core = { workspace = true }
 dioxus-html = { workspace = true, default-features = false, optional = true }
 dioxus-document = { workspace = true, optional = true }
+dioxus-history = { workspace = true, optional = true }
 dioxus-core-macro = { workspace = true, optional = true }
 dioxus-config-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
@@ -45,20 +46,26 @@ devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis"]
-document = ["dioxus-web?/document", "dioxus-document"]
+document = ["dioxus-web?/document", "dep:dioxus-document", "dep:dioxus-history"]
 
 launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]
 
 # Platforms
-web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
+web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web"]
 desktop = ["dep:dioxus-desktop", "dioxus-config-macro/desktop"]
 mobile = ["dep:dioxus-mobile", "dioxus-config-macro/mobile"]
-fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde", "dioxus-router?/fullstack"]
-ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
-liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
+fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde"]
+ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
+liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
 axum = ["server"]
 server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum", "dep:axum", "dioxus-server"]
+# fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde"]
+# desktop = ["dep:dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
+# mobile = ["dep:dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
+# web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation?/web", "dioxus-config-macro/web"]
+# ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
+# liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []

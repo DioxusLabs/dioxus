@@ -4,7 +4,7 @@ use super::{Synthetic, WebEventExt};
 
 impl HasFocusData for Synthetic<web_sys::FocusEvent> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

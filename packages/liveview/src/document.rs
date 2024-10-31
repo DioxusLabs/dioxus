@@ -1,27 +1,11 @@
 use dioxus_core::ScopeId;
 use dioxus_document::{Document, Eval, EvalError, Evaluator};
+use dioxus_history::History;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use std::rc::Rc;
 
+use crate::history::LiveviewHistory;
 use crate::query::{Query, QueryEngine};
-
-/// Provides the LiveviewDocument through [`ScopeId::provide_context`].
-pub fn init_eval() {
-    let query = ScopeId::ROOT.consume_context::<QueryEngine>().unwrap();
-    let provider: Rc<dyn Document> = Rc::new(LiveviewDocument { query });
-    ScopeId::ROOT.provide_context(provider);
-}
-
-/// Reprints the liveview-target's provider of evaluators.
-pub struct LiveviewDocument {
-    query: QueryEngine,
-}
-
-impl Document for LiveviewDocument {
-    fn eval(&self, js: String) -> Eval {
-        Eval::new(LiveviewEvaluator::create(self.query.clone(), js))
-    }
-}
 
 /// Represents a liveview-target's JavaScript evaluator.
 pub(crate) struct LiveviewEvaluator {
@@ -73,5 +57,30 @@ impl Evaluator for LiveviewEvaluator {
         self.query
             .poll_recv(context)
             .map_err(|e| EvalError::Communication(e.to_string()))
+    }
+}
+
+/// Provides the LiveviewDocument through [`ScopeId::provide_context`].
+pub fn init_document() {
+    let query = ScopeId::ROOT.consume_context::<QueryEngine>().unwrap();
+    let provider: Rc<dyn Document> = Rc::new(LiveviewDocument {
+        query: query.clone(),
+    });
+    ScopeId::ROOT.provide_context(provider);
+    let history = LiveviewHistory::new(Rc::new(move |script: &str| {
+        Eval::new(LiveviewEvaluator::create(query.clone(), script.to_string()))
+    }));
+    let history: Rc<dyn History> = Rc::new(history);
+    ScopeId::ROOT.provide_context(history);
+}
+
+/// Reprints the liveview-target's provider of evaluators.
+pub struct LiveviewDocument {
+    query: QueryEngine,
+}
+
+impl Document for LiveviewDocument {
+    fn eval(&self, js: String) -> Eval {
+        Eval::new(LiveviewEvaluator::create(self.query.clone(), js))
     }
 }

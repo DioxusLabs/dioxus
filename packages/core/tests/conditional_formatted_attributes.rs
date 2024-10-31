@@ -10,4 +10,23 @@ fn partially_formatted_conditional_attribute() {
             width: if true { "{width}" } else { "100px" }
         }
     };
+
+    // And make sure it works if one of those branches is an expression
+    // Regression test for https://github.com/DioxusLabs/dioxus/issues/3146
+    let opt = "button";
+
+    _ = rsx! {
+        input {
+            type: if true { opt } else { "text" },
+        }
+        input {
+            type: if true { opt.to_string() } else { "text with" },
+        }
+        input {
+            type: if true { opt.to_string() } else { "text with {width}" },
+        }
+        input {
+            type: if true { opt.to_string() } else if true { "" } else { "text with {width}" },
+        }
+    };
 }

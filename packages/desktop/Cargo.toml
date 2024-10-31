@@ -54,6 +54,7 @@ urlencoding = "2.1.2"
 async-trait = "0.1.68"
 tao = { workspace = true, features = ["rwh_05"] }
 once_cell = { workspace = true }
+dioxus-history.workspace = true
 
 
 [target.'cfg(unix)'.dependencies]
@@ -72,6 +73,8 @@ global-hotkey = "0.5.0"
 rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 muda = "0.11.3"
 
+[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]
+tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"

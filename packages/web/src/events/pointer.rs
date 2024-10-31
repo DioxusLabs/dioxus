@@ -53,7 +53,7 @@ impl HasPointerData for Synthetic<PointerEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

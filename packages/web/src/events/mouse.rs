@@ -5,7 +5,7 @@ use dioxus_html::{
         InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
         PointerInteraction,
     },
-    HasDragData, HasFileData, HasMouseData,
+    HasMouseData,
 };
 use web_sys::MouseEvent;
 
@@ -64,15 +64,7 @@ impl PointerInteraction for Synthetic<MouseEvent> {
 
 impl HasMouseData for Synthetic<MouseEvent> {
     fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-impl HasFileData for Synthetic<MouseEvent> {}
-
-impl HasDragData for Synthetic<MouseEvent> {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 

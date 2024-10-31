@@ -19,16 +19,6 @@ pub type LaunchFn = fn(fn() -> Element, Vec<ContextFn>, Vec<Box<dyn Any>>);
 /// A context function is a Send and Sync closure that returns a boxed trait object
 pub type ContextFn = Box<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>;
 
-#[cfg(any(feature = "fullstack", feature = "liveview"))]
-type ValidContext = SendContext;
-
-#[cfg(not(any(feature = "fullstack", feature = "liveview")))]
-type ValidContext = UnsendContext;
-
-type SendContext = dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync + 'static;
-
-type UnsendContext = dyn Fn() -> Box<dyn Any> + 'static;
-
 #[allow(clippy::redundant_closure)] // clippy doesnt doesn't understand our coercion to fn
 impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.

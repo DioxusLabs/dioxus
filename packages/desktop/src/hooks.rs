@@ -54,6 +54,40 @@ pub fn use_muda_event_handler(
     })
 }
 
+/// Register an event handler that runs when a tray icon menu event is processed.
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
+)]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub fn use_tray_menu_event_handler(
+    mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + 'static,
+) -> WryEventHandler {
+    use_wry_event_handler(move |event, _| {
+        if let Event::UserEvent(UserWindowEvent::TrayMenuEvent(event)) = event {
+            handler(event);
+        }
+    })
+}
+
+/// Register an event handler that runs when a tray icon event is processed.
+/// This is only for tray icon and not it's menus.
+/// If you want to register tray icon menus handler use `use_tray_menu_event_handler` instead.
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
+)]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub fn use_tray_icon_event_handler(
+    mut handler: impl FnMut(&tray_icon::TrayIconEvent) + 'static,
+) -> WryEventHandler {
+    use_wry_event_handler(move |event, _| {
+        if let Event::UserEvent(UserWindowEvent::TrayIconEvent(event)) = event {
+            handler(event);
+        }
+    })
+}
+
 /// Provide a callback to handle asset loading yourself.
 ///
 /// The callback takes a path as requested by the web view, and it should return `Some(response)`
