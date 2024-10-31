@@ -132,12 +132,10 @@ impl StringCache {
                         inside_style_tag: true,
                     });
                     write!(self, "\"")?;
-                } else {
-                    if has_dyn_attrs {
-                        self.push(Segment::StyleMarker {
-                            inside_style_tag: false,
-                        });
-                    }
+                } else if has_dyn_attrs {
+                    self.push(Segment::StyleMarker {
+                        inside_style_tag: false,
+                    });
                 }
 
                 // write the id if we are prerendering and this is either a root node or a node with a dynamic attribute
