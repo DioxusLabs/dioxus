@@ -49,8 +49,6 @@ pub(crate) enum Segment {
     Node(usize),
     /// Text that we know is static in the template that is pre-rendered
     PreRendered(String),
-    /// Anything between this and the segments at the index is only required for hydration. If you don't need to hydrate, you can safely skip to the section at the given index
-    HydrationOnlySection(usize),
     /// A marker for where to insert a dynamic styles
     StyleMarker {
         // If the marker is inside a style tag or not
@@ -144,12 +142,7 @@ impl StringCache {
 
                 // write the id if we are prerendering and this is either a root node or a node with a dynamic attribute
                 if has_dyn_attrs || is_root {
-                    self.if_hydration_enabled(|chain| {
-                        if has_dyn_attrs || is_root {
-                            chain.push(Segment::HydrationNodeId { is_attribute: true });
-                        }
-                        std::fmt::Result::Ok(())
-                    })?;
+                    self.push(Segment::HydrationNodeId { is_attribute: true });
                 }
 
                 if children.is_empty() && tag_is_self_closing(tag) {
@@ -173,46 +166,19 @@ impl StringCache {
             TemplateNode::Text { text } => {
                 // write the id if we are prerendering and this is a root node that may need to be removed in the future
                 if is_root {
-                    self.if_hydration_enabled(|chain| {
-                        chain.push(Segment::HydrationNodeId {
-                            is_attribute: false,
-                        });
-
-                        std::fmt::Result::Ok(())
-                    })?;
+                    self.push(Segment::HydrationNodeId {
+                        is_attribute: false,
+                    });
                 }
                 write!(self, "{}", askama_escape::escape(text, askama_escape::Html))?;
                 if is_root {
-                    self.if_hydration_enabled(|chain| {
-                        chain.push(Segment::HydrationClose);
-                        Ok(())
-                    })?;
-                    // self.if_hydration_enabled(|chain| write!(chain, "<!--#-->"))?;
+                    self.push(Segment::HydrationClose);
                 }
             }
             TemplateNode::Dynamic { id } => self.push(Segment::Node(*id)),
         }
 
         Ok(())
-    }
-
-    /// Add segments but only when hydration is enabled
-    fn if_hydration_enabled<O>(
-        &mut self,
-        during_prerender: impl FnOnce(&mut StringCache) -> O,
-    ) -> O {
-        // Insert a placeholder jump to the end of the hydration only segments
-        let jump_index = self.segments.len();
-        self.push(Segment::HydrationOnlySection(0));
-
-        let out = during_prerender(self);
-
-        // Go back and fill in where the placeholder jump should skip to
-        let after_hydration_only_section = self.segments.len();
-        // Don't add any text to static text in the hydration only section. This would cause the text to be skipped during non-hydration renders
-        self.add_text_to_last_segment = false;
-        self.segments[jump_index] = Segment::HydrationOnlySection(after_hydration_only_section);
-        out
     }
 
     /// Add a new segment

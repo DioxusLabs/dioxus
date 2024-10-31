@@ -115,19 +115,10 @@ impl Renderer {
         let mut accumulated_listeners = Vec::new();
 
         // We keep track of the index we are on manually so that we can jump forward to a new section quickly without iterating every item
-        let mut index = 0;
         let mut dynamic_node_id = 0;
 
-        while let Some(segment) = entry.segments.get(index) {
+        for segment in entry.segments.iter() {
             match segment {
-                Segment::HydrationOnlySection(jump_to) => {
-                    // If we are not prerendering, we don't need to write the content of the hydration only section
-                    // Instead we can jump to the next section
-                    if !self.pre_render {
-                        index = *jump_to;
-                        continue;
-                    }
-                }
                 Segment::Attr(idx) => {
                     let attrs = &*template.dynamic_attrs[*idx];
                     for attr in attrs {
@@ -258,8 +249,6 @@ impl Renderer {
 
                 Segment::HydrationClose => write!(buf, "<!--#-->")?,
             }
-
-            index += 1;
         }
 
         Ok(())
