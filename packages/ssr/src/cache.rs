@@ -60,7 +60,10 @@ pub(crate) enum Segment {
     /// A marker for where to insert a dynamic inner html
     InnerHtmlMarker,
     /// A marker for where to insert a node id for an attribute
-    AttributeNodeMarker,
+    HydrationNodeId {
+        is_attribute: bool,
+    },
+    HydrationClose,
 }
 
 impl StringCache {
@@ -94,6 +97,7 @@ impl StringCache {
                 let mut inner_html = None;
                 // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
                 let mut has_dyn_attrs = false;
+
                 for attr in *attrs {
                     match attr {
                         TemplateAttribute::Static {
@@ -130,23 +134,20 @@ impl StringCache {
                         inside_style_tag: true,
                     });
                     write!(self, "\"")?;
-                } else if has_dyn_attrs {
-                    // self.push(Segment::StyleMarker {
-                    //     inside_style_tag: false,
-                    // });
+                } else {
+                    if has_dyn_attrs {
+                        self.push(Segment::StyleMarker {
+                            inside_style_tag: false,
+                        });
+                    }
                 }
 
                 // write the id if we are prerendering and this is either a root node or a node with a dynamic attribute
                 if has_dyn_attrs || is_root {
                     self.if_hydration_enabled(|chain| {
-                        write!(chain, " data-node-hydration=\"")?;
                         if has_dyn_attrs || is_root {
-                            chain.push(Segment::AttributeNodeMarker);
+                            chain.push(Segment::HydrationNodeId { is_attribute: true });
                         }
-                        // else if is_root {
-                        //     chain.push(Segment::RootNodeMarker);
-                        // }
-                        write!(chain, "\"")?;
                         std::fmt::Result::Ok(())
                     })?;
                 }
@@ -173,15 +174,20 @@ impl StringCache {
                 // write the id if we are prerendering and this is a root node that may need to be removed in the future
                 if is_root {
                     self.if_hydration_enabled(|chain| {
-                        write!(chain, "<!--node-id")?;
-                        chain.push(Segment::AttributeNodeMarker);
-                        write!(chain, "-->")?;
+                        chain.push(Segment::HydrationNodeId {
+                            is_attribute: false,
+                        });
+
                         std::fmt::Result::Ok(())
                     })?;
                 }
                 write!(self, "{}", askama_escape::escape(text, askama_escape::Html))?;
                 if is_root {
-                    self.if_hydration_enabled(|chain| write!(chain, "<!--#-->"))?;
+                    self.if_hydration_enabled(|chain| {
+                        chain.push(Segment::HydrationClose);
+                        Ok(())
+                    })?;
+                    // self.if_hydration_enabled(|chain| write!(chain, "<!--#-->"))?;
                 }
             }
             TemplateNode::Dynamic { id } => self.push(Segment::Node(*id)),

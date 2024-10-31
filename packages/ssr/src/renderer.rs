@@ -220,8 +220,7 @@ impl Renderer {
 
                 Segment::InnerHtmlMarker => {
                     if let Some(inner_html) = inner_html.take() {
-                        let inner_html = &inner_html.value;
-                        match inner_html {
+                        match &inner_html.value {
                             AttributeValue::Text(value) => write!(buf, "{}", value)?,
                             AttributeValue::Bool(value) => write!(buf, "{}", value)?,
                             AttributeValue::Float(f) => write!(buf, "{}", f)?,
@@ -231,7 +230,12 @@ impl Renderer {
                     }
                 }
 
-                Segment::AttributeNodeMarker => {
+                Segment::HydrationNodeId { is_attribute } => {
+                    match is_attribute {
+                        true => write!(buf, " data-node-hydration=\"")?,
+                        false => write!(buf, "<!--node-id")?,
+                    };
+
                     // first write the id
                     write!(buf, "{}", dynamic_node_id)?;
                     dynamic_node_id += 1;
@@ -245,7 +249,14 @@ impl Renderer {
                             dioxus_core_types::event_bubbles(&name[2..]) as u8
                         )?;
                     }
+
+                    match is_attribute {
+                        true => write!(buf, "\"")?,
+                        false => write!(buf, "-->")?,
+                    };
                 }
+
+                Segment::HydrationClose => write!(buf, "<!--#-->")?,
             }
 
             index += 1;
@@ -368,7 +379,7 @@ fn to_string_works() {
                     },
                     HydrationOnlySection(7), // jump to `>` if we don't need to hydrate
                     PreRendered(" data-node-hydration=\"".to_string()),
-                    AttributeNodeMarker,
+                    HydrationNodeId,
                     PreRendered("\"".to_string()),
                     PreRendered(">".to_string()),
                     InnerHtmlMarker,
@@ -417,7 +428,7 @@ fn empty_for_loop_works() {
                     PreRendered("<div class=\"asdasdasd\"".to_string()),
                     HydrationOnlySection(5), // jump to `>` if we don't need to hydrate
                     PreRendered(" data-node-hydration=\"".to_string()),
-                    AttributeNodeMarker,
+                    HydrationNodeId,
                     PreRendered("\"".to_string()),
                     PreRendered(">".to_string()),
                     Node(0),
