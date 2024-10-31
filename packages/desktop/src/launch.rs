@@ -42,6 +42,12 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
                 UserWindowEvent::MudaMenuEvent(evnt) => app.handle_menu_event(evnt),
 
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::TrayMenuEvent(evnt) => app.handle_tray_menu_event(evnt),
+
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::TrayIconEvent(evnt) => app.handle_tray_icon_event(evnt),
+
                 #[cfg(all(feature = "devtools", debug_assertions))]
                 UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
 

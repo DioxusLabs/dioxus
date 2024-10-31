@@ -41,6 +41,10 @@ pub use wry;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use muda;
 
+// Tray icon
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub mod trayicon;
+
 // Public exports
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};

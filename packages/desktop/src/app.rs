@@ -85,6 +85,10 @@ impl App {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.set_menubar_receiver();
 
+        // Wire up the tray icon receiver - this way any component can key into the menubar actions
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        app.set_tray_icon_receiver();
+
         // Allow hotreloading to work - but only in debug mode
         #[cfg(all(feature = "devtools", debug_assertions))]
         app.connect_hotreload();
@@ -132,6 +136,29 @@ impl App {
                 }
             }
             _ => (),
+        }
+    }
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_tray_menu_event(&mut self, event: tray_icon::menu::MenuEvent) {
+        _ = event;
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_tray_icon_event(&mut self, event: tray_icon::TrayIconEvent) {
+        if let tray_icon::TrayIconEvent::Click {
+            id: _,
+            position: _,
+            rect: _,
+            button,
+            button_state: _,
+        } = event
+        {
+            if button == tray_icon::MouseButton::Left {
+                for webview in self.webviews.values() {
+                    webview.desktop_context.window.set_visible(true);
+                    webview.desktop_context.window.set_focus();
+                }
+            }
         }
     }
 
@@ -357,6 +384,27 @@ impl App {
         muda::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
             _ = receiver.send_event(UserWindowEvent::MudaMenuEvent(t));
+        }));
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    fn set_tray_icon_receiver(&self) {
+        let receiver = self.shared.proxy.clone();
+
+        // The event loop becomes the menu receiver
+        // This means we don't need to poll the receiver on every tick - we just get the events as they come in
+        // This is a bit more efficient than the previous implementation, but if someone else sets a handler, the
+        // receiver will become inert.
+        tray_icon::TrayIconEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::TrayIconEvent(t));
+        }));
+
+        // for whatever reason they had to make it separate
+        let receiver = self.shared.proxy.clone();
+        tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::TrayMenuEvent(t));
         }));
     }
 
