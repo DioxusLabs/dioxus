@@ -287,6 +287,8 @@ impl AppBundle {
     ///
     /// It's not guaranteed that they're different from any other folder
     fn prepare_build_dir(&self) -> Result<()> {
+        _ = std::fs::remove_dir_all(&self.app_dir());
+
         create_dir_all(self.app_dir())?;
         create_dir_all(self.exe_dir())?;
         create_dir_all(self.asset_dir())?;
@@ -579,6 +581,11 @@ impl AppBundle {
                 })
                 .await
                 .unwrap()?;
+
+                // Run SSG and cache static routes
+                if self.build.build.ssg {
+                    self.run_ssg().await?;
+                }
             }
             Platform::MacOS => {}
             Platform::Windows => {}
@@ -716,6 +723,72 @@ impl AppBundle {
                 (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
             );
         }
+
+        Ok(())
+    }
+
+    async fn run_ssg(&self) -> anyhow::Result<()> {
+        use futures_util::stream::FuturesUnordered;
+        use futures_util::StreamExt;
+        use tokio::process::Command;
+
+        const PORT: u16 = 9999;
+
+        tracing::info!("Running SSG");
+
+        // Run the server executable
+        let _child = Command::new(
+            self.server_exe()
+                .context("Failed to find server executable")?,
+        )
+        .env(dioxus_cli_config::SERVER_PORT_ENV, PORT.to_string())
+        .env(dioxus_cli_config::SERVER_IP_ENV, "127.0.0.1".to_string())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()?;
+
+        // Wait a second for the server to start
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // Get the routes from the `/static_routes` endpoint
+        let mut routes = reqwest::Client::builder()
+            .build()?
+            .post(format!("http://127.0.0.1:{PORT}/api/static_routes"))
+            .send()
+            .await
+            .context("Failed to get static routes from server")?
+            .text()
+            .await
+            .map(|raw| serde_json::from_str::<String>(&raw).unwrap())
+            .inspect(|text| tracing::info!("Got static routes: {text:?}"))
+            .context("Failed to parse static routes from server")?
+            .lines()
+            .map(|line| line.to_string())
+            .map(|line| async move {
+                tracing::info!("Getting static route: {line}");
+                reqwest::Client::builder()
+                    .build()?
+                    .get(format!("http://127.0.0.1:{PORT}{line}"))
+                    .header("Accept", "text/html")
+                    .send()
+                    .await
+            })
+            .collect::<FuturesUnordered<_>>();
+
+        while let Some(route) = routes.next().await {
+            match route {
+                Ok(route) => tracing::info!("ssg success: {route:?}"),
+                Err(err) => tracing::error!("ssg error: {err:?}"),
+            }
+        }
+
+        // Wait a second for the cache to be written by the server
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        tracing::info!("SSG complete");
+
+        drop(_child);
 
         Ok(())
     }
