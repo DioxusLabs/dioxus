@@ -24,8 +24,8 @@ dioxus-fullstack = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 thiserror = { workspace = true }
-wasm-bindgen-cli-support = "0.2"
-wasm-bindgen-shared = "0.2"
+wasm-bindgen-cli-support = { workspace = true }
+wasm-bindgen-shared = { workspace = true }
 uuid = { version = "1.3.0", features = ["v4"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

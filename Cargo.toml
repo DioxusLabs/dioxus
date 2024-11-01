@@ -141,7 +141,7 @@ dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.3" }
 generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.3" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.3" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.3" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.1" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.3" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.3" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.3", default-features = false }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.3" }
@@ -165,7 +165,9 @@ slotmap = { version = "1.0.7", features = ["serde"] }
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
-wasm-bindgen = "0.2.92"
+wasm-bindgen = "0.2.95"
+wasm-bindgen-cli-support = "0.2.95"
+wasm-bindgen-shared = "0.2.95"
 wasm-bindgen-futures = "0.4.42"
 html_parser = "0.7.0"
 thiserror = "1.0.40"
