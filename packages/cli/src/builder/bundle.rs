@@ -287,7 +287,7 @@ impl AppBundle {
     ///
     /// It's not guaranteed that they're different from any other folder
     fn prepare_build_dir(&self) -> Result<()> {
-        _ = std::fs::remove_dir_all(&self.app_dir());
+        _ = std::fs::remove_dir_all(self.app_dir());
 
         create_dir_all(self.app_dir())?;
         create_dir_all(self.exe_dir())?;
@@ -742,7 +742,7 @@ impl AppBundle {
                 .context("Failed to find server executable")?,
         )
         .env(dioxus_cli_config::SERVER_PORT_ENV, PORT.to_string())
-        .env(dioxus_cli_config::SERVER_IP_ENV, "127.0.0.1".to_string())
+        .env(dioxus_cli_config::SERVER_IP_ENV, "127.0.0.1")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
