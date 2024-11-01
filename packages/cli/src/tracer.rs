@@ -71,8 +71,7 @@ impl TraceController {
 
     /// Build tracing infrastructure.
     pub fn initialize() {
-        let mut filter =
-            EnvFilter::new("error,dx=trace,dioxus-cli=debug,manganis-cli-support=debug");
+        let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
 
         if env::var(LOG_ENV).is_ok() {
             filter = EnvFilter::from_env(LOG_ENV);
@@ -270,10 +269,18 @@ struct FmtLogWriter {}
 
 impl Write for FmtLogWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if !TUI_ENABLED.load(Ordering::SeqCst) {
+            std::io::stdout().write(buf)?;
+        }
+
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        if !TUI_ENABLED.load(Ordering::SeqCst) {
+            std::io::stdout().flush()?;
+        }
+
         Ok(())
     }
 }
