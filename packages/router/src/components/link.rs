@@ -264,6 +264,11 @@ pub fn Link(props: LinkProps) -> Element {
     let do_default = onclick.is_none() || !onclick_only;
 
     let action = move |event: MouseEvent| {
+        // Skip handling this action if `prevent_default` is used.
+        if !event.default_action_enabled() {
+            return;
+        }
+
         // Only handle events without modifiers
         if !event.modifiers().is_empty() {
             return;
