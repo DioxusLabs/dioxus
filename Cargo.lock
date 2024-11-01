@@ -3371,6 +3371,9 @@ dependencies = [
 [[package]]
 name = "dioxus-core-types"
 version = "0.6.0-alpha.3"
+dependencies = [
+ "once_cell",
+]
 
 [[package]]
 name = "dioxus-desktop"
