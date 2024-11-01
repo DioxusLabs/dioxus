@@ -336,6 +336,13 @@ impl SsrRendererPool {
                 if let Err(err) = wrapper.render_head(&mut cached_render, &virtual_dom) {
                     throw_error!(err);
                 }
+                renderer.reset_hydration();
+                if let Err(err) = renderer.render_to(&mut cached_render, &virtual_dom) {
+                    throw_error!(dioxus_isrg::IncrementalRendererError::RenderError(err));
+                }
+                if let Err(err) = wrapper.render_after_main(&mut cached_render, &virtual_dom) {
+                    throw_error!(err);
+                }
                 cached_render.push_str(&post_streaming);
 
                 if let Ok(mut incremental) = incremental.write() {
