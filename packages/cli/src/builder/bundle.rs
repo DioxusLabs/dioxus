@@ -761,12 +761,12 @@ impl AppBundle {
             .text()
             .await
             .map(|raw| serde_json::from_str::<String>(&raw).unwrap())
-            .inspect(|text| tracing::info!("Got static routes: {text:?}"))
+            .inspect(|text| tracing::debug!("Got static routes: {text:?}"))
             .context("Failed to parse static routes from server")?
             .lines()
             .map(|line| line.to_string())
             .map(|line| async move {
-                tracing::info!("Getting static route: {line}");
+                tracing::info!("SSG: {line}");
                 reqwest::Client::builder()
                     .build()?
                     .get(format!("http://127.0.0.1:{PORT}{line}"))
@@ -778,7 +778,7 @@ impl AppBundle {
 
         while let Some(route) = routes.next().await {
             match route {
-                Ok(route) => tracing::info!("ssg success: {route:?}"),
+                Ok(route) => tracing::debug!("ssg success: {route:?}"),
                 Err(err) => tracing::error!("ssg error: {err:?}"),
             }
         }
