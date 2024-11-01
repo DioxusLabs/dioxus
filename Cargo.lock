@@ -3511,6 +3511,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-desktop",
  "dioxus-devtools",
+ "dioxus-history",
  "dioxus-interpreter-js",
  "dioxus-isrg",
  "dioxus-lib",
