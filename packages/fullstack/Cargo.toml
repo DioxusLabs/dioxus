@@ -65,6 +65,7 @@ dioxus-cli-config = { workspace = true, optional = true }
 
 dioxus-devtools = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.8.1", optional = true }
+dioxus-history.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }

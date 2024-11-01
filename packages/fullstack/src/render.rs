@@ -7,6 +7,7 @@ use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
@@ -168,6 +169,9 @@ impl SsrRendererPool {
             let mut virtual_dom = virtual_dom_factory();
             let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
             virtual_dom.provide_root_context(document.clone());
+            virtual_dom.provide_root_context(Rc::new(
+                dioxus_history::MemoryHistory::with_initial_path(&route),
+            ) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
             // poll the future, which may call server_context()
