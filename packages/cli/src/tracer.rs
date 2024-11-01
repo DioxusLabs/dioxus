@@ -71,7 +71,8 @@ impl TraceController {
 
     /// Build tracing infrastructure.
     pub fn initialize() {
-        let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
+        let mut filter =
+            EnvFilter::new("error,dx=trace,dioxus-cli=debug,manganis-cli-support=debug");
 
         if env::var(LOG_ENV).is_ok() {
             filter = EnvFilter::from_env(LOG_ENV);
