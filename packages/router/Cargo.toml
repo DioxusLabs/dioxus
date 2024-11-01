@@ -11,20 +11,13 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-lib = { workspace = true }
-dioxus-history = { workspace = true } 
+dioxus-history = { workspace = true }
 dioxus-router-macro = { workspace = true }
 tracing = { workspace = true }
 urlencoding = "2.1.3"
 url = "2.3.1"
 dioxus-cli-config = { workspace = true }
 rustversion = "1.0.17"
-
-# you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
-# dev-dependncey crates
-[target.'cfg(target_family = "wasm")'.dev-dependencies]
-console_error_panic_hook = "0.1.7"
-gloo = "0.8.0"
-wasm-bindgen-test = "0.3.33"
 
 [features]
 default = []
@@ -34,15 +27,15 @@ axum = { workspace = true, features = ["ws"] }
 dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
 criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
-ciborium = { version = "0.2.1" }
-base64 = { version = "0.21.0" }
-serde = { version = "1", features = ["derive"] }
+ciborium = { workspace = true }
+base64 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-# Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
 
+# Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
 [[example]]
 name = "hash_fragment_state"
 path = "../../examples/hash_fragment_state.rs"
