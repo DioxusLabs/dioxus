@@ -58,6 +58,10 @@ pub(crate) struct WasmOptConfig {
     /// Keep debug symbols in the wasm file
     #[serde(default = "false_bool")]
     pub(crate) debug: bool,
+
+    /// Enable reference types
+    #[serde(default = "false_bool")]
+    pub(crate) reference_types: bool,
 }
 
 /// The wasm-opt level to use for release web builds [default: 4]

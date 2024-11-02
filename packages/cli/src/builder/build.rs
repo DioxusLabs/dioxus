@@ -232,7 +232,7 @@ impl BuildRequest {
         //     .await?;
 
         let mut manifest = AssetManifest::default();
-        manifest.add_from_object_path(exe.to_path_buf());
+        _ = manifest.add_from_object_path(exe.to_path_buf());
         Ok(manifest)
 
         // The linker wrote the manifest to the temp file, let's load it!
