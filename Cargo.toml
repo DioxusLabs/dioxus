@@ -245,6 +245,11 @@ tray-icon = "0.19"
 incremental = true
 debug = 0
 
+[profile.release-max-opt]
+inherits = "release"
+lto = true
+codegen-units = 1
+
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
 [profile.release-unoptimized]
 inherits = "dev"

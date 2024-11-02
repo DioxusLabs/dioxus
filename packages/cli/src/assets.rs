@@ -24,31 +24,20 @@ impl AssetManifest {
 
     /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
     pub(crate) fn add_from_object_path(&mut self, path: PathBuf) -> anyhow::Result<()> {
-        let Some(ext) = path.extension() else {
-            return Ok(());
-        };
-
-        let Some(ext) = ext.to_str() else {
-            return Ok(());
-        };
-
         let data = std::fs::read(path.clone())?;
 
-        match ext {
-            // Parse an unarchived object file
-            "o" => {
-                if let Ok(object) = object::File::parse(&*data) {
-                    self.add_from_object_file(&object)?;
-                }
-            }
-
+        match path.extension().map(|ext| ext.to_str()).flatten() {
             // Parse an rlib as a collection of objects
-            "rlib" => {
+            Some("rlib") => {
                 if let Ok(archive) = object::read::archive::ArchiveFile::parse(&*data) {
                     self.add_from_archive_file(&archive, &data)?;
                 }
             }
-            _ => {}
+            _ => {
+                if let Ok(object) = object::File::parse(&*data) {
+                    self.add_from_object_file(&object)?;
+                }
+            }
         }
 
         Ok(())
