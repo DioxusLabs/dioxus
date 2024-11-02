@@ -1,7 +1,7 @@
 use crate::{Result, TraceSrc};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-use tracing::{error, warn, trace};
+use tracing::{error, trace, warn};
 
 const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
 
