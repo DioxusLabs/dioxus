@@ -1,10 +1,11 @@
 use dioxus_core::prelude::spawn;
 use dioxus_document::Eval;
-use dioxus_history::History;
+use dioxus_history::{History, HistoryCallback};
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use std::sync::{Mutex, RwLock};
 use std::{collections::BTreeMap, sync::Arc};
+use tracing::warn;
 
 /// A [`HistoryProvider`] that evaluates history through JS.
 pub(crate) struct LiveviewHistory {
@@ -338,9 +339,13 @@ impl History for LiveviewHistory {
             })
     }
 
-    fn updater(&self, callback: Arc<dyn Fn() + Send + Sync>) {
-        let mut updater_callback = self.updater_callback.write().unwrap();
-        *updater_callback = callback;
+    fn updater(&self, callback: HistoryCallback) {
+        if let HistoryCallback::Shared(callback) = callback {
+            let mut updater_callback = self.updater_callback.write().unwrap();
+            *updater_callback = callback;
+        } else {
+            warn!("LiveviewHistory only supports shared callbacks");
+        };
     }
 }
 
