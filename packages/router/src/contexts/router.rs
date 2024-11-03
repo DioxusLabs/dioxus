@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use dioxus_history::history;
+use dioxus_history::{history, HistoryCallback};
 use dioxus_lib::prelude::*;
 
 use crate::{
@@ -133,16 +133,44 @@ impl RouterContext {
             site_map: R::SITE_MAP,
         };
 
-        // set the updater
-        history().updater(Arc::new(move || {
+        let inner = CopyValue::new_in_scope(myself, ScopeId::ROOT);
+
+        #[cfg(target_arch = "wasm32")]
+        inner
+            .write_unchecked()
+            .history
+            .updater(HistoryCallback::Local(Rc::new(move || {
+                for &id in subscribers.read().unwrap().iter() {
+                    (mark_dirty)(id);
+                }
+                me.change_route();
+            })));
+
+        // Set the updater callback.
+
+        // On web this is a local callback to ensure the `popstate` event is handled correctly.
+        #[cfg(target_arch = "wasm32")]
+        let callback = {
+            let me = Self { inner };
+            HistoryCallback::Local(std::rc::Rc::new(move || {
+                for &rc in subscribers.lock().unwrap().iter() {
+                    rc.mark_dirty();
+                }
+
+                me.change_route();
+            }))
+        };
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let callback = HistoryCallback::Shared(Arc::new(move || {
             for &rc in subscribers.lock().unwrap().iter() {
                 rc.mark_dirty();
             }
         }));
 
-        Self {
-            inner: CopyValue::new_in_scope(myself, ScopeId::ROOT),
-        }
+        history().updater(callback);
+
+        Self { inner }
     }
 
     /// Check if the router is running in a liveview context

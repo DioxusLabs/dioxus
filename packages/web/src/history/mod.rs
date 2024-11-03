@@ -1,3 +1,4 @@
+use dioxus_history::HistoryCallback;
 use scroll::ScrollPosition;
 use std::path::PathBuf;
 use wasm_bindgen::JsCast;
@@ -208,13 +209,14 @@ impl dioxus_history::History for WebHistory {
         self.navigate_external(url)
     }
 
-    fn updater(&self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
+    fn updater(&self, callback: HistoryCallback) {
         let w = self.window.clone();
         let h = self.history.clone();
         let d = self.do_scroll_restoration;
 
         let function = Closure::wrap(Box::new(move |_| {
-            (*callback)();
+            callback.run();
+
             if d {
                 if let Some([x, y]) = get_current(&h) {
                     ScrollPosition { x, y }.scroll_to(w.clone())

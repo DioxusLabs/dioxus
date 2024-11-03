@@ -20,6 +20,28 @@ pub fn provide_history_context(history: Rc<dyn History>) {
     provide_context(history);
 }
 
+/// Callback for history updates.
+pub enum HistoryCallback {
+    /// Local callback.
+    ///
+    /// This callback is only used for `dioxus-web`.
+    Local(Rc<dyn Fn()>),
+    /// Shared callback.
+    ///
+    /// This callback is used for all other Dioxus platforms to enable multi-threaded callbacks.
+    Shared(Arc<dyn Fn() + Send + Sync>),
+}
+
+impl HistoryCallback {
+    /// Run this callback.
+    pub fn run(&self) {
+        match self {
+            Self::Local(callback) => callback(),
+            Self::Shared(callback) => callback(),
+        }
+    }
+}
+
 pub trait History {
     /// Get the path of the current URL.
     ///
@@ -251,7 +273,7 @@ pub trait History {
     /// Some [`HistoryProvider`]s may receive URL updates from outside the router. When such
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
-    fn updater(&self, callback: Arc<dyn Fn() + Send + Sync>) {}
+    fn updater(&self, callback: HistoryCallback) {}
 
     /// Whether the router should include the legacy prevent default attribute instead of the new
     /// prevent default method. This should only be used by liveview.
