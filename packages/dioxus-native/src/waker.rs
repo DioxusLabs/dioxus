@@ -5,7 +5,7 @@ use winit::{event_loop::EventLoopProxy, window::WindowId};
 #[cfg(feature = "accessibility")]
 use accesskit_winit::Event as AccessibilityEvent;
 use accesskit_winit::WindowEvent as AccessibilityWindowEvent;
-use blitz_dom::util::Resource;
+use blitz_dom::net::Resource;
 
 #[derive(Debug, Clone)]
 pub enum BlitzEvent {
