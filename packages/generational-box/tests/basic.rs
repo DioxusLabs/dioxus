@@ -138,7 +138,7 @@ fn fuzz() {
 
             // After all the children run, we should still have our data
             let key_value = &*key.read();
-            println!("{:?}", &*key_value);
+            println!("{:?}", key_value);
             assert_eq!(key_value, &value);
 
             let invalid = valid_keys.pop().unwrap();
@@ -209,7 +209,7 @@ fn fuzz_rc() {
             // After all the children run, we should still have our data
             for key in keys {
                 let key_value = &*key.read();
-                println!("{:?}", &*key_value);
+                println!("{:?}", key_value);
                 assert_eq!(key_value, &value);
             }
 
