@@ -94,8 +94,7 @@ impl WebEventExt for dioxus_html::ScrollData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<Synthetic<web_sys::Event>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::Event>().cloned()
     }
 }
 
@@ -104,7 +103,6 @@ impl WebEventExt for dioxus_html::WheelData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<Synthetic<web_sys::WheelEvent>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::WheelEvent>().cloned()
     }
 }

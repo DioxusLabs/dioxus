@@ -105,7 +105,6 @@ impl WebEventExt for dioxus_html::TouchData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::TouchEvent> {
-        self.downcast::<Synthetic<web_sys::TouchEvent>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::TouchEvent>().cloned()
     }
 }

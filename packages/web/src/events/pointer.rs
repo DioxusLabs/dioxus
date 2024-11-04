@@ -113,7 +113,6 @@ impl WebEventExt for dioxus_html::PointerData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::PointerEvent> {
-        self.downcast::<Synthetic<web_sys::PointerEvent>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::PointerEvent>().cloned()
     }
 }
