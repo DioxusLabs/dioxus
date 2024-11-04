@@ -1,4 +1,4 @@
-use crate::{read::Readable, ReadableRef, Signal, SignalData, Writable};
+use crate::{read::Readable, ReadableRef, Signal, SignalData};
 use dioxus_core::IntoDynNode;
 use std::ops::Deref;
 
