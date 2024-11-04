@@ -178,6 +178,12 @@ fn fuzz_rc() {
             println!("created new box {key:?}");
             let mut keys = vec![key];
             for _ in 0..rand::random::<u8>() % 10 {
+                if rand::random::<u8>() % 2 == 0 {
+                    let owner = S::owner();
+                    let key = owner.insert_reference(key).unwrap();
+                    println!("created new reference {key:?}");
+                    invalid_keys.push(key);
+                }
                 let key = owner.insert_reference(key).unwrap();
                 println!("created new reference {key:?}");
                 keys.push(key);
