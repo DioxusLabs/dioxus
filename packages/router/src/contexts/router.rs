@@ -135,17 +135,6 @@ impl RouterContext {
 
         let inner = CopyValue::new_in_scope(myself, ScopeId::ROOT);
 
-        #[cfg(target_arch = "wasm32")]
-        inner
-            .write_unchecked()
-            .history
-            .updater(HistoryCallback::Local(Rc::new(move || {
-                for &id in subscribers.read().unwrap().iter() {
-                    (mark_dirty)(id);
-                }
-                me.change_route();
-            })));
-
         // Set the updater callback.
 
         // On web this is a local callback to ensure the `popstate` event is handled correctly.
