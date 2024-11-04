@@ -262,6 +262,14 @@ mod server_fn_impl {
     }
 }
 
+#[test]
+fn server_context_as_any_map() {
+    let parts = http::Request::new(()).into_parts().0;
+    let server_context = DioxusServerContext::new(parts);
+    server_context.insert_boxed_factory(Box::new(|| Box::new(1234u32)));
+    assert_eq!(server_context.get::<u32>().unwrap(), 1234u32);
+}
+
 std::thread_local! {
     pub(crate) static SERVER_CONTEXT: std::cell::RefCell<Box<DioxusServerContext>> = Default::default();
 }
