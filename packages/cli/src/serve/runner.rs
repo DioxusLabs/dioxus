@@ -169,6 +169,9 @@ impl AppRunner {
                     // todo(jon): don't hardcode this here
                     let asset_relative = PathBuf::from("/assets/").join(bundled_name);
                     assets.push(asset_relative);
+                } else {
+                    // This was not an asset that we could hot reload, perform a full rebuild
+                    return None;
                 }
             }
         }
