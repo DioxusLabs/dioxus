@@ -127,7 +127,7 @@ pub fn launch_static_html_cfg(html: &str, cfg: Config) {
         Arc::clone(&net_callback) as SharedCallback<Resource>,
     ));
 
-    let document = HtmlDocument::from_html(html, cfg.base_url, cfg.stylesheets, net_provider);
+    let document = HtmlDocument::from_html(html, cfg.base_url, cfg.stylesheets, net_provider, None);
     launch_with_document(document, rt, Some(net_callback));
 }
 
