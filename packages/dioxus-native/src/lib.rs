@@ -131,7 +131,11 @@ pub fn launch_static_html_cfg(html: &str, cfg: Config) {
     launch_with_document(document, rt, Some(net_callback));
 }
 
-fn launch_with_document(doc: impl DocumentLike, rt: Runtime, net_callback: Option<Arc<Callback>>) {
+pub fn launch_with_document(
+    doc: impl DocumentLike,
+    rt: Runtime,
+    net_callback: Option<Arc<Callback>>,
+) {
     let mut window_attrs = Window::default_attributes();
     if !cfg!(all(target_os = "android", target_os = "ios")) {
         window_attrs.inner_size = Some(
@@ -207,8 +211,8 @@ enum CallbackInner {
     Queue(Vec<Resource>),
 }
 impl Callback {
-    fn new() -> Self {
-        Self(Mutex::new(CallbackInner::Queue(Vec::new())))
+    pub fn new() -> Self {
+        Default::default()
     }
     fn init(self: Arc<Self>, window_id: WindowId, proxy: &EventLoopProxy<BlitzEvent>) {
         let old = std::mem::replace(
@@ -231,6 +235,13 @@ impl Callback {
             .unwrap()
     }
 }
+
+impl Default for Callback {
+    fn default() -> Self {
+        Self(Mutex::new(CallbackInner::Queue(Vec::new())))
+    }
+}
+
 impl blitz_traits::net::Callback for Callback {
     type Data = Resource;
     fn call(&self, data: Self::Data) {
