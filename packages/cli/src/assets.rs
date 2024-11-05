@@ -15,6 +15,7 @@ pub(crate) struct AssetManifest {
 }
 
 impl AssetManifest {
+    #[allow(dead_code)]
     pub(crate) fn load_from_file(path: &Path) -> anyhow::Result<Self> {
         let src = std::fs::read_to_string(path)
             .context("Failed to read asset manifest from filesystem")?;
@@ -26,7 +27,7 @@ impl AssetManifest {
     pub(crate) fn add_from_object_path(&mut self, path: PathBuf) -> anyhow::Result<()> {
         let data = std::fs::read(path.clone())?;
 
-        match path.extension().map(|ext| ext.to_str()).flatten() {
+        match path.extension().and_then(|ext| ext.to_str()) {
             // Parse an rlib as a collection of objects
             Some("rlib") => {
                 if let Ok(archive) = object::read::archive::ArchiveFile::parse(&*data) {
