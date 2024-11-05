@@ -99,71 +99,69 @@ impl Builder {
                 // Prevent updates from flowing in after the build has already finished
                 if !self.is_finished() {
                     self.stage = stage.clone();
-                }
 
-                match stage {
-                    BuildStage::Initializing => {
-                        self.compiled_crates = 0;
-                        self.compiled_crates_server = 0;
-                        self.bundling_progress = 0.0;
-                    }
-                    BuildStage::Starting {
-                        crate_count,
-                        platform,
-                    } => {
-                        if *platform == Platform::Server {
-                            self.expected_crates_server = *crate_count;
-                        } else {
-                            self.expected_crates = *crate_count;
+                    match stage {
+                        BuildStage::Initializing => {
+                            self.compiled_crates = 0;
+                            self.compiled_crates_server = 0;
+                            self.bundling_progress = 0.0;
                         }
-                    }
-                    BuildStage::InstallingTooling {} => {}
-                    BuildStage::Compiling {
-                        current,
-                        total,
-                        platform,
-                        ..
-                    } => {
-                        if *platform == Platform::Server {
-                            self.compiled_crates_server = *current;
-                            self.expected_crates_server = *total;
-                        } else {
-                            self.compiled_crates = *current;
-                            self.expected_crates = *total;
+                        BuildStage::Starting {
+                            crate_count,
+                            platform,
+                        } => {
+                            if *platform == Platform::Server {
+                                self.expected_crates_server = *crate_count;
+                            } else {
+                                self.expected_crates = *crate_count;
+                            }
                         }
+                        BuildStage::InstallingTooling {} => {}
+                        BuildStage::Compiling {
+                            current,
+                            total,
+                            platform,
+                            ..
+                        } => {
+                            if *platform == Platform::Server {
+                                self.compiled_crates_server = *current;
+                                self.expected_crates_server = *total;
+                            } else {
+                                self.compiled_crates = *current;
+                                self.expected_crates = *total;
+                            }
 
-                        if self.compile_start.is_none() {
-                            self.compile_start = Some(Instant::now());
+                            if self.compile_start.is_none() {
+                                self.compile_start = Some(Instant::now());
+                            }
                         }
-                    }
-                    BuildStage::Bundling {} => {
-                        self.complete_compile();
-                        self.bundling_progress = 0.0;
-                        self.bundle_start = Some(Instant::now());
-                    }
-                    BuildStage::OptimizingWasm {} => {}
-                    BuildStage::CopyingAssets { current, total, .. } => {
-                        self.bundling_progress = *current as f64 / *total as f64;
-                    }
-                    BuildStage::Success => {
-                        self.compiled_crates = self.expected_crates;
-                        self.compiled_crates_server = self.expected_crates_server;
-                        self.bundling_progress = 1.0;
-                    }
-                    BuildStage::Failed => {
-                        self.compiled_crates = self.expected_crates;
-                        self.compiled_crates_server = self.expected_crates_server;
-                        self.bundling_progress = 1.0;
-                    }
-                    BuildStage::Aborted => {}
-                    BuildStage::Restarting => {
-                        self.compiled_crates = 0;
-                        self.compiled_crates_server = 0;
-                        self.expected_crates = 1;
-                        self.bundling_progress = 0.0;
-                    }
-                    BuildStage::RunningBindgen {} => {
-                        self.bundling_progress = 0.5;
+                        BuildStage::Bundling {} => {
+                            self.complete_compile();
+                            self.bundling_progress = 0.0;
+                            self.bundle_start = Some(Instant::now());
+                        }
+                        BuildStage::OptimizingWasm {} => {}
+                        BuildStage::CopyingAssets { current, total, .. } => {
+                            self.bundling_progress = *current as f64 / *total as f64;
+                        }
+                        BuildStage::Success => {
+                            self.compiled_crates = self.expected_crates;
+                            self.compiled_crates_server = self.expected_crates_server;
+                            self.bundling_progress = 1.0;
+                        }
+                        BuildStage::Failed => {
+                            self.compiled_crates = self.expected_crates;
+                            self.compiled_crates_server = self.expected_crates_server;
+                            self.bundling_progress = 1.0;
+                        }
+                        BuildStage::Aborted => {}
+                        BuildStage::Restarting => {
+                            self.compiled_crates = 0;
+                            self.compiled_crates_server = 0;
+                            self.expected_crates = 1;
+                            self.bundling_progress = 0.0;
+                        }
+                        BuildStage::RunningBindgen {} => {}
                     }
                 }
             }
@@ -275,7 +273,7 @@ impl Builder {
         self.bundling_progress
     }
 
-    fn is_finished(&self) -> bool {
+    pub(crate) fn is_finished(&self) -> bool {
         match self.stage {
             BuildStage::Success => true,
             BuildStage::Failed => true,

@@ -31,7 +31,6 @@ pub enum BuildStage {
         total: usize,
         krate: String,
     },
-    Bundling {},
     RunningBindgen {},
     OptimizingWasm {},
     CopyingAssets {
@@ -39,6 +38,7 @@ pub enum BuildStage {
         total: usize,
         path: PathBuf,
     },
+    Bundling {},
     Success,
     Failed,
     Aborted,
@@ -54,6 +54,12 @@ impl BuildRequest {
     pub(crate) fn status_wasm_opt_start(&self) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::RunningBindgen {},
+        });
+    }
+
+    pub(crate) fn status_bundle_finished(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::Bundling {},
         });
     }
 

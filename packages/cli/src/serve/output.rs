@@ -329,10 +329,12 @@ impl Output {
     /// we won't be drawing it.
     pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
         match update {
-            BuildUpdate::CompilerMessage { .. } => {}
-            BuildUpdate::Progress { .. } => self.tick_animation = true,
+            BuildUpdate::Progress {
+                stage: BuildStage::Starting { .. },
+            } => self.tick_animation = true,
             BuildUpdate::BuildReady { .. } => self.tick_animation = false,
             BuildUpdate::BuildFailed { .. } => self.tick_animation = false,
+            _ => {}
         }
     }
 

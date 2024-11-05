@@ -147,7 +147,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 screen.new_build_update(&update);
 
                 // And then update the websocketed clients with the new build status in case they want it
-                devserver.new_build_update(&update).await;
+                devserver.new_build_update(&update, &builder).await;
 
                 // And then open the app if it's ready
                 // todo: there might be more things to do here that require coordination with other pieces of the CLI
