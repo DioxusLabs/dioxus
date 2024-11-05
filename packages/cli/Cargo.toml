@@ -61,6 +61,7 @@ syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mu
 
 headers = "0.4.0"
 walkdir = "2"
+walrus = { workspace = true, features = ["parallel"] }
 
 # tools download
 dirs = { workspace = true }
@@ -98,6 +99,9 @@ crossterm = { version = "0.28.0", features = ["event-stream"] }
 ansi-to-tui = "6.0"
 ansi-to-html = "0.2.1"
 ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
+
+# disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
+log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
 tempfile = "3.3"
