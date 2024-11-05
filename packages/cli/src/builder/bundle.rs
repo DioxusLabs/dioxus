@@ -653,7 +653,8 @@ impl AppBundle {
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
         let name = self.build.krate.executable_name().to_string();
-        let keep_debug = self.build.krate.config.web.wasm_opt.debug || (!self.build.build.release);
+        let keep_debug = self.build.krate.config.web.wasm_opt.debug;
+        let reference_types = self.build.krate.config.web.wasm_opt.reference_types;
 
         let start = std::time::Instant::now();
         tokio::task::spawn_blocking(move || {
@@ -664,9 +665,9 @@ impl AppBundle {
                 .debug(keep_debug)
                 .demangle(keep_debug)
                 .keep_debug(keep_debug)
-                .reference_types(true)
-                .remove_name_section(!keep_debug)
-                .remove_producers_section(!keep_debug)
+                .reference_types(reference_types)
+                .remove_name_section(true)
+                .remove_producers_section(true)
                 .out_name(&name)
                 .generate(&bindgen_outdir)
         })
