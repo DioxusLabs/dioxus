@@ -17,21 +17,6 @@ pub(crate) struct BuildArgs {
     #[serde(default)]
     pub(crate) force_sequential: bool,
 
-    /// Use verbose output [default: false]
-    #[clap(long)]
-    #[serde(default)]
-    pub(crate) verbose: bool,
-
-    /// Use trace output [default: false]
-    #[clap(long)]
-    #[serde(default)]
-    pub(crate) trace: bool,
-
-    /// Pass -Awarnings to the cargo build
-    #[clap(long)]
-    #[serde(default)]
-    pub(crate) silent: bool,
-
     /// Build the app with custom a profile
     #[clap(long)]
     pub(crate) profile: Option<String>,
@@ -73,7 +58,7 @@ pub(crate) struct BuildArgs {
 }
 
 impl BuildArgs {
-    pub async fn build_it(&mut self) -> Result<()> {
+    pub async fn build_it(mut self) -> Result<()> {
         self.build().await?;
         Ok(())
     }

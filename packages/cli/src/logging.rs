@@ -14,7 +14,7 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::{serve::ServeUpdate, Platform as TargetPlatform};
+use crate::{serve::ServeUpdate, Commands, Platform as TargetPlatform};
 use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use once_cell::sync::OnceCell;
@@ -45,6 +45,9 @@ pub fn log_path() -> PathBuf {
 static TUI_ENABLED: AtomicBool = AtomicBool::new(false);
 static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
 
+pub static VERBOSE: AtomicBool = AtomicBool::new(false);
+pub static TRACE: AtomicBool = AtomicBool::new(false);
+
 pub(crate) struct TraceController {
     pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
 }
@@ -70,24 +73,16 @@ impl TraceController {
     }
 
     /// Build tracing infrastructure.
-    pub fn initialize() {
-        let mut filter =
-            EnvFilter::new("error,dx=trace,dioxus-cli=debug,manganis-cli-support=debug");
+    pub fn initialize(args: &crate::Cli) {
+        // By default we capture ourselves at a higher tracing level
+        let mut filter = EnvFilter::new(match args.action {
+            Commands::Serve(_) => "error,dx=trace,dioxus-cli=trace,manganis-cli-support=debug",
+            _ => "error,dx=info,dioxus-cli=info,manganis-cli-support=info",
+        });
 
         if env::var(LOG_ENV).is_ok() {
             filter = EnvFilter::from_env(LOG_ENV);
         }
-
-        // Log file
-        let log_path = log_path();
-        _ = std::fs::write(&log_path, "");
-        let file_append_layer = match FileAppendLayer::new(log_path) {
-            Ok(f) => Some(f),
-            Err(e) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, err = ?e, "failed to init log file");
-                None
-            }
-        };
 
         // Build CLI layer
         let cli_layer = CLILayer;
@@ -102,6 +97,13 @@ impl TraceController {
             )
             .with_writer(Mutex::new(FmtLogWriter {}))
             .with_timer(tracing_subscriber::fmt::time::time());
+
+        // Log file
+        let file_append_layer = FileAppendLayer::new(log_path())
+            .inspect_err(
+                |e| tracing::error!(dx_src = ?TraceSrc::Dev, err = ?e, "failed to init log file"),
+            )
+            .ok();
 
         let sub = tracing_subscriber::registry()
             .with(filter)
@@ -127,6 +129,10 @@ struct FileAppendLayer {
 
 impl FileAppendLayer {
     pub fn new(file_path: PathBuf) -> io::Result<Self> {
+        if !file_path.exists() {
+            _ = std::fs::write(&file_path, "");
+        }
+
         Ok(Self {
             file_path,
             buffer: Mutex::new(String::new()),

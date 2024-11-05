@@ -112,7 +112,7 @@ impl Config {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }
             Config::LogFile {} => {
-                let log_path = crate::tracer::log_path();
+                let log_path = crate::logging::log_path();
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Log file is located at {}", log_path.display());
             }
             // Handle CLI settings.

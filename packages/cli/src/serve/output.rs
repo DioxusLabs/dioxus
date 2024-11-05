@@ -99,8 +99,8 @@ impl Output {
             more_modal_open: false,
             pending_logs: VecDeque::new(),
             throbber: RefCell::new(throbber_widgets_tui::ThrobberState::default()),
-            trace: cfg.trace,
-            verbose: cfg.verbose,
+            trace: crate::logging::TRACE.load(std::sync::atomic::Ordering::Relaxed),
+            verbose: crate::logging::VERBOSE.load(std::sync::atomic::Ordering::Relaxed),
             tick_animation: false,
             tick_interval: {
                 let mut interval = tokio::time::interval(Duration::from_millis(TICK_RATE_MS));
@@ -152,10 +152,8 @@ impl Output {
                 .execute(DisableBracketedPaste)?;
             disable_raw_mode()?;
 
-            // print a few lines to not cut off the output
-            for _ in 0..3 {
-                println!();
-            }
+            // print a line to force the cursor down (no tearing)
+            println!();
         }
 
         Ok(())
@@ -381,7 +379,7 @@ impl Output {
         let mut area = frame.area();
         area.width = area.width.clamp(0, VIEWPORT_MAX_WIDTH);
 
-        let [_top, body, bottom] = Layout::vertical([
+        let [_top, body, _bottom] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Fill(1),
             Constraint::Length(1),
@@ -391,7 +389,6 @@ impl Output {
 
         self.render_borders(frame, area);
         self.render_body(frame, body, state);
-        self.render_bottom_row(frame, bottom, state);
         self.render_body_title(frame, _top, state);
     }
 
@@ -709,23 +706,6 @@ impl Output {
                 "https://youtube.com/@DioxusLabs".blue(),
             ])),
             links_list[1],
-        );
-    }
-
-    /// Render the version number on the bottom right
-    fn render_bottom_row(&self, frame: &mut Frame, area: Rect, _state: RenderState) {
-        // Split the area into two chunks
-        let row = Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).split(area);
-
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                // "🧬 dx".dark_gray(),
-                // " ".dark_gray(),
-                // self.dx_version.as_str().dark_gray(),
-                // " ".dark_gray(),
-            ]))
-            .right_aligned(),
-            row[1],
         );
     }
 

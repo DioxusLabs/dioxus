@@ -283,11 +283,8 @@ impl BuildRequest {
             }
         }
 
-        if self.build.verbose {
-            cargo_args.push("--verbose".to_string());
-        } else {
-            cargo_args.push("--quiet".to_string());
-        }
+        // We always run in verbose since the CLI itself is the one doing the presentation
+        cargo_args.push("--verbose".to_string());
 
         if self.build.target_args.no_default_features {
             cargo_args.push("--no-default-features".to_string());

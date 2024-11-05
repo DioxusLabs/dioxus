@@ -8,19 +8,19 @@ pub(crate) struct Init {
     /// Template path
     #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
     template: String,
+
     /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
     option: Vec<String>,
+
     /// Specify a sub-template within the template repository to be used as the actual template
     #[clap(long)]
     subtemplate: Option<String>,
+
     /// Skip user interaction by using the default values for the used template.
     /// Default values can be overridden with `--option`
     #[clap(short, long)]
     yes: bool,
-    // TODO: turn on/off cargo-generate's output (now is invisible)
-    // #[clap(default_value = "false", short, long)]
-    // silent: bool,
 }
 
 impl Init {

@@ -13,6 +13,7 @@ mod dx_build_info;
 mod error;
 mod fastfs;
 mod filemap;
+mod logging;
 mod metadata;
 mod platform;
 mod profiles;
@@ -20,7 +21,6 @@ mod rustup;
 mod serve;
 mod settings;
 mod tooling;
-mod tracer;
 
 pub(crate) use builder::*;
 pub(crate) use cli::*;
@@ -28,10 +28,10 @@ pub(crate) use config::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use error::*;
 pub(crate) use filemap::*;
+pub(crate) use logging::*;
 pub(crate) use platform::*;
 pub(crate) use rustup::*;
 pub(crate) use settings::*;
-pub(crate) use tracer::*;
 
 use anyhow::Context;
 use clap::Parser;
@@ -44,10 +44,12 @@ async fn main() -> anyhow::Result<()> {
         return link_action.run();
     }
 
-    // Start the tracer so it captures logs from the build engine before we start the builder
-    TraceController::initialize();
+    let args = Cli::parse();
 
-    match Cli::parse().action {
+    // Start the tracer so it captures logs from the build engine before we start the builder
+    TraceController::initialize(&args);
+
+    match args.action {
         Translate(opts) => opts
             .translate()
             .context("⛔️ Translation of HTML into RSX failed:"),
@@ -64,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
 
         Clean(opts) => opts.clean().context("🚫 Cleaning project failed:"),
 
-        Build(mut opts) => opts.build_it().await.context("🚫 Building project failed:"),
+        Build(opts) => opts.build_it().await.context("🚫 Building project failed:"),
 
         Serve(opts) => opts.serve().await.context("🚫 Serving project failed:"),
 

@@ -38,13 +38,13 @@ pub(crate) struct Cli {
     #[clap(subcommand)]
     pub(crate) action: Commands,
 
-    /// Enable verbose logging.
-    #[clap(short)]
-    pub(crate) v: bool,
+    /// Use verbose output [default: false]
+    #[clap(long)]
+    pub(crate) verbose: bool,
 
-    /// Specify a binary target.
-    #[clap(global = true, long)]
-    pub(crate) bin: Option<String>,
+    /// Use trace output [default: false]
+    #[clap(long)]
+    pub(crate) trace: bool,
 }
 
 #[derive(Parser)]

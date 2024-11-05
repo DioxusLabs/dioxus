@@ -1,7 +1,4 @@
-use crate::{
-    BuildUpdate, Builder, DioxusCrate, Error, Platform, Result, ServeArgs, TraceController,
-    TraceSrc,
-};
+use crate::{BuildUpdate, Builder, Error, Platform, Result, ServeArgs, TraceController, TraceSrc};
 
 mod ansi_buffer;
 mod detect;
@@ -40,8 +37,12 @@ pub(crate) use watcher::*;
 /// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
+pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
+    // Redirect all logging the cli logger
     let mut tracer = TraceController::redirect();
+
+    // Load the krate and resolve the server args against it - this might log so do it after we turn on the tracer
+    let krate = args.load_krate()?;
 
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;

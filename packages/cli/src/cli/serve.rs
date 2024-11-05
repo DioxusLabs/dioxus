@@ -1,6 +1,5 @@
 use super::*;
 use crate::{AddressArguments, BuildArgs, DioxusCrate, Platform};
-use anyhow::Context;
 
 /// Serve the project
 #[derive(Clone, Debug, Default, Parser)]
@@ -47,10 +46,20 @@ pub(crate) struct ServeArgs {
 
 impl ServeArgs {
     /// Start the tui, builder, etc by resolving the arguments and then running the actual top-level serve function
-    pub(crate) async fn serve(mut self) -> Result<()> {
-        let krate = DioxusCrate::new(&self.build_arguments.target_args)
-            .context("Failed to load Dioxus workspace")?;
+    ///
+    /// Make sure not to do any intermediate logging since our tracing infra has now enabled much
+    /// higher log levels
+    pub(crate) async fn serve(self) -> Result<()> {
+        crate::serve::serve_all(self).await
+    }
 
+    pub(crate) fn load_krate(&mut self) -> Result<DioxusCrate> {
+        let krate = DioxusCrate::new(&self.build_arguments.target_args)?;
+        self.resolve(&krate)?;
+        Ok(krate)
+    }
+
+    pub(crate) fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
         // Enable hot reload.
         if self.hot_reload.is_none() {
             self.hot_reload = Some(krate.settings.always_hot_reload.unwrap_or(true));
@@ -74,7 +83,7 @@ impl ServeArgs {
         // Resolve the build arguments
         self.build_arguments.resolve(&krate)?;
 
-        crate::serve::serve_all(self, krate).await
+        Ok(())
     }
 
     pub(crate) fn should_hotreload(&self) -> bool {
