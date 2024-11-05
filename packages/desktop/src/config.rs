@@ -1,13 +1,21 @@
 use dioxus_core::LaunchConfig;
 use std::borrow::Cow;
 use std::path::PathBuf;
-use tao::event_loop::EventLoop;
+use tao::event_loop::{EventLoop, EventLoopWindowTarget};
 use tao::window::{Icon, WindowBuilder};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::RequestAsyncResponder;
 
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
+
+type CustomEventHandler = Box<
+    dyn 'static
+        + for<'a> FnMut(
+            &tao::event::Event<'a, UserWindowEvent>,
+            &EventLoopWindowTarget<UserWindowEvent>,
+        ),
+>;
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -53,6 +61,7 @@ pub struct Config {
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behavior: WindowCloseBehaviour,
+    pub(crate) custom_event_handler: Option<CustomEventHandler>,
 }
 
 impl LaunchConfig for Config {}
@@ -96,6 +105,7 @@ impl Config {
             root_name: "main".to_string(),
             background_color: None,
             last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
+            custom_event_handler: None,
         }
     }
 
@@ -145,6 +155,16 @@ impl Config {
     /// Sets the behaviour of the application when the last window is closed.
     pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
         self.last_window_close_behavior = behaviour;
+        self
+    }
+
+    /// Sets a custom callback to run whenever the event pool receives an event.
+    pub fn with_custom_event_handler(
+        mut self,
+        f: impl FnMut(&tao::event::Event<'_, UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
+            + 'static,
+    ) -> Self {
+        self.custom_event_handler = Some(Box::new(f));
         self
     }
 
