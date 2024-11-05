@@ -1,10 +1,12 @@
 use dioxus_core::LaunchConfig;
 use std::borrow::Cow;
 use std::path::PathBuf;
+use tao::event_loop::EventLoop;
 use tao::window::{Icon, WindowBuilder};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::RequestAsyncResponder;
 
+use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
 
 /// The behaviour of the application when the last window is closed.
@@ -37,6 +39,7 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 
 /// The configuration for the desktop application.
 pub struct Config {
+    pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
     pub(crate) window: WindowBuilder,
     pub(crate) menu: MenuBuilderState,
     pub(crate) protocols: Vec<WryProtocol>,
@@ -80,6 +83,7 @@ impl Config {
 
         Self {
             window,
+            event_loop: None,
             menu: MenuBuilderState::Unset,
             protocols: Vec::new(),
             asynchronous_protocols: Vec::new(),
@@ -118,6 +122,12 @@ impl Config {
     /// Set the pre-rendered HTML content
     pub fn with_prerendered(mut self, content: String) -> Self {
         self.pre_rendered = Some(content);
+        self
+    }
+
+    /// Set the event loop to be used
+    pub fn with_event_loop(mut self, event_loop: EventLoop<UserWindowEvent>) -> Self {
+        self.event_loop = Some(event_loop);
         self
     }
 

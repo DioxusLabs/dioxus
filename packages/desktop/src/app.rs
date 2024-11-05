@@ -53,8 +53,11 @@ pub(crate) struct SharedContext {
 }
 
 impl App {
-    pub fn new(cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
-        let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
+    pub fn new(mut cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
+        let event_loop = cfg
+            .event_loop
+            .take()
+            .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let app = Self {
             window_behavior: cfg.last_window_close_behavior,
