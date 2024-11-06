@@ -185,19 +185,7 @@ where
         for (path, method) in server_fn::axum::server_fn_paths() {
             tracing::trace!("Registering server function: {} {}", method, path);
             let context_providers = context_providers.clone();
-            let handler = move |req| {
-                handle_server_fns_inner(
-                    path,
-                    move |server_context| {
-                        for index in 0..context_providers.len() {
-                            let context_providers = context_providers.clone();
-                            server_context
-                                .insert_boxed_factory(Box::new(move || context_providers[index]()));
-                        }
-                    },
-                    req,
-                )
-            };
+            let handler = move |req| handle_server_fns_inner(path, context_providers, req);
             self = match method {
                 Method::GET => self.route(path, get(handler)),
                 Method::POST => self.route(path, post(handler)),
@@ -258,10 +246,18 @@ where
         Cfg: TryInto<ServeConfig, Error = Error>,
         Error: std::error::Error,
     {
-        // Add server functions and render index.html
-        let server = self.serve_static_assets().register_server_functions();
+        let cfg = cfg.try_into();
+        let context_providers = cfg
+            .as_ref()
+            .map(|cfg| cfg.context_providers.clone())
+            .unwrap_or_default();
 
-        match cfg.try_into() {
+        // Add server functions and render index.html
+        let server = self
+            .serve_static_assets()
+            .register_server_functions_with_context(context_providers);
+
+        match cfg {
             Ok(cfg) => {
                 let ssr_state = SSRState::new(&cfg);
                 server.fallback(
@@ -284,6 +280,13 @@ fn apply_request_parts_to_response<B>(
     let mut_headers = response.headers_mut();
     for (key, value) in headers.iter() {
         mut_headers.insert(key, value.clone());
+    }
+}
+
+fn add_server_context(server_context: &DioxusServerContext, context_providers: &ContextProviders) {
+    for index in 0..context_providers.len() {
+        let context_providers = context_providers.clone();
+        server_context.insert_boxed_factory(Box::new(move || context_providers[index]()));
     }
 }
 
@@ -384,7 +387,17 @@ pub async fn render_handler(
 
     let cfg = &state.config;
     let ssr_state = state.ssr_state();
-    let build_virtual_dom = state.build_virtual_dom.clone();
+    let build_virtual_dom = {
+        let build_virtual_dom = state.build_virtual_dom.clone();
+        let context_providers = state.config.context_providers.clone();
+        move || {
+            let mut vdom = build_virtual_dom();
+            for state in context_providers.as_slice() {
+                vdom.insert_any_root_context(state());
+            }
+            vdom
+        }
+    };
 
     let (parts, _) = request.into_parts();
     let url = parts
@@ -394,10 +407,13 @@ pub async fn render_handler(
         .to_string();
     let parts: Arc<parking_lot::RwLock<http::request::Parts>> =
         Arc::new(parking_lot::RwLock::new(parts));
+    // Create the server context with info from the request
     let server_context = DioxusServerContext::from_shared_parts(parts.clone());
+    // Provide additional context from the render state
+    add_server_context(&server_context, &state.config.context_providers);
 
     match ssr_state
-        .render(url, cfg, move || build_virtual_dom(), &server_context)
+        .render(url, cfg, build_virtual_dom, &server_context)
         .await
     {
         Ok((freshness, rx)) => {
@@ -424,7 +440,7 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
 /// A handler for Dioxus server functions. This will run the server function and return the result.
 async fn handle_server_fns_inner(
     path: &str,
-    additional_context: impl Fn(&DioxusServerContext) + 'static + Clone + Send,
+    additional_context: ContextProviders,
     req: Request<Body>,
 ) -> impl IntoResponse {
     use server_fn::middleware::Service;
@@ -438,8 +454,10 @@ async fn handle_server_fns_inner(
         if let Some(mut service) =
             server_fn::axum::get_server_fn_service(&path_string)
         {
+            // Create the server context with info from the request
             let server_context = DioxusServerContext::new(parts);
-            additional_context(&server_context);
+            // Provide additional context from the render state
+            add_server_context(&server_context, &additional_context);
 
             // store Accepts and Referrer in case we need them for redirect (below)
             let accepts_html = req
@@ -451,7 +469,8 @@ async fn handle_server_fns_inner(
             let referrer = req.headers().get(REFERER).cloned();
 
             // actually run the server fn (which may use the server context)
-            let mut res = ProvideServerContext::new(service.run(req), server_context.clone()).await;
+            let fut = with_server_context(server_context.clone(), || service.run(req));
+            let mut res = ProvideServerContext::new(fut, server_context.clone()).await;
 
             // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
             // Location set, then redirect to Referer
