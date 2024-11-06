@@ -1036,6 +1036,16 @@ impl IntoAttributeValue for f64 {
     }
 }
 
+impl IntoAttributeValue for i8 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for i16 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i32 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self as _)
@@ -1046,8 +1056,43 @@ impl IntoAttributeValue for i64 {
         AttributeValue::Int(self)
     }
 }
-
+impl IntoAttributeValue for isize {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i128 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+
+impl IntoAttributeValue for u8 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u16 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u64 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for usize {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u128 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self as _)
     }
