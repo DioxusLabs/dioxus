@@ -3,40 +3,6 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-mod assets;
-mod builder;
-mod bundle_utils;
-mod cli;
-mod config;
-mod dioxus_crate;
-mod dx_build_info;
-mod error;
-mod fastfs;
-mod filemap;
-mod logging;
-mod metadata;
-mod platform;
-mod profiles;
-mod rustup;
-mod serve;
-mod settings;
-mod tooling;
-
-pub(crate) use builder::*;
-pub(crate) use cli::*;
-pub(crate) use config::*;
-pub(crate) use dioxus_crate::*;
-pub(crate) use error::*;
-pub(crate) use filemap::*;
-pub(crate) use logging::*;
-pub(crate) use platform::*;
-pub(crate) use rustup::*;
-pub(crate) use settings::*;
-
-use anyhow::Context;
-use clap::Parser;
-use Commands::*;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
@@ -77,3 +43,37 @@ async fn main() -> anyhow::Result<()> {
         Doctor(opts) => opts.run().await.context("🚫 Checking project failed:"),
     }
 }
+
+mod assets;
+mod builder;
+mod bundle_utils;
+mod cli;
+mod config;
+mod dioxus_crate;
+mod dx_build_info;
+mod error;
+mod fastfs;
+mod filemap;
+mod logging;
+mod metadata;
+mod platform;
+mod profiles;
+mod rustup;
+mod serve;
+mod settings;
+mod tooling;
+
+pub(crate) use builder::*;
+pub(crate) use cli::*;
+pub(crate) use config::*;
+pub(crate) use dioxus_crate::*;
+pub(crate) use error::*;
+pub(crate) use filemap::*;
+pub(crate) use logging::*;
+pub(crate) use platform::*;
+pub(crate) use rustup::*;
+pub(crate) use settings::*;
+
+use anyhow::Context;
+use clap::Parser;
+use Commands::*;

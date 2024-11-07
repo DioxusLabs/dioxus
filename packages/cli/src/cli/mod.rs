@@ -35,19 +35,19 @@ use std::{
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
 pub(crate) struct Cli {
-    #[clap(subcommand)]
-    pub(crate) action: Commands,
-
     /// Use verbose output [default: false]
-    #[clap(long)]
+    #[clap(long, global = true)]
     pub(crate) verbose: bool,
 
     /// Use trace output [default: false]
-    #[clap(long)]
+    #[clap(long, global = true)]
     pub(crate) trace: bool,
+
+    #[command(subcommand)]
+    pub(crate) action: Commands,
 }
 
-#[derive(Parser)]
+#[derive(Subcommand)]
 pub(crate) enum Commands {
     /// Build the Dioxus project and all of its assets.
     Build(build::BuildArgs),

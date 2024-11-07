@@ -30,7 +30,6 @@ uuid = { version = "1.3.0", features = ["v4"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
-fs_extra = "1.2.0"
 cargo_toml = { workspace = true }
 futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { workspace = true, features = ["serde"] }
@@ -71,9 +70,6 @@ reqwest = { workspace = true, features = [
     "trust-dns",
     "blocking",
 ] }
-flate2 = "1.0.22"
-tar = "0.4.38"
-zip = "0.6.2"
 tower = { workspace = true }
 once_cell = "1.19.0"
 

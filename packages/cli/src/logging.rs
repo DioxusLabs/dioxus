@@ -74,7 +74,8 @@ impl TraceController {
 
     /// Build tracing infrastructure.
     pub fn initialize(args: &crate::Cli) {
-        // By default we capture ourselves at a higher tracing level
+        // By default we capture ourselves at a higher tracing level when serving
+        // This ensures we're tracing ourselves even if we end up tossing the logs
         let mut filter = EnvFilter::new(match args.action {
             Commands::Serve(_) => "error,dx=trace,dioxus-cli=trace,manganis-cli-support=debug",
             _ => "error,dx=info,dioxus-cli=info,manganis-cli-support=info",
@@ -89,14 +90,15 @@ impl TraceController {
 
         // Build fmt layer
         let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_target(args.verbose)
             .fmt_fields(
                 format::debug_fn(|writer, field, value| {
                     write!(writer, "{}", format_field(field.name(), value))
                 })
                 .delimited(" "),
             )
-            .with_writer(Mutex::new(FmtLogWriter {}))
-            .with_timer(tracing_subscriber::fmt::time::time());
+            .with_timer(tracing_subscriber::fmt::time::uptime())
+            .with_writer(Mutex::new(FmtLogWriter {}));
 
         // Log file
         let file_append_layer = FileAppendLayer::new(log_path())

@@ -432,7 +432,7 @@ dependencies = [
  "base64ct",
  "blake2",
  "cpufeatures",
- "password-hash 0.5.0",
+ "password-hash",
 ]
 
 [[package]]
@@ -558,8 +558,8 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
- "zstd 0.13.2",
- "zstd-safe 7.2.1",
+ "zstd",
+ "zstd-safe",
 ]
 
 [[package]]
@@ -2468,12 +2468,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "013b6c2c3a14d678f38cd23994b02da3a1a1b6a5d1eedddfe63a5a5f11b13a81"
 
 [[package]]
-name = "constant_time_eq"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
-
-[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3243,8 +3237,6 @@ dependencies = [
  "dioxus-rsx-rosetta",
  "dirs",
  "env_logger 0.11.5",
- "flate2",
- "fs_extra",
  "futures-channel",
  "futures-util",
  "handlebars",
@@ -3273,7 +3265,6 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "syn 2.0.86",
- "tar",
  "tauri-bundler",
  "tauri-utils",
  "tempfile",
@@ -3295,7 +3286,6 @@ dependencies = [
  "wasm-bindgen-cli-support",
  "wasm-bindgen-shared",
  "wasm-opt",
- "zip 0.6.6",
 ]
 
 [[package]]
@@ -8060,17 +8050,6 @@ dependencies = [
 
 [[package]]
 name = "password-hash"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7676374caaee8a325c9e7a2ae557f216c5563a171d6997b0ef8a65af35147700"
-dependencies = [
- "base64ct",
- "rand_core 0.6.4",
- "subtle",
-]
-
-[[package]]
-name = "password-hash"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "346f04948ba92c43e8469c1ee6736c7563d71012b17d40745260fe106aac2166"
@@ -8109,18 +8088,6 @@ name = "pathdiff"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d61c5ce1153ab5b689d0c074c4e7fc613e942dfb7dd9eea5ab202d2ad91fe361"
-
-[[package]]
-name = "pbkdf2"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83a0692ec44e4cf1ef28ca317f14f8f07da2d95ec3fa01f86e4467b725e60917"
-dependencies = [
- "digest",
- "hmac",
- "password-hash 0.4.2",
- "sha2",
-]
 
 [[package]]
 name = "pear"
@@ -9500,7 +9467,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "xz2",
- "zstd 0.13.2",
+ "zstd",
 ]
 
 [[package]]
@@ -13407,18 +13374,10 @@ version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "760394e246e4c28189f19d488c058bf16f564016aefac5d32bb1f3b51d5e9261"
 dependencies = [
- "aes",
  "byteorder",
- "bzip2",
- "constant_time_eq",
  "crc32fast",
  "crossbeam-utils",
  "flate2",
- "hmac",
- "pbkdf2",
- "sha1",
- "time",
- "zstd 0.11.2+zstd.1.5.2",
 ]
 
 [[package]]
@@ -13465,30 +13424,11 @@ dependencies = [
 
 [[package]]
 name = "zstd"
-version = "0.11.2+zstd.1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20cc960326ece64f010d2d2107537f26dc589a6573a316bd5b1dba685fa5fde4"
-dependencies = [
- "zstd-safe 5.0.2+zstd.1.5.2",
-]
-
-[[package]]
-name = "zstd"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcf2b778a664581e31e389454a7072dab1647606d44f7feea22cd5abb9c9f3f9"
 dependencies = [
- "zstd-safe 7.2.1",
-]
-
-[[package]]
-name = "zstd-safe"
-version = "5.0.2+zstd.1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d2a5585e04f9eea4b2a3d1eca508c4dee9592a89ef6f450c11719da0726f4db"
-dependencies = [
- "libc",
- "zstd-sys",
+ "zstd-safe",
 ]
 
 [[package]]
