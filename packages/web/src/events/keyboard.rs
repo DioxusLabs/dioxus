@@ -61,7 +61,6 @@ impl WebEventExt for dioxus_html::KeyboardData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::KeyboardEvent> {
-        self.downcast::<Synthetic<web_sys::KeyboardEvent>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::KeyboardEvent>().cloned()
     }
 }
