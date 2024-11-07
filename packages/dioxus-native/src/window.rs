@@ -3,7 +3,8 @@ use crate::waker::{create_waker, BlitzEvent, BlitzWindowEvent};
 use crate::{stylo_to_winit, Callback};
 use blitz_dom::events::{EventData, RendererEvent};
 use blitz_dom::{DocumentLike, Viewport};
-use blitz_renderer_vello::{Devtools, Renderer};
+use blitz_renderer_vello::Renderer;
+use blitz_traits::Devtools;
 use winit::keyboard::PhysicalKey;
 
 use std::sync::Arc;
