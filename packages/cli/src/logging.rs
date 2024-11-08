@@ -74,11 +74,17 @@ impl TraceController {
 
     /// Build tracing infrastructure.
     pub fn initialize(args: &crate::Cli) {
+        let our_level = if args.verbose { "debug" } else { "info" };
+
         // By default we capture ourselves at a higher tracing level when serving
         // This ensures we're tracing ourselves even if we end up tossing the logs
         let mut filter = EnvFilter::new(match args.action {
-            Commands::Serve(_) => "error,dx=trace,dioxus-cli=trace,manganis-cli-support=debug",
-            _ => "error,dx=info,dioxus-cli=info,manganis-cli-support=info",
+            Commands::Serve(_) => {
+                "error,dx=trace,dioxus-cli=trace,manganis-cli-support=debug".to_string()
+            }
+            _ => format!(
+                "error,dx={our_level},dioxus-cli={our_level},manganis-cli-support={our_level}"
+            ),
         });
 
         if env::var(LOG_ENV).is_ok() {

@@ -3,9 +3,8 @@ use crate::DioxusCrate;
 use crate::{build::BuildArgs, PackageType};
 use anyhow::Context;
 use itertools::Itertools;
-use std::env::current_dir;
-use std::str::FromStr;
-use tauri_bundler::{PackageSettings, SettingsBuilder};
+use std::{collections::HashMap, str::FromStr};
+use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
 
 use super::*;
 
@@ -37,7 +36,9 @@ impl Bundle {
             .finish()
             .await?;
 
-        tracing::debug!("Copying app to output directory...");
+        tracing::info!("Copying app to output directory...");
+
+        _ = std::fs::remove_dir_all(krate.bundle_dir(self.build_arguments.platform()));
 
         let package = krate.package();
         let mut name: PathBuf = krate.executable_name().into();
@@ -45,14 +46,22 @@ impl Bundle {
             name.set_extension("exe");
         }
 
-        // bundle the app
+        // Make sure we copy the exe to the bundle dir so the bundler can find it
+        std::fs::create_dir_all(krate.bundle_dir(self.build_arguments.platform()))?;
+        std::fs::copy(
+            &bundle.app.exe,
+            krate
+                .bundle_dir(self.build_arguments.platform())
+                .join(krate.executable_name()),
+        )?;
+
         let binaries = vec![
-            tauri_bundler::BundleBinary::new(name.display().to_string(), true)
-                .set_src_path(Some(krate.workspace_dir().display().to_string())),
+            // We use the name of the exe but it has to be in the same directory
+            BundleBinary::new(name.display().to_string(), true)
+                .set_src_path(Some(bundle.app.exe.display().to_string())),
         ];
 
-        let bundle_config = krate.config.bundle.clone();
-        let mut bundle_settings: tauri_bundler::BundleSettings = bundle_config.into();
+        let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
 
         if cfg!(windows) {
             let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
@@ -68,40 +77,29 @@ impl Bundle {
             }
         }
 
-        // Don't copy the executable or the old bundle directory
-        let ignored_files = [krate
-            .bundle_dir(self.build_arguments.platform())
-            .join("bundle")];
+        if bundle_settings.resources_map.is_none() {
+            bundle_settings.resources_map = Some(HashMap::new());
+        }
 
         for entry in std::fs::read_dir(bundle.asset_dir())?.flatten() {
-            let path = entry.path().canonicalize()?;
-            if ignored_files.iter().any(|f| path.starts_with(f)) {
-                continue;
-            }
+            let old = entry.path().canonicalize()?;
+            let new = PathBuf::from("assets").join(old.file_name().unwrap());
 
-            // Tauri bundle will add a __root__ prefix if the input path is absolute even though the output path is relative?
-            // We strip the prefix here to make sure the input path is relative so that the bundler puts the output path in the right place
-            let path = path
-                .strip_prefix(&current_dir()?)
-                .unwrap()
-                .display()
-                .to_string();
-
-            if let Some(resources) = &mut bundle_settings.resources_map {
-                resources.insert(path, "".to_string());
-            } else {
-                bundle_settings.resources_map = Some([(path, "".to_string())].into());
-            }
+            bundle_settings
+                .resources_map
+                .as_mut()
+                .expect("to be set")
+                .insert(old.display().to_string(), new.display().to_string());
         }
 
         // Drain any resources set in the config into the resources map. Tauri bundle doesn't let
         // you set both resources and resources_map https://github.com/DioxusLabs/dioxus/issues/2941
         for resource_path in bundle_settings.resources.take().into_iter().flatten() {
-            if let Some(resources) = &mut bundle_settings.resources_map {
-                resources.insert(resource_path, "".to_string());
-            } else {
-                bundle_settings.resources_map = Some([(resource_path, "".to_string())].into());
-            }
+            bundle_settings
+                .resources_map
+                .as_mut()
+                .expect("to be set")
+                .insert(resource_path, "".to_string());
         }
 
         let mut settings = SettingsBuilder::new()
@@ -114,6 +112,7 @@ impl Bundle {
                 authors: Some(package.authors.clone()),
                 default_run: Some(krate.executable_name().to_string()),
             })
+            .log_level(log::Level::Debug)
             .binaries(binaries)
             .bundle_settings(bundle_settings);
 
@@ -127,7 +126,7 @@ impl Bundle {
 
         let settings = settings.build()?;
 
-        tracing::info!("Bundling project with settings: {:#?}", settings);
+        tracing::debug!("Bundling project with settings: {:#?}", settings);
 
         // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
         if cfg!(target_os = "macos") {
