@@ -23,6 +23,7 @@ pub enum StructuredOutput {
     BuildUpdate { stage: BuildStage },
     CargoOutput { message: CompilerMessage },
     BundleOutput { bundles: Vec<PathBuf> },
+    HtmlTranslate { html: String },
     Success,
     Error { message: String },
 }

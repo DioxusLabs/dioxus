@@ -33,15 +33,18 @@ impl Translate {
         let dom = html_parser::Dom::parse(&contents)?;
 
         // Convert the HTML to RSX
-        let out = convert_html_to_formatted_rsx(&dom, self.component);
+        let html = convert_html_to_formatted_rsx(&dom, self.component);
 
         // Write the output
+        // todo(jon): we should probably use tracing out a different output format
+        // right now we're just printing to stdout since some tools rely on that, but likely we don't want that
+        // instead we should be printing as json (or maybe even a different format) if we're not interactive
         match self.output {
-            Some(output) => std::fs::write(output, out)?,
-            None => print!("{}", out),
+            Some(output) => std::fs::write(output, &html)?,
+            None => print!("{}", html),
         }
 
-        Ok(StructuredOutput::Success)
+        Ok(StructuredOutput::HtmlTranslate { html })
     }
 }
 

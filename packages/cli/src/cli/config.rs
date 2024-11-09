@@ -98,7 +98,7 @@ impl Config {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Init config file completed.");
             }
             Config::FormatPrint {} => {
-                println!(
+                tracing::info!(
                     "{:#?}",
                     crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())?.config
                 );

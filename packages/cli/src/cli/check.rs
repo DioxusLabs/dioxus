@@ -1,5 +1,6 @@
 use super::*;
 use crate::DioxusCrate;
+use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::Path, process::exit};
 
@@ -25,16 +26,14 @@ impl Check {
             // Default to checking the project
             None => {
                 let dioxus_crate = DioxusCrate::new(&self.target_args)?;
-                if let Err(e) = check_project_and_report(dioxus_crate).await {
-                    eprintln!("error checking project: {}", e);
-                    exit(1);
-                }
+                check_project_and_report(dioxus_crate)
+                    .await
+                    .context("error checking project")?;
             }
             Some(file) => {
-                if let Err(e) = check_file_and_report(file).await {
-                    eprintln!("failed to check file: {}", e);
-                    exit(1);
-                }
+                check_file_and_report(file)
+                    .await
+                    .context("error checking file")?;
             }
         }
 
