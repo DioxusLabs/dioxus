@@ -99,8 +99,8 @@ impl Output {
             more_modal_open: false,
             pending_logs: VecDeque::new(),
             throbber: RefCell::new(throbber_widgets_tui::ThrobberState::default()),
-            trace: crate::logging::TRACE.load(std::sync::atomic::Ordering::Relaxed),
-            verbose: crate::logging::VERBOSE.load(std::sync::atomic::Ordering::Relaxed),
+            trace: crate::logging::VERBOSITY.get().unwrap().trace,
+            verbose: crate::logging::VERBOSITY.get().unwrap().verbose,
             tick_animation: false,
             tick_interval: {
                 let mut interval = tokio::time::interval(Duration::from_millis(TICK_RATE_MS));

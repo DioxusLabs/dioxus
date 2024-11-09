@@ -9,7 +9,7 @@ pub(crate) struct Clean {}
 
 impl Clean {
     /// todo(jon): we should add a config option that just wipes target/dx and target/dioxus-client instead of doing a full clean
-    pub(crate) fn clean(self) -> anyhow::Result<()> {
+    pub(crate) fn clean(self) -> anyhow::Result<StructuredOutput> {
         let output = Command::new("cargo")
             .arg("clean")
             .stdout(Stdio::piped())
@@ -20,6 +20,6 @@ impl Clean {
             return Err(anyhow::anyhow!("Cargo clean failed."));
         }
 
-        Ok(())
+        Ok(StructuredOutput::GenericSuccess)
     }
 }

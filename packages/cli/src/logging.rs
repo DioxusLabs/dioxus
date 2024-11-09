@@ -14,8 +14,9 @@
 //! 3. Build CLI layer for routing tracing logs to the TUI.
 //! 4. Build fmt layer for non-interactive logging with a custom writer that prevents output during interactive mode.
 
-use crate::{serve::ServeUpdate, Commands, Platform as TargetPlatform};
+use crate::{serve::ServeUpdate, Cli, Commands, Platform as TargetPlatform, Verbosity};
 use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
+use clap::Parser;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use once_cell::sync::OnceCell;
 use std::{
@@ -23,12 +24,8 @@ use std::{
     env,
     fmt::{Debug, Display, Write as _},
     fs,
-    io::{self, Write},
     path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Mutex,
-    },
+    sync::Mutex,
 };
 use tracing::{field::Visit, Level, Subscriber};
 use tracing_subscriber::{fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer};
@@ -37,26 +34,76 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
 
-pub fn log_path() -> PathBuf {
-    let tmp_dir = std::env::temp_dir();
-    tmp_dir.join(LOG_FILE_NAME)
-}
-
-static TUI_ENABLED: AtomicBool = AtomicBool::new(false);
 static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
-
-pub static VERBOSE: AtomicBool = AtomicBool::new(false);
-pub static TRACE: AtomicBool = AtomicBool::new(false);
+pub static VERBOSITY: OnceCell<Verbosity> = OnceCell::new();
 
 pub(crate) struct TraceController {
     pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
 }
 
 impl TraceController {
+    /// Initialize the CLI and set up the tracing infrastructure
+    pub fn initialize() -> Cli {
+        let args = Cli::parse();
+
+        VERBOSITY
+            .set(args.verbosity.clone())
+            .expect("verbosity should only be set once");
+
+        // When running in interactive mode (of which serve is the only one), we want to do things slightly differently
+        // This involves no fmt layer or file logging
+        if matches!(args.action, Commands::Serve(_)) {
+            Self::initialize_for_serve();
+            return args;
+        }
+
+        // By default we capture ourselves at a higher tracing level when serving
+        // This ensures we're tracing ourselves even if we end up tossing the logs
+        let filter = if env::var(LOG_ENV).is_ok() {
+            EnvFilter::from_env(LOG_ENV)
+        } else {
+            EnvFilter::new(format!(
+                "error,dx={our_level},dioxus-cli={our_level},manganis-cli-support={our_level}",
+                our_level = if args.verbosity.verbose {
+                    "debug"
+                } else {
+                    "info"
+                }
+            ))
+        };
+
+        let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_target(args.verbosity.verbose)
+            .fmt_fields(
+                format::debug_fn(|writer, field, value| {
+                    write!(writer, "{}", format_field(field.name(), value))
+                })
+                .delimited(" "),
+            )
+            .with_timer(tracing_subscriber::fmt::time::uptime());
+
+        let fmt_layer = if args.verbosity.json_output {
+            fmt_layer.json().flatten_event(true).boxed()
+        } else {
+            fmt_layer.boxed()
+        };
+
+        let sub = tracing_subscriber::registry()
+            .with(filter)
+            .with(FileAppendLayer::new())
+            .with(fmt_layer);
+
+        #[cfg(feature = "tokio-console")]
+        let sub = sub.with(console_subscriber::spawn());
+
+        sub.init();
+
+        args
+    }
+
     /// Get a handle to the trace controller.
     pub fn redirect() -> Self {
         let (tui_tx, tui_rx) = unbounded();
-        TUI_ENABLED.store(true, Ordering::SeqCst);
         TUI_TX.set(tui_tx.clone()).unwrap();
         Self { tui_rx }
     }
@@ -68,61 +115,13 @@ impl TraceController {
         ServeUpdate::TracingLog { log }
     }
 
-    pub(crate) fn shutdown(&self) {
-        TUI_ENABLED.store(false, Ordering::SeqCst);
-    }
+    fn initialize_for_serve() {
+        let filter = EnvFilter::new("error,dx=trace,dioxus-cli=trace,manganis-cli-support=trace");
 
-    /// Build tracing infrastructure.
-    pub fn initialize(args: &crate::Cli) {
-        let our_level = if args.verbose { "debug" } else { "info" };
-
-        // By default we capture ourselves at a higher tracing level when serving
-        // This ensures we're tracing ourselves even if we end up tossing the logs
-        let mut filter = EnvFilter::new(match args.action {
-            Commands::Serve(_) => {
-                "error,dx=trace,dioxus-cli=trace,manganis-cli-support=debug".to_string()
-            }
-            _ => format!(
-                "error,dx={our_level},dioxus-cli={our_level},manganis-cli-support={our_level}"
-            ),
-        });
-
-        if env::var(LOG_ENV).is_ok() {
-            filter = EnvFilter::from_env(LOG_ENV);
-        }
-
-        // Build CLI layer
-        let cli_layer = CLILayer;
-
-        // Build fmt layer
-        let fmt_layer = tracing_subscriber::fmt::layer()
-            .with_target(args.verbose)
-            .fmt_fields(
-                format::debug_fn(|writer, field, value| {
-                    write!(writer, "{}", format_field(field.name(), value))
-                })
-                .delimited(" "),
-            )
-            .with_timer(tracing_subscriber::fmt::time::uptime())
-            .with_writer(Mutex::new(FmtLogWriter {}));
-
-        // Log file
-        let file_append_layer = FileAppendLayer::new(log_path())
-            .inspect_err(
-                |e| tracing::error!(dx_src = ?TraceSrc::Dev, err = ?e, "failed to init log file"),
-            )
-            .ok();
-
-        let sub = tracing_subscriber::registry()
+        tracing_subscriber::registry()
             .with(filter)
-            .with(file_append_layer)
-            .with(cli_layer)
-            .with(fmt_layer);
-
-        #[cfg(feature = "tokio-console")]
-        let sub = sub.with(console_subscriber::spawn());
-
-        sub.init();
+            .with(CLILayer {})
+            .init();
     }
 }
 
@@ -130,21 +129,27 @@ impl TraceController {
 ///
 /// This layer returns on any error allowing the cli to continue work
 /// despite failing to log to a file. This helps in case of permission errors and similar.
-struct FileAppendLayer {
+pub(crate) struct FileAppendLayer {
     file_path: PathBuf,
     buffer: Mutex<String>,
 }
 
 impl FileAppendLayer {
-    pub fn new(file_path: PathBuf) -> io::Result<Self> {
+    fn new() -> Self {
+        let file_path = Self::log_path();
+
         if !file_path.exists() {
             _ = std::fs::write(&file_path, "");
         }
 
-        Ok(Self {
+        Self {
             file_path,
             buffer: Mutex::new(String::new()),
-        })
+        }
+    }
+
+    pub(crate) fn log_path() -> PathBuf {
+        std::env::temp_dir().join(LOG_FILE_NAME)
     }
 }
 
@@ -208,15 +213,6 @@ where
         let mut visitor = CollectVisitor::new();
         event.record(&mut visitor);
 
-        // If the TUI output is disabled we let fmt subscriber handle the logs
-        // EXCEPT for cargo logs which we just print.
-        if !TUI_ENABLED.load(Ordering::SeqCst) {
-            if visitor.source == TraceSrc::Cargo {
-                println!("{}", visitor.message);
-            }
-            return;
-        }
-
         let meta = event.metadata();
         let level = meta.level();
 
@@ -237,8 +233,6 @@ where
             .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg))
             .unwrap();
     }
-
-    // TODO: support spans? structured tui log display?
 }
 
 /// A record visitor that collects dx-specific info and user-provided fields for logging consumption.
@@ -277,26 +271,6 @@ impl Visit for CollectVisitor {
         }
 
         self.fields.insert(name.to_string(), value_string);
-    }
-}
-
-struct FmtLogWriter {}
-
-impl Write for FmtLogWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        if !TUI_ENABLED.load(Ordering::SeqCst) {
-            return std::io::stdout().write(buf);
-        }
-
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        if !TUI_ENABLED.load(Ordering::SeqCst) {
-            std::io::stdout().flush()?;
-        }
-
-        Ok(())
     }
 }
 

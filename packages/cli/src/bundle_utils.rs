@@ -156,6 +156,7 @@ impl From<PackageType> for tauri_bundler::PackageType {
             PackageType::AppImage => Self::AppImage,
             PackageType::Dmg => Self::Dmg,
             PackageType::Updater => Self::Updater,
+            PackageType::Nsis => Self::Nsis,
         }
     }
 }

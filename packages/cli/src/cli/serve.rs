@@ -49,8 +49,10 @@ impl ServeArgs {
     ///
     /// Make sure not to do any intermediate logging since our tracing infra has now enabled much
     /// higher log levels
-    pub(crate) async fn serve(self) -> Result<()> {
-        crate::serve::serve_all(self).await
+    pub(crate) async fn serve(self) -> Result<StructuredOutput> {
+        _ = crate::serve::serve_all(self).await?;
+
+        Ok(StructuredOutput::GenericSuccess)
     }
 
     pub(crate) fn load_krate(&mut self) -> Result<DioxusCrate> {

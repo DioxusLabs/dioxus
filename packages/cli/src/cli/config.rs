@@ -76,7 +76,7 @@ impl From<BoolValue> for bool {
 }
 
 impl Config {
-    pub(crate) fn config(self) -> Result<()> {
+    pub(crate) fn config(self) -> Result<StructuredOutput> {
         let crate_root = crate_root()?;
         match self {
             Config::Init {
@@ -89,7 +89,7 @@ impl Config {
                     tracing::warn!(
                         "config file `Dioxus.toml` already exist, use `--force` to overwrite it."
                     );
-                    return Ok(());
+                    return Ok(StructuredOutput::GenericSuccess);
                 }
                 let mut file = File::create(conf_path)?;
                 let content = String::from(include_str!("../../assets/dioxus.toml"))
@@ -112,7 +112,7 @@ impl Config {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }
             Config::LogFile {} => {
-                let log_path = crate::logging::log_path();
+                let log_path = crate::logging::FileAppendLayer::log_path();
                 tracing::info!(dx_src = ?TraceSrc::Dev, "Log file is located at {}", log_path.display());
             }
             // Handle CLI settings.
@@ -132,6 +132,7 @@ impl Config {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");
             }
         }
-        Ok(())
+
+        Ok(StructuredOutput::GenericSuccess)
     }
 }

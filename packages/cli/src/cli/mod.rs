@@ -12,12 +12,14 @@ pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
 pub(crate) mod translate;
+pub(crate) mod verbosity;
 
 pub(crate) use build::*;
 pub(crate) use serve::*;
 pub(crate) use target::*;
+pub(crate) use verbosity::*;
 
-use crate::{error::Result, Error};
+use crate::{error::Result, Error, StructuredOutput};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
@@ -35,16 +37,11 @@ use std::{
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
 pub(crate) struct Cli {
-    /// Use verbose output [default: false]
-    #[clap(long, global = true)]
-    pub(crate) verbose: bool,
-
-    /// Use trace output [default: false]
-    #[clap(long, global = true)]
-    pub(crate) trace: bool,
-
     #[command(subcommand)]
     pub(crate) action: Commands,
+
+    #[command(flatten)]
+    pub(crate) verbosity: Verbosity,
 }
 
 #[derive(Subcommand)]

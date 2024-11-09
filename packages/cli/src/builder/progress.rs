@@ -51,17 +51,6 @@ impl BuildRequest {
             stage: BuildStage::RunningBindgen {},
         });
     }
-    pub(crate) fn status_wasm_opt_start(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
-            stage: BuildStage::RunningBindgen {},
-        });
-    }
-
-    pub(crate) fn status_bundle_finished(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
-            stage: BuildStage::Bundling {},
-        });
-    }
 
     pub(crate) fn status_start_bundle(&self) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {

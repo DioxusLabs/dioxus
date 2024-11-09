@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Result, TraceSrc};
+use crate::{Result, StructuredOutput, TraceSrc};
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
 use std::{io::IsTerminal as _, process::exit};
 
@@ -26,7 +26,7 @@ pub(crate) struct Translate {
 }
 
 impl Translate {
-    pub(crate) fn translate(self) -> Result<()> {
+    pub(crate) fn translate(self) -> Result<StructuredOutput> {
         // Get the right input for the translation
         let contents = determine_input(self.file, self.raw)?;
 
@@ -42,7 +42,7 @@ impl Translate {
             None => print!("{}", out),
         }
 
-        Ok(())
+        Ok(StructuredOutput::GenericSuccess)
     }
 }
 

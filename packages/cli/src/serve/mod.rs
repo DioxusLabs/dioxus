@@ -249,7 +249,6 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
     builder.abort_all();
-    tracer.shutdown();
 
     if let Err(err) = err {
         eprintln!("Exiting with error: {}", err);

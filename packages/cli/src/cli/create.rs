@@ -39,7 +39,7 @@ pub(crate) struct Create {
 }
 
 impl Create {
-    pub(crate) fn create(mut self) -> Result<()> {
+    pub(crate) fn create(mut self) -> Result<StructuredOutput> {
         let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
 
         // If we're getting pass a `.` name, that's actually a path
@@ -106,7 +106,9 @@ impl Create {
         .expect("ctrlc::set_handler");
         let path = cargo_generate::generate(args)?;
 
-        post_create(&path, metadata)
+        post_create(&path, metadata)?;
+
+        Ok(StructuredOutput::GenericSuccess)
     }
 }
 

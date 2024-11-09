@@ -94,21 +94,21 @@ impl BuildRequest {
     /// should be installing the x86 versions.
     pub(crate) async fn verify_ios_tooling(&self, _rustup: RustupShow) -> Result<()> {
         // open the simulator
-        _ = tokio::process::Command::new("open")
-            .arg("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app")
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .status()
-            .await;
+        // _ = tokio::process::Command::new("open")
+        //     .arg("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app")
+        //     .stderr(Stdio::piped())
+        //     .stdout(Stdio::piped())
+        //     .status()
+        //     .await;
 
         // Now xcrun to open the device
         // todo: we should try and query the device list and/or parse it rather than hardcode this simulator
-        _ = tokio::process::Command::new("xcrun")
-            .args(["simctl", "boot", "83AE3067-987F-4F85-AE3D-7079EF48C967"])
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .status()
-            .await;
+        // _ = tokio::process::Command::new("xcrun")
+        //     .args(["simctl", "boot", "83AE3067-987F-4F85-AE3D-7079EF48C967"])
+        //     .stderr(Stdio::piped())
+        //     .stdout(Stdio::piped())
+        //     .status()
+        //     .await;
 
         // if !rustup
         //     .installed_toolchains

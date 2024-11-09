@@ -37,7 +37,7 @@ pub(crate) struct Autoformat {
 }
 
 impl Autoformat {
-    pub(crate) fn autoformat(self) -> Result<()> {
+    pub(crate) fn autoformat(self) -> Result<StructuredOutput> {
         let Autoformat {
             check,
             raw,
@@ -88,7 +88,7 @@ impl Autoformat {
             }
         }
 
-        Ok(())
+        Ok(StructuredOutput::GenericSuccess)
     }
 }
 

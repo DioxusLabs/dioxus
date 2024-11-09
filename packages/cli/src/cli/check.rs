@@ -20,7 +20,7 @@ pub(crate) struct Check {
 
 impl Check {
     // Todo: check the entire crate
-    pub(crate) async fn check(self) -> Result<()> {
+    pub(crate) async fn check(self) -> Result<StructuredOutput> {
         match self.file {
             // Default to checking the project
             None => {
@@ -38,7 +38,7 @@ impl Check {
             }
         }
 
-        Ok(())
+        Ok(StructuredOutput::GenericSuccess)
     }
 }
 

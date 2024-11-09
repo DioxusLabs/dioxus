@@ -24,7 +24,7 @@ pub(crate) struct Init {
 }
 
 impl Init {
-    pub(crate) fn init(self) -> Result<()> {
+    pub(crate) fn init(self) -> Result<StructuredOutput> {
         let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
 
         // Get directory name.
@@ -57,6 +57,8 @@ impl Init {
             ..Default::default()
         };
         let path = cargo_generate::generate(args)?;
-        create::post_create(&path, metadata)
+        create::post_create(&path, metadata)?;
+
+        Ok(StructuredOutput::GenericSuccess)
     }
 }

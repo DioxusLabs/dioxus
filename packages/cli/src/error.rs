@@ -33,6 +33,9 @@ pub(crate) enum Error {
     #[error("Failed to bundle project: {0}")]
     BundleFailed(#[from] tauri_bundler::Error),
 
+    #[error("Unsupported feature: {0}")]
+    UnsupportedFeature(String),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

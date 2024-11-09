@@ -88,7 +88,6 @@ impl BuildRequest {
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
             .args(self.build_arguments());
-        // .env("RUSTFLAGS", self.rust_flags());
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             cmd.env("CARGO_TARGET_DIR", target_dir);

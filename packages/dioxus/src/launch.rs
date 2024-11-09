@@ -16,6 +16,7 @@ pub struct LaunchBuilder {
 }
 
 pub type LaunchFn = fn(fn() -> Element, Vec<ContextFn>, Vec<Box<dyn Any>>);
+
 /// A context function is a Send and Sync closure that returns a boxed trait object
 pub type ContextFn = Box<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>;
 

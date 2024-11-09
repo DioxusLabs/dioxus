@@ -1,5 +1,5 @@
 use super::*;
-use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate};
+use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate, Result};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -10,7 +10,7 @@ pub(crate) struct RunArgs {
 }
 
 impl RunArgs {
-    pub(crate) async fn run(mut self) -> anyhow::Result<()> {
+    pub(crate) async fn run(mut self) -> Result<StructuredOutput> {
         let krate = DioxusCrate::new(&self.build_args.target_args)
             .context("Failed to load Dioxus workspace")?;
 
@@ -55,6 +55,6 @@ impl RunArgs {
             }
         }
 
-        Ok(())
+        Ok(StructuredOutput::GenericSuccess)
     }
 }
