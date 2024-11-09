@@ -98,6 +98,15 @@ impl<Doc: DocumentLike> ApplicationHandler<BlitzEvent> for Application<Doc> {
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: BlitzEvent) {
+        // Suppress unused variable warning
+        #[cfg(not(all(
+            feature = "hot-reload",
+            debug_assertions,
+            not(target_os = "android"),
+            not(target_os = "ios")
+        )))]
+        let _ = event_loop;
+
         match event {
             BlitzEvent::Window { data, window_id } => {
                 if let Some(view) = self.windows.get_mut(&window_id) {
