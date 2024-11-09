@@ -5,7 +5,6 @@ use std::{io::IsTerminal as _, process::exit};
 
 /// Translate some source file into Dioxus code
 #[derive(Clone, Debug, Parser)]
-#[clap(name = "translate")]
 pub(crate) struct Translate {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name

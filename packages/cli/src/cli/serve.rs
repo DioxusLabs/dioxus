@@ -4,7 +4,6 @@ use crate::{AddressArguments, BuildArgs, DioxusCrate, Platform};
 /// Serve the project
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
-#[clap(name = "serve")]
 pub(crate) struct ServeArgs {
     /// The arguments for the address the server will run on
     #[clap(flatten)]

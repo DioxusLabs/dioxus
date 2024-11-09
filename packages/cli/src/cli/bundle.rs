@@ -7,7 +7,6 @@ use super::*;
 
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
-#[clap(name = "bundle")]
 pub struct Bundle {
     /// The package types to bundle
     ///

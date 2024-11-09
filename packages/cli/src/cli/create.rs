@@ -7,7 +7,6 @@ use std::path::Path;
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-#[clap(name = "new")]
 pub(crate) struct Create {
     /// Project name (required when `--yes` is used)
     name: Option<String>,

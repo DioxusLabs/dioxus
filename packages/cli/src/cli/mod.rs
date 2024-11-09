@@ -47,25 +47,32 @@ pub(crate) struct Cli {
 #[derive(Subcommand)]
 pub(crate) enum Commands {
     /// Build the Dioxus project and all of its assets.
+    #[clap(name = "build")]
     Build(build::BuildArgs),
 
     /// Translate a source file into Dioxus code.
+    #[clap(name = "translate")]
     Translate(translate::Translate),
 
     /// Build, watch & serve the Dioxus project and all of its assets.
+    #[clap(name = "serve")]
     Serve(serve::ServeArgs),
 
     /// Create a new project for Dioxus.
+    #[clap(name = "new")]
     New(create::Create),
 
     /// Init a new project for Dioxus in an existing directory.
     /// Will attempt to keep your project in a good state.
+    #[clap(name = "init")]
     Init(init::Init),
 
     /// Clean output artifacts.
+    #[clap(name = "clean")]
     Clean(clean::Clean),
 
     /// Bundle the Dioxus app into a shippable object.
+    #[clap(name = "bundle")]
     Bundle(bundle::Bundle),
 
     /// Automatically format RSX.
@@ -86,6 +93,7 @@ pub(crate) enum Commands {
 
     /// Dioxus config file controls.
     #[clap(subcommand)]
+    #[clap(name = "config")]
     Config(config::Config),
 }
 
@@ -108,7 +116,7 @@ impl Display for Commands {
     }
 }
 
-pub(crate) static VERSION: Lazy<String> = Lazy::new(|| {
+static VERSION: Lazy<String> = Lazy::new(|| {
     format!(
         "{} ({})",
         crate::dx_build_info::PKG_VERSION,

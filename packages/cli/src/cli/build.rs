@@ -5,7 +5,6 @@ use crate::{AppBundle, Builder, DioxusCrate, Platform, PROFILE_SERVER};
 ///
 /// Produces a final output bundle designed to be run on the target platform.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-#[clap(name = "build")]
 pub(crate) struct BuildArgs {
     /// Build in release mode [default: false]
     #[clap(long, short)]
@@ -136,7 +135,7 @@ impl BuildArgs {
 
         // Set the profile of the build if it's not already set
         // We do this for android/wasm since they require
-        if self.profile.is_none() {
+        if self.profile.is_none() && !self.release {
             match self.platform {
                 Some(Platform::Android) => {
                     self.profile = Some(crate::dioxus_crate::PROFILE_ANDROID.to_string());

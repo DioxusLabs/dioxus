@@ -4,7 +4,6 @@ use crate::{metadata::crate_root, CliSettings};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
-#[clap(name = "config")]
 pub(crate) enum Config {
     /// Init `Dioxus.toml` for project/folder.
     Init {

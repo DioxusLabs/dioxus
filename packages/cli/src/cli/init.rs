@@ -3,7 +3,6 @@ use crate::cli::create::DEFAULT_TEMPLATE;
 use cargo_generate::{GenerateArgs, TemplatePath};
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-#[clap(name = "init")]
 pub(crate) struct Init {
     /// Template path
     #[clap(default_value = DEFAULT_TEMPLATE, short, long)]

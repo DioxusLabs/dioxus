@@ -4,7 +4,6 @@ use super::*;
 ///
 /// Simlpy runs `cargo clean`
 #[derive(Clone, Debug, Parser)]
-#[clap(name = "clean")]
 pub(crate) struct Clean {}
 
 impl Clean {
