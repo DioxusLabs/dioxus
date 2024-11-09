@@ -51,7 +51,7 @@ impl ServeArgs {
     pub(crate) async fn serve(self) -> Result<StructuredOutput> {
         _ = crate::serve::serve_all(self).await?;
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 
     pub(crate) fn load_krate(&mut self) -> Result<DioxusCrate> {

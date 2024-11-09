@@ -6,6 +6,6 @@ pub struct Doctor {}
 
 impl Doctor {
     pub async fn run(self) -> Result<StructuredOutput> {
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }

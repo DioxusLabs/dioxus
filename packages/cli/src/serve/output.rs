@@ -511,6 +511,7 @@ impl Output {
             BuildStage::Failed => lines.push("Failed".red()),
             BuildStage::Aborted => lines.push("Aborted".red()),
             BuildStage::Restarting => lines.push("Restarting".yellow()),
+            _ => {}
         };
 
         frame.render_widget(Line::from(lines), status_line);

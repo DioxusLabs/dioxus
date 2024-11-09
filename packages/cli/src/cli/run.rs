@@ -55,6 +55,6 @@ impl RunArgs {
             }
         }
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }

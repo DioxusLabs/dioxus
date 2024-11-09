@@ -58,6 +58,6 @@ impl Init {
         let path = cargo_generate::generate(args)?;
         create::post_create(&path, metadata)?;
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }

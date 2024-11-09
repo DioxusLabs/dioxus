@@ -3230,6 +3230,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools-types",
+ "dioxus-dx-wire-format",
  "dioxus-fullstack",
  "dioxus-html",
  "dioxus-rsx",
@@ -3442,6 +3443,15 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "dioxus-dx-wire-format"
+version = "0.6.0-alpha.4"
+dependencies = [
+ "cargo_metadata",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

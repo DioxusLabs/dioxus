@@ -61,6 +61,7 @@ members = [
     "packages/devtools-types",
     "packages/isrg",
     "packages/rsx-hotreload",
+    "packages/dx-wire-format",
 
     # Static generation examples
     # "packages/static-generation/examples/simple",
@@ -144,6 +145,8 @@ dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alp
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.4" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.4" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.4", default-features = false }
+dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-alpha.4" }
+
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.4" }
 manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.4" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.4" }
@@ -222,6 +225,7 @@ dirs = "5.0.1"
 cargo-config2 = "0.1.26"
 criterion = { version = "0.5" }
 walrus = "*"
+cargo_metadata = "0.18.1"
 
 # desktop
 wry = { version = "0.45.0", default-features = false }

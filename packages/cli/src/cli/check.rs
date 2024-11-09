@@ -38,7 +38,7 @@ impl Check {
             }
         }
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }
 

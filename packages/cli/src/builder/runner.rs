@@ -1,6 +1,6 @@
 use crate::{
-    AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, DioxusCrate, Platform, ProgressRx,
-    ProgressTx, Result,
+    AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, DioxusCrate, ProgressRx,
+    ProgressTx, Result, StructuredOutput,
 };
 use std::time::{Duration, Instant};
 
@@ -40,6 +40,7 @@ impl Builder {
     pub(crate) fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let request = BuildRequest::new(krate.clone(), args, tx.clone());
+
         Ok(Self {
             krate: krate.clone(),
             request: request.clone(),
@@ -49,14 +50,7 @@ impl Builder {
                 // We wont bother verifying on subsequent builds
                 request.verify_tooling().await?;
 
-                let res = request.build_all().await;
-
-                // The first launch gets some extra logging :)
-                if res.is_ok() {
-                    tracing::info!("Build completed successfully, launching app! 💫")
-                }
-
-                res
+                request.build_all().await
             }),
             tx,
             rx,
@@ -108,9 +102,9 @@ impl Builder {
                         }
                         BuildStage::Starting {
                             crate_count,
-                            platform,
+                            is_server,
                         } => {
-                            if *platform == Platform::Server {
+                            if *is_server {
                                 self.expected_crates_server = *crate_count;
                             } else {
                                 self.expected_crates = *crate_count;
@@ -120,10 +114,10 @@ impl Builder {
                         BuildStage::Compiling {
                             current,
                             total,
-                            platform,
+                            is_server,
                             ..
                         } => {
-                            if *platform == Platform::Server {
+                            if *is_server {
                                 self.compiled_crates_server = *current;
                                 self.expected_crates_server = *total;
                             } else {
@@ -162,6 +156,7 @@ impl Builder {
                             self.bundling_progress = 0.0;
                         }
                         BuildStage::RunningBindgen {} => {}
+                        _ => {}
                     }
                 }
             }
@@ -222,10 +217,22 @@ impl Builder {
     pub(crate) async fn finish(&mut self) -> Result<AppBundle> {
         loop {
             match self.wait().await {
-                BuildUpdate::BuildReady { bundle } => return Ok(bundle),
-                BuildUpdate::BuildFailed { err } => return Err(err),
-                BuildUpdate::Progress { .. } => {}
-                BuildUpdate::CompilerMessage { .. } => {}
+                BuildUpdate::Progress { stage } => {
+                    tracing::debug!(structured = ?StructuredOutput::BuildUpdate { stage });
+                }
+                BuildUpdate::CompilerMessage { message } => {
+                    tracing::debug!(structured = ?StructuredOutput::CargoOutput { message });
+                }
+                BuildUpdate::BuildReady { bundle } => {
+                    tracing::debug!(structured = ?StructuredOutput::BuildFinished {
+                        path: bundle.app_dir(),
+                    });
+                    return Ok(bundle);
+                }
+                BuildUpdate::BuildFailed { err } => {
+                    tracing::debug!(structured = ?StructuredOutput::Error { message: err.to_string() });
+                    return Err(err);
+                }
             }
         }
     }

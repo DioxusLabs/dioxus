@@ -27,13 +27,13 @@ pub(crate) use builder::*;
 pub(crate) use cli::*;
 pub(crate) use config::*;
 pub(crate) use dioxus_crate::*;
+pub(crate) use dioxus_dx_wire_format::*;
 pub(crate) use error::*;
 pub(crate) use filemap::*;
 pub(crate) use logging::*;
 pub(crate) use platform::*;
 pub(crate) use rustup::*;
 pub(crate) use settings::*;
-pub(crate) use slog::*;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

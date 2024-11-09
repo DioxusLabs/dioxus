@@ -120,6 +120,11 @@ impl AppRunner {
                 self.builds_opened == 0 && should_open_web,
             )
             .await?;
+
+        if self.builds_opened == 0 {
+            tracing::info!("Build completed successfully, launching app! 💫");
+        }
+
         self.builds_opened += 1;
         self.running.insert(platform, handle);
 

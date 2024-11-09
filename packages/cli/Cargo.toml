@@ -21,6 +21,7 @@ dioxus-core-types = { workspace = true }
 dioxus-devtools-types = { workspace = true }
 dioxus-cli-config = { workspace = true }
 dioxus-fullstack = { workspace = true }
+dioxus-dx-wire-format = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 thiserror = { workspace = true }
@@ -34,7 +35,7 @@ cargo_toml = { workspace = true }
 futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { workspace = true, features = ["serde"] }
 html_parser = { workspace = true }
-cargo_metadata = "0.18.1"
+cargo_metadata = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"
 chrono = "0.4.19"

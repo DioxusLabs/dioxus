@@ -107,7 +107,7 @@ impl Create {
 
         post_create(&path, metadata)?;
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }
 

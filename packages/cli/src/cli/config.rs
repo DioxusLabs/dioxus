@@ -88,7 +88,7 @@ impl Config {
                     tracing::warn!(
                         "config file `Dioxus.toml` already exist, use `--force` to overwrite it."
                     );
-                    return Ok(StructuredOutput::GenericSuccess);
+                    return Ok(StructuredOutput::Success);
                 }
                 let mut file = File::create(conf_path)?;
                 let content = String::from(include_str!("../../assets/dioxus.toml"))
@@ -132,6 +132,6 @@ impl Config {
             }
         }
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }

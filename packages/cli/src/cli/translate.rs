@@ -41,7 +41,7 @@ impl Translate {
             None => print!("{}", out),
         }
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }
 

@@ -44,6 +44,8 @@ impl Bundle {
         let krate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
+        // We always use `release` mode for bundling
+        self.build_arguments.release = true;
         self.build_arguments.resolve(&krate)?;
 
         tracing::info!("Building app...");
@@ -59,7 +61,7 @@ impl Bundle {
             self.package_types = Some(vec![crate::PackageType::IosBundle]);
         }
 
-        let mut cmd_result = StructuredOutput::GenericSuccess;
+        let mut cmd_result = StructuredOutput::Success;
 
         match self.build_arguments.platform() {
             // By default, mac/win/linux work with tauri bundle
@@ -93,7 +95,6 @@ impl Bundle {
                 }
 
                 cmd_result = StructuredOutput::BundleOutput {
-                    platform: self.build_arguments.platform(),
                     bundles: bundle_paths,
                 };
             }
@@ -173,7 +174,7 @@ impl Bundle {
 
         for entry in std::fs::read_dir(bundle.asset_dir())?.flatten() {
             let old = entry.path().canonicalize()?;
-            let new = PathBuf::from("/assets").join(old.file_name().unwrap());
+            let new = PathBuf::from("assets").join(old.file_name().unwrap());
             tracing::debug!("Bundled asset: {old:?} -> {new:?}");
 
             bundle_settings

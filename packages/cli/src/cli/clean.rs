@@ -19,6 +19,6 @@ impl Clean {
             return Err(anyhow::anyhow!("Cargo clean failed."));
         }
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }

@@ -60,7 +60,7 @@ impl BuildArgs {
     pub async fn run_cmd(mut self) -> Result<StructuredOutput> {
         let _bundle = self.build().await?;
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 
     pub(crate) async fn build(&mut self) -> Result<AppBundle> {
@@ -70,11 +70,6 @@ impl BuildArgs {
         self.resolve(&krate)?;
 
         let bundle = Builder::start(&krate, self.clone())?.finish().await?;
-
-        println!(
-            "Successfully built! 💫\nBundle at {}",
-            bundle.app_dir().display()
-        );
 
         Ok(bundle)
     }

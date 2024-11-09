@@ -88,7 +88,7 @@ impl Autoformat {
             }
         }
 
-        Ok(StructuredOutput::GenericSuccess)
+        Ok(StructuredOutput::Success)
     }
 }
 
