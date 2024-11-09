@@ -1,7 +1,6 @@
 use super::*;
-use crate::{Result, StructuredOutput, TraceSrc};
+use crate::{Result, StructuredOutput};
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
-use std::{io::IsTerminal as _, process::exit};
 
 /// Translate some source file into Dioxus code
 #[derive(Clone, Debug, Parser)]
@@ -105,10 +104,11 @@ fn indent_and_write(raw: &str, idx: usize, out: &mut String) {
 }
 
 fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> {
+    use std::io::IsTerminal as _;
+
     // Make sure not both are specified
     if file.is_some() && raw.is_some() {
-        tracing::error!(dx_src = ?TraceSrc::Dev, "Only one of --file or --raw should be specified.");
-        exit(0);
+        return Err("Only one of --file or --raw should be specified.".into());
     }
 
     if let Some(raw) = raw {

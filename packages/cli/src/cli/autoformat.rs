@@ -1,8 +1,9 @@
 use super::*;
 use crate::DioxusCrate;
+use anyhow::Context;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
-use std::{borrow::Cow, fs, path::Path, process::exit};
+use std::{borrow::Cow, fs, path::Path};
 
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
@@ -66,13 +67,9 @@ impl Autoformat {
                     package: Some(package),
                     ..Default::default()
                 };
-                let dx_crate = match DioxusCrate::new(&target_args) {
-                    Ok(x) => x,
-                    Err(error) => {
-                        tracing::error!("failed to parse crate graph: {error}");
-                        exit(1);
-                    }
-                };
+                let dx_crate =
+                    DioxusCrate::new(&target_args).context("failed to parse crate graph")?;
+
                 Cow::Owned(dx_crate.crate_dir())
             } else {
                 Cow::Borrowed(Path::new("."))
@@ -103,8 +100,7 @@ fn refactor_file(
         fs::read_to_string(&file)
     };
     let Ok(mut s) = file_content else {
-        tracing::error!("failed to open file: {}", file_content.unwrap_err());
-        exit(1);
+        return Err(format!("failed to open file: {}", file_content.unwrap_err()).into());
     };
 
     if format_rust_code {
@@ -114,8 +110,7 @@ fn refactor_file(
     let Ok(Ok(edits)) =
         syn::parse_file(&s).map(|file| dioxus_autofmt::try_fmt_file(&s, &file, indent))
     else {
-        tracing::error!("failed to format file: {}", s);
-        exit(1);
+        return Err(format!("failed to format file: {}", s).into());
     };
 
     let out = dioxus_autofmt::apply_formats(&s, edits);
@@ -219,8 +214,7 @@ fn autoformat_project(
     let files_formatted: usize = counts.into_iter().flatten().sum();
 
     if files_formatted > 0 && check {
-        tracing::error!("{} files needed formatting", files_formatted);
-        exit(1);
+        return Err(format!("{} files needed formatting", files_formatted).into());
     }
 
     Ok(())

@@ -2,7 +2,7 @@ use super::*;
 use crate::DioxusCrate;
 use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
-use std::{path::Path, process::exit};
+use std::path::Path;
 
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
@@ -71,7 +71,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
             .await;
 
             if res.is_err() {
-                eprintln!("error checking file: {}", path.display());
+                tracing::error!("error checking file: {}", path.display());
             }
 
             res
@@ -91,19 +91,17 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
 
     for report in issue_reports.into_iter() {
         if !report.issues.is_empty() {
-            println!("{}", report);
+            tracing::info!("{}", report);
         }
     }
 
     match total_issues {
-        0 => println!("No issues found."),
-        1 => println!("1 issue found."),
-        _ => println!("{} issues found.", total_issues),
-    }
-
-    match total_issues {
-        0 => exit(0),
-        _ => exit(1),
+        0 => {
+            tracing::info!("No issues found.");
+            Ok(())
+        }
+        1 => Err("1 issue found.".into()),
+        _ => Err(format!("{} issues found.", total_issues).into()),
     }
 }
 
