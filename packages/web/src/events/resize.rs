@@ -39,8 +39,7 @@ impl WebEventExt for dioxus_html::ResizeData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::ResizeObserverEntry> {
-        self.downcast::<Synthetic<web_sys::ResizeObserverEntry>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::ResizeObserverEntry>().cloned()
     }
 }
 

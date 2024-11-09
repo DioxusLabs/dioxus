@@ -30,6 +30,20 @@ pub fn launch(
                 })
                 .unwrap_or_else(ServeConfig::new);
 
+            // Extend the config's context providers with the context providers from the launch builder
+            let platform_config = platform_config.map(|mut cfg| {
+                let mut contexts = contexts;
+                let cfg_context_providers = cfg.context_providers.clone();
+                for i in 0..cfg_context_providers.len() {
+                    contexts.push(Box::new({
+                        let cfg_context_providers = cfg_context_providers.clone();
+                        move || (cfg_context_providers[i])()
+                    }));
+                }
+                cfg.context_providers = std::sync::Arc::new(contexts);
+                cfg
+            });
+
             // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
             // and we use the generated address the CLI gives us
             let address = dioxus_cli_config::fullstack_address_or_localhost();
