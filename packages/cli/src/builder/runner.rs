@@ -218,19 +218,19 @@ impl Builder {
         loop {
             match self.wait().await {
                 BuildUpdate::Progress { stage } => {
-                    tracing::debug!(structured = ?StructuredOutput::BuildUpdate { stage });
+                    tracing::debug!(json = ?StructuredOutput::BuildUpdate { stage });
                 }
                 BuildUpdate::CompilerMessage { message } => {
-                    tracing::debug!(structured = ?StructuredOutput::CargoOutput { message });
+                    tracing::debug!(json = ?StructuredOutput::CargoOutput { message });
                 }
                 BuildUpdate::BuildReady { bundle } => {
-                    tracing::debug!(structured = ?StructuredOutput::BuildFinished {
+                    tracing::debug!(json = ?StructuredOutput::BuildFinished {
                         path: bundle.app_dir(),
                     });
                     return Ok(bundle);
                 }
                 BuildUpdate::BuildFailed { err } => {
-                    tracing::debug!(structured = ?StructuredOutput::Error { message: err.to_string() });
+                    tracing::debug!(json = ?StructuredOutput::Error { message: err.to_string() });
                     return Err(err);
                 }
             }

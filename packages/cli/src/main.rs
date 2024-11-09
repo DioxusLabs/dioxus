@@ -77,11 +77,11 @@ async fn main() -> anyhow::Result<()> {
     // Provide a structured output for third party tools that can consume the output of the CLI
     match result {
         Ok(output) => {
-            tracing::debug!(structured = ?output);
+            tracing::debug!(json = ?output);
             Ok(())
         }
         Err(err) => {
-            tracing::debug!(structured = ?err);
+            tracing::debug!(json = ?err);
             Err(err)
         }
     }

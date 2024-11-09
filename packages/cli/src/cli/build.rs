@@ -58,9 +58,11 @@ pub(crate) struct BuildArgs {
 
 impl BuildArgs {
     pub async fn run_cmd(mut self) -> Result<StructuredOutput> {
-        let _bundle = self.build().await?;
+        let bundle = self.build().await?;
 
-        Ok(StructuredOutput::Success)
+        Ok(StructuredOutput::BuildFinished {
+            path: bundle.app_dir(),
+        })
     }
 
     pub(crate) async fn build(&mut self) -> Result<AppBundle> {
