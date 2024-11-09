@@ -109,13 +109,13 @@ impl BuildArgs {
         // Add any features required to turn on the client
         self.target_args
             .client_features
-            .extend(krate.feature_for_platform(platform));
+            .push(krate.feature_for_platform(platform));
 
         // Add any features required to turn on the server
         // This won't take effect in the server is not built, so it's fine to just set it here even if it's not used
         self.target_args
             .server_features
-            .extend(krate.feature_for_platform(Platform::Server));
+            .push(krate.feature_for_platform(Platform::Server));
 
         // Make sure we set the fullstack platform so we actually build the fullstack variant
         // Users need to enable "fullstack" in their default feature set.

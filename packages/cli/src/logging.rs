@@ -227,11 +227,10 @@ where
             visitor.source = TraceSrc::Dev;
         }
 
-        TUI_TX
+        _ = TUI_TX
             .get()
             .unwrap()
-            .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg))
-            .unwrap();
+            .unbounded_send(TraceMsg::text(visitor.source, *level, final_msg));
     }
 }
 
@@ -247,7 +246,6 @@ impl CollectVisitor {
         Self {
             message: String::new(),
             source: TraceSrc::Unknown,
-
             fields: HashMap::new(),
         }
     }

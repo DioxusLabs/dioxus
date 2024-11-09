@@ -246,13 +246,13 @@ impl DioxusCrate {
     }
 
     /// Get the features required to build for the given platform
-    pub(crate) fn feature_for_platform(&self, platform: Platform) -> Option<String> {
+    pub(crate) fn feature_for_platform(&self, platform: Platform) -> String {
         let package = self.package();
 
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = platform.feature_name();
 
-        package.features.iter().find_map(|(key, features)| {
+        let res = package.features.iter().find_map(|(key, features)| {
             // if the feature is just the name of the platform, we use that
             if key == dioxus_feature {
                 return Some(key.clone());
@@ -271,7 +271,16 @@ impl DioxusCrate {
                     }
                 }
             }
+
             None
+        });
+
+        res.unwrap_or_else(|| {
+            let fallback = platform.feature_name();
+            tracing::warn!(
+                "Could not find explicit feature for platform {platform:?}, passing `dioxus/{fallback}` instead"
+            );
+            format!("dioxus/{fallback}")
         })
     }
 
