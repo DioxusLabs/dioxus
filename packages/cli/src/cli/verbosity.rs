@@ -1,6 +1,6 @@
 use clap::Parser;
 
-#[derive(Parser, Clone, Debug)]
+#[derive(Parser, Clone, Copy, Debug)]
 pub struct Verbosity {
     /// Use verbose output [default: false]
     #[clap(long, global = true)]

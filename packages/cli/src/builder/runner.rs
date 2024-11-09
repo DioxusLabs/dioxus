@@ -85,8 +85,6 @@ impl Builder {
             },
         };
 
-        tracing::trace!("Build update: {update:?}");
-
         // Update the internal stage of the build so the UI can render it
         match &update {
             BuildUpdate::Progress { stage } => {
@@ -218,10 +216,31 @@ impl Builder {
         loop {
             match self.wait().await {
                 BuildUpdate::Progress { stage } => {
-                    tracing::debug!(json = ?StructuredOutput::BuildUpdate { stage });
+                    match &stage {
+                        BuildStage::Compiling {
+                            current,
+                            total,
+                            krate,
+                            ..
+                        } => {
+                            tracing::info!("Compiling [{current:>3}/{total}]: {krate}");
+                        }
+                        BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
+                        BuildStage::CopyingAssets {
+                            current,
+                            total,
+                            path,
+                        } => {
+                            tracing::info!("Copying asset ({current}/{total}): {}", path.display());
+                        }
+                        BuildStage::Bundling => tracing::info!("Bundling app..."),
+                        _ => {}
+                    }
+
+                    tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
                 BuildUpdate::CompilerMessage { message } => {
-                    tracing::debug!(json = ?StructuredOutput::CargoOutput { message });
+                    tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
                 }
                 BuildUpdate::BuildReady { bundle } => {
                     tracing::debug!(json = ?StructuredOutput::BuildFinished {
@@ -230,7 +249,7 @@ impl Builder {
                     return Ok(bundle);
                 }
                 BuildUpdate::BuildFailed { err } => {
-                    tracing::debug!(json = ?StructuredOutput::Error { message: err.to_string() });
+                    tracing::error!(?err, json = ?StructuredOutput::Error { message: err.to_string() });
                     return Err(err);
                 }
             }

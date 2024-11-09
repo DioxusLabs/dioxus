@@ -26,9 +26,18 @@ use std::{
     fs,
     path::PathBuf,
     sync::Mutex,
+    time::Instant,
 };
 use tracing::{field::Visit, Level, Subscriber};
-use tracing_subscriber::{fmt::format, prelude::*, registry::LookupSpan, EnvFilter, Layer};
+use tracing_subscriber::{
+    fmt::{
+        format::{self, Writer},
+        time::FormatTime,
+    },
+    prelude::*,
+    registry::LookupSpan,
+    EnvFilter, Layer,
+};
 
 const LOG_ENV: &str = "DIOXUS_LOG";
 const LOG_FILE_NAME: &str = "dx.log";
@@ -72,15 +81,26 @@ impl TraceController {
             ))
         };
 
+        let json_filter = tracing_subscriber::filter::filter_fn(move |meta| {
+            if meta.fields().len() == 1 && meta.fields().iter().next().unwrap().name() == "json" {
+                return args.verbosity.json_output;
+            }
+            true
+        });
+
         let fmt_layer = tracing_subscriber::fmt::layer()
             .with_target(args.verbosity.verbose)
             .fmt_fields(
-                format::debug_fn(|writer, field, value| {
+                format::debug_fn(move |writer, field, value| {
+                    if field.name() == "json" && !args.verbosity.json_output {
+                        return Ok(());
+                    }
+
                     write!(writer, "{}", format_field(field.name(), value))
                 })
                 .delimited(" "),
             )
-            .with_timer(tracing_subscriber::fmt::time::uptime());
+            .with_timer(PrettyUptime::default());
 
         let fmt_layer = if args.verbosity.json_output {
             fmt_layer.json().flatten_event(true).boxed()
@@ -90,6 +110,7 @@ impl TraceController {
 
         let sub = tracing_subscriber::registry()
             .with(filter)
+            .with(json_filter)
             .with(FileAppendLayer::new())
             .with(fmt_layer);
 
@@ -382,5 +403,28 @@ impl Display for TraceSrc {
             Self::Unknown => write!(f, "n/a"),
             Self::Bundle => write!(f, "bundle"),
         }
+    }
+}
+
+/// Retrieve and print the relative elapsed wall-clock time since an epoch.
+///
+/// The `Default` implementation for `Uptime` makes the epoch the current time.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct PrettyUptime {
+    epoch: Instant,
+}
+
+impl Default for PrettyUptime {
+    fn default() -> Self {
+        Self {
+            epoch: Instant::now(),
+        }
+    }
+}
+
+impl FormatTime for PrettyUptime {
+    fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
+        let e = self.epoch.elapsed();
+        write!(w, "{:4}.{:2}s", e.as_secs(), e.subsec_millis())
     }
 }

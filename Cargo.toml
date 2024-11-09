@@ -316,6 +316,7 @@ liveview = ["dioxus/liveview"]
 fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 server = ["dioxus/axum"]
+mobile = ["dioxus/mobile"]
 web = ["dioxus/web"]
 http = ["dep:reqwest", "dep:http-range"]
 

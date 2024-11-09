@@ -41,7 +41,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     // Redirect all logging the cli logger
     let mut tracer = TraceController::redirect();
 
-    // Load the krate and resolve the server args against it - this might log so do it after we turn on the tracer
+    // Load the krate and resolve the server args against it - this might log so do it after we turn on the tracer first
     let krate = args.load_krate()?;
 
     // Note that starting the builder will queue up a build immediately
@@ -59,7 +59,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                - Press `ctrl+c` to exit the server
                - Press `r` to rebuild the app
                - Press `o` to open the app
-               - Press `t` to toggle cargo output
+               - Press `v` to toggle verbose logging
                - Press `/` for more commands and shortcuts
 
                Learn more at https://dioxuslabs.com/learn/0.6/getting_started"#,

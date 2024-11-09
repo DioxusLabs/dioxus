@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AppBundle, Builder, DioxusCrate, Platform, PROFILE_SERVER};
+use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -58,14 +58,8 @@ pub(crate) struct BuildArgs {
 
 impl BuildArgs {
     pub async fn run_cmd(mut self) -> Result<StructuredOutput> {
-        let bundle = self.build().await?;
+        tracing::info!("Building project...");
 
-        Ok(StructuredOutput::BuildFinished {
-            path: bundle.app_dir(),
-        })
-    }
-
-    pub(crate) async fn build(&mut self) -> Result<AppBundle> {
         let krate =
             DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 
@@ -73,7 +67,11 @@ impl BuildArgs {
 
         let bundle = Builder::start(&krate, self.clone())?.finish().await?;
 
-        Ok(bundle)
+        tracing::info!(path = ?bundle.app_dir(), "Build completed successfully! 🚀");
+
+        Ok(StructuredOutput::BuildFinished {
+            path: bundle.app_dir(),
+        })
     }
 
     /// Update the arguments of the CLI by inspecting the DioxusCrate itself and learning about how

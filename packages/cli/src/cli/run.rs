@@ -16,8 +16,8 @@ impl RunArgs {
 
         self.build_args.resolve(&krate)?;
 
-        println!("Building crate krate data: {:#?}", krate);
-        println!("Build args: {:#?}", self.build_args);
+        tracing::trace!("Building crate krate data: {:#?}", krate);
+        tracing::trace!("Build args: {:#?}", self.build_args);
 
         let bundle = Builder::start(&krate, self.build_args.clone())?
             .finish()
@@ -39,7 +39,7 @@ impl RunArgs {
                 ServeUpdate::StdoutReceived { platform, msg } => println!("[{platform}]: {msg}"),
                 ServeUpdate::ProcessExited { platform, status } => {
                     runner.kill(platform);
-                    eprintln!("[{platform}]: process exited with status: {status:?}");
+                    tracing::info!("[{platform}]: process exited with status: {status:?}");
                     break;
                 }
                 ServeUpdate::BuildUpdate { .. } => {}

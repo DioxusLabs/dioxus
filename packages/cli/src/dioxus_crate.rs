@@ -25,14 +25,15 @@ pub(crate) static PROFILE_SERVER: &str = "dioxus-server";
 
 impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
-        let mut cmd = Cmd::new();
-        cmd.features(target.features.clone());
-
-        let krates = krates::Builder::new()
+        tracing::debug!("Loading crate");
+        let cmd = Cmd::new();
+        let builder = krates::Builder::new();
+        let krates = builder
             .build(cmd, |_| {})
             .context("Failed to run cargo metadata")?;
 
         let package = find_main_package(&krates, target.package.clone())?;
+        tracing::debug!("Found package {package:?}");
 
         let dioxus_config = DioxusConfig::load(&krates, package)?.unwrap_or_default();
 
@@ -173,6 +174,7 @@ impl DioxusCrate {
             .get_enabled_features(krate.kid)?
             .iter()
             .flat_map(|feature| {
+                tracing::trace!("Autodetecting platform from feature {feature}");
                 Platform::autodetect_from_cargo_feature(feature).map(|f| (f, feature.to_string()))
             })
             .collect::<Vec<_>>();
@@ -276,11 +278,11 @@ impl DioxusCrate {
         });
 
         res.unwrap_or_else(|| {
-            let fallback = platform.feature_name();
-            tracing::warn!(
-                "Could not find explicit feature for platform {platform:?}, passing `dioxus/{fallback}` instead"
+            let fallback = format!("dioxus/{}", platform.feature_name()) ;
+            tracing::debug!(
+                "Could not find explicit feature for platform {platform}, passing `fallback` instead"
             );
-            format!("dioxus/{fallback}")
+            fallback
         })
     }
 
@@ -570,59 +572,60 @@ impl std::fmt::Debug for DioxusCrate {
 
 // Find the main package in the workspace
 fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId> {
-    let kid = match package {
-        Some(package) => {
-            let mut workspace_members = krates.workspace_members();
-            let found = workspace_members.find_map(|node| {
-                if let krates::Node::Krate { id, krate, .. } = node {
-                    if krate.name == package {
-                        return Some(id);
-                    }
-                }
-                None
-            });
-
-            if found.is_none() {
-                eprintln!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
-                eprintln!("Packages in the workspace:");
-                for package in krates.workspace_members() {
-                    if let krates::Node::Krate { krate, .. } = package {
-                        eprintln!("{}", krate.name());
-                    }
+    if let Some(package) = package {
+        let mut workspace_members = krates.workspace_members();
+        let found = workspace_members.find_map(|node| {
+            if let krates::Node::Krate { id, krate, .. } = node {
+                if krate.name == package {
+                    return Some(id);
                 }
             }
+            None
+        });
 
-            found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?
+        if found.is_none() {
+            tracing::error!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
+            tracing::error!("Packages in the workspace:");
+            for package in krates.workspace_members() {
+                if let krates::Node::Krate { krate, .. } = package {
+                    tracing::error!("{}", krate.name());
+                }
+            }
         }
-        None => {
-            // Otherwise find the package that is the closest parent of the current directory
-            let current_dir = std::env::current_dir()?;
-            let current_dir = current_dir.as_path();
-            // Go through each member and find the path that is a parent of the current directory
-            let mut closest_parent = None;
-            for member in krates.workspace_members() {
-                if let krates::Node::Krate { id, krate, .. } = member {
-                    let member_path = krate.manifest_path.parent().unwrap();
-                    if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
-                        let len = path.components().count();
-                        match closest_parent {
-                            Some((_, closest_parent_len)) => {
-                                if len < closest_parent_len {
-                                    closest_parent = Some((id, len));
-                                }
-                            }
-                            None => {
-                                closest_parent = Some((id, len));
-                            }
+
+        let kid = found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?;
+
+        return Ok(krates.nid_for_kid(kid).unwrap());
+    };
+
+    // Otherwise find the package that is the closest parent of the current directory
+    let current_dir = std::env::current_dir()?;
+    let current_dir = current_dir.as_path();
+
+    // Go through each member and find the path that is a parent of the current directory
+    let mut closest_parent = None;
+    for member in krates.workspace_members() {
+        if let krates::Node::Krate { id, krate, .. } = member {
+            let member_path = krate.manifest_path.parent().unwrap();
+            if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
+                let len = path.components().count();
+                match closest_parent {
+                    Some((_, closest_parent_len)) => {
+                        if len < closest_parent_len {
+                            closest_parent = Some((id, len));
                         }
                     }
+                    None => {
+                        closest_parent = Some((id, len));
+                    }
                 }
             }
-            closest_parent
-                .map(|(id, _)| id)
-                .context("Failed to find current package")?
         }
-    };
+    }
+
+    let kid = closest_parent
+        .map(|(id, _)| id)
+        .context("Failed to find current package")?;
 
     let package = krates.nid_for_kid(kid).unwrap();
     Ok(package)

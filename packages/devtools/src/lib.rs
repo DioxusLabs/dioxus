@@ -37,13 +37,7 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
     std::thread::spawn(move || {
         let (mut websocket, _req) = match tungstenite::connect(endpoint.clone()) {
             Ok((websocket, req)) => (websocket, req),
-            Err(err) => {
-                eprintln!(
-                    "Failed to connect to devserver at {} because {}",
-                    endpoint, err
-                );
-                return;
-            }
+            Err(_) => return,
         };
 
         while let Ok(msg) = websocket.read() {
@@ -51,13 +45,9 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
                 tungstenite::Message::Text(text) => {
                     if let Ok(msg) = serde_json::from_str(&text) {
                         callback(msg);
-                    } else {
-                        eprintln!("Failed to parse message from devserver: {:?}", text);
                     }
                 }
-                msg => {
-                    println!("Received a non-text message: {:?}", msg);
-                }
+                _ => {}
             }
         }
     });

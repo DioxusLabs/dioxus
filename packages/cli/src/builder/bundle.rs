@@ -275,6 +275,8 @@ impl AppBundle {
         bundle.write_metadata().await?;
         bundle.optimize().await?;
 
+        tracing::debug!("Bundle created at {}", bundle.app_dir().display());
+
         Ok(bundle)
     }
 
@@ -417,10 +419,9 @@ impl AppBundle {
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         // todo: we want to use the fastfs variant that knows how to parallelize folders, too
         assets_to_transfer.par_iter().try_for_each(|(from, to)| {
-            self.build.status_copying_asset(
-                assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
-                asset_count,
-                from.clone(),
+            tracing::trace!(
+                "Starting asset copy {current}/{asset_count} from {from:?}",
+                current = assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
             );
 
             // todo(jon): implement optimize + pre_compress on the asset type
@@ -430,7 +431,7 @@ impl AppBundle {
                 tracing::error!("Failed to copy asset {from:?}: {err}");
             }
 
-            self.build.status_copying_asset(
+            self.build.status_copied_asset(
                 assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
                 asset_count,
                 from.clone(),
@@ -471,16 +472,23 @@ impl AppBundle {
     ///
     /// todo(jon): we should name the app properly instead of making up the exe name. It's kinda okay for dev mode, but def not okay for prod
     pub fn main_exe(&self) -> PathBuf {
-        // todo(jon): this could just be named `App` or the name of the app like `Raycast` in `Raycast.app`
+        self.exe_dir().join(self.exe_name())
+    }
+
+    fn exe_name(&self) -> String {
         match self.build.build.platform() {
-            Platform::MacOS => self.exe_dir().join("DioxusApp"),
-            Platform::Ios => self.exe_dir().join("DioxusApp"),
-            Platform::Server => self.exe_dir().join("server"),
-            Platform::Liveview => self.exe_dir().join("server"),
-            Platform::Windows => self.exe_dir().join("app.exe"),
-            Platform::Linux => self.exe_dir().join("AppRun"), // from the appimage spec, the root exe needs to be named `AppRun`
-            Platform::Android => self.exe_dir().join("libdioxusapp.so"), // from the apk spec, the root exe will actually be a shared library
+            Platform::MacOS => self.build.krate.executable_name().to_string(),
+            Platform::Ios => self.build.krate.executable_name().to_string(),
+            Platform::Server => self.build.krate.executable_name().to_string(),
+            Platform::Liveview => self.build.krate.executable_name().to_string(),
+            Platform::Windows => format!("{}.exe", self.build.krate.executable_name()),
+
+            // from the apk spec, the root exe will actually be a shared library
+            Platform::Android => format!("lib{}.so", self.build.krate.executable_name()),
             Platform::Web => unimplemented!("there's no main exe on web"), // this will be wrong, I think, but not important?
+
+            // todo: maybe this should be called AppRun?
+            Platform::Linux => self.build.krate.executable_name().to_string(),
         }
     }
 
@@ -530,15 +538,15 @@ impl AppBundle {
         // write the Info.plist file
         match self.build.build.platform() {
             Platform::MacOS => {
-                let src = include_str!("../../assets/macos/mac.plist");
                 let dest = self.app_dir().join("Contents").join("Info.plist");
-                std::fs::write(dest, src)?;
+                let plist = self.macos_plist_contents()?;
+                std::fs::write(dest, plist)?;
             }
 
             Platform::Ios => {
-                let src = include_str!("../../assets/ios/ios.plist");
                 let dest = self.app_dir().join("Info.plist");
-                std::fs::write(dest, src)?;
+                let plist = self.ios_plist_contents()?;
+                std::fs::write(dest, plist)?;
             }
 
             // AndroidManifest.xml
@@ -631,8 +639,8 @@ impl AppBundle {
             Platform::Server => platform_dir.clone(), // ends up *next* to the public folder
 
             // These might not actually need to be called `.app` but it does let us run these with `open`
-            Platform::MacOS => platform_dir.join("DioxusApp.app"),
-            Platform::Ios => platform_dir.join("DioxusApp.app"),
+            Platform::MacOS => platform_dir.join(format!("{}.app", self.exe_name())),
+            Platform::Ios => platform_dir.join(format!("{}.app", self.exe_name())),
 
             // in theory, these all could end up in the build dir
             Platform::Linux => platform_dir.join("app"), // .appimage (after bundling)
@@ -790,5 +798,39 @@ impl AppBundle {
         drop(_child);
 
         Ok(())
+    }
+}
+
+#[derive(serde::Serialize)]
+struct InfoPlistData {
+    display_name: String,
+    bundle_name: String,
+    bundle_identifier: String,
+    executable_name: String,
+}
+
+impl AppBundle {
+    fn macos_plist_contents(&self) -> Result<String> {
+        Ok(handlebars::Handlebars::new().render_template(
+            include_str!("../../assets/macos/mac.plist.hbs"),
+            &InfoPlistData {
+                display_name: self.exe_name(),
+                bundle_name: self.exe_name(),
+                executable_name: self.exe_name(),
+                bundle_identifier: format!("com.dioxuslabs.{}", self.exe_name()),
+            },
+        )?)
+    }
+
+    fn ios_plist_contents(&self) -> Result<String> {
+        Ok(handlebars::Handlebars::new().render_template(
+            include_str!("../../assets/ios/ios.plist.hbs"),
+            &InfoPlistData {
+                display_name: self.exe_name(),
+                bundle_name: self.exe_name(),
+                executable_name: self.exe_name(),
+                bundle_identifier: format!("com.dioxuslabs.{}", self.exe_name()),
+            },
+        )?)
     }
 }

@@ -36,6 +36,9 @@ pub(crate) enum Error {
     #[error("Unsupported feature: {0}")]
     UnsupportedFeature(String),
 
+    #[error("Failed to render template: {0}")]
+    TemplateParse(#[from] handlebars::RenderError),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

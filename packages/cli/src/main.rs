@@ -36,7 +36,7 @@ pub(crate) use rustup::*;
 pub(crate) use settings::*;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
     use anyhow::Context;
     use Commands::*;
 
@@ -78,11 +78,16 @@ async fn main() -> anyhow::Result<()> {
     match result {
         Ok(output) => {
             tracing::debug!(json = ?output);
-            Ok(())
         }
         Err(err) => {
-            tracing::debug!(json = ?err);
-            Err(err)
+            tracing::error!(
+                ?err,
+                json = ?StructuredOutput::Error {
+                    message: format!("{err:?}"),
+                },
+            );
+
+            std::process::exit(1);
         }
-    }
+    };
 }

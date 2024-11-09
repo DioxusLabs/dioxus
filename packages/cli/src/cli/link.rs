@@ -39,7 +39,7 @@ impl LinkAction {
     ///
     /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
     /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
-    pub(crate) fn run(self) -> anyhow::Result<()> {
+    pub(crate) fn run(self) {
         match self {
             // Literally just run the android linker :)
             LinkAction::LinkAndroid {
@@ -102,7 +102,5 @@ impl LinkAction {
                 std::fs::write(dest, contents).expect("Failed to write output file");
             }
         }
-
-        Ok(())
     }
 }

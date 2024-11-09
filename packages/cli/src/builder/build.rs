@@ -44,10 +44,17 @@ impl BuildRequest {
     pub(crate) async fn build_all(self) -> Result<AppBundle> {
         tracing::debug!("Running build command...");
 
+        let (app, server) = self.build_concurrent().await?;
+
+        AppBundle::new(self, app, server).await
+    }
+
+    /// Run the build command with a pretty loader, returning the executable output location
+    async fn build_concurrent(&self) -> Result<(BuildArtifacts, Option<BuildArtifacts>)> {
         let (app, server) =
             futures_util::future::try_join(self.build_app(), self.build_server()).await?;
 
-        AppBundle::new(self, app, server).await
+        Ok((app, server))
     }
 
     pub(crate) async fn build_app(&self) -> Result<BuildArtifacts> {

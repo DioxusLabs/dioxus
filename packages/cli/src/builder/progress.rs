@@ -59,8 +59,7 @@ impl BuildRequest {
         });
     }
 
-    pub(crate) fn status_copying_asset(&self, current: usize, total: usize, path: PathBuf) {
-        tracing::trace!("Status copying asset {current}/{total} from {path:?}");
+    pub(crate) fn status_copied_asset(&self, current: usize, total: usize, path: PathBuf) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::CopyingAssets {
                 current,
