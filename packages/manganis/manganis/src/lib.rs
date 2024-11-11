@@ -58,14 +58,13 @@ macro_rules! asset {
     ($asset:literal $($tokens:tt)*) => {{
         const ASSET: $crate::AssetBuilder = $crate::AssetBuilder::new($asset) $($tokens)*;
         const BUFFER: $crate::const_serialize::ConstWriteBuffer = {
-            let mut write = $crate::const_serialize::ConstWriteBuffer::new();
-            write = $crate::const_serialize::serialize_const(&ASSET, write);
-            write
+            let write = $crate::const_serialize::ConstWriteBuffer::new();
+            $crate::const_serialize::serialize_const(&ASSET, write)
         };
         const BYTES: &[u8] = BUFFER.as_ref();
         const LEN: usize = BYTES.len();
 
-        #[link_section = $crate::__current_link_section!()] //
+        #[link_section = $crate::__current_link_section!()]
         #[used]
         static LINK_SECTION: [u8; LEN] = {
             let mut bytes = [0; LEN];
