@@ -270,10 +270,18 @@ struct FmtLogWriter {}
 
 impl Write for FmtLogWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if !TUI_ENABLED.load(Ordering::SeqCst) {
+            return std::io::stdout().write(buf);
+        }
+
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
+        if !TUI_ENABLED.load(Ordering::SeqCst) {
+            std::io::stdout().flush()?;
+        }
+
         Ok(())
     }
 }

@@ -101,7 +101,6 @@ impl WebEventExt for dioxus_html::DragData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::DragEvent> {
-        self.downcast::<Synthetic<DragEvent>>()
-            .map(|data| data.event.clone())
+        self.downcast::<DragEvent>().cloned()
     }
 }

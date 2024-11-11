@@ -94,8 +94,6 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
         let bundle_root = get_asset_root();
         let relative_path = uri_path.strip_prefix("/").unwrap();
         uri_path = bundle_root.join(relative_path);
-        println!("bundle root: {bundle_root:?}");
-        println!("uri path: {uri_path:?}");
     }
 
     // If the asset exists, then we can serve it!

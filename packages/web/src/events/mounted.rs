@@ -120,7 +120,6 @@ impl WebEventExt for MountedData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::Element> {
-        self.downcast::<Synthetic<web_sys::Element>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::Element>().cloned()
     }
 }

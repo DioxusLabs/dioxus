@@ -7,6 +7,8 @@ use std::path::PathBuf;
 
 use dioxus_lib::prelude::dioxus_core::LaunchConfig;
 
+use crate::server::ContextProviders;
+
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
@@ -14,6 +16,7 @@ pub struct ServeConfigBuilder {
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) context_providers: ContextProviders,
 }
 
 impl LaunchConfig for ServeConfigBuilder {}
@@ -26,6 +29,7 @@ impl ServeConfigBuilder {
             index_html: None,
             index_path: None,
             incremental: None,
+            context_providers: Default::default(),
         }
     }
 
@@ -115,6 +119,40 @@ impl ServeConfigBuilder {
         self
     }
 
+    /// Provide context to the root and server functions. You can use this context
+    /// while rendering with [`consume_context`](dioxus_lib::prelude::consume_context) or in server functions with [`FromContext`](crate::prelude::FromContext).
+    ///
+    /// Context will be forwarded from the LaunchBuilder if it is provided.
+    ///
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    ///
+    /// dioxus::LaunchBuilder::new()
+    ///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
+    ///     .with_context(server_only! {
+    ///         1234567890u32
+    ///     })
+    ///     .launch(app);
+    ///
+    /// #[server]
+    /// async fn read_context() -> Result<u32, ServerFnError> {
+    ///     // You can extract values from the server context with the `extract` function
+    ///     let FromContext(value) = extract().await?;
+    ///     Ok(value)
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     let future = use_resource(read_context);
+    ///     rsx! {
+    ///         h1 { "{future:?}" }
+    ///     }
+    /// }
+    /// ```
+    pub fn context_providers(mut self, state: ContextProviders) -> Self {
+        self.context_providers = state;
+        self
+    }
+
     /// Build the ServeConfig. This may fail if the index.html file is not found.
     pub fn build(self) -> Result<ServeConfig, UnableToLoadIndex> {
         // The CLI always bundles static assets into the exe/public directory
@@ -137,6 +175,7 @@ impl ServeConfigBuilder {
         Ok(ServeConfig {
             index,
             incremental: self.incremental,
+            context_providers: self.context_providers,
         })
     }
 }
@@ -241,6 +280,7 @@ pub(crate) struct IndexHtml {
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) context_providers: ContextProviders,
 }
 
 impl LaunchConfig for ServeConfig {}

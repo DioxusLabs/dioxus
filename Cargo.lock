@@ -1518,15 +1518,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.69.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3159,7 +3150,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "axum 0.7.7",
  "criterion",
@@ -3193,7 +3184,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-autofmt"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus-rsx",
  "pretty_assertions",
@@ -3206,7 +3197,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-check"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "indoc",
  "owo-colors",
@@ -3218,7 +3209,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "ansi-to-html",
  "ansi-to-tui",
@@ -3264,6 +3255,7 @@ dependencies = [
  "ignore",
  "itertools 0.13.0",
  "krates",
+ "log",
  "manganis-core",
  "notify",
  "object 0.36.5",
@@ -3298,6 +3290,7 @@ dependencies = [
  "unicode-segmentation",
  "uuid",
  "walkdir",
+ "walrus",
  "wasm-bindgen-cli-support",
  "wasm-bindgen-shared",
  "wasm-opt",
@@ -3306,11 +3299,11 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli-config"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 
 [[package]]
 name = "dioxus-config-macro"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3318,7 +3311,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "const_format",
  "dioxus",
@@ -3347,7 +3340,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core-macro"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "convert_case 0.6.0",
  "dioxus",
@@ -3363,11 +3356,14 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core-types"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
+dependencies = [
+ "once_cell",
+]
 
 [[package]]
 name = "dioxus-desktop"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "async-trait",
  "cocoa 0.25.0",
@@ -3418,7 +3414,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-devtools"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus-core",
  "dioxus-devtools-types",
@@ -3433,7 +3429,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-devtools-types"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus-core",
  "serde",
@@ -3441,7 +3437,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-document"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -3459,7 +3455,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-examples"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "async-std",
  "base64 0.22.1",
@@ -3481,7 +3477,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-ext"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus-autofmt",
  "dioxus-rsx-rosetta",
@@ -3492,7 +3488,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-fullstack"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -3504,6 +3500,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-desktop",
  "dioxus-devtools",
+ "dioxus-history",
  "dioxus-interpreter-js",
  "dioxus-isrg",
  "dioxus-lib",
@@ -3537,7 +3534,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-history"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -3546,7 +3543,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-hooks"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -3565,7 +3562,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-html"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "async-trait",
  "dioxus",
@@ -3594,7 +3591,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-html-internal-macro"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
@@ -3605,7 +3602,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-interpreter-js"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus-core",
  "dioxus-core-types",
@@ -3623,7 +3620,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-isrg"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "chrono",
  "http 1.1.0",
@@ -3635,7 +3632,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-lib"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus",
  "dioxus-config-macro",
@@ -3651,7 +3648,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-liveview"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "axum 0.7.7",
  "dioxus",
@@ -3690,7 +3687,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-mobile"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus-desktop",
  "dioxus-lib",
@@ -3740,12 +3737,11 @@ dependencies = [
 
 [[package]]
 name = "dioxus-router"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "axum 0.7.7",
- "base64 0.21.7",
+ "base64 0.22.1",
  "ciborium",
- "console_error_panic_hook",
  "criterion",
  "dioxus",
  "dioxus-cli-config",
@@ -3753,19 +3749,17 @@ dependencies = [
  "dioxus-lib",
  "dioxus-router-macro",
  "dioxus-ssr",
- "gloo",
  "rustversion",
  "serde",
  "tokio",
  "tracing",
  "url",
  "urlencoding",
- "wasm-bindgen-test",
 ]
 
 [[package]]
 name = "dioxus-router-macro"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus",
  "proc-macro2",
@@ -3776,7 +3770,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-rsx"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "prettier-please",
  "prettyplease",
@@ -3788,7 +3782,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-rsx-hotreload"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus-core",
  "dioxus-core-types",
@@ -3803,7 +3797,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-rsx-rosetta"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "convert_case 0.6.0",
  "dioxus-autofmt",
@@ -3819,7 +3813,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-signals"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -3841,7 +3835,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-ssr"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "askama_escape",
  "dioxus",
@@ -3852,7 +3846,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-static-site-generation"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "axum 0.7.7",
  "criterion",
@@ -3882,7 +3876,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-web"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "async-trait",
  "ciborium",
@@ -3920,7 +3914,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus_server_macro"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "axum 0.7.7",
  "dioxus",
@@ -5018,7 +5012,7 @@ dependencies = [
 
 [[package]]
 name = "generational-box"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "criterion",
  "parking_lot",
@@ -5471,103 +5465,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "gloo"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28999cda5ef6916ffd33fb4a7b87e1de633c47c0dc6d97905fee1cdaa142b94d"
-dependencies = [
- "gloo-console",
- "gloo-dialogs",
- "gloo-events",
- "gloo-file",
- "gloo-history",
- "gloo-net 0.3.1",
- "gloo-render",
- "gloo-storage",
- "gloo-timers 0.2.6",
- "gloo-utils 0.1.7",
- "gloo-worker",
-]
-
-[[package]]
-name = "gloo-console"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82b7ce3c05debe147233596904981848862b068862e9ec3e34be446077190d3f"
-dependencies = [
- "gloo-utils 0.1.7",
- "js-sys",
- "serde",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
 name = "gloo-dialogs"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67062364ac72d27f08445a46cab428188e2e224ec9e37efdba48ae8c289002e6"
 dependencies = [
  "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-events"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68b107f8abed8105e4182de63845afcc7b69c098b7852a813ea7462a320992fc"
-dependencies = [
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-file"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8d5564e570a38b43d78bdc063374a0c3098c4f0d64005b12f9bbe87e869b6d7"
-dependencies = [
- "gloo-events",
- "js-sys",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-history"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85725d90bf0ed47063b3930ef28e863658a7905989e9929a8708aab74a1d5e7f"
-dependencies = [
- "gloo-events",
- "gloo-utils 0.1.7",
- "serde",
- "serde-wasm-bindgen",
- "serde_urlencoded",
- "thiserror",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-net"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a66b4e3c7d9ed8d315fd6b97c8b1f74a7c6ecbbc2320e65ae7ed38b7068cc620"
-dependencies = [
- "futures-channel",
- "futures-core",
- "futures-sink",
- "gloo-utils 0.1.7",
- "http 0.2.12",
- "js-sys",
- "pin-project",
- "serde",
- "serde_json",
- "thiserror",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -5580,7 +5483,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-sink",
- "gloo-utils 0.2.0",
+ "gloo-utils",
  "http 1.1.0",
  "js-sys",
  "pin-project",
@@ -5589,31 +5492,6 @@ dependencies = [
  "thiserror",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-render"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fd9306aef67cfd4449823aadcd14e3958e0800aa2183955a309112a84ec7764"
-dependencies = [
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-storage"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d6ab60bf5dbfd6f0ed1f7843da31b41010515c745735c970e821945ca91e480"
-dependencies = [
- "gloo-utils 0.1.7",
- "js-sys",
- "serde",
- "serde_json",
- "thiserror",
- "wasm-bindgen",
  "web-sys",
 ]
 
@@ -5641,19 +5519,6 @@ dependencies = [
 
 [[package]]
 name = "gloo-utils"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "037fcb07216cb3a30f7292bd0176b050b7b9a052ba830ef7d5d65f6dc64ba58e"
-dependencies = [
- "js-sys",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-utils"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b5555354113b18c547c1d3a98fbf7fb32a9ff4f6fa112ce823a21641a0ba3aa"
@@ -5662,23 +5527,6 @@ dependencies = [
  "serde",
  "serde_json",
  "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-worker"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13471584da78061a28306d1359dd0178d8d6fc1c7c80e5e35d27260346e0516a"
-dependencies = [
- "anymap2",
- "bincode",
- "gloo-console",
- "gloo-utils 0.1.7",
- "js-sys",
- "serde",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -6378,6 +6226,9 @@ name = "id-arena"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25a2bc672d1148e28034f176e01fffebb08b35768468cc954630da77a1449005"
+dependencies = [
+ "rayon",
+]
 
 [[package]]
 name = "idea"
@@ -6976,7 +6827,7 @@ dependencies = [
 
 [[package]]
 name = "lazy-js-bundle"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 
 [[package]]
 name = "lazy_static"
@@ -7317,7 +7168,7 @@ dependencies = [
 
 [[package]]
 name = "manganis"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -7330,7 +7181,7 @@ dependencies = [
 
 [[package]]
 name = "manganis-core"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -7338,7 +7189,7 @@ dependencies = [
 
 [[package]]
 name = "manganis-macro"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "manganis-core",
  "proc-macro2",
@@ -10380,7 +10231,7 @@ dependencies = [
  "const_format",
  "dashmap",
  "futures",
- "gloo-net 0.6.0",
+ "gloo-net",
  "http 1.1.0",
  "http-body-util",
  "hyper 1.5.0",
@@ -11154,7 +11005,7 @@ dependencies = [
 
 [[package]]
 name = "suspense-carousel"
-version = "0.6.0-alpha.3"
+version = "0.6.0-alpha.4"
 dependencies = [
  "async-std",
  "dioxus",
@@ -11572,9 +11423,9 @@ dependencies = [
 
 [[package]]
 name = "throbber-widgets-tui"
-version = "0.7.1"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46994acd1137e3e5b78d9b9112d91596b20e64fc6ec788dfc0f2430a2e965633"
+checksum = "fad9e055cadd9da8b4a67662b962e3e67e96af491ae9cec7e88aaff92e7c3666"
 dependencies = [
  "rand 0.8.5",
  "ratatui",
@@ -12526,6 +12377,7 @@ dependencies = [
  "id-arena",
  "leb128",
  "log",
+ "rayon",
  "walrus-macro",
  "wasm-encoder",
  "wasmparser 0.212.0",

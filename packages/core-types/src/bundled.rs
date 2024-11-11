@@ -1,16 +1,22 @@
-static mut BUNDLED: bool = false;
-static mut CHECKED_YET: bool = false;
+use once_cell::sync::Lazy;
 
 pub fn is_bundled_app() -> bool {
-    // unsafe to implement a dumb cell without pulling in deps / mutexes
-    // we're okay with a race condition here since the bundled flag is always set to the same value
-    unsafe {
-        if !CHECKED_YET {
-            CHECKED_YET = true;
-            BUNDLED = std::env::var("DIOXUS_CLI_ENABLED").is_ok()
-                || !matches!(std::env::var("CARGO_MANIFEST_DIR"), Ok(path) if !path.is_empty());
+    static BUNDLED: Lazy<bool> = Lazy::new(|| {
+        // If the env var is set, we're bundled
+        if std::env::var("DIOXUS_CLI_ENABLED").is_ok() {
+            return true;
         }
 
-        BUNDLED
-    }
+        // If the cargo manifest dir is set, we're not bundled.
+        // Generally this is only set with `cargo run`
+        if let Ok(path) = std::env::var("CARGO_MANIFEST_DIR") {
+            if !path.is_empty() {
+                return false;
+            }
+        }
+
+        true
+    });
+
+    *BUNDLED
 }

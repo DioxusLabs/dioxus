@@ -1,7 +1,7 @@
 use crate::{Result, TraceSrc};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-use tracing::{debug, error, warn};
+use tracing::{error, trace, warn};
 
 const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
 
@@ -41,7 +41,7 @@ impl CliSettings {
         let path = path.join(GLOBAL_SETTINGS_FILE_NAME);
         let Some(data) = fs::read_to_string(path).ok() else {
             // We use a debug here because we expect the file to not exist.
-            debug!("failed to read `{}` config file", GLOBAL_SETTINGS_FILE_NAME);
+            trace!("failed to read `{}` config file", GLOBAL_SETTINGS_FILE_NAME);
             return None;
         };
 

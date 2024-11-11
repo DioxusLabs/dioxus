@@ -287,6 +287,8 @@ impl AppBundle {
     ///
     /// It's not guaranteed that they're different from any other folder
     fn prepare_build_dir(&self) -> Result<()> {
+        _ = std::fs::remove_dir_all(self.app_dir());
+
         create_dir_all(self.app_dir())?;
         create_dir_all(self.exe_dir())?;
         create_dir_all(self.asset_dir())?;
@@ -579,6 +581,11 @@ impl AppBundle {
                 })
                 .await
                 .unwrap()?;
+
+                // Run SSG and cache static routes
+                if self.build.build.ssg {
+                    self.run_ssg().await?;
+                }
             }
             Platform::MacOS => {}
             Platform::Windows => {}
@@ -646,7 +653,8 @@ impl AppBundle {
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
         let name = self.build.krate.executable_name().to_string();
-        let keep_debug = self.build.krate.config.web.wasm_opt.debug || (!self.build.build.release);
+        let keep_debug = self.build.krate.config.web.wasm_opt.debug;
+        let reference_types = self.build.krate.config.web.wasm_opt.reference_types;
 
         let start = std::time::Instant::now();
         tokio::task::spawn_blocking(move || {
@@ -657,9 +665,9 @@ impl AppBundle {
                 .debug(keep_debug)
                 .demangle(keep_debug)
                 .keep_debug(keep_debug)
-                .reference_types(true)
-                .remove_name_section(!keep_debug)
-                .remove_producers_section(!keep_debug)
+                .reference_types(reference_types)
+                .remove_name_section(true)
+                .remove_producers_section(true)
                 .out_name(&name)
                 .generate(&bindgen_outdir)
         })
@@ -716,6 +724,72 @@ impl AppBundle {
                 (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
             );
         }
+
+        Ok(())
+    }
+
+    async fn run_ssg(&self) -> anyhow::Result<()> {
+        use futures_util::stream::FuturesUnordered;
+        use futures_util::StreamExt;
+        use tokio::process::Command;
+
+        const PORT: u16 = 9999;
+
+        tracing::info!("Running SSG");
+
+        // Run the server executable
+        let _child = Command::new(
+            self.server_exe()
+                .context("Failed to find server executable")?,
+        )
+        .env(dioxus_cli_config::SERVER_PORT_ENV, PORT.to_string())
+        .env(dioxus_cli_config::SERVER_IP_ENV, "127.0.0.1")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()?;
+
+        // Wait a second for the server to start
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // Get the routes from the `/static_routes` endpoint
+        let mut routes = reqwest::Client::builder()
+            .build()?
+            .post(format!("http://127.0.0.1:{PORT}/api/static_routes"))
+            .send()
+            .await
+            .context("Failed to get static routes from server")?
+            .text()
+            .await
+            .map(|raw| serde_json::from_str::<String>(&raw).unwrap())
+            .inspect(|text| tracing::debug!("Got static routes: {text:?}"))
+            .context("Failed to parse static routes from server")?
+            .lines()
+            .map(|line| line.to_string())
+            .map(|line| async move {
+                tracing::info!("SSG: {line}");
+                reqwest::Client::builder()
+                    .build()?
+                    .get(format!("http://127.0.0.1:{PORT}{line}"))
+                    .header("Accept", "text/html")
+                    .send()
+                    .await
+            })
+            .collect::<FuturesUnordered<_>>();
+
+        while let Some(route) = routes.next().await {
+            match route {
+                Ok(route) => tracing::debug!("ssg success: {route:?}"),
+                Err(err) => tracing::error!("ssg error: {err:?}"),
+            }
+        }
+
+        // Wait a second for the cache to be written by the server
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        tracing::info!("SSG complete");
+
+        drop(_child);
 
         Ok(())
     }

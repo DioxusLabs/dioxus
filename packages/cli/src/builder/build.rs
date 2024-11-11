@@ -6,7 +6,10 @@ use crate::{build::BuildArgs, link::LinkAction};
 use crate::{AppBundle, Platform};
 use anyhow::Context;
 use serde::Deserialize;
-use std::{path::PathBuf, process::Stdio};
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 use tokio::{io::AsyncBufReadExt, process::Command};
 
 #[derive(Clone, Debug)]
@@ -50,7 +53,7 @@ impl BuildRequest {
     pub(crate) async fn build_app(&self) -> Result<BuildArtifacts> {
         tracing::debug!("Building app...");
         let exe = self.build_cargo().await?;
-        let assets = self.collect_assets().await?;
+        let assets = self.collect_assets(&exe).await?;
         Ok(BuildArtifacts { exe, assets })
     }
 
@@ -185,7 +188,7 @@ impl BuildRequest {
     /// This will execute `dx` with an env var set to force `dx` to operate as a linker, and then
     /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
     /// tables marked by manganis and parsing them as a ResourceAsset.
-    pub(crate) async fn collect_assets(&self) -> anyhow::Result<AssetManifest> {
+    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
         // If assets are skipped, we don't need to collect them
@@ -193,43 +196,11 @@ impl BuildRequest {
             return Ok(AssetManifest::default());
         }
 
-        // Create a temp file to put the output of the args
-        // We need to do this since rustc won't actually print the link args to stdout, so we need to
-        // give `dx` a file to dump its env::args into
-        let tmp_file = tempfile::NamedTempFile::new()?;
+        let mut manifest = AssetManifest::default();
 
-        // Run `cargo rustc` again, but this time with a custom linker (dx) and an env var to force
-        // `dx` to act as a linker
-        //
-        // This will force `dx` to look through the incremental cache and find the assets from the previous build
-        Command::new("cargo")
-            // .env("RUSTFLAGS", self.rust_flags())
-            .arg("rustc")
-            .args(self.build_arguments())
-            .arg("--offline") /* don't use the network, should already be resolved */
-            .arg("--")
-            .arg(format!(
-                "-Clinker={}",
-                std::env::current_exe()
-                    .unwrap()
-                    .canonicalize()
-                    .unwrap()
-                    .display()
-            ))
-            .env(
-                LinkAction::ENV_VAR_NAME,
-                LinkAction::BuildAssetManifest {
-                    destination: tmp_file.path().to_path_buf(),
-                }
-                .to_json(),
-            )
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
+        _ = manifest.add_from_object_path(exe.to_path_buf());
 
-        // The linker wrote the manifest to the temp file, let's load it!
-        AssetManifest::load_from_file(tmp_file.path())
+        Ok(manifest)
     }
 
     /// Create a list of arguments for cargo builds
@@ -415,5 +386,52 @@ impl BuildRequest {
                 .sum::<usize>() as f64
                 / 3.5) as usize
         })
+    }
+
+    /// We used to require traversing incremental artifacts for assets that were included but not
+    /// directly exposed to the final binary. Now, however, we force APIs to carry items created
+    /// from asset calls into top-level items such that they *do* get included in the final binary.
+    ///
+    /// There's a chance that's not actually true, so this function is kept around in case we do
+    /// need to revert to "deep extraction".
+    #[allow(unused)]
+    async fn deep_linker_asset_extract(&self) -> Result<AssetManifest> {
+        // Create a temp file to put the output of the args
+        // We need to do this since rustc won't actually print the link args to stdout, so we need to
+        // give `dx` a file to dump its env::args into
+        let tmp_file = tempfile::NamedTempFile::new()?;
+
+        // Run `cargo rustc` again, but this time with a custom linker (dx) and an env var to force
+        // `dx` to act as a linker
+        //
+        // This will force `dx` to look through the incremental cache and find the assets from the previous build
+        Command::new("cargo")
+            // .env("RUSTFLAGS", self.rust_flags())
+            .arg("rustc")
+            .args(self.build_arguments())
+            .arg("--offline") /* don't use the network, should already be resolved */
+            .arg("--")
+            .arg(format!(
+                "-Clinker={}",
+                std::env::current_exe()
+                    .unwrap()
+                    .canonicalize()
+                    .unwrap()
+                    .display()
+            ))
+            .env(
+                LinkAction::ENV_VAR_NAME,
+                LinkAction::BuildAssetManifest {
+                    destination: tmp_file.path().to_path_buf(),
+                }
+                .to_json(),
+            )
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+
+        // The linker wrote the manifest to the temp file, let's load it!
+        Ok(AssetManifest::load_from_file(tmp_file.path())?)
     }
 }
