@@ -61,6 +61,8 @@ members = [
     "packages/devtools-types",
     "packages/isrg",
     "packages/rsx-hotreload",
+    "packages/const-serialize",
+    "packages/derive-const-serialize",
 
     # Static generation examples
     # "packages/static-generation/examples/simple",
@@ -148,6 +150,8 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.4" }
 manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.4" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.4" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.0-alpha.4" }
+const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.4" }
+derive-const-serialize = { path = "packages/derive-const-serialize", version = "0.6.0-alpha.4" }
 
 warnings = { version = "0.2.0" }
 

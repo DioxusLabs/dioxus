@@ -1,0 +1,13 @@
+[package]
+name = "const-serialize"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+derive-const-serialize = { workspace = true }
+
+[dev-dependencies]
+const-serialize = { path = "." }
+
+[features]
+test-big-endian = []
