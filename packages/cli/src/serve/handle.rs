@@ -68,6 +68,7 @@ impl AppHandle {
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
             ("DIOXUS_CLI_ENABLED", "true".to_string()),
+            ("RUST_BACKTRACE", "1".to_string()),
             (
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
                 devserver_ip.to_string(),
@@ -262,14 +263,12 @@ impl AppHandle {
             .arg("launch")
             .arg("--console")
             .arg("booted")
-            .arg("com.dioxuslabs")
+            .arg(self.app.bundle_identifier())
             .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .spawn()?;
-
-        tracing::debug!("Launched app on simulator with exit code: {child:?}");
 
         Ok(child)
     }

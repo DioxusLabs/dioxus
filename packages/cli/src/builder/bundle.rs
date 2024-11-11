@@ -3,11 +3,11 @@ use crate::{assets::AssetManifest, TraceSrc};
 use crate::{BuildRequest, Platform};
 use anyhow::Context;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::sync::atomic::AtomicUsize;
 use std::{
     fs::create_dir_all,
     path::{Path, PathBuf},
 };
+use std::{sync::atomic::AtomicUsize, time::Duration};
 use wasm_bindgen_cli_support::Bindgen;
 
 /// The end result of a build.
@@ -93,6 +93,7 @@ pub(crate) struct AppBundle {
 pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
     pub(crate) assets: AssetManifest,
+    pub(crate) time_taken: Duration,
 }
 
 impl AppBundle {
@@ -472,10 +473,10 @@ impl AppBundle {
     ///
     /// todo(jon): we should name the app properly instead of making up the exe name. It's kinda okay for dev mode, but def not okay for prod
     pub fn main_exe(&self) -> PathBuf {
-        self.exe_dir().join(self.exe_name())
+        self.exe_dir().join(self.platform_exe_name())
     }
 
-    fn exe_name(&self) -> String {
+    fn platform_exe_name(&self) -> String {
         match self.build.build.platform() {
             Platform::MacOS => self.build.krate.executable_name().to_string(),
             Platform::Ios => self.build.krate.executable_name().to_string(),
@@ -639,8 +640,8 @@ impl AppBundle {
             Platform::Server => platform_dir.clone(), // ends up *next* to the public folder
 
             // These might not actually need to be called `.app` but it does let us run these with `open`
-            Platform::MacOS => platform_dir.join(format!("{}.app", self.exe_name())),
-            Platform::Ios => platform_dir.join(format!("{}.app", self.exe_name())),
+            Platform::MacOS => platform_dir.join(format!("{}.app", self.platform_exe_name())),
+            Platform::Ios => platform_dir.join(format!("{}.app", self.platform_exe_name())),
 
             // in theory, these all could end up in the build dir
             Platform::Linux => platform_dir.join("app"), // .appimage (after bundling)
@@ -799,6 +800,10 @@ impl AppBundle {
 
         Ok(())
     }
+
+    pub(crate) fn bundle_identifier(&self) -> String {
+        format!("com.dioxuslabs.{}", self.build.krate.executable_name())
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -814,10 +819,10 @@ impl AppBundle {
         Ok(handlebars::Handlebars::new().render_template(
             include_str!("../../assets/macos/mac.plist.hbs"),
             &InfoPlistData {
-                display_name: self.exe_name(),
-                bundle_name: self.exe_name(),
-                executable_name: self.exe_name(),
-                bundle_identifier: format!("com.dioxuslabs.{}", self.exe_name()),
+                display_name: self.platform_exe_name(),
+                bundle_name: self.platform_exe_name(),
+                executable_name: self.platform_exe_name(),
+                bundle_identifier: format!("com.dioxuslabs.{}", self.platform_exe_name()),
             },
         )?)
     }
@@ -826,10 +831,10 @@ impl AppBundle {
         Ok(handlebars::Handlebars::new().render_template(
             include_str!("../../assets/ios/ios.plist.hbs"),
             &InfoPlistData {
-                display_name: self.exe_name(),
-                bundle_name: self.exe_name(),
-                executable_name: self.exe_name(),
-                bundle_identifier: format!("com.dioxuslabs.{}", self.exe_name()),
+                display_name: self.platform_exe_name(),
+                bundle_name: self.platform_exe_name(),
+                executable_name: self.platform_exe_name(),
+                bundle_identifier: format!("com.dioxuslabs.{}", self.platform_exe_name()),
             },
         )?)
     }

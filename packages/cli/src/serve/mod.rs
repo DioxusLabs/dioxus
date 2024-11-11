@@ -54,15 +54,15 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
     tracing::info!(
-        r#"Serving your Dioxus app: {} 🚀
-
-               - Press `ctrl+c` to exit the server
-               - Press `r` to rebuild the app
-               - Press `o` to open the app
-               - Press `v` to toggle verbose logging
-               - Press `/` for more commands and shortcuts
-
-               Learn more at https://dioxuslabs.com/learn/0.6/getting_started"#,
+        r#"-----------------------------------------------------------------
+                Serving your Dioxus app: {} 🚀
+                • Press `ctrl+c` to exit the server
+                • Press `r` to rebuild the app
+                • Press `o` to open the app
+                • Press `v` to toggle verbose logging
+                • Press `/` for more commands and shortcuts
+                Learn more at https://dioxuslabs.com/learn/0.6/getting_started
+               ----------------------------------------------------------------"#,
         krate.executable_name()
     );
 
@@ -214,6 +214,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 // `Full rebuild:` to line up with
                 // `Hotreloading:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
+
                 builder.rebuild(args.build_arguments.clone());
                 runner.file_map.force_rebuild();
                 devserver.start_build().await

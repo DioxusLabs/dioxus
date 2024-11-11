@@ -35,8 +35,12 @@ impl RunArgs {
         // They won't generally be emitted
         loop {
             match runner.wait().await {
-                ServeUpdate::StderrReceived { platform, msg } => println!("[{platform}]: {msg}"),
-                ServeUpdate::StdoutReceived { platform, msg } => println!("[{platform}]: {msg}"),
+                ServeUpdate::StderrReceived { platform, msg } => {
+                    tracing::info!("[{platform}]: {msg}")
+                }
+                ServeUpdate::StdoutReceived { platform, msg } => {
+                    tracing::info!("[{platform}]: {msg}")
+                }
                 ServeUpdate::ProcessExited { platform, status } => {
                     runner.kill(platform);
                     tracing::info!("[{platform}]: process exited with status: {status:?}");

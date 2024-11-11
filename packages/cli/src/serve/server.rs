@@ -256,7 +256,7 @@ impl WebServer {
             return;
         }
 
-        tracing::debug!("Sending hotreload to clients {:?}", reload);
+        tracing::trace!("Sending hotreload to clients {:?}", reload);
 
         let msg = DevserverMsg::HotReload(reload);
         let msg = serde_json::to_string(&msg).unwrap();
@@ -287,7 +287,7 @@ impl WebServer {
 
     /// Tells all clients to reload if possible for new changes.
     pub(crate) async fn send_reload_command(&mut self) {
-        tracing::debug!("Sending reload to toast");
+        tracing::trace!("Sending reload to toast");
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 

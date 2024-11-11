@@ -17,8 +17,15 @@ libc = "0.2.159"
 once_cell.workspace = true
 
 [features]
-default = ["jnibindings"]
+default = ["jnibindings", "tokio_runtime", "devtools", "exception"]
 jnibindings = []
+tokio_runtime = ["dioxus-desktop/tokio_runtime"]
+fullscreen = ["dioxus-desktop/fullscreen"]
+transparent = ["dioxus-desktop/transparent"]
+devtools = ["dioxus-desktop/devtools"]
+gnu = ["dioxus-desktop/gnu"]
+exception = ["dioxus-desktop/exception"]
+
 
 [lib]
 doctest = false

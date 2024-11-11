@@ -111,6 +111,16 @@ impl AppRunner {
         // todo(jon): we should allow rebinding to the same port in fullstack itself
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
+        // Add some cute logging
+        if self.builds_opened == 0 {
+            tracing::info!(
+                "Build completed successfully in {:?}ms, launching app! 💫",
+                app.app.time_taken.as_millis()
+            );
+        } else {
+            tracing::info!("Build completed in {:?}ms", app.app.time_taken.as_millis());
+        }
+
         // Start the new app before we kill the old one to give it a little bit of time
         let mut handle = AppHandle::new(app).await?;
         handle
@@ -120,10 +130,6 @@ impl AppRunner {
                 self.builds_opened == 0 && should_open_web,
             )
             .await?;
-
-        if self.builds_opened == 0 {
-            tracing::info!("Build completed successfully, launching app! 💫");
-        }
 
         self.builds_opened += 1;
         self.running.insert(platform, handle);
@@ -269,17 +275,17 @@ impl AppRunner {
                     .arg("simctl")
                     .arg("get_app_container")
                     .arg("booted")
-                    .arg("com.dioxuslabs")
+                    .arg(runner.app.bundle_identifier())
                     .output()
                     .await;
 
                 if let Ok(res) = res {
-                    tracing::debug!("Using runtime asset dir: {:?}", res);
+                    tracing::trace!("Using runtime asset dir: {:?}", res);
 
                     if let Ok(out) = String::from_utf8(res.stdout) {
                         let out = out.trim();
 
-                        tracing::debug!("Setting Runtime asset dir: {out:?}");
+                        tracing::trace!("Setting Runtime asset dir: {out:?}");
                         runner.runtime_asst_dir = Some(PathBuf::from(out));
                     }
                 }

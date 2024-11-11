@@ -97,11 +97,12 @@ objc = "0.2.7"
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "wry/objc-exception", "devtools"]
+default = ["tokio_runtime", "exception", "devtools"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
+exception = ["wry/objc-exception"]
 gnu = []
 
 [package.metadata.docs.rs]

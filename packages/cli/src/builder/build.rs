@@ -9,6 +9,7 @@ use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
+    time::Instant,
 };
 use tokio::{io::AsyncBufReadExt, process::Command};
 
@@ -59,9 +60,17 @@ impl BuildRequest {
 
     pub(crate) async fn build_app(&self) -> Result<BuildArtifacts> {
         tracing::debug!("Building app...");
+
+        let start = Instant::now();
+
         let exe = self.build_cargo().await?;
         let assets = self.collect_assets(&exe).await?;
-        Ok(BuildArtifacts { exe, assets })
+
+        Ok(BuildArtifacts {
+            exe,
+            assets,
+            time_taken: start.elapsed(),
+        })
     }
 
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
