@@ -33,6 +33,5 @@ define_config_macro!(web if feature = "web");
 define_config_macro!(desktop if feature = "desktop");
 define_config_macro!(mobile if feature = "mobile");
 define_config_macro!(fullstack if feature = "fullstack");
-define_config_macro!(static_generation if feature = "static-generation");
 define_config_macro!(ssr if feature = "ssr");
 define_config_macro!(liveview if feature = "liveview");

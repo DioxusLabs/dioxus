@@ -19,7 +19,6 @@ quote = { workspace = true }
 [features]
 default = []
 fullstack = []
-static-generation = []
 desktop = []
 mobile = []
 web = []

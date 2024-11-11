@@ -19,7 +19,6 @@
 //! - `mobile`: enables the mobile platform
 //! - `web`: enables the web platform. If the fullstack platform is enabled, this will set the fullstack platform to client mode
 //! - `liveview`: enables the liveview platform
-//! - `static-generation`: enables the static generation platform. This must be used in combination with the `web` feature for wasm builds and `axum` feature for server builds
 //! - `axum`: enables the axum server with static generation or fullstack and sets the platform to server mode
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
@@ -119,13 +118,6 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     pub use dioxus_fullstack::prelude::*;
 
-    #[cfg(all(feature = "static-generation", not(feature = "fullstack")))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(feature = "static-generation", not(feature = "fullstack"))))
-    )]
-    pub use dioxus_static_site_generation::prelude::*;
-
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     pub use dioxus_router;
@@ -154,10 +146,6 @@ pub use dioxus_router as router;
 #[cfg(feature = "fullstack")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
 pub use dioxus_fullstack as fullstack;
-
-#[cfg(feature = "static-generation")]
-#[cfg_attr(docsrs, doc(cfg(feature = "static-generation")))]
-pub use dioxus_static_site_generation as static_site_generation;
 
 #[cfg(feature = "desktop")]
 #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]

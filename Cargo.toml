@@ -54,7 +54,6 @@ members = [
     "packages/server-macro",
     "packages/signals",
     "packages/ssr",
-    "packages/static-generation",
     "packages/lazy-js-bundle",
     "packages/cli-config",
     "packages/devtools",
@@ -62,11 +61,6 @@ members = [
     "packages/isrg",
     "packages/rsx-hotreload",
     "packages/dx-wire-format",
-
-    # Static generation examples
-    # "packages/static-generation/examples/simple",
-    # "packages/static-generation/examples/router",
-    # "packages/static-generation/examples/github-pages",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -95,9 +89,6 @@ members = [
     "examples/fullstack-streaming",
     "examples/fullstack-desktop",
     "examples/fullstack-auth",
-    "examples/ssg-simple",
-    "examples/ssg-router",
-    "examples/ssg-github-pages",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -143,7 +134,6 @@ generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.4" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.4" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.4" }
-dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.4" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.4", default-features = false }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-alpha.4" }
 
