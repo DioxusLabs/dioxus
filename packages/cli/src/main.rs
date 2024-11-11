@@ -4,7 +4,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod assets;
-mod builder;
+mod build;
 mod bundle_utils;
 mod cli;
 mod config;
@@ -23,7 +23,7 @@ mod settings;
 mod slog;
 mod tooling;
 
-pub(crate) use builder::*;
+pub(crate) use build::*;
 pub(crate) use cli::*;
 pub(crate) use config::*;
 pub(crate) use dioxus_crate::*;

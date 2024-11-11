@@ -238,13 +238,13 @@ impl AppHandle {
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
     async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        tracing::debug!("Installing app to simulator {:?}", self.app.app_dir());
+        tracing::debug!("Installing app to simulator {:?}", self.app.root_dir());
 
         let res = Command::new("xcrun")
             .arg("simctl")
             .arg("install")
             .arg("booted")
-            .arg(self.app.app_dir())
+            .arg(self.app.root_dir())
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .output()
@@ -308,7 +308,7 @@ impl AppHandle {
         // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
 
         use serde_json::Value;
-        let app_path = self.app.app_dir();
+        let app_path = self.app.root_dir();
 
         install_app(&app_path).await?;
 

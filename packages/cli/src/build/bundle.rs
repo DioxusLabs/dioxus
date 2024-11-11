@@ -1,7 +1,8 @@
-use crate::Result;
 use crate::{assets::AssetManifest, TraceSrc};
+use crate::{build, Result};
 use crate::{BuildRequest, Platform};
 use anyhow::Context;
+use once_cell::sync::{Lazy, OnceCell};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::create_dir_all,
@@ -9,6 +10,8 @@ use std::{
 };
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use wasm_bindgen_cli_support::Bindgen;
+
+use super::templates::InfoPlistData;
 
 /// The end result of a build.
 ///
@@ -276,7 +279,7 @@ impl AppBundle {
         bundle.write_metadata().await?;
         bundle.optimize().await?;
 
-        tracing::debug!("Bundle created at {}", bundle.app_dir().display());
+        tracing::debug!("Bundle created at {}", bundle.root_dir().display());
 
         Ok(bundle)
     }
@@ -290,16 +293,32 @@ impl AppBundle {
     ///
     /// It's not guaranteed that they're different from any other folder
     fn prepare_build_dir(&self) -> Result<()> {
-        _ = std::fs::remove_dir_all(self.app_dir());
+        static INTIALIZED: OnceCell<Result<()>> = OnceCell::new();
 
-        create_dir_all(self.app_dir())?;
-        create_dir_all(self.exe_dir())?;
-        create_dir_all(self.asset_dir())?;
+        let success = INTIALIZED.get_or_init(|| {
+            _ = std::fs::remove_dir_all(self.root_dir());
 
-        // we could download the templates from somewhere (github?) but after having banged my head against
-        // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
-        // by writing them here.
-        if let Platform::Android = self.build.build.platform() {}
+            create_dir_all(self.root_dir())?;
+            create_dir_all(self.exe_dir())?;
+            create_dir_all(self.asset_dir())?;
+
+            tracing::debug!("Initialized Root dir: {:?}", self.root_dir());
+            tracing::debug!("Initialized Exe dir: {:?}", self.exe_dir());
+            tracing::debug!("Initialized Asset dir: {:?}", self.asset_dir());
+
+            // we could download the templates from somewhere (github?) but after having banged my head against
+            // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
+            // by writing them here.
+            if let Platform::Android = self.build.build.platform() {
+                self.build_android_app_dir()?;
+            }
+
+            Ok(())
+        });
+
+        if let Err(e) = success.as_ref() {
+            return Err(format!("Failed to initialize build directory: {e}").into());
+        }
 
         Ok(())
     }
@@ -346,7 +365,7 @@ impl AppBundle {
 
                 // Write the index.html file with the pre-configured contents we got from pre-rendering
                 std::fs::write(
-                    self.app_dir().join("index.html"),
+                    self.root_dir().join("index.html"),
                     self.build.prepare_html()?,
                 )?;
             }
@@ -456,16 +475,24 @@ impl AppBundle {
     /// todo(jon): investigate if we need to put .wasm in `wasm`. It kinda leaks implementation details, which ideally we don't want to do.
     pub fn exe_dir(&self) -> PathBuf {
         match self.build.build.platform() {
-            Platform::MacOS => self.app_dir().join("Contents").join("MacOS"),
-            Platform::Android => self.app_dir().join("jniLibs").join("arm64-v8a"),
-            Platform::Web => self.app_dir().join("wasm"),
+            Platform::MacOS => self.root_dir().join("Contents").join("MacOS"),
+            Platform::Web => self.root_dir().join("wasm"),
+
+            // Android has a whole build structure to it
+            Platform::Android => self
+                .root_dir()
+                .join("app")
+                .join("src")
+                .join("main")
+                .join("jniLibs")
+                .join("arm64-v8a"),
 
             // these are all the same, I think?
             Platform::Windows
             | Platform::Linux
             | Platform::Ios
             | Platform::Server
-            | Platform::Liveview => self.app_dir(),
+            | Platform::Liveview => self.root_dir(),
         }
     }
 
@@ -495,11 +522,17 @@ impl AppBundle {
 
     pub fn asset_dir(&self) -> PathBuf {
         match self.build.build.platform() {
-            // macos why are you weird
             Platform::MacOS => self
-                .app_dir()
+                .root_dir()
                 .join("Contents")
                 .join("Resources")
+                .join("assets"),
+
+            Platform::Android => self
+                .root_dir()
+                .join("app")
+                .join("src")
+                .join("main")
                 .join("assets"),
 
             // everyone else is soooo normal, just app/assets :)
@@ -507,9 +540,8 @@ impl AppBundle {
             | Platform::Ios
             | Platform::Windows
             | Platform::Linux
-            | Platform::Android
             | Platform::Server
-            | Platform::Liveview => self.app_dir().join("assets"),
+            | Platform::Liveview => self.root_dir().join("assets"),
         }
     }
 
@@ -539,13 +571,13 @@ impl AppBundle {
         // write the Info.plist file
         match self.build.build.platform() {
             Platform::MacOS => {
-                let dest = self.app_dir().join("Contents").join("Info.plist");
+                let dest = self.root_dir().join("Contents").join("Info.plist");
                 let plist = self.macos_plist_contents()?;
                 std::fs::write(dest, plist)?;
             }
 
             Platform::Ios => {
-                let dest = self.app_dir().join("Info.plist");
+                let dest = self.root_dir().join("Info.plist");
                 let plist = self.ios_plist_contents()?;
                 std::fs::write(dest, plist)?;
             }
@@ -620,7 +652,7 @@ impl AppBundle {
         None
     }
 
-    /// returns the path to .app/.apk/.appimage folder
+    /// returns the path to root build folder. This will be our working directory for the build.
     ///
     /// we only add an extension to the folders where it sorta matters that it's named with the extension.
     /// for example, on mac, the `.app` indicates we can `open` it and it pulls in icons, dylibs, etc.
@@ -629,7 +661,11 @@ impl AppBundle {
     /// to run in the simulator.
     ///
     /// For windows/linux, it's also not important since we're just running the exe directly out of the folder
-    pub(crate) fn app_dir(&self) -> PathBuf {
+    ///
+    /// The idea of this folder is that we can run our top-level build command against it and we'll get
+    /// a final build output somewhere. Some platforms have basically no build command, and can simply
+    /// be ran by executing the exe directly.
+    pub(crate) fn root_dir(&self) -> PathBuf {
         let platform_dir = self
             .build
             .krate
@@ -643,10 +679,10 @@ impl AppBundle {
             Platform::MacOS => platform_dir.join(format!("{}.app", self.platform_exe_name())),
             Platform::Ios => platform_dir.join(format!("{}.app", self.platform_exe_name())),
 
-            // in theory, these all could end up in the build dir
-            Platform::Linux => platform_dir.join("app"), // .appimage (after bundling)
+            // in theory, these all could end up directly in the root dir
+            Platform::Android => platform_dir.join("apk"), // .apk (after bundling)
+            Platform::Linux => platform_dir.join("app"),   // .appimage (after bundling)
             Platform::Windows => platform_dir.join("app"), // .exe (after bundling)
-            Platform::Android => platform_dir.join("app"), // .apk (after bundling)
             Platform::Liveview => platform_dir.join("app"), // .exe (after bundling)
         }
     }
@@ -804,38 +840,116 @@ impl AppBundle {
     pub(crate) fn bundle_identifier(&self) -> String {
         format!("com.dioxuslabs.{}", self.build.krate.executable_name())
     }
-}
 
-#[derive(serde::Serialize)]
-struct InfoPlistData {
-    display_name: String,
-    bundle_name: String,
-    bundle_identifier: String,
-    executable_name: String,
-}
-
-impl AppBundle {
     fn macos_plist_contents(&self) -> Result<String> {
-        Ok(handlebars::Handlebars::new().render_template(
-            include_str!("../../assets/macos/mac.plist.hbs"),
-            &InfoPlistData {
-                display_name: self.platform_exe_name(),
-                bundle_name: self.platform_exe_name(),
-                executable_name: self.platform_exe_name(),
-                bundle_identifier: format!("com.dioxuslabs.{}", self.platform_exe_name()),
-            },
-        )?)
+        handlebars::Handlebars::new()
+            .render_template(
+                include_str!("../../assets/macos/mac.plist.hbs"),
+                &InfoPlistData {
+                    display_name: self.platform_exe_name(),
+                    bundle_name: self.platform_exe_name(),
+                    executable_name: self.platform_exe_name(),
+                    bundle_identifier: format!("com.dioxuslabs.{}", self.platform_exe_name()),
+                },
+            )
+            .map_err(|e| e.into())
     }
 
     fn ios_plist_contents(&self) -> Result<String> {
-        Ok(handlebars::Handlebars::new().render_template(
-            include_str!("../../assets/ios/ios.plist.hbs"),
-            &InfoPlistData {
-                display_name: self.platform_exe_name(),
-                bundle_name: self.platform_exe_name(),
-                executable_name: self.platform_exe_name(),
-                bundle_identifier: format!("com.dioxuslabs.{}", self.platform_exe_name()),
-            },
-        )?)
+        handlebars::Handlebars::new()
+            .render_template(
+                include_str!("../../assets/ios/ios.plist.hbs"),
+                &InfoPlistData {
+                    display_name: self.platform_exe_name(),
+                    bundle_name: self.platform_exe_name(),
+                    executable_name: self.platform_exe_name(),
+                    bundle_identifier: format!("com.dioxuslabs.{}", self.platform_exe_name()),
+                },
+            )
+            .map_err(|e| e.into())
+    }
+
+    fn build_android_app_dir(&self) -> Result<()> {
+        use std::fs::{create_dir_all, write};
+        let root = self.root_dir();
+
+        // Build out the directory structure
+        let wrapper = root.join("gradle").join("wrapper");
+        let build_src = root.join("buildSrc");
+        let build_src_kotlin = build_src.join("src").join("main").join("kotlin");
+        let app = root.join("app");
+        let app_main = app.join("src").join("main");
+        let app_kotlin = app_main.join("kotlin");
+        let app_jnilibs = app_main.join("jniLibs");
+        let app_assets = app_main.join("assets");
+
+        // And ensure they exist
+        create_dir_all(&wrapper)?;
+        create_dir_all(&build_src_kotlin)?;
+        create_dir_all(&app_kotlin)?;
+        create_dir_all(&app_jnilibs)?;
+        create_dir_all(&app_assets)?;
+
+        // Top-level gradle config
+        write(
+            root.join("build.gradle.kts"),
+            include_bytes!("../../assets/android/gen/build.gradle.kts"),
+        )?;
+        write(
+            root.join("gradle.properties"),
+            include_bytes!("../../assets/android/gen/gradle.properties"),
+        )?;
+        write(
+            root.join("gradlew"),
+            include_bytes!("../../assets/android/gen/gradlew"),
+        )?;
+        write(
+            root.join("gradlew.bat"),
+            include_bytes!("../../assets/android/gen/gradlew.bat"),
+        )?;
+        write(
+            root.join("settings.gradle"),
+            include_bytes!("../../assets/android/gen/settings.gradle"),
+        )?;
+
+        // Then the wrapper and its properties
+        write(
+            wrapper.join("gradle-wrapper.properties"),
+            include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.properties"),
+        )?;
+        write(
+            wrapper.join("gradle-wrapper.jar"),
+            include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.jar"),
+        )?;
+
+        // Now the buildSrc directory
+        write(
+            build_src.join("build.gradle.kts"),
+            include_bytes!("../../assets/android/gen/buildSrc/build.gradle.kts"),
+        )?;
+        write(
+            build_src_kotlin.join("RustPlugin.kt"),
+            include_bytes!("../../assets/android/gen/buildSrc/src/main/kotlin/RustPlugin.kt"),
+        )?;
+        write(
+            build_src_kotlin.join("BuildTask.kt"),
+            include_bytes!("../../assets/android/gen/buildSrc/src/main/kotlin/BuildTask.kt"),
+        )?;
+
+        // Now the app directory
+        write(
+            app.join("build.gradle.kts"),
+            include_bytes!("../../assets/android/gen/app/build.gradle.kts"),
+        )?;
+        write(
+            app.join("proguard-rules.pro"),
+            include_bytes!("../../assets/android/gen/app/proguard-rules.pro"),
+        )?;
+        write(
+            app.join("src").join("main").join("AndroidManifest.xml"),
+            include_bytes!("../../assets/android/gen/app/src/main/AndroidManifest.xml"),
+        )?;
+
+        Ok(())
     }
 }

@@ -1,4 +1,4 @@
-use crate::{build::BuildArgs, AppBundle, Builder, DioxusCrate, Platform};
+use crate::{AppBundle, BuildArgs, Builder, DioxusCrate, Platform};
 use anyhow::Context;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
@@ -100,20 +100,23 @@ impl Bundle {
             }
 
             Platform::Web => {
-                tracing::info!("App available at: {}", bundle.app_dir().display());
+                tracing::info!("App available at: {}", bundle.root_dir().display());
             }
 
             Platform::Ios => {
                 tracing::warn!("Signed iOS bundles are not yet supported");
-                tracing::info!("The bundle is available at: {}", bundle.app_dir().display());
+                tracing::info!(
+                    "The bundle is available at: {}",
+                    bundle.root_dir().display()
+                );
             }
 
             Platform::Server => {
-                tracing::info!("Server available at: {}", bundle.app_dir().display())
+                tracing::info!("Server available at: {}", bundle.root_dir().display())
             }
             Platform::Liveview => tracing::info!(
                 "Liveview server available at: {}",
-                bundle.app_dir().display()
+                bundle.root_dir().display()
             ),
 
             Platform::Android => {

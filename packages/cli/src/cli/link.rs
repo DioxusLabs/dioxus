@@ -1,7 +1,6 @@
+use crate::assets::AssetManifest;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-
-use crate::assets::AssetManifest;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LinkAction {

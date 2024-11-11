@@ -323,14 +323,13 @@ impl DioxusCrate {
             if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_SERVER) {
                 let mut server = toml_edit::Table::new();
                 server.insert("inherits", Item::Value("dev".into()));
-                server.insert("opt-level", Item::Value(2.into()));
+                // server.insert("opt-level", Item::Value(2.into()));
                 entry.insert(Item::Table(server));
             }
 
             if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_ANDROID) {
                 let mut android = toml_edit::Table::new();
                 android.insert("inherits", Item::Value("dev".into()));
-                android.insert("opt-level", Item::Value(2.into()));
                 entry.insert(Item::Table(android));
             }
         }

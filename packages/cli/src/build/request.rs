@@ -2,7 +2,7 @@ use super::{progress::ProgressTx, BuildArtifacts};
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use crate::{assets::AssetManifest, TraceSrc};
-use crate::{build::BuildArgs, link::LinkAction};
+use crate::{link::LinkAction, BuildArgs};
 use crate::{AppBundle, Platform};
 use anyhow::Context;
 use serde::Deserialize;

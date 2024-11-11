@@ -1,11 +1,13 @@
+//! Run linting against the user's codebase.
+//!
+//! For reference, the rustfmt main.rs file
+//! https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
+
 use super::*;
 use crate::DioxusCrate;
 use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::path::Path;
-
-// For reference, the rustfmt main.rs file
-// https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
@@ -111,7 +113,6 @@ fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
     };
 
     // load the gitignore
-
     for entry in folder {
         let Ok(entry) = entry else {
             continue;

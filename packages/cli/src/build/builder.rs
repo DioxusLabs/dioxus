@@ -244,7 +244,7 @@ impl Builder {
                 }
                 BuildUpdate::BuildReady { bundle } => {
                     tracing::debug!(json = ?StructuredOutput::BuildFinished {
-                        path: bundle.app_dir(),
+                        path: bundle.root_dir(),
                     });
                     return Ok(bundle);
                 }
