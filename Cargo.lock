@@ -3147,7 +3147,6 @@ dependencies = [
 name = "dioxus"
 version = "0.6.0-alpha.4"
 dependencies = [
- "axum 0.7.7",
  "criterion",
  "dioxus",
  "dioxus-config-macro",

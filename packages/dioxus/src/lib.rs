@@ -19,7 +19,7 @@
 //! - `mobile`: enables the mobile platform
 //! - `web`: enables the web platform. If the fullstack platform is enabled, this will set the fullstack platform to client mode
 //! - `liveview`: enables the liveview platform
-//! - `axum`: enables the axum server with static generation or fullstack and sets the platform to server mode
+//! - `server`: enables the server variant of dioxus
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -125,10 +125,6 @@ pub mod prelude {
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     pub use dioxus_router::prelude::*;
-
-    #[cfg(feature = "axum")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-    pub use axum;
 
     #[cfg(feature = "asset")]
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]

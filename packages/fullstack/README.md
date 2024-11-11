@@ -75,7 +75,7 @@ dioxus = { version = "*", features = ["fullstack"] }
 axum = { version = "0.7.0", optional = true }
 
 [features]
-server = ["dep:axum", "dioxus/server"]
+server = ["dioxus/server", "dep:axum"]
 web = ["dioxus/web"]
 ```
 
@@ -145,7 +145,7 @@ dioxus = { version = "*", features = ["fullstack"] }
 axum = { version = "0.7.0", optional = true }
 
 [features]
-server = ["dep:axum", "dioxus/server"]
+server = ["dioxus/server", "dep:axum"]
 web = ["dioxus/web"]
 ```
 
