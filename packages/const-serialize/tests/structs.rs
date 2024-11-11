@@ -144,12 +144,7 @@ fn test_serialize_const_layout_struct() {
     }
 
     #[derive(Debug, PartialEq, SerializeConst)]
-    struct OtherStruct {
-        a: u32,
-        b: u8,
-        c: Struct,
-        d: u32,
-    }
+    struct OtherStruct(u32, u8, Struct, u32);
 
     println!("{:?}", OtherStruct::MEMORY_LAYOUT);
 
@@ -159,12 +154,7 @@ fn test_serialize_const_layout_struct() {
         c: 0x33333333,
         d: 0x44444444,
     };
-    let data = OtherStruct {
-        a: 0x11111111,
-        b: 0x22,
-        c: data,
-        d: 0x44444444,
-    };
+    let data = OtherStruct(0x11111111, 0x22, data, 0x44444444);
     let mut buf = ConstWriteBuffer::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());

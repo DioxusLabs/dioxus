@@ -2441,6 +2441,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-serialize"
+version = "0.6.0-alpha.4"
+dependencies = [
+ "const-serialize",
+ "const-serialize-macro",
+]
+
+[[package]]
+name = "const-serialize-macro"
+version = "0.6.0-alpha.4"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+]
+
+[[package]]
 name = "const_format"
 version = "0.2.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7172,6 +7189,7 @@ version = "0.6.0-alpha.4"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "const-serialize",
  "dioxus-core-types",
  "dunce",
  "manganis-macro",

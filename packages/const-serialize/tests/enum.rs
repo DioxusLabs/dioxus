@@ -96,6 +96,32 @@ fn test_serialize_enum() {
 }
 
 #[test]
+fn test_serialize_u8_enum() {
+    #[derive(Clone, Copy, Debug, PartialEq, SerializeConst)]
+    #[repr(u8)]
+    enum Enum {
+        A,
+        B,
+    }
+
+    println!("{:#?}", Enum::MEMORY_LAYOUT);
+
+    let data = Enum::A;
+    let mut buf = ConstWriteBuffer::new();
+    buf = serialize_const(&data, buf);
+    println!("{:?}", buf.as_ref());
+    let buf = buf.read();
+    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+
+    let data = Enum::B;
+    let mut buf = ConstWriteBuffer::new();
+    buf = serialize_const(&data, buf);
+    println!("{:?}", buf.as_ref());
+    let buf = buf.read();
+    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+}
+
+#[test]
 fn test_serialize_corrupted_enum() {
     #[derive(Clone, Copy, Debug, PartialEq, SerializeConst)]
     #[repr(C, u8)]
@@ -129,7 +155,7 @@ fn test_serialize_nested_enum() {
     #[derive(Clone, Copy, Debug, PartialEq, SerializeConst)]
     #[repr(C, u16)]
     enum InnerEnum {
-        A { one: u8 },
+        A(u8),
         B { one: u64, two: f64 } = 1000,
         C { one: u32, two: u16 },
     }
@@ -146,7 +172,7 @@ fn test_serialize_nested_enum() {
 
     let data = Enum::B {
         one: 0x11,
-        two: InnerEnum::A { one: 0x22 },
+        two: InnerEnum::A(0x22),
     };
     let mut buf = ConstWriteBuffer::new();
     buf = serialize_const(&data, buf);

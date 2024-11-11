@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, LitInt};
 use syn::{parse_quote, Generics, WhereClause, WherePredicate};
 
 fn add_bounds(where_clause: &mut Option<WhereClause>, generics: &Generics) {
@@ -26,22 +26,28 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
 
     match input.data {
         syn::Data::Struct(data) => match data.fields {
-            syn::Fields::Named(fields) => {
+            syn::Fields::Unnamed(_) | syn::Fields::Named(_) => {
                 let ty = &input.ident;
                 let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
                 let mut where_clause = where_clause.cloned();
                 add_bounds(&mut where_clause, &input.generics);
-                let field_names = fields
-                    .named
-                    .iter()
-                    .map(|field| field.ident.as_ref().unwrap());
-                let field_types = fields.named.iter().map(|field| &field.ty);
+                let field_names = data.fields.iter().enumerate().map(|(i, field)| {
+                    field
+                        .ident
+                        .as_ref()
+                        .map(|ident| ident.to_token_stream())
+                        .unwrap_or_else(|| {
+                            LitInt::new(&i.to_string(), proc_macro2::Span::call_site())
+                                .into_token_stream()
+                        })
+                });
+                let field_types = data.fields.iter().map(|field| &field.ty);
                 quote! {
                     unsafe impl #impl_generics const_serialize::SerializeConst for #ty #ty_generics #where_clause {
                         const MEMORY_LAYOUT: const_serialize::Layout = const_serialize::Layout::Struct(const_serialize::StructEncoding::new(
                             std::mem::size_of::<Self>(),
                             &[#(
-                                const_serialize::PlainOldData::new(
+                                const_serialize::StructFieldEncoding::new(
                                     std::mem::offset_of!(#ty, #field_names),
                                     <#field_types as const_serialize::SerializeConst>::MEMORY_LAYOUT,
                                 ),
@@ -64,12 +70,6 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                     }
                 }.into()
             }
-            _ => syn::Error::new(
-                input.ident.span(),
-                "Only structs with named fields are supported",
-            )
-            .to_compile_error()
-            .into(),
         },
         syn::Data::Enum(data) => match data.variants.len() {
             0 => syn::Error::new(input.ident.span(), "Enums must have at least one variant")
@@ -118,14 +118,16 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                if !repr_c {
+                let variants_have_fields =
+                    data.variants.iter().any(|variant| variant.fields.len() > 0);
+                if !repr_c && variants_have_fields {
                     return syn::Error::new(input.ident.span(), "Enums must be repr(C, u*)")
                         .to_compile_error()
                         .into();
                 }
 
                 if discriminant_size.is_none() {
-                    return syn::Error::new(input.ident.span(), "Enums must be repr(C, u*)")
+                    return syn::Error::new(input.ident.span(), "Enums must be repr(u*)")
                         .to_compile_error()
                         .into();
                 }
@@ -147,14 +149,17 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                             }
                         });
                     last_discriminant = Some(discriminant.clone());
-                    let field_names = variant
-                        .fields
-                        .iter()
-                        .map(|field| field.ident.as_ref().unwrap());
+                    let field_names = variant.fields.iter().enumerate().map(|(i, field)| {
+                        field
+                            .ident
+                            .clone()
+                            .unwrap_or_else(|| quote::format_ident!("__field_{}", i))
+                    });
                     let field_types = variant.fields.iter().map(|field| &field.ty);
                     let generics = &input.generics;
                     quote! {
                         {
+                            #[allow(unused)]
                             #[derive(const_serialize::SerializeConst)]
                             #[repr(C)]
                             struct VariantStruct #generics {
@@ -193,7 +198,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 }.into()
             }
         },
-        _ => syn::Error::new(input.ident.span(), "Only structs are supported")
+        _ => syn::Error::new(input.ident.span(), "Only structs and enums are supported")
             .to_compile_error()
             .into(),
     }

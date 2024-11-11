@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{fmt::Debug, mem::MaybeUninit};
 
-const MAX_SIZE: usize = 2usize.pow(9);
+const MAX_SIZE: usize = 2usize.pow(10);
 
 pub struct ConstVec<T> {
     memory: [MaybeUninit<T>; MAX_SIZE],

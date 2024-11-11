@@ -4,16 +4,16 @@ mod const_buffers;
 mod const_vec;
 
 pub use const_buffers::{ConstReadBuffer, ConstWriteBuffer};
-pub use derive_const_serialize::SerializeConst;
+pub use const_serialize_macro::SerializeConst;
 
 /// Plain old data for a field. Stores the offset of the field in the struct and the encoding of the field.
 #[derive(Debug, Copy, Clone)]
-pub struct PlainOldData {
+pub struct StructFieldEncoding {
     offset: usize,
     encoding: Layout,
 }
 
-impl PlainOldData {
+impl StructFieldEncoding {
     pub const fn new(offset: usize, encoding: Layout) -> Self {
         Self { offset, encoding }
     }
@@ -23,11 +23,11 @@ impl PlainOldData {
 #[derive(Debug, Copy, Clone)]
 pub struct StructEncoding {
     size: usize,
-    data: &'static [PlainOldData],
+    data: &'static [StructFieldEncoding],
 }
 
 impl StructEncoding {
-    pub const fn new(size: usize, data: &'static [PlainOldData]) -> Self {
+    pub const fn new(size: usize, data: &'static [StructFieldEncoding]) -> Self {
         Self { size, data }
     }
 }
@@ -178,7 +178,7 @@ macro_rules! impl_serialize_const_tuple {
                     size: std::mem::size_of::<($($generic,)*)>(),
                     data: &[
                         $(
-                            PlainOldData::new(std::mem::offset_of!($inner, $generic_number), $generic::MEMORY_LAYOUT),
+                            StructFieldEncoding::new(std::mem::offset_of!($inner, $generic_number), $generic::MEMORY_LAYOUT),
                         )*
                     ],
                 })
@@ -198,6 +198,61 @@ impl_serialize_const_tuple!(T1: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6, T8:
 impl_serialize_const_tuple!(T1: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6, T8: 7, T9: 8);
 impl_serialize_const_tuple!(T1: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6, T8: 7, T9: 8, T10: 9);
 
+const MAX_STR_SIZE: usize = 256;
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct ConstStr {
+    len: u32,
+    bytes: [u8; MAX_STR_SIZE],
+}
+
+impl ConstStr {
+    pub const fn new(s: &str) -> Self {
+        let str_bytes = s.as_bytes();
+        let len = str_bytes.len() as u32;
+        let mut bytes = [0; MAX_STR_SIZE];
+        let mut i = 0;
+        while i < str_bytes.len() {
+            bytes[i] = str_bytes[i];
+            i += 1;
+        }
+        Self { len, bytes }
+    }
+
+    pub const fn as_str(&self) -> &str {
+        let str_bytes = self.bytes.split_at(self.len as usize).0;
+        match std::str::from_utf8(str_bytes) {
+            Ok(s) => s,
+            Err(_) => panic!(
+                "Invalid utf8; ConstStr should only ever be constructed from valid utf8 strings"
+            ),
+        }
+    }
+}
+
+unsafe impl SerializeConst for ConstStr {
+    const MEMORY_LAYOUT: Layout = Layout::Struct(StructEncoding {
+        size: std::mem::size_of::<Self>(),
+        data: &[
+            StructFieldEncoding::new(
+                std::mem::offset_of!(Self, len),
+                Layout::Primitive(PrimitiveEncoding {
+                    size: std::mem::size_of::<u32>(),
+                }),
+            ),
+            StructFieldEncoding::new(
+                std::mem::offset_of!(Self, bytes),
+                Layout::List(ListEncoding {
+                    len: MAX_STR_SIZE,
+                    item_encoding: &Layout::Primitive(PrimitiveEncoding {
+                        size: std::mem::size_of::<u8>(),
+                    }),
+                }),
+            ),
+        ],
+    });
+}
+
 /// Serialize a struct that is stored at the pointer passed in
 const fn serialize_const_struct(
     ptr: *const (),
@@ -207,7 +262,7 @@ const fn serialize_const_struct(
     let mut i = 0;
     while i < encoding.data.len() {
         // Serialize the field at the offset pointer in the struct
-        let PlainOldData { offset, encoding } = &encoding.data[i];
+        let StructFieldEncoding { offset, encoding } = &encoding.data[i];
         let field = unsafe { ptr.byte_add(*offset) };
         to = serialize_const_ptr(field, to, encoding);
         i += 1;
@@ -350,7 +405,7 @@ const fn deserialize_const_struct<'a, const N: usize>(
     let mut i = 0;
     while i < encoding.data.len() {
         // Deserialize the field at the offset pointer in the struct
-        let PlainOldData { offset, encoding } = &encoding.data[i];
+        let StructFieldEncoding { offset, encoding } = &encoding.data[i];
         let (new_from, new_out) =
             match deserialize_const_ptr(from, encoding, (start + *offset, out)) {
                 Some(data) => data,

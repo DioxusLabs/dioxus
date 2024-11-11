@@ -15,6 +15,7 @@ keywords = ["assets"]
 [dependencies]
 manganis-macro = { workspace = true, optional = true }
 dioxus-core-types = { workspace = true }
+const-serialize = { workspace = true }
 
 # dunce = "1.0.2"
 # [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]

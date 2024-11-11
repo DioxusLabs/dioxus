@@ -1,5 +1,55 @@
+use const_serialize::{ConstStr, SerializeConst};
 use dioxus_core_types::DioxusFormattable;
 use std::path::PathBuf;
+
+/// A builder for a generic asset. For configuration options specific to the asset type, see [`image`], [`folder`], [`css`], and [`js`]
+#[derive(SerializeConst)]
+pub struct AssetBuilder {
+    local_path: ConstStr,
+    preload: bool,
+    url_encoded: bool,
+}
+
+impl AssetBuilder {
+    /// Create a new asset builder
+    pub const fn new(local_path: &str) -> Self {
+        Self {
+            local_path: ConstStr::new(local_path),
+            preload: false,
+            url_encoded: false,
+        }
+    }
+
+    /// Make the asset preloaded
+    ///
+    /// Preloading an image will make the image start to load as soon as possible. This is useful for images that will be displayed soon after the page loads or images that may not be visible immediately, but should start loading sooner
+    ///
+    /// ```rust
+    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").preload());
+    /// ```
+    #[allow(unused)]
+    pub const fn preload(self) -> Self {
+        Self {
+            preload: true,
+            ..self
+        }
+    }
+
+    /// Make the asset URL encoded
+    ///
+    /// URL encoding an image inlines the data of the image into the URL. This is useful for small images that should load as soon as the html is parsed
+    ///
+    /// ```rust
+    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").url_encoded());
+    /// ```
+    #[allow(unused)]
+    pub const fn url_encoded(self) -> Self {
+        Self {
+            url_encoded: true,
+            ..self
+        }
+    }
+}
 
 /// Asset
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash)]

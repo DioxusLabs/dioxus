@@ -1,6 +1,7 @@
+use const_serialize::SerializeConst;
 use dioxus_core_types::DioxusFormattable;
 
-use crate::Asset;
+use crate::{Asset, AssetBuilder};
 
 /// An image asset that is built by the [`asset!`] macro
 #[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Copy)]
@@ -9,8 +10,6 @@ pub struct ImageAsset {
     asset: Asset,
     /// A low quality preview of the image that is URL encoded
     preview: Option<&'static str>,
-    /// A caption for the image
-    caption: Option<&'static str>,
     /// The format of the image
     format: Option<ImageType>,
 }
@@ -28,7 +27,6 @@ impl ImageAsset {
         Self {
             asset: path,
             preview: None,
-            caption: None,
             format: None,
         }
     }
@@ -38,7 +36,7 @@ impl ImageAsset {
         self.asset.bundled
     }
 
-    /// Returns the preview of the image
+    /// Returns the url encoded preview of the image
     pub const fn preview(&self) -> Option<&'static str> {
         self.preview
     }
@@ -46,21 +44,6 @@ impl ImageAsset {
     /// Sets the preview of the image
     pub const fn with_preview(self, preview: Option<&'static str>) -> Self {
         Self { preview, ..self }
-    }
-
-    /// Returns the caption of the image
-    pub const fn caption(&self) -> Option<&'static str> {
-        self.caption
-    }
-
-    /// Sets the caption of the image
-    pub const fn with_caption(self, caption: Option<&'static str>) -> Self {
-        Self { caption, ..self }
-    }
-
-    /// Sets the format of the image
-    pub const fn format(self, format: Option<ImageType>) -> Self {
-        Self { format, ..self }
     }
 }
 
@@ -85,7 +68,8 @@ impl DioxusFormattable for ImageAsset {
 }
 
 /// The type of an image. You can read more about the tradeoffs between image formats [here](https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types)
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
+#[repr(u8)]
 pub enum ImageType {
     /// A png image. Png images cannot contain transparency and tend to compress worse than other formats
     Png,
@@ -97,45 +81,86 @@ pub enum ImageType {
     Avif,
 }
 
-/// A builder for an image asset. This must be used in the [`asset!`] macro.
+/// The size of an image asset
+#[derive(SerializeConst)]
+#[repr(C, u8)]
+pub enum ImageSize {
+    /// A manual size in pixels
+    Manual {
+        /// The width of the image in pixels
+        width: u32,
+        /// The height of the image in pixels
+        height: u32,
+    },
+    /// The size will be automatically determined from the image source
+    Automatic,
+}
+
+/// A builder for an image asset. This must be used in the [`mg!`] macro.
 ///
-/// > **Note**: This will do nothing outside of the `asset!` macro
-pub struct ImageAssetBuilder;
+/// > **Note**: This will do nothing outside of the `mg!` macro
+#[derive(SerializeConst)]
+pub struct ImageAssetBuilder {
+    asset: AssetBuilder,
+    ty: ImageType,
+    low_quality_preview: bool,
+    size: ImageSize,
+}
 
 impl ImageAssetBuilder {
     /// Sets the format of the image
+    ///
+    /// > **Note**: This will do nothing outside of the `mg!` macro
+    ///
+    /// Choosing the right format can make your site load much faster. Webp and avif images tend to be a good default for most images
+    ///
+    /// ```rust
+    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").format(ImageType::Webp));
+    /// ```
     #[allow(unused)]
-    pub const fn format(self, format: ImageType) -> Self {
-        Self
+    pub const fn with_format(self, format: ImageType) -> Self {
+        Self { ty: format, ..self }
     }
 
     /// Sets the size of the image
+    ///
+    /// > **Note**: This will do nothing outside of the `mg!` macro
+    ///
+    /// If you only use the image in one place, you can set the size of the image to the size it will be displayed at. This will make the image load faster
+    ///
+    /// ```rust
+    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").size(512, 512));
+    /// ```
     #[allow(unused)]
-    pub const fn size(self, x: u32, y: u32) -> Self {
-        Self
+    pub const fn with_size(self, size: ImageSize) -> Self {
+        Self { size, ..self }
     }
 
     /// Make the image use a low quality preview
+    ///
+    /// > **Note**: This will do nothing outside of the `mg!` macro
+    ///
+    /// A low quality preview is a small version of the image that will load faster. This is useful for large images on mobile devices that may take longer to load
+    ///
+    /// ```rust
+    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").with_low_quality_image_preview());
+    /// ```
     #[allow(unused)]
-    pub const fn low_quality_preview(self) -> Self {
-        Self
-    }
-
-    /// Make the image preloaded
-    #[allow(unused)]
-    pub const fn preload(self) -> Self {
-        Self
-    }
-
-    /// Make the image URL encoded
-    #[allow(unused)]
-    pub const fn url_encoded(self) -> Self {
-        Self
+    pub const fn with_low_quality_image_preview(self, low_quality_preview: bool) -> Self {
+        Self {
+            low_quality_preview,
+            ..self
+        }
     }
 }
 
 /// Create an image asset from the local path or url to the image
 #[allow(unused)]
 pub const fn image(path: &'static str) -> ImageAssetBuilder {
-    ImageAssetBuilder
+    ImageAssetBuilder {
+        asset: AssetBuilder::new(path),
+        ty: ImageType::Png,
+        low_quality_preview: false,
+        size: ImageSize::Automatic,
+    }
 }
