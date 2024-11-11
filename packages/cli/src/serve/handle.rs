@@ -117,7 +117,7 @@ impl AppHandle {
 
             // https://developer.android.com/studio/run/emulator-commandline
             Platform::Android => {
-                tracing::error!("Android is not yet supported, sorry!");
+                self.open_android_sim(envs).await?;
                 None
             }
 
@@ -160,7 +160,7 @@ impl AppHandle {
         // we won't actually be using the build dir.
         let asset_dir = match self.runtime_asst_dir.as_ref() {
             Some(dir) => dir.to_path_buf().join("assets/"),
-            None => self.app.asset_dir(),
+            None => self.app.build.asset_dir(),
         };
 
         tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
@@ -238,13 +238,16 @@ impl AppHandle {
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
     async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        tracing::debug!("Installing app to simulator {:?}", self.app.root_dir());
+        tracing::debug!(
+            "Installing app to simulator {:?}",
+            self.app.build.root_dir()
+        );
 
         let res = Command::new("xcrun")
             .arg("simctl")
             .arg("install")
             .arg("booted")
-            .arg(self.app.root_dir())
+            .arg(self.app.build.root_dir())
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .output()
@@ -308,7 +311,7 @@ impl AppHandle {
         // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
 
         use serde_json::Value;
-        let app_path = self.app.root_dir();
+        let app_path = self.app.build.root_dir();
 
         install_app(&app_path).await?;
 
@@ -446,5 +449,34 @@ impl AppHandle {
         }
 
         unimplemented!("dioxus-cli doesn't support ios devices yet.")
+    }
+
+    async fn open_android_sim(&self, envs: Vec<(&str, String)>) -> Result<()> {
+        // Install
+        // adb install -r app-debug.apk
+
+        let output = Command::new("adb")
+            .arg("install")
+            .arg("-r")
+            .arg(self.app.apk_path())
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .output()
+            .await?;
+
+        // adb shell am start -n com.example.androidfinal/com.example.androidfinal.MainActivity
+        let output = Command::new("adb")
+            .arg("shell")
+            .arg("am")
+            .arg("start")
+            .arg("-n")
+            .arg("com.example.androidfinal/com.example.androidfinal.MainActivity")
+            .envs(envs)
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .output()
+            .await?;
+
+        Ok(())
     }
 }

@@ -67,10 +67,10 @@ impl BuildArgs {
 
         let bundle = Builder::start(&krate, self.clone())?.finish().await?;
 
-        tracing::info!(path = ?bundle.root_dir(), "Build completed successfully! 🚀");
+        tracing::info!(path = ?bundle.build.root_dir(), "Build completed successfully! 🚀");
 
         Ok(StructuredOutput::BuildFinished {
-            path: bundle.root_dir(),
+            path: bundle.build.root_dir(),
         })
     }
 

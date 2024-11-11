@@ -1,0 +1,8 @@
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+    	<item name="android:windowFullscreen">true</item>
+        <!-- Customize your theme here. -->
+    </style>
+</resources>

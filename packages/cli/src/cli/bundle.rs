@@ -100,23 +100,23 @@ impl Bundle {
             }
 
             Platform::Web => {
-                tracing::info!("App available at: {}", bundle.root_dir().display());
+                tracing::info!("App available at: {}", bundle.build.root_dir().display());
             }
 
             Platform::Ios => {
                 tracing::warn!("Signed iOS bundles are not yet supported");
                 tracing::info!(
                     "The bundle is available at: {}",
-                    bundle.root_dir().display()
+                    bundle.build.root_dir().display()
                 );
             }
 
             Platform::Server => {
-                tracing::info!("Server available at: {}", bundle.root_dir().display())
+                tracing::info!("Server available at: {}", bundle.build.root_dir().display())
             }
             Platform::Liveview => tracing::info!(
                 "Liveview server available at: {}",
-                bundle.root_dir().display()
+                bundle.build.root_dir().display()
             ),
 
             Platform::Android => {
@@ -175,7 +175,7 @@ impl Bundle {
             bundle_settings.resources_map = Some(HashMap::new());
         }
 
-        for entry in std::fs::read_dir(bundle.asset_dir())?.flatten() {
+        for entry in std::fs::read_dir(bundle.build.asset_dir())?.flatten() {
             let old = entry.path().canonicalize()?;
             let new = PathBuf::from("assets").join(old.file_name().unwrap());
             tracing::debug!("Bundled asset: {old:?} -> {new:?}");
