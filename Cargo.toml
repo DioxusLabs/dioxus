@@ -78,7 +78,6 @@ members = [
 
     # manganis
     "packages/manganis/manganis",
-    "packages/manganis/manganis-macro",
     "packages/manganis/manganis-core",
 
 
@@ -149,7 +148,6 @@ dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.4
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.4" }
 manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.4" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.4" }
-manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.0-alpha.4" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.4" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.4" }
 

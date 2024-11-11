@@ -7,7 +7,6 @@ use std::path::PathBuf;
 pub struct AssetBuilder {
     local_path: ConstStr,
     preload: bool,
-    url_encoded: bool,
 }
 
 impl AssetBuilder {
@@ -16,7 +15,6 @@ impl AssetBuilder {
         Self {
             local_path: ConstStr::new(local_path),
             preload: false,
-            url_encoded: false,
         }
     }
 
@@ -35,18 +33,12 @@ impl AssetBuilder {
         }
     }
 
-    /// Make the asset URL encoded
-    ///
-    /// URL encoding an image inlines the data of the image into the URL. This is useful for small images that should load as soon as the html is parsed
-    ///
-    /// ```rust
-    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").url_encoded());
-    /// ```
-    #[allow(unused)]
-    pub const fn url_encoded(self) -> Self {
-        Self {
-            url_encoded: true,
-            ..self
+    /// Finalize the asset builder and return the asset
+    pub const fn build(self) -> Asset {
+        Asset {
+            input: "",
+            local: "",
+            bundled: "",
         }
     }
 }

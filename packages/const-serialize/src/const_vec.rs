@@ -102,6 +102,10 @@ impl<T> ConstVec<T> {
         self.memory[index] = MaybeUninit::new(value);
         self
     }
+
+    pub const fn into_parts(self) -> ([MaybeUninit<T>; MAX_SIZE], usize) {
+        (self.memory, self.len)
+    }
 }
 
 #[test]

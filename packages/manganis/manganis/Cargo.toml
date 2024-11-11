@@ -13,7 +13,6 @@ keywords = ["assets"]
 [lib]
 
 [dependencies]
-manganis-macro = { workspace = true, optional = true }
 dioxus-core-types = { workspace = true }
 const-serialize = { workspace = true }
 
@@ -36,7 +35,5 @@ base64 = { workspace = true }
 
 
 [features]
-default = ["macro"]
+default = []
 html = []
-# url-encoding = ["manganis-macro/url-encoding"]
-macro = ["dep:manganis-macro"]
