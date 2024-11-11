@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use std::{sync::atomic::AtomicUsize, time::Duration};
+use tokio::process::Command;
 use wasm_bindgen_cli_support::Bindgen;
 
 use super::templates::InfoPlistData;
@@ -259,15 +260,11 @@ impl AppBundle {
     /// root().join(bundled)
     /// ```
     pub(crate) async fn new(
-        request: BuildRequest,
+        build: BuildRequest,
         app: BuildArtifacts,
         server: Option<BuildArtifacts>,
     ) -> Result<Self> {
-        let bundle = Self {
-            app,
-            server,
-            build: request,
-        };
+        let bundle = Self { app, server, build };
 
         tracing::debug!("Assembling app bundle");
 
@@ -278,6 +275,7 @@ impl AppBundle {
         bundle.write_assets().await?;
         bundle.write_metadata().await?;
         bundle.optimize().await?;
+        bundle.assemble().await?;
 
         tracing::debug!("Bundle created at {}", bundle.root_dir().display());
 
@@ -873,22 +871,38 @@ impl AppBundle {
         use std::fs::{create_dir_all, write};
         let root = self.root_dir();
 
-        // Build out the directory structure
+        // gradle
         let wrapper = root.join("gradle").join("wrapper");
+        create_dir_all(&wrapper)?;
+        tracing::debug!("Initialized Gradle wrapper: {:?}", wrapper);
+
+        // build-src
         let build_src = root.join("buildSrc");
         let build_src_kotlin = build_src.join("src").join("main").join("kotlin");
+        create_dir_all(&build_src)?;
+        create_dir_all(&build_src_kotlin)?;
+        tracing::debug!("Initialized build-src: {:?}", build_src);
+        tracing::debug!("Initialized build-src/kotlin: {:?}", build_src_kotlin);
+
+        // app
         let app = root.join("app");
         let app_main = app.join("src").join("main");
         let app_kotlin = app_main.join("kotlin");
         let app_jnilibs = app_main.join("jniLibs");
         let app_assets = app_main.join("assets");
-
-        // And ensure they exist
-        create_dir_all(&wrapper)?;
-        create_dir_all(&build_src_kotlin)?;
+        let app_kotlin_out = app_kotlin.join("com").join("example").join("androidfinal");
+        create_dir_all(&app)?;
+        create_dir_all(&app_main)?;
         create_dir_all(&app_kotlin)?;
         create_dir_all(&app_jnilibs)?;
         create_dir_all(&app_assets)?;
+        create_dir_all(&app_kotlin_out)?;
+        tracing::debug!("Initialized app: {:?}", app);
+        tracing::debug!("Initialized app/src: {:?}", app_main);
+        tracing::debug!("Initialized app/src/kotlin: {:?}", app_kotlin);
+        tracing::debug!("Initialized app/src/jniLibs: {:?}", app_jnilibs);
+        tracing::debug!("Initialized app/src/assets: {:?}", app_assets);
+        tracing::debug!("Initialized app/src/kotlin/main: {:?}", app_kotlin_out);
 
         // Top-level gradle config
         write(
@@ -951,5 +965,38 @@ impl AppBundle {
         )?;
 
         Ok(())
+    }
+
+    /// Run any final tools to produce apks or other artifacts we might need.
+    async fn assemble(&self) -> Result<()> {
+        match self.build.build.platform() {
+            Platform::Android => {
+                let output = Command::new("gradlew")
+                    .arg("assembleArm64Debug")
+                    .current_dir(self.root_dir())
+                    .stderr(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .output()
+                    .await?;
+
+                if !output.status.success() {
+                    return Err(anyhow::anyhow!("Failed to assemble apk: {output:?}").into());
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn apk_path(&self) -> PathBuf {
+        self.root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("apk")
+            .join("arm64")
+            .join("debug")
+            .join("app-arm64-debug.apk")
     }
 }

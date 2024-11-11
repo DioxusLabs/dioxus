@@ -103,7 +103,8 @@ impl BuildRequest {
             .current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
-            .args(self.build_arguments());
+            .args(self.build_arguments())
+            .envs(self.env_vars());
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             cmd.env("CARGO_TARGET_DIR", target_dir);
@@ -366,6 +367,7 @@ impl BuildRequest {
             .arg("-Z")
             .arg("unstable-options")
             .args(self.build_arguments())
+            .envs(self.env_vars())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -444,5 +446,21 @@ impl BuildRequest {
 
         // The linker wrote the manifest to the temp file, let's load it!
         Ok(AssetManifest::load_from_file(tmp_file.path())?)
+    }
+
+    fn env_vars(&self) -> Vec<(&str, &str)> {
+        let mut env_vars = vec![];
+
+        if self.build.platform() == Platform::Android {
+            env_vars.push(("WRY_ANDROID_PACKAGE", self.krate.executable_name()));
+            env_vars.push(("WRY_ANDROID_LIBRARY", self.krate.executable_name()));
+            env_vars.push((
+                "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
+                "/Users/jonkelley/Development/Tinkering/mobile-testing/androidfinal/target/dx/kotlinfiles",
+                // "<android-project-dir>/app/src/main/kotlin/com/example/androidfinal",
+            ));
+        };
+
+        env_vars
     }
 }
