@@ -454,7 +454,6 @@ impl AppHandle {
     async fn open_android_sim(&self, envs: Vec<(&str, String)>) -> Result<()> {
         // Install
         // adb install -r app-debug.apk
-
         let output = Command::new("adb")
             .arg("install")
             .arg("-r")
