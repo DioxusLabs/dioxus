@@ -7,7 +7,7 @@ use std::path::PathBuf;
 /// This is designed such that third party tools can reliably consume the output of the CLI when
 /// outputting json.
 ///
-/// Not every log outputted will be parsable, but all structued logs should be.
+/// Not every log outputted will be parsable, but all structured logs should be.
 ///
 /// This means the debug format of this log needs to be parsable json, not the default debug format.
 ///
@@ -16,6 +16,7 @@ use std::path::PathBuf;
 ///
 /// There might be intermediate lines that are parseable as structured logs (which you can put here)
 /// but they are not guaranteed to be, such that we can provide better error messages for the user.
+#[allow(clippy::large_enum_variant)]
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Clone)]
 pub enum StructuredOutput {

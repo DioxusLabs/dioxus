@@ -39,7 +39,11 @@ pub fn launch(incoming: fn() -> Element) {
 static APP_FN_PTR: Mutex<Option<fn() -> Element>> = Mutex::new(None);
 
 pub fn root() {
-    let app = APP_FN_PTR.lock().unwrap().unwrap();
+    let app = APP_FN_PTR
+        .lock()
+        .expect("APP_FN_PTR lock failed")
+        .expect("Android to have set the app trampoline");
+
     dioxus_desktop::launch::launch(app, vec![], Default::default());
 }
 

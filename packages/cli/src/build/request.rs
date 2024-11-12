@@ -482,9 +482,9 @@ impl BuildRequest {
         use once_cell::sync::OnceCell;
         use std::fs::{create_dir_all, remove_dir_all};
 
-        static INTIALIZED: OnceCell<Result<()>> = OnceCell::new();
+        static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
 
-        let success = INTIALIZED.get_or_init(|| {
+        let success = INITIALIZED.get_or_init(|| {
             _ = remove_dir_all(self.root_dir());
 
             create_dir_all(self.root_dir())?;
@@ -696,7 +696,7 @@ impl BuildRequest {
             include_bytes!("../../assets/android/gen/app/src/main/AndroidManifest.xml"),
         )?;
 
-        // Write the main activity manually sicne tao dropped support for it
+        // Write the main activity manually since tao dropped support for it
         write(
             app_main
                 .join("kotlin")
