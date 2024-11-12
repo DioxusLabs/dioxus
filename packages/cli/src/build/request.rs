@@ -64,7 +64,7 @@ impl BuildRequest {
         let start = Instant::now();
         self.prepare_build_dir()?;
         let exe = self.build_cargo().await?;
-        let assets = self.collect_assets(&exe).await?;
+        let assets = self.collect_assets().await?;
 
         Ok(BuildArtifacts {
             exe,
@@ -105,6 +105,7 @@ impl BuildRequest {
             .arg("json-diagnostic-rendered-ansi")
             .args(self.build_arguments())
             .envs(self.env_vars());
+        // .args(["--", "-Csave-temps=y"]);
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             cmd.env("CARGO_TARGET_DIR", target_dir);
@@ -203,27 +204,14 @@ impl BuildRequest {
     /// This will execute `dx` with an env var set to force `dx` to operate as a linker, and then
     /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
     /// tables marked by manganis and parsing them as a ResourceAsset.
-    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
+    pub(crate) async fn collect_assets(&self) -> Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
-        // If assets are skipped, we don't need to collect them
         if self.build.skip_assets {
             return Ok(AssetManifest::default());
         }
 
-        if !std::env::var("FASTLINK").is_ok() {
-            return self.deep_linker_asset_extract().await;
-        }
-
-        let mut manifest = AssetManifest::default();
-
-        manifest
-            .add_from_object_path(exe.to_path_buf())
-            .context("Failed to collect assets")?;
-
-        tracing::debug!("asset manifest ({}): {:#?}", exe.display(), manifest);
-
-        Ok(manifest)
+        self.deep_linker_asset_extract().await
     }
 
     /// Create a list of arguments for cargo builds
@@ -313,7 +301,7 @@ impl BuildRequest {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn rust_flags(&self) -> String {
+    pub(crate) fn android_rust_flags(&self) -> String {
         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
 
         if self.build.platform() == Platform::Android {
@@ -415,16 +403,11 @@ impl BuildRequest {
     ///
     /// There's a chance that's not actually true, so this function is kept around in case we do
     /// need to revert to "deep extraction".
-    #[allow(unused)]
     async fn deep_linker_asset_extract(&self) -> Result<AssetManifest> {
         // Create a temp file to put the output of the args
         // We need to do this since rustc won't actually print the link args to stdout, so we need to
         // give `dx` a file to dump its env::args into
-        // let tmp_file = tempfile::NamedTempFile::new()?;
-        let tmp_file = std::env::var("DEEPLINK")
-            .unwrap()
-            .parse::<PathBuf>()
-            .unwrap();
+        let tmp_file = tempfile::NamedTempFile::new()?;
 
         // Run `cargo rustc` again, but this time with a custom linker (dx) and an env var to force
         // `dx` to act as a linker
@@ -447,7 +430,7 @@ impl BuildRequest {
             .env(
                 LinkAction::ENV_VAR_NAME,
                 LinkAction::BuildAssetManifest {
-                    destination: tmp_file.clone(),
+                    destination: tmp_file.path().to_path_buf().clone(),
                 }
                 .to_json(),
             )
@@ -457,7 +440,13 @@ impl BuildRequest {
             .await?;
 
         // The linker wrote the manifest to the temp file, let's load it!
-        Ok(AssetManifest::load_from_file(&tmp_file)?)
+        let manifest = AssetManifest::load_from_file(tmp_file.path())?;
+
+        if let Ok(path) = std::env::var("DEEPLINK").map(|s| s.parse::<PathBuf>().unwrap()) {
+            _ = tmp_file.persist(path);
+        }
+
+        Ok(manifest)
     }
 
     fn env_vars(&self) -> Vec<(&str, String)> {
@@ -476,7 +465,7 @@ impl BuildRequest {
                 app_kotlin_out.display().to_string(),
             ));
 
-            env_vars.push(("RUSTFLAGS", self.rust_flags()))
+            env_vars.push(("RUSTFLAGS", self.android_rust_flags()))
         };
 
         env_vars

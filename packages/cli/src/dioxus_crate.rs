@@ -232,8 +232,6 @@ impl DioxusCrate {
             return possible_platforms.first().cloned();
         }
 
-        tracing::warn!("Could not autodetect platform. Platform must be explicitly specified. Pass `--platform <platform>` or set a default platform using a cargo feature.");
-
         None
     }
 
