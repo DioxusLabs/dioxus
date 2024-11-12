@@ -103,10 +103,7 @@ mod tests {
         let project_path = &current_dir;
         assert!(project_path.exists());
 
-        assert!(subcommand_init()
-            .current_dir(&current_dir)
-            .status()
-            .is_ok());
+        assert!(subcommand_init().current_dir(&current_dir).status().is_ok());
 
         let cargo_toml_path = get_cargo_toml_path(project_path);
         assert!(cargo_toml_path.exists());
