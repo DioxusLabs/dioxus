@@ -172,18 +172,9 @@ impl LaunchBuilder {
         (self.launch_fn)(app, self.contexts, cfg);
     }
 
-    // Static generation is the only platform that may exit. We can't use the `!` type here
-    #[cfg(any(feature = "web"))]
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
         self.launch_inner(app);
-    }
-
-    #[cfg(not(any(feature = "web")))]
-    /// Launch your application.
-    pub fn launch(self, app: fn() -> Element) -> ! {
-        self.launch_inner(app);
-        unreachable!("Launching an application will never exit")
     }
 }
 
@@ -210,7 +201,7 @@ mod current_platform {
         not(feature = "desktop"),
         not(all(feature = "fullstack", feature = "server"))
     ))]
-    pub use dioxus_mobile::launch::*;
+    pub use dioxus_mobile::launch_bindings::*;
 
     #[cfg(all(
         feature = "web",
@@ -249,7 +240,7 @@ mod current_platform {
         root: fn() -> dioxus_core::Element,
         contexts: Vec<super::ContextFn>,
         platform_config: Vec<Box<dyn std::any::Any>>,
-    ) -> ! {
+    ) {
         #[cfg(feature = "third-party-renderer")]
         panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
 
@@ -257,22 +248,10 @@ mod current_platform {
     }
 }
 
-// ! is unstable, so we can't name the type with an alias. Instead we need to generate different variants of items with macros
-macro_rules! impl_launch {
-    ($($return_type:tt),*) => {
-        /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
-        pub fn launch(app: fn() -> Element) -> $($return_type)* {
-            #[allow(deprecated)]
-            LaunchBuilder::new().launch(app)
-        }
-    };
+pub fn launch(app: fn() -> Element) {
+    #[allow(deprecated)]
+    LaunchBuilder::new().launch(app)
 }
-
-// Static generation is the only platform that may exit. We can't use the `!` type here
-#[cfg(any(feature = "web"))]
-impl_launch!(());
-#[cfg(not(any(feature = "web")))]
-impl_launch!(!);
 
 #[cfg(feature = "web")]
 fn web_launch(
@@ -307,6 +286,7 @@ fn web_launch(
 
         dioxus_web::launch::launch_virtual_dom(factory(), platform_config)
     }
+
     #[cfg(not(any(feature = "fullstack")))]
     dioxus_web::launch::launch(root, contexts, platform_config);
 }

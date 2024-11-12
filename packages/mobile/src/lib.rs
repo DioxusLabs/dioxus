@@ -6,6 +6,23 @@ pub use dioxus_desktop::*;
 use dioxus_lib::prelude::*;
 use std::sync::Mutex;
 
+pub mod launch_bindings {
+    use std::any::Any;
+
+    use super::*;
+    pub fn launch(
+        root: fn() -> Element,
+        contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+        platform_config: Vec<Box<dyn Any>>,
+    ) {
+        super::launch(root);
+    }
+
+    pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! {
+        todo!()
+    }
+}
+
 /// Launch via the binding API
 pub fn launch(incoming: fn() -> Element) {
     *APP_FN_PTR.lock().unwrap() = Some(incoming);

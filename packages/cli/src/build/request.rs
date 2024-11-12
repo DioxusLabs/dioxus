@@ -45,8 +45,6 @@ impl BuildRequest {
     pub(crate) async fn build_all(self) -> Result<AppBundle> {
         tracing::debug!("Running build command...");
 
-        self.prepare_build_dir()?;
-
         let (app, server) = self.build_concurrent().await?;
 
         AppBundle::new(self, app, server).await
@@ -64,7 +62,7 @@ impl BuildRequest {
         tracing::debug!("Building app...");
 
         let start = Instant::now();
-
+        self.prepare_build_dir()?;
         let exe = self.build_cargo().await?;
         let assets = self.collect_assets(&exe).await?;
 
@@ -480,7 +478,7 @@ impl BuildRequest {
     /// It's not guaranteed that they're different from any other folder
     fn prepare_build_dir(&self) -> Result<()> {
         use once_cell::sync::OnceCell;
-        use std::fs::{create_dir_all, remove_dir_all, write};
+        use std::fs::{create_dir_all, remove_dir_all};
 
         static INTIALIZED: OnceCell<Result<()>> = OnceCell::new();
 
@@ -604,6 +602,23 @@ impl BuildRequest {
         }
     }
 
+    pub fn platform_exe_name(&self) -> String {
+        match self.build.platform() {
+            Platform::MacOS => self.krate.executable_name().to_string(),
+            Platform::Ios => self.krate.executable_name().to_string(),
+            Platform::Server => self.krate.executable_name().to_string(),
+            Platform::Liveview => self.krate.executable_name().to_string(),
+            Platform::Windows => format!("{}.exe", self.krate.executable_name()),
+
+            // from the apk spec, the root exe will actually be a shared library
+            Platform::Android => format!("lib{}.so", self.krate.executable_name()),
+            Platform::Web => unimplemented!("there's no main exe on web"), // this will be wrong, I think, but not important?
+
+            // todo: maybe this should be called AppRun?
+            Platform::Linux => self.krate.executable_name().to_string(),
+        }
+    }
+
     fn build_android_app_dir(&self) -> Result<()> {
         use std::fs::{create_dir_all, write};
         let root = self.root_dir();
@@ -707,27 +722,6 @@ impl BuildRequest {
             include_bytes!("../../assets/android/gen/app/src/main/res/values/styles.xml"),
         )?;
 
-        // ├── drawable
-        // │   └── ic_launcher_background.xml
-        // ├── drawable-v24
-        // │   └── ic_launcher_foreground.xml
-        // ├── mipmap-anydpi-v26
-        // │   └── ic_launcher.xml
-        // ├── mipmap-hdpi
-        // │   └── ic_launcher.webp
-        // ├── mipmap-mdpi
-        // │   └── ic_launcher.webp
-        // ├── mipmap-xhdpi
-        // │   └── ic_launcher.webp
-        // ├── mipmap-xxhdpi
-        // │   └── ic_launcher.webp
-        // ├── mipmap-xxxhdpi
-        // │   └── ic_launcher.webp
-        // └── values
-        // ├── colors.xml
-        // ├── strings.xml
-        // └── styles.xml
-
         create_dir_all(res.join("drawable"))?;
         write(
             res.join("drawable").join("ic_launcher_background.xml"),
@@ -786,22 +780,5 @@ impl BuildRequest {
         )?;
 
         Ok(())
-    }
-
-    pub fn platform_exe_name(&self) -> String {
-        match self.build.platform() {
-            Platform::MacOS => self.krate.executable_name().to_string(),
-            Platform::Ios => self.krate.executable_name().to_string(),
-            Platform::Server => self.krate.executable_name().to_string(),
-            Platform::Liveview => self.krate.executable_name().to_string(),
-            Platform::Windows => format!("{}.exe", self.krate.executable_name()),
-
-            // from the apk spec, the root exe will actually be a shared library
-            Platform::Android => format!("lib{}.so", self.krate.executable_name()),
-            Platform::Web => unimplemented!("there's no main exe on web"), // this will be wrong, I think, but not important?
-
-            // todo: maybe this should be called AppRun?
-            Platform::Linux => self.krate.executable_name().to_string(),
-        }
     }
 }

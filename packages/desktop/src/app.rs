@@ -170,15 +170,6 @@ impl App {
                 _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
             })
         }
-
-        #[cfg(target_os = "android")]
-        {
-            let endpoint = "ws://10.0.2.2:8080/_dioxus".to_string();
-            let proxy = self.shared.proxy.clone();
-            dioxus_devtools::connect(endpoint, move |msg| {
-                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-            })
-        }
     }
 
     pub fn handle_new_window(&mut self) {

@@ -1,8 +1,7 @@
+use crate::Result;
 use crate::{assets::AssetManifest, TraceSrc};
-use crate::{build, Result};
 use crate::{BuildRequest, Platform};
 use anyhow::Context;
-use once_cell::sync::{Lazy, OnceCell};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::create_dir_all,
@@ -270,6 +269,10 @@ impl AppBundle {
         tracing::debug!("Assembling app bundle");
 
         bundle.build.status_start_bundle();
+        /*
+            assume the build dir is already created by BuildRequest
+            todo(jon): maybe refactor this a bit to force AppBundle to be created before it can be filled in
+        */
         bundle
             .write_main_executable()
             .await
