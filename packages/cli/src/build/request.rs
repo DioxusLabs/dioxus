@@ -211,9 +211,17 @@ impl BuildRequest {
             return Ok(AssetManifest::default());
         }
 
+        if !std::env::var("FASTLINK").is_ok() {
+            return self.deep_linker_asset_extract().await;
+        }
+
         let mut manifest = AssetManifest::default();
 
-        _ = manifest.add_from_object_path(exe.to_path_buf());
+        manifest
+            .add_from_object_path(exe.to_path_buf())
+            .context("Failed to collect assets")?;
+
+        tracing::debug!("asset manifest ({}): {:#?}", exe.display(), manifest);
 
         Ok(manifest)
     }
@@ -412,16 +420,20 @@ impl BuildRequest {
         // Create a temp file to put the output of the args
         // We need to do this since rustc won't actually print the link args to stdout, so we need to
         // give `dx` a file to dump its env::args into
-        let tmp_file = tempfile::NamedTempFile::new()?;
+        // let tmp_file = tempfile::NamedTempFile::new()?;
+        let tmp_file = std::env::var("DEEPLINK")
+            .unwrap()
+            .parse::<PathBuf>()
+            .unwrap();
 
         // Run `cargo rustc` again, but this time with a custom linker (dx) and an env var to force
         // `dx` to act as a linker
         //
         // This will force `dx` to look through the incremental cache and find the assets from the previous build
         Command::new("cargo")
-            // .env("RUSTFLAGS", self.rust_flags())
             .arg("rustc")
             .args(self.build_arguments())
+            .envs(self.env_vars())
             .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
             .arg(format!(
@@ -435,7 +447,7 @@ impl BuildRequest {
             .env(
                 LinkAction::ENV_VAR_NAME,
                 LinkAction::BuildAssetManifest {
-                    destination: tmp_file.path().to_path_buf(),
+                    destination: tmp_file.clone(),
                 }
                 .to_json(),
             )
@@ -445,7 +457,7 @@ impl BuildRequest {
             .await?;
 
         // The linker wrote the manifest to the temp file, let's load it!
-        Ok(AssetManifest::load_from_file(tmp_file.path())?)
+        Ok(AssetManifest::load_from_file(&tmp_file)?)
     }
 
     fn env_vars(&self) -> Vec<(&str, String)> {
@@ -463,6 +475,8 @@ impl BuildRequest {
                 "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
                 app_kotlin_out.display().to_string(),
             ));
+
+            env_vars.push(("RUSTFLAGS", self.rust_flags()))
         };
 
         env_vars

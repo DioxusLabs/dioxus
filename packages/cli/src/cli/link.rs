@@ -14,7 +14,7 @@ pub enum LinkAction {
 }
 
 impl LinkAction {
-    pub(crate) const ENV_VAR_NAME: &'static str = "dx-magic-link-file";
+    pub(crate) const ENV_VAR_NAME: &'static str = "dx_magic_link_file";
 
     /// Should we write the input arguments to a file (aka act as a linker subprocess)?
     ///
