@@ -141,7 +141,7 @@ path = "src/main.rs"
 name = "dx"
 
 [dev-dependencies]
-assert_cmd = "2.0"
+escargot = "0.5"
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-v{ version }{ archive-suffix }"

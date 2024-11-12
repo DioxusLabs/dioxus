@@ -77,8 +77,7 @@ impl Init {
 
 #[cfg(test)]
 mod tests {
-    use assert_cmd::Command;
-    use std::fs::create_dir_all;
+    use std::{fs::create_dir_all, process::Command};
     use tempfile::tempdir;
 
     use super::create::tests::*;
@@ -88,7 +87,7 @@ mod tests {
     // was broken and tests bring a peace of mind. And also so that I don't have
     // to run my local hand-made tests every time.
 
-    fn subcommand_init() -> Result<Command> {
+    fn subcommand_init() -> Command {
         subcommand("init")
     }
 
@@ -104,10 +103,10 @@ mod tests {
         let project_path = &current_dir;
         assert!(project_path.exists());
 
-        subcommand_init()?
+        assert!(subcommand_init()
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let cargo_toml_path = get_cargo_toml_path(project_path);
         assert!(cargo_toml_path.exists());
@@ -122,11 +121,11 @@ mod tests {
 
         let current_dir = tempdir()?;
 
-        subcommand_init()?
+        assert!(subcommand_init()
             .arg(project_dir)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let project_path = current_dir.path().join(project_dir);
         let cargo_toml_path = get_cargo_toml_path(&project_path);
@@ -143,11 +142,11 @@ mod tests {
 
         let current_dir = tempdir()?;
 
-        subcommand_init()?
+        assert!(subcommand_init()
             .arg(project_dir)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let project_path = current_dir.path().join(project_dir);
         let cargo_toml_path = get_cargo_toml_path(&project_path);
@@ -169,12 +168,12 @@ mod tests {
         let project_path = &current_dir;
         assert!(project_path.exists());
 
-        subcommand_init()?
+        assert!(subcommand_init()
             .arg("--name")
             .arg(project_name)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let cargo_toml_path = get_cargo_toml_path(project_path);
         assert!(cargo_toml_path.exists());
@@ -189,13 +188,13 @@ mod tests {
 
         let current_dir = tempdir()?;
 
-        subcommand_init()?
+        assert!(subcommand_init()
             .arg(project_dir)
             .arg("--name")
             .arg(project_name)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let project_path = current_dir.path().join(project_dir);
         let cargo_toml_path = get_cargo_toml_path(&project_path);
@@ -212,13 +211,13 @@ mod tests {
 
         let current_dir = tempdir()?;
 
-        subcommand_init()?
+        assert!(subcommand_init()
             .arg(project_dir)
             .arg("--name")
             .arg(project_name)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let project_path = current_dir.path().join(project_dir);
         let cargo_toml_path = get_cargo_toml_path(&project_path);

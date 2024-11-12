@@ -123,7 +123,12 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
             Ok(v) => Some(v),
             // Only 1 error means that CWD isn't a cargo project.
             Err(cargo_metadata::Error::CargoMetadata { .. }) => None,
-            Err(err) => return Err(Error::CargoMetadata(err)),
+            Err(err) => {
+                return Err(Error::Other(anyhow::anyhow!(
+                    "Couldn't retrieve cargo metadata: {:?}",
+                    err
+                )));
+            }
         }
     };
 
@@ -199,11 +204,21 @@ fn remove_triple_newlines(string: &str) -> String {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use assert_cmd::Command;
+    use escargot::{CargoBuild, CargoRun};
     use std::fs::{create_dir_all, read_to_string};
     use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::sync::LazyLock;
     use tempfile::tempdir;
     use toml::Value;
+
+    static BINARY: LazyLock<CargoRun> = LazyLock::new(|| {
+        CargoBuild::new()
+            .bin(env!("CARGO_BIN_NAME"))
+            .current_release()
+            .run()
+            .expect("Couldn't build the binary for tests.")
+    });
 
     // Note: tests below (at least 6 of them) were written to mainly test
     // correctness of project's directory and its name, because previously it
@@ -212,8 +227,8 @@ pub(crate) mod tests {
 
     pub(crate) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-    pub(crate) fn subcommand(name: &str) -> Result<Command> {
-        let mut command = Command::cargo_bin(env!("CARGO_BIN_NAME"))?;
+    pub(crate) fn subcommand(name: &str) -> Command {
+        let mut command = BINARY.command();
         command
             .arg(name)
             .arg("--yes") // Skip any questions by choosing default answers.
@@ -222,7 +237,7 @@ pub(crate) mod tests {
             // either `--subtemplate` or `--option`.
             // Maybe a simple template in tests/ dir?
             .arg("Fullstack");
-        Ok(command)
+        command
     }
 
     pub(crate) fn get_cargo_toml_path(project_path: &Path) -> PathBuf {
@@ -240,7 +255,7 @@ pub(crate) mod tests {
             .to_string())
     }
 
-    fn subcommand_new() -> Result<Command> {
+    fn subcommand_new() -> Command {
         subcommand("new")
     }
 
@@ -256,11 +271,11 @@ pub(crate) mod tests {
         let project_path = &current_dir;
         assert!(project_path.exists());
 
-        subcommand_new()?
+        assert!(subcommand_new()
             .arg(".")
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let cargo_toml_path = get_cargo_toml_path(project_path);
         assert!(cargo_toml_path.exists());
@@ -275,11 +290,11 @@ pub(crate) mod tests {
 
         let current_dir = tempdir()?;
 
-        subcommand_new()?
+        assert!(subcommand_new()
             .arg(project_dir)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let project_path = current_dir.path().join(project_dir);
         let cargo_toml_path = get_cargo_toml_path(&project_path);
@@ -296,11 +311,11 @@ pub(crate) mod tests {
 
         let current_dir = tempdir()?;
 
-        subcommand_new()?
+        assert!(subcommand_new()
             .arg(project_dir)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let project_path = current_dir.path().join(project_dir);
         let cargo_toml_path = get_cargo_toml_path(&project_path);
@@ -322,13 +337,13 @@ pub(crate) mod tests {
         let project_path = &current_dir;
         assert!(project_path.exists());
 
-        subcommand_new()?
+        assert!(subcommand_new()
             .arg("--name")
             .arg(project_name)
             .arg(".")
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let cargo_toml_path = get_cargo_toml_path(project_path);
         assert!(cargo_toml_path.exists());
@@ -343,13 +358,13 @@ pub(crate) mod tests {
 
         let current_dir = tempdir()?;
 
-        subcommand_new()?
+        assert!(subcommand_new()
             .arg(project_dir)
             .arg("--name")
             .arg(project_name)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let project_path = current_dir.path().join(project_dir);
         let cargo_toml_path = get_cargo_toml_path(&project_path);
@@ -366,13 +381,13 @@ pub(crate) mod tests {
 
         let current_dir = tempdir()?;
 
-        subcommand_new()?
+        assert!(subcommand_new()
             .arg(project_dir)
             .arg("--name")
             .arg(project_name)
             .current_dir(&current_dir)
-            .assert()
-            .success();
+            .status()
+            .is_ok());
 
         let project_path = current_dir.path().join(project_dir);
         let cargo_toml_path = get_cargo_toml_path(&project_path);
