@@ -85,7 +85,7 @@ objc_id = "0.1.1"
 tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
 jni = "0.21.1"
 ndk = { version = "0.9.0" }
-ndk-sys = { version = "0.6.0+11769913" }
+ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
 
 # use native tls on other platforms

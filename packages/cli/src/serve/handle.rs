@@ -454,7 +454,7 @@ impl AppHandle {
     async fn open_android_sim(&self, envs: Vec<(&str, String)>) -> Result<()> {
         // Install
         // adb install -r app-debug.apk
-        let output = Command::new("adb")
+        let _output = Command::new("adb")
             .arg("install")
             .arg("-r")
             .arg(self.app.apk_path())
@@ -464,7 +464,7 @@ impl AppHandle {
             .await?;
 
         // adb shell am start -n com.example.androidfinal/com.example.androidfinal.MainActivity
-        let output = Command::new("adb")
+        let _output = Command::new("adb")
             .arg("shell")
             .arg("am")
             .arg("start")

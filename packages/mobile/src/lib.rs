@@ -12,20 +12,28 @@ pub mod launch_bindings {
     use super::*;
     pub fn launch(
         root: fn() -> Element,
-        contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
-        platform_config: Vec<Box<dyn Any>>,
+        _contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+        _platform_config: Vec<Box<dyn Any>>,
     ) {
         super::launch(root);
     }
 
-    pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! {
+    pub fn launch_virtual_dom(_virtual_dom: VirtualDom, _desktop_config: Config) -> ! {
         todo!()
     }
 }
 
 /// Launch via the binding API
 pub fn launch(incoming: fn() -> Element) {
-    *APP_FN_PTR.lock().unwrap() = Some(incoming);
+    #[cfg(target_os = "android")]
+    {
+        *APP_FN_PTR.lock().unwrap() = Some(incoming);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        dioxus_desktop::launch::launch(incoming, vec![], Default::default());
+    }
 }
 
 static APP_FN_PTR: Mutex<Option<fn() -> Element>> = Mutex::new(None);

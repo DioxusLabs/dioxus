@@ -454,7 +454,10 @@ impl BuildRequest {
             let app_kotlin = app_main.join("kotlin");
             let app_kotlin_out = app_kotlin.join("com").join("example").join("androidfinal");
 
-            env_vars.push(("WRY_ANDROID_PACKAGE", format!("com.example.androidfinal")));
+            env_vars.push((
+                "WRY_ANDROID_PACKAGE",
+                "com.example.androidfinal".to_string(),
+            ));
             env_vars.push(("WRY_ANDROID_LIBRARY", "androidfinal".to_string()));
             env_vars.push((
                 "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",

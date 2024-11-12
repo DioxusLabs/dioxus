@@ -732,27 +732,27 @@ impl AppBundle {
 
     /// Run any final tools to produce apks or other artifacts we might need.
     async fn assemble(&self) -> Result<()> {
-        match self.build.build.platform() {
-            Platform::Android => {
-                // make sure we can execute the gradlew script
+        if let Platform::Android = self.build.build.platform() {
+            // make sure we can execute the gradlew script
+            #[cfg(unix)]
+            {
                 std::fs::set_permissions(
                     self.build.root_dir().join("gradlew"),
                     std::fs::Permissions::from_mode(0o755),
                 )?;
-
-                let output = Command::new("./gradlew")
-                    .arg("assembleDebug")
-                    .current_dir(self.build.root_dir())
-                    .stderr(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .output()
-                    .await?;
-
-                if !output.status.success() {
-                    return Err(anyhow::anyhow!("Failed to assemble apk: {output:?}").into());
-                }
             }
-            _ => {}
+
+            let output = Command::new("./gradlew")
+                .arg("assembleDebug")
+                .current_dir(self.build.root_dir())
+                .stderr(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                return Err(anyhow::anyhow!("Failed to assemble apk: {output:?}").into());
+            }
         }
 
         Ok(())

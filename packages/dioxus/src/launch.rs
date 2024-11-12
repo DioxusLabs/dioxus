@@ -260,7 +260,7 @@ fn web_launch(
     platform_config: Vec<Box<dyn std::any::Any>>,
 ) {
     // If the server feature is enabled, launch the client with hydration enabled
-    #[cfg(any(feature = "fullstack"))]
+    #[cfg(feature = "fullstack")]
     {
         let platform_config = platform_config
             .into_iter()
@@ -273,6 +273,7 @@ fn web_launch(
             for context in contexts {
                 vdom.insert_any_root_context(context());
             }
+
             #[cfg(feature = "document")]
             {
                 #[cfg(feature = "fullstack")]

@@ -41,13 +41,10 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
         };
 
         while let Ok(msg) = websocket.read() {
-            match msg {
-                tungstenite::Message::Text(text) => {
-                    if let Ok(msg) = serde_json::from_str(&text) {
-                        callback(msg);
-                    }
+            if let tungstenite::Message::Text(text) = msg {
+                if let Ok(msg) = serde_json::from_str(&text) {
+                    callback(msg);
                 }
-                _ => {}
             }
         }
     });

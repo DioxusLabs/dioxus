@@ -56,7 +56,7 @@ impl TraceController {
         let args = Cli::parse();
 
         VERBOSITY
-            .set(args.verbosity.clone())
+            .set(args.verbosity)
             .expect("verbosity should only be set once");
 
         // When running in interactive mode (of which serve is the only one), we want to do things slightly differently

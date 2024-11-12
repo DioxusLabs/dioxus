@@ -49,7 +49,7 @@ impl ServeArgs {
     /// Make sure not to do any intermediate logging since our tracing infra has now enabled much
     /// higher log levels
     pub(crate) async fn serve(self) -> Result<StructuredOutput> {
-        _ = crate::serve::serve_all(self).await?;
+        crate::serve::serve_all(self).await?;
 
         Ok(StructuredOutput::Success)
     }
@@ -82,7 +82,7 @@ impl ServeArgs {
         }
 
         // Resolve the build arguments
-        self.build_arguments.resolve(&krate)?;
+        self.build_arguments.resolve(krate)?;
 
         Ok(())
     }
