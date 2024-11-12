@@ -114,10 +114,17 @@ impl BuildRequest {
         // We don't want to overwrite the user's .cargo/config.toml since that gets committed to git
         // and we want everyone's install to be the same.
         if self.build.platform() == Platform::Android {
+            let linker = self
+                .krate
+                .android_linker()
+                .context("Could not autodetect android linker")?;
+
+            tracing::trace!("Using android linker: {linker:?}");
+
             cmd.env(
                 LinkAction::ENV_VAR_NAME,
                 LinkAction::LinkAndroid {
-                    linker: "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang".into(),
+                    linker,
                     extra_flags: vec![],
                 }
                 .to_json(),
