@@ -1,5 +1,5 @@
 use super::*;
-use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate};
+use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate, Result};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -10,14 +10,14 @@ pub(crate) struct RunArgs {
 }
 
 impl RunArgs {
-    pub(crate) async fn run(mut self) -> anyhow::Result<()> {
+    pub(crate) async fn run(mut self) -> Result<StructuredOutput> {
         let krate = DioxusCrate::new(&self.build_args.target_args)
             .context("Failed to load Dioxus workspace")?;
 
         self.build_args.resolve(&krate)?;
 
-        println!("Building crate krate data: {:#?}", krate);
-        println!("Build args: {:#?}", self.build_args);
+        tracing::trace!("Building crate krate data: {:#?}", krate);
+        tracing::trace!("Build args: {:#?}", self.build_args);
 
         let bundle = Builder::start(&krate, self.build_args.clone())?
             .finish()
@@ -35,11 +35,15 @@ impl RunArgs {
         // They won't generally be emitted
         loop {
             match runner.wait().await {
-                ServeUpdate::StderrReceived { platform, msg } => println!("[{platform}]: {msg}"),
-                ServeUpdate::StdoutReceived { platform, msg } => println!("[{platform}]: {msg}"),
+                ServeUpdate::StderrReceived { platform, msg } => {
+                    tracing::info!("[{platform}]: {msg}")
+                }
+                ServeUpdate::StdoutReceived { platform, msg } => {
+                    tracing::info!("[{platform}]: {msg}")
+                }
                 ServeUpdate::ProcessExited { platform, status } => {
                     runner.kill(platform);
-                    eprintln!("[{platform}]: process exited with status: {status:?}");
+                    tracing::info!("[{platform}]: process exited with status: {status:?}");
                     break;
                 }
                 ServeUpdate::BuildUpdate { .. } => {}
@@ -55,6 +59,6 @@ impl RunArgs {
             }
         }
 
-        Ok(())
+        Ok(StructuredOutput::Success)
     }
 }

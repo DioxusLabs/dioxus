@@ -30,6 +30,15 @@ pub(crate) enum Error {
     #[error("Failed to establish proxy: {0}")]
     ProxySetup(String),
 
+    #[error("Failed to bundle project: {0}")]
+    BundleFailed(#[from] tauri_bundler::Error),
+
+    #[error("Unsupported feature: {0}")]
+    UnsupportedFeature(String),
+
+    #[error("Failed to render template: {0}")]
+    TemplateParse(#[from] handlebars::RenderError),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

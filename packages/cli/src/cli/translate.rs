@@ -1,11 +1,9 @@
 use super::*;
-use crate::{Result, TraceSrc};
+use crate::{Result, StructuredOutput};
 use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
-use std::{io::IsTerminal as _, process::exit};
 
 /// Translate some source file into Dioxus code
 #[derive(Clone, Debug, Parser)]
-#[clap(name = "translate")]
 pub(crate) struct Translate {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name
@@ -26,7 +24,7 @@ pub(crate) struct Translate {
 }
 
 impl Translate {
-    pub(crate) fn translate(self) -> Result<()> {
+    pub(crate) fn translate(self) -> Result<StructuredOutput> {
         // Get the right input for the translation
         let contents = determine_input(self.file, self.raw)?;
 
@@ -34,15 +32,18 @@ impl Translate {
         let dom = html_parser::Dom::parse(&contents)?;
 
         // Convert the HTML to RSX
-        let out = convert_html_to_formatted_rsx(&dom, self.component);
+        let html = convert_html_to_formatted_rsx(&dom, self.component);
 
         // Write the output
+        // todo(jon): we should probably use tracing out a different output format
+        // right now we're just printing to stdout since some tools rely on that, but likely we don't want that
+        // instead we should be printing as json (or maybe even a different format) if we're not interactive
         match self.output {
-            Some(output) => std::fs::write(output, out)?,
-            None => print!("{}", out),
+            Some(output) => std::fs::write(output, &html)?,
+            None => print!("{}", html),
         }
 
-        Ok(())
+        Ok(StructuredOutput::HtmlTranslate { html })
     }
 }
 
@@ -103,10 +104,11 @@ fn indent_and_write(raw: &str, idx: usize, out: &mut String) {
 }
 
 fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> {
+    use std::io::IsTerminal as _;
+
     // Make sure not both are specified
     if file.is_some() && raw.is_some() {
-        tracing::error!(dx_src = ?TraceSrc::Dev, "Only one of --file or --raw should be specified.");
-        exit(0);
+        return Err("Only one of --file or --raw should be specified.".into());
     }
 
     if let Some(raw) = raw {

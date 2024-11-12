@@ -54,18 +54,13 @@ members = [
     "packages/server-macro",
     "packages/signals",
     "packages/ssr",
-    "packages/static-generation",
     "packages/lazy-js-bundle",
     "packages/cli-config",
     "packages/devtools",
     "packages/devtools-types",
     "packages/isrg",
     "packages/rsx-hotreload",
-
-    # Static generation examples
-    # "packages/static-generation/examples/simple",
-    # "packages/static-generation/examples/router",
-    # "packages/static-generation/examples/github-pages",
+    "packages/dx-wire-format",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -94,9 +89,6 @@ members = [
     "examples/fullstack-streaming",
     "examples/fullstack-desktop",
     "examples/fullstack-auth",
-    "examples/ssg-simple",
-    "examples/ssg-router",
-    "examples/ssg-github-pages",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -142,8 +134,9 @@ generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.4" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.4" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.4" }
-dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.4" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.4", default-features = false }
+dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-alpha.4" }
+
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.4" }
 manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.4" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.4" }
@@ -222,10 +215,11 @@ dirs = "5.0.1"
 cargo-config2 = "0.1.26"
 criterion = { version = "0.5" }
 walrus = "*"
+cargo_metadata = "0.18.1"
 
 # desktop
 wry = { version = "0.45.0", default-features = false }
-tao = { version = "0.30.0", features = ["rwh_05"] }
+tao = { version = "=0.30.0", features = ["rwh_05"] }
 webbrowser = "1.0.1"
 infer = "0.16.0"
 dunce = "1.0.2"
@@ -310,8 +304,8 @@ default = ["desktop"]
 desktop = ["dioxus/desktop"]
 liveview = ["dioxus/liveview"]
 fullstack = ["dioxus/fullstack"]
-axum = ["dioxus/axum"]
-server = ["dioxus/axum"]
+server = ["dioxus/server"]
+mobile = ["dioxus/mobile"]
 web = ["dioxus/web"]
 http = ["dep:reqwest", "dep:http-range"]
 

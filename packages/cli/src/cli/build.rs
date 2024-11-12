@@ -1,11 +1,10 @@
 use super::*;
-use crate::{AppBundle, Builder, DioxusCrate, Platform, PROFILE_SERVER};
+use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
 /// Produces a final output bundle designed to be run on the target platform.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-#[clap(name = "build")]
 pub(crate) struct BuildArgs {
     /// Build in release mode [default: false]
     #[clap(long, short)]
@@ -16,21 +15,6 @@ pub(crate) struct BuildArgs {
     #[clap(long)]
     #[serde(default)]
     pub(crate) force_sequential: bool,
-
-    /// Use verbose output [default: false]
-    #[clap(long)]
-    #[serde(default)]
-    pub(crate) verbose: bool,
-
-    /// Use trace output [default: false]
-    #[clap(long)]
-    #[serde(default)]
-    pub(crate) trace: bool,
-
-    /// Pass -Awarnings to the cargo build
-    #[clap(long)]
-    #[serde(default)]
-    pub(crate) silent: bool,
 
     /// Build the app with custom a profile
     #[clap(long)]
@@ -73,12 +57,9 @@ pub(crate) struct BuildArgs {
 }
 
 impl BuildArgs {
-    pub async fn build_it(&mut self) -> Result<()> {
-        self.build().await?;
-        Ok(())
-    }
+    pub async fn run_cmd(mut self) -> Result<StructuredOutput> {
+        tracing::info!("Building project...");
 
-    pub(crate) async fn build(&mut self) -> Result<AppBundle> {
         let krate =
             DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 
@@ -86,12 +67,11 @@ impl BuildArgs {
 
         let bundle = Builder::start(&krate, self.clone())?.finish().await?;
 
-        println!(
-            "Successfully built! 💫\nBundle at {}",
-            bundle.app_dir().display()
-        );
+        tracing::info!(path = ?bundle.build.root_dir(), "Build completed successfully! 🚀");
 
-        Ok(bundle)
+        Ok(StructuredOutput::BuildFinished {
+            path: bundle.build.root_dir(),
+        })
     }
 
     /// Update the arguments of the CLI by inspecting the DioxusCrate itself and learning about how
@@ -127,13 +107,13 @@ impl BuildArgs {
         // Add any features required to turn on the client
         self.target_args
             .client_features
-            .extend(krate.feature_for_platform(platform));
+            .push(krate.feature_for_platform(platform));
 
         // Add any features required to turn on the server
         // This won't take effect in the server is not built, so it's fine to just set it here even if it's not used
         self.target_args
             .server_features
-            .extend(krate.feature_for_platform(Platform::Server));
+            .push(krate.feature_for_platform(Platform::Server));
 
         // Make sure we set the fullstack platform so we actually build the fullstack variant
         // Users need to enable "fullstack" in their default feature set.
@@ -150,7 +130,7 @@ impl BuildArgs {
 
         // Set the profile of the build if it's not already set
         // We do this for android/wasm since they require
-        if self.profile.is_none() {
+        if self.profile.is_none() && !self.release {
             match self.platform {
                 Some(Platform::Android) => {
                     self.profile = Some(crate::dioxus_crate::PROFILE_ANDROID.to_string());
