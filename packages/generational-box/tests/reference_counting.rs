@@ -38,7 +38,7 @@ fn move_reference_in_place() {
         let original_owner = S::owner();
         // insert data into the store
         let original = original_owner.insert_rc(data1.clone());
-        let mut reference = original_owner.insert_reference(original).unwrap();
+        let reference = original_owner.insert_reference(original).unwrap();
         // The reference should point to the original value
         assert_eq!(&*reference.read(), &data1);
 
