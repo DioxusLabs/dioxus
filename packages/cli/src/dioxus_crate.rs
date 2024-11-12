@@ -2,6 +2,7 @@ use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
 use crate::{Platform, Result};
 use anyhow::Context;
+use itertools::Itertools;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use std::path::PathBuf;
@@ -554,6 +555,76 @@ impl DioxusCrate {
         krates.dedup();
 
         krates
+    }
+
+    fn android_ndk(&self) -> Option<PathBuf> {
+        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
+        static PATH: once_cell::sync::Lazy<Option<PathBuf>> = once_cell::sync::Lazy::new(|| {
+            use std::env::var;
+            use tracing::debug;
+
+            fn var_or_debug(name: &str) -> Option<PathBuf> {
+                var(name)
+                    .inspect_err(|_| debug!("{name} not set"))
+                    .ok()
+                    .map(PathBuf::from)
+            }
+
+            // attempt to autodetect the ndk path from env vars (usually set by the shell)
+            let auto_detected_ndk =
+                var_or_debug("NDK_HOME").or_else(|| var_or_debug("ANDROID_NDK_HOME"));
+
+            if let Some(home) = auto_detected_ndk {
+                return Some(home);
+            }
+
+            let sdk = var_or_debug("ANDROID_SDK_ROOT")
+                .or_else(|| var_or_debug("ANDROID_SDK"))
+                .or_else(|| var_or_debug("ANDROID_HOME"))?;
+
+            let ndk = sdk.join("ndk");
+
+            ndk.read_dir()
+                .ok()?
+                .flatten()
+                .map(|dir| (dir.file_name(), dir.path()))
+                .sorted()
+                .last()
+                .map(|(_, path)| path.to_path_buf())
+        });
+
+        PATH.clone()
+    }
+
+    pub(crate) fn android_linker(&self) -> Option<PathBuf> {
+        self.android_ndk().map(|ndk| {
+            let toolchain_dir = ndk.join("toolchains").join("llvm").join("prebuilt");
+
+            #[cfg(target_os = "macos")]
+            {
+                // for whatever reason, even on aarch64 macos, the linker is under darwin-x86_64
+                return toolchain_dir
+                    .join("darwin-x86_64")
+                    .join("bin")
+                    .join("aarch64-apple-darwin-clang");
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                return toolchain_dir
+                    .join("linux-x86_64")
+                    .join("bin")
+                    .join("aarch64-linux-android24-clang");
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                return toolchain_dir
+                    .join("windows-x86_64")
+                    .join("bin")
+                    .join("aarch64-linux-android24-clang.exe");
+            }
+        })
     }
 }
 

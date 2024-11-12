@@ -134,6 +134,12 @@ impl BuildRequest {
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     pub(crate) async fn verify_android_tooling(&self, _rustup: RustupShow) -> Result<()> {
+        if self.krate.android_linker().is_none() {
+            return Err(anyhow::anyhow!(
+                "Android linker not found. Please set the ANDROID_NDK_HOME environment variable to the root of your NDK installation."
+            ).into());
+        }
+
         Ok(())
     }
 
@@ -142,7 +148,7 @@ impl BuildRequest {
     ///
     /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
     ///     https://tauri.app/start/prerequisites/
-    pub(crate) async fn verify_linux_tooling(&self, _rustup: crate::RustupShow) -> Result<()> {
+    pub(crate) async fn verify_linux_tooling(&self, _rustup: RustupShow) -> Result<()> {
         Ok(())
     }
 }
