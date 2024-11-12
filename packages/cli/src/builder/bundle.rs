@@ -601,12 +601,18 @@ impl AppBundle {
 
     pub(crate) fn server_exe(&self) -> Option<PathBuf> {
         if let Some(_server) = &self.server {
-            return Some(
-                self.build
-                    .krate
-                    .build_dir(Platform::Server, self.build.build.release)
-                    .join("server"),
-            );
+            let mut path = self
+                .build
+                .krate
+                .build_dir(Platform::Server, self.build.build.release);
+
+            if cfg!(windows) {
+                path.push("server.exe");
+            } else {
+                path.push("server");
+            }
+
+            return Some(path);
         }
 
         None
