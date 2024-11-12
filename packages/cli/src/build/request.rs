@@ -6,11 +6,7 @@ use crate::{link::LinkAction, BuildArgs};
 use crate::{AppBundle, Platform};
 use anyhow::Context;
 use serde::Deserialize;
-use std::{
-    path::{Path, PathBuf},
-    process::Stdio,
-    time::Instant,
-};
+use std::{path::PathBuf, process::Stdio, time::Instant};
 use tokio::{io::AsyncBufReadExt, process::Command};
 
 #[derive(Clone, Debug)]
