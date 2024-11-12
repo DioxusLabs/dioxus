@@ -148,7 +148,7 @@ impl VirtualDom {
     /// Take the top task from the highest scope
     pub(crate) fn pop_task(&mut self) -> Option<Task> {
         let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
-        let tasks = dirty_tasks.pop_first()?;
+        let tasks = dirty_tasks.first()?;
 
         // The scope that owns the effect should still exist. We can't just ignore the task if the scope doesn't exist
         // because the scope id may have been reallocated
