@@ -601,8 +601,7 @@ impl DioxusCrate {
         self.android_ndk().map(|ndk| {
             let toolchain_dir = ndk.join("toolchains").join("llvm").join("prebuilt");
 
-            #[cfg(target_os = "macos")]
-            {
+            if cfg!(target_os = "macos") {
                 // for whatever reason, even on aarch64 macos, the linker is under darwin-x86_64
                 return toolchain_dir
                     .join("darwin-x86_64")
@@ -610,18 +609,18 @@ impl DioxusCrate {
                     .join("clang");
             }
 
-            #[cfg(target_os = "linux")]
-            {
+            if cfg!(target_os = "linux") {
                 return toolchain_dir.join("linux-x86_64").join("bin").join("clang");
             }
 
-            #[cfg(target_os = "windows")]
-            {
+            if cfg!(target_os = "windows") {
                 return toolchain_dir
                     .join("windows-x86_64")
                     .join("bin")
                     .join("clang.exe");
             }
+
+            unimplemented!("Unsupported target os for android toolchain auodetection")
         })
     }
 }
