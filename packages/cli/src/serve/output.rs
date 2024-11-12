@@ -99,8 +99,8 @@ impl Output {
             more_modal_open: false,
             pending_logs: VecDeque::new(),
             throbber: RefCell::new(throbber_widgets_tui::ThrobberState::default()),
-            trace: cfg.trace,
-            verbose: cfg.verbose,
+            trace: crate::logging::VERBOSITY.get().unwrap().trace,
+            verbose: crate::logging::VERBOSITY.get().unwrap().verbose,
             tick_animation: false,
             tick_interval: {
                 let mut interval = tokio::time::interval(Duration::from_millis(TICK_RATE_MS));
@@ -152,10 +152,8 @@ impl Output {
                 .execute(DisableBracketedPaste)?;
             disable_raw_mode()?;
 
-            // print a few lines to not cut off the output
-            for _ in 0..3 {
-                println!();
-            }
+            // print a line to force the cursor down (no tearing)
+            println!();
         }
 
         Ok(())
@@ -331,10 +329,12 @@ impl Output {
     /// we won't be drawing it.
     pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
         match update {
-            BuildUpdate::CompilerMessage { .. } => {}
-            BuildUpdate::Progress { .. } => self.tick_animation = true,
+            BuildUpdate::Progress {
+                stage: BuildStage::Starting { .. },
+            } => self.tick_animation = true,
             BuildUpdate::BuildReady { .. } => self.tick_animation = false,
             BuildUpdate::BuildFailed { .. } => self.tick_animation = false,
+            _ => {}
         }
     }
 
@@ -381,7 +381,7 @@ impl Output {
         let mut area = frame.area();
         area.width = area.width.clamp(0, VIEWPORT_MAX_WIDTH);
 
-        let [_top, body, bottom] = Layout::vertical([
+        let [_top, body, _bottom] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Fill(1),
             Constraint::Length(1),
@@ -391,7 +391,6 @@ impl Output {
 
         self.render_borders(frame, area);
         self.render_body(frame, body, state);
-        self.render_bottom_row(frame, bottom, state);
         self.render_body_title(frame, _top, state);
     }
 
@@ -512,6 +511,7 @@ impl Output {
             BuildStage::Failed => lines.push("Failed".red()),
             BuildStage::Aborted => lines.push("Aborted".red()),
             BuildStage::Restarting => lines.push("Restarting".yellow()),
+            _ => {}
         };
 
         frame.render_widget(Line::from(lines), status_line);
@@ -712,23 +712,6 @@ impl Output {
         );
     }
 
-    /// Render the version number on the bottom right
-    fn render_bottom_row(&self, frame: &mut Frame, area: Rect, _state: RenderState) {
-        // Split the area into two chunks
-        let row = Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).split(area);
-
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                // "🧬 dx".dark_gray(),
-                // " ".dark_gray(),
-                // self.dx_version.as_str().dark_gray(),
-                // " ".dark_gray(),
-            ]))
-            .right_aligned(),
-            row[1],
-        );
-    }
-
     /// Render borders around the terminal, forcing an inner clear while we're at it
     fn render_borders(&self, frame: &mut Frame, area: Rect) {
         frame.render_widget(ratatui::widgets::Clear, area);
@@ -784,7 +767,7 @@ impl Output {
 
         // Render the log into an ansi string
         // We're going to add some metadata to it like the timestamp and source and then dump it to the raw ansi sequences we need to send to crossterm
-        let output_sequence = tracemsg_to_ansi_string(log, term_size.width);
+        let output_sequence = Self::tracemsg_to_ansi_string(log, term_size.width);
 
         // Get the lines of the output sequence and their overflow
         let lines = output_sequence.lines().collect::<Vec<_>>();
@@ -863,94 +846,94 @@ impl Output {
             false => VIEWPORT_HEIGHT_SMALL,
         }
     }
-}
 
-fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
-    let rendered = match log.content {
-        TraceContent::Cargo(msg) => msg.message.rendered.unwrap_or_default(),
-        TraceContent::Text(text) => text,
-    };
+    fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
+        let rendered = match log.content {
+            TraceContent::Cargo(msg) => msg.message.rendered.unwrap_or_default(),
+            TraceContent::Text(text) => text,
+        };
 
-    // Create a paragraph widget using the log line itself
-    // From here on out, we want to work with the escaped ansi string and the "real lines" to be printed
-    //
-    // We make a special case for lines that look like frames (ie ==== or ---- or ------) and make them
-    // dark gray, just for readability.
-    //
-    // todo(jon): refactor this out to accept any widget, not just paragraphs
-    let paragraph = Paragraph::new({
-        use ansi_to_tui::IntoText;
-        use chrono::Timelike;
+        // Create a paragraph widget using the log line itself
+        // From here on out, we want to work with the escaped ansi string and the "real lines" to be printed
+        //
+        // We make a special case for lines that look like frames (ie ==== or ---- or ------) and make them
+        // dark gray, just for readability.
+        //
+        // todo(jon): refactor this out to accept any widget, not just paragraphs
+        let paragraph = Paragraph::new({
+            use ansi_to_tui::IntoText;
+            use chrono::Timelike;
 
-        let mut text = Text::default();
+            let mut text = Text::default();
 
-        for (idx, raw_line) in rendered.lines().enumerate() {
-            let line_as_text = raw_line.into_text().unwrap();
-            let is_pretending_to_be_frame = raw_line
-                .chars()
-                .all(|c| c == '=' || c == '-' || c == ' ' || c == '─');
+            for (idx, raw_line) in rendered.lines().enumerate() {
+                let line_as_text = raw_line.into_text().unwrap();
+                let is_pretending_to_be_frame = raw_line
+                    .chars()
+                    .all(|c| c == '=' || c == '-' || c == ' ' || c == '─');
 
-            for (subline_idx, line) in line_as_text.lines.into_iter().enumerate() {
-                let mut out_line = if idx == 0 && subline_idx == 0 {
-                    let mut formatted_line = Line::default();
+                for (subline_idx, line) in line_as_text.lines.into_iter().enumerate() {
+                    let mut out_line = if idx == 0 && subline_idx == 0 {
+                        let mut formatted_line = Line::default();
 
-                    formatted_line.push_span(
-                        Span::raw(format!(
-                            "{:02}:{:02}:{:02} ",
-                            log.timestamp.hour(),
-                            log.timestamp.minute(),
-                            log.timestamp.second()
-                        ))
-                        .dark_gray(),
-                    );
-                    formatted_line.push_span(
-                        Span::raw(format!(
-                            "[{src}] {padding}",
-                            src = log.source,
-                            padding =
-                                " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
-                        ))
-                        .style(match log.source {
-                            TraceSrc::App(_platform) => Style::new().blue(),
-                            TraceSrc::Dev => Style::new().magenta(),
-                            TraceSrc::Build => Style::new().yellow(),
-                            TraceSrc::Bundle => Style::new().magenta(),
-                            TraceSrc::Cargo => Style::new().yellow(),
-                            TraceSrc::Unknown => Style::new().gray(),
-                        }),
-                    );
+                        formatted_line.push_span(
+                            Span::raw(format!(
+                                "{:02}:{:02}:{:02} ",
+                                log.timestamp.hour(),
+                                log.timestamp.minute(),
+                                log.timestamp.second()
+                            ))
+                            .dark_gray(),
+                        );
+                        formatted_line.push_span(
+                            Span::raw(format!(
+                                "[{src}] {padding}",
+                                src = log.source,
+                                padding =
+                                    " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
+                            ))
+                            .style(match log.source {
+                                TraceSrc::App(_platform) => Style::new().blue(),
+                                TraceSrc::Dev => Style::new().magenta(),
+                                TraceSrc::Build => Style::new().yellow(),
+                                TraceSrc::Bundle => Style::new().magenta(),
+                                TraceSrc::Cargo => Style::new().yellow(),
+                                TraceSrc::Unknown => Style::new().gray(),
+                            }),
+                        );
 
-                    for span in line.spans {
-                        formatted_line.push_span(span);
+                        for span in line.spans {
+                            formatted_line.push_span(span);
+                        }
+
+                        formatted_line
+                    } else {
+                        line
+                    };
+
+                    if is_pretending_to_be_frame {
+                        out_line = out_line.dark_gray();
                     }
 
-                    formatted_line
-                } else {
-                    line
-                };
-
-                if is_pretending_to_be_frame {
-                    out_line = out_line.dark_gray();
+                    text.lines.push(out_line);
                 }
-
-                text.lines.push(out_line);
             }
-        }
 
-        text
-    });
+            text
+        });
 
-    // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
-    //
-    // This is important because the line_count method on paragraph takes into account the width of these codes
-    // the 3000 clip width is to bound log lines to a reasonable memory usage
-    // We could consider reusing this buffer since it's a lot to allocate, but log printing is not the
-    // slowest thing in the world and allocating is pretty fast...
-    //
-    // After we've dumped the ascii out, we want to call "trim_end" which ensures we don't attempt
-    // to print extra characters as lines, since AnsiStringBuffer will in fact attempt to print empty
-    // cells as characters. That might not actually be important, but we want to shrink the buffer
-    // before printing it
-    let line_count = paragraph.line_count(term_width);
-    AnsiStringBuffer::new(3000, line_count as u16).render(&paragraph)
+        // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
+        //
+        // This is important because the line_count method on paragraph takes into account the width of these codes
+        // the 3000 clip width is to bound log lines to a reasonable memory usage
+        // We could consider reusing this buffer since it's a lot to allocate, but log printing is not the
+        // slowest thing in the world and allocating is pretty fast...
+        //
+        // After we've dumped the ascii out, we want to call "trim_end" which ensures we don't attempt
+        // to print extra characters as lines, since AnsiStringBuffer will in fact attempt to print empty
+        // cells as characters. That might not actually be important, but we want to shrink the buffer
+        // before printing it
+        let line_count = paragraph.line_count(term_width);
+        AnsiStringBuffer::new(3000, line_count as u16).render(&paragraph)
+    }
 }

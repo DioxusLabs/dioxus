@@ -83,6 +83,10 @@ objc_id = "0.1.1"
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
 tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
+jni = "0.21.1"
+ndk = { version = "0.9.0" }
+ndk-sys = { version = "0.6.0" }
+ndk-context = { version = "0.1.1" }
 
 # use native tls on other platforms
 [target.'cfg(not(target_os = "android"))'.dependencies]
@@ -97,11 +101,12 @@ objc = "0.2.7"
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["tokio_runtime", "wry/objc-exception", "devtools"]
+default = ["tokio_runtime", "exception", "devtools"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
+exception = ["wry/objc-exception"]
 gnu = []
 
 [package.metadata.docs.rs]
