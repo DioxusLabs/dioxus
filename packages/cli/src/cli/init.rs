@@ -47,7 +47,7 @@ pub struct Init {
 }
 
 impl Init {
-    pub fn init(mut self) -> Result<()> {
+    pub fn init(mut self) -> Result<StructuredOutput> {
         // Project name defaults to directory name.
         if self.name.is_none() {
             self.name = Some(create::name_from_path(&self.path)?);
@@ -71,7 +71,8 @@ impl Init {
         };
         create::restore_cursor_on_sigint();
         let path = cargo_generate::generate(args)?;
-        create::post_create(&path)
+        create::post_create(&path)?;
+        Ok(StructuredOutput::Success)
     }
 }
 
