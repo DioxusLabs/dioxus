@@ -119,6 +119,8 @@ impl BuildRequest {
                 .android_linker()
                 .context("Could not autodetect android linker")?;
 
+            tracing::trace!("Using android linker: {linker:?}");
+
             cmd.env(
                 LinkAction::ENV_VAR_NAME,
                 LinkAction::LinkAndroid {

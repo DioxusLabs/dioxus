@@ -597,6 +597,7 @@ impl DioxusCrate {
     }
 
     pub(crate) fn android_linker(&self) -> Option<PathBuf> {
+        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         self.android_ndk().map(|ndk| {
             let toolchain_dir = ndk.join("toolchains").join("llvm").join("prebuilt");
 
@@ -606,15 +607,12 @@ impl DioxusCrate {
                 return toolchain_dir
                     .join("darwin-x86_64")
                     .join("bin")
-                    .join("aarch64-apple-darwin-clang");
+                    .join("clang");
             }
 
             #[cfg(target_os = "linux")]
             {
-                return toolchain_dir
-                    .join("linux-x86_64")
-                    .join("bin")
-                    .join("aarch64-linux-android24-clang");
+                return toolchain_dir.join("linux-x86_64").join("bin").join("clang");
             }
 
             #[cfg(target_os = "windows")]
@@ -622,7 +620,7 @@ impl DioxusCrate {
                 return toolchain_dir
                     .join("windows-x86_64")
                     .join("bin")
-                    .join("aarch64-linux-android24-clang.exe");
+                    .join("clang.exe");
             }
         })
     }
