@@ -5,7 +5,6 @@ use anyhow::Context;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::create_dir_all,
-    os::unix::prelude::PermissionsExt,
     path::{Path, PathBuf},
 };
 use std::{sync::atomic::AtomicUsize, time::Duration};
@@ -736,6 +735,7 @@ impl AppBundle {
             // make sure we can execute the gradlew script
             #[cfg(unix)]
             {
+                use std::os::unix::prelude::PermissionsExt;
                 std::fs::set_permissions(
                     self.build.root_dir().join("gradlew"),
                     std::fs::Permissions::from_mode(0o755),
