@@ -18,5 +18,5 @@ tracing-subscriber = "0.3.17"
 
 [features]
 default = []
-server = ["dioxus/axum"]
+server = ["dioxus/server"]
 web = ["dioxus/web"]

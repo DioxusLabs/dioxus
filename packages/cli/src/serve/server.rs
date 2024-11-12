@@ -204,7 +204,11 @@ impl WebServer {
     }
 
     /// Sends an updated build status to all clients.
-    pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate) {
+    pub(crate) async fn new_build_update(
+        &mut self,
+        update: &BuildUpdate,
+        builder: &super::Builder,
+    ) {
         match update {
             BuildUpdate::Progress { stage } => {
                 // Todo(miles): wire up more messages into the splash screen UI
@@ -220,11 +224,13 @@ impl WebServer {
                         krate,
                         ..
                     } => {
-                        self.build_status.set(Status::Building {
-                            progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
-                            build_message: format!("{krate} compiling"),
-                        });
-                        self.send_build_status().await;
+                        if !builder.is_finished() {
+                            self.build_status.set(Status::Building {
+                                progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
+                                build_message: format!("{krate} compiling"),
+                            });
+                            self.send_build_status().await;
+                        }
                     }
                     BuildStage::OptimizingWasm {} => {}
                     BuildStage::Aborted => {}
@@ -250,7 +256,7 @@ impl WebServer {
             return;
         }
 
-        tracing::debug!("Sending hotreload to clients {:?}", reload);
+        tracing::trace!("Sending hotreload to clients {:?}", reload);
 
         let msg = DevserverMsg::HotReload(reload);
         let msg = serde_json::to_string(&msg).unwrap();
@@ -281,6 +287,8 @@ impl WebServer {
 
     /// Tells all clients to reload if possible for new changes.
     pub(crate) async fn send_reload_command(&mut self) {
+        tracing::trace!("Sending reload to toast");
+
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
         self.build_status.set(Status::Ready);

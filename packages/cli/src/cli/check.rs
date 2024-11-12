@@ -1,10 +1,13 @@
+//! Run linting against the user's codebase.
+//!
+//! For reference, the rustfmt main.rs file
+//! https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
+
 use super::*;
 use crate::DioxusCrate;
+use anyhow::Context;
 use futures_util::{stream::FuturesUnordered, StreamExt};
-use std::{path::Path, process::exit};
-
-// For reference, the rustfmt main.rs file
-// https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
+use std::path::Path;
 
 /// Check the Rust files in the project for issues.
 #[derive(Clone, Debug, Parser)]
@@ -20,25 +23,23 @@ pub(crate) struct Check {
 
 impl Check {
     // Todo: check the entire crate
-    pub(crate) async fn check(self) -> Result<()> {
+    pub(crate) async fn check(self) -> Result<StructuredOutput> {
         match self.file {
             // Default to checking the project
             None => {
                 let dioxus_crate = DioxusCrate::new(&self.target_args)?;
-                if let Err(e) = check_project_and_report(dioxus_crate).await {
-                    eprintln!("error checking project: {}", e);
-                    exit(1);
-                }
+                check_project_and_report(dioxus_crate)
+                    .await
+                    .context("error checking project")?;
             }
             Some(file) => {
-                if let Err(e) = check_file_and_report(file).await {
-                    eprintln!("failed to check file: {}", e);
-                    exit(1);
-                }
+                check_file_and_report(file)
+                    .await
+                    .context("error checking file")?;
             }
         }
 
-        Ok(())
+        Ok(StructuredOutput::Success)
     }
 }
 
@@ -72,7 +73,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
             .await;
 
             if res.is_err() {
-                eprintln!("error checking file: {}", path.display());
+                tracing::error!("error checking file: {}", path.display());
             }
 
             res
@@ -92,19 +93,17 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
 
     for report in issue_reports.into_iter() {
         if !report.issues.is_empty() {
-            println!("{}", report);
+            tracing::info!("{}", report);
         }
     }
 
     match total_issues {
-        0 => println!("No issues found."),
-        1 => println!("1 issue found."),
-        _ => println!("{} issues found.", total_issues),
-    }
-
-    match total_issues {
-        0 => exit(0),
-        _ => exit(1),
+        0 => {
+            tracing::info!("No issues found.");
+            Ok(())
+        }
+        1 => Err("1 issue found.".into()),
+        _ => Err(format!("{} issues found.", total_issues).into()),
     }
 }
 
@@ -114,7 +113,6 @@ fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
     };
 
     // load the gitignore
-
     for entry in folder {
         let Ok(entry) = entry else {
             continue;

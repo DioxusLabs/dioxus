@@ -4,7 +4,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod assets;
-mod builder;
+mod build;
 mod bundle_utils;
 mod cli;
 mod config;
@@ -13,65 +13,65 @@ mod dx_build_info;
 mod error;
 mod fastfs;
 mod filemap;
+mod logging;
 mod metadata;
 mod platform;
 mod profiles;
 mod rustup;
 mod serve;
 mod settings;
+mod slog;
 mod tooling;
-mod tracer;
 
-pub(crate) use builder::*;
+pub(crate) use build::*;
 pub(crate) use cli::*;
 pub(crate) use config::*;
 pub(crate) use dioxus_crate::*;
+pub(crate) use dioxus_dx_wire_format::*;
 pub(crate) use error::*;
 pub(crate) use filemap::*;
+pub(crate) use logging::*;
 pub(crate) use platform::*;
 pub(crate) use rustup::*;
 pub(crate) use settings::*;
-pub(crate) use tracer::*;
-
-use anyhow::Context;
-use clap::Parser;
-use Commands::*;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
     if let Some(link_action) = link::LinkAction::from_env() {
         return link_action.run();
     }
 
-    // Start the tracer so it captures logs from the build engine before we start the builder
-    TraceController::initialize();
+    let args = TraceController::initialize();
+    let result = match args.action {
+        Commands::Translate(opts) => opts.translate(),
+        Commands::New(opts) => opts.create(),
+        Commands::Init(opts) => opts.init(),
+        Commands::Config(opts) => opts.config(),
+        Commands::Autoformat(opts) => opts.autoformat(),
+        Commands::Check(opts) => opts.check().await,
+        Commands::Clean(opts) => opts.clean().await,
+        Commands::Build(opts) => opts.run_cmd().await,
+        Commands::Serve(opts) => opts.serve().await,
+        Commands::Bundle(opts) => opts.bundle().await,
+        Commands::Run(opts) => opts.run().await,
+        Commands::Doctor(opts) => opts.run().await,
+    };
 
-    match Cli::parse().action {
-        Translate(opts) => opts
-            .translate()
-            .context("⛔️ Translation of HTML into RSX failed:"),
+    // Provide a structured output for third party tools that can consume the output of the CLI
+    match result {
+        Ok(output) => {
+            tracing::debug!(json = ?output);
+        }
+        Err(err) => {
+            tracing::error!(
+                ?err,
+                json = ?StructuredOutput::Error {
+                    message: format!("{err:?}"),
+                },
+            );
 
-        New(opts) => opts.create().context("🚫 Creating new project failed:"),
-
-        Init(opts) => opts.init().context("🚫 Initializing a new project failed:"),
-
-        Config(opts) => opts.config().context("🚫 Configuring new project failed:"),
-
-        Autoformat(opts) => opts.autoformat().context("🚫 Error autoformatting RSX:"),
-
-        Check(opts) => opts.check().await.context("🚫 Error checking RSX:"),
-
-        Clean(opts) => opts.clean().context("🚫 Cleaning project failed:"),
-
-        Build(mut opts) => opts.build_it().await.context("🚫 Building project failed:"),
-
-        Serve(opts) => opts.serve().await.context("🚫 Serving project failed:"),
-
-        Bundle(opts) => opts.bundle().await.context("🚫 Bundling project failed:"),
-
-        Run(opts) => opts.run().await.context("🚫 Running project failed:"),
-
-        Doctor(opts) => opts.run().await.context("🚫 Checking project failed:"),
-    }
+            std::process::exit(1);
+        }
+    };
 }

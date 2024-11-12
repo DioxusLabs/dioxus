@@ -16,6 +16,7 @@ pub fn launch(
     for context in contexts {
         vdom.insert_any_root_context(context());
     }
+
     let platform_config = *platform_config
         .into_iter()
         .find_map(|cfg| cfg.downcast::<Config>().ok())

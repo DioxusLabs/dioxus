@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::PathBuf;
+use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct BundleConfig {
@@ -181,18 +181,6 @@ impl Default for WebviewInstallMode {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum PackageType {
-    MacOsBundle,
-    IosBundle,
-    WindowsMsi,
-    Deb,
-    Rpm,
-    AppImage,
-    Dmg,
-    Updater,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomSignCommandSettings {
     /// The command to run to sign the binary.
@@ -201,4 +189,36 @@ pub struct CustomSignCommandSettings {
     ///
     /// "%1" will be replaced with the path to the binary to be signed.
     pub args: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PackageType {
+    MacOsBundle,
+    IosBundle,
+    WindowsMsi,
+    Nsis,
+    Deb,
+    Rpm,
+    AppImage,
+    Dmg,
+    Updater,
+}
+
+impl FromStr for PackageType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "macos" => Ok(PackageType::MacOsBundle),
+            "ios" => Ok(PackageType::IosBundle),
+            "msi" => Ok(PackageType::WindowsMsi),
+            "nsis" => Ok(PackageType::Nsis),
+            "deb" => Ok(PackageType::Deb),
+            "rpm" => Ok(PackageType::Rpm),
+            "appimage" => Ok(PackageType::AppImage),
+            "dmg" => Ok(PackageType::Dmg),
+            "updater" => Ok(PackageType::Updater),
+            _ => Err(format!("{} is not a valid package type", s)),
+        }
+    }
 }

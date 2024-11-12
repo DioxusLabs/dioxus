@@ -1,8 +1,9 @@
 use super::*;
 use crate::DioxusCrate;
+use anyhow::Context;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
-use std::{borrow::Cow, fs, path::Path, process::exit};
+use std::{borrow::Cow, fs, path::Path};
 
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
@@ -37,7 +38,7 @@ pub(crate) struct Autoformat {
 }
 
 impl Autoformat {
-    pub(crate) fn autoformat(self) -> Result<()> {
+    pub(crate) fn autoformat(self) -> Result<StructuredOutput> {
         let Autoformat {
             check,
             raw,
@@ -56,9 +57,7 @@ impl Autoformat {
             if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0, indent) {
                 println!("{}", inner);
             } else {
-                // exit process with error
-                eprintln!("error formatting codeblock");
-                exit(1);
+                return Err("error formatting codeblock".into());
             }
         } else {
             // Default to formatting the project.
@@ -68,13 +67,9 @@ impl Autoformat {
                     package: Some(package),
                     ..Default::default()
                 };
-                let dx_crate = match DioxusCrate::new(&target_args) {
-                    Ok(x) => x,
-                    Err(error) => {
-                        eprintln!("failed to parse crate graph: {error}");
-                        exit(1);
-                    }
-                };
+                let dx_crate =
+                    DioxusCrate::new(&target_args).context("failed to parse crate graph")?;
+
                 Cow::Owned(dx_crate.crate_dir())
             } else {
                 Cow::Borrowed(Path::new("."))
@@ -83,12 +78,11 @@ impl Autoformat {
             if let Err(e) =
                 autoformat_project(check, split_line_attributes, format_rust_code, crate_dir)
             {
-                eprintln!("error formatting project: {}", e);
-                exit(1);
+                return Err(format!("error formatting project: {}", e).into());
             }
         }
 
-        Ok(())
+        Ok(StructuredOutput::Success)
     }
 }
 
@@ -106,8 +100,7 @@ fn refactor_file(
         fs::read_to_string(&file)
     };
     let Ok(mut s) = file_content else {
-        eprintln!("failed to open file: {}", file_content.unwrap_err());
-        exit(1);
+        return Err(format!("failed to open file: {}", file_content.unwrap_err()).into());
     };
 
     if format_rust_code {
@@ -117,8 +110,7 @@ fn refactor_file(
     let Ok(Ok(edits)) =
         syn::parse_file(&s).map(|file| dioxus_autofmt::try_fmt_file(&s, &file, indent))
     else {
-        eprintln!("failed to format file: {}", s);
-        exit(1);
+        return Err(format!("failed to format file: {}", s).into());
     };
 
     let out = dioxus_autofmt::apply_formats(&s, edits);
@@ -126,7 +118,7 @@ fn refactor_file(
     if file == "-" {
         print!("{}", out);
     } else if let Err(e) = fs::write(&file, out) {
-        eprintln!("failed to write formatted content to file: {e}",);
+        tracing::error!("failed to write formatted content to file: {e}",);
     } else {
         println!("formatted {}", file);
     }
@@ -212,7 +204,7 @@ fn autoformat_project(
             match res {
                 Ok(cnt) => Some(cnt),
                 Err(err) => {
-                    eprintln!("error formatting file : {}\n{:#?}", path.display(), err);
+                    tracing::error!("error formatting file : {}\n{:#?}", path.display(), err);
                     None
                 }
             }
@@ -222,8 +214,7 @@ fn autoformat_project(
     let files_formatted: usize = counts.into_iter().flatten().sum();
 
     if files_formatted > 0 && check {
-        eprintln!("{} files needed formatting", files_formatted);
-        exit(1);
+        return Err(format!("{} files needed formatting", files_formatted).into());
     }
 
     Ok(())

@@ -16,6 +16,11 @@ pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
 ///
 /// This is not a websocket! There's no protocol!
 pub fn devserver_raw_addr() -> Option<SocketAddr> {
+    // On android, 10.0.2.2 is the default loopback
+    if cfg!(target_os = "android") {
+        return Some("10.0.2.2:8080".parse().unwrap());
+    }
+
     std::env::var(DEVSERVER_RAW_ADDR_ENV)
         .map(|s| s.parse().ok())
         .ok()

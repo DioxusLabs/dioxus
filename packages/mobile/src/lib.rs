@@ -6,15 +6,44 @@ pub use dioxus_desktop::*;
 use dioxus_lib::prelude::*;
 use std::sync::Mutex;
 
+pub mod launch_bindings {
+    use std::any::Any;
+
+    use super::*;
+    pub fn launch(
+        root: fn() -> Element,
+        _contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+        _platform_config: Vec<Box<dyn Any>>,
+    ) {
+        super::launch(root);
+    }
+
+    pub fn launch_virtual_dom(_virtual_dom: VirtualDom, _desktop_config: Config) -> ! {
+        todo!()
+    }
+}
+
 /// Launch via the binding API
 pub fn launch(incoming: fn() -> Element) {
-    *APP_FN_PTR.lock().unwrap() = Some(incoming);
+    #[cfg(target_os = "android")]
+    {
+        *APP_FN_PTR.lock().unwrap() = Some(incoming);
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        dioxus_desktop::launch::launch(incoming, vec![], Default::default());
+    }
 }
 
 static APP_FN_PTR: Mutex<Option<fn() -> Element>> = Mutex::new(None);
 
 pub fn root() {
-    let app = APP_FN_PTR.lock().unwrap().unwrap();
+    let app = APP_FN_PTR
+        .lock()
+        .expect("APP_FN_PTR lock failed")
+        .expect("Android to have set the app trampoline");
+
     dioxus_desktop::launch::launch(app, vec![], Default::default());
 }
 
@@ -24,13 +53,13 @@ pub fn root() {
 pub extern "C" fn start_app() {
     tao::android_binding!(
         com_example,
-        wrytest,
+        androidfinal,
         WryActivity,
         wry::android_setup,
         root,
         tao
     );
-    wry::android_binding!(com_example, wrytest, wry);
+    wry::android_binding!(com_example, androidfinal, wry);
 }
 
 /// Call our `main` function to initialize the rust runtime and set the launch binding trampoline

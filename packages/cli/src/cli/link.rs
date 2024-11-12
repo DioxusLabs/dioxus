@@ -1,7 +1,6 @@
+use crate::assets::AssetManifest;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-
-use crate::assets::AssetManifest;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LinkAction {
@@ -15,7 +14,7 @@ pub enum LinkAction {
 }
 
 impl LinkAction {
-    pub(crate) const ENV_VAR_NAME: &'static str = "dx-magic-link-file";
+    pub(crate) const ENV_VAR_NAME: &'static str = "dx_magic_link_file";
 
     /// Should we write the input arguments to a file (aka act as a linker subprocess)?
     ///
@@ -39,7 +38,7 @@ impl LinkAction {
     ///
     /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
     /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
-    pub(crate) fn run(self) -> anyhow::Result<()> {
+    pub(crate) fn run(self) {
         match self {
             // Literally just run the android linker :)
             LinkAction::LinkAndroid {
@@ -102,7 +101,5 @@ impl LinkAction {
                 std::fs::write(dest, contents).expect("Failed to write output file");
             }
         }
-
-        Ok(())
     }
 }

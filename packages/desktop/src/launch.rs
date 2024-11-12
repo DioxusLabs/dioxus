@@ -75,7 +75,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                         webview.dom.in_runtime(|| {
                             ScopeId::ROOT.in_runtime(|| {
                                 let e = eval(
-                                    r#" 
+                                    r#"
                                     const xPos = await dioxus.recv();
                                     const yPos = await dioxus.recv();
                                     window.interpreter.handleWindowsDragOver(xPos, yPos)
@@ -121,7 +121,9 @@ pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! 
     }
 
     #[cfg(not(feature = "tokio_runtime"))]
-    launch_virtual_dom_blocking(virtual_dom, desktop_config);
+    {
+        launch_virtual_dom_blocking(virtual_dom, desktop_config);
+    }
 }
 
 /// Launches the WebView and runs the event loop, with configuration and root props.
