@@ -1,7 +1,6 @@
 use dioxus_core::ScopeId;
-use dioxus_html::document::{
-    Document, EvalError, Evaluator, JSOwner, WeakDioxusChannel, WebDioxusChannel,
-};
+use dioxus_document::{Document, Eval, EvalError, Evaluator};
+use dioxus_history::History;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde::Serialize;
@@ -11,23 +10,69 @@ use std::pin::Pin;
 use std::{rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
 
-/// Provides the WebEvalProvider through [`ScopeId::provide_context`].
+use crate::history::WebHistory;
+
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub struct JSOwner {
+    _owner: Box<dyn std::any::Any>,
+}
+
+impl JSOwner {
+    pub fn new(owner: impl std::any::Any) -> Self {
+        Self {
+            _owner: Box::new(owner),
+        }
+    }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
+extern "C" {
+    pub type WebDioxusChannel;
+
+    #[wasm_bindgen(constructor)]
+    pub fn new(owner: JSOwner) -> WebDioxusChannel;
+
+    #[wasm_bindgen(method, js_name = "rustSend")]
+    pub fn rust_send(this: &WebDioxusChannel, value: wasm_bindgen::JsValue);
+
+    #[wasm_bindgen(method, js_name = "rustRecv")]
+    pub async fn rust_recv(this: &WebDioxusChannel) -> wasm_bindgen::JsValue;
+
+    #[wasm_bindgen(method)]
+    pub fn send(this: &WebDioxusChannel, value: wasm_bindgen::JsValue);
+
+    #[wasm_bindgen(method)]
+    pub async fn recv(this: &WebDioxusChannel) -> wasm_bindgen::JsValue;
+
+    #[wasm_bindgen(method)]
+    pub fn weak(this: &WebDioxusChannel) -> WeakDioxusChannel;
+
+    pub type WeakDioxusChannel;
+
+    #[wasm_bindgen(method, js_name = "rustSend")]
+    pub fn rust_send(this: &WeakDioxusChannel, value: wasm_bindgen::JsValue);
+
+    #[wasm_bindgen(method, js_name = "rustRecv")]
+    pub async fn rust_recv(this: &WeakDioxusChannel) -> wasm_bindgen::JsValue;
+}
+
+/// Provides the Document through [`ScopeId::provide_context`].
 pub fn init_document() {
     let provider: Rc<dyn Document> = Rc::new(WebDocument);
     if ScopeId::ROOT.has_context::<Rc<dyn Document>>().is_none() {
         ScopeId::ROOT.provide_context(provider);
+    }
+    let history_provider: Rc<dyn History> = Rc::new(WebHistory::default());
+    if ScopeId::ROOT.has_context::<Rc<dyn History>>().is_none() {
+        ScopeId::ROOT.provide_context(history_provider);
     }
 }
 
 /// The web-target's document provider.
 pub struct WebDocument;
 impl Document for WebDocument {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        WebEvaluator::create(js)
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn eval(&self, js: String) -> Eval {
+        Eval::new(WebEvaluator::create(js))
     }
 }
 
@@ -53,10 +98,8 @@ impl WebEvaluator {
     fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         let owner = UnsyncStorage::owner();
 
-        let generational_box = owner.invalid();
-
         // add the drop handler to DioxusChannel so that it gets dropped when the channel is dropped in js
-        let channels = WebDioxusChannel::new(JSOwner::new(owner));
+        let channels = WebDioxusChannel::new(JSOwner::new(owner.clone()));
 
         // The Rust side of the channel is a weak reference to the DioxusChannel
         let weak_channels = channels.weak();
@@ -89,13 +132,11 @@ impl WebEvaluator {
             )),
         };
 
-        generational_box.set(Box::new(Self {
+        owner.insert(Box::new(Self {
             channels: weak_channels,
             result: Some(result),
             next_future: None,
-        }) as Box<dyn Evaluator>);
-
-        generational_box
+        }) as Box<dyn Evaluator>)
     }
 }
 

@@ -1,10 +1,11 @@
+use dioxus_isrg::*;
+use dioxus_lib::document::Document;
 use dioxus_lib::prelude::*;
 use dioxus_router::prelude::*;
-use dioxus_ssr::incremental::*;
 use dioxus_ssr::renderer;
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::Config;
 
@@ -65,23 +66,24 @@ pub async fn generate_static_site(
     }
 
     // Copy over the web output dir into the static output dir
-    let assets_path = dioxus_cli_config::CURRENT_CONFIG
-        .as_ref()
-        .map(|c| c.application.out_dir.clone())
-        .unwrap_or("./dist".into());
+    let out_path = dioxus_cli_config::out_dir().unwrap_or("./dist".into());
 
-    let assets_path = assets_path.join("public");
+    let assets_path = out_path.join("public");
 
-    copy_static_files(&assets_path, &config.output_dir)?;
+    let index_path = assets_path.join("index.html");
+    let skip = vec![index_path.clone()];
+    copy_static_files(&assets_path, &config.output_dir, &skip)?;
+
+    // Copy the output of the SSG build into the public directory so the CLI serves it
+    copy_static_files(&config.output_dir, &assets_path, &[])?;
 
     Ok(())
 }
 
-fn copy_static_files(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
-    let index_path = src.join("index.html");
+fn copy_static_files(src: &Path, dst: &Path, skip: &[PathBuf]) -> Result<(), std::io::Error> {
     let mut queue = vec![src.to_path_buf()];
     while let Some(path) = queue.pop() {
-        if path == index_path {
+        if skip.contains(&path) {
             continue;
         }
         if path.is_dir() {
@@ -105,9 +107,9 @@ async fn prerender_route(
     app: fn() -> Element,
     route: String,
     renderer: &mut renderer::Renderer,
-    cache: &mut dioxus_ssr::incremental::IncrementalRenderer,
+    cache: &mut dioxus_isrg::IncrementalRenderer,
     config: &Config,
-) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
+) -> Result<RenderFreshness, dioxus_isrg::IncrementalRendererError> {
     use dioxus_fullstack::prelude::*;
 
     let context = server_context_for_route(&route);

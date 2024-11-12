@@ -1,0 +1,206 @@
+<style>
+  /* Inter Font */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+  #dx-toast-template {
+    display: none;
+    visibility: hidden;
+  }
+
+  .dx-toast {
+    position: absolute;
+    top: 10px;
+    right: 0;
+    padding-right: 10px;
+    user-select: none;
+    transition: transform 0.2s ease;
+    z-index: 2147483647;
+  }
+
+  .dx-toast .dx-toast-inner {
+    transition: right 0.2s ease-out;
+    position: fixed;
+
+    background-color: #181B20;
+    color: #ffffff;
+    font-family: "Inter", sans-serif;
+
+    display: grid;
+    grid-template-columns: auto auto;
+    min-width: 280px;
+    min-height: 92px;
+    width: min-content;
+    border-radius: 5px;
+
+  }
+
+  .dx-toast:hover {
+    cursor: pointer;
+    transform: translateX(-5px);
+  }
+
+  .dx-toast .dx-toast-level-bar-container {
+    height: 100%;
+    width: 6px;
+  }
+
+  .dx-toast .dx-toast-level-bar-container .dx-toast-level-bar {
+    width: 100%;
+    height: 100%;
+    border-radius: 5px 0px 0px 5px;
+  }
+
+  .dx-toast .dx-toast-content {
+    padding: 13px;
+  }
+
+  .dx-toast .dx-toast-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: start;
+    align-items: end;
+    margin-bottom: 13px;
+  }
+
+  .dx-toast .dx-toast-header>svg {
+    height: 22px;
+    margin-right: 5px;
+  }
+
+  .dx-toast .dx-toast-header .dx-toast-header-text {
+    font-size: 16px;
+    font-weight: 700;
+    padding: 0;
+    margin: 0;
+  }
+
+  .dx-toast .dx-toast-msg {
+    font-size: 14px;
+    font-weight: 400;
+    padding: 0;
+    margin: 0;
+  }
+
+  .dx-toast-level-bar.info {
+    background-color: #428EFF;
+  }
+
+  .dx-toast-level-bar.success {
+    background-color: #42FF65;
+  }
+
+  .dx-toast-level-bar.error {
+    background-color: #FF4242;
+  }
+</style>
+
+<div id="dx-toast-template" class="dx-toast">
+  <div class="dx-toast-inner" style="right:-300px;">
+    <!-- Level/Color decor -->
+    <div class="dx-toast-level-bar-container">
+      <div class="dx-toast-level-bar info"></div>
+    </div>
+
+    <!-- Content -->
+    <div class="dx-toast-content">
+      <!-- Header -->
+      <div class="dx-toast-header">
+        <!-- Dioxus Logo -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" preserveAspectRatio="none">
+          <path
+            d="M22.158 1.783c0 3.077-.851 5.482-2.215 7.377s-3.32 3.557-5.447 5.33-4.425 3.657-6.252 6.195-3.102 5.515-3.102 9.532h4.699c0-3.077.853-5.377 2.217-7.272s3.32-3.557 5.447-5.33 4.425-3.657 6.252-6.195 3.102-5.62 3.102-9.637z"
+            fill="#e96020" />
+          <path
+            d="M9.531 25.927c-.635 0-1.021.515-1.02 1.15s.385 1.151 1.02 1.15H22.47a1.151 1.151 0 1 0 0-2.301zm1.361-4.076c-.608 0-.954.558-.953 1.166s.346 1.035.953 1.035h10.217a1.101 1.101 0 1 0 0-2.201zm0-13.594a1.101 1.101 0 1 0 0 2.201h10.217c.607 0 .953-.598.953-1.205s-.345-.996-.953-.996zM9.531 4.021A1.15 1.15 0 0 0 8.38 5.17a1.15 1.15 0 0 0 1.15 1.15h12.94c.635 0 1.021-.498 1.02-1.133s-.386-1.166-1.02-1.166z"
+            fill="#2d323b" />
+          <path
+            d="M5.142 1.783c0 4.016 1.275 7.099 3.102 9.637s4.125 4.422 6.252 6.195 4.083 3.656 5.447 5.551 2.215 3.974 2.215 7.051h4.701c0-4.016-1.275-7.038-3.102-9.576s-4.125-4.422-6.252-6.195-4.083-3.435-5.447-5.33S9.841 4.86 9.841 1.783z"
+            fill="#00a8d6" />
+        </svg>
+        <!-- Toast Title Text -->
+        <h3 class="dx-toast-header-text">Your app is being rebuilt.</h3>
+      </div>
+
+      <!-- Message -->
+      <p class="dx-toast-msg">A non-hot-reloadable change occurred and we must rebuild.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = "SCHEDULED-DX-TOAST";
+  let currentToast = null;
+  let currentTimeout = null;
+
+  // Show a toast, removing the previous one.
+  function showDXToast(headerText, message, progressLevel, durationMs) {
+    // Close current toast if exists.
+    closeDXToast();
+
+    // Clone template and add unique id.
+    let toastTemplate = document.getElementById("dx-toast-template");
+    let cloned = toastTemplate.cloneNode(true);
+    let toastId = `dx-toast`;
+    cloned.id = toastId;
+    currentToast = cloned;
+
+    let innerElem = currentToast.querySelector(`#${toastId} .dx-toast-inner`);
+
+    // Set the progress level
+    let progressBarElem = innerElem.querySelector(".dx-toast-inner .dx-toast-level-bar-container .dx-toast-level-bar");
+    progressBarElem.className = `dx-toast-level-bar ${progressLevel}`;
+
+    // Set header text
+    let headerTextElem = innerElem.querySelector(".dx-toast-inner .dx-toast-header .dx-toast-header-text");
+    headerTextElem.innerText = headerText;
+
+    // Set message
+    let messageElem = innerElem.querySelector(".dx-toast-inner .dx-toast-msg");
+    messageElem.innerText = message;
+
+    document.body.appendChild(currentToast);
+
+    // Add listener to close toasts when clicked.
+    // Safety: Calling `closeToast` removes the element and all event listeners with it.
+    currentToast.addEventListener("click", closeDXToast);
+
+    // Wait a bit of time so animation plays correctly.
+    setTimeout(() => {
+      innerElem.style.right = "0";
+
+      currentTimeout = setTimeout(() => {
+        closeDXToast();
+      }, durationMs);
+    }, 100);
+  }
+
+  // Schedule a toast to be displayed after reload.
+  function scheduleDXToast(headerText, message, level, durationMs) {
+    let data = {
+      headerText,
+      message,
+      level,
+      durationMs,
+    };
+
+    let jsonData = JSON.stringify(data);
+    sessionStorage.setItem(STORAGE_KEY, jsonData);
+  }
+
+  // Close the current toast.
+  function closeDXToast() {
+    if (currentToast) {
+      currentToast.remove();
+    }
+    clearTimeout(currentTimeout);
+  }
+
+  // Handle any scheduled toasts after reload.
+  let potentialData = sessionStorage.getItem(STORAGE_KEY);
+  if (potentialData) {
+    sessionStorage.removeItem(STORAGE_KEY);
+    let data = JSON.parse(potentialData);
+    showDXToast(data.headerText, data.message, data.level, data.durationMs);
+  }
+
+</script>

@@ -13,8 +13,9 @@ use dioxus_interpreter_js::NATIVE_JS;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
 mod config;
-mod eval;
+mod document;
 mod events;
+mod history;
 pub use config::*;
 #[cfg(feature = "axum")]
 pub mod launch;
@@ -60,7 +61,7 @@ fn handle_edits_code() -> String {
             if (realId === null) {
               return;
             }
-            const message = window.interpreter.serializeIpcMessage("user_event", {
+            const message = window.interpreter.sendSerializedEvent({
               name: name,
               element: parseInt(realId),
               data: contents,

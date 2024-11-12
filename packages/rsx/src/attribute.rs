@@ -166,50 +166,6 @@ impl Attribute {
         self.as_static_str_literal().is_some()
     }
 
-    #[cfg(feature = "hot_reload")]
-    pub(crate) fn html_tag_and_namespace<Ctx: crate::HotReloadingContext>(
-        &self,
-    ) -> (&'static str, Option<&'static str>) {
-        let attribute_name_rust = self.name.to_string();
-        let element_name = self.el_name.as_ref().unwrap();
-        let rust_name = match element_name {
-            ElementName::Ident(i) => i.to_string(),
-            ElementName::Custom(s) => return (intern(s.value()), None),
-        };
-
-        Ctx::map_attribute(&rust_name, &attribute_name_rust)
-            .unwrap_or((intern(attribute_name_rust.as_str()), None))
-    }
-
-    #[cfg(feature = "hot_reload")]
-    pub fn to_template_attribute<Ctx: crate::HotReloadingContext>(
-        &self,
-    ) -> dioxus_core::TemplateAttribute {
-        use dioxus_core::TemplateAttribute;
-
-        // If it's a dynamic node, just return it
-        // For dynamic attributes, we need to check the mapping to see if that mapping exists
-        // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
-        // or something sufficiently serializable
-        //  (ie `checked`` being a bool and bools being interpretable)
-        //
-        // For now, just give up if that attribute doesn't exist in the mapping
-        if !self.is_static_str_literal() {
-            let id = self.dyn_idx.get();
-            return TemplateAttribute::Dynamic { id };
-        }
-
-        // Otherwise it's a static node and we can build it
-        let (_, value) = self.as_static_str_literal().unwrap();
-        let (name, namespace) = self.html_tag_and_namespace::<Ctx>();
-
-        TemplateAttribute::Static {
-            name,
-            namespace,
-            value: intern(value.to_static().unwrap().as_str()),
-        }
-    }
-
     pub fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
         // Shortcut out with spreads
         if let AttributeName::Spread(_) = self.name {
@@ -402,6 +358,10 @@ pub enum AttributeName {
 impl AttributeName {
     pub fn is_likely_event(&self) -> bool {
         matches!(self, Self::BuiltIn(ident) if ident.to_string().starts_with("on"))
+    }
+
+    pub fn is_likely_key(&self) -> bool {
+        matches!(self, Self::BuiltIn(ident) if ident == "key")
     }
 
     pub fn span(&self) -> proc_macro2::Span {
@@ -622,6 +582,20 @@ impl IfAttributeValue {
         }
     }
 
+    fn contains_expression(&self) -> bool {
+        if let AttributeValue::AttrExpr(_) = &*self.then_value {
+            return true;
+        }
+        match &self.else_value {
+            Some(attribute) => match attribute.as_ref() {
+                AttributeValue::IfExpr(if_expr) => if_expr.is_terminated(),
+                AttributeValue::AttrExpr(_) => true,
+                _ => false,
+            },
+            None => false,
+        }
+    }
+
     fn parse_attribute_value_from_block(block: &Block) -> syn::Result<Box<AttributeValue>> {
         let stmts = &block.stmts;
 
@@ -649,12 +623,45 @@ impl IfAttributeValue {
         }
     }
 
-    fn to_tokens_with_terminated(&self, tokens: &mut TokenStream2, terminated: bool) {
+    fn to_tokens_with_terminated(
+        &self,
+        tokens: &mut TokenStream2,
+        terminated: bool,
+        contains_expression: bool,
+    ) {
         let IfAttributeValue {
             condition,
             then_value,
             else_value,
         } = self;
+
+        // Quote an attribute value and convert the value to a string if it is formatted
+        // We always quote formatted segments as strings inside if statements so they have a consistent type
+        // This fixes https://github.com/DioxusLabs/dioxus/issues/2997
+        fn quote_attribute_value_string(
+            value: &AttributeValue,
+            contains_expression: bool,
+        ) -> TokenStream2 {
+            if let AttributeValue::AttrLiteral(HotLiteral::Fmted(fmted)) = value {
+                if let Some(str) = fmted.to_static().filter(|_| contains_expression) {
+                    // If this is actually a static string, the user may be using a static string expression in another branch
+                    // use into to convert the string to whatever the other branch is using
+                    quote! {
+                        {
+                            #[allow(clippy::useless_conversion)]
+                            #str.into()
+                        }
+                    }
+                } else {
+                    quote! { #value.to_string() }
+                }
+            } else {
+                value.to_token_stream()
+            }
+        }
+
+        let then_value = quote_attribute_value_string(then_value, terminated);
+
         let then_value = if terminated {
             quote! { #then_value }
         }
@@ -666,10 +673,11 @@ impl IfAttributeValue {
         let else_value = match else_value.as_deref() {
             Some(AttributeValue::IfExpr(else_value)) => {
                 let mut tokens = TokenStream2::new();
-                else_value.to_tokens_with_terminated(&mut tokens, terminated);
+                else_value.to_tokens_with_terminated(&mut tokens, terminated, contains_expression);
                 tokens
             }
             Some(other) => {
+                let other = quote_attribute_value_string(other, contains_expression);
                 if terminated {
                     quote! { #other }
                 } else {
@@ -734,7 +742,8 @@ impl ToTokens for IfAttributeValue {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         // If the if expression is terminated, we can just return the then value
         let terminated = self.is_terminated();
-        self.to_tokens_with_terminated(tokens, terminated)
+        let contains_expression = self.contains_expression();
+        self.to_tokens_with_terminated(tokens, terminated, contains_expression)
     }
 }
 

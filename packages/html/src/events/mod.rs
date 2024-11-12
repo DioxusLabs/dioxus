@@ -134,6 +134,8 @@ pub trait HtmlEventConverter: Send + Sync {
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData;
     /// Convert a general event to a pointer data event
     fn convert_pointer_data(&self, event: &PlatformEventData) -> PointerData;
+    /// Convert a general event to a resize data event
+    fn convert_resize_data(&self, event: &PlatformEventData) -> ResizeData;
     /// Convert a general event to a scroll data event
     fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData;
     /// Convert a general event to a selection data event
@@ -220,6 +222,12 @@ impl From<&PlatformEventData> for PointerData {
     }
 }
 
+impl From<&PlatformEventData> for ResizeData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_resize_data(val))
+    }
+}
+
 impl From<&PlatformEventData> for ScrollData {
     fn from(val: &PlatformEventData) -> Self {
         with_event_converter(|c| c.convert_scroll_data(val))
@@ -268,6 +276,7 @@ mod media;
 mod mounted;
 mod mouse;
 mod pointer;
+mod resize;
 mod scroll;
 mod selection;
 mod toggle;
@@ -287,102 +296,10 @@ pub use media::*;
 pub use mounted::*;
 pub use mouse::*;
 pub use pointer::*;
+pub use resize::*;
 pub use scroll::*;
 pub use selection::*;
 pub use toggle::*;
 pub use touch::*;
 pub use transition::*;
 pub use wheel::*;
-
-pub fn event_bubbles(evt: &str) -> bool {
-    match evt {
-        "copy" => true,
-        "cut" => true,
-        "paste" => true,
-        "compositionend" => true,
-        "compositionstart" => true,
-        "compositionupdate" => true,
-        "keydown" => true,
-        "keypress" => true,
-        "keyup" => true,
-        "focus" => false,
-        "focusout" => true,
-        "focusin" => true,
-        "blur" => false,
-        "change" => true,
-        "input" => true,
-        "invalid" => true,
-        "reset" => true,
-        "submit" => true,
-        "click" => true,
-        "contextmenu" => true,
-        "doubleclick" => true,
-        "dblclick" => true,
-        "drag" => true,
-        "dragend" => true,
-        "dragenter" => false,
-        "dragexit" => false,
-        "dragleave" => true,
-        "dragover" => true,
-        "dragstart" => true,
-        "drop" => true,
-        "mousedown" => true,
-        "mouseenter" => false,
-        "mouseleave" => false,
-        "mousemove" => true,
-        "mouseout" => true,
-        "scroll" => false,
-        "mouseover" => true,
-        "mouseup" => true,
-        "pointerdown" => true,
-        "pointermove" => true,
-        "pointerup" => true,
-        "pointercancel" => true,
-        "gotpointercapture" => true,
-        "lostpointercapture" => true,
-        "pointerenter" => false,
-        "pointerleave" => false,
-        "pointerover" => true,
-        "pointerout" => true,
-        "select" => true,
-        "touchcancel" => true,
-        "touchend" => true,
-        "touchmove" => true,
-        "touchstart" => true,
-        "wheel" => true,
-        "abort" => false,
-        "canplay" => false,
-        "canplaythrough" => false,
-        "durationchange" => false,
-        "emptied" => false,
-        "encrypted" => true,
-        "ended" => false,
-        "error" => false,
-        "loadeddata" => false,
-        "loadedmetadata" => false,
-        "loadstart" => false,
-        "load" => false,
-        "pause" => false,
-        "play" => false,
-        "playing" => false,
-        "progress" => false,
-        "ratechange" => false,
-        "seeked" => false,
-        "seeking" => false,
-        "stalled" => false,
-        "suspend" => false,
-        "timeupdate" => false,
-        "volumechange" => false,
-        "waiting" => false,
-        "animationstart" => true,
-        "animationend" => true,
-        "animationiteration" => true,
-        "transitionend" => true,
-        "toggle" => true,
-        "mounted" => false,
-        _ => {
-            tracing::warn!("Unknown event name: {evt}");
-            true
-        }
-    }
-}

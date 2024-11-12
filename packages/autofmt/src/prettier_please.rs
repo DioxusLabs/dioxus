@@ -1,5 +1,5 @@
 use dioxus_rsx::CallBody;
-use syn::{parse::Parser, visit_mut::VisitMut, Expr, File, Item};
+use syn::{parse::Parser, visit_mut::VisitMut, Expr, File, Item, MacroDelimiter};
 
 use crate::{IndentOptions, Writer};
 
@@ -46,6 +46,11 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 i.path = syn::parse_str(MARKER).unwrap();
                 i.tokens = Default::default();
 
+                // make sure to transform the delimiter to a brace so the marker can be found
+                // an alternative approach would be to use multiple different markers that are not
+                // sensitive to the delimiter.
+                i.delimiter = MacroDelimiter::Brace(Default::default());
+
                 // Push out the indent level of the formatted block if it's multiline
                 if multiline || formatted.contains('\n') {
                     formatted = formatted
@@ -80,11 +85,12 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     // now we can replace the macros with the formatted blocks
     for fmted in replacer.formatted_stack.drain(..) {
         let is_multiline = fmted.contains('{');
+        let is_empty = fmted.trim().is_empty();
 
         let mut out_fmt = String::from("rsx! {");
         if is_multiline {
             out_fmt.push('\n');
-        } else {
+        } else if !is_empty {
             out_fmt.push(' ');
         }
 
@@ -117,7 +123,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         if is_multiline {
             out_fmt.push('\n');
             out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
-        } else {
+        } else if !is_empty {
             out_fmt.push(' ');
         }
 

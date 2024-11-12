@@ -1,5 +1,7 @@
 use dioxus::prelude::*;
-use std::str::FromStr;
+use dioxus_history::{History, MemoryHistory};
+use dioxus_router::components::HistoryProvider;
+use std::{rc::Rc, str::FromStr};
 
 // Tests for regressions of <https://github.com/DioxusLabs/dioxus/issues/2549>
 #[test]
@@ -33,10 +35,9 @@ fn Home(lang: String) -> Element {
 #[component]
 fn App(path: Route) -> Element {
     rsx! {
-        Router::<Route> {
-            config: {
-                move |_| RouterConfig::default().history(MemoryHistory::with_initial_path(path.clone()))
-            }
+        HistoryProvider {
+            history:  move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+            Router::<Route> {}
         }
     }
 }

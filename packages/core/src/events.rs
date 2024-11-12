@@ -1,10 +1,6 @@
-use crate::{global_context::current_scope_id, properties::SuperFrom, Runtime, ScopeId};
+use crate::{properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
 use generational_box::GenerationalBox;
-use std::{
-    cell::{Cell, RefCell},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -26,19 +22,29 @@ use std::{
 pub struct Event<T: 'static + ?Sized> {
     /// The data associated with this event
     pub data: Rc<T>,
-    pub(crate) propagates: Rc<Cell<bool>>,
+    pub(crate) metadata: Rc<RefCell<EventMetadata>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct EventMetadata {
+    pub(crate) propagates: bool,
+    pub(crate) prevent_default: bool,
 }
 
 impl<T: ?Sized + 'static> Event<T> {
-    pub(crate) fn new(data: Rc<T>, bubbles: bool) -> Self {
+    /// Create a new event from the inner data
+    pub fn new(data: Rc<T>, propagates: bool) -> Self {
         Self {
             data,
-            propagates: Rc::new(Cell::new(bubbles)),
+            metadata: Rc::new(RefCell::new(EventMetadata {
+                propagates,
+                prevent_default: false,
+            })),
         }
     }
 }
 
-impl<T> Event<T> {
+impl<T: ?Sized> Event<T> {
     /// Map the event data to a new type
     ///
     /// # Example
@@ -57,7 +63,7 @@ impl<T> Event<T> {
     pub fn map<U: 'static, F: FnOnce(&T) -> U>(&self, f: F) -> Event<U> {
         Event {
             data: Rc::new(f(&self.data)),
-            propagates: self.propagates.clone(),
+            metadata: self.metadata.clone(),
         }
     }
 
@@ -78,7 +84,12 @@ impl<T> Event<T> {
     /// ```
     #[deprecated = "use stop_propagation instead"]
     pub fn cancel_bubble(&self) {
-        self.propagates.set(false);
+        self.metadata.borrow_mut().propagates = false;
+    }
+
+    /// Check if the event propagates up the tree to parent elements
+    pub fn propagates(&self) -> bool {
+        self.metadata.borrow().propagates
     }
 
     /// Prevent this event from continuing to bubble up the tree to parent elements.
@@ -96,7 +107,7 @@ impl<T> Event<T> {
     /// };
     /// ```
     pub fn stop_propagation(&self) {
-        self.propagates.set(false);
+        self.metadata.borrow_mut().propagates = false;
     }
 
     /// Get a reference to the inner data from this event
@@ -117,12 +128,49 @@ impl<T> Event<T> {
     pub fn data(&self) -> Rc<T> {
         self.data.clone()
     }
+
+    /// Prevent the default action of the event.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         a {
+    ///             // You can prevent the default action of the event with `prevent_default`
+    ///             onclick: move |event| {
+    ///                 event.prevent_default();
+    ///             },
+    ///             href: "https://dioxuslabs.com",
+    ///             "don't go to the link"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Note: This must be called synchronously when handling the event. Calling it after the event has been handled will have no effect.
+    ///
+    /// <div class="warning">
+    ///
+    /// This method is not available on the LiveView renderer because LiveView handles all events over a websocket which cannot block.
+    ///
+    /// </div>
+    #[track_caller]
+    pub fn prevent_default(&self) {
+        self.metadata.borrow_mut().prevent_default = true;
+    }
+
+    /// Check if the default action of the event is enabled.
+    pub fn default_action_enabled(&self) -> bool {
+        !self.metadata.borrow().prevent_default
+    }
 }
 
 impl<T: ?Sized> Clone for Event<T> {
     fn clone(&self) -> Self {
         Self {
-            propagates: self.propagates.clone(),
+            metadata: self.metadata.clone(),
             data: self.data.clone(),
         }
     }
@@ -138,7 +186,8 @@ impl<T> std::ops::Deref for Event<T> {
 impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UiEvent")
-            .field("bubble_state", &self.propagates)
+            .field("bubble_state", &self.propagates())
+            .field("prevent_default", &!self.default_action_enabled())
             .field("data", &self.data)
             .finish()
     }
@@ -152,7 +201,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// rsx!{
+/// rsx! {
 ///     MyComponent { onclick: move |evt| tracing::debug!("clicked") }
 /// };
 ///
@@ -162,7 +211,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// fn MyComponent(cx: MyProps) -> Element {
-///     rsx!{
+///     rsx! {
 ///         button {
 ///             onclick: move |evt| cx.onclick.call(evt),
 ///         }
@@ -179,7 +228,7 @@ pub type EventHandler<T = ()> = Callback<T>;
 /// # Example
 ///
 /// ```rust, ignore
-/// rsx!{
+/// rsx! {
 ///     MyComponent { onclick: move |evt| {
 ///         tracing::debug!("clicked");
 ///         42
@@ -192,7 +241,7 @@ pub type EventHandler<T = ()> = Callback<T>;
 /// }
 ///
 /// fn MyComponent(cx: MyProps) -> Element {
-///     rsx!{
+///     rsx! {
 ///         button {
 ///             onclick: move |evt| println!("number: {}", cx.onclick.call(evt)),
 ///         }
@@ -207,7 +256,7 @@ pub struct Callback<Args = (), Ret = ()> {
     /// # use dioxus::prelude::*;
     /// #[component]
     /// fn Child(onclick: EventHandler<MouseEvent>) -> Element {
-    ///     rsx!{
+    ///     rsx! {
     ///         button {
     ///             // Diffing Child will not rerun this component, it will just update the callback in place so that if this callback is called, it will run the latest version of the callback
     ///             onclick: move |evt| onclick(evt),
@@ -381,7 +430,10 @@ impl<Args: 'static, Ret: 'static> PartialEq for Callback<Args, Ret> {
     }
 }
 
-type ExternalListenerCallback<Args, Ret> = Rc<RefCell<dyn FnMut(Args) -> Ret>>;
+pub(super) struct ExternalListenerCallback<Args, Ret> {
+    callback: Box<dyn FnMut(Args) -> Ret>,
+    runtime: std::rc::Weak<Runtime>,
+}
 
 impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     /// Create a new [`Callback`] from an [`FnMut`]. The callback is owned by the current scope and will be dropped when the scope is dropped.
@@ -390,27 +442,33 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     pub fn new<MaybeAsync: SpawnIfAsync<Marker, Ret>, Marker>(
         mut f: impl FnMut(Args) -> MaybeAsync + 'static,
     ) -> Self {
+        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        let origin = runtime
+            .current_scope_id()
+            .unwrap_or_else(|e| panic!("{}", e));
         let owner = crate::innerlude::current_owner::<generational_box::UnsyncStorage>();
-        let callback = owner.insert(Some(
-            Rc::new(RefCell::new(move |event: Args| f(event).spawn()))
-                as Rc<RefCell<dyn FnMut(Args) -> Ret>>,
-        ));
-        Self {
-            callback,
-            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-        }
+        let callback = owner.insert_rc(Some(ExternalListenerCallback {
+            callback: Box::new(move |event: Args| f(event).spawn()),
+            runtime: Rc::downgrade(&runtime),
+        }));
+        Self { callback, origin }
     }
 
     /// Leak a new [`Callback`] that will not be dropped unless it is manually dropped.
     #[track_caller]
     pub fn leak(mut f: impl FnMut(Args) -> Ret + 'static) -> Self {
-        let callback =
-            GenerationalBox::leak(Some(Rc::new(RefCell::new(move |event: Args| f(event)))
-                as Rc<RefCell<dyn FnMut(Args) -> Ret>>));
-        Self {
-            callback,
-            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-        }
+        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        let origin = runtime
+            .current_scope_id()
+            .unwrap_or_else(|e| panic!("{}", e));
+        let callback = GenerationalBox::leak_rc(
+            Some(ExternalListenerCallback {
+                callback: Box::new(move |event: Args| f(event).spawn()),
+                runtime: Rc::downgrade(&runtime),
+            }),
+            Location::caller(),
+        );
+        Self { callback, origin }
     }
 
     /// Call this callback with the appropriate argument type
@@ -418,17 +476,13 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     /// This borrows the callback using a RefCell. Recursively calling a callback will cause a panic.
     #[track_caller]
     pub fn call(&self, arguments: Args) -> Ret {
-        if let Some(callback) = self.callback.read().as_ref() {
-            Runtime::with(|rt| {
-                rt.with_scope_on_stack(self.origin, || {
-                    let value = {
-                        let mut callback = callback.borrow_mut();
-                        callback(arguments)
-                    };
-                    value
-                })
-            })
-            .unwrap_or_else(|e| panic!("{}", e))
+        if let Some(callback) = self.callback.write().as_mut() {
+            let runtime = callback
+                .runtime
+                .upgrade()
+                .expect("Callback was called after the runtime was dropped");
+            let _guard = RuntimeGuard::new(runtime.clone());
+            runtime.with_scope_on_stack(self.origin, || (callback.callback)(arguments))
         } else {
             panic!("Callback was manually dropped")
         }
@@ -446,19 +500,19 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         self.callback.set(None);
     }
 
-    #[doc(hidden)]
-    /// This should only be used by the `rsx!` macro.
-    pub fn __set(&mut self, value: ExternalListenerCallback<Args, Ret>) {
-        self.callback.set(Some(value));
+    /// Replace the function in the callback with a new one
+    pub fn replace(&mut self, callback: Box<dyn FnMut(Args) -> Ret>) {
+        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        self.callback.set(Some(ExternalListenerCallback {
+            callback,
+            runtime: Rc::downgrade(&runtime),
+        }));
     }
 
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
-    pub fn __take(&self) -> ExternalListenerCallback<Args, Ret> {
-        self.callback
-            .read()
-            .clone()
-            .expect("Callback was manually dropped")
+    pub fn __point_to(&mut self, other: &Self) {
+        self.callback.point_to(other.callback).unwrap();
     }
 }
 

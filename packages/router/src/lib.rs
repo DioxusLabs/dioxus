@@ -24,6 +24,12 @@ pub mod components {
 
     mod router;
     pub use router::*;
+
+    mod history_provider;
+    pub use history_provider::*;
+
+    #[doc(hidden)]
+    pub mod child_router;
 }
 
 mod contexts {
@@ -36,8 +42,6 @@ mod contexts {
 }
 
 mod router_cfg;
-
-mod history;
 
 /// Hooks for interacting with the router in components.
 pub mod hooks {
@@ -55,9 +59,11 @@ pub use hooks::router;
 
 /// A collection of useful items most applications might need.
 pub mod prelude {
-    pub use crate::components::*;
+    pub use crate::components::{
+        GoBackButton, GoForwardButton, HistoryButtonProps, Link, LinkProps, Outlet, Router,
+        RouterProps,
+    };
     pub use crate::contexts::*;
-    pub use crate::history::*;
     pub use crate::hooks::*;
     pub use crate::navigation::*;
     pub use crate::routable::*;

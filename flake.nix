@@ -26,6 +26,7 @@
             pkgs.openssl
             pkgs.libiconv
             pkgs.pkg-config
+          ] ++ lib.optionals pkgs.stdenv.isLinux [
             pkgs.glib
             pkgs.gtk3
             pkgs.libsoup_3

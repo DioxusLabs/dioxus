@@ -4,6 +4,7 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+mod android_sync_lock;
 mod app;
 mod assets;
 mod config;
@@ -39,6 +40,10 @@ pub use wry;
 // Reexport muda only if we are on desktop platforms that support menus
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use muda;
+
+// Tray icon
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub mod trayicon;
 
 // Public exports
 pub use assets::AssetRequest;

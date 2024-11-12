@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
-use std::{rc::Rc, sync::Mutex};
+use std::{any::Any, rc::Rc, sync::Mutex};
 
 static CLICKS: Mutex<usize> = Mutex::new(0);
 
@@ -12,12 +12,11 @@ fn events_propagate() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // Top-level click is registered
-    dom.handle_event(
-        "click",
-        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-        ElementId(1),
+    let event = Event::new(
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
         true,
     );
+    dom.runtime().handle_event("click", event, ElementId(1));
     assert_eq!(*CLICKS.lock().unwrap(), 1);
 
     // break reference....
@@ -27,12 +26,11 @@ fn events_propagate() {
     }
 
     // Lower click is registered
-    dom.handle_event(
-        "click",
-        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-        ElementId(2),
+    let event = Event::new(
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
         true,
     );
+    dom.runtime().handle_event("click", event, ElementId(2));
     assert_eq!(*CLICKS.lock().unwrap(), 3);
 
     // break reference....
@@ -42,12 +40,11 @@ fn events_propagate() {
     }
 
     // Stop propagation occurs
-    dom.handle_event(
-        "click",
-        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-        ElementId(2),
+    let event = Event::new(
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
         true,
     );
+    dom.runtime().handle_event("click", event, ElementId(2));
     assert_eq!(*CLICKS.lock().unwrap(), 3);
 }
 

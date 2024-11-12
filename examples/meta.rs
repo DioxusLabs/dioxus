@@ -3,8 +3,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    tracing_subscriber::fmt::init();
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -12,23 +11,23 @@ fn app() -> Element {
         // You can use the Meta component to render a meta tag into the head of the page
         // Meta tags are useful to provide information about the page to search engines and social media sites
         // This example sets up meta tags for the open graph protocol for social media previews
-        Meta {
+        document::Meta {
             property: "og:title",
             content: "My Site",
         }
-        Meta {
+        document::Meta {
             property: "og:type",
             content: "website",
         }
-        Meta {
+        document::Meta {
             property: "og:url",
             content: "https://www.example.com",
         }
-        Meta {
+        document::Meta {
             property: "og:image",
             content: "https://example.com/image.jpg",
         }
-        Meta {
+        document::Meta {
             name: "description",
             content: "My Site is a site",
         }

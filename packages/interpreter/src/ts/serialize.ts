@@ -58,6 +58,13 @@ export function serializeEvent(
     extend({});
   }
 
+  if (event instanceof CustomEvent) {
+    const detail = event.detail;
+    if (detail instanceof ResizeObserverEntry) {
+      extend(serializeResizeEventDetail(detail));
+    }
+  }
+
   // safari is quirky and doesn't have TouchEvent
   if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
     extend(serializeTouchEvent(event));
@@ -94,6 +101,47 @@ export function serializeEvent(
   }
 
   return contents;
+}
+
+function toSerializableResizeObserverSize(
+  size: ResizeObserverSize,
+  is_inline_width: boolean
+): Object {
+  return [
+    is_inline_width ? size.inlineSize : size.blockSize,
+    is_inline_width ? size.blockSize : size.inlineSize,
+  ];
+}
+
+export function serializeResizeEventDetail(
+  detail: ResizeObserverEntry
+): SerializedEvent {
+  let is_inline_width = true;
+  if (detail.target instanceof HTMLElement) {
+    let target_style = window.getComputedStyle(detail.target);
+    let target_writing_mode = target_style.getPropertyValue("writing-mode");
+    if (target_writing_mode !== "horizontal-tb") {
+      is_inline_width = false;
+    }
+  }
+
+  return {
+    border_box_size:
+      detail.borderBoxSize !== undefined
+        ? toSerializableResizeObserverSize(
+            detail.borderBoxSize[0],
+            is_inline_width
+          )
+        : detail.contentRect,
+    content_box_size:
+      detail.contentBoxSize !== undefined
+        ? toSerializableResizeObserverSize(
+            detail.contentBoxSize[0],
+            is_inline_width
+          )
+        : detail.contentRect,
+    content_rect: detail.contentRect,
+  };
 }
 
 function serializeInputEvent(

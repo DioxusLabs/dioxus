@@ -8,12 +8,12 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub struct CargoError {
+pub(crate) struct CargoError {
     msg: String,
 }
 
 impl CargoError {
-    pub fn new(msg: String) -> Self {
+    pub(crate) fn new(msg: String) -> Self {
         Self { msg }
     }
 }

@@ -8,15 +8,15 @@
 
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!("./examples/assets/links.css");
+const STYLE: Asset = asset!("/examples/assets/links.css");
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
     rsx! (
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         Router::<Route> {}
     )
 }
@@ -70,8 +70,10 @@ fn DefaultLinks() -> Element {
             // It will just log "Hello Dioxus" to the console
             a {
                 href: "http://dioxuslabs.com/",
-                prevent_default: "onclick",
-                onclick: |_| println!("Hello Dioxus"),
+                onclick: |event| {
+                    event.prevent_default();
+                    println!("Hello Dioxus")
+                },
                 "Custom event link - links inside of your app"
             }
         }

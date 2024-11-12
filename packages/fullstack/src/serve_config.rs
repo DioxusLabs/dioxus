@@ -5,28 +5,54 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
+use dioxus_lib::prelude::dioxus_core::LaunchConfig;
+
+use crate::server::ContextProviders;
+
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
-    pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
+    pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) context_providers: ContextProviders,
 }
 
+impl LaunchConfig for ServeConfigBuilder {}
+
 impl ServeConfigBuilder {
-    /// Create a new ServeConfigBuilder with the root component and props to render on the server.
+    /// Create a new ServeConfigBuilder with incremental static generation disabled and the default index.html settings
     pub fn new() -> Self {
         Self {
             root_id: None,
             index_html: None,
             index_path: None,
             incremental: None,
+            context_providers: Default::default(),
         }
     }
 
-    /// Enable incremental static generation
-    pub fn incremental(mut self, cfg: dioxus_ssr::incremental::IncrementalRendererConfig) -> Self {
+    /// Enable incremental static generation. Incremental static generation caches the
+    /// rendered html in memory and/or the file system. It can be used to improve performance of heavy routes.
+    ///
+    /// ```rust, no_run
+    /// # fn app() -> Element { todo!() }
+    /// use dioxus::prelude::*;
+    ///
+    /// let mut cfg = dioxus::fullstack::Config::new();
+    ///
+    /// // Only set the server config if the server feature is enabled
+    /// server_only! {
+    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default().incremental(IncrementalRendererConfig::default()));
+    /// }
+    ///
+    /// // Finally, launch the app with the config
+    /// LaunchBuilder::new()
+    ///     .with_cfg(cfg)
+    ///     .launch(app);
+    /// ```
+    pub fn incremental(mut self, cfg: dioxus_isrg::IncrementalRendererConfig) -> Self {
         self.incremental = Some(cfg);
         self
     }
@@ -44,13 +70,91 @@ impl ServeConfigBuilder {
     }
 
     /// Set the id of the root element in the index.html file to place the prerendered content into. (defaults to main)
+    ///
+    /// # Example
+    ///
+    /// If your index.html file looks like this:
+    /// ```html
+    /// <!DOCTYPE html>
+    /// <html>
+    ///     <head>
+    ///         <title>My App</title>
+    ///     </head>
+    ///     <body>
+    ///         <div id="my-custom-root"></div>
+    ///     </body>
+    /// </html>
+    /// ```
+    ///
+    /// You can set the root id to `"my-custom-root"` to render the app into that element:
+    ///
+    /// ```rust, no_run
+    /// # fn app() -> Element { todo!() }
+    /// use dioxus::prelude::*;
+    ///
+    /// let mut cfg = dioxus::fullstack::Config::new();
+    ///
+    /// // Only set the server config if the server feature is enabled
+    /// server_only! {
+    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default().root_id("app"));
+    /// }
+    ///
+    /// // You also need to set the root id in your web config
+    /// web! {
+    ///     cfg = cfg.with_web_config(dioxus::web::Config::default().rootname("app"));
+    /// }
+    ///
+    /// // And desktop config
+    /// desktop! {
+    ///     cfg = cfg.with_desktop_config(dioxus::desktop::Config::default().with_root_name("app"));
+    /// }
+    ///
+    /// // Finally, launch the app with the config
+    /// LaunchBuilder::new()
+    ///     .with_cfg(cfg)
+    ///     .launch(app);
+    /// ```
     pub fn root_id(mut self, root_id: &'static str) -> Self {
         self.root_id = Some(root_id);
         self
     }
 
-    /// Build the ServeConfig
-    pub fn build(self) -> ServeConfig {
+    /// Provide context to the root and server functions. You can use this context
+    /// while rendering with [`consume_context`](dioxus_lib::prelude::consume_context) or in server functions with [`FromContext`](crate::prelude::FromContext).
+    ///
+    /// Context will be forwarded from the LaunchBuilder if it is provided.
+    ///
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    ///
+    /// dioxus::LaunchBuilder::new()
+    ///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
+    ///     .with_context(server_only! {
+    ///         1234567890u32
+    ///     })
+    ///     .launch(app);
+    ///
+    /// #[server]
+    /// async fn read_context() -> Result<u32, ServerFnError> {
+    ///     // You can extract values from the server context with the `extract` function
+    ///     let FromContext(value) = extract().await?;
+    ///     Ok(value)
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     let future = use_resource(read_context);
+    ///     rsx! {
+    ///         h1 { "{future:?}" }
+    ///     }
+    /// }
+    /// ```
+    pub fn context_providers(mut self, state: ContextProviders) -> Self {
+        self.context_providers = state;
+        self
+    }
+
+    /// Build the ServeConfig. This may fail if the index.html file is not found.
+    pub fn build(self) -> Result<ServeConfig, UnableToLoadIndex> {
         // The CLI always bundles static assets into the exe/public directory
         let public_path = public_path();
 
@@ -61,16 +165,26 @@ impl ServeConfigBuilder {
 
         let root_id = self.root_id.unwrap_or("main");
 
-        let index_html = self
-            .index_html
-            .unwrap_or_else(|| load_index_path(index_path));
+        let index_html = match self.index_html {
+            Some(index) => index,
+            None => load_index_path(index_path)?,
+        };
 
         let index = load_index_html(index_html, root_id);
 
-        ServeConfig {
+        Ok(ServeConfig {
             index,
             incremental: self.incremental,
-        }
+            context_providers: self.context_providers,
+        })
+    }
+}
+
+impl TryInto<ServeConfig> for ServeConfigBuilder {
+    type Error = UnableToLoadIndex;
+
+    fn try_into(self) -> Result<ServeConfig, Self::Error> {
+        self.build()
     }
 }
 
@@ -84,13 +198,25 @@ pub(crate) fn public_path() -> PathBuf {
         .join("public")
 }
 
-fn load_index_path(path: PathBuf) -> String {
-    let mut file = File::open(&path).unwrap_or_else(|_| panic!("Failed to find index.html. Make sure the index_path is set correctly and the WASM application has been built. Tried to open file at path: {path:?}"));
+/// An error that can occur when loading the index.html file
+#[derive(Debug)]
+pub struct UnableToLoadIndex(PathBuf);
+
+impl std::fmt::Display for UnableToLoadIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Failed to find index.html. Make sure the index_path is set correctly and the WASM application has been built. Tried to open file at path: {:?}", self.0)
+    }
+}
+
+impl std::error::Error for UnableToLoadIndex {}
+
+fn load_index_path(path: PathBuf) -> Result<String, UnableToLoadIndex> {
+    let mut file = File::open(&path).map_err(|_| UnableToLoadIndex(path))?;
 
     let mut contents = String::new();
     file.read_to_string(&mut contents)
         .expect("Failed to read index.html");
-    contents
+    Ok(contents)
 }
 
 fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
@@ -153,24 +279,20 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
-    pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
+    pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) context_providers: ContextProviders,
 }
 
-impl Default for ServeConfig {
-    fn default() -> Self {
-        Self::builder().build()
-    }
-}
+impl LaunchConfig for ServeConfig {}
 
 impl ServeConfig {
+    /// Create a new ServeConfig
+    pub fn new() -> Result<Self, UnableToLoadIndex> {
+        ServeConfigBuilder::new().build()
+    }
+
     /// Create a new builder for a ServeConfig
     pub fn builder() -> ServeConfigBuilder {
         ServeConfigBuilder::new()
-    }
-}
-
-impl From<ServeConfigBuilder> for ServeConfig {
-    fn from(builder: ServeConfigBuilder) -> Self {
-        builder.build()
     }
 }

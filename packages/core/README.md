@@ -12,7 +12,10 @@ let real_dom = SomeRenderer::new();
 
 loop {
     tokio::select! {
-        evt = real_dom.event() => vdom.handle_event("onclick", evt, ElementId(0), true),
+        evt = real_dom.event() => {
+            let evt = Event::new(evt, true);
+            vdom.runtime().handle_event("onclick", evt, ElementId(0))
+        },
         _ = vdom.wait_for_work() => {}
     }
     vdom.render_immediate(&mut real_dom.apply())

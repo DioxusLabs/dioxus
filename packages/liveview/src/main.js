@@ -11,6 +11,7 @@ class IPC {
   constructor(root) {
     window.interpreter = new NativeInterpreter();
     window.interpreter.initialize(root);
+    window.interpreter.liveview = true;
     window.interpreter.ipc = this;
     const ws = new WebSocket(WS_ADDR);
     ws.binaryType = "arraybuffer";
@@ -32,13 +33,12 @@ class IPC {
     ws.onmessage = (message) => {
       const u8view = new Uint8Array(message.data);
       const binaryFrame = u8view[0] == 1;
-      const messageData = message.data.slice(1)
+      const messageData = message.data.slice(1);
       // The first byte tells the shim if this is a binary of text frame
       if (binaryFrame) {
         // binary frame
         window.interpreter.run_from_bytes(messageData);
-      }
-      else {
+      } else {
         // text frame
 
         let decoder = new TextDecoder("utf-8");

@@ -2,9 +2,9 @@
 
 use dioxus_core::prelude::IntoAttributeValue;
 use dioxus_core::HasAttributes;
-use dioxus_html_internal_macro::impl_extension_attributes;
 #[cfg(feature = "hot-reload-context")]
-use dioxus_rsx::HotReloadingContext;
+use dioxus_core_types::HotReloadingContext;
+use dioxus_html_internal_macro::impl_extension_attributes;
 
 #[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};
@@ -1391,7 +1391,11 @@ builder_constructors! {
     /// Build a
     /// [`<fieldset>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset)
     /// element.
-    fieldset None {};
+    fieldset None {
+        disabled: Bool DEFAULT,
+        form: Id DEFAULT,
+        name: Id DEFAULT,
+    };
 
     /// Build a
     /// [`<form>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form)

@@ -54,6 +54,8 @@
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ko-kr"> 한국어 </a>
   </h3>
 </div>
 <br>
@@ -221,7 +223,25 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
 
 ## Running the examples
 
-The examples in the top level of this repository can be run with `cargo run --example <example>`. However, we encourage you to download the dioxus-cli and run the examples with `dx serve` since many examples also support web. When running for web, you either need to modify the Cargo.toml to disable the default desktop feature, or use
+> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.5 branch](https://github.com/DioxusLabs/dioxus/tree/v0.5/examples).
+
+The examples in the top level of this repository can be run with:
+
+```sh
+cargo run --example <example>
+```
+
+However, we encourage you to download the dioxus-cli. If you are running the git version of dioxus, you can install the matching version of the CLI with:
+
+```sh
+cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli --locked
+```
+
+With the CLI, you can also run examples with the web platform. You just need to disable the default desktop feature and enable the web feature with this command:
+
+```sh
+dx serve --example <example> --platform web -- --no-default-features
+```
 
 ## Dioxus vs other frameworks
 
@@ -298,7 +318,7 @@ fn Counters() -> impl IntoView {
 
 - **`Copy` state**: Dioxus 0.1 to 0.4 relied on lifetimes to relax the rules of Rust's borrow checker. This worked well for event handlers, but struggled around async. In Dioxus 0.5, we've switched to a [`Copy` state model](https://crates.io/crates/generational-box) borrowed from Leptos.
 
-- **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge, meaning we've historically released at a slower cadence than Leptos. Leptos focuses on the fullstack web, with features that Dioxus doesn't have like `<Suspense />`-based streaming HTML, islands, `<Form />` components, and other web-specific features. Generally, web apps you build with Leptos will have a smaller footprint.
+- **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge, meaning we've historically released at a slower cadence than Leptos. Leptos focuses on the fullstack web, with features that Dioxus doesn't have like islands, `<Form />` components, and other web-specific features. Generally, web apps you build with Leptos will have a smaller footprint.
 
 - **Different DSLs**: While both frameworks target the web, Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses a more HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL. For example, dioxus will automatically format strings for you while Leptos can split up strings into static and dynamic segments.
 
@@ -345,7 +365,7 @@ Iced is a cross-platform GUI library inspired by Elm. Iced renders natively with
 
 - **Native Feel**: Since Dioxus uses a webview as its renderer, it automatically gets native text input, paste handling, and other native features like accessibility. Iced's renderer currently doesn't implement these features, making it feel less native.
 
-- **WGPU**: Dioxus' WGPU renderer is currently quite immature and not yet reader for production use. Iced's WGPU renderer is much more mature and is being used in production. This enables certain types of apps that need GPU access to be built with Iced that can't currently be built with Dioxus.
+- **WGPU**: Dioxus' WGPU renderer is currently quite immature and not yet ready for production use. Iced's WGPU renderer is much more mature and is being used in production. This enables certain types of apps that need GPU access to be built with Iced that can't currently be built with Dioxus.
 
 ### Dioxus vs Electron
 
@@ -367,10 +387,11 @@ Dioxus and Electron are two entirely different projects with similar goals. Elec
 
 ## License
 
-This project is licensed under the [MIT license].
+This project is licensed under either the [MIT license] or the [Apache-2 License].
 
+[apache-2 license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-APACHE
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you, shall be licensed as MIT or Apache-2, without any additional
 terms or conditions.

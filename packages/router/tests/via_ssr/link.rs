@@ -1,13 +1,23 @@
 use dioxus::prelude::*;
-use std::str::FromStr;
+use dioxus_history::{History, MemoryHistory};
+use dioxus_router::components::HistoryProvider;
+use std::{rc::Rc, str::FromStr};
 
 fn prepare<R: Routable>() -> String
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    prepare_at::<R>("/")
+}
+
+fn prepare_at<R: Routable>(at: impl ToString) -> String
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
     let mut vdom = VirtualDom::new_with_props(
         App,
         AppProps::<R> {
+            at: at.to_string(),
             phantom: std::marker::PhantomData,
         },
     );
@@ -16,12 +26,14 @@ where
 
     #[derive(Props)]
     struct AppProps<R: Routable> {
+        at: String,
         phantom: std::marker::PhantomData<R>,
     }
 
     impl<R: Routable> Clone for AppProps<R> {
         fn clone(&self) -> Self {
             Self {
+                at: self.at.clone(),
                 phantom: std::marker::PhantomData,
             }
         }
@@ -34,14 +46,15 @@ where
     }
 
     #[allow(non_snake_case)]
-    fn App<R: Routable>(_props: AppProps<R>) -> Element
+    fn App<R: Routable>(props: AppProps<R>) -> Element
     where
         <R as FromStr>::Err: std::fmt::Display,
     {
         rsx! {
             h1 { "App" }
-            Router::<R> {
-                config: |_| RouterConfig::default().history(MemoryHistory::default())
+            HistoryProvider {
+                history:  move |_| Rc::new(MemoryHistory::with_initial_path(props.at.clone())) as Rc<dyn History>,
+                Router::<R> {}
             }
         }
     }
@@ -72,11 +85,7 @@ fn href_internal() {
         }
     }
 
-    let expected = format!(
-        "<h1>App</h1><a {href} {default}>Link</a>",
-        href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
-    );
+    let expected = format!("<h1>App</h1><a {href}>Link</a>", href = r#"href="/test""#,);
 
     assert_eq!(prepare::<Route>(), expected);
 }
@@ -107,9 +116,8 @@ fn href_external() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {rel}>Link</a>",
+        "<h1>App</h1><a {href} {rel}>Link</a>",
         href = r#"href="https://dioxuslabs.com/""#,
-        default = r#"dioxus-prevent-default="""#,
         rel = r#"rel="noopener noreferrer""#,
     );
 
@@ -143,9 +151,8 @@ fn with_class() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class}>Link</a>",
+        "<h1>App</h1><a {href} {class}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class""#,
     );
 
@@ -173,9 +180,8 @@ fn with_active_class_active() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {aria}>Link</a>",
+        "<h1>App</h1><a {href} {class} {aria}>Link</a>",
         href = r#"href="/""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class active_class""#,
         aria = r#"aria-current="page""#,
     );
@@ -211,9 +217,8 @@ fn with_active_class_inactive() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class}>Link</a>",
+        "<h1>App</h1><a {href} {class}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class""#,
     );
 
@@ -247,9 +252,8 @@ fn with_id() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {id}>Link</a>",
+        "<h1>App</h1><a {href} {id}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         id = r#"id="test_id""#,
     );
 
@@ -283,9 +287,8 @@ fn with_new_tab() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {target}>Link</a>",
+        "<h1>App</h1><a {href} {target}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="""#,
         target = r#"target="_blank""#
     );
 
@@ -312,9 +315,8 @@ fn with_new_tab_external() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {rel} {target}>Link</a>",
         href = r#"href="https://dioxuslabs.com/""#,
-        default = r#"dioxus-prevent-default="""#,
         rel = r#"rel="noopener noreferrer""#,
         target = r#"target="_blank""#
     );
@@ -349,11 +351,83 @@ fn with_rel() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {rel}>Link</a>",
+        "<h1>App</h1><a {href} {rel}>Link</a>",
         href = r#"href="/test""#,
-        default = r#"dioxus-prevent-default="onclick""#,
         rel = r#"rel="test_rel""#,
     );
 
     assert_eq!(prepare::<Route>(), expected);
+}
+
+#[test]
+fn with_child_route() {
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum ChildRoute {
+        #[route("/")]
+        ChildRoot {},
+        #[route("/:not_static")]
+        NotStatic { not_static: String },
+    }
+
+    #[derive(Routable, Clone, PartialEq, Debug)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+        #[child("/child")]
+        Nested { child: ChildRoute },
+    }
+
+    #[component]
+    fn Test() -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Root() -> Element {
+        rsx! {
+            Link {
+                to: Route::Test {},
+                "Parent Link"
+            }
+            Link {
+                to: Route::Nested { child: ChildRoute::NotStatic { not_static: "this-is-a-child-route".to_string() } },
+                "Child Link"
+            }
+        }
+    }
+
+    #[component]
+    fn ChildRoot() -> Element {
+        rsx! {
+            Link {
+                to: Route::Test {},
+                "Parent Link"
+            }
+            Link {
+                to: ChildRoute::NotStatic { not_static: "this-is-a-child-route".to_string() },
+                "Child Link 1"
+            }
+            Link {
+                to: Route::Nested { child: ChildRoute::NotStatic { not_static: "this-is-a-child-route".to_string() } },
+                "Child Link 2"
+            }
+        }
+    }
+
+    #[component]
+    fn NotStatic(not_static: String) -> Element {
+        unimplemented!()
+    }
+
+    assert_eq!(
+        prepare_at::<Route>("/"),
+        "<h1>App</h1><a href=\"/test\">Parent Link</a><a href=\"/child/this-is-a-child-route\">Child Link</a>"
+    );
+
+    assert_eq!(
+        prepare_at::<Route>("/child"),
+        "<h1>App</h1><a href=\"/test\">Parent Link</a><a href=\"/child/this-is-a-child-route\">Child Link 1</a><a href=\"/child/this-is-a-child-route\">Child Link 2</a>"
+    );
 }

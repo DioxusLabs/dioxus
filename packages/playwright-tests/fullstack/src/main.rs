@@ -8,7 +8,9 @@
 use dioxus::{prelude::*, CapturedError};
 
 fn main() {
-    LaunchBuilder::fullstack().launch(app);
+    dioxus::LaunchBuilder::new()
+        .with_context(1234u32)
+        .launch(app);
 }
 
 fn app() -> Element {
@@ -16,8 +18,8 @@ fn app() -> Element {
     let mut text = use_signal(|| "...".to_string());
 
     rsx! {
+        document::Title { "hello axum! {count}" }
         h1 { "hello axum! {count}" }
-        Title { "hello axum! {count}" }
         button { class: "increment-button", onclick: move |_| count += 1, "Increment" }
         button {
             class: "server-button",
@@ -38,8 +40,15 @@ fn app() -> Element {
     }
 }
 
+#[cfg(feature = "server")]
+async fn assert_server_context_provided() {
+    let FromContext(i): FromContext<u32> = extract().await.unwrap();
+    assert_eq!(i, 1234u32);
+}
+
 #[server(PostServerData)]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+    assert_server_context_provided().await;
     println!("Server received: {}", data);
 
     Ok(())
@@ -47,11 +56,13 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
 
 #[server(GetServerData)]
 async fn get_server_data() -> Result<String, ServerFnError> {
+    assert_server_context_provided().await;
     Ok("Hello from the server!".to_string())
 }
 
 #[server]
 async fn server_error() -> Result<String, ServerFnError> {
+    assert_server_context_provided().await;
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
     Err(ServerFnError::new("the server threw an error!"))
 }

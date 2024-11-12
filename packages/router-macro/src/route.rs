@@ -242,7 +242,23 @@ impl Route {
                 quote! {
                     #[allow(unused)]
                     (#last_index.., Self::#name { #field_name, .. }) => {
-                        #field_name.render(level - #last_index)
+                        rsx! {
+                            dioxus_router::components::child_router::ChildRouter {
+                                route: #field_name,
+                                // Try to parse the current route as a parent route, and then match it as a child route
+                                parse_route_from_root_route: |__route| if let Ok(__route) = __route.parse() {
+                                    if let Self::#name { #field_name, .. } = __route {
+                                        Some(#field_name)
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                },
+                                // Try to parse the child route and turn it into a parent route
+                                format_route_as_root_route: |#field_name| Self::#name { #field_name: #field_name }.to_string(),
+                            }
+                        }
                     }
                 }
             }
@@ -338,7 +354,7 @@ impl Route {
             RouteType::Leaf { .. } => None,
         };
 
-        create_error_type(error_name, &self.segments, child_type)
+        create_error_type(&self.route, error_name, &self.segments, child_type)
     }
 
     pub fn parse_query(&self) -> TokenStream2 {

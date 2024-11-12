@@ -3,10 +3,10 @@
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
-const STYLE: &str = asset!("./examples/assets/todomvc.css");
+const STYLE: Asset = asset!("/examples/assets/todomvc.css");
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -16,9 +16,7 @@ enum FilterState {
     Completed,
 }
 
-#[derive(Debug, PartialEq, Eq)]
 struct TodoItem {
-    id: u32,
     checked: bool,
     contents: String,
 }
@@ -65,7 +63,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Link { rel: "stylesheet", href: STYLE }
         section { class: "todoapp",
             TodoHeader { todos }
             section { class: "main",
@@ -120,7 +118,6 @@ fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
         if evt.key() == Key::Enter && !draft.read().is_empty() {
             let id = todo_id();
             let todo = TodoItem {
-                id,
                 checked: false,
                 contents: draft.to_string(),
             };
@@ -177,15 +174,15 @@ fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
                 label {
                     r#for: "cbg-{id}",
                     ondoubleclick: move |_| is_editing.set(true),
-                    prevent_default: "onclick",
+                    onclick: |evt| evt.prevent_default(),
                     "{contents}"
                 }
                 button {
                     class: "destroy",
-                    onclick: move |_| {
+                    onclick: move |evt| {
+                        evt.prevent_default();
                         todos.write().remove(&id);
                     },
-                    prevent_default: "onclick"
                 }
             }
 
@@ -220,41 +217,43 @@ fn ListFooter(
     let show_clear_completed = use_memo(move || todos.read().values().any(|todo| todo.checked));
 
     rsx! {
-            footer { class: "footer",
-                span { class: "todo-count",
-                    strong { "{active_todo_count} " }
-                    span {
-                        match active_todo_count() {
-                            1 => "item",
-                            _ => "items",
-                        }
-                        " left"
+        footer { class: "footer",
+            span { class: "todo-count",
+                strong { "{active_todo_count} " }
+                span {
+                    match active_todo_count() {
+                        1 => "item",
+                        _ => "items",
                     }
+                    " left"
                 }
-                ul { class: "filters",
-                    for (state , state_text , url) in [
-        (FilterState::All, "All", "#/"),
-        (FilterState::Active, "Active", "#/active"),
-        (FilterState::Completed, "Completed", "#/completed"),
-    ] {
-                        li {
-                            a {
-                                href: url,
-                                class: if filter() == state { "selected" },
-                                onclick: move |_| filter.set(state),
-                                prevent_default: "onclick",
-                                {state_text}
-                            }
+            }
+            ul { class: "filters",
+                for (state , state_text , url) in [
+                    (FilterState::All, "All", "#/"),
+                    (FilterState::Active, "Active", "#/active"),
+                    (FilterState::Completed, "Completed", "#/completed"),
+                ] {
+                    li {
+                        a {
+                            href: url,
+                            class: if filter() == state { "selected" },
+                            onclick: move |evt| {
+                                evt.prevent_default();
+                                filter.set(state)
+                            },
+                            {state_text}
                         }
-                    }
-                }
-                if show_clear_completed() {
-                    button {
-                        class: "clear-completed",
-                        onclick: move |_| todos.write().retain(|_, todo| !todo.checked),
-                        "Clear completed"
                     }
                 }
             }
+            if show_clear_completed() {
+                button {
+                    class: "clear-completed",
+                    onclick: move |_| todos.write().retain(|_, todo| !todo.checked),
+                    "Clear completed"
+                }
+            }
         }
+    }
 }

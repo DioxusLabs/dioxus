@@ -151,11 +151,11 @@ impl WebsysDom {
                 self,
                 |to| {
                     // Switch to only writing templates
-                    to.only_write_templates = true;
+                    to.skip_mutations = true;
                 },
                 children.len(),
             );
-            self.only_write_templates = false;
+            self.skip_mutations = false;
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes
@@ -218,7 +218,7 @@ impl WebsysDom {
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
         // Any suspense boundaries we run into are stored for hydration later.
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone().into()])?;
+        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone()])?;
 
         Ok(rx)
     }

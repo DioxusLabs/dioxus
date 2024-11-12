@@ -1,4 +1,5 @@
 #![allow(non_upper_case_globals)]
+#![allow(deprecated)]
 
 use dioxus_core::prelude::IntoAttributeValue;
 use dioxus_core::HasAttributes;
@@ -215,10 +216,8 @@ mod_methods! {
     map_global_attributes;
     map_html_global_attributes_to_rsx;
 
-    /// Prevent the default action for this element.
-    ///
-    /// For more information, see the MDN docs:
-    /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
+    #[deprecated(note = "This attribute does nothing. For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead. For liveview, you can use `\"onclick\": (evt) => evt.prevent_default()` to prevent the default action for this element.")]
+    /// This attribute has been deprecated in favor of [`dioxus_core::Event::prevent_default`]
     prevent_default: "dioxus-prevent-default";
 
 
@@ -416,6 +415,9 @@ mod_methods! {
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timing-function>
     animation_timing_function: "animation-timing-function" in "style";
+
+    /// <https://developer.mozilla.org/en-US/docs/Web/CSS/aspect-ratio>
+    aspect_ratio: "aspect-ratio" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/azimuth>
     azimuth in "style";
@@ -1746,7 +1748,12 @@ mod_methods! {
     map_svg_attributes;
     map_html_svg_attributes_to_rsx;
 
-    /// Prevent the default action for this element.
+    /// Prevent the default action for this element. This attribute is only recommended in the LiveView renderer
+    /// which does not support the prevent default method on events.
+    ///
+    ///
+    /// For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead.
+    ///
     ///
     /// For more information, see the MDN docs:
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>

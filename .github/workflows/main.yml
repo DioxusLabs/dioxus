@@ -37,9 +37,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: "0"
+  CARGO_INCREMENTAL: "1"
   RUST_BACKTRACE: 1
-  rust_nightly: nightly-2024-07-01
+  rust_nightly: nightly-2024-10-20
 
 jobs:
   check-msrv:
@@ -52,7 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: "true"
       # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
       - name: install_cargo_msrv
         run: cargo install cargo-msrv --all-features
@@ -82,7 +82,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: "true"
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -94,22 +94,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: "true"
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
       - run: cargo test --profile release-unoptimized --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile
 
   fmt:
@@ -124,7 +124,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: "true"
       - run: cargo fmt --all -- --check
 
   typos:
@@ -142,22 +142,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
       - name: Install Rust ${{ env.rust_nightly }}
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: ${{ env.rust_nightly }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: "true"
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
-        env:
-          RUSTFLAGS: --cfg docsrs
-          RUSTDOCFLAGS: --cfg docsrs
-          # todo: re-enable warnings
-          # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+        # env:
+        #   RUSTFLAGS: --cfg docsrs
+        #   RUSTDOCFLAGS: --cfg docsrs
+        # todo: re-enable warnings, private items
+        # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+        #  --document-private-items
 
   # Check for invalid links in the repository
   link-check:
@@ -173,7 +176,7 @@ jobs:
           key: cache-lychee-${{ github.sha }}
           restore-keys: cache-lychee-
       - name: Run lychee
-        uses: lycheeverse/lychee-action@v1
+        uses: lycheeverse/lychee-action@v2
         with:
           args: --base . --config ./lychee.toml './**/*.md'
           fail: true
@@ -190,7 +193,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: "true"
       - run: cargo check --workspace --all-features --all-targets
 
   clippy:
@@ -207,52 +210,36 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: "true"
       - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
 
-  # Only run semver checks if the PR is not a draft and does not have the breaking label
-  # Breaking PRs don't need to follow semver since they are breaking changes
-  # However, this means we won't attempt to backport them, so you should be careful about using this label, as it will
-  # likely make future backporting difficult
-  #
-  # todo: fix this so even if breaking changes have been merged, the fix can be backported
-  #
-  # This will stop working once the first breaking change has been merged, so we should really try to just backport the fix
-  # and *then* run the semver checks. Basically "would backporting this PR cause a breaking change on stable?"
-  #
-  # semver:
-  #   if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
-  #   name: Semver Check
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - uses: Swatinem/rust-cache@v2
-  #       with:
-  #         cache-all-crates: "true"
-  #         save-if: ${{ github.ref == 'refs/heads/main' }}
-  #     - name: Check semver
-  #       uses: obi1kenobi/cargo-semver-checks-action@v2
-  #       with:
-  #         manifest-path: ./Cargo.toml
-  #         exclude: "dioxus-cli, dioxus-ext"
+  nix:
+    if: github.event.pull_request.draft == false
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Install omnix
+        run: nix --accept-flake-config profile install "github:juspay/omnix"
+      - name: Build all flake outputs
+        run: om ci
+      - name: Ensure devShell has all build deps
+        run: nix develop -c cargo build -p dioxus-cli
 
   playwright:
     if: github.event.pull_request.draft == false
     name: Playwright Tests
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 16
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -261,29 +248,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install dependencies
-        run: npm ci
+          cache-on-failure: "true"
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+      - name: Playwright
         working-directory: ./packages/playwright-tests
-
-      - name: Install Playwright
-        run: npm install -D @playwright/test
-        working-directory: ./packages/playwright-tests
-
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-        working-directory: ./packages/playwright-tests
-
-      - name: Run Playwright tests
-        run: npx playwright test
-        working-directory: ./packages/playwright-tests
-
+        run: |
+          npm ci
+          npm install -D @playwright/test
+          npx playwright install --with-deps
+          npx playwright test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
-          path: playwright-report/
+          path: ./packages/playwright-tests/playwright-report/
           retention-days: 30
 
   matrix_test:
@@ -362,10 +345,37 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: "${{ matrix.platform.target }}"
+          key: "matrix-${{ matrix.platform.target }}"
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: "true"
 
       - name: test
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
+
+  # Only run semver checks if the PR is not a draft and does not have the breaking label
+  # Breaking PRs don't need to follow semver since they are breaking changes
+  # However, this means we won't attempt to backport them, so you should be careful about using this label, as it will
+  # likely make future backporting difficult
+  #
+  # todo: fix this so even if breaking changes have been merged, the fix can be backported
+  #
+  # This will stop working once the first breaking change has been merged, so we should really try to just backport the fix
+  # and *then* run the semver checks. Basically "would backporting this PR cause a breaking change on stable?"
+  #
+  # semver:
+  #   if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
+  #   name: Semver Check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         cache-on-failure: "true"
+  #     - name: Check semver
+  #       uses: obi1kenobi/cargo-semver-checks-action@v2
+  #       with:
+  #         manifest-path: ./Cargo.toml
+  #         exclude: "dioxus-cli, dioxus-ext"

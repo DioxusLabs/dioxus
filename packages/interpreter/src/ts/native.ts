@@ -21,16 +21,18 @@ export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
   ipc: any;
   editsPath: string;
+  eventsPath: string;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
 
   // eventually we want to remove liveview and build it into the server-side-events of fullstack
-  // however, for now we need to support it since SSE in fullstack doesn't exist yet
+  // however, for now we need to support it since WebSockets in fullstack doesn't exist yet
   liveview: boolean;
 
-  constructor(editsPath: string) {
+  constructor(editsPath: string, eventsPath: string) {
     super();
     this.editsPath = editsPath;
+    this.eventsPath = eventsPath;
     this.kickStylesheets = false;
   }
 
@@ -96,6 +98,7 @@ export class NativeInterpreter extends JSChannel_ {
     // make sure we pass the handler to the base interpreter
     const handler: EventListener = (event) =>
       this.handleEvent(event, event.type, true);
+
     super.initialize(root, handler);
   }
 
@@ -164,6 +167,47 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  // Windows drag-n-drop fix code. Called by wry drag-n-drop handler over the event loop.
+  handleWindowsDragDrop() {
+    if (window.dxDragLastElement) {
+      const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+      window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+
+      let data = new DataTransfer();
+
+      // We need to mimic that there are actually files in this event for our native file engine to pick it up.
+      const file = new File(["content"], "file.txt", { type: "text/plain" });
+      data.items.add(file);
+
+      const dragDropEvent = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data });
+      window.dxDragLastElement.dispatchEvent(dragDropEvent);
+      window.dxDragLastElement = null;
+    }
+  }
+
+  handleWindowsDragOver(xPos, yPos) {
+    const element = document.elementFromPoint(xPos, yPos);
+
+    if (element != window.dxDragLastElement) {
+      if (window.dxDragLastElement) {
+        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+        window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+      }
+
+      const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
+      element.dispatchEvent(dragOverEvent);
+      window.dxDragLastElement = element;
+    }
+  }
+
+  handleWindowsDragLeave() {
+    if (window.dxDragLastElement) {
+      const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+      window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+      window.dxDragLastElement = null;
+    }
+  }
+
   // ignore the fact the base interpreter uses ptr + len but we use array...
   // @ts-ignore
   loadChild(array: number[]) {
@@ -207,7 +251,7 @@ export class NativeInterpreter extends JSChannel_ {
     // This is to support the prevent_default: "onclick" attribute that dioxus has had for a while, but is not necessary
     // now that we expose preventDefault to the virtualdom on desktop
     // Liveview will still need to use this
-    this.preventDefaults(event, target);
+    this.preventDefaults(event);
 
     // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
@@ -218,23 +262,40 @@ export class NativeInterpreter extends JSChannel_ {
       ) {
         if (target.getAttribute("type") === "file") {
           this.readFiles(target, contents, bubbles, realId, name);
+          return;
         }
       }
-    } else {
+    }
+    const response = this.sendSerializedEvent(body);
+    // capture/prevent default of the event if the virtualdom wants to
+    if (response) {
+      if (response.preventDefault) {
+        event.preventDefault();
+      } else {
+        // Attempt to intercept if the event is a click and the default action was not prevented
+        if (target instanceof Element && event.type === "click") {
+          this.handleClickNavigate(event, target);
+        }
+      }
+
+      if (response.stopPropagation) {
+        event.stopPropagation();
+      }
+    }
+  }
+
+  sendSerializedEvent(body: {
+    name: string;
+    element: number;
+    data: any;
+    bubbles: boolean;
+  }): EventSyncResult | void {
+    if (this.liveview) {
       const message = this.serializeIpcMessage("user_event", body);
       this.ipc.postMessage(message);
-
-      // // Run the event handler on the virtualdom
-      // // capture/prevent default of the event if the virtualdom wants to
-      // const res = handleVirtualdomEventSync(JSON.stringify(body));
-
-      // if (res.preventDefault) {
-      //   event.preventDefault();
-      // }
-
-      // if (res.stopPropagation) {
-      //   event.stopPropagation();
-      // }
+    } else {
+      // Run the event handler on the virtualdom
+      return handleVirtualdomEventSync(this.eventsPath, JSON.stringify(body));
     }
   }
 
@@ -243,36 +304,13 @@ export class NativeInterpreter extends JSChannel_ {
   // - prevent anchor tags from navigating
   // - prevent buttons from submitting forms
   // - let the virtualdom attempt to prevent the event
-  preventDefaults(event: Event, target: EventTarget) {
-    let preventDefaultRequests: string | null = null;
-
-    // Some events can be triggered on text nodes, which don't have attributes
-    if (target instanceof Element) {
-      preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
-    }
-
-    if (
-      preventDefaultRequests &&
-      preventDefaultRequests.includes(`on${event.type}`)
-    ) {
-      event.preventDefault();
-    }
-
+  preventDefaults(event: Event) {
     if (event.type === "submit") {
       event.preventDefault();
     }
-
-    // Attempt to intercept if the event is a click
-    if (target instanceof Element && event.type === "click") {
-      this.handleClickNavigate(event, target, preventDefaultRequests);
-    }
   }
 
-  handleClickNavigate(
-    event: Event,
-    target: Element,
-    preventDefaultRequests: string
-  ) {
+  handleClickNavigate(event: Event, target: Element) {
     // todo call prevent default if it's the right type of event
     if (!this.intercept_link_redirects) {
       return;
@@ -291,24 +329,9 @@ export class NativeInterpreter extends JSChannel_ {
 
     event.preventDefault();
 
-    let elementShouldPreventDefault =
-      preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
-
-    let aElementShouldPreventDefault = a_element.getAttribute(
-      `dioxus-prevent-default`
-    );
-
-    let linkShouldPreventDefault =
-      aElementShouldPreventDefault &&
-      aElementShouldPreventDefault.includes(`onclick`);
-
-    if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
-      const href = a_element.getAttribute("href");
-      if (href !== "" && href !== null && href !== undefined) {
-        this.ipc.postMessage(
-          this.serializeIpcMessage("browser_open", { href })
-        );
-      }
+    const href = a_element.getAttribute("href");
+    if (href !== "" && href !== null && href !== undefined) {
+      this.ipc.postMessage(this.serializeIpcMessage("browser_open", { href }));
     }
   }
 
@@ -387,7 +410,7 @@ export class NativeInterpreter extends JSChannel_ {
 
     contents.files = { files: file_contents };
 
-    const message = this.serializeIpcMessage("user_event", {
+    const message = this.sendSerializedEvent({
       name: name,
       element: realId,
       data: contents,
@@ -401,8 +424,6 @@ export class NativeInterpreter extends JSChannel_ {
 type EventSyncResult = {
   preventDefault: boolean;
   stopPropagation: boolean;
-  stopImmediatePropagation: boolean;
-  filesRequested: boolean;
 };
 
 // This function sends the event to the virtualdom and then waits for the virtualdom to process it
@@ -410,14 +431,25 @@ type EventSyncResult = {
 // However, it's not really suitable for liveview, because it's synchronous and will block the main thread
 // We should definitely consider using a websocket if we want to block... or just not block on liveview
 // Liveview is a little bit of a tricky beast
-function handleVirtualdomEventSync(contents: string): EventSyncResult {
+function handleVirtualdomEventSync(
+  endpoint: string,
+  contents: string
+): EventSyncResult {
   // Handle the event on the virtualdom and then process whatever its output was
   const xhr = new XMLHttpRequest();
 
   // Serialize the event and send it to the custom protocol in the Rust side of things
-  xhr.timeout = 1000;
-  xhr.open("GET", "/handle/event.please", false);
+  xhr.open("POST", endpoint, false);
   xhr.setRequestHeader("Content-Type", "application/json");
+
+  // hack for android since we CANT SEND BODIES (because wry is using shouldInterceptRequest)
+  //
+  // https://issuetracker.google.com/issues/119844519
+  // https://stackoverflow.com/questions/43273640/android-webviewclient-how-to-get-post-request-body
+  // https://developer.android.com/reference/android/webkit/WebViewClient#shouldInterceptRequest(android.webkit.WebView,%20android.webkit.WebResourceRequest)
+  //
+  // the issue here isn't that big, tbh, but there's a small chance we lose the event due to header max size (16k per header, 32k max)
+  xhr.setRequestHeader("dioxus-data", contents);
   xhr.send(contents);
 
   // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
@@ -447,27 +479,3 @@ function getTargetId(target: EventTarget): NodeId | null {
 
   return parseInt(realId);
 }
-
-// function applyFileUpload() {
-//   let inputs = document.querySelectorAll("input");
-//   for (let input of inputs) {
-//     if (!input.getAttribute("data-dioxus-file-listener")) {
-//       // prevent file inputs from opening the file dialog on click
-//       const type = input.getAttribute("type");
-//       if (type === "file") {
-//         input.setAttribute("data-dioxus-file-listener", true);
-//         input.addEventListener("click", (event) => {
-//           let target = event.target;
-//           let target_id = find_real_id(target);
-//           if (target_id !== null) {
-//             const send = (event_name) => {
-//               const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
-//               window.ipc.postMessage(message);
-//             };
-//             send("change&input");
-//           }
-//           event.preventDefault();
-//         });
-//       }
-//     }
-// }

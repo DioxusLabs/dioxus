@@ -1,0 +1,18 @@
+[package]
+name = "dioxus-history"
+edition = "2021"
+version = { workspace = true }
+authors = ["Jonathan Kelley"]
+description = "History provider for dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react"]
+
+
+[dependencies]
+dioxus-core = { workspace = true }
+tracing.workspace = true
+
+[dev-dependencies]
+dioxus = { workspace = true, features = ["router"] }

@@ -1,0 +1,21 @@
+[package]
+name = "dioxus-rsx-hotreload"
+edition = "2021"
+version.workspace = true
+authors = ["Jonathan Kelley", "Evan Almloff"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+description = "CLI Configuration for dioxus-cli"
+keywords = ["dom", "ui", "gui", "react"]
+
+[dependencies]
+dioxus-rsx = { workspace = true }
+internment = { workspace = true }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+proc-macro2-diagnostics = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
+tracing = { workspace = true }
+dioxus-core = { workspace = true }
+dioxus-core-types = { workspace = true }

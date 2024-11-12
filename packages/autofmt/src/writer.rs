@@ -72,9 +72,11 @@ impl<'a> Writer<'a> {
 
     /// Check if the rsx call is short enough to be inlined
     pub(crate) fn is_short_rsx_call(roots: &[BodyNode]) -> bool {
-        match roots.len() {
-            0 => true,
-            1 if matches!(roots[0], BodyNode::Text(_)) => true,
+        // eventually I want to use the _text length, so shutup now
+        #[allow(clippy::match_like_matches_macro)]
+        match roots {
+            [] => true,
+            [BodyNode::Text(_text)] => true,
             _ => false,
         }
     }
@@ -605,7 +607,11 @@ impl<'a> Writer<'a> {
 
         let mut comments = VecDeque::new();
 
-        for (id, line) in self.src[..line_start].iter().enumerate().rev() {
+        let Some(lines) = self.src.get(..line_start) else {
+            return comments;
+        };
+
+        for (id, line) in lines.iter().enumerate().rev() {
             if line.trim().starts_with("//") || line.is_empty() && id != 0 {
                 if id != 0 {
                     comments.push_front(id);
@@ -619,7 +625,11 @@ impl<'a> Writer<'a> {
     }
     fn apply_comments(&mut self, mut comments: VecDeque<usize>) -> Result {
         while let Some(comment_line) = comments.pop_front() {
-            let line = &self.src[comment_line].trim();
+            let Some(line) = self.src.get(comment_line) else {
+                continue;
+            };
+
+            let line = &line.trim();
 
             if line.is_empty() {
                 self.out.new_line()?;
@@ -688,13 +698,15 @@ impl<'a> Writer<'a> {
 
         for attr in attributes {
             if self.current_span_is_primary(attr.span().start()) {
-                'line: for line in self.src[..attr.span().start().line - 1].iter().rev() {
-                    match (line.trim().starts_with("//"), line.is_empty()) {
-                        (true, _) => return 100000,
-                        (_, true) => continue 'line,
-                        _ => break 'line,
+                if let Some(lines) = self.src.get(..attr.span().start().line - 1) {
+                    'line: for line in lines.iter().rev() {
+                        match (line.trim().starts_with("//"), line.is_empty()) {
+                            (true, _) => return 100000,
+                            (_, true) => continue 'line,
+                            _ => break 'line,
+                        }
                     }
-                }
+                };
             }
 
             let name_len = match &attr.name {
@@ -736,7 +748,9 @@ impl<'a> Writer<'a> {
         writeln!(self.out)?;
 
         for idx in start.line..end.line {
-            let line = &self.src[idx];
+            let Some(line) = self.src.get(idx) else {
+                continue;
+            };
             if line.trim().starts_with("//") {
                 for _ in 0..self.out.indent_level + 1 {
                     write!(self.out, "    ")?
@@ -834,13 +848,20 @@ impl<'a> Writer<'a> {
             }
 
             // TODO: let rawexprs to be inlined
-            [BodyNode::Component(ref comp)] if comp.fields.is_empty() => Some(
-                comp.name
-                    .segments
-                    .iter()
-                    .map(|s| s.ident.to_string().len() + 2)
-                    .sum::<usize>(),
-            ),
+            [BodyNode::Component(ref comp)]
+            // basically if the component is completely empty, we can inline it
+                if comp.fields.is_empty()
+                    && comp.children.is_empty()
+                    && comp.spreads.is_empty() =>
+            {
+                Some(
+                    comp.name
+                        .segments
+                        .iter()
+                        .map(|s| s.ident.to_string().len() + 2)
+                        .sum::<usize>(),
+                )
+            }
 
             // Feedback on discord indicates folks don't like combining multiple children on the same line
             // We used to do a lot of math to figure out if we should expand out the line, but folks just

@@ -1,17 +1,16 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    element::DesktopElement,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileDragEvent, DesktopFileUploadForm, FileDialogRequest},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
-use dioxus_core::ElementId;
-use dioxus_core::VirtualDom;
-use dioxus_html::{native_bind::NativeFileEngine, HasFileData, HtmlEvent, PlatformEventData};
+use dioxus_core::{ElementId, VirtualDom};
+use dioxus_html::PlatformEventData;
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
@@ -86,13 +85,12 @@ impl App {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.set_menubar_receiver();
 
+        // Wire up the tray icon receiver - this way any component can key into the menubar actions
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        app.set_tray_icon_receiver();
+
         // Allow hotreloading to work - but only in debug mode
-        #[cfg(all(
-            feature = "hot-reload",
-            debug_assertions,
-            not(target_os = "android"),
-            not(target_os = "ios")
-        ))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         app.connect_hotreload();
 
         #[cfg(debug_assertions)]
@@ -140,26 +138,38 @@ impl App {
             _ => (),
         }
     }
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_tray_menu_event(&mut self, event: tray_icon::menu::MenuEvent) {
+        _ = event;
+    }
 
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
-    pub fn connect_hotreload(&self) {
-        let proxy = self.shared.proxy.clone();
-
-        tokio::task::spawn(async move {
-            let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
-            else {
-                return;
-            };
-
-            while let Some(Ok(msg)) = receiver.next().await {
-                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_tray_icon_event(&mut self, event: tray_icon::TrayIconEvent) {
+        if let tray_icon::TrayIconEvent::Click {
+            id: _,
+            position: _,
+            rect: _,
+            button,
+            button_state: _,
+        } = event
+        {
+            if button == tray_icon::MouseButton::Left {
+                for webview in self.webviews.values() {
+                    webview.desktop_context.window.set_visible(true);
+                    webview.desktop_context.window.set_focus();
+                }
             }
-        });
+        }
+    }
+
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub fn connect_hotreload(&self) {
+        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
+            let proxy = self.shared.proxy.clone();
+            dioxus_devtools::connect(endpoint, move |msg| {
+                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+            })
+        }
     }
 
     pub fn handle_new_window(&mut self) {
@@ -243,10 +253,11 @@ impl App {
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let view = self.webviews.get_mut(&id).unwrap();
 
-        view.dom
-            .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
+        view.edits
+            .wry_queue
+            .with_mutation_state_mut(|f| view.dom.rebuild(f));
 
-        view.desktop_context.send_edits();
+        view.edits.wry_queue.send_edits();
 
         view.desktop_context
             .window
@@ -277,68 +288,14 @@ impl App {
         view.desktop_context.query.send(result);
     }
 
-    pub fn handle_user_event_msg(&mut self, msg: IpcMessage, id: WindowId) {
-        let parsed_params = serde_json::from_value(msg.params())
-            .map_err(|err| tracing::error!("Error parsing user_event: {:?}", err));
-
-        let Ok(evt) = parsed_params else { return };
-
-        let HtmlEvent {
-            element,
-            name,
-            bubbles,
-            data,
-        } = evt;
-
-        let view = self.webviews.get_mut(&id).unwrap();
-        let query = view.desktop_context.query.clone();
-        let recent_file = view.desktop_context.file_hover.clone();
-
-        // check for a mounted event placeholder and replace it with a desktop specific element
-        let as_any = match data {
-            dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, view.desktop_context.clone(), query);
-                Rc::new(PlatformEventData::new(Box::new(element)))
-            }
-            dioxus_html::EventData::Drag(ref drag) => {
-                // we want to override this with a native file engine, provided by the most recent drag event
-                if drag.files().is_some() {
-                    let file_event = recent_file.current().unwrap();
-                    let paths = match file_event {
-                        wry::DragDropEvent::Enter { paths, .. } => paths,
-                        wry::DragDropEvent::Drop { paths, .. } => paths,
-                        _ => vec![],
-                    };
-                    Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
-                        mouse: drag.mouse.clone(),
-                        files: Arc::new(NativeFileEngine::new(paths)),
-                    })))
-                } else {
-                    data.into_any()
-                }
-            }
-            _ => data.into_any(),
-        };
-
-        view.dom.handle_event(&name, as_any, element, bubbles);
-        view.dom
-            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
-        view.desktop_context.send_edits();
-    }
-
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
-    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
-        use dioxus_hot_reload::DevserverMsg;
+    #[cfg(all(feature = "devtools", debug_assertions))]
+    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
+        use dioxus_devtools::DevserverMsg;
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
+                    dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
 
@@ -378,17 +335,15 @@ impl App {
 
         let view = self.webviews.get_mut(&window).unwrap();
 
-        if event_name == "change&input" {
-            view.dom
-                .handle_event("input", data.clone(), id, event_bubbles);
-            view.dom.handle_event("change", data, id, event_bubbles);
-        } else {
-            view.dom.handle_event(event_name, data, id, event_bubbles);
-        }
+        let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
 
-        view.dom
-            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
-        view.desktop_context.send_edits();
+        let runtime = view.dom.runtime();
+        if event_name == "change&input" {
+            runtime.handle_event("input", event.clone(), id);
+            runtime.handle_event("change", event, id);
+        } else {
+            runtime.handle_event(event_name, event, id);
+        }
     }
 
     /// Poll the virtualdom until it's pending
@@ -429,6 +384,27 @@ impl App {
         muda::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
             _ = receiver.send_event(UserWindowEvent::MudaMenuEvent(t));
+        }));
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    fn set_tray_icon_receiver(&self) {
+        let receiver = self.shared.proxy.clone();
+
+        // The event loop becomes the menu receiver
+        // This means we don't need to poll the receiver on every tick - we just get the events as they come in
+        // This is a bit more efficient than the previous implementation, but if someone else sets a handler, the
+        // receiver will become inert.
+        tray_icon::TrayIconEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::TrayIconEvent(t));
+        }));
+
+        // for whatever reason they had to make it separate
+        let receiver = self.shared.proxy.clone();
+        tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::TrayMenuEvent(t));
         }));
     }
 

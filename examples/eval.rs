@@ -3,22 +3,23 @@
 //! Eval will only work with renderers that support javascript - so currently only the web and desktop/mobile renderers
 //! that use a webview. Native renderers will throw "unsupported" errors when calling `eval`.
 
+use async_std::task::sleep;
 use dioxus::prelude::*;
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
     // Create a future that will resolve once the javascript has been successfully executed.
     let future = use_resource(move || async move {
         // Wait a little bit just to give the appearance of a loading screen
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        sleep(std::time::Duration::from_secs(1)).await;
 
         // The `eval` is available in the prelude - and simply takes a block of JS.
         // Dioxus' eval is interesting since it allows sending messages to and from the JS code using the `await dioxus.recv()`
         // builtin function. This allows you to create a two-way communication channel between Rust and JS.
-        let mut eval = eval(
+        let mut eval = document::eval(
             r#"
                 dioxus.send("Hi from JS!");
                 let msg = await dioxus.recv();
@@ -28,10 +29,10 @@ fn app() -> Element {
         );
 
         // Send a message to the JS code.
-        eval.send("Hi from Rust!".into()).unwrap();
+        eval.send("Hi from Rust!").unwrap();
 
         // Our line on the JS side will log the message and then return "hello world".
-        let res = eval.recv().await.unwrap();
+        let res: String = eval.recv().await.unwrap();
 
         // This will print "Hi from JS!" and "Hi from Rust!".
         println!("{:?}", eval.await);
