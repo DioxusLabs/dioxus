@@ -1,3 +1,3 @@
-package com.example.androidfinal
+package dev.dioxus.main
 
 class MainActivity : WryActivity()

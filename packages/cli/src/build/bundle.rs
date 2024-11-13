@@ -780,30 +780,38 @@ impl AppBundle {
     /// Copy the Android executable to the target directory, and rename the hardcoded com_hardcoded_dioxuslabs entries
     /// to the user's app name.
     async fn copy_android_exe(&self, source: &Path, destination: &Path) -> Result<()> {
+        // only use this experimetal objcopy if the env var is set
+        if std::env::var("USE_OBJCOPY").is_err() {
+            std::fs::copy(source, destination)?;
+            return Ok(());
+        }
+
         // gathered by `nm -g target/debug/android-final | grep com_hardcoded_dioxuslabs`
         let known_symbols = vec![
-            "Java_dev_dioxuslabs_hardcoded_Ipc_ipc",
-            "Java_dev_dioxuslabs_hardcoded_RustWebChromeClient_handleReceivedTitle",
-            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_assetLoaderDomain",
-            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_handleRequest",
-            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_onPageLoaded",
-            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_onPageLoading",
-            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_shouldOverride",
-            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_withAssetLoader",
-            "Java_dev_dioxuslabs_hardcoded_RustWebView_onEval",
-            "Java_dev_dioxuslabs_hardcoded_RustWebView_shouldOverride",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_create",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_destroy",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_focus",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_memory",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_pause",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_resume",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_save",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_start",
-            "Java_dev_dioxuslabs_hardcoded_WryActivity_stop",
+            "Java_dev_dioxus_main_Ipc_ipc",
+            "Java_dev_dioxus_main_RustWebChromeClient_handleReceivedTitle",
+            "Java_dev_dioxus_main_RustWebViewClient_assetLoaderDomain",
+            "Java_dev_dioxus_main_RustWebViewClient_handleRequest",
+            "Java_dev_dioxus_main_RustWebViewClient_onPageLoaded",
+            "Java_dev_dioxus_main_RustWebViewClient_onPageLoading",
+            "Java_dev_dioxus_main_RustWebViewClient_shouldOverride",
+            "Java_dev_dioxus_main_RustWebViewClient_withAssetLoader",
+            "Java_dev_dioxus_main_RustWebView_onEval",
+            "Java_dev_dioxus_main_RustWebView_shouldOverride",
+            "Java_dev_dioxus_main_WryActivity_create",
+            "Java_dev_dioxus_main_WryActivity_destroy",
+            "Java_dev_dioxus_main_WryActivity_focus",
+            "Java_dev_dioxus_main_WryActivity_memory",
+            "Java_dev_dioxus_main_WryActivity_pause",
+            "Java_dev_dioxus_main_WryActivity_resume",
+            "Java_dev_dioxus_main_WryActivity_save",
+            "Java_dev_dioxus_main_WryActivity_start",
+            "Java_dev_dioxus_main_WryActivity_stop",
         ];
 
-        tracing::debug!("Redefining symbols for Android linker");
+        tracing::debug!(
+            "Redefining symbols for Android linker. Source: {source:#?}, target: {destination:#?}"
+        );
 
         // --redefine-sym=Java_dev_dioxuslabs_hardcoded_WryActivity_create=Java_com_example_DIOXUSLABS_WryActivity_create
         let redefined_org = self.build.krate.mobile_org().replace(".", "_");
@@ -811,7 +819,9 @@ impl AppBundle {
 
         let res = Command::new(self.build.krate.android_llvm_objcopy().unwrap())
             .args(known_symbols.iter().map(|incoming| {
-                let redefined = format!("--redefine-sym={incoming}={redefined_org}_{app_name}",);
+                let replaced =
+                    incoming.replace("dev_dioxus_main", &format!("{redefined_org}_{app_name}"));
+                let redefined = format!("--redefine-sym={incoming}={replaced}",);
                 tracing::trace!("redefining symbol {incoming} to {redefined}");
                 redefined
             }))

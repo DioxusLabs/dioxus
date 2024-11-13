@@ -614,8 +614,10 @@ impl BuildRequest {
             Platform::Liveview => self.krate.executable_name().to_string(),
             Platform::Windows => format!("{}.exe", self.krate.executable_name()),
 
-            // from the apk spec, the root exe will actually be a shared library
-            Platform::Android => format!("lib{}.so", self.krate.executable_name()),
+            // from the apk spec, the root exe is a shared libary
+            // we include the user's rust code as a shared library with a fixed namespacea
+            Platform::Android => format!("libdioxusmain.so"),
+
             Platform::Web => unimplemented!("there's no main exe on web"), // this will be wrong, I think, but not important?
 
             // todo: maybe this should be called AppRun?
@@ -652,6 +654,18 @@ impl BuildRequest {
         tracing::debug!("Initialized app/src/assets: {:?}", app_assets);
         tracing::debug!("Initialized app/src/kotlin/main: {:?}", app_kotlin_out);
 
+        // handlerbars
+        let hbs = handlebars::Handlebars::new();
+        #[derive(serde::Serialize)]
+        struct HbsTypes {
+            application_id: String,
+            app_name: String,
+        }
+        let hbs_data = HbsTypes {
+            application_id: self.krate.mobile_app_name(),
+            app_name: self.krate.mobile_app_name(),
+        };
+
         // Top-level gradle config
         write(
             root.join("build.gradle.kts"),
@@ -687,7 +701,10 @@ impl BuildRequest {
         // Now the app directory
         write(
             app.join("build.gradle.kts"),
-            include_bytes!("../../assets/android/gen/app/build.gradle.kts"),
+            hbs.render_template(
+                include_str!("../../assets/android/gen/app/build.gradle.kts.hbs"),
+                &hbs_data,
+            )?,
         )?;
         write(
             app.join("proguard-rules.pro"),
@@ -695,7 +712,10 @@ impl BuildRequest {
         )?;
         write(
             app.join("src").join("main").join("AndroidManifest.xml"),
-            include_bytes!("../../assets/android/gen/app/src/main/AndroidManifest.xml"),
+            hbs.render_template(
+                include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
+                &hbs_data,
+            )?,
         )?;
 
         // Write the main activity manually since tao dropped support for it
@@ -711,7 +731,10 @@ impl BuildRequest {
         create_dir_all(res.join("values"))?;
         write(
             res.join("values").join("strings.xml"),
-            include_bytes!("../../assets/android/gen/app/src/main/res/values/strings.xml"),
+            hbs.render_template(
+                include_str!("../../assets/android/gen/app/src/main/res/values/strings.xml.hbs"),
+                &hbs_data,
+            )?,
         )?;
         write(
             res.join("values").join("colors.xml"),
@@ -790,7 +813,7 @@ impl BuildRequest {
             .join("main")
             .join("kotlin");
 
-        for segment in self.krate.full_mobile_app_name().split('.') {
+        for segment in "dev.dioxus.main".split('.') {
             kotlin_dir = kotlin_dir.join(segment);
         }
 

@@ -636,18 +636,21 @@ impl DioxusCrate {
                 return toolchain_dir
                     .join("darwin-x86_64")
                     .join("bin")
-                    .join("clang");
+                    .join("aarch64-linux-android24-clang");
             }
 
             if cfg!(target_os = "linux") {
-                return toolchain_dir.join("linux-x86_64").join("bin").join("clang");
+                return toolchain_dir
+                    .join("linux-x86_64")
+                    .join("bin")
+                    .join("aarch64-linux-android24-clang");
             }
 
             if cfg!(target_os = "windows") {
                 return toolchain_dir
                     .join("windows-x86_64")
                     .join("bin")
-                    .join("clang.exe");
+                    .join("aarch64-linux-android24-clang.cmd");
             }
 
             unimplemented!("Unsupported target os for android toolchain auodetection")
