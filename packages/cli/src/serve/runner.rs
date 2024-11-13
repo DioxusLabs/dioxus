@@ -275,7 +275,7 @@ impl AppRunner {
                     .arg("simctl")
                     .arg("get_app_container")
                     .arg("booted")
-                    .arg(runner.app.bundle_identifier())
+                    .arg(runner.app.build.krate.bundle_identifier())
                     .output()
                     .await;
 

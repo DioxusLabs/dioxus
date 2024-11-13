@@ -702,10 +702,6 @@ impl AppBundle {
         Ok(())
     }
 
-    pub(crate) fn bundle_identifier(&self) -> String {
-        format!("com.dioxuslabs.{}", self.build.krate.executable_name())
-    }
-
     fn macos_plist_contents(&self) -> Result<String> {
         handlebars::Handlebars::new()
             .render_template(

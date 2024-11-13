@@ -266,7 +266,7 @@ impl AppHandle {
             .arg("launch")
             .arg("--console")
             .arg("booted")
-            .arg(self.app.bundle_identifier())
+            .arg(self.app.build.krate.bundle_identifier())
             .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
