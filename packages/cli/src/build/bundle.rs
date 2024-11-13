@@ -347,9 +347,8 @@ impl AppBundle {
             //
             // todo(jon): maybe just symlink this rather than copy it?
             Platform::Android => {
-                // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
-                // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
-                std::fs::copy(&self.app.exe, self.main_exe())?;
+                self.copy_android_exe(&self.app.exe, &self.main_exe())
+                    .await?;
             }
 
             // These are all super simple, just copy the exe into the folder
@@ -703,10 +702,6 @@ impl AppBundle {
         Ok(())
     }
 
-    pub(crate) fn bundle_identifier(&self) -> String {
-        format!("com.dioxuslabs.{}", self.build.krate.executable_name())
-    }
-
     fn macos_plist_contents(&self) -> Result<String> {
         handlebars::Handlebars::new()
             .render_template(
@@ -715,7 +710,7 @@ impl AppBundle {
                     display_name: self.build.platform_exe_name(),
                     bundle_name: self.build.platform_exe_name(),
                     executable_name: self.build.platform_exe_name(),
-                    bundle_identifier: format!("com.dioxuslabs.{}", self.build.platform_exe_name()),
+                    bundle_identifier: self.build.krate.bundle_identifier(),
                 },
             )
             .map_err(|e| e.into())
@@ -729,7 +724,7 @@ impl AppBundle {
                     display_name: self.build.platform_exe_name(),
                     bundle_name: self.build.platform_exe_name(),
                     executable_name: self.build.platform_exe_name(),
-                    bundle_identifier: format!("com.dioxuslabs.{}", self.build.platform_exe_name()),
+                    bundle_identifier: self.build.krate.bundle_identifier(),
                 },
             )
             .map_err(|e| e.into())
@@ -773,5 +768,16 @@ impl AppBundle {
             .join("apk")
             .join("debug")
             .join("app-debug.apk")
+    }
+
+    /// Copy the Android executable to the target directory, and rename the hardcoded com_hardcoded_dioxuslabs entries
+    /// to the user's app name.
+    async fn copy_android_exe(&self, source: &Path, destination: &Path) -> Result<()> {
+        // we might want to eventually use the objcopy logic to handle this
+        //
+        // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
+        // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
+        std::fs::copy(source, destination)?;
+        Ok(())
     }
 }

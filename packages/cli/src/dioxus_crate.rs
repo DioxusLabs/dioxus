@@ -606,22 +606,53 @@ impl DioxusCrate {
                 return toolchain_dir
                     .join("darwin-x86_64")
                     .join("bin")
-                    .join("clang");
+                    .join("aarch64-linux-android24-clang");
             }
 
             if cfg!(target_os = "linux") {
-                return toolchain_dir.join("linux-x86_64").join("bin").join("clang");
+                return toolchain_dir
+                    .join("linux-x86_64")
+                    .join("bin")
+                    .join("aarch64-linux-android24-clang");
             }
 
             if cfg!(target_os = "windows") {
                 return toolchain_dir
                     .join("windows-x86_64")
                     .join("bin")
-                    .join("clang.exe");
+                    .join("aarch64-linux-android24-clang.cmd");
             }
 
             unimplemented!("Unsupported target os for android toolchain auodetection")
         })
+    }
+
+    pub(crate) fn mobile_org(&self) -> String {
+        let identifier = self.bundle_identifier();
+        let mut split = identifier.splitn(3, '.');
+        let sub = split
+            .next()
+            .expect("Identifier to have at least 3 periods like `com.example.app`");
+        let tld = split
+            .next()
+            .expect("Identifier to have at least 3 periods like `com.example.app`");
+        format!("{}.{}", sub, tld)
+    }
+
+    pub(crate) fn mobile_app_name(&self) -> String {
+        self.executable_name().to_string()
+    }
+
+    pub(crate) fn full_mobile_app_name(&self) -> String {
+        format!("{}.{}", self.mobile_org(), self.mobile_app_name())
+    }
+
+    pub(crate) fn bundle_identifier(&self) -> String {
+        if let Some(identifier) = self.config.bundle.identifier.clone() {
+            return identifier.clone();
+        }
+
+        format!("com.example.{}", self.executable_name())
     }
 }
 

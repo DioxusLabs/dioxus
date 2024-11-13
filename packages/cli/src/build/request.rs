@@ -307,6 +307,7 @@ impl BuildRequest {
     pub(crate) fn android_rust_flags(&self) -> String {
         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
 
+        // todo(jon): maybe we can make the symbol aliasing logic here instead of using llvm-objcopy
         if self.build.platform() == Platform::Android {
             let cur_exe = std::env::current_exe().unwrap();
             rust_flags.push_str(format!(" -Clinker={}", cur_exe.display()).as_str());
@@ -456,19 +457,13 @@ impl BuildRequest {
         let mut env_vars = vec![];
 
         if self.build.platform() == Platform::Android {
-            let app = self.root_dir().join("app");
-            let app_main = app.join("src").join("main");
-            let app_kotlin = app_main.join("kotlin");
-            let app_kotlin_out = app_kotlin.join("com").join("example").join("androidfinal");
-
-            env_vars.push((
-                "WRY_ANDROID_PACKAGE",
-                "com.example.androidfinal".to_string(),
-            ));
-            env_vars.push(("WRY_ANDROID_LIBRARY", "androidfinal".to_string()));
+            env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
+            env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
             env_vars.push((
                 "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
-                app_kotlin_out.display().to_string(),
+                self.wry_android_kotlin_files_out_dir()
+                    .display()
+                    .to_string(),
             ));
 
             env_vars.push(("RUSTFLAGS", self.android_rust_flags()))
@@ -619,8 +614,10 @@ impl BuildRequest {
             Platform::Liveview => self.krate.executable_name().to_string(),
             Platform::Windows => format!("{}.exe", self.krate.executable_name()),
 
-            // from the apk spec, the root exe will actually be a shared library
-            Platform::Android => format!("lib{}.so", self.krate.executable_name()),
+            // from the apk spec, the root exe is a shared library
+            // we include the user's rust code as a shared library with a fixed namespacea
+            Platform::Android => "libdioxusmain.so".to_string(),
+
             Platform::Web => unimplemented!("there's no main exe on web"), // this will be wrong, I think, but not important?
 
             // todo: maybe this should be called AppRun?
@@ -643,7 +640,7 @@ impl BuildRequest {
         let app_kotlin = app_main.join("kotlin");
         let app_jnilibs = app_main.join("jniLibs");
         let app_assets = app_main.join("assets");
-        let app_kotlin_out = app_kotlin.join("com").join("example").join("androidfinal");
+        let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
         create_dir_all(&app)?;
         create_dir_all(&app_main)?;
         create_dir_all(&app_kotlin)?;
@@ -656,6 +653,18 @@ impl BuildRequest {
         tracing::debug!("Initialized app/src/jniLibs: {:?}", app_jnilibs);
         tracing::debug!("Initialized app/src/assets: {:?}", app_assets);
         tracing::debug!("Initialized app/src/kotlin/main: {:?}", app_kotlin_out);
+
+        // handlerbars
+        let hbs = handlebars::Handlebars::new();
+        #[derive(serde::Serialize)]
+        struct HbsTypes {
+            application_id: String,
+            app_name: String,
+        }
+        let hbs_data = HbsTypes {
+            application_id: self.krate.full_mobile_app_name(),
+            app_name: self.krate.mobile_app_name(),
+        };
 
         // Top-level gradle config
         write(
@@ -692,7 +701,10 @@ impl BuildRequest {
         // Now the app directory
         write(
             app.join("build.gradle.kts"),
-            include_bytes!("../../assets/android/gen/app/build.gradle.kts"),
+            hbs.render_template(
+                include_str!("../../assets/android/gen/app/build.gradle.kts.hbs"),
+                &hbs_data,
+            )?,
         )?;
         write(
             app.join("proguard-rules.pro"),
@@ -700,18 +712,20 @@ impl BuildRequest {
         )?;
         write(
             app.join("src").join("main").join("AndroidManifest.xml"),
-            include_bytes!("../../assets/android/gen/app/src/main/AndroidManifest.xml"),
+            hbs.render_template(
+                include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
+                &hbs_data,
+            )?,
         )?;
 
         // Write the main activity manually since tao dropped support for it
         write(
-            app_main
-                .join("kotlin")
-                .join("com")
-                .join("example")
-                .join("androidfinal")
+            self.wry_android_kotlin_files_out_dir()
                 .join("MainActivity.kt"),
-            include_bytes!("../../assets/android/MainActivity.kt"),
+            hbs.render_template(
+                include_str!("../../assets/android/MainActivity.kt.hbs"),
+                &hbs_data,
+            )?,
         )?;
 
         // Write the res folder
@@ -720,7 +734,10 @@ impl BuildRequest {
         create_dir_all(res.join("values"))?;
         write(
             res.join("values").join("strings.xml"),
-            include_bytes!("../../assets/android/gen/app/src/main/res/values/strings.xml"),
+            hbs.render_template(
+                include_str!("../../assets/android/gen/app/src/main/res/values/strings.xml.hbs"),
+                &hbs_data,
+            )?,
         )?;
         write(
             res.join("values").join("colors.xml"),
@@ -789,5 +806,22 @@ impl BuildRequest {
         )?;
 
         Ok(())
+    }
+
+    pub(crate) fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
+        let mut kotlin_dir = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("kotlin");
+
+        for segment in "dev.dioxus.main".split('.') {
+            kotlin_dir = kotlin_dir.join(segment);
+        }
+
+        tracing::debug!("app_kotlin_out: {:?}", kotlin_dir);
+
+        kotlin_dir
     }
 }
