@@ -21,6 +21,8 @@ use tokio::{
 /// We might want to bring in websockets here too, so we know the exact channels the app is using to
 /// communicate with the devserver. Currently that's a broadcast-type system, so this struct isn't super
 /// duper useful.
+///
+/// todo: restructure this such that "open" is a running task instead of blocking the main thread
 pub(crate) struct AppHandle {
     pub(crate) app: AppBundle,
 
@@ -451,36 +453,41 @@ impl AppHandle {
         unimplemented!("dioxus-cli doesn't support ios devices yet.")
     }
 
-    async fn open_android_sim(&self, envs: Vec<(&str, String)>) -> Result<()> {
-        // Install
-        // adb install -r app-debug.apk
-        let _output = Command::new("adb")
-            .arg("install")
-            .arg("-r")
-            .arg(self.app.apk_path())
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .output()
-            .await?;
+    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) -> Result<()> {
+        let apk_path = self.app.apk_path();
+        let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
 
-        // eventually, use the user's MainAcitivty, not our MainAcitivty
-        // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
-        let activity_name = format!(
-            "{}/dev.dioxus.main.MainActivity",
-            self.app.build.krate.full_mobile_app_name(),
-        );
+        // Start backgrounded since .open() is called while in the arm of the top-level match
+        tokio::task::spawn(async move {
+            // Install
+            // adb install -r app-debug.apk
+            let _output = Command::new("adb")
+                .arg("install")
+                .arg("-r")
+                .arg(apk_path)
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .output()
+                .await?;
 
-        let _output = Command::new("adb")
-            .arg("shell")
-            .arg("am")
-            .arg("start")
-            .arg("-n")
-            .arg(activity_name)
-            .envs(envs)
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .output()
-            .await?;
+            // eventually, use the user's MainAcitivty, not our MainAcitivty
+            // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
+            let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
+
+            let _output = Command::new("adb")
+                .arg("shell")
+                .arg("am")
+                .arg("start")
+                .arg("-n")
+                .arg(activity_name)
+                .envs(envs)
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .output()
+                .await?;
+
+            Result::<()>::Ok(())
+        });
 
         Ok(())
     }
