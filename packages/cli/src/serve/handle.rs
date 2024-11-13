@@ -463,13 +463,19 @@ impl AppHandle {
             .output()
             .await?;
 
-        // adb shell am start -n com.example.androidfinal/com.example.androidfinal.MainActivity
+        // adb shell am start -n dev.dioxuslabs.hardcoded/dev.dioxuslabs.hardcoded.MainActivity
+        let activity_name = format!(
+            "{}/{}.MainActivity",
+            self.app.build.krate.full_mobile_app_name(),
+            self.app.build.krate.full_mobile_app_name(),
+        );
+
         let _output = Command::new("adb")
             .arg("shell")
             .arg("am")
             .arg("start")
             .arg("-n")
-            .arg("com.example.androidfinal/com.example.androidfinal.MainActivity")
+            .arg(activity_name)
             .envs(envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())

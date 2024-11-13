@@ -307,6 +307,7 @@ impl BuildRequest {
     pub(crate) fn android_rust_flags(&self) -> String {
         let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
 
+        // todo(jon): maybe we can make the symbol aliasing logic here instead of using llvm-objcopy
         if self.build.platform() == Platform::Android {
             let cur_exe = std::env::current_exe().unwrap();
             rust_flags.push_str(format!(" -Clinker={}", cur_exe.display()).as_str());
@@ -456,16 +457,10 @@ impl BuildRequest {
         let mut env_vars = vec![];
 
         if self.build.platform() == Platform::Android {
-            let app = self.root_dir().join("app");
-            let app_main = app.join("src").join("main");
-            let app_kotlin = app_main.join("kotlin");
-            let app_kotlin_out = app_kotlin.join("com").join("example").join("androidfinal");
+            let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
 
-            env_vars.push((
-                "WRY_ANDROID_PACKAGE",
-                "com.example.androidfinal".to_string(),
-            ));
-            env_vars.push(("WRY_ANDROID_LIBRARY", "androidfinal".to_string()));
+            env_vars.push(("WRY_ANDROID_PACKAGE", self.krate.full_mobile_app_name()));
+            env_vars.push(("WRY_ANDROID_LIBRARY", self.krate.mobile_app_name()));
             env_vars.push((
                 "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
                 app_kotlin_out.display().to_string(),
@@ -643,7 +638,7 @@ impl BuildRequest {
         let app_kotlin = app_main.join("kotlin");
         let app_jnilibs = app_main.join("jniLibs");
         let app_assets = app_main.join("assets");
-        let app_kotlin_out = app_kotlin.join("com").join("example").join("androidfinal");
+        let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
         create_dir_all(&app)?;
         create_dir_all(&app_main)?;
         create_dir_all(&app_kotlin)?;
@@ -705,11 +700,7 @@ impl BuildRequest {
 
         // Write the main activity manually since tao dropped support for it
         write(
-            app_main
-                .join("kotlin")
-                .join("com")
-                .join("example")
-                .join("androidfinal")
+            self.wry_android_kotlin_files_out_dir()
                 .join("MainActivity.kt"),
             include_bytes!("../../assets/android/MainActivity.kt"),
         )?;
@@ -789,5 +780,22 @@ impl BuildRequest {
         )?;
 
         Ok(())
+    }
+
+    pub(crate) fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
+        let mut kotlin_dir = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("kotlin");
+
+        for segment in self.krate.full_mobile_app_name().split('.') {
+            kotlin_dir = kotlin_dir.join(segment);
+        }
+
+        tracing::debug!("app_kotlin_out: {:?}", kotlin_dir);
+
+        kotlin_dir
     }
 }

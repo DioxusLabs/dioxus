@@ -52,14 +52,14 @@ pub fn root() {
 #[inline(never)]
 pub extern "C" fn start_app() {
     tao::android_binding!(
-        com_example,
-        androidfinal,
+        dev_dioxuslabs,
+        hardcoded,
         WryActivity,
         wry::android_setup,
         root,
         tao
     );
-    wry::android_binding!(com_example, androidfinal, wry);
+    wry::android_binding!(dev_dioxuslabs, hardcoded, wry);
 }
 
 /// Call our `main` function to initialize the rust runtime and set the launch binding trampoline

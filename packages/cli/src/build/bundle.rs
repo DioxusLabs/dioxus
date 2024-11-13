@@ -2,6 +2,7 @@ use crate::Result;
 use crate::{assets::AssetManifest, TraceSrc};
 use crate::{BuildRequest, Platform};
 use anyhow::Context;
+use core::str;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::create_dir_all,
@@ -349,7 +350,8 @@ impl AppBundle {
             Platform::Android => {
                 // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
                 // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
-                std::fs::copy(&self.app.exe, self.main_exe())?;
+                self.copy_android_exe(&self.app.exe, &self.main_exe())
+                    .await?;
             }
 
             // These are all super simple, just copy the exe into the folder
@@ -773,5 +775,60 @@ impl AppBundle {
             .join("apk")
             .join("debug")
             .join("app-debug.apk")
+    }
+
+    /// Copy the Android executable to the target directory, and rename the hardcoded com_hardcoded_dioxuslabs entries
+    /// to the user's app name.
+    async fn copy_android_exe(&self, source: &Path, destination: &Path) -> Result<()> {
+        // gathered by `nm -g target/debug/android-final | grep com_hardcoded_dioxuslabs`
+        let known_symbols = vec![
+            "Java_dev_dioxuslabs_hardcoded_Ipc_ipc",
+            "Java_dev_dioxuslabs_hardcoded_RustWebChromeClient_handleReceivedTitle",
+            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_assetLoaderDomain",
+            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_handleRequest",
+            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_onPageLoaded",
+            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_onPageLoading",
+            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_shouldOverride",
+            "Java_dev_dioxuslabs_hardcoded_RustWebViewClient_withAssetLoader",
+            "Java_dev_dioxuslabs_hardcoded_RustWebView_onEval",
+            "Java_dev_dioxuslabs_hardcoded_RustWebView_shouldOverride",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_create",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_destroy",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_focus",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_memory",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_pause",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_resume",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_save",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_start",
+            "Java_dev_dioxuslabs_hardcoded_WryActivity_stop",
+        ];
+
+        tracing::debug!("Redefining symbols for Android linker");
+
+        // --redefine-sym=Java_dev_dioxuslabs_hardcoded_WryActivity_create=Java_com_example_DIOXUSLABS_WryActivity_create
+        let redefined_org = self.build.krate.mobile_org().replace(".", "_");
+        let app_name = self.build.krate.mobile_app_name();
+
+        let res = Command::new(self.build.krate.android_llvm_objcopy().unwrap())
+            .args(known_symbols.iter().map(|incoming| {
+                let redefined = format!("--redefine-sym={incoming}={redefined_org}_{app_name}",);
+                tracing::trace!("redefining symbol {incoming} to {redefined}");
+                redefined
+            }))
+            .arg(source)
+            .arg(destination)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .await?;
+
+        if !res.stderr.is_empty() {
+            tracing::error!(
+                "error running llvm-objcopy {:#?}",
+                str::from_utf8(&res.stderr)
+            );
+        }
+
+        Ok(())
     }
 }
