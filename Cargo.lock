@@ -12371,11 +12371,12 @@ dependencies = [
 
 [[package]]
 name = "warnings"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0c672c7629eeed21c37d7a96ee9c0287b86a5e29b5730773117e4261d1a73ca"
+checksum = "64f68998838dab65727c9b30465595c6f7c953313559371ca8bf31759b3680ad"
 dependencies = [
  "pin-project",
+ "tracing",
  "warnings-macro",
 ]
 
