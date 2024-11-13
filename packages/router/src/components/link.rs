@@ -194,10 +194,6 @@ pub fn Link(props: LinkProps) -> Element {
     let do_default = onclick.is_none() || !onclick_only;
 
     let action = move |event: MouseEvent| {
-        // Only handle internal links
-        if is_external {
-            return;
-        }
         // Only handle events without modifiers
         if !event.modifiers().is_empty() {
             return;
@@ -208,7 +204,7 @@ pub fn Link(props: LinkProps) -> Element {
         }
 
         // todo(jon): this is extra hacky for no reason - we should fix prevent default on Links
-        if do_default && is_external && cfg!(target_arch = "wasm32") {
+        if do_default && is_external {
             return;
         }
 
@@ -236,7 +232,7 @@ pub fn Link(props: LinkProps) -> Element {
         // If the event is a click with the left mouse button and no modifiers, prevent the default action
         // and navigate to the href with client side routing
         router.include_prevent_default().then_some(
-            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"   
+            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"
         )
     };
 
