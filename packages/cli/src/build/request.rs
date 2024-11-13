@@ -614,7 +614,7 @@ impl BuildRequest {
             Platform::Liveview => self.krate.executable_name().to_string(),
             Platform::Windows => format!("{}.exe", self.krate.executable_name()),
 
-            // from the apk spec, the root exe is a shared libary
+            // from the apk spec, the root exe is a shared library
             // we include the user's rust code as a shared library with a fixed namespacea
             Platform::Android => "libdioxusmain.so".to_string(),
 
