@@ -39,7 +39,7 @@
 //! - Allow top-level fragments
 
 fn main() {
-    launch(app)
+    dioxus::launch(app)
 }
 
 use core::{fmt, str::FromStr};

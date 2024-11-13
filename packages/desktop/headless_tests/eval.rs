@@ -16,23 +16,23 @@ static EVALS_RETURNED: GlobalSignal<usize> = Signal::global(|| 0);
 fn app() -> Element {
     // Double 100 values in the value
     use_future(|| async {
-        let mut eval = eval(
+        let mut eval = document::eval(
             r#"for (let i = 0; i < 100; i++) {
             let value = await dioxus.recv();
             dioxus.send(value*2);
         }"#,
         );
         for i in 0..100 {
-            eval.send(serde_json::Value::from(i)).unwrap();
-            let value = eval.recv().await.unwrap();
-            assert_eq!(value, serde_json::Value::from(i * 2));
+            eval.send(i).unwrap();
+            let value: i32 = eval.recv().await.unwrap();
+            assert_eq!(value, i * 2);
             EVALS_RECEIVED.with_mut(|x| *x += 1);
         }
     });
 
     // Make sure returning no value resolves the future
     use_future(|| async {
-        let eval = eval(r#"return;"#);
+        let eval = document::eval(r#"return;"#);
 
         eval.await.unwrap();
         EVALS_RETURNED.with_mut(|x| *x += 1);
@@ -40,7 +40,7 @@ fn app() -> Element {
 
     // Return a value from the future
     use_future(|| async {
-        let eval = eval(
+        let eval = document::eval(
             r#"
         return [1, 2, 3];
         "#,

@@ -3,8 +3,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    tracing_subscriber::fmt::init();
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -14,7 +13,7 @@ fn app() -> Element {
         div {
             // You can set the title of the page with the Title component
             // In web applications, this sets the title in the head. On desktop, it sets the window title
-            Title { "My Application (Count {count})" }
+            document::Title { "My Application (Count {count})" }
             button { onclick: move |_| count += 1, "Up high!" }
             button { onclick: move |_| count -= 1, "Down low!" }
         }

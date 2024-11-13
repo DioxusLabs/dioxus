@@ -13,7 +13,7 @@ This overview provides a brief introduction to Dioxus. For a more in-depth guide
 
 - [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
 - [Book (0.5)](https://dioxuslabs.com/learn/0.5)
-- [Examples](https://github.com/DioxusLabs/example-projects)
+- [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
 # Overview and Goals
 
@@ -44,7 +44,7 @@ To launch an app, we use the `launch` method and use features in `Cargo.toml` to
 use dioxus::prelude::*;
 
 fn main() {
-    launch(App);
+    dioxus::launch(App);
 }
 
 // The #[component] attribute streamlines component creation.
@@ -239,7 +239,7 @@ Using components, templates, and hooks, we can build a simple app.
 use dioxus::prelude::*;
 
 fn main() {
-    launch(App);
+    dioxus::launch(App);
 }
 
 #[component]

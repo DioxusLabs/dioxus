@@ -1,74 +1,78 @@
-pub mod autoformat;
-pub mod build;
-pub mod bundle;
-pub mod check;
-pub mod clean;
-pub mod config;
-pub mod create;
-pub mod init;
-pub mod link;
-pub mod serve;
-pub mod translate;
+pub(crate) mod autoformat;
+pub(crate) mod build;
+pub(crate) mod bundle;
+pub(crate) mod check;
+pub(crate) mod clean;
+pub(crate) mod config;
+pub(crate) mod create;
+pub(crate) mod doctor;
+pub(crate) mod init;
+pub(crate) mod link;
+pub(crate) mod run;
+pub(crate) mod serve;
+pub(crate) mod target;
+pub(crate) mod translate;
+pub(crate) mod verbosity;
 
-use crate::{custom_error, error::Result, Error};
+pub(crate) use build::*;
+pub(crate) use serve::*;
+pub(crate) use target::*;
+pub(crate) use verbosity::*;
+
+use crate::{error::Result, Error, StructuredOutput};
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::{
     fmt::Display,
-    fs::{remove_dir_all, File},
+    fs::File,
     io::{Read, Write},
     path::PathBuf,
     process::{Command, Stdio},
 };
 
-pub static VERSION: Lazy<String> = Lazy::new(|| {
-    format!(
-        "{} ({})",
-        crate::dx_build_info::PKG_VERSION,
-        crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("was built without git repository")
-    )
-});
-
 /// Build, Bundle & Ship Dioxus Apps.
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
-pub struct Cli {
-    #[clap(subcommand)]
-    pub action: Commands,
+pub(crate) struct Cli {
+    #[command(subcommand)]
+    pub(crate) action: Commands,
 
-    /// Enable verbose logging.
-    #[clap(short)]
-    pub v: bool,
-
-    /// Specify a binary target.
-    #[clap(global = true, long)]
-    pub bin: Option<String>,
+    #[command(flatten)]
+    pub(crate) verbosity: Verbosity,
 }
 
-#[derive(Parser)]
-pub enum Commands {
+#[derive(Subcommand)]
+pub(crate) enum Commands {
     /// Build the Dioxus project and all of its assets.
-    Build(build::Build),
+    #[clap(name = "build")]
+    Build(build::BuildArgs),
 
     /// Translate a source file into Dioxus code.
+    #[clap(name = "translate")]
     Translate(translate::Translate),
 
     /// Build, watch & serve the Dioxus project and all of its assets.
-    Serve(serve::Serve),
+    #[clap(name = "serve")]
+    Serve(serve::ServeArgs),
 
     /// Create a new project for Dioxus.
+    #[clap(name = "new")]
     New(create::Create),
 
     /// Init a new project for Dioxus in an existing directory.
     /// Will attempt to keep your project in a good state.
+    #[clap(name = "init")]
     Init(init::Init),
 
     /// Clean output artifacts.
+    #[clap(name = "clean")]
     Clean(clean::Clean),
 
     /// Bundle the Dioxus app into a shippable object.
+    #[clap(name = "bundle")]
     Bundle(bundle::Bundle),
 
     /// Automatically format RSX.
@@ -79,13 +83,18 @@ pub enum Commands {
     #[clap(name = "check")]
     Check(check::Check),
 
+    /// Run the project without any hotreloading
+    #[clap(name = "run")]
+    Run(run::RunArgs),
+
+    /// Ensure all the tooling is installed and configured correctly
+    #[clap(name = "doctor")]
+    Doctor(doctor::Doctor),
+
     /// Dioxus config file controls.
     #[clap(subcommand)]
+    #[clap(name = "config")]
     Config(config::Config),
-
-    /// Handles parsing of linker arguments for linker-based systems
-    /// such as Manganis and binary patching.
-    Link(link::LinkCommand),
 }
 
 impl Display for Commands {
@@ -101,7 +110,16 @@ impl Display for Commands {
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
-            Commands::Link(_) => write!(f, "link"),
+            Commands::Run(_) => write!(f, "run"),
+            Commands::Doctor(_) => write!(f, "doctor"),
         }
     }
 }
+
+static VERSION: Lazy<String> = Lazy::new(|| {
+    format!(
+        "{} ({})",
+        crate::dx_build_info::PKG_VERSION,
+        crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("was built without git repository")
+    )
+});

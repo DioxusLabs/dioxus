@@ -117,7 +117,8 @@ fn fuzz() {
 
         for i in 0..children {
             let owner = S::owner();
-            let key = owner.insert(format!("hello world {path:?}"));
+            let value = format!("hello world {path:?}");
+            let key = owner.insert(value.clone());
             println!("created new box {key:?}");
             valid_keys.push(key);
             path.push(i);
@@ -134,9 +135,87 @@ fn fuzz() {
                 assert!(key.try_read().is_err());
             }
             maybe_owner_scope(valid_keys, invalid_keys, path);
+
+            // After all the children run, we should still have our data
+            let key_value = &*key.read();
+            println!("{:?}", key_value);
+            assert_eq!(key_value, &value);
+
             let invalid = valid_keys.pop().unwrap();
             println!("popping {invalid:?}");
             invalid_keys.push(invalid);
+            path.pop();
+        }
+    }
+
+    for _ in 0..10 {
+        maybe_owner_scope::<UnsyncStorage>(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
+    }
+
+    for _ in 0..10 {
+        maybe_owner_scope::<SyncStorage>(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
+    }
+}
+
+#[test]
+fn fuzz_rc() {
+    fn maybe_owner_scope<S: Storage<String>>(
+        valid_keys: &mut Vec<Vec<GenerationalBox<String, S>>>,
+        invalid_keys: &mut Vec<GenerationalBox<String, S>>,
+        path: &mut Vec<u8>,
+    ) {
+        let branch_cutoff = 5;
+        let children = if path.len() < branch_cutoff {
+            rand::random::<u8>() % 4
+        } else {
+            rand::random::<u8>() % 2
+        };
+
+        for i in 0..children {
+            let owner = S::owner();
+            let value = format!("hello world {path:?}");
+            let key = owner.insert_rc(value.clone());
+            println!("created new box {key:?}");
+            let mut keys = vec![key];
+            for _ in 0..rand::random::<u8>() % 10 {
+                if rand::random::<u8>() % 2 == 0 {
+                    let owner = S::owner();
+                    let key = owner.insert_reference(key).unwrap();
+                    println!("created new reference {key:?}");
+                    invalid_keys.push(key);
+                }
+                let key = owner.insert_reference(key).unwrap();
+                println!("created new reference {key:?}");
+                keys.push(key);
+            }
+            valid_keys.push(keys.clone());
+            path.push(i);
+            // read all keys
+            println!("{:?}", path);
+            for keys in valid_keys.iter() {
+                for key in keys {
+                    println!("reading {key:?}");
+                    let value = key.read();
+                    println!("{:?}", &*value);
+                    assert!(value.starts_with("hello world"));
+                }
+            }
+            for key in invalid_keys.iter() {
+                println!("reading invalid {key:?}");
+                assert!(key.try_read().is_err());
+            }
+            maybe_owner_scope(valid_keys, invalid_keys, path);
+
+            // After all the children run, we should still have our data
+            for key in keys {
+                let key_value = &*key.read();
+                println!("{:?}", key_value);
+                assert_eq!(key_value, &value);
+            }
+
+            let invalid = valid_keys.pop().unwrap();
+            println!("popping {invalid:?}");
+            invalid_keys.extend(invalid);
             path.pop();
         }
     }

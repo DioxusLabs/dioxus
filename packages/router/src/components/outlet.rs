@@ -58,8 +58,9 @@ use dioxus_lib::prelude::*;
 /// # #[component]
 /// # fn App() -> Element {
 /// #     rsx! {
-/// #         Router::<Route> {
-/// #             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(Route::Child {}))
+/// #         dioxus_router::components::HistoryProvider {
+/// #             history:  move |_| std::rc::Rc::new(dioxus_history::MemoryHistory::with_initial_path(Route::Child {}.to_string())) as std::rc::Rc<dyn dioxus_history::History>,
+/// #             Router::<Route> {}
 /// #         }
 /// #     }
 /// # }

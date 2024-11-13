@@ -26,7 +26,7 @@ warnings = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 tracing-subscriber = "0.3.17"
 simple_logger = "4.2.0"
 reqwest = { workspace = true }

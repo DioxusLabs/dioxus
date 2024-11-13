@@ -1,4 +1,8 @@
-use std::{cell::RefCell, collections::VecDeque, rc::Rc, task::Waker};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, RwLock},
+    task::Waker,
+};
 
 use dioxus_interpreter_js::MutationState;
 
@@ -6,7 +10,7 @@ use dioxus_interpreter_js::MutationState;
 /// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until a new request is made.
 #[derive(Default, Clone)]
 pub(crate) struct WryQueue {
-    inner: Rc<RefCell<WryQueueInner>>,
+    inner: Arc<RwLock<WryQueueInner>>,
 }
 
 #[derive(Default)]
@@ -23,7 +27,7 @@ pub(crate) struct WryQueueInner {
 
 impl WryQueue {
     pub fn handle_request(&self, responder: wry::RequestAsyncResponder) {
-        let mut myself = self.inner.borrow_mut();
+        let mut myself = self.inner.write().unwrap();
         if let Some(bytes) = myself.edit_queue.pop_back() {
             responder.respond(wry::http::Response::new(bytes));
         } else {
@@ -36,13 +40,17 @@ impl WryQueue {
         }
     }
 
-    pub fn mutation_state_mut(&self) -> std::cell::RefMut<'_, MutationState> {
-        std::cell::RefMut::map(self.inner.borrow_mut(), |myself| &mut myself.mutation_state)
+    pub fn with_mutation_state_mut<O: 'static>(
+        &self,
+        f: impl FnOnce(&mut MutationState) -> O,
+    ) -> O {
+        let mut inner = self.inner.write().unwrap();
+        f(&mut inner.mutation_state)
     }
 
     /// Send a list of mutations to the webview
     pub(crate) fn send_edits(&self) {
-        let mut myself = self.inner.borrow_mut();
+        let mut myself = self.inner.write().unwrap();
         let serialized_edits = myself.mutation_state.export_memory();
         // There are pending edits that need to be applied to the webview before we run futures
         myself.edits_in_progress = true;
@@ -54,13 +62,13 @@ impl WryQueue {
     }
 
     fn edits_in_progress(&self) -> bool {
-        self.inner.borrow().edits_in_progress
+        self.inner.read().unwrap().edits_in_progress
     }
 
     /// Wait until all pending edits have been rendered in the webview
     pub fn poll_edits_flushed(&self, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
         if self.edits_in_progress() {
-            let mut myself = self.inner.borrow_mut();
+            let mut myself = self.inner.write().unwrap();
             let waker = cx.waker();
             myself.waiting_for_edits_flushed.push(waker.clone());
             std::task::Poll::Pending

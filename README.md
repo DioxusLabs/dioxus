@@ -54,6 +54,8 @@
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ko-kr"> 한국어 </a>
   </h3>
 </div>
 <br>
@@ -254,7 +256,7 @@ Dioxus places an emphasis on a few key points that make it different from other 
 
 ### Dioxus vs Tauri
 
-Tauri is a framework for building desktop (and soon, mobile) apps where your frontend is written in a web-based framework like React, Vue, Svelte, etc. Whenever you need to do native work, you can write Rust functions and call them from your frontend.
+Tauri is a framework for building desktop mobile apps where your frontend is written in a web-based framework like React, Vue, Svelte, etc. Whenever you need to do native work, you can write Rust functions and call them from your frontend.
 
 - **Natively Rust**: Tauri's architecture limits your UI to either JavaScript or WebAssembly. With Dioxus, your Rust code is running natively on the user's machine, letting you do things like spawning threads, accessing the filesystem, without any IPC bridge. This drastically simplifies your app's architecture and makes it easier to build. You can build a Tauri app with Dioxus-Web as a frontend if you'd like.
 
@@ -363,7 +365,7 @@ Iced is a cross-platform GUI library inspired by Elm. Iced renders natively with
 
 - **Native Feel**: Since Dioxus uses a webview as its renderer, it automatically gets native text input, paste handling, and other native features like accessibility. Iced's renderer currently doesn't implement these features, making it feel less native.
 
-- **WGPU**: Dioxus' WGPU renderer is currently quite immature and not yet reader for production use. Iced's WGPU renderer is much more mature and is being used in production. This enables certain types of apps that need GPU access to be built with Iced that can't currently be built with Dioxus.
+- **WGPU**: Dioxus' WGPU renderer is currently quite immature and not yet ready for production use. Iced's WGPU renderer is much more mature and is being used in production. This enables certain types of apps that need GPU access to be built with Iced that can't currently be built with Dioxus.
 
 ### Dioxus vs Electron
 

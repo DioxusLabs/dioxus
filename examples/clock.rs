@@ -5,10 +5,8 @@ use async_std::task::sleep;
 use dioxus::prelude::*;
 use web_time::Instant;
 
-const STYLE: &str = asset!("./examples/assets/clock.css");
-
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -36,7 +34,7 @@ fn app() -> Element {
     );
 
     rsx! {
-        head::Link { rel: "stylesheet", href: STYLE }
+        document::Stylesheet { href: asset!("/examples/assets/clock.css") }
         div { id: "app",
             div { id: "title", "Carpe diem 🎉" }
             div { id: "clock-display", "{time}" }

@@ -222,6 +222,46 @@ pub fn remove_future(id: Task) {
 /// In order to clean up resources you would need to implement the [`Drop`] trait for an inner value stored in a RC or similar (Signals for instance),
 /// as these only drop their inner value once all references have been dropped, which only happens when the component is dropped.
 ///
+/// <div class="warning">
+///
+/// `use_hook` is not reactive. It just returns the value on every render. If you need state that will track changes, use [`use_signal`](dioxus::prelude::use_signal) instead.
+///
+/// ❌ Don't use `use_hook` with `Rc<RefCell<T>>` for state. It will not update the UI and other hooks when the state changes.
+/// ```rust
+/// use dioxus::prelude::*;
+/// use std::rc::Rc;
+/// use std::cell::RefCell;
+///
+/// pub fn Comp() -> Element {
+///     let count = use_hook(|| Rc::new(RefCell::new(0)));
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| *count.borrow_mut() += 1,
+///             "{count.borrow()}"
+///         }
+///     }
+/// }
+/// ```
+///
+/// ✅ Use `use_signal` instead.
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// pub fn Comp() -> Element {
+///     let mut count = use_signal(|| 0);
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| count += 1,
+///             "{count}"
+///         }
+///     }
+/// }
+/// ```
+///
+/// </div>
+///
 /// # Example
 ///
 /// ```rust, no_run
@@ -310,6 +350,9 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// This can be used to clean up side effects from the component
 /// (created with [`use_effect`](dioxus::prelude::use_effect)).
 ///
+/// Note:
+/// Effects do not run on the server, but use_drop **DOES**. It runs any time the component is dropped including during SSR rendering on the server. If your clean up logic targets web, the logic has to be gated by a feature, see the below example for details.
+///
 /// Example:
 /// ```rust
 /// use dioxus::prelude::*;
@@ -346,9 +389,12 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///     });
 ///
 ///     use_drop(move || {
-///         /// restore scroll to the top of the page
-///         let window = web_sys::window().unwrap();
-///         window.scroll_with_x_and_y(original_scroll_position(), 0.0);
+///         // This only make sense to web and hence the `web!` macro
+///         web! {
+///             /// restore scroll to the top of the page
+///             let window = web_sys::window().unwrap();
+///             window.scroll_with_x_and_y(original_scroll_position(), 0.0);
+///         }
 ///     });
 ///
 ///     rsx! {

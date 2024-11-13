@@ -78,7 +78,7 @@ where
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct UseFuture {
     task: CopyValue<Task>,
     state: Signal<UseFutureState>,

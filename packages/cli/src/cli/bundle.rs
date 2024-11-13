@@ -1,210 +1,239 @@
-use crate::build::Build;
-use crate::DioxusCrate;
+use crate::{AppBundle, BuildArgs, Builder, DioxusCrate, Platform};
 use anyhow::Context;
-use std::env::current_dir;
-use std::fs::create_dir_all;
-use std::ops::Deref;
-use std::str::FromStr;
-use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
+use std::collections::HashMap;
+use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
 
 use super::*;
 
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
-#[clap(name = "bundle")]
 pub struct Bundle {
     /// The package types to bundle
+    ///
+    /// Any of:
+    /// - macos: The macOS application bundle (.app).
+    /// - ios: The iOS app bundle.
+    /// - msi: The Windows bundle (.msi).
+    /// - nsis: The NSIS bundle (.exe).
+    /// - deb: The Linux Debian package bundle (.deb).
+    /// - rpm: The Linux RPM bundle (.rpm).
+    /// - appimage: The Linux AppImage bundle (.AppImage).
+    /// - dmg: The macOS DMG bundle (.dmg).
+    /// - updater: The Updater bundle.
     #[clap(long)]
-    pub packages: Option<Vec<PackageType>>,
+    pub package_types: Option<Vec<crate::PackageType>>,
+
+    /// The directory in which the final bundle will be placed.
+    ///
+    /// Relative paths will be placed relative to the current working directory.
+    ///
+    /// We will flatten the artifacts into this directory - there will be no differentiation between
+    /// artifacts produced by different platforms.
+    #[clap(long)]
+    pub outdir: Option<PathBuf>,
+
     /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub build_arguments: Build,
-}
-
-impl Deref for Bundle {
-    type Target = Build;
-
-    fn deref(&self) -> &Self::Target {
-        &self.build_arguments
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum PackageType {
-    MacOsBundle,
-    IosBundle,
-    WindowsMsi,
-    Deb,
-    Rpm,
-    AppImage,
-    Dmg,
-    Updater,
-}
-
-impl FromStr for PackageType {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "macos" => Ok(PackageType::MacOsBundle),
-            "ios" => Ok(PackageType::IosBundle),
-            "msi" => Ok(PackageType::WindowsMsi),
-            "deb" => Ok(PackageType::Deb),
-            "rpm" => Ok(PackageType::Rpm),
-            "appimage" => Ok(PackageType::AppImage),
-            "dmg" => Ok(PackageType::Dmg),
-            _ => Err(format!("{} is not a valid package type", s)),
-        }
-    }
-}
-
-impl From<PackageType> for tauri_bundler::PackageType {
-    fn from(val: PackageType) -> Self {
-        match val {
-            PackageType::MacOsBundle => tauri_bundler::PackageType::MacOsBundle,
-            PackageType::IosBundle => tauri_bundler::PackageType::IosBundle,
-            PackageType::WindowsMsi => tauri_bundler::PackageType::WindowsMsi,
-            PackageType::Deb => tauri_bundler::PackageType::Deb,
-            PackageType::Rpm => tauri_bundler::PackageType::Rpm,
-            PackageType::AppImage => tauri_bundler::PackageType::AppImage,
-            PackageType::Dmg => tauri_bundler::PackageType::Dmg,
-            PackageType::Updater => tauri_bundler::PackageType::Updater,
-        }
-    }
+    pub(crate) build_arguments: BuildArgs,
 }
 
 impl Bundle {
-    pub async fn bundle(mut self) -> anyhow::Result<()> {
-        let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
+    pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
+        tracing::info!("Bundling project...");
+
+        let krate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        self.build_arguments.resolve(&mut dioxus_crate)?;
+        // We always use `release` mode for bundling
+        self.build_arguments.release = true;
+        self.build_arguments.resolve(&krate)?;
 
-        // Build the app
-        self.build_arguments.build(&mut dioxus_crate).await?;
+        tracing::info!("Building app...");
 
-        // copy the binary to the out dir
-        let package = dioxus_crate.package();
+        let bundle = Builder::start(&krate, self.build_arguments.clone())?
+            .finish()
+            .await?;
 
-        let mut name: PathBuf = dioxus_crate.executable_name().into();
+        tracing::info!("Copying app to output directory...");
+
+        // If we're building for iOS, we need to bundle the iOS bundle
+        if self.build_arguments.platform() == Platform::Ios && self.package_types.is_none() {
+            self.package_types = Some(vec![crate::PackageType::IosBundle]);
+        }
+
+        let mut cmd_result = StructuredOutput::Success;
+
+        match self.build_arguments.platform() {
+            // By default, mac/win/linux work with tauri bundle
+            Platform::MacOS | Platform::Linux | Platform::Windows => {
+                let bundles = self.bundle_desktop(krate, bundle)?;
+
+                tracing::info!("Bundled app successfully!");
+                tracing::info!("App produced {} outputs:", bundles.len());
+                tracing::debug!("Bundling produced bundles: {:#?}", bundles);
+
+                // Copy the bundles to the output directory and log their locations
+                let mut bundle_paths = vec![];
+                for bundle in bundles {
+                    for src in bundle.bundle_paths {
+                        let src = if let Some(outdir) = &self.outdir {
+                            let dest = outdir.join(src.file_name().unwrap());
+                            crate::fastfs::copy_asset(&src, &dest)?;
+                            dest
+                        } else {
+                            src.clone()
+                        };
+
+                        tracing::info!(
+                            "{} - [{}]",
+                            bundle.package_type.short_name(),
+                            src.display()
+                        );
+
+                        bundle_paths.push(src);
+                    }
+                }
+
+                cmd_result = StructuredOutput::BundleOutput {
+                    bundles: bundle_paths,
+                };
+            }
+
+            Platform::Web => {
+                tracing::info!("App available at: {}", bundle.build.root_dir().display());
+            }
+
+            Platform::Ios => {
+                tracing::warn!("Signed iOS bundles are not yet supported");
+                tracing::info!(
+                    "The bundle is available at: {}",
+                    bundle.build.root_dir().display()
+                );
+            }
+
+            Platform::Server => {
+                tracing::info!("Server available at: {}", bundle.build.root_dir().display())
+            }
+            Platform::Liveview => tracing::info!(
+                "Liveview server available at: {}",
+                bundle.build.root_dir().display()
+            ),
+
+            Platform::Android => {
+                return Err(Error::UnsupportedFeature(
+                    "Android bundles are not yet supported".into(),
+                ));
+            }
+        };
+
+        Ok(cmd_result)
+    }
+
+    fn bundle_desktop(
+        &self,
+        krate: DioxusCrate,
+        bundle: AppBundle,
+    ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
+        _ = std::fs::remove_dir_all(krate.bundle_dir(self.build_arguments.platform()));
+
+        let package = krate.package();
+        let mut name: PathBuf = krate.executable_name().into();
         if cfg!(windows) {
             name.set_extension("exe");
         }
+        std::fs::create_dir_all(krate.bundle_dir(self.build_arguments.platform()))?;
+        std::fs::copy(
+            &bundle.app.exe,
+            krate
+                .bundle_dir(self.build_arguments.platform())
+                .join(krate.executable_name()),
+        )?;
 
-        // bundle the app
         let binaries = vec![
-            tauri_bundler::BundleBinary::new(name.display().to_string(), true)
-                .set_src_path(Some(dioxus_crate.workspace_dir().display().to_string())),
+            // We use the name of the exe but it has to be in the same directory
+            BundleBinary::new(name.display().to_string(), true)
+                .set_src_path(Some(bundle.app.exe.display().to_string())),
         ];
 
-        let mut bundle_settings: BundleSettings = dioxus_crate.dioxus_config.bundle.clone().into();
+        let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
+
         if cfg!(windows) {
-            let windows_icon_override = dioxus_crate
-                .dioxus_config
-                .bundle
-                .windows
-                .as_ref()
-                .map(|w| &w.icon_path);
+            let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
             if windows_icon_override.is_none() {
                 let icon_path = bundle_settings
                     .icon
                     .as_ref()
                     .and_then(|icons| icons.first());
-                let icon_path = if let Some(icon_path) = icon_path {
-                    icon_path.into()
-                } else {
-                    let path = PathBuf::from("./icons/icon.ico");
-                    // create the icon if it doesn't exist
-                    if !path.exists() {
-                        create_dir_all(path.parent().unwrap()).unwrap();
-                        let mut file = File::create(&path).unwrap();
-                        file.write_all(include_bytes!("../../assets/icon.ico"))
-                            .unwrap();
-                    }
-                    path
+
+                if let Some(icon_path) = icon_path {
+                    bundle_settings.icon = Some(vec![icon_path.into()]);
                 };
-                bundle_settings.windows.icon_path = icon_path;
             }
         }
 
-        // Copy the assets in the dist directory to the bundle
-        let static_asset_output_dir = &dioxus_crate.dioxus_config.application.out_dir;
-        // Make sure the dist directory is relative to the crate directory
-        let static_asset_output_dir = static_asset_output_dir
-            .strip_prefix(dioxus_crate.workspace_dir())
-            .unwrap_or(static_asset_output_dir);
-
-        let static_asset_output_dir = static_asset_output_dir.display().to_string();
-        println!("Adding assets from {} to bundle", static_asset_output_dir);
-
-        // Don't copy the executable or the old bundle directory
-        let ignored_files = [
-            dioxus_crate.out_dir().join("bundle"),
-            dioxus_crate.out_dir().join(name),
-        ];
-
-        for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
-            let path = entry.path().canonicalize()?;
-            if ignored_files.iter().any(|f| path.starts_with(f)) {
-                continue;
-            }
-
-            // Tauri bundle will add a __root__ prefix if the input path is absolute even though the output path is relative?
-            // We strip the prefix here to make sure the input path is relative so that the bundler puts the output path in the right place
-            let path = path
-                .strip_prefix(&current_dir()?)
-                .unwrap()
-                .display()
-                .to_string();
-            if let Some(resources) = &mut bundle_settings.resources_map {
-                resources.insert(path, "".to_string());
-            } else {
-                bundle_settings.resources_map = Some([(path, "".to_string())].into());
-            }
+        if bundle_settings.resources_map.is_none() {
+            bundle_settings.resources_map = Some(HashMap::new());
         }
 
-        // Drain any resources set in the config into the resources map. Tauri bundle doesn't let you set both resources and resources_map https://github.com/DioxusLabs/dioxus/issues/2941
+        for entry in std::fs::read_dir(bundle.build.asset_dir())?.flatten() {
+            let old = entry.path().canonicalize()?;
+            let new = PathBuf::from("assets").join(old.file_name().unwrap());
+            tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+
+            bundle_settings
+                .resources_map
+                .as_mut()
+                .expect("to be set")
+                .insert(old.display().to_string(), new.display().to_string());
+        }
+
         for resource_path in bundle_settings.resources.take().into_iter().flatten() {
-            if let Some(resources) = &mut bundle_settings.resources_map {
-                resources.insert(resource_path, "".to_string());
-            } else {
-                bundle_settings.resources_map = Some([(resource_path, "".to_string())].into());
-            }
+            bundle_settings
+                .resources_map
+                .as_mut()
+                .expect("to be set")
+                .insert(resource_path, "".to_string());
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(dioxus_crate.out_dir())
+            .project_out_directory(krate.bundle_dir(self.build_arguments.platform()))
             .package_settings(PackageSettings {
-                product_name: dioxus_crate.dioxus_config.application.name.clone(),
+                product_name: krate.executable_name().to_string(),
                 version: package.version.to_string(),
                 description: package.description.clone().unwrap_or_default(),
                 homepage: Some(package.homepage.clone().unwrap_or_default()),
                 authors: Some(package.authors.clone()),
-                default_run: Some(dioxus_crate.dioxus_config.application.name.clone()),
+                default_run: Some(krate.executable_name().to_string()),
             })
+            .log_level(log::Level::Debug)
             .binaries(binaries)
             .bundle_settings(bundle_settings);
-        if let Some(packages) = &self.packages {
+
+        if let Some(packages) = &self.package_types {
             settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
         }
 
-        if let Some(target) = &self.target_args.target {
+        if let Some(target) = self.build_arguments.target_args.target.as_ref() {
             settings = settings.target(target.to_string());
         }
 
-        let settings = settings.build();
+        if self.build_arguments.platform() == Platform::Ios {
+            settings = settings.target("aarch64-apple-ios".to_string());
+        }
 
-        // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
-        #[cfg(target_os = "macos")]
-        std::env::set_var("CI", "true");
+        let settings = settings.build()?;
+        tracing::debug!("Bundling project with settings: {:#?}", settings);
+        if cfg!(target_os = "macos") {
+            std::env::set_var("CI", "true");
+        }
 
-        tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
-            #[cfg(target_os = "macos")]
-            panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
-            #[cfg(not(target_os = "macos"))]
-            panic!("Failed to bundle project: {:#?}", err);
-        });
+        let bundles = tauri_bundler::bundle::bundle_project(&settings).inspect_err(|err| {
+            tracing::error!("Failed to bundle project: {:#?}", err);
+            if cfg!(target_os = "macos") {
+                tracing::error!("Make sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)");
+            }
+        })?;
 
-        Ok(())
+        Ok(bundles)
     }
 }

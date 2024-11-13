@@ -4,9 +4,8 @@
 
 use std::cell::RefCell;
 
-use dioxus_lib::{html::document::*, prelude::*};
+use dioxus_lib::{document::*, prelude::*};
 use dioxus_ssr::Renderer;
-use generational_box::GenerationalBox;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 
@@ -71,8 +70,8 @@ impl ServerDocument {
 }
 
 impl Document for ServerDocument {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        NoOpDocument.new_evaluator(js)
+    fn eval(&self, js: String) -> Eval {
+        NoOpDocument.eval(js)
     }
 
     fn set_title(&self, title: String) {
@@ -91,6 +90,7 @@ impl Document for ServerDocument {
                 http_equiv: props.http_equiv,
                 content: props.content,
                 property: props.property,
+                ..props.additional_attributes
             }
         });
     }
@@ -98,7 +98,7 @@ impl Document for ServerDocument {
     fn create_script(&self, props: ScriptProps) {
         self.warn_if_streaming();
         self.serialize_for_hydration();
-        let children = props.script_contents();
+        let children = props.script_contents().ok();
         self.0.borrow_mut().script.push(rsx! {
             script {
                 src: props.src,
@@ -110,12 +110,47 @@ impl Document for ServerDocument {
                 nonce: props.nonce,
                 referrerpolicy: props.referrerpolicy,
                 r#type: props.r#type,
+                ..props.additional_attributes,
                 {children}
             }
         });
     }
 
-    fn create_link(&self, props: head::LinkProps) {
+    fn create_style(&self, props: StyleProps) {
+        self.warn_if_streaming();
+        self.serialize_for_hydration();
+        match (&props.href, props.style_contents()) {
+            // The style has inline contents, render it as a style tag
+            (_, Ok(contents)) => self.0.borrow_mut().script.push(rsx! {
+                style {
+                    media: props.media,
+                    nonce: props.nonce,
+                    title: props.title,
+                    ..props.additional_attributes,
+                    {contents}
+                }
+            }),
+            // The style has a href, render it as a link tag
+            (Some(_), _) => {
+                self.0.borrow_mut().script.push(rsx! {
+                    link {
+                        rel: "stylesheet",
+                        href: props.href,
+                        media: props.media,
+                        nonce: props.nonce,
+                        title: props.title,
+                        ..props.additional_attributes,
+                    }
+                });
+            }
+            // The style has neither contents nor src, log an error
+            (None, Err(err)) => {
+                err.log("Style");
+            }
+        }
+    }
+
+    fn create_link(&self, props: LinkProps) {
         self.warn_if_streaming();
         self.serialize_for_hydration();
         self.0.borrow_mut().link.push(rsx! {
@@ -136,9 +171,5 @@ impl Document for ServerDocument {
                 blocking: props.blocking,
             }
         })
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }

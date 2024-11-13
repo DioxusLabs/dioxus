@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 use rand::{thread_rng, Rng};
 
 fn main() {
-    launch(|| {
+    dioxus::launch(|| {
         rsx! {
             div { user_select: "none", webkit_user_select: "none", margin_left: "10%", margin_right: "10%",
                 h1 { "Click die to generate a new value" }

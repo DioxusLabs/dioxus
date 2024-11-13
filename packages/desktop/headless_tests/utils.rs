@@ -17,7 +17,7 @@ pub fn check_app_exits(app: fn() -> Element) {
         }
     });
 
-    LaunchBuilder::desktop()
+    dioxus::LaunchBuilder::desktop()
         .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(false)))
         .launch(app);
 
@@ -50,7 +50,7 @@ pub fn mock_event_with_extra(id: &'static str, value: &'static str, extra: &'sta
                 "#
             );
 
-            eval(&js).await.unwrap();
+            document::eval(&js).await.unwrap();
         });
     })
 }
