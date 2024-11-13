@@ -596,36 +596,6 @@ impl DioxusCrate {
         PATH.clone()
     }
 
-    pub(crate) fn android_llvm_objcopy(&self) -> Option<PathBuf> {
-        self.android_ndk().map(|ndk| {
-            let toolchain_dir = ndk.join("toolchains").join("llvm").join("prebuilt");
-
-            if cfg!(target_os = "macos") {
-                // for whatever reason, even on aarch64 macos, the linker is under darwin-x86_64
-                return toolchain_dir
-                    .join("darwin-x86_64")
-                    .join("bin")
-                    .join("llvm-objcopy");
-            }
-
-            if cfg!(target_os = "windows") {
-                return toolchain_dir
-                    .join("windows-x86_64")
-                    .join("bin")
-                    .join("llvm-objcopy.cmd");
-            }
-
-            if cfg!(target_os = "linux") {
-                return toolchain_dir
-                    .join("linux-x86_64")
-                    .join("bin")
-                    .join("llvm-objcopy");
-            }
-
-            panic!("unsupported target os");
-        })
-    }
-
     pub(crate) fn android_linker(&self) -> Option<PathBuf> {
         // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         self.android_ndk().map(|ndk| {

@@ -463,7 +463,8 @@ impl AppHandle {
             .output()
             .await?;
 
-        // adb shell am start -n dev.dioxuslabs.hardcoded/dev.dioxuslabs.hardcoded.MainActivity
+        // eventually, use the user's MainAcitivty, not our MainAcitivty
+        // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
         let activity_name = format!(
             "{}/dev.dioxus.main.MainActivity",
             self.app.build.krate.full_mobile_app_name(),

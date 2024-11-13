@@ -2,7 +2,6 @@ use crate::Result;
 use crate::{assets::AssetManifest, TraceSrc};
 use crate::{BuildRequest, Platform};
 use anyhow::Context;
-use core::str;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::create_dir_all,
@@ -348,8 +347,6 @@ impl AppBundle {
             //
             // todo(jon): maybe just symlink this rather than copy it?
             Platform::Android => {
-                // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
-                // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
                 self.copy_android_exe(&self.app.exe, &self.main_exe())
                     .await?;
             }
@@ -780,65 +777,11 @@ impl AppBundle {
     /// Copy the Android executable to the target directory, and rename the hardcoded com_hardcoded_dioxuslabs entries
     /// to the user's app name.
     async fn copy_android_exe(&self, source: &Path, destination: &Path) -> Result<()> {
-        // only use this experimetal objcopy if the env var is set
-        if std::env::var("USE_OBJCOPY").is_err() {
-            std::fs::copy(source, destination)?;
-            return Ok(());
-        }
-
-        // gathered by `nm -g target/debug/android-final | grep com_hardcoded_dioxuslabs`
-        let known_symbols = vec![
-            "Java_dev_dioxus_main_Ipc_ipc",
-            "Java_dev_dioxus_main_RustWebChromeClient_handleReceivedTitle",
-            "Java_dev_dioxus_main_RustWebViewClient_assetLoaderDomain",
-            "Java_dev_dioxus_main_RustWebViewClient_handleRequest",
-            "Java_dev_dioxus_main_RustWebViewClient_onPageLoaded",
-            "Java_dev_dioxus_main_RustWebViewClient_onPageLoading",
-            "Java_dev_dioxus_main_RustWebViewClient_shouldOverride",
-            "Java_dev_dioxus_main_RustWebViewClient_withAssetLoader",
-            "Java_dev_dioxus_main_RustWebView_onEval",
-            "Java_dev_dioxus_main_RustWebView_shouldOverride",
-            "Java_dev_dioxus_main_WryActivity_create",
-            "Java_dev_dioxus_main_WryActivity_destroy",
-            "Java_dev_dioxus_main_WryActivity_focus",
-            "Java_dev_dioxus_main_WryActivity_memory",
-            "Java_dev_dioxus_main_WryActivity_pause",
-            "Java_dev_dioxus_main_WryActivity_resume",
-            "Java_dev_dioxus_main_WryActivity_save",
-            "Java_dev_dioxus_main_WryActivity_start",
-            "Java_dev_dioxus_main_WryActivity_stop",
-        ];
-
-        tracing::debug!(
-            "Redefining symbols for Android linker. Source: {source:#?}, target: {destination:#?}"
-        );
-
-        // --redefine-sym=Java_dev_dioxuslabs_hardcoded_WryActivity_create=Java_com_example_DIOXUSLABS_WryActivity_create
-        let redefined_org = self.build.krate.mobile_org().replace(".", "_");
-        let app_name = self.build.krate.mobile_app_name();
-
-        let res = Command::new(self.build.krate.android_llvm_objcopy().unwrap())
-            .args(known_symbols.iter().map(|incoming| {
-                let replaced =
-                    incoming.replace("dev_dioxus_main", &format!("{redefined_org}_{app_name}"));
-                let redefined = format!("--redefine-sym={incoming}={replaced}",);
-                tracing::trace!("redefining symbol {incoming} to {redefined}");
-                redefined
-            }))
-            .arg(source)
-            .arg(destination)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .output()
-            .await?;
-
-        if !res.stderr.is_empty() {
-            tracing::error!(
-                "error running llvm-objcopy {:#?}",
-                str::from_utf8(&res.stderr)
-            );
-        }
-
+        // we might want to eventually use the objcopy logic to handle this
+        //
+        // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
+        // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
+        std::fs::copy(source, destination)?;
         Ok(())
     }
 }

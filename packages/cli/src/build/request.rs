@@ -618,7 +618,7 @@ impl BuildRequest {
 
             // from the apk spec, the root exe is a shared libary
             // we include the user's rust code as a shared library with a fixed namespacea
-            Platform::Android => format!("libdioxusmain.so"),
+            Platform::Android => "libdioxusmain.so".to_string(),
 
             Platform::Web => unimplemented!("there's no main exe on web"), // this will be wrong, I think, but not important?
 
