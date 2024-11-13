@@ -465,8 +465,7 @@ impl AppHandle {
 
         // adb shell am start -n dev.dioxuslabs.hardcoded/dev.dioxuslabs.hardcoded.MainActivity
         let activity_name = format!(
-            "{}/{}.MainActivity",
-            self.app.build.krate.full_mobile_app_name(),
+            "{}/dev.dioxus.main.MainActivity",
             self.app.build.krate.full_mobile_app_name(),
         );
 

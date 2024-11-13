@@ -457,13 +457,15 @@ impl BuildRequest {
         let mut env_vars = vec![];
 
         if self.build.platform() == Platform::Android {
-            let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
-
-            env_vars.push(("WRY_ANDROID_PACKAGE", self.krate.full_mobile_app_name()));
-            env_vars.push(("WRY_ANDROID_LIBRARY", self.krate.mobile_app_name()));
+            env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
+            env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
+            // env_vars.push(("WRY_ANDROID_PACKAGE", self.krate.full_mobile_app_name()));
+            // env_vars.push(("WRY_ANDROID_LIBRARY", self.krate.mobile_app_name()));
             env_vars.push((
                 "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
-                app_kotlin_out.display().to_string(),
+                self.wry_android_kotlin_files_out_dir()
+                    .display()
+                    .to_string(),
             ));
 
             env_vars.push(("RUSTFLAGS", self.android_rust_flags()))
@@ -662,7 +664,7 @@ impl BuildRequest {
             app_name: String,
         }
         let hbs_data = HbsTypes {
-            application_id: self.krate.mobile_app_name(),
+            application_id: self.krate.full_mobile_app_name(),
             app_name: self.krate.mobile_app_name(),
         };
 
@@ -722,7 +724,10 @@ impl BuildRequest {
         write(
             self.wry_android_kotlin_files_out_dir()
                 .join("MainActivity.kt"),
-            include_bytes!("../../assets/android/MainActivity.kt"),
+            hbs.render_template(
+                include_str!("../../assets/android/MainActivity.kt.hbs"),
+                &hbs_data,
+            )?,
         )?;
 
         // Write the res folder
