@@ -459,8 +459,6 @@ impl BuildRequest {
         if self.build.platform() == Platform::Android {
             env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
             env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
-            // env_vars.push(("WRY_ANDROID_PACKAGE", self.krate.full_mobile_app_name()));
-            // env_vars.push(("WRY_ANDROID_LIBRARY", self.krate.mobile_app_name()));
             env_vars.push((
                 "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
                 self.wry_android_kotlin_files_out_dir()
