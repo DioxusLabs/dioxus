@@ -714,7 +714,7 @@ impl AppBundle {
                     display_name: self.build.platform_exe_name(),
                     bundle_name: self.build.platform_exe_name(),
                     executable_name: self.build.platform_exe_name(),
-                    bundle_identifier: format!("com.dioxuslabs.{}", self.build.platform_exe_name()),
+                    bundle_identifier: self.build.krate.bundle_identifier(),
                 },
             )
             .map_err(|e| e.into())
@@ -728,7 +728,7 @@ impl AppBundle {
                     display_name: self.build.platform_exe_name(),
                     bundle_name: self.build.platform_exe_name(),
                     executable_name: self.build.platform_exe_name(),
-                    bundle_identifier: format!("com.dioxuslabs.{}", self.build.platform_exe_name()),
+                    bundle_identifier: self.build.krate.bundle_identifier(),
                 },
             )
             .map_err(|e| e.into())
