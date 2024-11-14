@@ -51,6 +51,12 @@ pub(crate) struct TargetArgs {
     pub(crate) target: Option<String>,
 }
 
+impl TargetArgs {
+    pub(crate) fn arch(&self) -> Arch {
+        self.arch.unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Default, Copy, Clone, PartialEq, Deserialize, clap::ValueEnum)]
 #[non_exhaustive]
 pub(crate) enum Arch {

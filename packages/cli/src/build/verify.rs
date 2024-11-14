@@ -139,12 +139,7 @@ impl BuildRequest {
                 break 'a true;
             };
 
-            let linker = self
-                .build
-                .target_args
-                .arch
-                .unwrap_or_default()
-                .android_linker(&ndk);
+            let linker = self.build.target_args.arch().android_linker(&ndk);
 
             !linker.exists()
         };
