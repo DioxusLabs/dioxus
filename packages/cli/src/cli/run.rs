@@ -11,10 +11,10 @@ pub(crate) struct RunArgs {
 
 impl RunArgs {
     pub(crate) async fn run(mut self) -> Result<StructuredOutput> {
-        let krate = DioxusCrate::new(&self.build_args.target_args)
+        let mut krate = DioxusCrate::new(&self.build_args.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        self.build_args.resolve(&krate)?;
+        self.build_args.resolve(&mut krate)?;
 
         tracing::trace!("Building crate krate data: {:#?}", krate);
         tracing::trace!("Build args: {:#?}", self.build_args);

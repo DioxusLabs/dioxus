@@ -1,5 +1,5 @@
-use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
+use crate::{Arch, CliSettings};
 use crate::{Platform, Result};
 use anyhow::Context;
 use itertools::Itertools;
@@ -18,6 +18,7 @@ pub(crate) struct DioxusCrate {
     pub(crate) config: DioxusConfig,
     pub(crate) target: Target,
     pub(crate) settings: CliSettings,
+    pub(crate) arch: Option<Arch>,
 }
 
 pub(crate) static PROFILE_WASM: &str = "dioxus-wasm";
@@ -52,7 +53,7 @@ impl DioxusCrate {
             .unwrap_or(package_name);
 
         let main_package = &krates[package];
-        let target = main_package
+        let crate_target = main_package
             .targets
             .iter()
             .find(|target| {
@@ -67,8 +68,9 @@ impl DioxusCrate {
             krates: Arc::new(krates),
             package,
             config: dioxus_config,
-            target,
+            target: crate_target,
             settings,
+            arch: target.arch,
         })
     }
 
@@ -600,24 +602,32 @@ impl DioxusCrate {
         // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         self.android_ndk().map(|ndk| {
             let toolchain_dir = ndk.join("toolchains").join("llvm").join("prebuilt");
+            let arch = self.arch.unwrap_or_default();
+            let triplet = arch.android_clang_triplet();
+            let clang_exec = format!("{}24-clang", triplet);
+
+            tracing::trace!("android linker: {}", clang_exec);
 
             if cfg!(target_os = "macos") {
                 // for whatever reason, even on aarch64 macos, the linker is under darwin-x86_64
                 return toolchain_dir
                     .join("darwin-x86_64")
                     .join("bin")
-                    .join("clang");
+                    .join(clang_exec);
             }
 
             if cfg!(target_os = "linux") {
-                return toolchain_dir.join("linux-x86_64").join("bin").join("clang");
+                return toolchain_dir
+                    .join("linux-x86_64")
+                    .join("bin")
+                    .join(clang_exec);
             }
 
             if cfg!(target_os = "windows") {
                 return toolchain_dir
                     .join("windows-x86_64")
                     .join("bin")
-                    .join("clang.exe");
+                    .join(format!("{}.cmd", clang_exec));
             }
 
             unimplemented!("Unsupported target os for android toolchain auodetection")

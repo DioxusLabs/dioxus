@@ -252,7 +252,13 @@ impl BuildRequest {
                     Some(true) => Some("aarch64-apple-ios"),
                     _ => Some("aarch64-apple-ios-sim"),
                 },
-                Platform::Android => Some("aarch64-linux-android"),
+                Platform::Android => Some(
+                    self.build
+                        .target_args
+                        .arch
+                        .unwrap_or_default()
+                        .android_target_triplet(),
+                ),
                 Platform::Server => None,
                 // we're assuming we're building for the native platform for now... if you're cross-compiling
                 // the targets here might be different
@@ -541,7 +547,13 @@ impl BuildRequest {
                 .join("src")
                 .join("main")
                 .join("jniLibs")
-                .join("arm64-v8a"),
+                .join(
+                    self.build
+                        .target_args
+                        .arch
+                        .unwrap_or_default()
+                        .android_jnilib(),
+                ),
 
             // these are all the same, I think?
             Platform::Windows

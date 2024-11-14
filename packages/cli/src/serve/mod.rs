@@ -158,7 +158,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                         screen.push_cargo_log(message);
                     }
                     BuildUpdate::BuildFailed { err } => {
-                        tracing::error!("Build failed: {}", err);
+                        tracing::error!("Build failed: {:?}", err);
                     }
                     BuildUpdate::BuildReady { bundle } => {
                         let handle = runner
