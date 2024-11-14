@@ -5,7 +5,7 @@ pub(crate) fn ChildrenOrLoading(children: Element) -> Element {
     rsx! {
         document::Link {
             rel: "stylesheet",
-            href: asset!("./public/loading.css")
+            href: asset!("/public/loading.css")
         }
         SuspenseBoundary {
             fallback: |context: SuspenseContext| {

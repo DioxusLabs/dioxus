@@ -32,7 +32,7 @@ fn main() {
                 }
                 document::Link {
                     rel: "stylesheet",
-                    href: asset!("./examples/assets/crm.css"),
+                    href: asset!("/examples/assets/crm.css"),
                 }
                 h1 { "Dioxus CRM Example" }
                 Router::<Route> {}
