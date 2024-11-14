@@ -1,5 +1,3 @@
-use once_cell::sync::OnceCell;
-
 use super::*;
 use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 
@@ -62,10 +60,10 @@ impl BuildArgs {
     pub async fn run_cmd(mut self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
-        let mut krate =
+        let krate =
             DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 
-        self.resolve(&mut krate)?;
+        self.resolve(&krate)?;
 
         let bundle = Builder::start(&krate, self.clone())?.finish().await?;
 
@@ -81,7 +79,7 @@ impl BuildArgs {
     ///
     /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
     /// fullstack variant even if they omitted the `--fullstack` flag.
-    pub(crate) fn resolve(&mut self, krate: &mut DioxusCrate) -> Result<()> {
+    pub(crate) fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
         let default_platform = krate.default_platform();
         let auto_platform = krate.autodetect_platform();
 
@@ -151,34 +149,7 @@ impl BuildArgs {
         if self.platform == Some(Platform::Android) && self.target_args.arch.is_none() {
             tracing::debug!("No android arch provided, attempting to auto detect.");
 
-            // Try auto detecting arch through adb.
-            static AUTO_ARCH: OnceCell<Option<Arch>> = OnceCell::new();
-
-            let arch = AUTO_ARCH.get_or_init(|| {
-                // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
-                let output = std::process::Command::new("adb")
-                    .arg("shell")
-                    .arg("uname")
-                    .arg("-m")
-                    .output();
-
-                let out = match output {
-                    Ok(o) => o,
-                    Err(e) => {
-                        tracing::debug!("ADB command failed: {:?}", e);
-                        return None;
-                    }
-                };
-
-                let Ok(out) = String::from_utf8(out.stdout) else {
-                    tracing::debug!("ADB returned unexpected data.");
-                    return None;
-                };
-                let trimmed = out.trim().to_string();
-                tracing::trace!("ADB Returned: `{trimmed:?}`");
-
-                Arch::try_from(trimmed).ok()
-            });
+            let arch = Arch::autodetect();
 
             // Some extra logs
             let arch = match arch {
@@ -200,7 +171,6 @@ impl BuildArgs {
             };
 
             self.target_args.arch = Some(arch);
-            krate.arch = Some(arch);
         }
 
         Ok(())

@@ -114,10 +114,16 @@ impl BuildRequest {
         // We don't want to overwrite the user's .cargo/config.toml since that gets committed to git
         // and we want everyone's install to be the same.
         if self.build.platform() == Platform::Android {
-            let linker = self
+            let ndk = self
                 .krate
-                .android_linker()
+                .android_ndk()
                 .context("Could not autodetect android linker")?;
+            let linker = self
+                .build
+                .target_args
+                .arch
+                .unwrap_or_default()
+                .android_linker(&ndk);
 
             tracing::trace!("Using android linker: {linker:?}");
 

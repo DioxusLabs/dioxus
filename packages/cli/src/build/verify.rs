@@ -134,9 +134,24 @@ impl BuildRequest {
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     pub(crate) async fn verify_android_tooling(&self, _rustup: RustupShow) -> Result<()> {
-        if self.krate.android_linker().is_none() {
+        let failed = 'a: {
+            let Some(ndk) = self.krate.android_ndk() else {
+                break 'a true;
+            };
+
+            let linker = self
+                .build
+                .target_args
+                .arch
+                .unwrap_or_default()
+                .android_linker(&ndk);
+
+            !linker.exists()
+        };
+
+        if failed {
             return Err(anyhow::anyhow!(
-                "Android linker not found. Please set the ANDROID_NDK_HOME environment variable to the root of your NDK installation."
+                "Android linker not found. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation."
             ).into());
         }
 

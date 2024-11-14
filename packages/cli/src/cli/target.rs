@@ -1,3 +1,7 @@
+use std::path::Path;
+
+use once_cell::sync::OnceCell;
+
 use super::*;
 
 /// Information about the target to build
@@ -64,6 +68,37 @@ pub enum Arch {
 }
 
 impl Arch {
+    pub fn autodetect() -> Option<Self> {
+        // Try auto detecting arch through adb.
+        static AUTO_ARCH: OnceCell<Option<Arch>> = OnceCell::new();
+
+        *AUTO_ARCH.get_or_init(|| {
+            // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
+            let output = std::process::Command::new("adb")
+                .arg("shell")
+                .arg("uname")
+                .arg("-m")
+                .output();
+
+            let out = match output {
+                Ok(o) => o,
+                Err(e) => {
+                    tracing::debug!("ADB command failed: {:?}", e);
+                    return None;
+                }
+            };
+
+            let Ok(out) = String::from_utf8(out.stdout) else {
+                tracing::debug!("ADB returned unexpected data.");
+                return None;
+            };
+            let trimmed = out.trim().to_string();
+            tracing::trace!("ADB Returned: `{trimmed:?}`");
+
+            Arch::try_from(trimmed).ok()
+        })
+    }
+
     pub fn android_target_triplet(&self) -> &'static str {
         match self {
             Arch::Arm => "armv7-linux-androideabi",
@@ -87,6 +122,38 @@ impl Arch {
             Self::Arm => "armv7a-linux-androideabi",
             _ => self.android_target_triplet(),
         }
+    }
+
+    pub(crate) fn android_linker(&self, ndk: &Path) -> PathBuf {
+        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
+
+        let toolchain_dir = ndk.join("toolchains").join("llvm").join("prebuilt");
+        let triplet = self.android_clang_triplet();
+        let clang_exec = format!("{}24-clang", triplet);
+
+        if cfg!(target_os = "macos") {
+            // for whatever reason, even on aarch64 macos, the linker is under darwin-x86_64
+            return toolchain_dir
+                .join("darwin-x86_64")
+                .join("bin")
+                .join(clang_exec);
+        }
+
+        if cfg!(target_os = "linux") {
+            return toolchain_dir
+                .join("linux-x86_64")
+                .join("bin")
+                .join(clang_exec);
+        }
+
+        if cfg!(target_os = "windows") {
+            return toolchain_dir
+                .join("windows-x86_64")
+                .join("bin")
+                .join(format!("{}.cmd", clang_exec));
+        }
+
+        unimplemented!("Unsupported target os for android toolchain auodetection")
     }
 }
 
