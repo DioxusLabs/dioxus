@@ -1,5 +1,5 @@
 use super::*;
-use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate, Result};
+use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate, Platform, Result};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -23,8 +23,12 @@ impl RunArgs {
             .finish()
             .await?;
 
-        let devserver_ip = "127.0.0.1:8080".parse().unwrap();
-        let fullstack_ip = "127.0.0.1:8081".parse().unwrap();
+        let devserver_ip = "127.0.0.1:8081".parse().unwrap();
+        let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
+
+        if self.build_args.platform() == Platform::Web || self.build_args.fullstack {
+            tracing::info!("Serving at: {}", fullstack_ip);
+        }
 
         let mut runner = crate::serve::AppRunner::start(&krate);
         runner
