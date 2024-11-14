@@ -44,7 +44,7 @@ impl AssetManifest {
         Ok(())
     }
 
-    /// Fill this manifest from an rlib / ar file that contains many object files and their entryies
+    /// Fill this manifest from an rlib / ar file that contains many object files and their entries
     fn add_from_archive_file(&mut self, archive: &ArchiveFile, data: &[u8]) -> object::Result<()> {
         // Look through each archive member for object files.
         // Read the archive member's binary data (we know it's an object file)

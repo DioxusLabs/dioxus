@@ -77,8 +77,8 @@ members = [
     "packages/playwright-tests/nested-suspense",
 
     # manganis
-    "packages/manganis/manganis",
-    "packages/manganis/manganis-core",
+    "packages/manganis",
+    "packages/manganis-core",
 
 
     # Full project examples
@@ -146,8 +146,8 @@ dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.4" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.4" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.4", default-features = false }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.4" }
-manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.4" }
-manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.4" }
+manganis = { path = "packages/manganis", version = "0.6.0-alpha.4" }
+manganis-core = { path = "packages/manganis-core", version = "0.6.0-alpha.4" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.4" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.4" }
 

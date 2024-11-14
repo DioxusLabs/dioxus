@@ -2,11 +2,30 @@ use const_serialize::{ConstStr, SerializeConst};
 use dioxus_core_types::DioxusFormattable;
 use std::path::PathBuf;
 
+use crate::{CssAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptions};
+
+/// Settings for a generic asset
+#[derive(SerializeConst)]
+#[repr(C, u8)]
+#[non_exhaustive]
+pub enum GenericAssetOptions {
+    /// An image asset
+    Image(ImageAssetOptions),
+    /// A folder asset
+    Folder(FolderAssetOptions),
+    /// A css asset
+    Css(CssAssetOptions),
+    /// A javascript asset
+    Js(JsAssetOptions),
+    /// An unknown asset
+    Unknown,
+}
+
 /// A builder for a generic asset. For configuration options specific to the asset type, see [`image`], [`folder`], [`css`], and [`js`]
 #[derive(SerializeConst)]
 pub struct AssetBuilder {
     local_path: ConstStr,
-    preload: bool,
+    config: GenericAssetOptions,
 }
 
 impl AssetBuilder {
@@ -14,23 +33,13 @@ impl AssetBuilder {
     pub const fn new(local_path: &str) -> Self {
         Self {
             local_path: ConstStr::new(local_path),
-            preload: false,
+            config: GenericAssetOptions::Unknown,
         }
     }
 
-    /// Make the asset preloaded
-    ///
-    /// Preloading an image will make the image start to load as soon as possible. This is useful for images that will be displayed soon after the page loads or images that may not be visible immediately, but should start loading sooner
-    ///
-    /// ```rust
-    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").preload());
-    /// ```
-    #[allow(unused)]
-    pub const fn preload(self) -> Self {
-        Self {
-            preload: true,
-            ..self
-        }
+    /// Set the config for the asset
+    pub const fn with_config(self, config: GenericAssetOptions) -> Self {
+        Self { config, ..self }
     }
 
     /// Finalize the asset builder and return the asset

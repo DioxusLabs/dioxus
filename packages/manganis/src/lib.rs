@@ -1,5 +1,4 @@
-//! Manganis is a Rust library for bundling assets into a final binary.
-
+#![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
 pub use const_serialize;
@@ -15,6 +14,12 @@ pub use builder::*;
 
 mod linker;
 pub use linker::*;
+
+mod css;
+pub use css::*;
+
+mod js;
+pub use js::*;
 
 /// The mg macro collects assets that will be included in the final binary
 ///
