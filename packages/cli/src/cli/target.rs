@@ -1,8 +1,6 @@
-use std::path::Path;
-
-use once_cell::sync::OnceCell;
-
 use super::*;
+use once_cell::sync::OnceCell;
+use std::path::Path;
 
 /// Information about the target to build
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -44,7 +42,7 @@ pub(crate) struct TargetArgs {
     pub(crate) arch: Option<Arch>,
 
     /// Are we building for a device or just the simulator.
-    /// If simulator is false, then we'll build for the simulator
+    /// If device is false, then we'll build for the simulator
     #[clap(long)]
     pub(crate) device: Option<bool>,
 
@@ -55,7 +53,7 @@ pub(crate) struct TargetArgs {
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Deserialize, clap::ValueEnum)]
 #[non_exhaustive]
-pub enum Arch {
+pub(crate) enum Arch {
     // Android: armv7l, armv7-linux-androideabi
     Arm,
     // Android: aarch64, aarch64-linux-android
@@ -68,7 +66,7 @@ pub enum Arch {
 }
 
 impl Arch {
-    pub fn autodetect() -> Option<Self> {
+    pub(crate) fn autodetect() -> Option<Self> {
         // Try auto detecting arch through adb.
         static AUTO_ARCH: OnceCell<Option<Arch>> = OnceCell::new();
 
@@ -99,7 +97,7 @@ impl Arch {
         })
     }
 
-    pub fn android_target_triplet(&self) -> &'static str {
+    pub(crate) fn android_target_triplet(&self) -> &'static str {
         match self {
             Arch::Arm => "armv7-linux-androideabi",
             Arch::Arm64 => "aarch64-linux-android",
@@ -108,7 +106,7 @@ impl Arch {
         }
     }
 
-    pub fn android_jnilib(&self) -> &'static str {
+    pub(crate) fn android_jnilib(&self) -> &'static str {
         match self {
             Arch::Arm => "armeabi-v7a",
             Arch::Arm64 => "arm64-v8a",
@@ -117,7 +115,7 @@ impl Arch {
         }
     }
 
-    pub fn android_clang_triplet(&self) -> &'static str {
+    pub(crate) fn android_clang_triplet(&self) -> &'static str {
         match self {
             Self::Arm => "armv7a-linux-androideabi",
             _ => self.android_target_triplet(),
