@@ -1,9 +1,9 @@
 use const_serialize::SerializeConst;
 
-use crate::GenericAssetOptions;
+use crate::AssetOptions;
 
 /// A builder for a javascript asset. This must be used in the [`mg!`] macro.#[derive(SerializeConst)]
-#[derive(SerializeConst)]
+#[derive(Debug, SerializeConst)]
 pub struct JsAssetOptions {
     minify: bool,
     preload: bool,
@@ -46,7 +46,7 @@ impl JsAssetOptions {
     }
 
     /// Convert the builder into a generic asset
-    pub const fn into_asset_options(self) -> GenericAssetOptions {
-        GenericAssetOptions::Js(self)
+    pub const fn into_asset_options(self) -> AssetOptions {
+        AssetOptions::Js(self)
     }
 }

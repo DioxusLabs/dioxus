@@ -1,85 +1,106 @@
-use serde::{Deserialize, Serialize};
-use std::{
-    hash::{Hash, Hasher},
-    path::PathBuf,
-    time::SystemTime,
-};
+use std::char;
+
+use const_serialize::{ConstStr, SerializeConst};
+
+use crate::{hash::ConstHasher, AssetOptions};
 
 /// The location we'll write to the link section - needs to be serializable
 ///
 /// This basically is 1:1 with `manganis/Asset` but with more metadata to be useful to the macro and cli
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct ResourceAsset {
-    /// The input path `/assets/blah.css`
-    pub input: PathBuf,
-
+#[derive(Debug, SerializeConst)]
+pub struct CLIAsset {
     /// The canonicalized asset
     ///
     /// `Users/dioxus/dev/app/assets/blah.css`
-    pub absolute: PathBuf,
+    pub absolute: ConstStr,
 
-    /// The post-bundle name of the asset - do we include the `assets` name?
-    ///
-    /// `blahcss123.css`
-    pub bundled: String,
+    /// The path that the asset should be written to
+    pub output_path: ConstStr,
+
+    /// The config for the asset at the absolute path
+    pub asset_config: AssetOptions,
 }
 
-#[derive(Debug)]
-pub struct AssetError {}
+impl CLIAsset {
+    /// Create a new asset
+    pub const fn new(
+        input_path: ConstStr,
+        absolute_path: ConstStr,
+        content_hash: u64,
+        asset_config: AssetOptions,
+    ) -> Self {
+        todo!()
+    }
+}
 
-impl ResourceAsset {
-    pub fn parse_any(raw: &str) -> Result<Self, AssetError> {
-        // get the location where the asset is absolute, relative to
-        //
-        // IE
-        // /users/dioxus/dev/app/
-        // is the root of
-        // /users/dioxus/dev/app/assets/blah.css
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-            .map(PathBuf::from)
-            .unwrap();
+/// Format the input path with a hash to create an unique output path for the macro in the form `{input_path}-{hash}.{extension}`
+const fn unique_path(input_path: &str, content_hash: u64, asset_config: &AssetOptions) -> ConstStr {
+    // Format the unique path with the format `{input_path}-{hash}.{extension}`
+    // Start with the input path
+    let mut input_path = ConstStr::new(input_path);
+    // Then strip the prefix from the input path
+    let mut extension = None;
+    if let Some((_, new_input_path)) = input_path.rsplit_once(std::path::MAIN_SEPARATOR) {
+        input_path = new_input_path;
+    }
+    if let Some((new_input_path, new_extension)) = input_path.rsplit_once('.') {
+        extension = Some(new_extension);
+        input_path = new_input_path;
+    }
+    // Then add a dash
+    let mut macro_output_path = input_path.push_str("-");
 
-        // 1. the input file should be a pathbuf
-        let input = PathBuf::from(raw);
+    // Hash the contents along with the asset config to create a unique hash for the asset
+    // When this hash changes, the client needs to re-fetch the asset
+    let mut hasher = ConstHasher::new();
+    hasher = hasher.write(&content_hash.to_le_bytes());
+    hasher = hasher.hash_by_bytes(asset_config);
+    let hash = hasher.finish();
 
-        // 2. absolute path to the asset
-        let absolute = manifest_dir
-            .join(raw.trim_start_matches('/'))
-            .canonicalize()
-            .unwrap();
-
-        // 3. the bundled path is the unique name of the asset
-        let bundled = Self::make_unique_name(absolute.clone());
-
-        Ok(Self {
-            input,
-            absolute,
-            bundled,
-        })
+    // Then add the hash in hex form
+    let hash_bytes = hash.to_le_bytes();
+    let mut i = 0;
+    while i < hash_bytes.len() {
+        let byte = hash_bytes[i];
+        let first = byte >> 4;
+        let second = byte & 0x0f;
+        const fn byte_to_char(byte: u8) -> char {
+            char::from_digit(byte as u32, 16).unwrap()
+        }
+        macro_output_path = macro_output_path.push(byte_to_char(first));
+        macro_output_path = macro_output_path.push(byte_to_char(second));
+        i += 1;
     }
 
-    fn make_unique_name(file_path: PathBuf) -> String {
-        // Create a hasher
-        let mut hash = std::collections::hash_map::DefaultHasher::new();
-
-        // Open the file to get its options
-        let file = std::fs::File::open(&file_path).unwrap();
-        let metadata = file.metadata().unwrap();
-        let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-
-        // Hash a bunch of metadata
-        // name, options, modified time, and maybe the version of our crate
-        // Hash the last time the file was updated and the file source. If either of these change, we need to regenerate the unique name
-        modified.hash(&mut hash);
-        file_path.hash(&mut hash);
-
-        let uuid = hash.finish();
-        let file_name = file_path.file_stem().unwrap().to_string_lossy();
-        let extension = file_path
-            .extension()
-            .map(|f| f.to_string_lossy())
-            .unwrap_or_default();
-
-        format!("{file_name}-{uuid:x}.{extension}")
+    // Finally add the extension
+    match asset_config.extension() {
+        Some(extension) => {
+            macro_output_path = macro_output_path.push('.');
+            macro_output_path = macro_output_path.push_str(extension)
+        }
+        None => {
+            if let Some(extension) = extension {
+                macro_output_path = macro_output_path.push('.');
+                macro_output_path = macro_output_path.push_str(extension.as_str())
+            }
+        }
     }
+
+    macro_output_path
+}
+
+#[test]
+fn test_unique_path() {
+    let input_path = "/some/prefix/test.png";
+    let content_hash = 123456789;
+    let asset_config =
+        AssetOptions::Image(crate::ImageAssetOptions::new().with_format(crate::ImageType::Avif));
+    let output_path = unique_path(input_path, content_hash, &asset_config);
+    assert_eq!(output_path.as_str(), "test-603a88fe296462a3.avif");
+
+    let input_path = "test/ing/test";
+    let content_hash = 123456789;
+    let asset_config = AssetOptions::Unknown;
+    let output_path = unique_path(input_path, content_hash, &asset_config);
+    assert_eq!(output_path.as_str(), "test-c8c4cfad21cac262");
 }

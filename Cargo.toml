@@ -79,7 +79,7 @@ members = [
     # manganis
     "packages/manganis",
     "packages/manganis-core",
-
+    "packages/manganis-macro",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -148,6 +148,7 @@ dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.4
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.4" }
 manganis = { path = "packages/manganis", version = "0.6.0-alpha.4" }
 manganis-core = { path = "packages/manganis-core", version = "0.6.0-alpha.4" }
+manganis-macro = { path = "packages/manganis-macro", version = "0.6.0-alpha.4" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.4" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.4" }
 

@@ -1,9 +1,9 @@
 use const_serialize::SerializeConst;
 
-use crate::GenericAssetOptions;
+use crate::AssetOptions;
 
 /// A builder for a css asset. This must be used in the [`mg!`] macro.
-#[derive(SerializeConst)]
+#[derive(Debug, SerializeConst)]
 pub struct CssAssetOptions {
     minify: bool,
     preload: bool,
@@ -46,7 +46,7 @@ impl CssAssetOptions {
     }
 
     /// Convert the builder into a generic asset
-    pub const fn into_asset_options(self) -> GenericAssetOptions {
-        GenericAssetOptions::Css(self)
+    pub const fn into_asset_options(self) -> AssetOptions {
+        AssetOptions::Css(self)
     }
 }

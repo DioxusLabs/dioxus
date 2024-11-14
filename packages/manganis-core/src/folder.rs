@@ -1,9 +1,9 @@
 use const_serialize::SerializeConst;
 
-use crate::GenericAssetOptions;
+use crate::AssetOptions;
 
 /// The builder for [`FolderAsset`]
-#[derive(SerializeConst)]
+#[derive(Debug, SerializeConst)]
 pub struct FolderAssetOptions {}
 
 impl FolderAssetOptions {
@@ -13,7 +13,7 @@ impl FolderAssetOptions {
     }
 
     /// Convert the builder into a generic asset
-    pub const fn into_asset_options(self) -> GenericAssetOptions {
-        GenericAssetOptions::Folder(self)
+    pub const fn into_asset_options(self) -> AssetOptions {
+        AssetOptions::Folder(self)
     }
 }

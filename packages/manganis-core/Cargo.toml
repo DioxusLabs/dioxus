@@ -15,3 +15,4 @@ keywords = ["dom", "ui", "gui", "assets"]
 [dependencies]
 serde_json = "1.0"
 serde = { workspace = true, features = ["derive"] }
+const-serialize.workspace = true

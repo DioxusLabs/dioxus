@@ -237,6 +237,254 @@ impl ConstStr {
             ),
         }
     }
+
+    pub const fn push(self, byte: char) -> Self {
+        assert!(byte.is_ascii(), "Only ASCII bytes are supported");
+        let (bytes, len) = char_to_bytes(byte);
+        let (str, _) = bytes.split_at(len);
+        let Ok(str) = std::str::from_utf8(str) else {
+            panic!("Invalid utf8; char_to_bytes should always return valid utf8 bytes")
+        };
+        self.push_str(str)
+    }
+
+    pub const fn push_str(mut self, str: &str) -> Self {
+        let bytes = str.as_bytes();
+        self = Self {
+            bytes: self.bytes.extend(bytes),
+        };
+        self
+    }
+
+    pub const fn split_at(self, index: usize) -> (Self, Self) {
+        let (left, right) = self.bytes.split_at(index);
+        (Self { bytes: left }, Self { bytes: right })
+    }
+
+    pub const fn rsplit_once(&self, char: char) -> Option<(Self, Self)> {
+        let str = self.as_str();
+        let mut index = str.len() - 1;
+        // First find the bytes we are searching for
+        let (char_bytes, len) = char_to_bytes(char);
+        let (char_bytes, _) = char_bytes.split_at(len);
+        let bytes = str.as_bytes();
+
+        // Then walk backwards from the end of the string
+        loop {
+            let byte = bytes[index];
+            // Look for char boundaries in the string and check if the bytes match
+            if let Some(char_boundary_len) = utf8_char_boundary_to_char_len(byte) {
+                // Split up the string into three sections: [before_char, in_char, after_char]
+                let (before_char, after_index) = bytes.split_at(index);
+                let (in_char, after_char) = after_index.split_at(char_boundary_len as usize);
+                if in_char.len() != char_boundary_len as usize {
+                    panic!("in_char.len() should always be equal to char_boundary_len as usize")
+                }
+                // Check if the bytes for the current char and the target char match
+                let mut in_char_eq = true;
+                let mut i = 0;
+                let min_len = if in_char.len() < char_bytes.len() {
+                    in_char.len()
+                } else {
+                    char_bytes.len()
+                };
+                while i < min_len {
+                    in_char_eq &= in_char[i] == char_bytes[i];
+                    i += 1;
+                }
+                // If they do, convert the bytes to strings and return the split strings
+                if in_char_eq {
+                    let Ok(before_char_str) = std::str::from_utf8(before_char) else {
+                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                    };
+                    let Ok(after_char_str) = std::str::from_utf8(after_char) else {
+                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                    };
+                    return Some((Self::new(before_char_str), Self::new(after_char_str)));
+                }
+            }
+            match index.checked_sub(1) {
+                Some(new_index) => index = new_index,
+                None => return None,
+            }
+        }
+    }
+
+    pub const fn split_once(&self, char: char) -> Option<(Self, Self)> {
+        let str = self.as_str();
+        let mut index = 0;
+        // First find the bytes we are searching for
+        let (char_bytes, len) = char_to_bytes(char);
+        let (char_bytes, _) = char_bytes.split_at(len);
+        let bytes = str.as_bytes();
+
+        // Then walk forwards from the start of the string
+        while index < bytes.len() {
+            let byte = bytes[index];
+            // Look for char boundaries in the string and check if the bytes match
+            if let Some(char_boundary_len) = utf8_char_boundary_to_char_len(byte) {
+                // Split up the string into three sections: [before_char, in_char, after_char]
+                let (before_char, after_index) = bytes.split_at(index);
+                let (in_char, after_char) = after_index.split_at(char_boundary_len as usize);
+                if in_char.len() != char_boundary_len as usize {
+                    panic!("in_char.len() should always be equal to char_boundary_len as usize")
+                }
+                // Check if the bytes for the current char and the target char match
+                let mut in_char_eq = true;
+                let mut i = 0;
+                let min_len = if in_char.len() < char_bytes.len() {
+                    in_char.len()
+                } else {
+                    char_bytes.len()
+                };
+                while i < min_len {
+                    in_char_eq &= in_char[i] == char_bytes[i];
+                    i += 1;
+                }
+                // If they do, convert the bytes to strings and return the split strings
+                if in_char_eq {
+                    let Ok(before_char_str) = std::str::from_utf8(before_char) else {
+                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                    };
+                    let Ok(after_char_str) = std::str::from_utf8(after_char) else {
+                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                    };
+                    return Some((Self::new(before_char_str), Self::new(after_char_str)));
+                }
+            }
+            index += 1
+        }
+        None
+    }
+}
+
+#[test]
+fn test_rsplit_once() {
+    let str = ConstStr::new("hello");
+    assert_eq!(
+        str.rsplit_once('l'),
+        Some((ConstStr::new("hel"), ConstStr::new("o")))
+    );
+    assert_eq!(
+        str.rsplit_once('o'),
+        Some((ConstStr::new("hell"), ConstStr::new("")))
+    );
+    assert_eq!(
+        str.rsplit_once('e'),
+        Some((ConstStr::new("h"), ConstStr::new("llo")))
+    );
+
+    let unicode_str = ConstStr::new("h😀ell😀o😀o");
+    assert_eq!(
+        unicode_str.rsplit_once('😀'),
+        Some((ConstStr::new("h😀ell😀o"), ConstStr::new("o")))
+    );
+    assert_eq!(
+        unicode_str.rsplit_once('o'),
+        Some((ConstStr::new("h😀ell😀o😀"), ConstStr::new("")))
+    );
+    assert_eq!(unicode_str.rsplit_once('❌'), None);
+
+    for _ in 0..100 {
+        let random_str: String = (0..rand::random::<u8>() % 50)
+            .map(|_| rand::random::<char>())
+            .collect();
+        let konst = ConstStr::new(&random_str);
+        let mut seen_chars = std::collections::HashSet::new();
+        for char in random_str.chars().rev() {
+            let (char_bytes, len) = char_to_bytes(char);
+            let char_bytes = &char_bytes[..len];
+            assert_eq!(char_bytes, char.to_string().as_bytes());
+            if seen_chars.contains(&char) {
+                continue;
+            }
+            seen_chars.insert(char);
+            let (correct_left, correct_right) = random_str.rsplit_once(char).unwrap();
+            let (left, right) = konst.rsplit_once(char).unwrap();
+            println!("splitting {random_str:?} at {char:?}");
+            assert_eq!(left.as_str(), correct_left);
+            assert_eq!(right.as_str(), correct_right);
+        }
+    }
+}
+
+const CONTINUED_CHAR_MASK: u8 = 0b10000000;
+const BYTE_CHAR_BOUNDARIES: [u8; 4] = [0b00000000, 0b11000000, 0b11100000, 0b11110000];
+
+// Const version of https://doc.rust-lang.org/src/core/char/methods.rs.html#1765-1797
+const fn char_to_bytes(char: char) -> ([u8; 4], usize) {
+    let code = char as u32;
+    let len = char.len_utf8();
+    let mut bytes = [0; 4];
+    match len {
+        1 => {
+            bytes[0] = code as u8;
+        }
+        2 => {
+            bytes[0] = (code >> 6 & 0x1F) as u8 | BYTE_CHAR_BOUNDARIES[1];
+            bytes[1] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+        }
+        3 => {
+            bytes[0] = (code >> 12 & 0x0F) as u8 | BYTE_CHAR_BOUNDARIES[2];
+            bytes[1] = (code >> 6 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[2] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+        }
+        4 => {
+            bytes[0] = (code >> 18 & 0x07) as u8 | BYTE_CHAR_BOUNDARIES[3];
+            bytes[1] = (code >> 12 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[2] = (code >> 6 & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+            bytes[3] = (code & 0x3F) as u8 | CONTINUED_CHAR_MASK;
+        }
+        _ => panic!(
+            "encode_utf8: need more than 4 bytes to encode the unicode character, but the buffer has 4 bytes"
+        ),
+    };
+    (bytes, len)
+}
+
+#[test]
+fn fuzz_char_to_bytes() {
+    use std::char;
+    for _ in 0..1000 {
+        let char = rand::random::<char>();
+        let (bytes, len) = char_to_bytes(char);
+        let str = std::str::from_utf8(&bytes[..len]).unwrap();
+        assert_eq!(char.to_string(), str);
+    }
+}
+
+const fn utf8_char_boundary_to_char_len(byte: u8) -> Option<u8> {
+    match byte {
+        0b00000000..0b10000000 => Some(1),
+        0b11000000..0b11100000 => Some(2),
+        0b11100000..0b11110000 => Some(3),
+        0b11110000..0b11111000 => Some(4),
+        _ => None,
+    }
+}
+
+#[test]
+fn fuzz_utf8_byte_to_char_len() {
+    for _ in 0..1000 {
+        let random_string: String = (0..rand::random::<u8>())
+            .map(|_| rand::random::<char>())
+            .collect();
+        let bytes = random_string.as_bytes();
+        let chars: std::collections::HashMap<_, _> = random_string.char_indices().collect();
+        for (i, byte) in bytes.iter().enumerate() {
+            match utf8_char_boundary_to_char_len(*byte) {
+                Some(char_len) => {
+                    let char = chars
+                        .get(&i)
+                        .unwrap_or_else(|| panic!("{byte:b} is not a character boundary"));
+                    assert_eq!(char.len_utf8(), char_len as usize);
+                }
+                None => {
+                    assert!(!chars.contains_key(&i), "{byte:b} is a character boundary");
+                }
+            }
+        }
+    }
 }
 
 /// Serialize a struct that is stored at the pointer passed in

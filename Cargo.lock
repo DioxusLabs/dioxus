@@ -2446,6 +2446,7 @@ version = "0.6.0-alpha.4"
 dependencies = [
  "const-serialize",
  "const-serialize-macro",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -7200,8 +7201,21 @@ dependencies = [
 name = "manganis-core"
 version = "0.6.0-alpha.4"
 dependencies = [
+ "const-serialize",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "manganis-macro"
+version = "0.6.0-alpha.4"
+dependencies = [
+ "manganis-core",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn 2.0.87",
 ]
 
 [[package]]

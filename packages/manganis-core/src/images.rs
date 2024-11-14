@@ -1,6 +1,6 @@
 use const_serialize::SerializeConst;
 
-use crate::GenericAssetOptions;
+use crate::AssetOptions;
 
 /// The type of an image. You can read more about the tradeoffs between image formats [here](https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types)
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
@@ -14,10 +14,12 @@ pub enum ImageType {
     Webp,
     /// An avif image. Avif images can compress slightly better than webp images but are not supported by all browsers
     Avif,
+    /// An unknown image type
+    Unknown,
 }
 
 /// The size of an image asset
-#[derive(SerializeConst)]
+#[derive(Debug, SerializeConst)]
 #[repr(C, u8)]
 pub enum ImageSize {
     /// A manual size in pixels
@@ -32,7 +34,7 @@ pub enum ImageSize {
 }
 
 /// A builder for an image asset. This must be used in the [`mg!`] macro.
-#[derive(SerializeConst)]
+#[derive(Debug, SerializeConst)]
 pub struct ImageAssetOptions {
     ty: ImageType,
     low_quality_preview: bool,
@@ -41,6 +43,16 @@ pub struct ImageAssetOptions {
 }
 
 impl ImageAssetOptions {
+    /// Create a new image asset options
+    pub const fn new() -> Self {
+        Self {
+            ty: ImageType::Unknown,
+            low_quality_preview: false,
+            size: ImageSize::Automatic,
+            preload: false,
+        }
+    }
+
     /// Make the asset preloaded
     ///
     /// Preloading an image will make the image start to load as soon as possible. This is useful for images that will be displayed soon after the page loads or images that may not be visible immediately, but should start loading sooner
@@ -97,7 +109,17 @@ impl ImageAssetOptions {
     // }
 
     /// Convert the builder into a generic asset
-    pub const fn into_asset_options(self) -> GenericAssetOptions {
-        GenericAssetOptions::Image(self)
+    pub const fn into_asset_options(self) -> AssetOptions {
+        AssetOptions::Image(self)
+    }
+
+    pub(crate) const fn extension(&self) -> Option<&'static str> {
+        match self.ty {
+            ImageType::Png => Some("png"),
+            ImageType::Jpg => Some("jpg"),
+            ImageType::Webp => Some("webp"),
+            ImageType::Avif => Some("avif"),
+            ImageType::Unknown => None,
+        }
     }
 }

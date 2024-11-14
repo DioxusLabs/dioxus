@@ -82,6 +82,18 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         self
     }
 
+    pub const fn extend(mut self, other: &[T]) -> Self
+    where
+        T: Copy,
+    {
+        let mut i = 0;
+        while i < other.len() {
+            self = self.push(other[i]);
+            i += 1;
+        }
+        self
+    }
+
     pub const fn get(&self, index: usize) -> Option<&T> {
         if index < self.len {
             Some(unsafe { &*self.memory[index].as_ptr() })
@@ -150,6 +162,28 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
 
     pub const fn into_parts(self) -> ([MaybeUninit<T>; MAX_SIZE], usize) {
         (self.memory, self.len)
+    }
+
+    pub const fn split_at(&self, index: usize) -> (Self, Self)
+    where
+        T: Copy,
+    {
+        assert!(index <= self.len);
+        let slice = self.as_ref();
+        let (left, right) = slice.split_at(index);
+        let mut left_vec = Self::new();
+        let mut i = 0;
+        while i < left.len() {
+            left_vec = left_vec.push(left[i]);
+            i += 1;
+        }
+        let mut right_vec = Self::new();
+        i = 0;
+        while i < right.len() {
+            right_vec = right_vec.push(right[i]);
+            i += 1;
+        }
+        (left_vec, right_vec)
     }
 }
 

@@ -1,25 +1,72 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
+use std::path::PathBuf;
+
 pub use const_serialize;
 
-mod folder;
-pub use folder::*;
+use dioxus_core_types::DioxusFormattable;
 
-mod images;
-pub use images::*;
+/// Asset
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash)]
+pub struct Asset {
+    /// The input URI given to the macro
+    pub input: &'static str,
+}
 
-mod builder;
-pub use builder::*;
+impl Asset {
+    /// Create a new asset
+    pub const fn new(self) -> Self {
+        self
+    }
 
-mod linker;
-pub use linker::*;
+    /// Get the path to the asset
+    pub fn path(&self) -> PathBuf {
+        PathBuf::from(self.input.to_string())
+    }
 
-mod css;
-pub use css::*;
+    /// Get the path to the asset
+    pub fn relative_path(&self) -> PathBuf {
+        PathBuf::from(self.input.trim_start_matches('/').to_string())
+    }
 
-mod js;
-pub use js::*;
+    /// Return a canonicalized path to the asset
+    ///
+    /// Attempts to resolve it against an `assets` folder in the current directory.
+    /// If that doesn't exist, it will resolve against the cargo manifest dir
+    pub fn resolve(&self) -> PathBuf {
+        // If the asset is relative, we resolve the asset at the current directory
+        if !dioxus_core_types::is_bundled_app() {
+            return PathBuf::from(self.local);
+        }
+
+        // Otherwise presumably we're bundled and we can use the bundled path
+        PathBuf::from("/assets/").join(PathBuf::from(self.bundled.trim_start_matches('/')))
+    }
+}
+
+impl From<Asset> for String {
+    fn from(value: Asset) -> Self {
+        value.to_string()
+    }
+}
+impl From<Asset> for Option<String> {
+    fn from(value: Asset) -> Self {
+        Some(value.to_string())
+    }
+}
+
+impl std::fmt::Display for Asset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.resolve().display())
+    }
+}
+
+impl DioxusFormattable for Asset {
+    fn format(&self) -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Owned(self.to_string())
+    }
+}
 
 /// The mg macro collects assets that will be included in the final binary
 ///
