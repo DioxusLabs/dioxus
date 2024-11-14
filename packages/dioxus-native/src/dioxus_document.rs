@@ -7,8 +7,8 @@ use blitz_dom::{
     local_name, namespace_url,
     net::Resource,
     node::NodeSpecificData,
-    ns, Atom, Document, DocumentLike, ElementNodeData, Node, NodeData, QualName, Viewport,
-    DEFAULT_CSS,
+    ns, Atom, ColorScheme, Document, DocumentLike, ElementNodeData, Node, NodeData, QualName,
+    Viewport, DEFAULT_CSS,
 };
 
 use blitz_traits::net::NetProvider;
@@ -373,7 +373,7 @@ impl DioxusDocument {
         vdom: VirtualDom,
         net_provider: Option<Arc<dyn NetProvider<Data = Resource>>>,
     ) -> Self {
-        let viewport = Viewport::new(0, 0, 1.0);
+        let viewport = Viewport::new(0, 0, 1.0, ColorScheme::Light);
         let mut doc = Document::new(viewport);
 
         // Set net provider
