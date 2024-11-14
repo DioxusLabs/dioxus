@@ -1,6 +1,6 @@
-use manganis_core::ResourceAsset;
+use manganis_core::{AssetParseError, ResourceAsset};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     LitStr,
@@ -8,7 +8,7 @@ use syn::{
 
 pub struct AssetParser {
     /// The asset itself
-    asset: ResourceAsset,
+    asset: Result<ResourceAsset, AssetParseError>,
 
     /// The source of the trailing options
     options: TokenStream2,
@@ -36,7 +36,7 @@ impl Parse for AssetParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // And then parse the options
         let src = input.parse::<LitStr>()?;
-        let asset = ResourceAsset::parse_any(&src.value()).unwrap();
+        let asset = ResourceAsset::parse_any(&src.value());
         let options = input.parse()?;
 
         Ok(Self { asset, options })
@@ -60,23 +60,32 @@ impl ToTokens for AssetParser {
     // a limitation from rust itself. We technically could support them but not without some hoops
     // to jump through
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let asset = match self.asset.as_ref() {
+            Ok(asset) => asset,
+            Err(err) => {
+                let err = err.to_string();
+                tokens.append_all(quote! { compile_error!(#err) });
+                return;
+            }
+        };
+
         // 1. the link section itself
-        let link_section = crate::generate_link_section(&self.asset);
+        let link_section = crate::generate_link_section(&asset);
 
         // 2. original
-        let input = self.asset.input.display().to_string();
+        let input = asset.input.display().to_string();
 
         // 3. resolved on the user's system
-        let local = self.asset.absolute.display().to_string();
+        let local = asset.absolute.display().to_string();
 
         // 4. bundled
-        let bundled = self.asset.bundled.to_string();
+        let bundled = asset.bundled.to_string();
 
         // 5. source tokens
         let option_source = &self.options;
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
-        let method = if self.asset.input.is_relative() {
+        let method = if asset.input.is_relative() {
             quote::quote! { new_relative }
         } else {
             quote::quote! { new }

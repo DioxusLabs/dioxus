@@ -19,7 +19,7 @@ fn main() {
         rsx! {
             document::Link {
                 rel: "stylesheet",
-                href: asset!("./public/tailwind.css")
+                href: asset!("/public/tailwind.css")
             }
 
             ChildrenOrLoading {

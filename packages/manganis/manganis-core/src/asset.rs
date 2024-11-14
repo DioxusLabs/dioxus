@@ -24,11 +24,8 @@ pub struct ResourceAsset {
     pub bundled: String,
 }
 
-#[derive(Debug)]
-pub struct AssetError {}
-
 impl ResourceAsset {
-    pub fn parse_any(raw: &str) -> Result<Self, AssetError> {
+    pub fn parse_any(raw: &str) -> Result<Self, AssetParseError> {
         // get the location where the asset is absolute, relative to
         //
         // IE
@@ -43,13 +40,17 @@ impl ResourceAsset {
         let input = PathBuf::from(raw);
 
         // 2. absolute path to the asset
-        let absolute = manifest_dir
-            .join(raw.trim_start_matches('/'))
-            .canonicalize()
-            .unwrap();
+        let absolute = manifest_dir.join(raw.trim_start_matches('/'));
+        let absolute =
+            absolute
+                .canonicalize()
+                .map_err(|err| AssetParseError::AssetDoesntExist {
+                    err,
+                    path: absolute,
+                })?;
 
         // 3. the bundled path is the unique name of the asset
-        let bundled = Self::make_unique_name(absolute.clone());
+        let bundled = Self::make_unique_name(absolute.clone())?;
 
         Ok(Self {
             input,
@@ -58,14 +59,16 @@ impl ResourceAsset {
         })
     }
 
-    fn make_unique_name(file_path: PathBuf) -> String {
+    fn make_unique_name(file_path: PathBuf) -> Result<String, AssetParseError> {
         // Create a hasher
         let mut hash = std::collections::hash_map::DefaultHasher::new();
 
         // Open the file to get its options
-        let file = std::fs::File::open(&file_path).unwrap();
-        let metadata = file.metadata().unwrap();
-        let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        let file = std::fs::File::open(&file_path).map_err(AssetParseError::FailedToReadAsset)?;
+        let modified = file
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
 
         // Hash a bunch of metadata
         // name, options, modified time, and maybe the version of our crate
@@ -74,12 +77,42 @@ impl ResourceAsset {
         file_path.hash(&mut hash);
 
         let uuid = hash.finish();
-        let file_name = file_path.file_stem().unwrap().to_string_lossy();
+        let file_name = file_path
+            .file_stem()
+            .expect("file_path should have a file_stem")
+            .to_string_lossy();
+
         let extension = file_path
             .extension()
             .map(|f| f.to_string_lossy())
             .unwrap_or_default();
 
-        format!("{file_name}-{uuid:x}.{extension}")
+        Ok(format!("{file_name}-{uuid:x}.{extension}"))
+    }
+}
+
+#[derive(Debug)]
+pub enum AssetParseError {
+    ParseError(String),
+    AssetDoesntExist {
+        err: std::io::Error,
+        path: std::path::PathBuf,
+    },
+    FailedToReadAsset(std::io::Error),
+    FailedToReadMetadata(std::io::Error),
+}
+
+impl std::fmt::Display for AssetParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AssetParseError::ParseError(err) => write!(f, "Failed to parse asset: {}", err),
+            AssetParseError::AssetDoesntExist { err, path } => {
+                write!(f, "Asset at {} doesn't exist: {}", path.display(), err)
+            }
+            AssetParseError::FailedToReadAsset(err) => write!(f, "Failed to read asset: {}", err),
+            AssetParseError::FailedToReadMetadata(err) => {
+                write!(f, "Failed to read asset metadata: {}", err)
+            }
+        }
     }
 }
