@@ -1,20 +1,65 @@
 #![allow(dead_code)]
 use std::{fmt::Debug, mem::MaybeUninit};
 
-const MAX_SIZE: usize = 2usize.pow(10);
+use crate::{
+    Layout, ListEncoding, PrimitiveEncoding, SerializeConst, StructEncoding, StructFieldEncoding,
+};
 
-pub struct ConstVec<T> {
+const DEFAULT_MAX_SIZE: usize = 2usize.pow(10);
+
+pub struct ConstVec<T, const MAX_SIZE: usize = DEFAULT_MAX_SIZE> {
     memory: [MaybeUninit<T>; MAX_SIZE],
     len: usize,
 }
 
-impl<T> Default for ConstVec<T> {
+unsafe impl<T: SerializeConst, const MAX_SIZE: usize> SerializeConst for ConstVec<T, MAX_SIZE> {
+    const MEMORY_LAYOUT: Layout = Layout::Struct(StructEncoding {
+        size: std::mem::size_of::<Self>(),
+        data: &[
+            StructFieldEncoding::new(
+                std::mem::offset_of!(Self, len),
+                Layout::Primitive(PrimitiveEncoding {
+                    size: std::mem::size_of::<u32>(),
+                }),
+            ),
+            StructFieldEncoding::new(
+                std::mem::offset_of!(Self, memory),
+                Layout::List(ListEncoding {
+                    len: std::mem::size_of::<[MaybeUninit<T>; MAX_SIZE]>(),
+                    item_encoding: &Layout::Primitive(PrimitiveEncoding {
+                        size: std::mem::size_of::<u8>(),
+                    }),
+                }),
+            ),
+        ],
+    });
+}
+
+impl<T: Clone, const MAX_SIZE: usize> Clone for ConstVec<T, MAX_SIZE> {
+    fn clone(&self) -> Self {
+        let mut cloned = Self::new();
+        for i in 0..self.len {
+            cloned = cloned.push(self.get(i).unwrap().clone());
+        }
+        cloned
+    }
+}
+
+impl<T: Copy, const MAX_SIZE: usize> Copy for ConstVec<T, MAX_SIZE> {}
+
+impl<T: PartialEq, const MAX_SIZE: usize> PartialEq for ConstVec<T, MAX_SIZE> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref() == other.as_ref()
+    }
+}
+
+impl<T, const MAX_SIZE: usize> Default for ConstVec<T, MAX_SIZE> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Debug> Debug for ConstVec<T> {
+impl<T: Debug, const MAX_SIZE: usize> Debug for ConstVec<T, MAX_SIZE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConstVec")
             .field("len", &self.len)
@@ -23,7 +68,7 @@ impl<T: Debug> Debug for ConstVec<T> {
     }
 }
 
-impl<T> ConstVec<T> {
+impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     pub const fn new() -> Self {
         Self {
             memory: unsafe { MaybeUninit::uninit().assume_init() },

@@ -5,6 +5,7 @@ mod const_vec;
 
 pub use const_buffers::{ConstReadBuffer, ConstWriteBuffer};
 pub use const_serialize_macro::SerializeConst;
+use const_vec::ConstVec;
 
 /// Plain old data for a field. Stores the offset of the field in the struct and the encoding of the field.
 #[derive(Debug, Copy, Clone)]
@@ -202,25 +203,33 @@ const MAX_STR_SIZE: usize = 256;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct ConstStr {
-    len: u32,
-    bytes: [u8; MAX_STR_SIZE],
+    bytes: ConstVec<u8, MAX_STR_SIZE>,
+}
+
+unsafe impl SerializeConst for ConstStr {
+    const MEMORY_LAYOUT: Layout = Layout::Struct(StructEncoding {
+        size: std::mem::size_of::<Self>(),
+        data: &[StructFieldEncoding::new(
+            std::mem::offset_of!(Self, bytes),
+            ConstVec::<u8, MAX_STR_SIZE>::MEMORY_LAYOUT,
+        )],
+    });
 }
 
 impl ConstStr {
     pub const fn new(s: &str) -> Self {
         let str_bytes = s.as_bytes();
-        let len = str_bytes.len() as u32;
-        let mut bytes = [0; MAX_STR_SIZE];
+        let mut bytes = ConstVec::new();
         let mut i = 0;
         while i < str_bytes.len() {
-            bytes[i] = str_bytes[i];
+            bytes = bytes.push(str_bytes[i]);
             i += 1;
         }
-        Self { len, bytes }
+        Self { bytes }
     }
 
     pub const fn as_str(&self) -> &str {
-        let str_bytes = self.bytes.split_at(self.len as usize).0;
+        let str_bytes = self.bytes.as_ref().split_at(self.bytes.len() as usize).0;
         match std::str::from_utf8(str_bytes) {
             Ok(s) => s,
             Err(_) => panic!(
@@ -228,29 +237,6 @@ impl ConstStr {
             ),
         }
     }
-}
-
-unsafe impl SerializeConst for ConstStr {
-    const MEMORY_LAYOUT: Layout = Layout::Struct(StructEncoding {
-        size: std::mem::size_of::<Self>(),
-        data: &[
-            StructFieldEncoding::new(
-                std::mem::offset_of!(Self, len),
-                Layout::Primitive(PrimitiveEncoding {
-                    size: std::mem::size_of::<u32>(),
-                }),
-            ),
-            StructFieldEncoding::new(
-                std::mem::offset_of!(Self, bytes),
-                Layout::List(ListEncoding {
-                    len: MAX_STR_SIZE,
-                    item_encoding: &Layout::Primitive(PrimitiveEncoding {
-                        size: std::mem::size_of::<u8>(),
-                    }),
-                }),
-            ),
-        ],
-    });
 }
 
 /// Serialize a struct that is stored at the pointer passed in
