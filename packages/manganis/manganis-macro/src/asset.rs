@@ -19,13 +19,13 @@ impl Parse for AssetParser {
     //
     // This gives you the Asset type - it's generic and basically unrefined
     // ```
-    // asset!("myfile.png")
+    // asset!("/assets/myfile.png")
     // ```
     //
     // To narrow the type, use a method call to get the refined type
     // ```
     // asset!(
-    //     "myfile.png",
+    //     "/assets/myfile.png",
     //      asset::image()
     //        .format(ImageType::Jpg)
     //        .size(512, 512)
@@ -75,8 +75,15 @@ impl ToTokens for AssetParser {
         // 5. source tokens
         let option_source = &self.options;
 
+        // generate the asset::new method to deprecate the `./assets/blah.css` syntax
+        let method = if self.asset.input.is_relative() {
+            quote::quote! { new_relative }
+        } else {
+            quote::quote! { new }
+        };
+
         tokens.extend(quote! {
-            Asset::new(
+            Asset::#method(
                 {
                     #link_section
                     manganis::Asset {
