@@ -31,7 +31,7 @@ fn app() -> Element {
     rsx! {
         document::Link {
             rel: "stylesheet",
-            href: asset!("./examples/assets/calculator.css"),
+            href: asset!("/examples/assets/calculator.css"),
         }
         div { id: "wrapper",
             div { class: "app",

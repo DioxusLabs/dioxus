@@ -12,12 +12,17 @@ use tao::event::{Event, StartCause, WindowEvent};
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Config) -> ! {
+pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: Config) -> ! {
+    let mut custom_event_handler = desktop_config.custom_event_handler.take();
     let (event_loop, mut app) = App::new(desktop_config, virtual_dom);
 
-    event_loop.run(move |window_event, _, control_flow| {
+    event_loop.run(move |window_event, event_loop, control_flow| {
         // Set the control flow and check if any events need to be handled in the app itself
         app.tick(&window_event);
+
+        if let Some(ref mut f) = custom_event_handler {
+            f(&window_event, event_loop)
+        }
 
         match window_event {
             Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(),
