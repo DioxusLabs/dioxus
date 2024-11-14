@@ -148,13 +148,11 @@ impl VirtualDom {
     /// Take the top task from the highest scope
     pub(crate) fn pop_task(&mut self) -> Option<Task> {
         let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
-        let mut tasks = dirty_tasks.first()?;
+        let tasks = dirty_tasks.first()?;
 
-        // If the scope doesn't exist for whatever reason, then we should skip it
-        while !self.scopes.contains(tasks.order.id.0) {
-            dirty_tasks.pop_first();
-            tasks = dirty_tasks.first()?;
-        }
+        // The scope that owns the effect should still exist. We can't just ignore the task if the scope doesn't exist
+        // because the scope id may have been reallocated
+        debug_assert!(self.scopes.contains(tasks.order.id.0));
 
         let mut tasks = tasks.tasks_queued.borrow_mut();
         let task = tasks.pop_front()?;
@@ -168,27 +166,22 @@ impl VirtualDom {
     /// Take any effects from the highest scope. This should only be called if there is no pending scope reruns or tasks
     pub(crate) fn pop_effect(&mut self) -> Option<Effect> {
         let mut pending_effects = self.runtime.pending_effects.borrow_mut();
-        let mut effect = pending_effects.pop_first()?;
+        let effect = pending_effects.pop_first()?;
 
-        // If the scope doesn't exist for whatever reason, then we should skip it
-        while !self.scopes.contains(effect.order.id.0) {
-            effect = pending_effects.pop_first()?;
-        }
+        // The scope that owns the effect should still exist. We can't just ignore the effect if the scope doesn't exist
+        // because the scope id may have been reallocated
+        debug_assert!(self.scopes.contains(effect.order.id.0));
 
         Some(effect)
     }
 
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
     pub(crate) fn pop_work(&mut self) -> Option<Work> {
-        let mut dirty_scope = self.dirty_scopes.first();
-        // Pop any invalid scopes off of each dirty task;
-        while let Some(scope) = dirty_scope {
-            if !self.scopes.contains(scope.id.0) {
-                self.dirty_scopes.pop_first();
-                dirty_scope = self.dirty_scopes.first();
-            } else {
-                break;
-            }
+        let dirty_scope = self.dirty_scopes.first();
+        // Make sure the top dirty scope is valid
+        #[cfg(debug_assertions)]
+        if let Some(scope) = dirty_scope {
+            assert!(self.scopes.contains(scope.id.0));
         }
 
         // Find the height of the highest dirty scope
@@ -197,7 +190,7 @@ impl VirtualDom {
             let mut dirty_task = dirty_tasks.first();
             // Pop any invalid tasks off of each dirty scope;
             while let Some(task) = dirty_task {
-                if task.tasks_queued.borrow().is_empty() || !self.scopes.contains(task.order.id.0) {
+                if task.tasks_queued.borrow().is_empty() {
                     dirty_tasks.pop_first();
                     dirty_task = dirty_tasks.first()
                 } else {
