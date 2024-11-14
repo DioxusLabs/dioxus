@@ -557,7 +557,7 @@ impl DioxusCrate {
         krates
     }
 
-    pub fn android_ndk(&self) -> Option<PathBuf> {
+    pub(crate) fn android_ndk(&self) -> Option<PathBuf> {
         // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         static PATH: once_cell::sync::Lazy<Option<PathBuf>> = once_cell::sync::Lazy::new(|| {
             use std::env::var;
