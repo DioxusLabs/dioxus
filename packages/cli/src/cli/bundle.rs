@@ -46,7 +46,7 @@ impl Bundle {
 
         // We always use `release` mode for bundling
         self.build_arguments.release = true;
-        self.build_arguments.resolve(&krate)?;
+        self.build_arguments.resolve(&krate).await?;
 
         tracing::info!("Building app...");
 

@@ -745,7 +745,13 @@ impl AppBundle {
                 )?;
             }
 
-            let output = Command::new("./gradlew")
+            let gradle_exec_name = match cfg!(windows) {
+                true => "gradlew.bat",
+                false => "gradlew",
+            };
+            let gradle_exec = self.build.root_dir().join(gradle_exec_name);
+
+            let output = Command::new(gradle_exec)
                 .arg("assembleDebug")
                 .current_dir(self.build.root_dir())
                 .stderr(std::process::Stdio::piped())

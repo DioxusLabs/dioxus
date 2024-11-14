@@ -14,7 +14,7 @@ impl RunArgs {
         let krate = DioxusCrate::new(&self.build_args.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        self.build_args.resolve(&krate)?;
+        self.build_args.resolve(&krate).await?;
 
         tracing::trace!("Building crate krate data: {:#?}", krate);
         tracing::trace!("Build args: {:#?}", self.build_args);

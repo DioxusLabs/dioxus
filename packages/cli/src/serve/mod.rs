@@ -42,7 +42,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     let mut tracer = TraceController::redirect();
 
     // Load the krate and resolve the server args against it - this might log so do it after we turn on the tracer first
-    let krate = args.load_krate()?;
+    let krate = args.load_krate().await?;
 
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;
@@ -158,7 +158,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                         screen.push_cargo_log(message);
                     }
                     BuildUpdate::BuildFailed { err } => {
-                        tracing::error!("Build failed: {}", err);
+                        tracing::error!("Build failed: {:?}", err);
                     }
                     BuildUpdate::BuildReady { bundle } => {
                         let handle = runner

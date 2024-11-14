@@ -54,13 +54,13 @@ impl ServeArgs {
         Ok(StructuredOutput::Success)
     }
 
-    pub(crate) fn load_krate(&mut self) -> Result<DioxusCrate> {
+    pub(crate) async fn load_krate(&mut self) -> Result<DioxusCrate> {
         let krate = DioxusCrate::new(&self.build_arguments.target_args)?;
-        self.resolve(&krate)?;
+        self.resolve(&krate).await?;
         Ok(krate)
     }
 
-    pub(crate) fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
+    pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
         // Enable hot reload.
         if self.hot_reload.is_none() {
             self.hot_reload = Some(krate.settings.always_hot_reload.unwrap_or(true));
@@ -82,7 +82,7 @@ impl ServeArgs {
         }
 
         // Resolve the build arguments
-        self.build_arguments.resolve(krate)?;
+        self.build_arguments.resolve(krate).await?;
 
         Ok(())
     }

@@ -557,7 +557,7 @@ impl DioxusCrate {
         krates
     }
 
-    fn android_ndk(&self) -> Option<PathBuf> {
+    pub(crate) fn android_ndk(&self) -> Option<PathBuf> {
         // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         static PATH: once_cell::sync::Lazy<Option<PathBuf>> = once_cell::sync::Lazy::new(|| {
             use std::env::var;
@@ -594,37 +594,6 @@ impl DioxusCrate {
         });
 
         PATH.clone()
-    }
-
-    pub(crate) fn android_linker(&self) -> Option<PathBuf> {
-        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
-        self.android_ndk().map(|ndk| {
-            let toolchain_dir = ndk.join("toolchains").join("llvm").join("prebuilt");
-
-            if cfg!(target_os = "macos") {
-                // for whatever reason, even on aarch64 macos, the linker is under darwin-x86_64
-                return toolchain_dir
-                    .join("darwin-x86_64")
-                    .join("bin")
-                    .join("aarch64-linux-android24-clang");
-            }
-
-            if cfg!(target_os = "linux") {
-                return toolchain_dir
-                    .join("linux-x86_64")
-                    .join("bin")
-                    .join("aarch64-linux-android24-clang");
-            }
-
-            if cfg!(target_os = "windows") {
-                return toolchain_dir
-                    .join("windows-x86_64")
-                    .join("bin")
-                    .join("aarch64-linux-android24-clang.cmd");
-            }
-
-            unimplemented!("Unsupported target os for android toolchain auodetection")
-        })
     }
 
     pub(crate) fn mobile_org(&self) -> String {

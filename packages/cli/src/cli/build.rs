@@ -63,7 +63,7 @@ impl BuildArgs {
         let krate =
             DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 
-        self.resolve(&krate)?;
+        self.resolve(&krate).await?;
 
         let bundle = Builder::start(&krate, self.clone())?.finish().await?;
 
@@ -79,7 +79,7 @@ impl BuildArgs {
     ///
     /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
     /// fullstack variant even if they omitted the `--fullstack` flag.
-    pub(crate) fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
+    pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
         let default_platform = krate.default_platform();
         let auto_platform = krate.autodetect_platform();
 
@@ -143,6 +143,34 @@ impl BuildArgs {
                 }
                 _ => {}
             }
+        }
+
+        // Determine arch if android
+        if self.platform == Some(Platform::Android) && self.target_args.arch.is_none() {
+            tracing::debug!("No android arch provided, attempting to auto detect.");
+
+            let arch = Arch::autodetect().await;
+
+            // Some extra logs
+            let arch = match arch {
+                Some(a) => {
+                    tracing::info!(
+                        "Autodetected `{}` Android arch.",
+                        a.android_target_triplet()
+                    );
+                    a.to_owned()
+                }
+                None => {
+                    let a = Arch::default();
+                    tracing::info!(
+                        "Could not detect Android arch, defaulting to `{}`",
+                        a.android_target_triplet()
+                    );
+                    a
+                }
+            };
+
+            self.target_args.arch = Some(arch);
         }
 
         Ok(())

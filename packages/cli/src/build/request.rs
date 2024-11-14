@@ -114,10 +114,11 @@ impl BuildRequest {
         // We don't want to overwrite the user's .cargo/config.toml since that gets committed to git
         // and we want everyone's install to be the same.
         if self.build.platform() == Platform::Android {
-            let linker = self
+            let ndk = self
                 .krate
-                .android_linker()
+                .android_ndk()
                 .context("Could not autodetect android linker")?;
+            let linker = self.build.target_args.arch().android_linker(&ndk);
 
             tracing::trace!("Using android linker: {linker:?}");
 
@@ -252,7 +253,7 @@ impl BuildRequest {
                     Some(true) => Some("aarch64-apple-ios"),
                     _ => Some("aarch64-apple-ios-sim"),
                 },
-                Platform::Android => Some("aarch64-linux-android"),
+                Platform::Android => Some(self.build.target_args.arch().android_target_triplet()),
                 Platform::Server => None,
                 // we're assuming we're building for the native platform for now... if you're cross-compiling
                 // the targets here might be different
@@ -536,7 +537,7 @@ impl BuildRequest {
                 .join("src")
                 .join("main")
                 .join("jniLibs")
-                .join("arm64-v8a"),
+                .join(self.build.target_args.arch().android_jnilib()),
 
             // these are all the same, I think?
             Platform::Windows
