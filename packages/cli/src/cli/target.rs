@@ -1,6 +1,7 @@
 use super::*;
 use once_cell::sync::OnceCell;
 use std::path::Path;
+use tokio::process::Command;
 
 /// Information about the target to build
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -72,35 +73,46 @@ pub(crate) enum Arch {
 }
 
 impl Arch {
-    pub(crate) fn autodetect() -> Option<Self> {
+    pub(crate) async fn autodetect() -> Option<Self> {
         // Try auto detecting arch through adb.
         static AUTO_ARCH: OnceCell<Option<Arch>> = OnceCell::new();
 
-        *AUTO_ARCH.get_or_init(|| {
-            // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
-            let output = std::process::Command::new("adb")
-                .arg("shell")
-                .arg("uname")
-                .arg("-m")
-                .output();
+        match AUTO_ARCH.get() {
+            Some(a) => *a,
+            None => {
+                // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
+                let output = Command::new("adb")
+                    .arg("shell")
+                    .arg("uname")
+                    .arg("-m")
+                    .output()
+                    .await;
 
-            let out = match output {
-                Ok(o) => o,
-                Err(e) => {
-                    tracing::debug!("ADB command failed: {:?}", e);
+                let out = match output {
+                    Ok(o) => o,
+                    Err(e) => {
+                        tracing::debug!("ADB command failed: {:?}", e);
+                        return None;
+                    }
+                };
+
+                // Parse ADB output
+                let Ok(out) = String::from_utf8(out.stdout) else {
+                    tracing::debug!("ADB returned unexpected data.");
                     return None;
-                }
-            };
+                };
+                let trimmed = out.trim().to_string();
+                tracing::trace!("ADB Returned: `{trimmed:?}`");
 
-            let Ok(out) = String::from_utf8(out.stdout) else {
-                tracing::debug!("ADB returned unexpected data.");
-                return None;
-            };
-            let trimmed = out.trim().to_string();
-            tracing::trace!("ADB Returned: `{trimmed:?}`");
+                // Set the cell
+                let arch = Arch::try_from(trimmed).ok();
+                AUTO_ARCH
+                    .set(arch)
+                    .expect("the cell should have been checked empty by the match condition");
 
-            Arch::try_from(trimmed).ok()
-        })
+                arch
+            }
+        }
     }
 
     pub(crate) fn android_target_triplet(&self) -> &'static str {
