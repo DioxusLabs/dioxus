@@ -51,6 +51,13 @@ pub(crate) struct BuildArgs {
     #[clap(long, default_value_t = true)]
     pub(crate) inject_loading_scripts: bool,
 
+    /// Generate debug symbols for the wasm binary [default: true]
+    ///
+    /// This will make the binary larger and take longer to compile, but will allow you to debug the
+    /// wasm binary
+    #[clap(long, default_value_t = true)]
+    pub(crate) debug_symbols: bool,
+
     /// Information about the target to build
     #[clap(flatten)]
     pub(crate) target_args: TargetArgs,

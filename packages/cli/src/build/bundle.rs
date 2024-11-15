@@ -562,8 +562,12 @@ impl AppBundle {
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
         let name = self.build.krate.executable_name().to_string();
-        let keep_debug = self.build.krate.config.web.wasm_opt.debug;
         let reference_types = self.build.krate.config.web.wasm_opt.reference_types;
+        let keep_debug =
+            // if we're in debug mode, or we're generating debug symbols, keep debug info
+            (self.build.krate.config.web.wasm_opt.debug || self.build.build.debug_symbols)
+            // but only if we're not in release mode
+            && !self.build.build.release;
 
         let start = std::time::Instant::now();
         tokio::task::spawn_blocking(move || {
@@ -574,9 +578,9 @@ impl AppBundle {
                 .debug(keep_debug)
                 .demangle(keep_debug)
                 .keep_debug(keep_debug)
-                .reference_types(reference_types)
-                .remove_name_section(true)
-                .remove_producers_section(true)
+                .reference_types(keep_debug || reference_types)
+                .remove_name_section(!keep_debug)
+                .remove_producers_section(!keep_debug)
                 .out_name(&name)
                 .generate(&bindgen_outdir)
         })
@@ -669,11 +673,10 @@ impl AppBundle {
             .context("Failed to get static routes from server")?
             .text()
             .await
-            .map(|raw| serde_json::from_str::<String>(&raw).unwrap())
+            .map(|raw| serde_json::from_str::<Vec<String>>(&raw).unwrap())
             .inspect(|text| tracing::debug!("Got static routes: {text:?}"))
             .context("Failed to parse static routes from server")?
-            .lines()
-            .map(|line| line.to_string())
+            .into_iter()
             .map(|line| async move {
                 tracing::info!("SSG: {line}");
                 reqwest::Client::builder()
