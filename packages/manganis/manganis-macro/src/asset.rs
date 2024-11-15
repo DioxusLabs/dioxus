@@ -85,7 +85,7 @@ impl ToTokens for AssetParser {
         let option_source = &self.options;
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
-        let method = if asset.input.is_relative() {
+        let method = if !asset.input.starts_with("/") {
             quote::quote! { new_relative }
         } else {
             quote::quote! { new }
