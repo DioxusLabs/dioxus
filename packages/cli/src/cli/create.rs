@@ -96,7 +96,10 @@ pub(crate) fn resolve_template_and_branch(
     if template.is_none() {
         use crate::dx_build_info::{PKG_VERSION_MAJOR, PKG_VERSION_MINOR};
         *template = Some(DEFAULT_TEMPLATE.to_string());
-        *branch = Some(format!("v{PKG_VERSION_MAJOR}.{PKG_VERSION_MINOR}"));
+
+        if branch.is_none() {
+            *branch = Some(format!("v{PKG_VERSION_MAJOR}.{PKG_VERSION_MINOR}"));
+        }
     };
 }
 
