@@ -129,7 +129,7 @@ impl BuildRequest {
         let base_path = self.krate.config.web.app.base_path();
         *html = html.replace("{base_path}", base_path);
 
-        let app_name = &self.krate.bundled_app_name();
+        let app_name = &self.krate.executable_name();
         *html = html.replace("{app_name}", app_name);
     }
 
