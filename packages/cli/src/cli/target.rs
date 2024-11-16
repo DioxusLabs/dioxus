@@ -190,57 +190,61 @@ impl Arch {
     }
 
     pub(crate) fn java_home(&self) -> Option<PathBuf> {
-        // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
-        // always respect the user's JAVA_HOME env var above all other options
-        //
-        // we only attempt autodetection if java_home is not set
-        //
-        // this is a better fallback than falling onto the users' system java home since many users might
-        // not even know which java that is - they just know they have android studio installed
-        if let Some(java_home) = std::env::var_os("JAVA_HOME") {
-            return Some(PathBuf::from(java_home));
-        }
-
-        // Attempt to autodetect java home from the android studio path or jdk path on macos
-        #[cfg(target_os = "macos")]
-        {
-            let jbr_home =
-                PathBuf::from("/Applications/Android Studio.app/Contents/jbr/Contents/Home/");
-            if jbr_home.exists() {
-                return Some(jbr_home);
+        // wrap in a lazy so we don't accidentally keep probing for java home and potentially thrash env vars
+        once_cell::sync::Lazy::new(|| {
+            // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
+            // always respect the user's JAVA_HOME env var above all other options
+            //
+            // we only attempt autodetection if java_home is not set
+            //
+            // this is a better fallback than falling onto the users' system java home since many users might
+            // not even know which java that is - they just know they have android studio installed
+            if let Some(java_home) = std::env::var_os("JAVA_HOME") {
+                return Some(PathBuf::from(java_home));
             }
 
-            let jre_home =
-                PathBuf::from("/Applications/Android Studio.app/Contents/jre/Contents/Home");
-            if jre_home.exists() {
-                return Some(jre_home);
+            // Attempt to autodetect java home from the android studio path or jdk path on macos
+            #[cfg(target_os = "macos")]
+            {
+                let jbr_home =
+                    PathBuf::from("/Applications/Android Studio.app/Contents/jbr/Contents/Home/");
+                if jbr_home.exists() {
+                    return Some(jbr_home);
+                }
+
+                let jre_home =
+                    PathBuf::from("/Applications/Android Studio.app/Contents/jre/Contents/Home");
+                if jre_home.exists() {
+                    return Some(jre_home);
+                }
+
+                let jdk_home =
+                    PathBuf::from("/Library/Java/JavaVirtualMachines/openjdk.jdk/Contents/Home/");
+                if jdk_home.exists() {
+                    return Some(jdk_home);
+                }
             }
 
-            let jdk_home =
-                PathBuf::from("/Library/Java/JavaVirtualMachines/openjdk.jdk/Contents/Home/");
-            if jdk_home.exists() {
-                return Some(jdk_home);
+            #[cfg(target_os = "windows")]
+            {
+                let jbr_home = PathBuf::from("C:\\Program Files\\Android\\Android Studio\\jbr");
+                if jbr_home.exists() {
+                    return Some(jbr_home);
+                }
             }
-        }
 
-        #[cfg(target_os = "windows")]
-        {
-            let jbr_home = PathBuf::from("C:\\Program Files\\Android\\Android Studio\\jbr");
-            if jbr_home.exists() {
-                return Some(jbr_home);
+            // todo(jon): how do we detect java home on linux?
+            #[cfg(target_os = "linux")]
+            {
+                let jbr_home = PathBuf::from("/usr/lib/jvm/java-11-openjdk-amd64");
+                if jbr_home.exists() {
+                    return Some(jbr_home);
+                }
             }
-        }
 
-        // todo(jon): how do we detect java home on linux?
-        #[cfg(target_os = "linux")]
-        {
-            let jbr_home = PathBuf::from("/usr/lib/jvm/java-11-openjdk-amd64");
-            if jbr_home.exists() {
-                return Some(jbr_home);
-            }
-        }
-
-        None
+            None
+        })
+        .clone()
     }
 }
 

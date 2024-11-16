@@ -494,7 +494,7 @@ impl BuildRequest {
             }
 
             // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
-            // attempt to set java_home to the android studio java home if it exists and java_home was not relady set
+            // attempt to set java_home to the android studio java home if it exists and java_home was not already set
 
             env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
             env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
