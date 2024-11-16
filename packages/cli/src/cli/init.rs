@@ -1,5 +1,4 @@
 use super::*;
-use crate::cli::create::DEFAULT_TEMPLATE;
 use cargo_generate::{GenerateArgs, TemplatePath};
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -14,8 +13,8 @@ pub struct Init {
     name: Option<String>,
 
     /// Template path
-    #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
-    template: String,
+    #[clap(short, long)]
+    template: Option<String>,
 
     /// Branch to select when using `template` from a git repository.
     /// Mutually exclusive with: `--revision`, `--tag`.
@@ -53,6 +52,9 @@ impl Init {
             self.name = Some(create::name_from_path(&self.path)?);
         }
 
+        // If no template is specified, use the default one and set the branch to the latest release.
+        create::resolve_template_and_branch(&mut self.template, &mut self.branch);
+
         let args = GenerateArgs {
             define: self.option,
             destination: Some(self.path),
@@ -60,7 +62,7 @@ impl Init {
             name: self.name,
             silent: self.yes,
             template_path: TemplatePath {
-                auto_path: Some(self.template),
+                auto_path: self.template,
                 branch: self.branch,
                 revision: self.revision,
                 subfolder: self.subtemplate,
