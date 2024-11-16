@@ -488,13 +488,12 @@ impl BuildRequest {
             env_vars.push(("ANDROID_NDK_ROOT", ndk.display().to_string()));
 
             // attempt to set java_home to the android studio java home if it exists.
+            // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
+            // attempt to set java_home to the android studio java home if it exists and java_home was not already set
             if let Some(java_home) = java_home {
                 tracing::debug!("Setting JAVA_HOME to {java_home:?}");
                 env_vars.push(("JAVA_HOME", java_home.display().to_string()));
             }
-
-            // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
-            // attempt to set java_home to the android studio java home if it exists and java_home was not already set
 
             env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
             env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
