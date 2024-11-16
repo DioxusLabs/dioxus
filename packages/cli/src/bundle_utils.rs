@@ -3,12 +3,6 @@ use crate::{
     NSISInstallerMode, NsisSettings, PackageType, WebviewInstallMode, WindowsSettings, WixSettings,
 };
 
-pub(crate) fn make_tauri_bundler_settings(
-    bundle_config: BundleConfig,
-) -> tauri_bundler::BundleSettings {
-    bundle_config.into()
-}
-
 impl From<NsisSettings> for tauri_bundler::NsisSettings {
     fn from(val: NsisSettings) -> Self {
         tauri_bundler::NsisSettings {
@@ -162,6 +156,7 @@ impl From<PackageType> for tauri_bundler::PackageType {
             PackageType::AppImage => Self::AppImage,
             PackageType::Dmg => Self::Dmg,
             PackageType::Updater => Self::Updater,
+            PackageType::Nsis => Self::Nsis,
         }
     }
 }

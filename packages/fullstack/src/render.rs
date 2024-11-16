@@ -175,7 +175,6 @@ impl SsrRendererPool {
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
             // poll the future, which may call server_context()
-            tracing::info!("Rebuilding vdom");
             with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             let mut pre_body = String::new();

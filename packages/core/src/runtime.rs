@@ -1,6 +1,7 @@
 use crate::arena::ElementRef;
 use crate::innerlude::{DirtyTasks, Effect};
 use crate::nodes::VNodeMount;
+use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
@@ -128,6 +129,11 @@ impl Runtime {
                     for id in scope.spawned_tasks.take() {
                         self.remove_task(id);
                     }
+
+                    // Drop all queued effects
+                    self.pending_effects
+                        .borrow_mut()
+                        .remove(&ScopeOrder::new(scope.height, scope.id));
 
                     // Drop all hooks in reverse order in case a hook depends on another hook.
                     for hook in scope.hooks.take().drain(..).rev() {

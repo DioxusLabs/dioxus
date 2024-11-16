@@ -13,5 +13,5 @@ tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
 default = []
-server = ["dioxus/axum", "dep:tokio"]
+server = ["dioxus/server", "dep:tokio"]
 web = ["dioxus/web"]

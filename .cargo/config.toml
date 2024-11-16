@@ -10,4 +10,5 @@ opt-level = 2
 
 [profile.dioxus-android]
 inherits = "dev"
-opt-level = 2
+opt-level = 1
+debug = 0

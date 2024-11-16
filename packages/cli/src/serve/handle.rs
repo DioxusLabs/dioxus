@@ -21,6 +21,8 @@ use tokio::{
 /// We might want to bring in websockets here too, so we know the exact channels the app is using to
 /// communicate with the devserver. Currently that's a broadcast-type system, so this struct isn't super
 /// duper useful.
+///
+/// todo: restructure this such that "open" is a running task instead of blocking the main thread
 pub(crate) struct AppHandle {
     pub(crate) app: AppBundle,
 
@@ -68,6 +70,7 @@ impl AppHandle {
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
             ("DIOXUS_CLI_ENABLED", "true".to_string()),
+            ("RUST_BACKTRACE", "1".to_string()),
             (
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
                 devserver_ip.to_string(),
@@ -116,7 +119,7 @@ impl AppHandle {
 
             // https://developer.android.com/studio/run/emulator-commandline
             Platform::Android => {
-                tracing::error!("Android is not yet supported, sorry!");
+                self.open_android_sim(envs).await?;
                 None
             }
 
@@ -159,7 +162,7 @@ impl AppHandle {
         // we won't actually be using the build dir.
         let asset_dir = match self.runtime_asst_dir.as_ref() {
             Some(dir) => dir.to_path_buf().join("assets/"),
-            None => self.app.asset_dir(),
+            None => self.app.build.asset_dir(),
         };
 
         tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
@@ -237,13 +240,16 @@ impl AppHandle {
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
     async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        tracing::debug!("Installing app to simulator {:?}", self.app.app_dir());
+        tracing::debug!(
+            "Installing app to simulator {:?}",
+            self.app.build.root_dir()
+        );
 
         let res = Command::new("xcrun")
             .arg("simctl")
             .arg("install")
             .arg("booted")
-            .arg(self.app.app_dir())
+            .arg(self.app.build.root_dir())
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .output()
@@ -262,14 +268,12 @@ impl AppHandle {
             .arg("launch")
             .arg("--console")
             .arg("booted")
-            .arg("com.dioxuslabs")
+            .arg(self.app.build.krate.bundle_identifier())
             .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .spawn()?;
-
-        tracing::debug!("Launched app on simulator with exit code: {child:?}");
 
         Ok(child)
     }
@@ -309,7 +313,7 @@ impl AppHandle {
         // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
 
         use serde_json::Value;
-        let app_path = self.app.app_dir();
+        let app_path = self.app.build.root_dir();
 
         install_app(&app_path).await?;
 
@@ -447,5 +451,44 @@ impl AppHandle {
         }
 
         unimplemented!("dioxus-cli doesn't support ios devices yet.")
+    }
+
+    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) -> Result<()> {
+        let apk_path = self.app.apk_path();
+        let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
+
+        // Start backgrounded since .open() is called while in the arm of the top-level match
+        tokio::task::spawn(async move {
+            // Install
+            // adb install -r app-debug.apk
+            let _output = Command::new("adb")
+                .arg("install")
+                .arg("-r")
+                .arg(apk_path)
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .output()
+                .await?;
+
+            // eventually, use the user's MainAcitivty, not our MainAcitivty
+            // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
+            let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
+
+            let _output = Command::new("adb")
+                .arg("shell")
+                .arg("am")
+                .arg("start")
+                .arg("-n")
+                .arg(activity_name)
+                .envs(envs)
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .output()
+                .await?;
+
+            Result::<()>::Ok(())
+        });
+
+        Ok(())
     }
 }

@@ -1,7 +1,4 @@
-use crate::{
-    BuildUpdate, Builder, DioxusCrate, Error, Platform, Result, ServeArgs, TraceController,
-    TraceSrc,
-};
+use crate::{BuildUpdate, Builder, Error, Platform, Result, ServeArgs, TraceController, TraceSrc};
 
 mod ansi_buffer;
 mod detect;
@@ -40,8 +37,12 @@ pub(crate) use watcher::*;
 /// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
+pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
+    // Redirect all logging the cli logger
     let mut tracer = TraceController::redirect();
+
+    // Load the krate and resolve the server args against it - this might log so do it after we turn on the tracer first
+    let krate = args.load_krate().await?;
 
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;
@@ -53,15 +54,15 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
     tracing::info!(
-        r#"Serving your Dioxus app: {} 🚀
-
-               - Press `ctrl+c` to exit the server
-               - Press `r` to rebuild the app
-               - Press `o` to open the app
-               - Press `t` to toggle cargo output
-               - Press `/` for more commands and shortcuts
-
-               Learn more at https://dioxuslabs.com/learn/0.6/getting_started"#,
+        r#"-----------------------------------------------------------------
+                Serving your Dioxus app: {} 🚀
+                • Press `ctrl+c` to exit the server
+                • Press `r` to rebuild the app
+                • Press `o` to open the app
+                • Press `v` to toggle verbose logging
+                • Press `/` for more commands and shortcuts
+                Learn more at https://dioxuslabs.com/learn/0.6/getting_started
+               ----------------------------------------------------------------"#,
         krate.executable_name()
     );
 
@@ -146,7 +147,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 screen.new_build_update(&update);
 
                 // And then update the websocketed clients with the new build status in case they want it
-                devserver.new_build_update(&update).await;
+                devserver.new_build_update(&update, &builder).await;
 
                 // And then open the app if it's ready
                 // todo: there might be more things to do here that require coordination with other pieces of the CLI
@@ -157,7 +158,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                         screen.push_cargo_log(message);
                     }
                     BuildUpdate::BuildFailed { err } => {
-                        tracing::error!("Build failed: {}", err);
+                        tracing::error!("Build failed: {:?}", err);
                     }
                     BuildUpdate::BuildReady { bundle } => {
                         let handle = runner
@@ -213,6 +214,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 // `Full rebuild:` to line up with
                 // `Hotreloading:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
+
                 builder.rebuild(args.build_arguments.clone());
                 runner.file_map.force_rebuild();
                 devserver.start_build().await
@@ -248,7 +250,6 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
     builder.abort_all();
-    tracer.shutdown();
 
     if let Err(err) = err {
         eprintln!("Exiting with error: {}", err);
