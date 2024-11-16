@@ -140,36 +140,107 @@ impl Arch {
         }
     }
 
-    pub(crate) fn android_linker(&self, ndk: &Path) -> PathBuf {
-        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
-
-        let toolchain_dir = ndk.join("toolchains").join("llvm").join("prebuilt");
-        let triplet = self.android_clang_triplet();
-        let clang_exec = format!("{}24-clang", triplet);
+    pub(crate) fn android_tools_dir(&self, ndk: &Path) -> PathBuf {
+        let prebuilt = ndk.join("toolchains").join("llvm").join("prebuilt");
 
         if cfg!(target_os = "macos") {
             // for whatever reason, even on aarch64 macos, the linker is under darwin-x86_64
-            return toolchain_dir
-                .join("darwin-x86_64")
-                .join("bin")
-                .join(clang_exec);
+            return prebuilt.join("darwin-x86_64").join("bin");
         }
 
         if cfg!(target_os = "linux") {
-            return toolchain_dir
-                .join("linux-x86_64")
-                .join("bin")
-                .join(clang_exec);
+            return prebuilt.join("linux-x86_64").join("bin");
         }
 
         if cfg!(target_os = "windows") {
-            return toolchain_dir
-                .join("windows-x86_64")
-                .join("bin")
-                .join(format!("{}.cmd", clang_exec));
+            return prebuilt.join("windows-x86_64").join("bin");
         }
 
-        unimplemented!("Unsupported target os for android toolchain auodetection")
+        unimplemented!("Unsupported target os for android toolchain autodetection")
+    }
+
+    pub(crate) fn android_linker(&self, ndk: &Path) -> PathBuf {
+        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
+        let triplet = self.android_clang_triplet();
+        let suffix = if cfg!(target_os = "windows") {
+            ".cmd"
+        } else {
+            ""
+        };
+
+        self.android_tools_dir(ndk)
+            .join(format!("{}24-clang{}", triplet, suffix))
+    }
+
+    pub(crate) fn android_min_sdk_version(&self) -> u32 {
+        // todo(jon): this should be configurable
+        24
+    }
+
+    pub(crate) fn android_ar_path(&self, ndk: &Path) -> PathBuf {
+        self.android_tools_dir(ndk).join("llvm-ar")
+    }
+
+    pub(crate) fn target_cc(&self, ndk: &Path) -> PathBuf {
+        self.android_tools_dir(ndk).join("clang")
+    }
+
+    pub(crate) fn target_cxx(&self, ndk: &Path) -> PathBuf {
+        self.android_tools_dir(ndk).join("clang++")
+    }
+
+    pub(crate) fn java_home(&self) -> Option<PathBuf> {
+        // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
+        // always respect the user's JAVA_HOME env var above all other options
+        //
+        // we only attempt autodetection if java_home is not set
+        //
+        // this is a better fallback than falling onto the users' system java home since many users might
+        // not even know which java that is - they just know they have android studio installed
+        if let Some(java_home) = std::env::var_os("JAVA_HOME") {
+            return Some(PathBuf::from(java_home));
+        }
+
+        // Attempt to autodetect java home from the android studio path or jdk path on macos
+        #[cfg(target_os = "macos")]
+        {
+            let jbr_home =
+                PathBuf::from("/Applications/Android Studio.app/Contents/jbr/Contents/Home/");
+            if jbr_home.exists() {
+                return Some(jbr_home);
+            }
+
+            let jre_home =
+                PathBuf::from("/Applications/Android Studio.app/Contents/jre/Contents/Home");
+            if jre_home.exists() {
+                return Some(jre_home);
+            }
+
+            let jdk_home =
+                PathBuf::from("/Library/Java/JavaVirtualMachines/openjdk.jdk/Contents/Home/");
+            if jdk_home.exists() {
+                return Some(jdk_home);
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            let jbr_home = PathBuf::from("C:\\Program Files\\Android\\Android Studio\\jbr");
+            if jbr_home.exists() {
+                return Some(jbr_home);
+            }
+        }
+
+        // todo(jon): how do we detect java home on linux?
+        #[cfg(target_os = "linux")]
+        {
+            let jbr_home = PathBuf::from("/usr/lib/jvm/java-11-openjdk-amd64");
+            if jbr_home.exists() {
+                return Some(jbr_home);
+            }
+        }
+
+        None
     }
 }
 

@@ -449,7 +449,7 @@ impl AppBundle {
 
             std::fs::create_dir_all(self.server_exe().unwrap().parent().unwrap())?;
 
-            tracing::debug!("Copying server executable from {server:?} to {to:?}");
+            tracing::debug!("Copying server executable to: {to:?} {server:#?}");
 
             // Remove the old server executable if it exists, since copying might corrupt it :(
             // todo(jon): do this in more places, I think
@@ -712,8 +712,8 @@ impl AppBundle {
             .render_template(
                 include_str!("../../assets/macos/mac.plist.hbs"),
                 &InfoPlistData {
-                    display_name: self.build.platform_exe_name(),
-                    bundle_name: self.build.platform_exe_name(),
+                    display_name: self.build.krate.bundled_app_name(),
+                    bundle_name: self.build.krate.bundled_app_name(),
                     executable_name: self.build.platform_exe_name(),
                     bundle_identifier: self.build.krate.bundle_identifier(),
                 },
@@ -726,8 +726,8 @@ impl AppBundle {
             .render_template(
                 include_str!("../../assets/ios/ios.plist.hbs"),
                 &InfoPlistData {
-                    display_name: self.build.platform_exe_name(),
-                    bundle_name: self.build.platform_exe_name(),
+                    display_name: self.build.krate.bundled_app_name(),
+                    bundle_name: self.build.krate.bundled_app_name(),
                     executable_name: self.build.platform_exe_name(),
                     bundle_identifier: self.build.krate.bundle_identifier(),
                 },

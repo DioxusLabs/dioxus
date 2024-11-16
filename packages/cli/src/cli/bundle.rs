@@ -198,7 +198,7 @@ impl Bundle {
         let mut settings = SettingsBuilder::new()
             .project_out_directory(krate.bundle_dir(self.build_arguments.platform()))
             .package_settings(PackageSettings {
-                product_name: krate.executable_name().to_string(),
+                product_name: krate.bundled_app_name(),
                 version: package.version.to_string(),
                 description: package.description.clone().unwrap_or_default(),
                 homepage: Some(package.homepage.clone().unwrap_or_default()),

@@ -608,12 +608,13 @@ impl DioxusCrate {
         format!("{}.{}", sub, tld)
     }
 
-    pub(crate) fn mobile_app_name(&self) -> String {
-        self.executable_name().to_string()
+    pub(crate) fn bundled_app_name(&self) -> String {
+        use convert_case::{Case, Casing};
+        self.executable_name().to_case(Case::Pascal)
     }
 
     pub(crate) fn full_mobile_app_name(&self) -> String {
-        format!("{}.{}", self.mobile_org(), self.mobile_app_name())
+        format!("{}.{}", self.mobile_org(), self.bundled_app_name())
     }
 
     pub(crate) fn bundle_identifier(&self) -> String {
@@ -621,7 +622,7 @@ impl DioxusCrate {
             return identifier.clone();
         }
 
-        format!("com.example.{}", self.executable_name())
+        format!("com.example.{}", self.bundled_app_name())
     }
 }
 

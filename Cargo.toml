@@ -297,6 +297,10 @@ tokio = { version = "1.40", default-features = false, features = [
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.40", features = ["full"] }
 
+# force vendored openssl on android
+[target.'cfg(target_os = "android")'.dev-dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
+
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
 [features]

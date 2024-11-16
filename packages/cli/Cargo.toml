@@ -24,6 +24,7 @@ dioxus-fullstack = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
+convert_case = { workspace = true }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = { workspace = true }
 wasm-bindgen-shared = { workspace = true }

@@ -3219,6 +3219,7 @@ dependencies = [
  "clap",
  "console",
  "console-subscriber",
+ "convert_case 0.6.0",
  "crossterm",
  "ctrlc",
  "dioxus-autofmt",
@@ -3469,6 +3470,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.2.15",
  "http-range",
+ "openssl",
  "rand 0.8.5",
  "reqwest 0.12.9",
  "separator",
@@ -8004,6 +8006,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "openssl-src"
+version = "300.3.2+3.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a211a18d945ef7e648cc6e0058f4c548ee46aab922ea203e0d30e966ea23647b"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8011,6 +8022,7 @@ checksum = "45abf306cbf99debc8195b66b7346498d7b10c210de50418b5ccd7ceba08c741"
 dependencies = [
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]

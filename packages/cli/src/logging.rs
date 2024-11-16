@@ -25,7 +25,10 @@ use std::{
     fmt::{Debug, Display, Write as _},
     fs,
     path::PathBuf,
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     time::Instant,
 };
 use tracing::{field::Visit, Level, Subscriber};
@@ -43,6 +46,7 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
 
+static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
 static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
 pub static VERBOSITY: OnceCell<Verbosity> = OnceCell::new();
 
@@ -59,17 +63,12 @@ impl TraceController {
             .set(args.verbosity)
             .expect("verbosity should only be set once");
 
-        // When running in interactive mode (of which serve is the only one), we want to do things slightly differently
-        // This involves no fmt layer or file logging
-        if matches!(args.action, Commands::Serve(_)) {
-            Self::initialize_for_serve();
-            return args;
-        }
-
         // By default we capture ourselves at a higher tracing level when serving
         // This ensures we're tracing ourselves even if we end up tossing the logs
         let filter = if env::var(LOG_ENV).is_ok() {
             EnvFilter::from_env(LOG_ENV)
+        } else if matches!(args.action, Commands::Serve(_)) {
+            EnvFilter::new("error,dx=trace,dioxus-cli=trace,manganis-cli-support=trace")
         } else {
             EnvFilter::new(format!(
                 "error,dx={our_level},dioxus-cli={our_level},manganis-cli-support={our_level}",
@@ -108,11 +107,16 @@ impl TraceController {
             fmt_layer.boxed()
         };
 
+        // When running in interactive mode (of which serve is the only one), we don't want to log to console directly
+        let print_fmts_filter =
+            tracing_subscriber::filter::filter_fn(|_| !TUI_ACTIVE.load(Ordering::Relaxed));
+
         let sub = tracing_subscriber::registry()
             .with(filter)
             .with(json_filter)
             .with(FileAppendLayer::new())
-            .with(fmt_layer);
+            .with(CLILayer {})
+            .with(fmt_layer.with_filter(print_fmts_filter));
 
         #[cfg(feature = "tokio-console")]
         let sub = sub.with(console_subscriber::spawn());
@@ -125,6 +129,7 @@ impl TraceController {
     /// Get a handle to the trace controller.
     pub fn redirect() -> Self {
         let (tui_tx, tui_rx) = unbounded();
+        TUI_ACTIVE.store(true, Ordering::Relaxed);
         TUI_TX.set(tui_tx.clone()).unwrap();
         Self { tui_rx }
     }
@@ -135,14 +140,20 @@ impl TraceController {
         let log = self.tui_rx.next().await.expect("tracer should never die");
         ServeUpdate::TracingLog { log }
     }
+}
 
-    fn initialize_for_serve() {
-        let filter = EnvFilter::new("error,dx=trace,dioxus-cli=trace,manganis-cli-support=trace");
+impl Drop for TraceController {
+    fn drop(&mut self) {
+        TUI_ACTIVE.store(false, Ordering::Relaxed);
 
-        tracing_subscriber::registry()
-            .with(filter)
-            .with(CLILayer {})
-            .init();
+        // re-emit any remaining messages
+        while let Ok(Some(msg)) = self.tui_rx.try_next() {
+            let contents = match msg.content {
+                TraceContent::Text(text) => text,
+                TraceContent::Cargo(msg) => msg.message.to_string(),
+            };
+            tracing::error!("{}", contents);
+        }
     }
 }
 
@@ -231,6 +242,10 @@ where
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
+        if !TUI_ACTIVE.load(Ordering::Relaxed) {
+            return;
+        }
+
         let mut visitor = CollectVisitor::new();
         event.record(&mut visitor);
 
