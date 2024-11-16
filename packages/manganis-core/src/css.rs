@@ -3,7 +3,7 @@ use const_serialize::SerializeConst;
 use crate::AssetOptions;
 
 /// A builder for a css asset. This must be used in the [`mg!`] macro.
-#[derive(Debug, SerializeConst)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
 pub struct CssAssetOptions {
     minify: bool,
     preload: bool,
@@ -45,7 +45,7 @@ impl CssAssetOptions {
         }
     }
 
-    /// Convert the builder into a generic asset
+    /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
         AssetOptions::Css(self)
     }

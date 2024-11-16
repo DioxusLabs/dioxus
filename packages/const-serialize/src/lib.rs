@@ -5,7 +5,6 @@ mod const_vec;
 
 pub use const_buffers::{ConstReadBuffer, ConstWriteBuffer};
 pub use const_serialize_macro::SerializeConst;
-use const_vec::ConstVec;
 
 /// Plain old data for a field. Stores the offset of the field in the struct and the encoding of the field.
 #[derive(Debug, Copy, Clone)]
@@ -201,35 +200,52 @@ impl_serialize_const_tuple!(T1: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6, T8:
 
 const MAX_STR_SIZE: usize = 256;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash)]
 pub struct ConstStr {
-    bytes: ConstVec<u8, MAX_STR_SIZE>,
+    bytes: [u8; MAX_STR_SIZE],
+    len: u32,
 }
 
 unsafe impl SerializeConst for ConstStr {
     const MEMORY_LAYOUT: Layout = Layout::Struct(StructEncoding {
         size: std::mem::size_of::<Self>(),
-        data: &[StructFieldEncoding::new(
-            std::mem::offset_of!(Self, bytes),
-            ConstVec::<u8, MAX_STR_SIZE>::MEMORY_LAYOUT,
-        )],
+        data: &[
+            StructFieldEncoding::new(
+                std::mem::offset_of!(Self, bytes),
+                Layout::List(ListEncoding {
+                    len: MAX_STR_SIZE,
+                    item_encoding: &Layout::Primitive(PrimitiveEncoding {
+                        size: std::mem::size_of::<u8>(),
+                    }),
+                }),
+            ),
+            StructFieldEncoding::new(
+                std::mem::offset_of!(Self, len),
+                Layout::Primitive(PrimitiveEncoding {
+                    size: std::mem::size_of::<u32>(),
+                }),
+            ),
+        ],
     });
 }
 
 impl ConstStr {
     pub const fn new(s: &str) -> Self {
         let str_bytes = s.as_bytes();
-        let mut bytes = ConstVec::new();
+        let mut bytes = [0; MAX_STR_SIZE];
         let mut i = 0;
         while i < str_bytes.len() {
-            bytes = bytes.push(str_bytes[i]);
+            bytes[i] = str_bytes[i];
             i += 1;
         }
-        Self { bytes }
+        Self {
+            bytes,
+            len: str_bytes.len() as u32,
+        }
     }
 
     pub const fn as_str(&self) -> &str {
-        let str_bytes = self.bytes.as_ref().split_at(self.bytes.len() as usize).0;
+        let str_bytes = self.bytes.split_at(self.len as usize).0;
         match std::str::from_utf8(str_bytes) {
             Ok(s) => s,
             Err(_) => panic!(
@@ -248,17 +264,40 @@ impl ConstStr {
         self.push_str(str)
     }
 
-    pub const fn push_str(mut self, str: &str) -> Self {
-        let bytes = str.as_bytes();
-        self = Self {
-            bytes: self.bytes.extend(bytes),
-        };
-        self
+    pub const fn push_str(self, str: &str) -> Self {
+        let Self { mut bytes, len } = self;
+        assert!(
+            str.len() + len as usize <= MAX_STR_SIZE,
+            "String is too long"
+        );
+        let str_bytes = str.as_bytes();
+        let new_len = len as usize + str_bytes.len();
+        let mut i = 0;
+        while i < str_bytes.len() {
+            bytes[len as usize + i] = str_bytes[i];
+            i += 1;
+        }
+        Self {
+            bytes,
+            len: new_len as u32,
+        }
     }
 
     pub const fn split_at(self, index: usize) -> (Self, Self) {
         let (left, right) = self.bytes.split_at(index);
-        (Self { bytes: left }, Self { bytes: right })
+        let left = match std::str::from_utf8(left) {
+            Ok(s) => s,
+            Err(_) => {
+                panic!("Invalid utf8; you cannot split at a byte that is not a char boundary")
+            }
+        };
+        let right = match std::str::from_utf8(right) {
+            Ok(s) => s,
+            Err(_) => {
+                panic!("Invalid utf8; you cannot split at a byte that is not a char boundary")
+            }
+        };
+        (Self::new(left), Self::new(right))
     }
 
     pub const fn rsplit_once(&self, char: char) -> Option<(Self, Self)> {

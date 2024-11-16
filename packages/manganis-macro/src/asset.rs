@@ -1,10 +1,13 @@
-use manganis_core::ResourceAsset;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::{hash::Hasher, io::Read, path::PathBuf};
+use std::{
+    hash::Hasher,
+    io::Read,
+    path::{Path, PathBuf},
+};
 use syn::{
     parse::{Parse, ParseStream},
-    LitStr,
+    LitStr, Token,
 };
 
 fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
@@ -31,31 +34,36 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
         })
 }
 
-fn hash_file_contents(file_path: PathBuf) -> u64 {
+fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
     // Create a hasher
     let mut hash = std::collections::hash_map::DefaultHasher::new();
 
     // Open the file to get its options
-    let mut file = std::fs::File::open(&file_path).unwrap();
+    let mut file =
+        std::fs::File::open(file_path).map_err(|err| AssetParseError::AssetDoesntExist {
+            err,
+            path: file_path.to_path_buf(),
+        })?;
 
     // We add a hash to the end of the file so it is invalidated when the bundled version of the file changes
     // The hash includes the file contents, the options, and the version of manganis. From the macro, we just
     // know the file contents, so we only include that hash
     let mut buffer = [0; 8192];
     loop {
-        let read = file.read(&mut buffer).unwrap();
+        let read = file
+            .read(&mut buffer)
+            .map_err(|err| AssetParseError::FailedToReadAsset(err))?;
         if read == 0 {
             break;
         }
         hash.write(&buffer[..read]);
     }
 
-    hash.finish()
+    Ok(hash.finish())
 }
 
 #[derive(Debug)]
 pub(crate) enum AssetParseError {
-    ParseError(String),
     AssetDoesntExist {
         err: std::io::Error,
         path: std::path::PathBuf,
@@ -66,7 +74,6 @@ pub(crate) enum AssetParseError {
 impl std::fmt::Display for AssetParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AssetParseError::ParseError(err) => write!(f, "Failed to parse asset: {}", err),
             AssetParseError::AssetDoesntExist { err, path } => {
                 write!(f, "Asset at {} doesn't exist: {}", path.display(), err)
             }
@@ -76,8 +83,11 @@ impl std::fmt::Display for AssetParseError {
 }
 
 pub struct AssetParser {
+    /// The span of the source string
+    path_span: proc_macro2::Span,
+
     /// The asset itself
-    asset: Result<ResourceAsset, AssetParseError>,
+    asset: Result<PathBuf, AssetParseError>,
 
     /// The source of the trailing options
     options: TokenStream2,
@@ -105,29 +115,27 @@ impl Parse for AssetParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // And then parse the options
         let src = input.parse::<LitStr>()?;
-        let asset = ResourceAsset::parse_any(&src.value())?;
+        let path_span = src.span();
+        let asset = resolve_path(&src.value());
+        let _comma = input.parse::<Token![,]>();
         let options = input.parse()?;
 
-        Ok(Self { asset, options })
+        Ok(Self {
+            path_span,
+            asset,
+            options,
+        })
     }
 }
 
 impl ToTokens for AssetParser {
-    // Need to generate:
-    //
-    // - 1. absolute file path on the user's system: `/users/dioxus/dev/project/assets/blah.css`
-    // - 2. original input in case that's useful: `../blah.css`
-    // - 3. path relative to the CARGO_MANIFEST_DIR - and then we'll add a `/`: `/assets/blah.css
-    // - 4. file from which this macro was called: `/users/dioxus/dev/project/src/lib.rs`
-    // - 5: The link section containing all this data
-    // - 6: the input tokens such that the builder gets validated by the const code
-    // - 7: the bundled name `/blahcss123.css`
-    //
-    // Not that we'll use everything, but at least we have this metadata for more post-processing.
-    //
-    // For now, `2` and `3` will be the same since we don't support relative paths... a bit of
-    // a limitation from rust itself. We technically could support them but not without some hoops
-    // to jump through
+    // The manganis macro outputs info to two different places:
+    // 1) The crate the macro was invoked in
+    //   - It needs the hashed contents of the file, the file path, and the file options
+    //   - Most of this is just forwarding the input, the only thing that the macro needs to do is hash the file contents
+    // 2) A bundler that supports manganis (currently just dioxus-cli)
+    //   - The macro needs to output the absolute path to the asset for the bundler to find later
+    //   - It also needs to serialize the bundled asset along with the asset options for the bundler to use later
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let asset = match self.asset.as_ref() {
             Ok(asset) => asset,
@@ -137,45 +145,49 @@ impl ToTokens for AssetParser {
                 return;
             }
         };
+        let asset_str = asset.display().to_string();
+        let mut asset_str = proc_macro2::Literal::string(&asset_str);
+        asset_str.set_span(self.path_span);
 
-        // 1. the link section itself
-        let link_section = crate::generate_link_section(&asset);
+        let hash = match hash_file_contents(asset) {
+            Ok(hash) => hash,
+            Err(err) => {
+                let err = err.to_string();
+                tokens.append_all(quote! { compile_error!(#err) });
+                return;
+            }
+        };
 
-        // 2. original
-        let input = asset.input.display().to_string();
-
-        // 3. resolved on the user's system
-        let local = asset.absolute.display().to_string();
-
-        // 4. bundled
-        let bundled = asset.bundled.to_string();
-
-        // 5. source tokens
-        let option_source = &self.options;
+        // Generate the link section for the asset
+        // The link section includes the source path and the output path of the asset
+        let link_section = crate::generate_link_section(quote!(__ASSET));
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
-        let method = if asset.input.is_relative() {
+        let constructor = if asset.is_relative() {
             quote::quote! { new_relative }
         } else {
             quote::quote! { new }
         };
 
+        let options = if self.options.is_empty() {
+            quote! { manganis::AssetOptions::Unknown }
+        } else {
+            self.options.clone()
+        };
+
         tokens.extend(quote! {
-            Asset::#method(
-                {
-                    #link_section
-                    manganis::Asset {
-                        // "/assets/blah.css"
-                        input: #input,
+            {
+                const __ASSET_HASH: u64 = #hash;
+                const __ASSET_SOURCE_PATH: &'static str = #asset_str;
+                const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
+                const __ASSET_BUNDLED_PATH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::generate_unique_path(__ASSET_SOURCE_PATH, __ASSET_HASH, &__ASSET_OPTIONS);
+                const __ASSET_BUNDLED_PATH_STR: &'static str = __ASSET_BUNDLED_PATH.as_str();
+                const __ASSET: manganis::Asset = manganis::Asset::#constructor(__ASSET_SOURCE_PATH, __ASSET_BUNDLED_PATH_STR, __ASSET_OPTIONS);
 
-                        // "/users/dioxus/dev/app/assets/blah.css"
-                        local: #local,
+                #link_section
 
-                        // "/blahcss123.css"
-                        bundled: #bundled,
-                    }
-                }
-            ) #option_source
+                __ASSET
+            }
         })
     }
 }

@@ -7188,13 +7188,9 @@ dependencies = [
 name = "manganis"
 version = "0.6.0-alpha.4"
 dependencies = [
- "anyhow",
- "base64 0.22.1",
  "const-serialize",
- "dioxus-core-types",
- "dunce",
- "once_cell",
- "serde",
+ "manganis-core",
+ "manganis-macro",
 ]
 
 [[package]]
@@ -7202,6 +7198,7 @@ name = "manganis-core"
 version = "0.6.0-alpha.4"
 dependencies = [
  "const-serialize",
+ "dioxus-core-types",
  "serde",
  "serde_json",
 ]

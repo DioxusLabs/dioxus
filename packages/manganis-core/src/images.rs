@@ -19,7 +19,7 @@ pub enum ImageType {
 }
 
 /// The size of an image asset
-#[derive(Debug, SerializeConst)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
 #[repr(C, u8)]
 pub enum ImageSize {
     /// A manual size in pixels
@@ -34,7 +34,7 @@ pub enum ImageSize {
 }
 
 /// A builder for an image asset. This must be used in the [`mg!`] macro.
-#[derive(Debug, SerializeConst)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
 pub struct ImageAssetOptions {
     ty: ImageType,
     low_quality_preview: bool,
@@ -108,7 +108,7 @@ impl ImageAssetOptions {
     //     }
     // }
 
-    /// Convert the builder into a generic asset
+    /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
         AssetOptions::Image(self)
     }

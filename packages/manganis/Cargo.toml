@@ -13,8 +13,9 @@ keywords = ["assets"]
 [lib]
 
 [dependencies]
-dioxus-core-types = { workspace = true }
 const-serialize = { workspace = true }
+manganis-core.workspace = true
+manganis-macro.workspace = true
 
 # dunce = "1.0.2"
 # [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
@@ -27,13 +28,6 @@ const-serialize = { workspace = true }
 # infer = { workspace = true }
 # manganis-common = { workspace = true }
 
-once_cell = "1.19.0"
-dunce = "1.0.2"
-serde = { version = "1.0.183", features = ["derive"] }
-anyhow = "1"
-base64 = { workspace = true }
-
-
 [features]
 default = []
-html = []
+

@@ -1,44 +1,17 @@
 #![allow(dead_code)]
-use std::{fmt::Debug, mem::MaybeUninit};
-
-use crate::{
-    Layout, ListEncoding, PrimitiveEncoding, SerializeConst, StructEncoding, StructFieldEncoding,
-};
+use std::{fmt::Debug, hash::Hash, mem::MaybeUninit};
 
 const DEFAULT_MAX_SIZE: usize = 2usize.pow(10);
 
 pub struct ConstVec<T, const MAX_SIZE: usize = DEFAULT_MAX_SIZE> {
     memory: [MaybeUninit<T>; MAX_SIZE],
-    len: usize,
-}
-
-unsafe impl<T: SerializeConst, const MAX_SIZE: usize> SerializeConst for ConstVec<T, MAX_SIZE> {
-    const MEMORY_LAYOUT: Layout = Layout::Struct(StructEncoding {
-        size: std::mem::size_of::<Self>(),
-        data: &[
-            StructFieldEncoding::new(
-                std::mem::offset_of!(Self, len),
-                Layout::Primitive(PrimitiveEncoding {
-                    size: std::mem::size_of::<u32>(),
-                }),
-            ),
-            StructFieldEncoding::new(
-                std::mem::offset_of!(Self, memory),
-                Layout::List(ListEncoding {
-                    len: std::mem::size_of::<[MaybeUninit<T>; MAX_SIZE]>(),
-                    item_encoding: &Layout::Primitive(PrimitiveEncoding {
-                        size: std::mem::size_of::<u8>(),
-                    }),
-                }),
-            ),
-        ],
-    });
+    len: u32,
 }
 
 impl<T: Clone, const MAX_SIZE: usize> Clone for ConstVec<T, MAX_SIZE> {
     fn clone(&self) -> Self {
         let mut cloned = Self::new();
-        for i in 0..self.len {
+        for i in 0..self.len as usize {
             cloned = cloned.push(self.get(i).unwrap().clone());
         }
         cloned
@@ -50,6 +23,12 @@ impl<T: Copy, const MAX_SIZE: usize> Copy for ConstVec<T, MAX_SIZE> {}
 impl<T: PartialEq, const MAX_SIZE: usize> PartialEq for ConstVec<T, MAX_SIZE> {
     fn eq(&self, other: &Self) -> bool {
         self.as_ref() == other.as_ref()
+    }
+}
+
+impl<T: Hash, const MAX_SIZE: usize> Hash for ConstVec<T, MAX_SIZE> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
     }
 }
 
@@ -71,13 +50,13 @@ impl<T: Debug, const MAX_SIZE: usize> Debug for ConstVec<T, MAX_SIZE> {
 impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     pub const fn new() -> Self {
         Self {
-            memory: unsafe { MaybeUninit::uninit().assume_init() },
+            memory: [const { MaybeUninit::uninit() }; MAX_SIZE],
             len: 0,
         }
     }
 
     pub const fn push(mut self, value: T) -> Self {
-        self.memory[self.len] = MaybeUninit::new(value);
+        self.memory[self.len as usize] = MaybeUninit::new(value);
         self.len += 1;
         self
     }
@@ -95,7 +74,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     }
 
     pub const fn get(&self, index: usize) -> Option<&T> {
-        if index < self.len {
+        if index < self.len as usize {
             Some(unsafe { &*self.memory[index].as_ptr() })
         } else {
             None
@@ -103,19 +82,21 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     }
 
     pub const fn len(&self) -> usize {
-        self.len
+        self.len as usize
     }
 
     pub const fn as_ref(&self) -> &[T] {
-        unsafe { &*(self.memory.split_at(self.len).0 as *const [MaybeUninit<T>] as *const [T]) }
+        unsafe {
+            &*(self.memory.split_at(self.len as usize).0 as *const [MaybeUninit<T>] as *const [T])
+        }
     }
 
     pub const fn swap(mut self, first: usize, second: usize) -> Self
     where
         T: Copy,
     {
-        assert!(first < self.len);
-        assert!(second < self.len);
+        assert!(first < self.len as usize);
+        assert!(second < self.len as usize);
         let temp = self.memory[first];
         self.memory[first] = self.memory[second];
         self.memory[second] = temp;
@@ -128,7 +109,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     {
         let value = if self.len > 0 {
             self.len -= 1;
-            let last = self.len;
+            let last = self.len as usize;
             let last_value = unsafe { self.memory[last].assume_init() };
             Some(last_value)
         } else {
@@ -141,10 +122,10 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     where
         T: Copy,
     {
-        assert!(index < self.len);
+        assert!(index < self.len as usize);
         let value = unsafe { self.memory[index].assume_init() };
         let mut swap_index = index;
-        while swap_index + 1 < self.len {
+        while swap_index + 1 < self.len as usize {
             self.memory[swap_index] = self.memory[swap_index + 1];
             swap_index += 1;
         }
@@ -153,7 +134,7 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     }
 
     pub const fn set(mut self, index: usize, value: T) -> Self {
-        if index >= self.len {
+        if index >= self.len as usize {
             panic!("Out of bounds")
         }
         self.memory[index] = MaybeUninit::new(value);
@@ -161,14 +142,14 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
     }
 
     pub const fn into_parts(self) -> ([MaybeUninit<T>; MAX_SIZE], usize) {
-        (self.memory, self.len)
+        (self.memory, self.len as usize)
     }
 
     pub const fn split_at(&self, index: usize) -> (Self, Self)
     where
         T: Copy,
     {
-        assert!(index <= self.len);
+        assert!(index <= self.len as usize);
         let slice = self.as_ref();
         let (left, right) = slice.split_at(index);
         let mut left_vec = Self::new();

@@ -4,8 +4,8 @@ pub use folder::*;
 mod images;
 pub use images::*;
 
-mod builder;
-pub use builder::*;
+mod options;
+pub use options::*;
 
 mod css;
 pub use css::*;
@@ -16,7 +16,4 @@ pub use js::*;
 mod asset;
 pub use asset::*;
 
-mod linker;
-pub use linker::*;
-
-mod hash;
+pub mod linker;
