@@ -216,6 +216,7 @@ cargo-config2 = "0.1.26"
 criterion = { version = "0.5" }
 walrus = "0.22.0"
 cargo_metadata = "0.18.1"
+parking_lot = "0.12.1"
 
 # desktop
 wry = { version = "0.45.0", default-features = false }

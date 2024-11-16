@@ -10,8 +10,8 @@ keywords = ["generational", "box", "memory", "allocator"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-parking_lot = "0.12.1"
-tracing.workspace = true
+parking_lot = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }

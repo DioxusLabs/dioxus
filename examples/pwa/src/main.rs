@@ -14,7 +14,7 @@ fn app() -> Element {
             h1 { "🌗 Dioxus 🚀" }
             h3 { "Frontend that scales." }
             p {
-                "Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust."
+                "Dioxus is a Build fullstack web, desktop, and mobile apps with a single codebase.."
             }
         }
     )

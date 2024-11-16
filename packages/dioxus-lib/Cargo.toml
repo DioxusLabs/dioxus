@@ -3,7 +3,7 @@ name = "dioxus-lib"
 version = { workspace = true }
 authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
 edition = "2021"
-description = "Portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust"
+description = "Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.5/"
