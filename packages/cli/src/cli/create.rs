@@ -16,8 +16,8 @@ pub struct Create {
     name: Option<String>,
 
     /// Template path
-    #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
-    template: String,
+    #[clap(short, long)]
+    template: Option<String>,
 
     /// Branch to select when using `template` from a git repository.
     /// Mutually exclusive with: `--revision`, `--tag`.
@@ -55,6 +55,9 @@ impl Create {
             self.name = Some(create::name_from_path(&self.path)?);
         }
 
+        // If no template is specified, use the default one and set the branch to the latest release.
+        resolve_template_and_branch(&mut self.template, &mut self.branch);
+
         let args = GenerateArgs {
             define: self.option,
             destination: Some(self.path),
@@ -67,7 +70,7 @@ impl Create {
             name: self.name,
             silent: self.yes,
             template_path: TemplatePath {
-                auto_path: Some(self.template),
+                auto_path: self.template,
                 branch: self.branch,
                 revision: self.revision,
                 subfolder: self.subtemplate,
@@ -81,6 +84,20 @@ impl Create {
         post_create(&path)?;
         Ok(StructuredOutput::Success)
     }
+}
+
+/// If no template is specified, use the default one and set the branch to the latest release.
+///
+/// Allows us to version templates under the v0.5/v0.6 scheme on the templates repo.
+pub(crate) fn resolve_template_and_branch(
+    template: &mut Option<String>,
+    branch: &mut Option<String>,
+) {
+    if template.is_none() {
+        use crate::dx_build_info::{PKG_VERSION_MAJOR, PKG_VERSION_MINOR};
+        *template = Some(DEFAULT_TEMPLATE.to_string());
+        *branch = Some(format!("v{PKG_VERSION_MAJOR}.{PKG_VERSION_MINOR}"));
+    };
 }
 
 /// Prevent hidden cursor if Ctrl+C is pressed when interacting
@@ -230,14 +247,7 @@ pub(crate) mod tests {
 
     pub(crate) fn subcommand(name: &str) -> Command {
         let mut command = BINARY.command();
-        command
-            .arg(name)
-            .arg("--yes") // Skip any questions by choosing default answers.
-            .arg("--subtemplate")
-            // Probably should use some template that doesn't require specifying
-            // either `--subtemplate` or `--option`.
-            // Maybe a simple template in tests/ dir?
-            .arg("Fullstack");
+        command.arg(name).arg("--yes"); // Skip any questions by choosing default answers.
         command
     }
 
