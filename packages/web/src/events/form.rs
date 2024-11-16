@@ -18,7 +18,7 @@ impl WebEventExt for dioxus_html::FormData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<WebFormData>().map(|e| e.raw.clone())
+        self.downcast::<Event>().cloned()
     }
 }
 
