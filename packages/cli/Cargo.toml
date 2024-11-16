@@ -96,6 +96,7 @@ wasm-opt = { version = "0.116.1", optional = true }
 crossterm = { version = "0.28.0", features = ["event-stream"] }
 ansi-to-tui = "6.0"
 ansi-to-html = "0.2.1"
+path-absolutize = "3.1"
 ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
@@ -137,6 +138,9 @@ wasm-opt = ["dep:wasm-opt"]
 [[bin]]
 path = "src/main.rs"
 name = "dx"
+
+[dev-dependencies]
+escargot = "0.5"
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-v{ version }{ archive-suffix }"
