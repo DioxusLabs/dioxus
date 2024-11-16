@@ -247,14 +247,7 @@ pub(crate) mod tests {
 
     pub(crate) fn subcommand(name: &str) -> Command {
         let mut command = BINARY.command();
-        command
-            .arg(name)
-            .arg("--yes") // Skip any questions by choosing default answers.
-            .arg("--subtemplate")
-            // Probably should use some template that doesn't require specifying
-            // either `--subtemplate` or `--option`.
-            // Maybe a simple template in tests/ dir?
-            .arg("Fullstack");
+        command.arg(name).arg("--yes"); // Skip any questions by choosing default answers.
         command
     }
 
