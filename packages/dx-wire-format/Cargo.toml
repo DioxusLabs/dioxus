@@ -2,7 +2,7 @@
 name = "dioxus-dx-wire-format"
 edition = "2021"
 version.workspace = true
-publish = false
+publish = true
 authors = ["Jonathan Kelley"]
 description = "Wire format for the Dioxus CLI"
 license = "MIT OR Apache-2.0"
