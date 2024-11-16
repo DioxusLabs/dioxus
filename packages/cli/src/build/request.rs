@@ -100,7 +100,9 @@ impl BuildRequest {
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
             .args(self.build_arguments())
-            .envs(self.env_vars());
+            .envs(self.env_vars()?);
+
+        // todo(jon): save the temps into a file that we use for asset extraction instead of the weird double compile.
         // .args(["--", "-Csave-temps=y"]);
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
@@ -118,21 +120,19 @@ impl BuildRequest {
                 .krate
                 .android_ndk()
                 .context("Could not autodetect android linker")?;
-            let linker = self.build.target_args.arch().android_linker(&ndk);
+            let arch = self.build.target_args.arch();
+            let linker = arch.android_linker(&ndk);
 
-            tracing::trace!("Using android linker: {linker:?}");
+            let link_action = LinkAction::LinkAndroid {
+                linker,
+                extra_flags: vec![],
+            }
+            .to_json();
 
-            cmd.env(
-                LinkAction::ENV_VAR_NAME,
-                LinkAction::LinkAndroid {
-                    linker,
-                    extra_flags: vec![],
-                }
-                .to_json(),
-            );
+            cmd.env(LinkAction::ENV_VAR_NAME, link_action);
         }
 
-        tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:?}", cmd);
+        tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
 
         let mut child = cmd
             .stdout(Stdio::piped())
@@ -368,7 +368,7 @@ impl BuildRequest {
             .arg("-Z")
             .arg("unstable-options")
             .args(self.build_arguments())
-            .envs(self.env_vars())
+            .envs(self.env_vars()?)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -421,7 +421,7 @@ impl BuildRequest {
         Command::new("cargo")
             .arg("rustc")
             .args(self.build_arguments())
-            .envs(self.env_vars())
+            .envs(self.env_vars()?)
             .arg("--offline") /* don't use the network, should already be resolved */
             .arg("--")
             .arg(format!(
@@ -454,10 +454,47 @@ impl BuildRequest {
         Ok(manifest)
     }
 
-    fn env_vars(&self) -> Vec<(&str, String)> {
+    fn env_vars(&self) -> Result<Vec<(&str, String)>> {
         let mut env_vars = vec![];
 
         if self.build.platform() == Platform::Android {
+            let ndk = self
+                .krate
+                .android_ndk()
+                .context("Could not autodetect android linker")?;
+            let arch = self.build.target_args.arch();
+            let linker = arch.android_linker(&ndk);
+            let min_sdk_version = arch.android_min_sdk_version();
+            let ar_path = arch.android_ar_path(&ndk);
+            let target_cc = arch.target_cc(&ndk);
+            let target_cxx = arch.target_cxx(&ndk);
+            let java_home = arch.java_home();
+
+            tracing::debug!(
+                r#"Using android:
+            min_sdk_version: {min_sdk_version}
+            linker: {linker:?}
+            ar_path: {ar_path:?}
+            target_cc: {target_cc:?}
+            target_cxx: {target_cxx:?}
+            java_home: {java_home:?}
+            "#
+            );
+
+            env_vars.push(("ANDROID_NATIVE_API_LEVEL", min_sdk_version.to_string()));
+            env_vars.push(("TARGET_AR", ar_path.display().to_string()));
+            env_vars.push(("TARGET_CC", target_cc.display().to_string()));
+            env_vars.push(("TARGET_CXX", target_cxx.display().to_string()));
+            env_vars.push(("ANDROID_NDK_ROOT", ndk.display().to_string()));
+
+            // attempt to set java_home to the android studio java home if it exists.
+            // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
+            // attempt to set java_home to the android studio java home if it exists and java_home was not already set
+            if let Some(java_home) = java_home {
+                tracing::debug!("Setting JAVA_HOME to {java_home:?}");
+                env_vars.push(("JAVA_HOME", java_home.display().to_string()));
+            }
+
             env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
             env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
             env_vars.push((
@@ -468,9 +505,29 @@ impl BuildRequest {
             ));
 
             env_vars.push(("RUSTFLAGS", self.android_rust_flags()))
+
+            // todo(jon): the guide for openssl recommends extending the path to include the tools dir
+            //            in practice I couldn't get this to work, but this might eventually become useful.
+            //
+            // https://github.com/openssl/openssl/blob/master/NOTES-ANDROID.md#configuration
+            //
+            // They recommend a configuration like this:
+            //
+            // // export ANDROID_NDK_ROOT=/home/whoever/Android/android-sdk/ndk/20.0.5594570
+            // PATH=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$ANDROID_NDK_ROOT/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-x86_64/bin:$PATH
+            // ./Configure android-arm64 -D__ANDROID_API__=29
+            // make
+            //
+            // let tools_dir = arch.android_tools_dir(&ndk);
+            // let extended_path = format!(
+            //     "{}:{}",
+            //     tools_dir.display(),
+            //     std::env::var("PATH").unwrap_or_default()
+            // );
+            // env_vars.push(("PATH", extended_path));
         };
 
-        env_vars
+        Ok(env_vars)
     }
 
     /// We only really currently care about:
@@ -664,7 +721,7 @@ impl BuildRequest {
         }
         let hbs_data = HbsTypes {
             application_id: self.krate.full_mobile_app_name(),
-            app_name: self.krate.mobile_app_name(),
+            app_name: self.krate.bundled_app_name(),
         };
 
         // Top-level gradle config

@@ -161,7 +161,7 @@ impl BuildArgs {
             // Some extra logs
             let arch = match arch {
                 Some(a) => {
-                    tracing::info!(
+                    tracing::debug!(
                         "Autodetected `{}` Android arch.",
                         a.android_target_triplet()
                     );
@@ -169,7 +169,7 @@ impl BuildArgs {
                 }
                 None => {
                     let a = Arch::default();
-                    tracing::info!(
+                    tracing::debug!(
                         "Could not detect Android arch, defaulting to `{}`",
                         a.android_target_triplet()
                     );
