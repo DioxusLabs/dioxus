@@ -1,8 +1,21 @@
-<div>
-  <h1>🌗🚀 Dioxus</h1>
-  <p>
-    <strong>A concurrent, functional, virtual DOM for Rust</strong>
-  </p>
+<div align="center">
+    <style>
+        @media (prefers-color-scheme: dark) {
+            .darkmode-image {
+                display: none;
+            }
+        }
+        @media (prefers-color-scheme: light) {
+            .lightmode-image {
+                display: none;
+            }
+        }
+    </style>
+    <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/refs/heads/main/notes/header-light-updated.svg" alt="Dioxus logo" width="100%" class="lightmode-image">
+    <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/refs/heads/main/notes/header-dark-updated.svg" alt="Dioxus logo" width="100%" class="darkmode-image">
+</div>
+<div align="center">
+    <strong>Build web, desktop, and mobile apps with a single codebase.</strong>
 </div>
 
 # Resources
@@ -47,8 +60,7 @@ fn main() {
 
 // The #[component] attribute streamlines component creation.
 // It's not required, but highly recommended. It will lint incorrect component definitions and help you create props structs.
-#[component]
-fn App() -> Element {
+fn app() -> Element {
     rsx! { "hello world!" }
 }
 ```
@@ -60,8 +72,7 @@ Any element in `rsx!` can have attributes, listeners, and children. For
 consistency, we force all attributes and listeners to be listed _before_
 children.
 
-```rust, no_run
-# use dioxus::prelude::*;
+```rust, ignore
 let value = "123";
 
 rsx! {
@@ -75,8 +86,7 @@ rsx! {
 
 The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that implements [`IntoDynNode`](dioxus_core::IntoDynNode) will be parsed as a child. We make two exceptions: both `for` loops and `if` statements are parsed where their body is parsed as a rsx nodes.
 
-```rust, no_run
-# use dioxus::prelude::*;
+```rust, ignore
 rsx! {
     div {
         for _ in 0..10 {
@@ -89,10 +99,8 @@ rsx! {
 Putting everything together, we can write a simple component that renders a list of
 elements:
 
-```rust, no_run
-# use dioxus::prelude::*;
-#[component]
-fn App() -> Element {
+```rust, ignore
+fn app() -> Element {
     let name = "dave";
     rsx! {
         h1 { "Hello, {name}!" }
@@ -112,11 +120,8 @@ component we design must take some Properties. For components with no explicit p
 
 In Dioxus, all properties are memorized by default with Clone and PartialEq. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
 
-```rust, no_run
-# use dioxus::prelude::*;
-# #[component] fn Header(title: String, color: String) -> Element { todo!() }
-#[component]
-fn App() -> Element {
+```rust, ignore
+fn app() -> Element {
     rsx! {
         Header {
             title: "My App",
@@ -128,8 +133,7 @@ fn App() -> Element {
 
 The `#[component]` macro will help us automatically create a props struct for our component:
 
-```rust, no_run
-# use dioxus::prelude::*;
+```rust, ignore
 // The component macro turns the arguments for our function into named fields we can pass in to the component in rsx
 #[component]
 fn Header(title: String, color: String) -> Element {
@@ -153,10 +157,8 @@ it to render UI elements.
 By convention, all hooks are functions that should start with `use_`. We can
 use hooks to define the state and modify it from within listeners.
 
-```rust, no_run
-# use dioxus::prelude::*;
-#[component]
-fn App() -> Element {
+```rust, ignore
+fn app() -> Element {
     // The use signal hook runs once when the component is created and then returns the current value every run after the first
     let name = use_signal(|| "world");
 
@@ -187,8 +189,7 @@ fn main() {
     dioxus::launch(App);
 }
 
-#[component]
-fn App() -> Element {
+fn app() -> Element {
     let mut count = use_signal(|| 0);
 
     rsx! {
