@@ -88,16 +88,13 @@ fn app() -> Element {
 With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time.
 
 <div align="center">
-  <video src="https://private-user-images.githubusercontent.com/10237910/386918847-05f8b0a5-e03e-4b3c-aa66-98f51b6ec917.mov" width="500"></video>
+  <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video>
 </div>
 
-<video src="https://private-user-images.githubusercontent.com/10237910/386918847-05f8b0a5-e03e-4b3c-aa66-98f51b6ec917.mov" autoplay loop muted width="500"></video>
 
-![Video?](https://private-user-images.githubusercontent.com/10237910/386918847-05f8b0a5-e03e-4b3c-aa66-98f51b6ec917.mov)
+## First-class Android and iOS support
 
-## Built-in Android and iOS support
-
-Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Objective-C to access native APIs.
+Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Native APIs.
 
 <div align="center">
   <img src="./notes/android_and_ios.avif" width="500">
