@@ -7,7 +7,6 @@ use crate::{AppBundle, Platform};
 use anyhow::Context;
 use serde::Deserialize;
 use std::{
-    ffi::OsStr,
     path::{Path, PathBuf},
     process::Stdio,
     time::Instant,
@@ -216,38 +215,14 @@ impl BuildRequest {
             return Ok(AssetManifest::default());
         }
 
-        // // Experimental feature for testing - if the env var is set, we'll use the deeplinker
-        // if std::env::var("DEEPLINK").is_ok() {
-        //     tracing::debug!("Using deeplinker instead of incremental cache");
-        //     return self.deep_linker_asset_extract().await;
-        // }
+        // Experimental feature for testing - if the env var is set, we'll use the deeplinker
+        if std::env::var("DEEPLINK").is_ok() {
+            tracing::debug!("Using deeplinker instead of incremental cache");
+            return self.deep_linker_asset_extract().await;
+        }
 
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
-
-        // // Add from the deps folder where the rlibs are stored for dependencies
-        // let mut deps_folder = exe.parent().unwrap().join("deps");
-        // tracing::trace!("Adding assets from deps folder: {deps_folder:?}");
-        // for entry in deps_folder.read_dir()?.flatten() {
-        //     if entry.path().extension() == Some(OsStr::new("rlib")) {
-        //         _ = manifest.add_from_object_path(&entry.path());
-        //     }
-        // }
-
-        // // Add from the incremental cache folder by recursively walking the folder
-        // // it seems that this sticks around no matter what - and cargo doesn't clean it up since the .os are cached anyway
-        // fn recursive_add(manifest: &mut AssetManifest, path: &Path) -> Result<()> {
-        //     if path.extension() == Some(OsStr::new("o")) {
-        //         _ = manifest.add_from_object_path(path);
-        //     } else if let Ok(dir) = path.read_dir() {
-        //         for entry in dir.flatten() {
-        //             recursive_add(manifest, &entry.path())?;
-        //         }
-        //     }
-
-        //     Ok(())
-        // }
-        // recursive_add(&mut manifest, &exe.parent().unwrap().join("incremental"))?;
 
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
         _ = manifest.add_from_object_path(exe);
