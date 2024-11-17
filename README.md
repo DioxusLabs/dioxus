@@ -100,7 +100,7 @@ With one command, `dx serve` and your app is running. Edit your markup and style
 Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Native APIs.
 
 <div align="center">
-  <img src="./notes/android_and_ios.avif2" width="500">
+  <img src="./notes/android_and_ios2.avif" width="500">
 </div>
 
 ## Bundle for web, desktop, and mobile
