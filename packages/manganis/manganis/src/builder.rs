@@ -50,6 +50,7 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
+        // Force a volatile read of the metadata to ensure the symbol makes it into the binary
         (self.metadata)();
 
         // If the asset is relative, we resolve the asset at the current directory
