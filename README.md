@@ -88,12 +88,12 @@ fn app() -> Element {
 With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time.
 
 <div align="center">
-  <video src="./notes/hotreload-video.mp4" width="500"></video>
+  <video src="https://private-user-images.githubusercontent.com/10237910/386918847-05f8b0a5-e03e-4b3c-aa66-98f51b6ec917.mov" width="500"></video>
 </div>
 
-<video src="./notes/hotreload-video.mp4" width="500"></video>
+<video src="https://private-user-images.githubusercontent.com/10237910/386918847-05f8b0a5-e03e-4b3c-aa66-98f51b6ec917.mov" width="500"></video>
 
-![Video?](./notes/hotreload-video.mp4)
+![Video?](https://private-user-images.githubusercontent.com/10237910/386918847-05f8b0a5-e03e-4b3c-aa66-98f51b6ec917.mov)
 
 ## Built-in Android and iOS support
 
