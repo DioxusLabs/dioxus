@@ -17,5 +17,9 @@ pub fn generate_link_section(asset: &impl Serialize) -> TokenStream2 {
         #[link_section = #section_name]
         #[used]
         static ASSET: [u8; #len] = * #asset_bytes;
+
+        fn __volatile_reader() -> u8 {
+            unsafe { std::ptr::read_volatile(ASSET.as_ptr()) }
+        }
     }
 }

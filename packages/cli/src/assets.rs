@@ -24,8 +24,8 @@ impl AssetManifest {
     }
 
     /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
-    pub(crate) fn add_from_object_path(&mut self, path: PathBuf) -> anyhow::Result<()> {
-        let data = std::fs::read(path.clone())?;
+    pub(crate) fn add_from_object_path(&mut self, path: &Path) -> anyhow::Result<()> {
+        let data = std::fs::read(path)?;
 
         match path.extension().and_then(|ext| ext.to_str()) {
             // Parse an rlib as a collection of objects
