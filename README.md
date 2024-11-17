@@ -100,10 +100,6 @@ Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx 
   <img src="./notes/android_and_ios.avif" width="500">
 </div>
 
-## Interactive CLI for building apps
-
-
-
 ## Bundle for web, desktop, and mobile
 
 Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.5/reference/assets), and more. Build webapps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 15mb.
@@ -119,14 +115,6 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 
 <div align="center">
   <img src="./notes/docs.avif">
-</div>
-
-## Emphasis on developer experience
-
-Dioxus prioritizes developer experience, and we've put a ton of effort into end-to-end tooling. We've built a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) that autoformats your RSX code, converts HTML to RSX, and more. We've also built a very powerful [CLI](https://dioxuslabs.com/learn/0.5/CLI) that supports creating new apps, serving them, and cross-platform bundling, with deployment on the roadmap.
-
-<div align="center">
-  <img src="./notes/autofmt.gif">
 </div>
 
 ## Community
