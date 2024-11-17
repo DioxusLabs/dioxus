@@ -104,6 +104,8 @@ impl ToTokens for AssetParser {
 
                         // "/blahcss123.css"
                         bundled: #bundled,
+
+                        metadata: __volatile_reader as fn() -> u8,
                     }
                 }
             ) #option_source

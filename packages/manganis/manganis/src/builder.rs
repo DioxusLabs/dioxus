@@ -14,6 +14,9 @@ pub struct Asset {
     ///
     /// `blah-123.css``
     pub bundled: &'static str,
+
+    /// The metadata for this asset plumbed by the compiler
+    pub metadata: fn() -> u8,
 }
 
 impl Asset {
@@ -47,6 +50,8 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
+        (self.metadata)();
+
         // If the asset is relative, we resolve the asset at the current directory
         if !dioxus_core_types::is_bundled_app() {
             return PathBuf::from(self.local);
