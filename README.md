@@ -48,7 +48,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.5/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -84,7 +84,7 @@ fn app() -> Element {
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
 - Type-safe Routing and server functions to leverage Rust's powerful compile-time guarantees
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
-- And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
+- And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
 
 ## Instant hot-reloading
 
@@ -105,7 +105,7 @@ Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx 
 
 ## Bundle for web, desktop, and mobile
 
-Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.5/reference/assets), and more. Build webapps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 15mb.
+Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.6/reference/assets), and more. Build webapps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 15mb.
 
 <div align="center">
   <img src="./notes/bundle.gif">
@@ -114,7 +114,7 @@ Simply run `dx bundle` and your app will be built and bundled with maximization 
 
 ## Fantastic documentation
 
-We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our docsite runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.5/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new diouxs features - [check it out!](https://github.com/dioxusLabs/docsite)
+We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our docsite runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.6/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new diouxs features - [check it out!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="./notes/docs.avif">
@@ -193,7 +193,7 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
 
 ## Running the examples
 
-> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.5 branch](https://github.com/DioxusLabs/dioxus/tree/v0.5/examples).
+> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.6 branch](https://github.com/DioxusLabs/dioxus/tree/v0.6/examples).
 
 The examples in the top level of this repository can be run with:
 
@@ -238,7 +238,7 @@ Tauri is a framework for building desktop mobile apps where your frontend is wri
 
 Leptos is a library for building fullstack web-apps, similar to SolidJS and SolidStart. The two libraries share similar goals on the web, but have several key differences:
 
-- **Reactivity model**: Leptos uses signals for its underlying reactivity, while Dioxus opts for a VirtualDom and re-renders. While in theory signals are more efficient, in practice, Dioxus' VirtualDom performs little-to-no actual diffing (thanks to our [block-dom inspired templates](https://dioxuslabs.com/blog/templates-diffing)) and is [actually faster than Leptos](https://krausest.github.io/js-framework-benchmark/2024/table_chrome_123.0.6312.59.html).
+- **Reactivity model**: Leptos uses signals for its underlying reactivity, while Dioxus opts for a VirtualDom and re-renders. While in theory signals are more efficient, in practice, Dioxus' VirtualDom performs little-to-no actual diffing (thanks to our [block-dom inspired templates](https://dioxuslabs.com/blog/templates-diffing)) and as fast as the fastest JS frameworks.
 
 - **Control flow**: Because Leptos uses signals for reactivity, you are constrained to Leptos' primitives for things like `for` loops and `if` statements. If you get this wrong, your app will lose reactivity, leading to hard to debug UI issues. With Dioxus, you can use iterators, regular Rust `for` loops and `if` statements, and your app will still be reactive. In practice, a Dioxus component to insert counters into a list might look like this:
 
@@ -249,7 +249,7 @@ fn Counters() -> Element {
     rsx! {
         button { onclick: move |_| counters.push(counters.len()), "Add Counter" }
         ul {
-            for idx in 0..counters.len() {
+            for idx a.counters.len() {
                 li {
                     button { onclick: move |_| counters.write()[idx] += 1, "{counters.index(idx)}" }
                     button { onclick: move |_| { counters.remove(idx); }, "Remove" }
@@ -347,7 +347,7 @@ Dioxus and Electron are two entirely different projects with similar goals. Elec
 
 ## Contributing
 
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.5/contributing).
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.6/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 
