@@ -166,8 +166,9 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
       <td>
         <ul>
           <li>Render using Webview or - experimentally - with WGPU or Skia </li>
-          <li>Support for iOS and Android </li>
-          <li>Currently quite experimental, with lots of improvements coming throughout 2024 </li>
+          <li>Build .ipa and .apk files for iOS and Android </li>
+          <li>Call directly into Java and Objective-C with minimal overhead</li>
+          <li>From "hello world" to running on device in seconds</li>
         </ul>
       </td>
     </tr>
