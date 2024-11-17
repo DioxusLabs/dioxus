@@ -90,6 +90,7 @@ With one command, `dx serve` and your app is running. Edit your markup and style
 <div align="center">
   <video src="./notes/hotreload-video.mp4" width="500"></video>
 </div>
+<video src="./notes/hotreload-video.mp4" width="500"></video>
 
 ## Built-in Android and iOS support
 
