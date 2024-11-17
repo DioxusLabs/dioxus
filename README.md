@@ -88,7 +88,7 @@ fn app() -> Element {
 With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time.
 
 <div align="center">
-  <video src="./notes/hotreload-video.mp4" autoplay loop muted width="500"></video>
+  <video src="./notes/hotreload-video.mp4" width="500"></video>
 </div>
 
 ## Built-in Android and iOS support
