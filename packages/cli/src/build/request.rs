@@ -216,6 +216,12 @@ impl BuildRequest {
             return Ok(AssetManifest::default());
         }
 
+        // Experimental feature for testing - if the env var is set, we'll use the deeplinker
+        if std::env::var("DEEPLINK").is_ok() {
+            tracing::debug!("Using deeplinker instead of incremental cache");
+            return self.deep_linker_asset_extract().await;
+        }
+
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
 
