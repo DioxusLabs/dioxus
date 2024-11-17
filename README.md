@@ -1,5 +1,5 @@
-> [!IMPORTANT]  Dioxus 0.6 is released [check it out here!](https://dioxuslabs.com/blog/release-060/)
-
+> [!IMPORTANT] Dioxus 0.6 is released [check it out here!](https://dioxuslabs.com/blog/release-060/)
+> hmmm
 <p>
     <p align="center" >
       <img src="./notes/header-light.svg#gh-light-mode-only" >
