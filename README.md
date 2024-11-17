@@ -79,25 +79,38 @@ fn app() -> Element {
 
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
-- Extremely performant, powered by Rust's fastest wasm-framework [sledgehammer](https://dioxuslabs.com/blog/templates-diffing)
+- Type-safe Routing and server functions to leverage Rust's powerful compile-time guarantees
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
 - And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
 
 ## Instant hot-reloading
 
-With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time. Rust code hotreloading is not yet 1st class, but possible with [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/).
+With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time.
 
 <div align="center">
-  <img src="./notes/hotreload.gif">
+  <video src="./notes/hotreload.mp4" autoplay loop muted></video>
 </div>
 
-## Bundler for deploying to the web and desktop
+## Built-in Android and iOS support
+
+Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Objective-C to access native APIs.
+
+<div align="center">
+  <img src="./notes/android_and_ios.avif">
+</div>
+
+## Interactive CLI for building apps
+
+
+
+## Bundle for web, desktop, and mobile
 
 Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.5/reference/assets), and more. Build webapps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 15mb.
 
 <div align="center">
   <img src="./notes/bundle.gif">
 </div>
+
 
 ## Fantastic documentation
 
@@ -134,8 +147,6 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     <tr>
       <td>
       <b>Web</b>
-      <br />
-      <em>Tier 1 Support</em>
       </td>
       <td>
         <ul>
@@ -148,24 +159,7 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     </tr>
     <tr>
       <td>
-      <b>Fullstack</b>
-      <br />
-      <em>Tier 1 Support</em>
-      </td>
-      <td>
-        <ul>
-          <li>Suspense, hydration, and server-side rendering</li>
-          <li>Quickly drop in backend functionality with server functions</li>
-          <li>Extractors, middleware, and routing integrations</li>
-          <li>Compatible with desktop and mobile!</li>
-        </ul>
-      </td>
-    </tr>
-    <tr>
-      <td>
       <b>Desktop</b>
-      <br />
-      <em>Tier 1 Support</em>
       </td>
       <td>
         <ul>
@@ -178,23 +172,7 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     </tr>
     <tr>
       <td>
-      <b>Liveview</b>
-      <br />
-      <em>Tier 1 Support</em>
-      </td>
-      <td>
-        <ul>
-          <li>Render apps - or just a single component - entirely on the server</li>
-          <li>Integrations with popular Rust frameworks like Axum and Warp</li>
-          <li>Extremely low-latency and ability to support 10,000+ simultaneous apps</li>
-        </ul>
-      </td>
-    </tr>
-    <tr>
-      <td>
       <b>Mobile</b>
-      <br />
-      <em>Tier 2 Support</em>
       </td>
       <td>
         <ul>
@@ -206,15 +184,14 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     </tr>
     <tr>
       <td>
-      <b>Terminal</b>
-      <br />
-      <em>Tier 2 Support</em>
+      <b>Server-side Rendering</b>
       </td>
       <td>
         <ul>
-          <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
-          <li>Powered by the familiar flexbox and CSS model of the browser</li>
-          <li>Built-in widgets like text input, buttons, and focus system</li>
+          <li>Suspense, hydration, and server-side rendering</li>
+          <li>Quickly drop in backend functionality with server functions</li>
+          <li>Extractors, middleware, and routing integrations</li>
+          <li>Static-site generation and incremental regeneration</li>
         </ul>
       </td>
     </tr>
