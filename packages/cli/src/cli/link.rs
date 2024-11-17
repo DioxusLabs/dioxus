@@ -92,7 +92,7 @@ impl LinkAction {
                     if item.ends_with(".o") || item.ends_with(".rlib") {
                         let path_to_item = PathBuf::from(item);
                         if let Ok(path) = path_to_item.canonicalize() {
-                            _ = manifest.add_from_object_path(path);
+                            _ = manifest.add_from_object_path(&path);
                         }
                     }
                 }
