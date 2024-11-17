@@ -1,5 +1,5 @@
 <p align="center">
-  ✨✨ Dioxus 0.6 is released - <a href="https://dioxuslabs.com/blog/release-060/"> check it out here! </a> ✨✨
+  <a href="https://dioxuslabs.com/blog/release-060/">✨ Dioxus 0.6 is released - check it out here! ✨</a>
 </p>
 <p>
     <p align="center" >
