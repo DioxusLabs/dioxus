@@ -11,12 +11,14 @@
             }
         }
     </style>
-    <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/refs/heads/main/notes/header-light-updated.svg" alt="Dioxus logo" width="100%" class="lightmode-image">
-    <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/refs/heads/main/notes/header-dark-updated.svg" alt="Dioxus logo" width="100%" class="darkmode-image">
+    <img src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c" alt="Dioxus logo" width="100%" class="lightmode-image">
+    <img src="https://github.com/user-attachments/assets/9c6a5fac-806d-4391-80d0-d87d63c406eb" alt="Dioxus logo" width="100%" class="darkmode-image">
 </div>
 <div align="center">
     <strong>Build web, desktop, and mobile apps with a single codebase.</strong>
 </div>
+<!-- ![header-light-updated](https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c) -->
+<!-- ![header-dark-updated](https://github.com/user-attachments/assets/9c6a5fac-806d-4391-80d0-d87d63c406eb) -->
 
 # Resources
 
