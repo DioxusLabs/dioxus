@@ -1,6 +1,6 @@
 [package]
 name = "const-serialize-macro"
-version = "0.6.0-alpha.4"
+version = "0.6.0-alpha.5"
 edition = "2021"
 description = "A macro to derive const serialize"
 license = "MIT/Apache-2.0"

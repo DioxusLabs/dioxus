@@ -82,7 +82,7 @@ fn test_serialize_enum() {
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+    assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B {
         one: 0x11,
@@ -92,7 +92,7 @@ fn test_serialize_enum() {
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+    assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 }
 
 #[test]
@@ -111,14 +111,14 @@ fn test_serialize_u8_enum() {
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+    assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B;
     let mut buf = ConstWriteBuffer::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+    assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 }
 
 #[test]
@@ -168,7 +168,7 @@ fn test_serialize_nested_enum() {
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+    assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B {
         one: 0x11,
@@ -178,7 +178,7 @@ fn test_serialize_nested_enum() {
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+    assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B {
         one: 0x11,
@@ -191,7 +191,7 @@ fn test_serialize_nested_enum() {
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+    assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B {
         one: 0x11,
@@ -204,5 +204,5 @@ fn test_serialize_nested_enum() {
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(Enum, buf), Some(data));
+    assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 }

@@ -1,7 +1,9 @@
+use crate::assets::process_file_to;
 use crate::Result;
 use crate::{assets::AssetManifest, TraceSrc};
 use crate::{BuildRequest, Platform};
 use anyhow::Context;
+use manganis_core::AssetOptions;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     fs::create_dir_all,
@@ -388,10 +390,10 @@ impl AppBundle {
         // Queue the bundled assets
         for asset in self.app.assets.assets.keys() {
             let bundled = self.app.assets.assets.get(asset).unwrap();
-            let from = bundled.absolute.clone();
-            let to = asset_dir.join(&bundled.bundled);
+            let from = PathBuf::from(bundled.absolute_source_path());
+            let to = asset_dir.join(&bundled.bundled_path());
             tracing::debug!("Copying asset {from:?} to {to:?}");
-            assets_to_transfer.push((from, to));
+            assets_to_transfer.push((from, to, *bundled.options()));
         }
 
         // And then queue the legacy assets
@@ -399,7 +401,7 @@ impl AppBundle {
         for from in self.build.krate.legacy_asset_dir_files() {
             let to = asset_dir.join(from.file_name().unwrap());
             tracing::debug!("Copying legacy asset {from:?} to {to:?}");
-            assets_to_transfer.push((from, to));
+            assets_to_transfer.push((from, to, AssetOptions::Unknown));
         }
 
         let asset_count = assets_to_transfer.len();
@@ -407,27 +409,28 @@ impl AppBundle {
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         // todo: we want to use the fastfs variant that knows how to parallelize folders, too
-        assets_to_transfer.par_iter().try_for_each(|(from, to)| {
-            tracing::trace!(
-                "Starting asset copy {current}/{asset_count} from {from:?}",
-                current = assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
-            );
+        assets_to_transfer
+            .par_iter()
+            .try_for_each(|(from, to, options)| {
+                tracing::trace!(
+                    "Starting asset copy {current}/{asset_count} from {from:?}",
+                    current = assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
+                );
 
-            // todo(jon): implement optimize + pre_compress on the asset type
-            let res = crate::fastfs::copy_asset(from, to);
+                let res = process_file_to(options, from, to);
 
-            if let Err(err) = res.as_ref() {
-                tracing::error!("Failed to copy asset {from:?}: {err}");
-            }
+                if let Err(err) = res.as_ref() {
+                    tracing::error!("Failed to copy asset {from:?}: {err}");
+                }
 
-            self.build.status_copied_asset(
-                assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
-                asset_count,
-                from.clone(),
-            );
+                self.build.status_copied_asset(
+                    assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
+                    asset_count,
+                    from.to_path_buf(),
+                );
 
-            res.map(|_| ())
-        })?;
+                res.map(|_| ())
+            })?;
 
         Ok(())
     }

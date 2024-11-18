@@ -201,9 +201,33 @@ impl_serialize_const_tuple!(T1: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6, T8:
 const MAX_STR_SIZE: usize = 256;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstStr {
+    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
     bytes: [u8; MAX_STR_SIZE],
     len: u32,
+}
+
+#[cfg(feature = "serde")]
+mod serde_bytes {
+    use serde::{Deserialize, Serializer};
+
+    pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_bytes(bytes)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; super::MAX_STR_SIZE], D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = Vec::<u8>::deserialize(deserializer)?;
+        bytes
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("Failed to convert bytes to a fixed size array"))
+    }
 }
 
 unsafe impl SerializeConst for ConstStr {
@@ -802,16 +826,18 @@ macro_rules! deserialize_const {
 #[must_use = "The data is deserialized from the input buffer"]
 pub const unsafe fn deserialize_const_raw<const N: usize, T: SerializeConst>(
     from: ConstReadBuffer,
-) -> Option<T> {
+) -> Option<(ConstReadBuffer, T)> {
     // Create uninitized memory with the size of the type
     let out = [MaybeUninit::uninit(); N];
     // Fill in the bytes into the buffer for the type
-    let (_, out) = match deserialize_const_ptr(from, &T::MEMORY_LAYOUT, (0, out)) {
+    let (from, out) = match deserialize_const_ptr(from, &T::MEMORY_LAYOUT, (0, out)) {
         Some(data) => data,
         None => return None,
     };
     // Now that the memory is filled in, transmute it into the type
-    Some(unsafe { std::mem::transmute_copy::<[MaybeUninit<u8>; N], T>(&out) })
+    Some((from, unsafe {
+        std::mem::transmute_copy::<[MaybeUninit<u8>; N], T>(&out)
+    }))
 }
 
 /// Check if the serialized representation of two items are the same

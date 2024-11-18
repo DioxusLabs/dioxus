@@ -1,10 +1,11 @@
 [package]
 name = "const-serialize"
-version = "0.6.0-alpha.4"
+version = "0.6.0-alpha.5"
 edition = "2021"
 
 [dependencies]
 const-serialize-macro = { workspace = true }
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 const-serialize = { path = "." }
@@ -12,3 +13,4 @@ rand.workspace = true
 
 [features]
 test-big-endian = []
+serde = ["dep:serde"]

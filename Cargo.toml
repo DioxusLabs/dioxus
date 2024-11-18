@@ -137,17 +137,14 @@ dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alp
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.5" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.5" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.5", default-features = false }
+const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.5" }
+const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.5" }
+dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-alpha.5" }
+
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.5" }
 manganis = { path = "packages/manganis", version = "0.6.0-alpha.5" }
 manganis-core = { path = "packages/manganis-core", version = "0.6.0-alpha.5" }
 manganis-macro = { path = "packages/manganis-macro", version = "0.6.0-alpha.5" }
-const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.5" }
-const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.5" }
-
-lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.5" }
-manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.5" }
-manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.5" }
-manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.0-alpha.5" }
 
 warnings = { version = "0.2.1" }
 

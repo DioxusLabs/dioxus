@@ -3,7 +3,17 @@ use const_serialize::SerializeConst;
 use crate::AssetOptions;
 
 /// The type of an image. You can read more about the tradeoffs between image formats [here](https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types)
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
+#[derive(
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    SerializeConst,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[repr(u8)]
 pub enum ImageType {
     /// A png image. Png images cannot contain transparency and tend to compress worse than other formats
@@ -19,7 +29,17 @@ pub enum ImageType {
 }
 
 /// The size of an image asset
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
+#[derive(
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    SerializeConst,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[repr(C, u8)]
 pub enum ImageSize {
     /// A manual size in pixels
@@ -34,7 +54,17 @@ pub enum ImageSize {
 }
 
 /// A builder for an image asset. This must be used in the [`mg!`] macro.
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
+#[derive(
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    SerializeConst,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct ImageAssetOptions {
     ty: ImageType,
     low_quality_preview: bool,
@@ -61,11 +91,13 @@ impl ImageAssetOptions {
     /// const _: manganis::ImageAsset = manganis::mg!(css("https://sindresorhus.com/github-markdown-css/github-markdown.css").preload());
     /// ```
     #[allow(unused)]
-    pub const fn preload(self) -> Self {
-        Self {
-            preload: true,
-            ..self
-        }
+    pub const fn with_preload(self, preload: bool) -> Self {
+        Self { preload, ..self }
+    }
+
+    /// Check if the asset is preloaded
+    pub const fn preloaded(&self) -> bool {
+        self.preload
     }
 
     /// Sets the format of the image
@@ -80,6 +112,11 @@ impl ImageAssetOptions {
         Self { ty: format, ..self }
     }
 
+    /// Get the format of the image
+    pub const fn format(&self) -> ImageType {
+        self.ty
+    }
+
     /// Sets the size of the image
     ///
     /// If you only use the image in one place, you can set the size of the image to the size it will be displayed at. This will make the image load faster
@@ -90,6 +127,11 @@ impl ImageAssetOptions {
     #[allow(unused)]
     pub const fn with_size(self, size: ImageSize) -> Self {
         Self { size, ..self }
+    }
+
+    /// Get the size of the image
+    pub const fn size(&self) -> ImageSize {
+        self.size
     }
 
     // LQIP is currently disabled until we have the CLI set up to inject the low quality image preview after the crate is built through the linker

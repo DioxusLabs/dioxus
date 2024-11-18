@@ -1,5 +1,6 @@
 use crate::const_vec::ConstVec;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ConstReadBuffer<'a> {
     location: usize,
     memory: &'a [u8],

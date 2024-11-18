@@ -3,7 +3,17 @@ use const_serialize::SerializeConst;
 use crate::AssetOptions;
 
 /// The builder for [`FolderAsset`]
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
+#[derive(
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    SerializeConst,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct FolderAssetOptions {}
 
 impl FolderAssetOptions {

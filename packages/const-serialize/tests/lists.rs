@@ -6,7 +6,7 @@ fn test_serialize_const_layout_list() {
     buf = serialize_const(&[1u8, 2, 3] as &[u8; 3], buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!([u8; 3], buf), Some([1, 2, 3]))
+    assert_eq!(deserialize_const!([u8; 3], buf).unwrap().1, [1, 2, 3])
 }
 
 #[test]
@@ -20,8 +20,8 @@ fn test_serialize_const_layout_nested_lists() {
     let buf = buf.read();
 
     assert_eq!(
-        deserialize_const!([[u8; 3]; 3], buf),
-        Some([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        deserialize_const!([[u8; 3]; 3], buf).unwrap().1,
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     );
 }
 

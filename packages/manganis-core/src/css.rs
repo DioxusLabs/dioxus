@@ -3,7 +3,17 @@ use const_serialize::SerializeConst;
 use crate::AssetOptions;
 
 /// A builder for a css asset. This must be used in the [`mg!`] macro.
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
+#[derive(
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    SerializeConst,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct CssAssetOptions {
     minify: bool,
     preload: bool,
@@ -26,8 +36,13 @@ impl CssAssetOptions {
     /// const _: &str = manganis::mg!(css("https://sindresorhus.com/github-markdown-css/github-markdown.css").minify(false));
     /// ```
     #[allow(unused)]
-    pub const fn minify(self, minify: bool) -> Self {
+    pub const fn with_minify(self, minify: bool) -> Self {
         Self { minify, ..self }
+    }
+
+    /// Check if the asset is minified
+    pub const fn minified(&self) -> bool {
+        self.minify
     }
 
     /// Make the asset preloaded
@@ -38,11 +53,13 @@ impl CssAssetOptions {
     /// const _: manganis::ImageAsset = manganis::mg!(css("https://sindresorhus.com/github-markdown-css/github-markdown.css").preload());
     /// ```
     #[allow(unused)]
-    pub const fn preload(self) -> Self {
-        Self {
-            preload: true,
-            ..self
-        }
+    pub const fn with_preload(self, preload: bool) -> Self {
+        Self { preload, ..self }
+    }
+
+    /// Check if the asset is preloaded
+    pub const fn preloaded(&self) -> bool {
+        self.preload
     }
 
     /// Convert the options into options for a generic asset

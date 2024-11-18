@@ -7,7 +7,10 @@ fn test_serialize_const_layout_str() {
     buf = serialize_const(&str, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
-    assert_eq!(deserialize_const!(ConstStr, buf).unwrap().as_str(), "hello");
+    assert_eq!(
+        deserialize_const!(ConstStr, buf).unwrap().1.as_str(),
+        "hello"
+    );
 }
 
 #[test]
@@ -19,12 +22,12 @@ fn test_serialize_const_layout_nested_str() {
     let buf = buf.read();
 
     assert_eq!(
-        deserialize_const!([ConstStr; 3], buf),
-        Some([
+        deserialize_const!([ConstStr; 3], buf).unwrap().1,
+        [
             ConstStr::new("hello"),
             ConstStr::new("hello"),
             ConstStr::new("hello")
-        ])
+        ]
     );
 }
 

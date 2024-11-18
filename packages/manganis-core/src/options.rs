@@ -3,7 +3,17 @@ use const_serialize::SerializeConst;
 use crate::{CssAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptions};
 
 /// Settings for a generic asset
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
+#[derive(
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    SerializeConst,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[repr(C, u8)]
 #[non_exhaustive]
 pub enum AssetOptions {

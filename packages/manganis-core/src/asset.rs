@@ -3,7 +3,17 @@ use const_serialize::{ConstStr, SerializeConst};
 use std::path::PathBuf;
 
 /// A bundled asset with some options. You need to
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash, SerializeConst)]
+#[derive(
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Clone,
+    Copy,
+    Hash,
+    SerializeConst,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct Asset {
     /// The absolute path of the asset
     absolute_source_path: ConstStr,
