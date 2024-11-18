@@ -156,6 +156,20 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
         self.len as usize
     }
 
+    /// Check if the [`ConstVec`] is empty
+    ///
+    /// # Example
+    /// ```rust
+    /// # use const_serialize::ConstVec;
+    /// const EMPTY: ConstVec<u8> = ConstVec::new();
+    /// assert!(EMPTY.is_empty());
+    /// const ONE: ConstVec<u8> = EMPTY.push(1);
+    /// assert!(!ONE.is_empty());
+    /// ```
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     /// Get a reference to the underlying slice
     ///
     /// # Example
