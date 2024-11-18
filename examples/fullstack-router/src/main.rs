@@ -7,9 +7,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::LaunchBuilder::new()
-        .with_cfg(())
-        .launch(app);
+    dioxus::LaunchBuilder::new().with_cfg(()).launch(app);
 }
 
 fn app() -> Element {

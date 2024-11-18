@@ -1,7 +1,4 @@
-use std::{
-    io::Read,
-    path::Path,
-};
+use std::{io::Read, path::Path};
 
 use anyhow::Context;
 
