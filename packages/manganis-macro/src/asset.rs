@@ -52,7 +52,7 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
     loop {
         let read = file
             .read(&mut buffer)
-            .map_err(|err| AssetParseError::FailedToReadAsset(err))?;
+            .map_err(AssetParseError::FailedToReadAsset)?;
         if read == 0 {
             break;
         }

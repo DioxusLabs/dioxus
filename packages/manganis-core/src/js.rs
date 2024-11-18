@@ -19,6 +19,12 @@ pub struct JsAssetOptions {
     preload: bool,
 }
 
+impl Default for JsAssetOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JsAssetOptions {
     /// Create a new js asset builder
     pub const fn new() -> Self {

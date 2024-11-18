@@ -391,7 +391,7 @@ impl AppBundle {
         for asset in self.app.assets.assets.keys() {
             let bundled = self.app.assets.assets.get(asset).unwrap();
             let from = PathBuf::from(bundled.absolute_source_path());
-            let to = asset_dir.join(&bundled.bundled_path());
+            let to = asset_dir.join(bundled.bundled_path());
             tracing::debug!("Copying asset {from:?} to {to:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
         }

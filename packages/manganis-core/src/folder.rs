@@ -16,6 +16,12 @@ use crate::AssetOptions;
 )]
 pub struct FolderAssetOptions {}
 
+impl Default for FolderAssetOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FolderAssetOptions {
     /// Create a new folder asset using the builder
     pub const fn new() -> Self {

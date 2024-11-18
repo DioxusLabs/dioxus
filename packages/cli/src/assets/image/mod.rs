@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::Context;
 use jpg::compress_jpg;
-use manganis_core::{Asset, ImageAssetOptions, ImageSize, ImageType};
+use manganis_core::{ImageAssetOptions, ImageSize, ImageType};
 use png::compress_png;
 
 mod jpg;

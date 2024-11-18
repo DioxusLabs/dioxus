@@ -1,10 +1,9 @@
 use std::{
     io::Read,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use anyhow::Context;
-use manganis_core::Asset;
 
 pub(crate) fn minify_json(source: &str) -> anyhow::Result<String> {
     // First try to parse the json

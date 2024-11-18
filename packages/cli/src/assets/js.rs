@@ -1,9 +1,9 @@
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
-use manganis_core::{Asset, JsAssetOptions};
+use manganis_core::JsAssetOptions;
 use swc::{config::JsMinifyOptions, try_with_handler, BoolOrDataConfig};
 use swc_common::{sync::Lrc, FileName};
 use swc_common::{SourceMap, GLOBALS};
@@ -52,7 +52,7 @@ pub(crate) fn process_js(
     let js = if js_options.minified() {
         minify_js(source)?
     } else {
-        let mut source_file = std::fs::File::open(&source)?;
+        let mut source_file = std::fs::File::open(source)?;
         let mut source = String::new();
         source_file.read_to_string(&mut source)?;
         source

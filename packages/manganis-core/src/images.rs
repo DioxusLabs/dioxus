@@ -72,6 +72,12 @@ pub struct ImageAssetOptions {
     preload: bool,
 }
 
+impl Default for ImageAssetOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ImageAssetOptions {
     /// Create a new image asset options
     pub const fn new() -> Self {

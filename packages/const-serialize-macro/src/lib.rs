@@ -118,8 +118,10 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                     }
                 }
 
-                let variants_have_fields =
-                    data.variants.iter().any(|variant| variant.fields.len() > 0);
+                let variants_have_fields = data
+                    .variants
+                    .iter()
+                    .any(|variant| !variant.fields.is_empty());
                 if !repr_c && variants_have_fields {
                     return syn::Error::new(input.ident.span(), "Enums must be repr(C, u*)")
                         .to_compile_error()

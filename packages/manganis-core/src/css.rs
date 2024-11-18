@@ -19,6 +19,12 @@ pub struct CssAssetOptions {
     preload: bool,
 }
 
+impl Default for CssAssetOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CssAssetOptions {
     /// Create a new css asset using the builder
     pub const fn new() -> Self {
