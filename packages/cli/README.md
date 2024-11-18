@@ -68,4 +68,4 @@ title = "Hello"
 [web.resource.dev]
 ```
 
-The full anatomy of `Dioxus.toml` is shown on the [Dioxus website](https://dioxuslabs.com/learn/0.5/CLI/configure).
+The full anatomy of `Dioxus.toml` is shown on the [Dioxus website](https://dioxuslabs.com/learn/0.6/CLI/configure).

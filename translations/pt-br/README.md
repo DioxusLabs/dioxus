@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Exemplos </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.5"> Guia </a>
+    <a href="https://dioxuslabs.com/learn/0.6"> Guia </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -85,18 +85,18 @@ Se você conhece React, então você já conhece o Dioxus.
 
 <table style="width:100%" align="center">
     <tr>
-        <th><a href="https://dioxuslabs.com/learn/0.5">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.5/reference/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.5/reference/desktop">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.5/reference/ssr">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.5/reference/mobile">Móvel</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6">Tutorial</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6/reference/web">Web</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6/reference/desktop">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6/reference/ssr">SSR</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6/reference/mobile">Móvel</a></th>
     <tr>
 </table>
 
 ## Projetos de Exemplo:
 
-| Navegador de Arquivos (Desktop)                                                                                                                                                          | WiFi Scanner (Desktop)                                                                                                                                                                 | TodoMVC (Todas as Plataformas)                                                                                                                                          | E-commerce com Tailwind (SSR/LiveView)                                                                                                                                                   |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Navegador de Arquivos (Desktop)                                                                                                                                                                  | WiFi Scanner (Desktop)                                                                                                                                                                 | TodoMVC (Todas as Plataformas)                                                                                                                                          | E-commerce com Tailwind (SSR/LiveView)                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![Explorador de Arquivos](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer/assets/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![Exemplo de E-commerce](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
 
 Veja a página [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) para uma lista curada do conteúdo dentro do ecossistema do Dioxus.
@@ -161,7 +161,7 @@ Dioxus é único no ecossistema do Rust por suportar:
 - SSR com `hydration` feito pelo Cliente
 - Suporte à aplicação Desktop
 
-Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/learn/0.5).
+Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/learn/0.6).
 
 ## Projeto dentro do ecossistema Dioxus
 

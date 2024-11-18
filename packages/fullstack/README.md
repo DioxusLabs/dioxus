@@ -15,7 +15,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.5/) |
+[Guides](https://dioxuslabs.com/learn/0.6/) |
 [API Docs](https://docs.rs/dioxus-fullstack/latest/dioxus_fullstack/) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -205,7 +205,7 @@ async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
 
 ## Getting Started
 
-To get started with full stack Dioxus, check out our [getting started guide](https://dioxuslabs.com/learn/0.5/getting_started), or the [full stack examples](https://github.com/DioxusLabs/dioxus/tree/master/examples).
+To get started with full stack Dioxus, check out our [getting started guide](https://dioxuslabs.com/learn/0.6/getting_started), or the [full stack examples](https://github.com/DioxusLabs/dioxus/tree/master/examples).
 
 ## Contributing
 

@@ -23,35 +23,47 @@
         width="100%"
         class="lightmode-image"
     >
+    <div>
+        <a href=https://dioxuslabs.com/learn/0.6/getting_started>Getting Started</a> | <a href="https://dioxuslabs.com/learn/0.6">Book (0.6)</a> | <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples">Examples</a>
+    </div>
 </div>
 
-
-# Resources
-
-This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
-
-- [Getting Started](https://dioxuslabs.com/learn/0.6/getting_started)
-- [Book (0.6)](https://dioxuslabs.com/learn/0.6)
-- [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
-
-
-# Overview
-
+---
 Dioxus is a framework for building cross-platform apps in Rust. With one codebase, you can build web, desktop, and mobile apps with fullstack server functions. Dioxus is designed to be easy to learn for developers familiar with web technologies like HTML, CSS, and JavaScript.
 
 <div align="center">
     <img src="https://github.com/user-attachments/assets/dddae6a9-c13b-4a88-84e8-dc98c1286d2a" alt="App with dioxus" height="600px">
 </div>
 
-# At a glance
+## At a glance
 
-Dioxus is crossplatform app framework that empowers developer to build beautiful, fast, type-safe apps with Rust. By default, Dioxus apps are declared with HTML and CSS, but you can use other technologies like Skia or AppKit.
+Dioxus is crossplatform app framework that empowers developer to build beautiful, fast, type-safe apps with Rust. By default, Dioxus apps are declared with HTML and CSS though alternative renderers are available. Dioxus includes a number of useful features:
 
-Dioxus includes a number of useful features:
 - Hotreloading of RSX markup and assets
-- Interactive CLI
+- Interactive CLI with logging, project templates, linting, and more
+- Integrated bundler for deploying to the web, macOS, Linux, and Windows
+- Support for modern web features like SSR, Hydration, and HTML streaming
+- Direct access to system APIs through JNI (Android), CoreFoundation (Apple), and web-sys (web)
+- Type-safe application routing and server functions
 
-## Brief Overview
+## Quick start
+
+To get started with Dioxus, you'll want to grab the dioxus-cli tool: `dx`. We distribute `dx` with `cargo-binstall` - if you already have binstall skip this step.
+```shell
+# skip if you already have cargo-binstall
+cargo install cargo-binstall
+
+# install the precompiled `dx` tool
+cargo binstall dioxus-cli
+
+# create a new app, following the template
+dx new my-app && cd my-app
+
+# and then serve!
+dx serve --platform desktop
+```
+
+## Your first app
 
 All Dioxus apps are built by composing functions return an `Element`.
 
@@ -67,7 +79,6 @@ fn main() {
 // The #[component] attribute streamlines component creation.
 // It's not required, but highly recommended. It will lint incorrect component definitions and help you create props structs.
 #[component]
-#[component]
 fn App() -> Element {
     rsx! { "hello world!" }
 }
@@ -80,7 +91,8 @@ Any element in `rsx!` can have attributes, listeners, and children. For
 consistency, we force all attributes and listeners to be listed _before_
 children.
 
-```rust, ignore
+```rust, no_run
+# use dioxus::prelude::*;
 let value = "123";
 
 rsx! {
@@ -94,7 +106,8 @@ rsx! {
 
 The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that implements [`IntoDynNode`](dioxus_core::IntoDynNode) will be parsed as a child. We make two exceptions: both `for` loops and `if` statements are parsed where their body is parsed as a rsx nodes.
 
-```rust, ignore
+```rust, no_run
+# use dioxus::prelude::*;
 rsx! {
     div {
         for _ in 0..10 {
@@ -107,7 +120,8 @@ rsx! {
 Putting everything together, we can write a simple component that renders a list of
 elements:
 
-```rust, ignore
+```rust, no_run
+# use dioxus::prelude::*;
 #[component]
 fn App() -> Element {
     let name = "dave";
@@ -128,7 +142,9 @@ We can compose these function components to build a complex app. Each new compon
 
 In Dioxus, all properties are memoized by default with `Clone` and `PartialEq`. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
 
-```rust, ignore
+```rust, no_run
+# use dioxus::prelude::*;
+# #[component] fn Header(title: String, color: String) -> Element { todo!() }
 #[component]
 fn App() -> Element {
     rsx! {
@@ -142,7 +158,8 @@ fn App() -> Element {
 
 The `#[component]` macro will help us automatically create a props struct for our component:
 
-```rust, ignore
+```rust, no_run
+# use dioxus::prelude::*;
 // The component macro turns the arguments for our function into named fields we can pass in to the component in rsx
 #[component]
 fn Header(title: String, color: String) -> Element {
@@ -155,7 +172,7 @@ fn Header(title: String, color: String) -> Element {
 }
 ```
 
-> You can read more about props in the [reference](https://dioxuslabs.com/learn/0.5/reference/component_props).
+> You can read more about props in the [reference](https://dioxuslabs.com/learn/0.6/reference/component_props).
 
 ## Hooks
 
@@ -164,7 +181,8 @@ it to render UI elements.
 
 By convention, all hooks are functions that should start with `use_`. We can use hooks to define the state and modify it from within listeners.
 
-```rust, ignore
+```rust, no_run
+# use dioxus::prelude::*;
 #[component]
 fn App() -> Element {
     // The use signal hook runs once when the component is created and then returns the current value every run after the first
@@ -174,14 +192,14 @@ fn App() -> Element {
 }
 ```
 
-Hooks are sensitive to how they are used. To use hooks, you must abide by the ["rules of hooks"](https://dioxuslabs.com/learn/0.5/reference/hooks#rules-of-hooks):
+Hooks are sensitive to how they are used. To use hooks, you must abide by the ["rules of hooks"](https://dioxuslabs.com/learn/0.6/reference/hooks#rules-of-hooks):
 
 - Hooks can only be called in the body of a component or another hook. Not inside of another expression like a loop, conditional or function call.
 - Hooks should start with "use\_"
 
 In a sense, hooks let us add a field of state to our component without declaring an explicit state struct. However, this means we need to "load" the struct in the right order. If that order is wrong, then the hook will pick the wrong state and panic.
 
-Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with [custom hooks](https://dioxuslabs.com/learn/0.5/cookbook/state/custom_hooks).
+Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with [custom hooks](https://dioxuslabs.com/learn/0.6/cookbook/state/custom_hooks).
 
 ## Putting it all together
 
@@ -208,18 +226,18 @@ fn App() -> Element {
 
 ## Conclusion
 
-This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.5/guide) and [reference](https://dioxuslabs.com/learn/0.5/reference) on the official
+This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.6/guide) and [reference](https://dioxuslabs.com/learn/0.6/reference) on the official
 website for more details.
 
 Beyond this overview, Dioxus supports:
 
-- [Server-side rendering](https://dioxuslabs.com/learn/0.5/reference/fullstack)
+- [Server-side rendering](https://dioxuslabs.com/learn/0.6/reference/fullstack)
 - Concurrent rendering (with async support)
 - Web/Desktop/Mobile support
 - Pre-rendering and hydration
 - Fragments, and Suspense
 - Inline-styles
-- [Custom event handlers](https://dioxuslabs.com/learn/0.5/reference/event_handlers#handler-props)
+- [Custom event handlers](https://dioxuslabs.com/learn/0.6/reference/event_handlers#handler-props)
 - Custom elements
 - Basic fine-grained reactivity (IE SolidJS/Svelte)
 - and more!

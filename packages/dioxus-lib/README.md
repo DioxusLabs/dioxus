@@ -11,8 +11,8 @@
 
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
 
-- [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
-- [Book (0.5)](https://dioxuslabs.com/learn/0.5)
+- [Getting Started](https://dioxuslabs.com/learn/0.6/getting_started)
+- [Book (0.5)](https://dioxuslabs.com/learn/0.6)
 - [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
 # Overview and Goals
@@ -202,7 +202,7 @@ fn App() -> Element {
 ```
 
 Hooks are sensitive to how they are used. To use hooks, you must abide by the
-["rules of hooks"](https://dioxuslabs.com/learn/0.5/reference/hooks#rules-of-hooks):
+["rules of hooks"](https://dioxuslabs.com/learn/0.6/reference/hooks#rules-of-hooks):
 
 - Functions with "use\_" should not be called in callbacks
 - Functions with "use\_" should not be called out of order
