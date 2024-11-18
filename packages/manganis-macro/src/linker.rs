@@ -36,5 +36,9 @@ pub fn generate_link_section(asset: impl ToTokens) -> TokenStream2 {
             }
             bytes
         };
+
+        fn __keep_link_section() -> u8 {
+            unsafe { std::ptr::read_volatile(__LINK_SECTION.as_ptr()) }
+        }
     }
 }

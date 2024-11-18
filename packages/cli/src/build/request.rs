@@ -6,7 +6,11 @@ use crate::{link::LinkAction, BuildArgs};
 use crate::{AppBundle, Platform};
 use anyhow::Context;
 use serde::Deserialize;
-use std::{path::PathBuf, process::Stdio, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+    time::Instant,
+};
 use tokio::{io::AsyncBufReadExt, process::Command};
 
 #[derive(Clone, Debug)]
@@ -60,7 +64,7 @@ impl BuildRequest {
         let start = Instant::now();
         self.prepare_build_dir()?;
         let exe = self.build_cargo().await?;
-        let assets = self.collect_assets().await?;
+        let assets = self.collect_assets(&exe).await?;
 
         Ok(BuildArtifacts {
             exe,
@@ -101,9 +105,6 @@ impl BuildRequest {
             .arg("json-diagnostic-rendered-ansi")
             .args(self.build_arguments())
             .envs(self.env_vars()?);
-
-        // todo(jon): save the temps into a file that we use for asset extraction instead of the weird double compile.
-        // .args(["--", "-Csave-temps=y"]);
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
             cmd.env("CARGO_TARGET_DIR", target_dir);
@@ -203,19 +204,30 @@ impl BuildRequest {
         Ok(out_location)
     }
 
-    /// Run the linker intercept and then fill in our AssetManifest from the incremental artifacts
+    /// Traverse the target directory and collect all assets from the incremental cache
     ///
-    /// This will execute `dx` with an env var set to force `dx` to operate as a linker, and then
-    /// traverse the .o and .rlib files rustc passes that new `dx` instance, collecting the link
-    /// tables marked by manganis and parsing them as a ResourceAsset.
-    pub(crate) async fn collect_assets(&self) -> Result<AssetManifest> {
+    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
+    /// One day this system might break and we might need to go back to using the linker approach.
+    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
         if self.build.skip_assets {
             return Ok(AssetManifest::default());
         }
 
-        self.deep_linker_asset_extract().await
+        // Experimental feature for testing - if the env var is set, we'll use the deeplinker
+        if std::env::var("DEEPLINK").is_ok() {
+            tracing::debug!("Using deeplinker instead of incremental cache");
+            return self.deep_linker_asset_extract().await;
+        }
+
+        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
+        let mut manifest = AssetManifest::default();
+
+        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
+        _ = manifest.add_from_object_path(exe);
+
+        Ok(manifest)
     }
 
     /// Create a list of arguments for cargo builds
@@ -408,6 +420,7 @@ impl BuildRequest {
     ///
     /// There's a chance that's not actually true, so this function is kept around in case we do
     /// need to revert to "deep extraction".
+    #[allow(unused)]
     async fn deep_linker_asset_extract(&self) -> Result<AssetManifest> {
         // Create a temp file to put the output of the args
         // We need to do this since rustc won't actually print the link args to stdout, so we need to
@@ -619,9 +632,7 @@ impl BuildRequest {
     /// a final build output somewhere. Some platforms have basically no build command, and can simply
     /// be ran by executing the exe directly.
     pub(crate) fn root_dir(&self) -> PathBuf {
-        let platform_dir = self
-            .krate
-            .build_dir(self.build.platform(), self.build.release);
+        let platform_dir = self.platform_dir();
 
         match self.build.platform() {
             Platform::Web => platform_dir.join("public"),
@@ -637,6 +648,11 @@ impl BuildRequest {
             Platform::Windows => platform_dir.join("app"), // .exe (after bundling)
             Platform::Liveview => platform_dir.join("app"), // .exe (after bundling)
         }
+    }
+
+    pub(crate) fn platform_dir(&self) -> PathBuf {
+        self.krate
+            .build_dir(self.build.platform(), self.build.release)
     }
 
     pub fn asset_dir(&self) -> PathBuf {

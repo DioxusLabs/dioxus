@@ -100,6 +100,7 @@ impl Asset {
     /// Attempts to resolve it against an `assets` folder in the current directory.
     /// If that doesn't exist, it will resolve against the cargo manifest dir
     pub fn resolve(&self) -> PathBuf {
+        // Force a volatile read of the asset link section to ensure the symbol makes it into the binary
         (self.keep_link_section)();
 
         #[cfg(feature = "dioxus")]
