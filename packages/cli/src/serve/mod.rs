@@ -107,7 +107,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 } else if runner.should_full_rebuild {
                     tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
 
-                    // Kill runnning executables
+                    // Kill any running executables
                     runner.kill_all();
 
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
