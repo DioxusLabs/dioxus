@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use jpg::compress_jpg;
-use manganis_core::{ImageAssetOptions, ImageSize, ImageType};
+use manganis_core::{ImageAssetOptions, ImageFormat, ImageSize};
 use png::compress_png;
 
 mod jpg;
@@ -24,18 +24,18 @@ pub(crate) fn process_image(
     }
 
     match (image, image_options.format()) {
-        (image, ImageType::Png) => {
+        (image, ImageFormat::Png) => {
             compress_png(image?, output_path);
         }
-        (image, ImageType::Jpg) => {
+        (image, ImageFormat::Jpg) => {
             compress_jpg(image?, output_path)?;
         }
-        (Ok(image), ImageType::Avif) => {
+        (Ok(image), ImageFormat::Avif) => {
             if let Err(error) = image.save(output_path) {
                 tracing::error!("Failed to save avif image: {} with path {}. You must have the avif feature enabled to use avif assets", error, output_path.display());
             }
         }
-        (Ok(image), ImageType::Webp) => {
+        (Ok(image), ImageFormat::Webp) => {
             if let Err(err) = image.save(output_path) {
                 tracing::error!("Failed to save webp image: {}. You must have the avif feature enabled to use webp assets", err);
             }
