@@ -99,7 +99,7 @@ mozjpeg = { version = "0.10.7", default-features = false, features = [
 imagequant = "4.2.0"
 png = "0.17.9"
 # Image format/conversion
-image = { version = "0.25" }
+image = { version = "0.25", features = ["avif"] }
 
 # CSS Minification
 lightningcss = "1.0.0-alpha.60"
@@ -197,7 +197,7 @@ default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
 bundle = []
-nasm = ["mozjpeg/nasm_simd"]
+nasm = ["mozjpeg/nasm_simd", "image/nasm"]
 
 # when releasing dioxus, we want to enable wasm-opt
 # and then also maybe developing it too.
