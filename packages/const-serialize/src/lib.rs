@@ -530,10 +530,10 @@ fn fuzz_char_to_bytes() {
 
 const fn utf8_char_boundary_to_char_len(byte: u8) -> Option<u8> {
     match byte {
-        0b00000000..0b10000000 => Some(1),
-        0b11000000..0b11100000 => Some(2),
-        0b11100000..0b11110000 => Some(3),
-        0b11110000..0b11111000 => Some(4),
+        0b00000000..=0b01111111 => Some(1),
+        0b11000000..=0b11011111 => Some(2),
+        0b11100000..=0b11101111 => Some(3),
+        0b11110000..=0b11111111 => Some(4),
         _ => None,
     }
 }
