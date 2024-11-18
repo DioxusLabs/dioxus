@@ -135,7 +135,6 @@ generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.5" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.5" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.5" }
-dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.5" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.5", default-features = false }
 const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.5" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.5" }
