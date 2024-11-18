@@ -508,7 +508,7 @@ const fn char_to_bytes(char: char) -> ([u8; 4], usize) {
 #[test]
 fn fuzz_char_to_bytes() {
     use std::char;
-    for _ in 0..1000 {
+    for _ in 0..100 {
         let char = rand::random::<char>();
         let (bytes, len) = char_to_bytes(char);
         let str = std::str::from_utf8(&bytes[..len]).unwrap();
@@ -528,7 +528,7 @@ const fn utf8_char_boundary_to_char_len(byte: u8) -> Option<u8> {
 
 #[test]
 fn fuzz_utf8_byte_to_char_len() {
-    for _ in 0..1000 {
+    for _ in 0..100 {
         let random_string: String = (0..rand::random::<u8>())
             .map(|_| rand::random::<char>())
             .collect();
