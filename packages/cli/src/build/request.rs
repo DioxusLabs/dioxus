@@ -545,7 +545,7 @@ impl BuildRequest {
         static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
 
         let success = INITIALIZED.get_or_init(|| {
-            _ = remove_dir_all(self.root_dir());
+            _ = remove_dir_all(self.exe_dir());
 
             create_dir_all(self.root_dir())?;
             create_dir_all(self.exe_dir())?;

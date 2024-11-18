@@ -15,30 +15,36 @@ pub(crate) fn process_image(
 ) -> anyhow::Result<()> {
     let mut image = image::ImageReader::new(std::io::Cursor::new(&*std::fs::read(source)?))
         .with_guessed_format()?
-        .decode()?;
+        .decode();
 
-    if let ImageSize::Manual { width, height } = image_options.size() {
-        image = image.resize_exact(width, height, image::imageops::FilterType::Lanczos3);
+    if let Ok(image) = &mut image {
+        if let ImageSize::Manual { width, height } = image_options.size() {
+            *image = image.resize_exact(width, height, image::imageops::FilterType::Lanczos3);
+        }
     }
 
-    match image_options.format() {
-        ImageType::Png => {
-            compress_png(image, output_path);
+    match (image, image_options.format()) {
+        (image, ImageType::Png) => {
+            compress_png(image?, output_path);
         }
-        ImageType::Jpg => {
-            compress_jpg(image, output_path)?;
+        (image, ImageType::Jpg) => {
+            compress_jpg(image?, output_path)?;
         }
-        ImageType::Avif => {
+        (Ok(image), ImageType::Avif) => {
             if let Err(error) = image.save(output_path) {
                 tracing::error!("Failed to save avif image: {} with path {}. You must have the avif feature enabled to use avif assets", error, output_path.display());
             }
         }
-        ImageType::Webp => {
+        (Ok(image), ImageType::Webp) => {
             if let Err(err) = image.save(output_path) {
                 tracing::error!("Failed to save webp image: {}. You must have the avif feature enabled to use webp assets", err);
             }
         }
-        ImageType::Unknown => {
+        (Ok(image), _) => {
+            image.save(output_path)?;
+        }
+        // If we can't decode the image or it is of an unknown type, we just copy the file
+        _ => {
             let source_file = std::fs::File::open(source)?;
             let mut reader = std::io::BufReader::new(source_file);
             let output_file = std::fs::File::create(output_path)?;

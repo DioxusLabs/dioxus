@@ -19,6 +19,11 @@ pub(crate) fn process_file_to(
     if output_path.exists() {
         return Ok(());
     }
+    if let Some(parent) = output_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
     match options {
         AssetOptions::Unknown => match source.extension().map(|e| e.to_string_lossy()).as_deref() {
             Some("css") => {

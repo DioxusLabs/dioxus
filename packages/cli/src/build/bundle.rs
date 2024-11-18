@@ -5,6 +5,7 @@ use crate::{BuildRequest, Platform};
 use anyhow::Context;
 use manganis_core::AssetOptions;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use std::collections::HashSet;
 use std::{
     fs::create_dir_all,
     path::{Path, PathBuf},
@@ -379,18 +380,49 @@ impl AppBundle {
 
         let asset_dir = self.build.asset_dir();
 
-        // First, clear the asset dir
-        // todo(jon): cache the asset dir, removing old files and only copying new ones that changed since the last build
-        _ = std::fs::remove_dir_all(&asset_dir);
+        // First, clear the asset dir of any files that don't exist in the new manifest
         _ = create_dir_all(&asset_dir);
+        // Create a set of all the paths that new files will be bundled to
+        let bundled_output_paths: HashSet<_> = self
+            .app
+            .assets
+            .assets
+            .values()
+            .map(|a| asset_dir.join(a.bundled_path()))
+            .collect();
+        // one possible implementation of walking a directory only visiting files
+        fn remove_old_assets(
+            path: &Path,
+            bundled_output_paths: &HashSet<PathBuf>,
+        ) -> std::io::Result<()> {
+            // If this asset is in the manifest, we don't need to remove it
+            if bundled_output_paths.contains(path.canonicalize()?.as_path()) {
+                return Ok(());
+            }
+            // Otherwise, if it is a directory, we need to walk it and remove child files
+            if path.is_dir() {
+                for entry in std::fs::read_dir(path)?.flatten() {
+                    let path = entry.path();
+                    remove_old_assets(&path, bundled_output_paths)?;
+                }
+                if path.read_dir()?.next().is_none() {
+                    // If the directory is empty, remove it
+                    std::fs::remove_dir(path)?;
+                }
+            } else {
+                // If it is a file, remove it
+                std::fs::remove_file(path)?;
+            }
+            Ok(())
+        }
+        remove_old_assets(&asset_dir, &bundled_output_paths)?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for asset in self.app.assets.assets.keys() {
-            let bundled = self.app.assets.assets.get(asset).unwrap();
-            let from = PathBuf::from(bundled.absolute_source_path());
+        for (asset, bundled) in &self.app.assets.assets {
+            let from = asset.clone();
             let to = asset_dir.join(bundled.bundled_path());
             tracing::debug!("Copying asset {from:?} to {to:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
