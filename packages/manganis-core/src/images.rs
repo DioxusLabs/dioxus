@@ -94,7 +94,8 @@ impl ImageAssetOptions {
     /// Preloading an image will make the image start to load as soon as possible. This is useful for images that will be displayed soon after the page loads or images that may not be visible immediately, but should start loading sooner
     ///
     /// ```rust
-    /// const _: manganis::ImageAsset = manganis::mg!(css("https://sindresorhus.com/github-markdown-css/github-markdown.css").preload());
+    /// # use manganis::{asset, Asset, ImageAssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().preload());
     /// ```
     #[allow(unused)]
     pub const fn with_preload(self, preload: bool) -> Self {
@@ -111,7 +112,8 @@ impl ImageAssetOptions {
     /// Choosing the right format can make your site load much faster. Webp and avif images tend to be a good default for most images
     ///
     /// ```rust
-    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").format(ImageType::Webp));
+    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageType};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().format(ImageType::Webp));
     /// ```
     #[allow(unused)]
     pub const fn with_format(self, format: ImageType) -> Self {
@@ -128,7 +130,8 @@ impl ImageAssetOptions {
     /// If you only use the image in one place, you can set the size of the image to the size it will be displayed at. This will make the image load faster
     ///
     /// ```rust
-    /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").size(512, 512));
+    /// # use manganis::{asset, Asset, ImageAssetOptions};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().size(512, 512));
     /// ```
     #[allow(unused)]
     pub const fn with_size(self, size: ImageSize) -> Self {
@@ -146,7 +149,8 @@ impl ImageAssetOptions {
     // /// A low quality preview is a small version of the image that will load faster. This is useful for large images on mobile devices that may take longer to load
     // ///
     // /// ```rust
-    // /// const _: manganis::ImageAsset = manganis::mg!(image("https://avatars.githubusercontent.com/u/79236386?s=48&v=4").with_low_quality_image_preview());
+    // /// # use manganis::{asset, Asset, ImageAssetOptions};
+    // /// const _: Asset = manganis::asset!("/assets/image.png", ImageAssetOptions::new().with_low_quality_image_preview());
     // /// ```
     // #[allow(unused)]
     // pub const fn with_low_quality_image_preview(self, low_quality_preview: bool) -> Self {

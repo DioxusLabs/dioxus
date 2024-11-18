@@ -39,7 +39,8 @@ impl JsAssetOptions {
     /// Minifying the js can make your site load faster by loading less data
     ///
     /// ```rust
-    /// const _: &str = manganis::mg!(js("assets/script.js").minify(false));
+    /// # use manganis::{asset, Asset, JsAssetOptions};
+    /// const _: Asset = asset!("/assets/script.js", JsAssetOptions::new().minify(false));
     /// ```
     #[allow(unused)]
     pub const fn with_minify(self, minify: bool) -> Self {
@@ -56,7 +57,8 @@ impl JsAssetOptions {
     /// Preloading the javascript will make the javascript start to load as soon as possible. This is useful for javascript that will be used soon after the page loads or javascript that may not be used immediately, but should start loading sooner
     ///
     /// ```rust
-    /// const _: manganis::ImageAsset = manganis::mg!(css("https://sindresorhus.com/github-markdown-css/github-markdown.css").preload());
+    /// # use manganis::{asset, Asset, JsAssetOptions};
+    /// const _: Asset = asset!("/assets/script.js", JsAssetOptions::new().preload());
     /// ```
     #[allow(unused)]
     pub const fn with_preload(self, preload: bool) -> Self {
