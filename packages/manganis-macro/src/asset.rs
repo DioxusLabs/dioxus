@@ -177,11 +177,17 @@ impl ToTokens for AssetParser {
 
         tokens.extend(quote! {
             {
+                // We keep a hash of the contents of the asset for cache busting
                 const __ASSET_HASH: u64 = #hash;
+                // The source is used by the CLI to copy the asset
                 const __ASSET_SOURCE_PATH: &'static str = #asset_str;
+                // The options give the CLI info about how to process the asset
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
+                // We calculate the bundled path from the hash and any transformations done by the options
+                // This is the final path that the asset will be written to
                 const __ASSET_BUNDLED_PATH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::generate_unique_path(__ASSET_SOURCE_PATH, __ASSET_HASH, &__ASSET_OPTIONS);
                 const __ASSET_BUNDLED_PATH_STR: &'static str = __ASSET_BUNDLED_PATH.as_str();
+                // Create the asset that the crate will use
                 const __ASSET: manganis::Asset = manganis::Asset::#constructor(__ASSET_SOURCE_PATH, __ASSET_BUNDLED_PATH_STR, __ASSET_OPTIONS);
 
                 #link_section

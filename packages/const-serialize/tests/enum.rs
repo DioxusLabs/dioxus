@@ -1,4 +1,4 @@
-use const_serialize::{deserialize_const, serialize_const, ConstWriteBuffer, SerializeConst};
+use const_serialize::{deserialize_const, serialize_const, ConstVec, SerializeConst};
 use std::mem::MaybeUninit;
 
 #[test]
@@ -78,7 +78,7 @@ fn test_serialize_enum() {
         one: 0x11111111,
         two: 0x22,
     };
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
@@ -88,7 +88,7 @@ fn test_serialize_enum() {
         one: 0x11,
         two: 0x2233,
     };
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
@@ -107,14 +107,14 @@ fn test_serialize_u8_enum() {
     println!("{:#?}", Enum::MEMORY_LAYOUT);
 
     let data = Enum::A;
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B;
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
@@ -133,11 +133,9 @@ fn test_serialize_corrupted_enum() {
         one: 0x11111111,
         two: 0x22,
     };
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
-    let mut bad_buf = buf.inner();
-    bad_buf = bad_buf.set(0, 2);
-    let buf = ConstWriteBuffer::from(bad_buf);
+    buf = buf.set(0, 2);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
     assert_eq!(deserialize_const!(Enum, buf), None);
@@ -164,7 +162,7 @@ fn test_serialize_nested_enum() {
         one: 0x11111111,
         two: 0x22,
     };
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
@@ -174,7 +172,7 @@ fn test_serialize_nested_enum() {
         one: 0x11,
         two: InnerEnum::A(0x22),
     };
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
@@ -187,7 +185,7 @@ fn test_serialize_nested_enum() {
             two: 0.123456789,
         },
     };
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
@@ -200,7 +198,7 @@ fn test_serialize_nested_enum() {
             two: 56789,
         },
     };
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();

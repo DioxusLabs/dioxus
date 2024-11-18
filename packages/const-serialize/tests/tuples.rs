@@ -1,8 +1,8 @@
-use const_serialize::{deserialize_const, serialize_const, ConstWriteBuffer};
+use const_serialize::{deserialize_const, serialize_const, ConstVec};
 
 #[test]
 fn test_serialize_const_layout_tuple() {
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&(1234u32, 5678u16), buf);
     let buf = buf.read();
     assert_eq!(
@@ -10,7 +10,7 @@ fn test_serialize_const_layout_tuple() {
         (1234u32, 5678u16)
     );
 
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&(1234f64, 5678u16, 90u8), buf);
     let buf = buf.read();
     assert_eq!(
@@ -18,7 +18,7 @@ fn test_serialize_const_layout_tuple() {
         (1234f64, 5678u16, 90u8)
     );
 
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&(1234u32, 5678u16, 90u8, 1000000f64), buf);
     let buf = buf.read();
     assert_eq!(

@@ -1,50 +1,57 @@
+#![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
+
 use std::mem::MaybeUninit;
 
 mod const_buffers;
 mod const_vec;
 
-pub use const_buffers::{ConstReadBuffer, ConstWriteBuffer};
+pub use const_buffers::ConstReadBuffer;
 pub use const_serialize_macro::SerializeConst;
+pub use const_vec::ConstVec;
 
-/// Plain old data for a field. Stores the offset of the field in the struct and the encoding of the field.
+/// Plain old data for a field. Stores the offset of the field in the struct and the layout of the field.
 #[derive(Debug, Copy, Clone)]
-pub struct StructFieldEncoding {
+pub struct StructFieldLayout {
     offset: usize,
-    encoding: Layout,
+    layout: Layout,
 }
 
-impl StructFieldEncoding {
-    pub const fn new(offset: usize, encoding: Layout) -> Self {
-        Self { offset, encoding }
+impl StructFieldLayout {
+    /// Create a new struct field layout
+    pub const fn new(offset: usize, layout: Layout) -> Self {
+        Self { offset, layout }
     }
 }
 
-/// Layout for a struct. The struct encoding is just a list of fields with offsets
+/// Layout for a struct. The struct layout is just a list of fields with offsets
 #[derive(Debug, Copy, Clone)]
-pub struct StructEncoding {
+pub struct StructLayout {
     size: usize,
-    data: &'static [StructFieldEncoding],
+    data: &'static [StructFieldLayout],
 }
 
-impl StructEncoding {
-    pub const fn new(size: usize, data: &'static [StructFieldEncoding]) -> Self {
+impl StructLayout {
+    /// Create a new struct layout
+    pub const fn new(size: usize, data: &'static [StructFieldLayout]) -> Self {
         Self { size, data }
     }
 }
 
-/// The encoding for an enum. The enum encoding is just a discriminate size and a tag encoding.
+/// The layout for an enum. The enum layout is just a discriminate size and a tag layout.
 #[derive(Debug, Copy, Clone)]
-pub struct EnumEncoding {
+pub struct EnumLayout {
     size: usize,
-    discriminant: PrimitiveEncoding,
+    discriminant: PrimitiveLayout,
     variants_offset: usize,
     variants: &'static [EnumVariant],
 }
 
-impl EnumEncoding {
+impl EnumLayout {
+    /// Create a new enum layout
     pub const fn new(
         size: usize,
-        discriminant: PrimitiveEncoding,
+        discriminant: PrimitiveLayout,
         variants: &'static [EnumVariant],
     ) -> Self {
         let mut max_align = 1;
@@ -68,62 +75,70 @@ impl EnumEncoding {
     }
 }
 
+/// The layout for an enum variant. The enum variant layout is just a struct layout with a tag and alignment.
 #[derive(Debug, Copy, Clone)]
 pub struct EnumVariant {
     // Note: tags may not be sequential
     tag: u32,
-    data: StructEncoding,
+    data: StructLayout,
     align: usize,
 }
 
 impl EnumVariant {
-    pub const fn new(tag: u32, data: StructEncoding, align: usize) -> Self {
+    /// Create a new enum variant layout
+    pub const fn new(tag: u32, data: StructLayout, align: usize) -> Self {
         Self { tag, data, align }
     }
 }
 
-/// The encoding for a constant sized array. The array encoding is just a length and an item encoding.
+/// The layout for a constant sized array. The array layout is just a length and an item layout.
 #[derive(Debug, Copy, Clone)]
-pub struct ListEncoding {
+pub struct ListLayout {
     len: usize,
-    item_encoding: &'static Layout,
+    item_layout: &'static Layout,
 }
 
-impl ListEncoding {
-    pub const fn new(len: usize, item_encoding: &'static Layout) -> Self {
-        Self { len, item_encoding }
+impl ListLayout {
+    /// Create a new list layout
+    pub const fn new(len: usize, item_layout: &'static Layout) -> Self {
+        Self { len, item_layout }
     }
 }
 
-/// The encoding for a primitive type. The bytes will be reversed if the target is big endian.
+/// The layout for a primitive type. The bytes will be reversed if the target is big endian.
 #[derive(Debug, Copy, Clone)]
-pub struct PrimitiveEncoding {
+pub struct PrimitiveLayout {
     size: usize,
 }
 
-impl PrimitiveEncoding {
+impl PrimitiveLayout {
+    /// Create a new primitive layout
     pub const fn new(size: usize) -> Self {
         Self { size }
     }
 }
 
-/// The encoding for a type. This encoding defines a sequence of locations and reversed or not bytes. These bytes will be copied from during serialization and copied into during deserialization.
+/// The layout for a type. This layout defines a sequence of locations and reversed or not bytes. These bytes will be copied from during serialization and copied into during deserialization.
 #[derive(Debug, Copy, Clone)]
 pub enum Layout {
-    Enum(EnumEncoding),
-    Struct(StructEncoding),
-    List(ListEncoding),
-    Primitive(PrimitiveEncoding),
+    /// An enum layout
+    Enum(EnumLayout),
+    /// A struct layout
+    Struct(StructLayout),
+    /// A list layout
+    List(ListLayout),
+    /// A primitive layout
+    Primitive(PrimitiveLayout),
 }
 
 impl Layout {
     /// The size of the type in bytes.
     const fn size(&self) -> usize {
         match self {
-            Layout::Enum(encoding) => encoding.size,
-            Layout::Struct(encoding) => encoding.size,
-            Layout::List(encoding) => encoding.len * encoding.item_encoding.size(),
-            Layout::Primitive(encoding) => encoding.size,
+            Layout::Enum(layout) => layout.size,
+            Layout::Struct(layout) => layout.size,
+            Layout::List(layout) => layout.len * layout.item_layout.size(),
+            Layout::Primitive(layout) => layout.size,
         }
     }
 }
@@ -131,17 +146,18 @@ impl Layout {
 /// A trait for types that can be serialized and deserialized in const.
 ///
 /// # Safety
-/// The encoding must accurately describe the memory layout of the type
+/// The layout must accurately describe the memory layout of the type
 pub unsafe trait SerializeConst: Sized {
     /// The memory layout of the type. This type must have plain old data; no pointers or references.
     const MEMORY_LAYOUT: Layout;
+    /// Assert that the memory layout of the type is the same as the size of the type
     const _ASSERT: () = assert!(Self::MEMORY_LAYOUT.size() == std::mem::size_of::<Self>());
 }
 
 macro_rules! impl_serialize_const {
     ($type:ty) => {
         unsafe impl SerializeConst for $type {
-            const MEMORY_LAYOUT: Layout = Layout::Primitive(PrimitiveEncoding {
+            const MEMORY_LAYOUT: Layout = Layout::Primitive(PrimitiveLayout {
                 size: std::mem::size_of::<$type>(),
             });
         }
@@ -161,9 +177,9 @@ impl_serialize_const!(f32);
 impl_serialize_const!(f64);
 
 unsafe impl<const N: usize, T: SerializeConst> SerializeConst for [T; N] {
-    const MEMORY_LAYOUT: Layout = Layout::List(ListEncoding {
+    const MEMORY_LAYOUT: Layout = Layout::List(ListLayout {
         len: N,
-        item_encoding: &T::MEMORY_LAYOUT,
+        item_layout: &T::MEMORY_LAYOUT,
     });
 }
 
@@ -174,11 +190,11 @@ macro_rules! impl_serialize_const_tuple {
     (@impl $inner:ty = $($generic:ident: $generic_number:expr),*) => {
         unsafe impl<$($generic: SerializeConst),*> SerializeConst for ($($generic,)*) {
             const MEMORY_LAYOUT: Layout = {
-                Layout::Struct(StructEncoding {
+                Layout::Struct(StructLayout {
                     size: std::mem::size_of::<($($generic,)*)>(),
                     data: &[
                         $(
-                            StructFieldEncoding::new(std::mem::offset_of!($inner, $generic_number), $generic::MEMORY_LAYOUT),
+                            StructFieldLayout::new(std::mem::offset_of!($inner, $generic_number), $generic::MEMORY_LAYOUT),
                         )*
                     ],
                 })
@@ -200,6 +216,7 @@ impl_serialize_const_tuple!(T1: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6, T8:
 
 const MAX_STR_SIZE: usize = 256;
 
+/// A string that is stored in a constant sized buffer that can be serialized and deserialized at compile time
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstStr {
@@ -231,21 +248,21 @@ mod serde_bytes {
 }
 
 unsafe impl SerializeConst for ConstStr {
-    const MEMORY_LAYOUT: Layout = Layout::Struct(StructEncoding {
+    const MEMORY_LAYOUT: Layout = Layout::Struct(StructLayout {
         size: std::mem::size_of::<Self>(),
         data: &[
-            StructFieldEncoding::new(
+            StructFieldLayout::new(
                 std::mem::offset_of!(Self, bytes),
-                Layout::List(ListEncoding {
+                Layout::List(ListLayout {
                     len: MAX_STR_SIZE,
-                    item_encoding: &Layout::Primitive(PrimitiveEncoding {
+                    item_layout: &Layout::Primitive(PrimitiveLayout {
                         size: std::mem::size_of::<u8>(),
                     }),
                 }),
             ),
-            StructFieldEncoding::new(
+            StructFieldLayout::new(
                 std::mem::offset_of!(Self, len),
-                Layout::Primitive(PrimitiveEncoding {
+                Layout::Primitive(PrimitiveLayout {
                     size: std::mem::size_of::<u32>(),
                 }),
             ),
@@ -254,6 +271,7 @@ unsafe impl SerializeConst for ConstStr {
 }
 
 impl ConstStr {
+    /// Create a new constant string
     pub const fn new(s: &str) -> Self {
         let str_bytes = s.as_bytes();
         let mut bytes = [0; MAX_STR_SIZE];
@@ -268,6 +286,7 @@ impl ConstStr {
         }
     }
 
+    /// Get a reference to the string
     pub const fn as_str(&self) -> &str {
         let str_bytes = self.bytes.split_at(self.len as usize).0;
         match std::str::from_utf8(str_bytes) {
@@ -278,6 +297,7 @@ impl ConstStr {
         }
     }
 
+    /// Push a character onto the string
     pub const fn push(self, byte: char) -> Self {
         assert!(byte.is_ascii(), "Only ASCII bytes are supported");
         let (bytes, len) = char_to_bytes(byte);
@@ -288,6 +308,7 @@ impl ConstStr {
         self.push_str(str)
     }
 
+    /// Push a str onto the string
     pub const fn push_str(self, str: &str) -> Self {
         let Self { mut bytes, len } = self;
         assert!(
@@ -307,6 +328,7 @@ impl ConstStr {
         }
     }
 
+    /// Split the string at a byte index. The byte index must be a char boundary
     pub const fn split_at(self, index: usize) -> (Self, Self) {
         let (left, right) = self.bytes.split_at(index);
         let left = match std::str::from_utf8(left) {
@@ -324,6 +346,7 @@ impl ConstStr {
         (Self::new(left), Self::new(right))
     }
 
+    /// Split the string at the last occurrence of a character
     pub const fn rsplit_once(&self, char: char) -> Option<(Self, Self)> {
         let str = self.as_str();
         let mut index = str.len() - 1;
@@ -373,6 +396,7 @@ impl ConstStr {
         }
     }
 
+    /// Split the string at the first occurrence of a character
     pub const fn split_once(&self, char: char) -> Option<(Self, Self)> {
         let str = self.as_str();
         let mut index = 0;
@@ -553,15 +577,15 @@ fn fuzz_utf8_byte_to_char_len() {
 /// Serialize a struct that is stored at the pointer passed in
 const fn serialize_const_struct(
     ptr: *const (),
-    mut to: ConstWriteBuffer,
-    encoding: &StructEncoding,
-) -> ConstWriteBuffer {
+    mut to: ConstVec<u8>,
+    layout: &StructLayout,
+) -> ConstVec<u8> {
     let mut i = 0;
-    while i < encoding.data.len() {
+    while i < layout.data.len() {
         // Serialize the field at the offset pointer in the struct
-        let StructFieldEncoding { offset, encoding } = &encoding.data[i];
+        let StructFieldLayout { offset, layout } = &layout.data[i];
         let field = unsafe { ptr.byte_add(*offset) };
-        to = serialize_const_ptr(field, to, encoding);
+        to = serialize_const_ptr(field, to, layout);
         i += 1;
     }
     to
@@ -570,19 +594,19 @@ const fn serialize_const_struct(
 /// Serialize an enum that is stored at the pointer passed in
 const fn serialize_const_enum(
     ptr: *const (),
-    mut to: ConstWriteBuffer,
-    encoding: &EnumEncoding,
-) -> ConstWriteBuffer {
+    mut to: ConstVec<u8>,
+    layout: &EnumLayout,
+) -> ConstVec<u8> {
     let mut discriminant = 0;
 
     let byte_ptr = ptr as *const u8;
     let mut offset = 0;
-    while offset < encoding.discriminant.size {
+    while offset < layout.discriminant.size {
         // If the bytes are reversed, walk backwards from the end of the number when pushing bytes
         let byte = if cfg!(target_endian = "big") {
             unsafe {
                 byte_ptr
-                    .byte_add(encoding.discriminant.size - offset - 1)
+                    .byte_add(layout.discriminant.size - offset - 1)
                     .read()
             }
         } else {
@@ -594,11 +618,11 @@ const fn serialize_const_enum(
     }
 
     let mut i = 0;
-    while i < encoding.variants.len() {
+    while i < layout.variants.len() {
         // If the variant is the discriminated one, serialize it
-        let EnumVariant { tag, data, .. } = &encoding.variants[i];
+        let EnumVariant { tag, data, .. } = &layout.variants[i];
         if discriminant == *tag {
-            let data_ptr = unsafe { ptr.byte_add(encoding.variants_offset) };
+            let data_ptr = unsafe { ptr.byte_add(layout.variants_offset) };
             to = serialize_const_struct(data_ptr, to, data);
             break;
         }
@@ -610,15 +634,15 @@ const fn serialize_const_enum(
 /// Serialize a primitive type that is stored at the pointer passed in
 const fn serialize_const_primitive(
     ptr: *const (),
-    mut to: ConstWriteBuffer,
-    encoding: &PrimitiveEncoding,
-) -> ConstWriteBuffer {
+    mut to: ConstVec<u8>,
+    layout: &PrimitiveLayout,
+) -> ConstVec<u8> {
     let ptr = ptr as *const u8;
     let mut offset = 0;
-    while offset < encoding.size {
+    while offset < layout.size {
         // If the bytes are reversed, walk backwards from the end of the number when pushing bytes
         if cfg!(any(target_endian = "big", feature = "test-big-endian")) {
-            to = to.push(unsafe { ptr.byte_add(encoding.size - offset - 1).read() });
+            to = to.push(unsafe { ptr.byte_add(layout.size - offset - 1).read() });
         } else {
             to = to.push(unsafe { ptr.byte_add(offset).read() });
         }
@@ -630,39 +654,54 @@ const fn serialize_const_primitive(
 /// Serialize a constant sized array that is stored at the pointer passed in
 const fn serialize_const_list(
     ptr: *const (),
-    mut to: ConstWriteBuffer,
-    encoding: &ListEncoding,
-) -> ConstWriteBuffer {
-    let len = encoding.len;
+    mut to: ConstVec<u8>,
+    layout: &ListLayout,
+) -> ConstVec<u8> {
+    let len = layout.len;
     let mut i = 0;
     while i < len {
-        let field = unsafe { ptr.byte_add(i * encoding.item_encoding.size()) };
-        to = serialize_const_ptr(field, to, encoding.item_encoding);
+        let field = unsafe { ptr.byte_add(i * layout.item_layout.size()) };
+        to = serialize_const_ptr(field, to, layout.item_layout);
         i += 1;
     }
     to
 }
 
 /// Serialize a pointer to a type that is stored at the pointer passed in
-const fn serialize_const_ptr(
-    ptr: *const (),
-    to: ConstWriteBuffer,
-    encoding: &Layout,
-) -> ConstWriteBuffer {
-    match encoding {
-        Layout::Enum(encoding) => serialize_const_enum(ptr, to, encoding),
-        Layout::Struct(encoding) => serialize_const_struct(ptr, to, encoding),
-        Layout::List(encoding) => serialize_const_list(ptr, to, encoding),
-        Layout::Primitive(encoding) => serialize_const_primitive(ptr, to, encoding),
+const fn serialize_const_ptr(ptr: *const (), to: ConstVec<u8>, layout: &Layout) -> ConstVec<u8> {
+    match layout {
+        Layout::Enum(layout) => serialize_const_enum(ptr, to, layout),
+        Layout::Struct(layout) => serialize_const_struct(ptr, to, layout),
+        Layout::List(layout) => serialize_const_list(ptr, to, layout),
+        Layout::Primitive(layout) => serialize_const_primitive(ptr, to, layout),
     }
 }
 
 /// Serialize a type into a buffer
+///
+/// # Example
+///
+/// ```rust
+/// use const_serialize::{ConstVec, SerializeConst, serialize_const};
+///
+/// #[derive(Clone, Copy, Debug, PartialEq, SerializeConst)]
+/// struct Struct {
+///     a: u32,
+///     b: u8,
+///     c: u32,
+/// }
+///
+/// let mut buffer = ConstVec::new();
+/// buffer = serialize_const(&Struct {
+///     a: 0x11111111,
+///     b: 0x22,
+///     c: 0x33333333,
+/// }, buffer);
+/// let buf = buffer.read();
+/// assert_eq!(buf.as_ref(), &[0x11, 0x11, 0x11, 0x11, 0x22, 0x33, 0x33, 0x33, 0x33]);
+/// ```
 #[must_use = "The data is serialized into the returned buffer"]
-pub const fn serialize_const<T: SerializeConst>(
-    data: &T,
-    to: ConstWriteBuffer,
-) -> ConstWriteBuffer {
+pub const fn serialize_const<T: SerializeConst>(data: &T, to: ConstVec<u8>) -> ConstVec<u8> {
     let ptr = data as *const T as *const ();
     serialize_const_ptr(ptr, to, &T::MEMORY_LAYOUT)
 }
@@ -670,12 +709,12 @@ pub const fn serialize_const<T: SerializeConst>(
 /// Deserialize a primitive type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
 const fn deserialize_const_primitive<'a, const N: usize>(
     mut from: ConstReadBuffer<'a>,
-    encoding: &PrimitiveEncoding,
+    layout: &PrimitiveLayout,
     out: (usize, [MaybeUninit<u8>; N]),
 ) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
     let (start, mut out) = out;
     let mut offset = 0;
-    while offset < encoding.size {
+    while offset < layout.size {
         // If the bytes are reversed, walk backwards from the end of the number when filling in bytes
         let (from_new, value) = match from.get() {
             Some(data) => data,
@@ -683,7 +722,7 @@ const fn deserialize_const_primitive<'a, const N: usize>(
         };
         from = from_new;
         if cfg!(any(target_endian = "big", feature = "test-big-endian")) {
-            out[start + encoding.size - offset - 1] = MaybeUninit::new(value);
+            out[start + layout.size - offset - 1] = MaybeUninit::new(value);
         } else {
             out[start + offset] = MaybeUninit::new(value);
         }
@@ -695,19 +734,19 @@ const fn deserialize_const_primitive<'a, const N: usize>(
 /// Deserialize a struct type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
 const fn deserialize_const_struct<'a, const N: usize>(
     mut from: ConstReadBuffer<'a>,
-    encoding: &StructEncoding,
+    layout: &StructLayout,
     out: (usize, [MaybeUninit<u8>; N]),
 ) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
     let (start, mut out) = out;
     let mut i = 0;
-    while i < encoding.data.len() {
+    while i < layout.data.len() {
         // Deserialize the field at the offset pointer in the struct
-        let StructFieldEncoding { offset, encoding } = &encoding.data[i];
-        let (new_from, new_out) =
-            match deserialize_const_ptr(from, encoding, (start + *offset, out)) {
-                Some(data) => data,
-                None => return None,
-            };
+        let StructFieldLayout { offset, layout } = &layout.data[i];
+        let (new_from, new_out) = match deserialize_const_ptr(from, layout, (start + *offset, out))
+        {
+            Some(data) => data,
+            None => return None,
+        };
         from = new_from;
         out = new_out;
         i += 1;
@@ -718,7 +757,7 @@ const fn deserialize_const_struct<'a, const N: usize>(
 /// Deserialize an enum type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
 const fn deserialize_const_enum<'a, const N: usize>(
     mut from: ConstReadBuffer<'a>,
-    encoding: &EnumEncoding,
+    layout: &EnumLayout,
     out: (usize, [MaybeUninit<u8>; N]),
 ) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
     let (start, mut out) = out;
@@ -726,7 +765,7 @@ const fn deserialize_const_enum<'a, const N: usize>(
 
     // First, deserialize the discriminant
     let mut offset = 0;
-    while offset < encoding.discriminant.size {
+    while offset < layout.discriminant.size {
         // If the bytes are reversed, walk backwards from the end of the number when filling in bytes
         let (from_new, value) = match from.get() {
             Some(data) => data,
@@ -734,8 +773,8 @@ const fn deserialize_const_enum<'a, const N: usize>(
         };
         from = from_new;
         if cfg!(target_endian = "big") {
-            out[start + encoding.size - offset - 1] = MaybeUninit::new(value);
-            discriminant |= (value as u32) << ((encoding.discriminant.size - offset - 1) * 8);
+            out[start + layout.size - offset - 1] = MaybeUninit::new(value);
+            discriminant |= (value as u32) << ((layout.discriminant.size - offset - 1) * 8);
         } else {
             out[start + offset] = MaybeUninit::new(value);
             discriminant |= (value as u32) << (offset * 8);
@@ -746,11 +785,11 @@ const fn deserialize_const_enum<'a, const N: usize>(
     // Then, deserialize the variant
     let mut i = 0;
     let mut matched_variant = false;
-    while i < encoding.variants.len() {
+    while i < layout.variants.len() {
         // If the variant is the discriminated one, deserialize it
-        let EnumVariant { tag, data, .. } = &encoding.variants[i];
+        let EnumVariant { tag, data, .. } = &layout.variants[i];
         if discriminant == *tag {
-            let offset = encoding.variants_offset;
+            let offset = layout.variants_offset;
             let (new_from, new_out) =
                 match deserialize_const_struct(from, data, (start + offset, out)) {
                     Some(data) => data,
@@ -773,22 +812,19 @@ const fn deserialize_const_enum<'a, const N: usize>(
 /// Deserialize a list type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
 const fn deserialize_const_list<'a, const N: usize>(
     mut from: ConstReadBuffer<'a>,
-    encoding: &ListEncoding,
+    layout: &ListLayout,
     out: (usize, [MaybeUninit<u8>; N]),
 ) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
     let (start, mut out) = out;
-    let len = encoding.len;
-    let item_encoding = encoding.item_encoding;
+    let len = layout.len;
+    let item_layout = layout.item_layout;
     let mut i = 0;
     while i < len {
-        let (new_from, new_out) = match deserialize_const_ptr(
-            from,
-            item_encoding,
-            (start + i * item_encoding.size(), out),
-        ) {
-            Some(data) => data,
-            None => return None,
-        };
+        let (new_from, new_out) =
+            match deserialize_const_ptr(from, item_layout, (start + i * item_layout.size(), out)) {
+                Some(data) => data,
+                None => return None,
+            };
         from = new_from;
         out = new_out;
         i += 1;
@@ -799,17 +835,45 @@ const fn deserialize_const_list<'a, const N: usize>(
 /// Deserialize a type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
 const fn deserialize_const_ptr<'a, const N: usize>(
     from: ConstReadBuffer<'a>,
-    encoding: &Layout,
+    layout: &Layout,
     out: (usize, [MaybeUninit<u8>; N]),
 ) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
-    match encoding {
-        Layout::Enum(encoding) => deserialize_const_enum(from, encoding, out),
-        Layout::Struct(encoding) => deserialize_const_struct(from, encoding, out),
-        Layout::List(encoding) => deserialize_const_list(from, encoding, out),
-        Layout::Primitive(encoding) => deserialize_const_primitive(from, encoding, out),
+    match layout {
+        Layout::Enum(layout) => deserialize_const_enum(from, layout, out),
+        Layout::Struct(layout) => deserialize_const_struct(from, layout, out),
+        Layout::List(layout) => deserialize_const_list(from, layout, out),
+        Layout::Primitive(layout) => deserialize_const_primitive(from, layout, out),
     }
 }
 
+/// Deserialize a type into the output buffer. Accepts (Type, ConstVec<u8>) as input and returns Option<(ConstReadBuffer, Instance of type)>
+///
+/// # Example
+/// ```rust
+/// # use const_serialize::{deserialize_const, serialize_const, ConstVec, SerializeConst};
+/// #[derive(Clone, Copy, Debug, PartialEq, SerializeConst)]
+/// struct Struct {
+///     a: u32,
+///     b: u8,
+///     c: u32,
+///     d: u32,
+/// }
+///
+/// let mut buffer = ConstVec::new();
+/// buffer = serialize_const(&Struct {
+///     a: 0x11111111,
+///     b: 0x22,
+///     c: 0x33333333,
+///     d: 0x44444444,
+/// }, buffer);
+/// let buf = buffer.read();
+/// assert_eq!(deserialize_const!(Struct, buf).unwrap().1, Struct {
+///     a: 0x11111111,
+///     b: 0x22,
+///     c: 0x33333333,
+///     d: 0x44444444,
+/// });
+/// ```
 #[macro_export]
 macro_rules! deserialize_const {
     ($type:ty, $buffer:expr) => {
@@ -842,9 +906,9 @@ pub const unsafe fn deserialize_const_raw<const N: usize, T: SerializeConst>(
 
 /// Check if the serialized representation of two items are the same
 pub const fn serialize_eq<T: SerializeConst>(first: &T, second: &T) -> bool {
-    let first_serialized = ConstWriteBuffer::new();
+    let first_serialized = ConstVec::<u8>::new();
     let first_serialized = serialize_const(first, first_serialized);
-    let second_serialized = ConstWriteBuffer::new();
+    let second_serialized = ConstVec::<u8>::new();
     let second_serialized = serialize_const(second, second_serialized);
     let first_buf = first_serialized.as_ref();
     let second_buf = second_serialized.as_ref();

@@ -15,8 +15,8 @@ pub fn generate_link_section(asset: impl ToTokens) -> TokenStream2 {
 
     quote::quote! {
         // First serialize the asset into a constant sized buffer
-        const __BUFFER: manganis::macro_helpers::const_serialize::ConstWriteBuffer = {
-            let write = manganis::macro_helpers::const_serialize::ConstWriteBuffer::new();
+        const __BUFFER: manganis::macro_helpers::const_serialize::ConstVec<u8> = {
+            let write = manganis::macro_helpers::const_serialize::ConstVec::new();
             manganis::macro_helpers::const_serialize::serialize_const(&#asset, write)
         };
         // Then pull out the byte slice

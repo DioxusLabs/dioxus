@@ -1,5 +1,5 @@
-use crate::const_vec::ConstVec;
-
+/// A buffer that can be read from at compile time. This is very similar to [Cursor](std::io::Cursor) but is
+/// designed to be used in const contexts.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ConstReadBuffer<'a> {
     location: usize,
@@ -7,6 +7,7 @@ pub struct ConstReadBuffer<'a> {
 }
 
 impl<'a> ConstReadBuffer<'a> {
+    /// Create a new buffer from a byte slice
     pub const fn new(memory: &'a [u8]) -> Self {
         Self {
             location: 0,
@@ -14,6 +15,8 @@ impl<'a> ConstReadBuffer<'a> {
         }
     }
 
+    /// Get the next byte from the buffer. Returns `None` if the buffer is empty.
+    /// This will return the new version of the buffer with the first byte removed.
     pub const fn get(mut self) -> Option<(Self, u8)> {
         if self.location >= self.memory.len() {
             return None;
@@ -23,47 +26,8 @@ impl<'a> ConstReadBuffer<'a> {
         Some((self, value))
     }
 
+    /// Get a reference to the underlying byte slice
     pub const fn as_ref(&self) -> &[u8] {
         self.memory
-    }
-}
-
-pub struct ConstWriteBuffer {
-    memory: ConstVec<u8>,
-}
-
-impl Default for ConstWriteBuffer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ConstWriteBuffer {
-    pub const fn new() -> Self {
-        Self {
-            memory: ConstVec::new(),
-        }
-    }
-
-    pub const fn from(vec: ConstVec<u8>) -> Self {
-        Self { memory: vec }
-    }
-
-    pub const fn push(self, value: u8) -> Self {
-        let memory = self.memory.push(value);
-        Self { memory }
-    }
-
-    pub const fn as_ref(&self) -> &[u8] {
-        self.memory.as_ref()
-    }
-
-    /// Get the underlying const vec for this buffer
-    pub const fn inner(self) -> ConstVec<u8> {
-        self.memory
-    }
-
-    pub const fn read(&self) -> ConstReadBuffer {
-        ConstReadBuffer::new(self.memory.as_ref())
     }
 }

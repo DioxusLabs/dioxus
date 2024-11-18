@@ -1,4 +1,4 @@
-use const_serialize::{deserialize_const, serialize_const, ConstWriteBuffer, SerializeConst};
+use const_serialize::{deserialize_const, serialize_const, ConstVec, SerializeConst};
 use std::mem::MaybeUninit;
 
 #[test]
@@ -94,7 +94,7 @@ fn test_serialize_const_layout_struct_list() {
     ];
 
     const _ASSERT: () = {
-        let mut buf = ConstWriteBuffer::new();
+        let mut buf = ConstVec::new();
         buf = serialize_const(&DATA, buf);
         let buf = buf.read();
         let [first, second, third] = match deserialize_const!([OtherStruct; 3], buf) {
@@ -106,7 +106,7 @@ fn test_serialize_const_layout_struct_list() {
         }
     };
     const _ASSERT_2: () = {
-        let mut buf = ConstWriteBuffer::new();
+        let mut buf = ConstVec::new();
         const DATA_AGAIN: [[OtherStruct; 3]; 3] = [DATA, DATA, DATA];
         buf = serialize_const(&DATA_AGAIN, buf);
         let buf = buf.read();
@@ -125,7 +125,7 @@ fn test_serialize_const_layout_struct_list() {
         }
     };
 
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&DATA, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
@@ -155,35 +155,10 @@ fn test_serialize_const_layout_struct() {
         d: 0x44444444,
     };
     let data = OtherStruct(0x11111111, 0x22, data, 0x44444444);
-    let mut buf = ConstWriteBuffer::new();
+    let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.read();
     let (_, data2) = deserialize_const!(OtherStruct, buf).unwrap();
     assert_eq!(data, data2);
-}
-
-#[test]
-fn test_link_sections() {
-    #[derive(SerializeConst)]
-    struct Struct {
-        a: u32,
-        b: u8,
-        c: u32,
-        d: f64,
-    }
-
-    const BUF_1: ConstWriteBuffer = ConstWriteBuffer::new();
-    const BUF_2: ConstWriteBuffer = serialize_const(
-        &Struct {
-            a: 0x11111111,
-            b: 0x22,
-            c: 0x33333333,
-            d: 0.123456789,
-        },
-        BUF_1,
-    );
-
-    #[used]
-    static DATA: ConstWriteBuffer = BUF_2;
 }

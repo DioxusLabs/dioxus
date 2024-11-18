@@ -1,4 +1,4 @@
-use const_serialize::{serialize_const, ConstWriteBuffer, SerializeConst};
+use const_serialize::{serialize_const, ConstVec, SerializeConst};
 
 // From rustchash -  https://github.com/rust-lang/rustc-hash/blob/6745258da00b7251bed4a8461871522d0231a9c7/src/lib.rs#L98
 #[cfg(target_pointer_width = "64")]
@@ -34,7 +34,7 @@ impl ConstHasher {
     }
 
     pub const fn hash_by_bytes<T: SerializeConst>(self, item: &T) -> Self {
-        let mut bytes = ConstWriteBuffer::new();
+        let mut bytes = ConstVec::new();
         bytes = serialize_const(item, bytes);
         let bytes = bytes.as_ref();
         self.write(bytes)

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 const-serialize-macro = { workspace = true }
-serde = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 
 [dev-dependencies]
 const-serialize = { path = "." }
