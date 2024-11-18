@@ -197,7 +197,6 @@ default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
 bundle = []
-nasm = ["mozjpeg/nasm_simd", "image/nasm"]
 
 # when releasing dioxus, we want to enable wasm-opt
 # and then also maybe developing it too.
