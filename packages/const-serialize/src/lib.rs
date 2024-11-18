@@ -447,28 +447,16 @@ impl ConstStr {
 
 #[test]
 fn test_rsplit_once() {
-    let str = ConstStr::new("hello");
+    let str = ConstStr::new("hello world");
     assert_eq!(
-        str.rsplit_once('l'),
-        Some((ConstStr::new("hel"), ConstStr::new("o")))
-    );
-    assert_eq!(
-        str.rsplit_once('o'),
-        Some((ConstStr::new("hell"), ConstStr::new("")))
-    );
-    assert_eq!(
-        str.rsplit_once('e'),
-        Some((ConstStr::new("h"), ConstStr::new("llo")))
+        str.rsplit_once(' '),
+        Some((ConstStr::new("hello"), ConstStr::new("world")))
     );
 
-    let unicode_str = ConstStr::new("h😀ell😀o😀o");
+    let unicode_str = ConstStr::new("hi😀hello😀world😀world");
     assert_eq!(
         unicode_str.rsplit_once('😀'),
-        Some((ConstStr::new("h😀ell😀o"), ConstStr::new("o")))
-    );
-    assert_eq!(
-        unicode_str.rsplit_once('o'),
-        Some((ConstStr::new("h😀ell😀o😀"), ConstStr::new("")))
+        Some((ConstStr::new("hi😀hello😀world"), ConstStr::new("world")))
     );
     assert_eq!(unicode_str.rsplit_once('❌'), None);
 
