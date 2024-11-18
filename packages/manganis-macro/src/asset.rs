@@ -188,11 +188,11 @@ impl ToTokens for AssetParser {
                 const __ASSET_BUNDLED_PATH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::generate_unique_path(__ASSET_SOURCE_PATH, __ASSET_HASH, &__ASSET_OPTIONS);
                 const __ASSET_BUNDLED_PATH_STR: &'static str = __ASSET_BUNDLED_PATH.as_str();
                 // Create the asset that the crate will use
-                const __ASSET: manganis::Asset = manganis::Asset::#constructor(__ASSET_SOURCE_PATH, __ASSET_BUNDLED_PATH_STR, __ASSET_OPTIONS);
+                const __ASSET: manganis::BundledAsset = manganis::BundledAsset::#constructor(__ASSET_SOURCE_PATH, __ASSET_BUNDLED_PATH_STR, __ASSET_OPTIONS);
 
                 #link_section
 
-                __ASSET
+                manganis::Asset::new(__ASSET, __keep_link_section)
             }
         })
     }

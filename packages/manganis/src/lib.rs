@@ -7,6 +7,6 @@ pub mod macro_helpers;
 pub use manganis_macro::asset;
 
 pub use manganis_core::{
-    Asset, AssetOptions, CssAssetOptions, FolderAssetOptions, ImageAssetOptions, ImageSize,
-    ImageType, JsAssetOptions,
+    Asset, AssetOptions, BundledAsset, CssAssetOptions, FolderAssetOptions, ImageAssetOptions,
+    ImageSize, ImageType, JsAssetOptions,
 };

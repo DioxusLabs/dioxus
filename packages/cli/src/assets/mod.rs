@@ -1,6 +1,6 @@
 use anyhow::Context;
 use manganis_core::linker::LinkSection;
-use manganis_core::Asset;
+use manganis_core::BundledAsset;
 use object::{read::archive::ArchiveFile, File as ObjectFile, Object, ObjectSection};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -21,7 +21,7 @@ pub(crate) use file::process_file_to;
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub(crate) struct AssetManifest {
     /// Map of bundled asset name to the asset itself
-    pub(crate) assets: HashMap<PathBuf, Asset>,
+    pub(crate) assets: HashMap<PathBuf, BundledAsset>,
 }
 
 impl AssetManifest {
@@ -96,7 +96,7 @@ impl AssetManifest {
 
             let mut buffer = const_serialize::ConstReadBuffer::new(&bytes);
             while let Some((remaining_buffer, asset)) =
-                const_serialize::deserialize_const!(Asset, buffer)
+                const_serialize::deserialize_const!(BundledAsset, buffer)
             {
                 self.assets
                     .insert(asset.absolute_source_path().into(), asset);
