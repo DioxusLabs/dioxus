@@ -1,19 +1,28 @@
-<div>
-  <h1>🌗🚀 Dioxus (lib)</h1>
-  <p>
-    <strong>A concurrent, functional, virtual DOM for Rust</strong>
-  </p>
+<div align="center">
+    <style>
+        @media (prefers-color-scheme: dark) { .darkmode-image { display: none; } }
+        @media (prefers-color-scheme: light) { .lightmode-image { display: none; } }
+    </style>
+    <img
+        src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c"
+        alt="Build web, desktop, and mobile apps with a single codebase."
+        width="100%"
+        class="darkmode-image"
+    >
+    <img
+        src="https://github.com/user-attachments/assets/9c6a5fac-806d-4391-80d0-d87d63c406eb"
+        alt="Build web, desktop, and mobile apps with a single codebase."
+        width="100%"
+        class="lightmode-image"
+    >
+    <div>
+        <a href=https://dioxuslabs.com/learn/0.6/getting_started>Getting Started</a> | <a href="https://dioxuslabs.com/learn/0.6">Book (0.6)</a> | <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples">Examples</a>
+    </div>
 </div>
 
+---
+
 > This crate implements dioxus-lib which is a renderer-free version of Dioxus. This crate is intended to be used by library authors who need a stable core version of dioxus withuot pulling in renderer-related dependencies on accident.
-
-# Resources
-
-This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
-
-- [Getting Started](https://dioxuslabs.com/learn/0.6/getting_started)
-- [Book (0.5)](https://dioxuslabs.com/learn/0.6)
-- [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
 # Overview and Goals
 

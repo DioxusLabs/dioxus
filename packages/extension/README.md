@@ -29,7 +29,7 @@ Formats the current file as RSX.
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
 
 - [Getting Started](https://dioxuslabs.com/learn/0.6/getting_started)
-- [Book (0.5)](https://dioxuslabs.com/learn/0.6)
+- [Book (0.6)](https://dioxuslabs.com/learn/0.6)
 
 ## Contributing
 - Check out the website [section on contributing](https://dioxuslabs.com/learn/0.6/contributing).

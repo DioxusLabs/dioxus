@@ -14,7 +14,7 @@
 //!
 //! Platform features (the current platform determines what platform the [`launch()`] function runs):
 //!
-//! - `fullstack`: enables the fullstack platform. This must be used in combination with the `web` feature for wasm builds and `axum` feature for server builds
+//! - `fullstack`: enables the fullstack platform. This must be used in combination with the `web` feature for wasm builds and `server` feature for server builds
 //! - `desktop`: enables the desktop platform
 //! - `mobile`: enables the mobile platform
 //! - `web`: enables the web platform. If the fullstack platform is enabled, this will set the fullstack platform to client mode

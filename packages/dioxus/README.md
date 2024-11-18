@@ -1,15 +1,7 @@
 <div align="center">
     <style>
-        @media (prefers-color-scheme: dark) {
-            .darkmode-image {
-                display: none;
-            }
-        }
-        @media (prefers-color-scheme: light) {
-            .lightmode-image {
-                display: none;
-            }
-        }
+        @media (prefers-color-scheme: dark) { .darkmode-image { display: none; } }
+        @media (prefers-color-scheme: light) { .lightmode-image { display: none; } }
     </style>
     <img
         src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c"
