@@ -7524,8 +7524,8 @@ version = "0.6.0-alpha.5"
 dependencies = [
  "const-serialize",
  "dioxus-core-types",
+ "manganis",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -7535,8 +7535,6 @@ dependencies = [
  "manganis-core",
  "proc-macro2",
  "quote",
- "serde",
- "serde_json",
  "syn 2.0.87",
 ]
 

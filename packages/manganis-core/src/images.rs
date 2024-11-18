@@ -95,7 +95,7 @@ impl ImageAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().preload());
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_preload(true));
     /// ```
     #[allow(unused)]
     pub const fn with_preload(self, preload: bool) -> Self {
@@ -113,7 +113,7 @@ impl ImageAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageType};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().format(ImageType::Webp));
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageType::Webp));
     /// ```
     #[allow(unused)]
     pub const fn with_format(self, format: ImageType) -> Self {
@@ -130,8 +130,8 @@ impl ImageAssetOptions {
     /// If you only use the image in one place, you can set the size of the image to the size it will be displayed at. This will make the image load faster
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().size(512, 512));
+    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 512, height: 512 }));
     /// ```
     #[allow(unused)]
     pub const fn with_size(self, size: ImageSize) -> Self {

@@ -40,7 +40,7 @@ impl CssAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, CssAssetOptions};
-    /// const _: Asset = asset!("/assets/style.css", CssAssetOptions::new().minify(false));
+    /// const _: Asset = asset!("/assets/style.css", CssAssetOptions::new().with_minify(false));
     /// ```
     #[allow(unused)]
     pub const fn with_minify(self, minify: bool) -> Self {
@@ -58,7 +58,7 @@ impl CssAssetOptions {
     ///
     /// ```rust
     /// # use manganis::{asset, Asset, CssAssetOptions};
-    /// const _: Asset = asset!("/assets/style.css", CssAssetOptions::new().preload());
+    /// const _: Asset = asset!("/assets/style.css", CssAssetOptions::new().with_preload(true));
     /// ```
     #[allow(unused)]
     pub const fn with_preload(self, preload: bool) -> Self {

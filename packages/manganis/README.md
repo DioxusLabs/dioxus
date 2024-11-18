@@ -5,26 +5,25 @@ The Manganis allows you to submit assets to any build tool that supports collect
 If you defined this in a component library:
 
 ```rust
-const AVIF_ASSET: &str = manganis::asset!("rustacean-flat-gesture.png");
+use manganis::{Asset, asset};
+const AVIF_ASSET: Asset = manganis::asset!("/assets/image.png");
 ```
 
 AVIF_ASSET will be set to a new file name that will be served by some CLI. That file can be collected by any package that depends on the component library.
 
 ```rust
-// You can include tailwind classes that will be collected into the final binary
-const TAILWIND_CLASSES: &str = manganis::classes!("flex flex-col p-5");
-
-// You can also collect arbitrary files. Relative paths are resolved relative to the package root
-const _: Asset = manganis::asset!("test-package-dependency/src/asset.txt");
+use manganis::{ImageType, ImageAssetOptions, Asset, asset, ImageSize};
+// You can collect arbitrary files. Absolute paths are resolved relative to the package root
+const _: Asset = asset!("/assets/script.js");
 
 // You can collect images which will be automatically optimized
-pub const PNG_ASSET: manganis::ImageAsset =
-    manganis::asset!("rustacean-flat-gesture.png");
+pub const PNG_ASSET: Asset =
+    asset!("/assets/image.png");
 // Resize the image at compile time to make the assets smaller
-pub const RESIZED_PNG_ASSET: manganis::ImageAsset =
-    manganis::asset!("rustacean-flat-gesture.png", ImageAssetOptions::new().size(52, 52));
+pub const RESIZED_PNG_ASSET: Asset =
+    asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 52, height: 52 }));
 // Or convert the image at compile time to a web friendly format
-pub const AVIF_ASSET: Asset = manganis::asset!("rustacean-flat-gesture.png", ImageAssetOptions::new().format(ImageType::Avif));
+pub const AVIF_ASSET: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageType::Avif));
 ```
 
 ## Adding Support to Your CLI
