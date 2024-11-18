@@ -15,7 +15,7 @@ pub const fn generate_unique_path(
     let mut input_path = ConstStr::new(input_path);
     // Then strip the prefix from the input path
     let mut extension = None;
-    if let Some((_, new_input_path)) = input_path.rsplit_once(std::path::MAIN_SEPARATOR) {
+    if let Some((_, new_input_path)) = input_path.rsplit_once('/') {
         input_path = new_input_path;
     }
     if let Some((new_input_path, new_extension)) = input_path.rsplit_once('.') {
