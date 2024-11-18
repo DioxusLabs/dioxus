@@ -22,3 +22,6 @@ manganis-core = { workspace = true }
 
 [features]
 default = []
+
+[dev-dependencies]
+manganis.workspace = true

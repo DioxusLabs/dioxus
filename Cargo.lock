@@ -7532,6 +7532,7 @@ dependencies = [
 name = "manganis-macro"
 version = "0.6.0-alpha.5"
 dependencies = [
+ "manganis",
  "manganis-core",
  "proc-macro2",
  "quote",

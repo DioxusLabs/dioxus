@@ -15,7 +15,7 @@ use crate::AssetOptions;
     serde::Deserialize,
 )]
 #[repr(u8)]
-pub enum ImageType {
+pub enum ImageFormat {
     /// A png image. Png images cannot contain transparency and tend to compress worse than other formats
     Png,
     /// A jpg image. Jpg images can contain transparency and tend to compress better than png images
@@ -66,7 +66,7 @@ pub enum ImageSize {
     serde::Deserialize,
 )]
 pub struct ImageAssetOptions {
-    ty: ImageType,
+    ty: ImageFormat,
     low_quality_preview: bool,
     size: ImageSize,
     preload: bool,
@@ -82,7 +82,7 @@ impl ImageAssetOptions {
     /// Create a new image asset options
     pub const fn new() -> Self {
         Self {
-            ty: ImageType::Unknown,
+            ty: ImageFormat::Unknown,
             low_quality_preview: false,
             size: ImageSize::Automatic,
             preload: false,
@@ -112,16 +112,16 @@ impl ImageAssetOptions {
     /// Choosing the right format can make your site load much faster. Webp and avif images tend to be a good default for most images
     ///
     /// ```rust
-    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageType};
-    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageType::Webp));
+    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageFormat::Webp));
     /// ```
     #[allow(unused)]
-    pub const fn with_format(self, format: ImageType) -> Self {
+    pub const fn with_format(self, format: ImageFormat) -> Self {
         Self { ty: format, ..self }
     }
 
     /// Get the format of the image
-    pub const fn format(&self) -> ImageType {
+    pub const fn format(&self) -> ImageFormat {
         self.ty
     }
 
@@ -167,11 +167,11 @@ impl ImageAssetOptions {
 
     pub(crate) const fn extension(&self) -> Option<&'static str> {
         match self.ty {
-            ImageType::Png => Some("png"),
-            ImageType::Jpg => Some("jpg"),
-            ImageType::Webp => Some("webp"),
-            ImageType::Avif => Some("avif"),
-            ImageType::Unknown => None,
+            ImageFormat::Png => Some("png"),
+            ImageFormat::Jpg => Some("jpg"),
+            ImageFormat::Webp => Some("webp"),
+            ImageFormat::Avif => Some("avif"),
+            ImageFormat::Unknown => None,
         }
     }
 }

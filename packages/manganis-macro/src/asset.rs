@@ -106,7 +106,7 @@ impl Parse for AssetParser {
     // asset!(
     //     "/assets/myfile.png",
     //      ImageAssetOptions::new()
-    //        .format(ImageType::Jpg)
+    //        .format(ImageFormat::Jpg)
     //        .size(512, 512)
     // )
     // ```

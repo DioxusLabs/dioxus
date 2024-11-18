@@ -8,5 +8,5 @@ pub use manganis_macro::asset;
 
 pub use manganis_core::{
     Asset, AssetOptions, BundledAsset, CssAssetOptions, FolderAssetOptions, ImageAssetOptions,
-    ImageSize, ImageType, JsAssetOptions,
+    ImageFormat, ImageSize, JsAssetOptions,
 };

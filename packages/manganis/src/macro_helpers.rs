@@ -69,17 +69,17 @@ pub const fn generate_unique_path(
 
 #[test]
 fn test_unique_path() {
-    use manganis_core::{ImageAssetOptions, ImageType};
+    use manganis_core::{ImageAssetOptions, ImageFormat};
     let input_path = "/some/prefix/test.png";
     let content_hash = 123456789;
-    let asset_config = AssetOptions::Image(ImageAssetOptions::new().with_format(ImageType::Avif));
+    let asset_config = AssetOptions::Image(ImageAssetOptions::new().with_format(ImageFormat::Avif));
     let output_path = generate_unique_path(input_path, content_hash, &asset_config);
     assert_eq!(output_path.as_str(), "test-603a88fe296462a3.avif");
 
     // Changing the path without changing the contents shouldn't change the hash
     let input_path = "/some/prefix/../prefix/test.png";
     let content_hash = 123456789;
-    let asset_config = AssetOptions::Image(ImageAssetOptions::new().with_format(ImageType::Avif));
+    let asset_config = AssetOptions::Image(ImageAssetOptions::new().with_format(ImageFormat::Avif));
     let output_path = generate_unique_path(input_path, content_hash, &asset_config);
     assert_eq!(output_path.as_str(), "test-603a88fe296462a3.avif");
 
