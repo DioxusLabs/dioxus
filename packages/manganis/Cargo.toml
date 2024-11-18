@@ -14,20 +14,9 @@ keywords = ["assets"]
 
 [dependencies]
 const-serialize = { workspace = true }
-manganis-core.workspace = true
-manganis-macro.workspace = true
-
-# dunce = "1.0.2"
-# [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-# core-foundation = "0.10.0"
-# [target.'cfg(target_os = "macos")'.dependencies]
-# core-foundation = "0.9.3"
-# [target.'cfg(target_os ="macos")'.dependencies]
-# infer = { workspace = true }
-# dirs = "5.0.1"
-# infer = { workspace = true }
-# manganis-common = { workspace = true }
+manganis-core = { workspace = true }
+manganis-macro = { workspace = true }
 
 [features]
 default = []
-
+dioxus = ["manganis-core/dioxus"]
