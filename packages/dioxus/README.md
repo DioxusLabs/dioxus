@@ -11,45 +11,49 @@
             }
         }
     </style>
-    <img src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c" alt="Dioxus logo" width="100%" class="lightmode-image">
-    <img src="https://github.com/user-attachments/assets/9c6a5fac-806d-4391-80d0-d87d63c406eb" alt="Dioxus logo" width="100%" class="darkmode-image">
+    <img
+        src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c"
+        alt="Build web, desktop, and mobile apps with a single codebase."
+        width="100%"
+        class="darkmode-image"
+    >
+    <img
+        src="https://github.com/user-attachments/assets/9c6a5fac-806d-4391-80d0-d87d63c406eb"
+        alt="Build web, desktop, and mobile apps with a single codebase."
+        width="100%"
+        class="lightmode-image"
+    >
 </div>
-<div align="center">
-    <strong>Build web, desktop, and mobile apps with a single codebase.</strong>
-</div>
-<!-- ![header-light-updated](https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c) -->
-<!-- ![header-dark-updated](https://github.com/user-attachments/assets/9c6a5fac-806d-4391-80d0-d87d63c406eb) -->
+
 
 # Resources
 
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
 
-- [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
-- [Book (0.5)](https://dioxuslabs.com/learn/0.5)
+- [Getting Started](https://dioxuslabs.com/learn/0.6/getting_started)
+- [Book (0.6)](https://dioxuslabs.com/learn/0.6)
 - [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
-# Overview and Goals
 
-Dioxus makes it easy to quickly build complex user interfaces with Rust. Any Dioxus app can run in the web browser,
-as a desktop app, as a mobile app, or anywhere else provided you build the right renderer.
+# Overview
 
-Dioxus is heavily inspired by React, supporting many of the same concepts:
+Dioxus is a framework for building cross-platform apps in Rust. With one codebase, you can build web, desktop, and mobile apps with fullstack server functions. Dioxus is designed to be easy to learn for developers familiar with web technologies like HTML, CSS, and JavaScript.
 
-- Hooks for state
-- VirtualDom & diffing
-- Concurrency, fibers, and asynchronous rendering
-- JSX-like templating syntax
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/dddae6a9-c13b-4a88-84e8-dc98c1286d2a" alt="App with dioxus" height="600px">
+</div>
 
-If you know React, then you know Dioxus.
+# At a glance
 
-Dioxus is _substantially_ more performant than many of the other Rust UI libraries (Yew/Percy) and is _significantly_ more performant
-than React—roughly competitive with InfernoJS.
+Dioxus is crossplatform app framework that empowers developer to build beautiful, fast, type-safe apps with Rust. By default, Dioxus apps are declared with HTML and CSS, but you can use other technologies like Skia or AppKit.
 
-Remember: Dioxus is a library for declaring interactive user interfaces—it is not a dedicated renderer. Most 1st party renderers for Dioxus currently only support web technologies.
+Dioxus includes a number of useful features:
+- Hotreloading of RSX markup and assets
+- Interactive CLI
 
 ## Brief Overview
 
-All Dioxus apps are built by composing functions that start with a capital letter and return an `Element`.
+All Dioxus apps are built by composing functions return an `Element`.
 
 To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
 
@@ -62,7 +66,9 @@ fn main() {
 
 // The #[component] attribute streamlines component creation.
 // It's not required, but highly recommended. It will lint incorrect component definitions and help you create props structs.
-fn app() -> Element {
+#[component]
+#[component]
+fn App() -> Element {
     rsx! { "hello world!" }
 }
 ```
@@ -102,7 +108,8 @@ Putting everything together, we can write a simple component that renders a list
 elements:
 
 ```rust, ignore
-fn app() -> Element {
+#[component]
+fn App() -> Element {
     let name = "dave";
     rsx! {
         h1 { "Hello, {name}!" }
@@ -117,13 +124,13 @@ fn app() -> Element {
 
 ## Components
 
-We can compose these function components to build a complex app. Each new
-component we design must take some Properties. For components with no explicit properties, we can omit the type altogether.
+We can compose these function components to build a complex app. Each new component takes some Properties. For components with no explicit properties, we can omit the type altogether.
 
-In Dioxus, all properties are memorized by default with Clone and PartialEq. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
+In Dioxus, all properties are memoized by default with `Clone` and `PartialEq`. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
 
 ```rust, ignore
-fn app() -> Element {
+#[component]
+fn App() -> Element {
     rsx! {
         Header {
             title: "My App",
@@ -152,15 +159,14 @@ fn Header(title: String, color: String) -> Element {
 
 ## Hooks
 
-While components are reusable forms of UI elements, hooks are reusable forms
-of logic. Hooks provide a way of retrieving state from Dioxus' internal `Scope` and using
+While components are reusable forms of UI elements, hooks are reusable forms of logic. Hooks provide a way of retrieving state from Dioxus' internal `Scope` and using
 it to render UI elements.
 
-By convention, all hooks are functions that should start with `use_`. We can
-use hooks to define the state and modify it from within listeners.
+By convention, all hooks are functions that should start with `use_`. We can use hooks to define the state and modify it from within listeners.
 
 ```rust, ignore
-fn app() -> Element {
+#[component]
+fn App() -> Element {
     // The use signal hook runs once when the component is created and then returns the current value every run after the first
     let name = use_signal(|| "world");
 
@@ -168,15 +174,12 @@ fn app() -> Element {
 }
 ```
 
-Hooks are sensitive to how they are used. To use hooks, you must abide by the
-["rules of hooks"](https://dioxuslabs.com/learn/0.5/reference/hooks#rules-of-hooks):
+Hooks are sensitive to how they are used. To use hooks, you must abide by the ["rules of hooks"](https://dioxuslabs.com/learn/0.5/reference/hooks#rules-of-hooks):
 
 - Hooks can only be called in the body of a component or another hook. Not inside of another expression like a loop, conditional or function call.
 - Hooks should start with "use\_"
 
-In a sense, hooks let us add a field of state to our component without declaring
-an explicit state struct. However, this means we need to "load" the struct in the right
-order. If that order is wrong, then the hook will pick the wrong state and panic.
+In a sense, hooks let us add a field of state to our component without declaring an explicit state struct. However, this means we need to "load" the struct in the right order. If that order is wrong, then the hook will pick the wrong state and panic.
 
 Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with [custom hooks](https://dioxuslabs.com/learn/0.5/cookbook/state/custom_hooks).
 
@@ -191,7 +194,8 @@ fn main() {
     dioxus::launch(App);
 }
 
-fn app() -> Element {
+#[component]
+fn App() -> Element {
     let mut count = use_signal(|| 0);
 
     rsx! {
