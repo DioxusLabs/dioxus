@@ -121,9 +121,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         websys_dom.flush_edits();
     }
 
-    // the mutations come back with nothing - we need to actually mount them
-    websys_dom.mount();
-
     loop {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
