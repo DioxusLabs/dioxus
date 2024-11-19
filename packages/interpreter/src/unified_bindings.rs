@@ -45,7 +45,7 @@ mod js {
     pub struct Interpreter;
 
     fn mount_to_root() {
-        "{this.appendChildren(this.root, this.stack.length-1);}"
+        "{this.appendChildren(0, this.stack.length-1);}"
     }
     fn push_root(root: u32) {
         "{this.pushRoot(this.nodes[$root$]);}"
