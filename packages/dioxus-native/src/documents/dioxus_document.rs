@@ -4,16 +4,19 @@ use std::{
     any::Any,
     collections::{HashMap, HashSet},
     rc::Rc,
+    sync::Arc,
 };
 
 use blitz_dom::{
     events::{EventData, RendererEvent},
     local_name, namespace_url,
+    net::Resource,
     node::{Attribute, NodeSpecificData},
     ns, Atom, Document, DocumentLike, ElementNodeData, Node, NodeData, QualName, Viewport,
     DEFAULT_CSS,
 };
 
+use blitz_traits::net::NetProvider;
 use dioxus::{
     dioxus_core::{
         AttributeValue, ElementId, Event, Template, TemplateAttribute, TemplateNode, VirtualDom,
@@ -381,9 +384,17 @@ impl DioxusDocument {
             .collect()
     }
 
-    pub fn new(vdom: VirtualDom) -> Self {
+    pub fn new(
+        vdom: VirtualDom,
+        net_provider: Option<Arc<dyn NetProvider<Data = Resource>>>,
+    ) -> Self {
         let viewport = Viewport::new(0, 0, 1.0);
         let mut doc = Document::new(viewport);
+
+        // Set net provider
+        if let Some(net_provider) = net_provider {
+            doc.set_net_provider(net_provider);
+        }
 
         // Create a virtual "html" element to act as the root element, as we won't necessarily
         // have a single root otherwise, while the rest of blitz requires that we do

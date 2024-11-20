@@ -69,11 +69,6 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     props: P,
     _cfg: Config,
 ) {
-    // Spin up the virtualdom
-    // We're going to need to hit it with a special waker
-    let vdom = VirtualDom::new_with_props(root, props);
-    let document = DioxusDocument::new(vdom);
-
     // Turn on the runtime and enter it
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -81,7 +76,19 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         .unwrap();
 
     let _guard = rt.enter();
-    launch_with_document(document, rt, None)
+
+    let net_callback = Arc::new(Callback::new());
+    let net_provider = Arc::new(Provider::new(
+        rt.handle().clone(),
+        Arc::clone(&net_callback) as SharedCallback<Resource>,
+    ));
+
+    // Spin up the virtualdom
+    // We're going to need to hit it with a special waker
+    let vdom = VirtualDom::new_with_props(root, props);
+    let document = DioxusDocument::new(vdom, Some(net_provider));
+
+    launch_with_document(document, rt, Some(net_callback))
 }
 
 pub fn launch_url(url: &str) {
