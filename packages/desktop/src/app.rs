@@ -22,7 +22,6 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
 };
-use wry::Rect;
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
@@ -229,6 +228,8 @@ impl App {
         // Window creation and modification is the responsibility fo the webview instance so it makes sense to
         // encapsulate that there.
         self.webviews.values().for_each(|webview_instance| {
+            use wry::Rect;
+
             webview_instance
                 .desktop_context
                 .webview

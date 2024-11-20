@@ -21,7 +21,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
-use wry::{DragDropEvent, Rect, RequestAsyncResponder, WebContext, WebViewBuilder};
+use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
@@ -323,7 +323,7 @@ impl WebviewInstance {
         }
 
         webview = webview
-            .with_bounds(Rect {
+            .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
                     window.inner_size().width,

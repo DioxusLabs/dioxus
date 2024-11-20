@@ -15,14 +15,7 @@ fn main() {
         .launch(app);
 }
 
-async fn setup_triangle<'a>(
-    context: &'a DesktopContext,
-) -> (
-    wgpu::Surface<'a>,
-    wgpu::Device,
-    wgpu::RenderPipeline,
-    wgpu::Queue,
-) {
+async fn setup_triangle<'a>(context: &'a DesktopContext) -> GraphicsResources<'a> {
     let window = &context.window;
     let size = window.inner_size();
 
@@ -83,7 +76,7 @@ fn fs_main() -> @location(0) vec4<f32> {
     let swapchain_capabilities = surface.get_capabilities(&adapter);
     let swapchain_format = swapchain_capabilities.formats[0];
 
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
@@ -114,7 +107,13 @@ fn fs_main() -> @location(0) vec4<f32> {
     };
 
     surface.configure(&device, &config);
-    (surface, device, render_pipeline, queue)
+
+    GraphicsResources {
+        surface,
+        device,
+        pipeline,
+        queue,
+    }
 }
 
 fn render_triangle(
@@ -174,15 +173,7 @@ fn app() -> Element {
         GraphicsContextAsyncBuilder {
             desktop: window(),
             resources_builder: |desktop: &DesktopContext| {
-                Box::pin(async move {
-                    let (surface, device, pipeline, queue) = setup_triangle(desktop).await;
-                    GraphicsResources {
-                        surface: surface,
-                        device: device,
-                        pipeline: pipeline,
-                        queue: queue,
-                    }
-                })
+                Box::pin(async move { setup_triangle(desktop).await })
             },
         }
         .build()
