@@ -2,7 +2,7 @@ use const_serialize::SerializeConst;
 
 use crate::AssetOptions;
 
-/// A builder for a css asset. This must be used in the [`mg!`] macro.
+/// Options for a css asset
 #[derive(
     Debug,
     PartialEq,

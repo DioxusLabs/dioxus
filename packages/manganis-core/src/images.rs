@@ -53,7 +53,7 @@ pub enum ImageSize {
     Automatic,
 }
 
-/// A builder for an image asset. This must be used in the [`mg!`] macro.
+/// Options for an image asset
 #[derive(
     Debug,
     PartialEq,

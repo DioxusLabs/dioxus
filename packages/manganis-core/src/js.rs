@@ -2,7 +2,7 @@ use const_serialize::SerializeConst;
 
 use crate::AssetOptions;
 
-/// A builder for a javascript asset
+/// Options for a javascript asset
 #[derive(
     Debug,
     PartialEq,
