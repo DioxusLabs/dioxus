@@ -22,7 +22,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut graphics_resources = use_resource(move || async {
+    let graphics_resources = use_resource(move || async {
         GraphicsContextAsyncBuilder {
             desktop: window(),
             resources_builder: |ctx| Box::pin(GraphicsResources::new(ctx)),
@@ -47,12 +47,18 @@ fn app() -> Element {
         }
 
         if let WryEvent::WindowEvent {
-            event: WindowEvent::Resized(_new_size),
+            event: WindowEvent::Resized(new_size),
             ..
         } = event
         {
-            // TODO: use the new_size to update the existing surface instead of recreating the entire graphics resource
-            graphics_resources.restart();
+            let ctx = graphics_resources.value();
+            let ctx: &GraphicsContext = &*ctx.as_ref().unwrap();
+            ctx.with_resources(|srcs| {
+                let mut cfg = srcs.config.clone();
+                cfg.width = new_size.width;
+                cfg.height = new_size.height;
+                srcs.surface.configure(&srcs.device, &cfg);
+            });
             window().window.request_redraw();
         }
     });
@@ -86,6 +92,7 @@ struct GraphicsResources<'a> {
     device: wgpu::Device,
     pipeline: wgpu::RenderPipeline,
     queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
 }
 
 impl<'a> GraphicsResources<'a> {
@@ -188,6 +195,7 @@ fn fs_main() -> @location(0) vec4<f32> {
             device,
             pipeline,
             queue,
+            config,
         }
     }
 
@@ -197,6 +205,7 @@ fn fs_main() -> @location(0) vec4<f32> {
             device,
             pipeline,
             queue,
+            ..
         } = self;
 
         let frame = surface
