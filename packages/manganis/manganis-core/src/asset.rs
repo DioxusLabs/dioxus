@@ -80,10 +80,11 @@ impl BundledAsset {
 ///
 /// ```rust
 /// # use manganis::{asset, Asset};
+/// # use dioxus::prelude::*;
 /// const ASSET: Asset = asset!("/assets/image.png");
 /// rsx! {
 ///     img { src: ASSET }
-/// }
+/// };
 /// ```
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Asset {
