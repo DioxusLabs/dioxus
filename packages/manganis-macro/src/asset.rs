@@ -38,7 +38,21 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
     // Create a hasher
     let mut hash = std::collections::hash_map::DefaultHasher::new();
 
-    // Open the file to get its options
+    // If this is a folder, hash the folder contents
+    if file_path.is_dir() {
+        let files =
+            std::fs::read_dir(file_path).map_err(|err| AssetParseError::AssetDoesntExist {
+                err,
+                path: file_path.to_path_buf(),
+            })?;
+        for file in files.flatten() {
+            let path = file.path();
+            hash_file_contents(&path)?;
+        }
+        return Ok(hash.finish());
+    }
+
+    // Otherwise, open the file to get its contents
     let mut file =
         std::fs::File::open(file_path).map_err(|err| AssetParseError::AssetDoesntExist {
             err,
