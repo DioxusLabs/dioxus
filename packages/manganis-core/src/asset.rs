@@ -2,7 +2,11 @@ use crate::AssetOptions;
 use const_serialize::{ConstStr, SerializeConst};
 use std::path::PathBuf;
 
-/// A bundled asset with some options. You need to
+/// An asset that should be copied by the bundler with some options. This type will be
+/// serialized into the binary and added to the link section [`LinkSection::CURRENT`](crate::linker::LinkSection::CURRENT).
+/// CLIs that support manganis, should pull out the assets from the link section, optimize,
+/// and write them to the filesystem at [`BundledAsset::bundled_path`] for the application
+/// to use.
 #[derive(
     Debug,
     PartialEq,
@@ -70,7 +74,17 @@ impl BundledAsset {
     }
 }
 
-/// A bundled asset with some options. You need to
+/// A bundled asset with some options. The asset can be used in rsx! to reference the asset.
+/// It should not be read directly with [`std::fs::read`] because the path needs to be resolved
+/// relative to the bundle
+///
+/// ```rust
+/// # use manganis::{asset, Asset};
+/// const ASSET: Asset = asset!("/assets/image.png");
+/// rsx! {
+///     img { src: ASSET }
+/// }
+/// ```
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Asset {
     /// The bundled asset

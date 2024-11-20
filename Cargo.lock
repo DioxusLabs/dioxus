@@ -7523,6 +7523,7 @@ name = "manganis-core"
 version = "0.6.0-alpha.5"
 dependencies = [
  "const-serialize",
+ "dioxus",
  "dioxus-core-types",
  "manganis",
  "serde",
