@@ -1,6 +1,6 @@
 pub use const_serialize;
-use const_serialize::ConstStr;
-use manganis_core::AssetOptions;
+use const_serialize::{serialize_const, ConstStr, ConstVec};
+use manganis_core::{AssetOptions, BundledAsset};
 
 use crate::hash::ConstHasher;
 
@@ -109,4 +109,21 @@ fn test_unique_path() {
     let output_path =
         generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
     assert_eq!(output_path.as_str(), "test-7bced03789ff865c");
+}
+
+/// Serialize an asset to a const buffer
+pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8> {
+    let write = ConstVec::new();
+    serialize_const(asset, write)
+}
+
+/// Copy a slice into a constant sized buffer at compile time
+pub const fn copy_bytes<const N: usize>(bytes: &[u8]) -> [u8; N] {
+    let mut out = [0; N];
+    let mut i = 0;
+    while i < N {
+        out[i] = bytes[i];
+        i += 1;
+    }
+    out
 }

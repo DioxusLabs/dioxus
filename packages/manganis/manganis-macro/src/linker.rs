@@ -15,10 +15,7 @@ pub fn generate_link_section(asset: impl ToTokens) -> TokenStream2 {
 
     quote::quote! {
         // First serialize the asset into a constant sized buffer
-        const __BUFFER: manganis::macro_helpers::const_serialize::ConstVec<u8> = {
-            let write = manganis::macro_helpers::const_serialize::ConstVec::new();
-            manganis::macro_helpers::const_serialize::serialize_const(&#asset, write)
-        };
+        const __BUFFER: manganis::macro_helpers::const_serialize::ConstVec<u8> = manganis::macro_helpers::serialize_asset(&#asset);
         // Then pull out the byte slice
         const __BYTES: &[u8] = __BUFFER.as_ref();
         // And the length of the byte slice
@@ -27,15 +24,7 @@ pub fn generate_link_section(asset: impl ToTokens) -> TokenStream2 {
         // Now that we have the size of the asset, copy the bytes into a static array
         #[link_section = #section_name]
         #[used]
-        static __LINK_SECTION: [u8; __LEN] = {
-            let mut bytes = [0; __LEN];
-            let mut i = 0;
-            while i < __LEN {
-                bytes[i] = __BYTES[i];
-                i += 1;
-            }
-            bytes
-        };
+        static __LINK_SECTION: [u8; __LEN] = manganis::macro_helpers::copy_bytes(__BYTES);
 
         fn __keep_link_section() -> u8 {
             unsafe { std::ptr::read_volatile(__LINK_SECTION.as_ptr()) }
