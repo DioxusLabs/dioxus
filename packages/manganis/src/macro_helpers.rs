@@ -15,7 +15,7 @@ pub const fn generate_unique_path(
     let mut input_path = ConstStr::new(input_path);
     // Then strip the prefix from the input path
     let mut extension = None;
-    if let Some((_, new_input_path)) = input_path.rsplit_once('/') {
+    if let Some((_, new_input_path)) = input_path.rsplit_once(std::path::MAIN_SEPARATOR) {
         input_path = new_input_path;
     }
     if let Some((new_input_path, new_extension)) = input_path.rsplit_once('.') {
@@ -70,29 +70,43 @@ pub const fn generate_unique_path(
 #[test]
 fn test_unique_path() {
     use manganis_core::{ImageAssetOptions, ImageFormat};
-    let input_path = "/some/prefix/test.png";
+    use std::path::PathBuf;
+    let mut input_path = PathBuf::from("some");
+    input_path.push("prefix");
+    input_path.push("test.png");
     let content_hash = 123456789;
     let asset_config = AssetOptions::Image(ImageAssetOptions::new().with_format(ImageFormat::Avif));
-    let output_path = generate_unique_path(input_path, content_hash, &asset_config);
+    let output_path =
+        generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
     assert_eq!(output_path.as_str(), "test-603a88fe296462a3.avif");
 
     // Changing the path without changing the contents shouldn't change the hash
-    let input_path = "/some/prefix/../prefix/test.png";
+    let mut input_path = PathBuf::from("some");
+    input_path.push("prefix");
+    input_path.push("prefix");
+    input_path.push("test.png");
     let content_hash = 123456789;
     let asset_config = AssetOptions::Image(ImageAssetOptions::new().with_format(ImageFormat::Avif));
-    let output_path = generate_unique_path(input_path, content_hash, &asset_config);
+    let output_path =
+        generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
     assert_eq!(output_path.as_str(), "test-603a88fe296462a3.avif");
 
-    let input_path = "test/ing/test";
+    let mut input_path = PathBuf::from("test");
+    input_path.push("ing");
+    input_path.push("test");
     let content_hash = 123456789;
     let asset_config = AssetOptions::Unknown;
-    let output_path = generate_unique_path(input_path, content_hash, &asset_config);
+    let output_path =
+        generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
     assert_eq!(output_path.as_str(), "test-c8c4cfad21cac262");
 
     // Just changing the content hash should change the total hash
-    let input_path = "test/ing/test";
+    let mut input_path = PathBuf::from("test");
+    input_path.push("ing");
+    input_path.push("test");
     let content_hash = 123456780;
     let asset_config = AssetOptions::Unknown;
-    let output_path = generate_unique_path(input_path, content_hash, &asset_config);
+    let output_path =
+        generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
     assert_eq!(output_path.as_str(), "test-7bced03789ff865c");
 }
