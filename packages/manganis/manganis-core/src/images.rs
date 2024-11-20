@@ -97,7 +97,6 @@ impl ImageAssetOptions {
     /// # use manganis::{asset, Asset, ImageAssetOptions};
     /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_preload(true));
     /// ```
-    #[allow(unused)]
     pub const fn with_preload(self, preload: bool) -> Self {
         Self { preload, ..self }
     }
@@ -115,9 +114,58 @@ impl ImageAssetOptions {
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
     /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_format(ImageFormat::Webp));
     /// ```
-    #[allow(unused)]
     pub const fn with_format(self, format: ImageFormat) -> Self {
         Self { ty: format, ..self }
+    }
+
+    /// Sets the format of the image to [`ImageFormat::Avif`]
+    ///
+    /// Avif images tend to be a good default for most images rendered in browser because
+    /// they compress images well
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_avif());
+    /// ```
+    pub const fn with_avif(self) -> Self {
+        self.with_format(ImageFormat::Avif)
+    }
+
+    /// Sets the format of the image to [`ImageFormat::Webp`]
+    ///
+    /// Webp images tend to be a good default for most images rendered in browser because
+    /// they compress images well
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_webp());
+    /// ```
+    pub const fn with_webp(self) -> Self {
+        self.with_format(ImageFormat::Webp)
+    }
+
+    /// Sets the format of the image to [`ImageFormat::Jpg`]
+    ///
+    /// Jpeg images compress much better than [`ImageFormat::Png`], but worse than [`ImageFormat::Webp`] or [`ImageFormat::Avif`]
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_jpg());
+    /// ```
+    pub const fn with_jpg(self) -> Self {
+        self.with_format(ImageFormat::Jpg)
+    }
+
+    /// Sets the format of the image to [`ImageFormat::Png`]
+    ///
+    /// Png images don't compress very well, so they are not recommended for large images
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, ImageAssetOptions, ImageFormat};
+    /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_png());
+    /// ```
+    pub const fn with_png(self) -> Self {
+        self.with_format(ImageFormat::Png)
     }
 
     /// Get the format of the image
@@ -133,7 +181,7 @@ impl ImageAssetOptions {
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize};
     /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 512, height: 512 }));
     /// ```
-    #[allow(unused)]
+
     pub const fn with_size(self, size: ImageSize) -> Self {
         Self { size, ..self }
     }
@@ -152,7 +200,7 @@ impl ImageAssetOptions {
     // /// # use manganis::{asset, Asset, ImageAssetOptions};
     // /// const _: Asset = manganis::asset!("/assets/image.png", ImageAssetOptions::new().with_low_quality_image_preview());
     // /// ```
-    // #[allow(unused)]
+    //
     // pub const fn with_low_quality_image_preview(self, low_quality_preview: bool) -> Self {
     //     Self {
     //         low_quality_preview,
