@@ -7,7 +7,7 @@
 
 use dioxus::desktop::{
     tao::{event::Event as WryEvent, window::WindowBuilder},
-    use_window, use_wry_event_handler, window, Config, DesktopContext,
+    use_wry_event_handler, window, Config, DesktopContext,
 };
 use dioxus::prelude::*;
 
@@ -31,33 +31,42 @@ fn app() -> Element {
         .await
     });
 
-    let desktop_context = use_window();
-    graphics_resources.read().as_ref().map(|_| {
-        desktop_context.window.request_redraw();
+    // on first render request a redraw
+    use_effect(|| {
+        window().window.request_redraw();
     });
 
     use_wry_event_handler(move |event, _| {
+        use dioxus::desktop::tao::event::WindowEvent;
+
         if let WryEvent::RedrawRequested(_id) = event {
             graphics_resources
                 .read()
                 .as_ref()
                 .map(|resources| resources.with_resources(|resources| resources.render()));
-        } else if let WryEvent::WindowEvent {
-            event: dioxus::desktop::tao::event::WindowEvent::Resized(_new_size),
+        }
+
+        if let WryEvent::WindowEvent {
+            event: WindowEvent::Resized(_new_size),
             ..
         } = event
         {
             // TODO: use the new_size to update the existing surface instead of recreating the entire graphics resource
             graphics_resources.restart();
+            window().window.request_redraw();
         }
     });
 
     rsx! {
         div {
-            p {
-                color: "red",
-                "hello world"
-            }
+            color: "blue",
+            width: "100vw",
+            height: "100vh",
+            display: "flex",
+            justify_content: "center",
+            align_items: "center",
+            font_size: "20px",
+            div { "text overlayed on wgpu surface!" }
         }
     }
 }
