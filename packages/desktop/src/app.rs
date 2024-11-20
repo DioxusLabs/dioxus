@@ -225,7 +225,7 @@ impl App {
 
     pub fn resize_window(&self, size: PhysicalSize<u32>) {
         // TODO: the app layer should avoid directly manipulating the webview webview instance internals.
-        // Window creation and modification is the responsibility fo the webview instance so it makes sense to
+        // Window creation and modification is the responsibility of the webview instance so it makes sense to
         // encapsulate that there.
         self.webviews.values().for_each(|webview_instance| {
             use wry::Rect;
