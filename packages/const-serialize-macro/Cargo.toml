@@ -1,12 +1,13 @@
 [package]
 name = "const-serialize-macro"
-version = "0.6.0-alpha.5"
+version = { workspace = true }
+authors = ["Evan Almloff"]
 edition = "2021"
 description = "A macro to derive const serialize"
-license = "MIT/Apache-2.0"
-repository = "https://github.com/ealmloff/const-serialize"
-authors = ["Evan Almloff"]
-keywords = ["const", "serialize", "derive"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dioxuslabs/dioxus"
+homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
+keywords = ["const", "serialize"]
 
 [dependencies]
 syn = "2.0"
