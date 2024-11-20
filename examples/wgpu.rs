@@ -1,4 +1,4 @@
-//! Demonstate how to use dioxus as a child window for use in alternative renderers like wgpu.
+//! Demonstrate how to use dioxus as a child window for use in alternative renderers like wgpu.
 //!
 //! The code here is borrowed from wry's example:
 //! https://github.com/tauri-apps/wry/blob/dev/examples/wgpu.rs
