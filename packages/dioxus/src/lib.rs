@@ -19,8 +19,7 @@
 //! - `mobile`: enables the mobile platform
 //! - `web`: enables the web platform. If the fullstack platform is enabled, this will set the fullstack platform to client mode
 //! - `liveview`: enables the liveview platform
-//! - `static-generation`: enables the static generation platform. This must be used in combination with the `web` feature for wasm builds and `axum` feature for server builds
-//! - `axum`: enables the axum server with static generation or fullstack and sets the platform to server mode
+//! - `server`: enables the server variant of dioxus
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -54,6 +53,10 @@ pub mod events {
 #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
 pub use dioxus_document as document;
 
+#[cfg(feature = "document")]
+#[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+pub use dioxus_history as history;
+
 #[cfg(feature = "html")]
 #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
 pub use dioxus_html as html;
@@ -66,6 +69,10 @@ pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
     pub use dioxus_document as document;
+
+    #[cfg(feature = "document")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+    pub use dioxus_history::{history, History};
 
     #[cfg(feature = "launch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
@@ -111,13 +118,6 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     pub use dioxus_fullstack::prelude::*;
 
-    #[cfg(all(feature = "static-generation", not(feature = "fullstack")))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(feature = "static-generation", not(feature = "fullstack"))))
-    )]
-    pub use dioxus_static_site_generation::prelude::*;
-
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     pub use dioxus_router;
@@ -126,13 +126,9 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     pub use dioxus_router::prelude::*;
 
-    #[cfg(feature = "axum")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-    pub use axum;
-
     #[cfg(feature = "asset")]
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
-    pub use manganis::{self, classes, mg as asset, ImageAsset, ImageType};
+    pub use manganis::{self, asset, Asset, ImageAsset, ImageType};
 }
 
 #[cfg(feature = "web")]
@@ -146,10 +142,6 @@ pub use dioxus_router as router;
 #[cfg(feature = "fullstack")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
 pub use dioxus_fullstack as fullstack;
-
-#[cfg(feature = "static-generation")]
-#[cfg_attr(docsrs, doc(cfg(feature = "static-generation")))]
-pub use dioxus_static_site_generation as static_site_generation;
 
 #[cfg(feature = "desktop")]
 #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]

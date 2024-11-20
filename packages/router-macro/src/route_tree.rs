@@ -274,7 +274,7 @@ pub(crate) enum RouteTreeSegmentData<'a> {
     Redirect(&'a Redirect),
 }
 
-impl<'a> RouteTreeSegmentData<'a> {
+impl RouteTreeSegmentData<'_> {
     pub fn to_tokens(
         &self,
         nests: &[Nest],

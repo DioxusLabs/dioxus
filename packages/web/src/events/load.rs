@@ -23,7 +23,7 @@ impl HasImageData for WebImageEvent {
     }
 
     fn as_any(&self) -> &dyn Any {
-        &self.raw as &dyn Any
+        &self.raw
     }
 }
 

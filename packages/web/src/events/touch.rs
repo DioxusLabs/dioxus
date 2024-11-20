@@ -60,7 +60,7 @@ impl dioxus_html::events::HasTouchData for Synthetic<TouchEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 
@@ -82,7 +82,7 @@ impl HasTouchPointData for Synthetic<Touch> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 
@@ -105,7 +105,6 @@ impl WebEventExt for dioxus_html::TouchData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::TouchEvent> {
-        self.downcast::<Synthetic<web_sys::TouchEvent>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::TouchEvent>().cloned()
     }
 }

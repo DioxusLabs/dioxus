@@ -145,7 +145,7 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     }
 
     /// Change this box to point to another generational box
-    pub fn point_to(&mut self, other: GenerationalBox<T, S>) -> BorrowResult {
+    pub fn point_to(&self, other: GenerationalBox<T, S>) -> BorrowResult {
         S::change_reference(self.raw, other.raw)
     }
 }

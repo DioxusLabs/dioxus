@@ -39,6 +39,8 @@ mod document;
 #[cfg(feature = "file_engine")]
 mod file_engine;
 #[cfg(feature = "document")]
+mod history;
+#[cfg(feature = "document")]
 pub use document::WebDocument;
 #[cfg(feature = "file_engine")]
 pub use file_engine::*;
@@ -61,8 +63,6 @@ pub use hydration::*;
 /// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
 pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
-    tracing::info!("Starting up");
-
     #[cfg(feature = "document")]
     virtual_dom.in_runtime(document::init_document);
 

@@ -1,7 +1,6 @@
 use super::*;
 use crate::TraceSrc;
 use cargo_generate::{GenerateArgs, TemplatePath};
-use cargo_metadata::Metadata;
 use std::path::Path;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
@@ -9,28 +8,39 @@ pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
 pub struct Create {
-    /// Project name (required when `--yes` is used)
+    /// Create a new Dioxus project at PATH
+    path: PathBuf,
+
+    /// Project name. Defaults to directory name
+    #[arg(short, long)]
     name: Option<String>,
 
-    /// Generate the template directly at the given path.
-    #[arg(long, value_parser)]
-    destination: Option<PathBuf>,
-
-    /// Generate the template directly into the current dir. No subfolder will be created and no vcs is initialized.
-    #[arg(long, action)]
-    init: bool,
-
     /// Template path
-    #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
-    template: String,
-
-    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
-    option: Vec<String>,
+    template: Option<String>,
+
+    /// Branch to select when using `template` from a git repository.
+    /// Mutually exclusive with: `--revision`, `--tag`.
+    #[clap(long, conflicts_with_all(["revision", "tag"]))]
+    branch: Option<String>,
+
+    /// A commit hash to select when using `template` from a git repository.
+    /// Mutually exclusive with: `--branch`, `--tag`.
+    #[clap(long, conflicts_with_all(["branch", "tag"]))]
+    revision: Option<String>,
+
+    /// Tag to select when using `template` from a git repository.
+    /// Mutually exclusive with: `--branch`, `--revision`.
+    #[clap(long, conflicts_with_all(["branch", "revision"]))]
+    tag: Option<String>,
 
     /// Specify a sub-template within the template repository to be used as the actual template
     #[clap(long)]
     subtemplate: Option<String>,
+
+    /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
+    #[clap(short, long)]
+    option: Vec<String>,
 
     /// Skip user interaction by using the default values for the used template.
     /// Default values can be overridden with `--option`
@@ -39,80 +49,110 @@ pub struct Create {
 }
 
 impl Create {
-    pub fn create(mut self) -> Result<()> {
-        let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
-
-        // If we're getting pass a `.` name, that's actually a path
-        // We're actually running an init - we should clear the name
-        if self.name.as_deref() == Some(".") {
-            self.name = None;
-            self.init = true;
-        }
-
-        // A default destination is set for nameless projects
+    pub fn create(mut self) -> Result<StructuredOutput> {
+        // Project name defaults to directory name.
         if self.name.is_none() {
-            self.destination = Some(PathBuf::from("."));
+            self.name = Some(create::name_from_path(&self.path)?);
         }
 
-        // Split the name into path components
-        // such that dx new packages/app will create a directory called packages/app
-        let destination = self.destination.unwrap_or_else(|| {
-            let mut path = PathBuf::from(self.name.as_deref().unwrap());
-
-            if path.is_relative() {
-                path = std::env::current_dir().unwrap().join(path);
-            }
-
-            // split the path into the parent and the name
-            let parent = path.parent().unwrap();
-            let name = path.file_name().unwrap();
-            self.name = Some(name.to_str().unwrap().to_string());
-
-            // create the parent directory if it doesn't exist
-            std::fs::create_dir_all(parent).unwrap();
-
-            // And then the "destination" is the parent directory
-            parent.to_path_buf()
-        });
+        // If no template is specified, use the default one and set the branch to the latest release.
+        resolve_template_and_branch(&mut self.template, &mut self.branch);
 
         let args = GenerateArgs {
             define: self.option,
+            destination: Some(self.path),
+            // NOTE: destination without init means base_dir + name, with —
+            // means dest_dir. So use `init: true` and always handle
+            // the dest_dir manually and carefully.
+            // Cargo never adds name to the path. Name is solely for project name.
+            // https://github.com/cargo-generate/cargo-generate/issues/1250
+            init: true,
             name: self.name,
             silent: self.yes,
             template_path: TemplatePath {
-                auto_path: Some(self.template),
+                auto_path: self.template,
+                branch: self.branch,
+                revision: self.revision,
                 subfolder: self.subtemplate,
+                tag: self.tag,
                 ..Default::default()
-            },
-            init: self.init,
-            destination: Some(destination),
-            vcs: if metadata.is_some() {
-                Some(cargo_generate::Vcs::None)
-            } else {
-                None
             },
             ..Default::default()
         };
-
-        if self.yes && args.name.is_none() {
-            return Err("You have to provide the project's name when using `--yes` option.".into());
-        }
-
-        // https://github.com/console-rs/dialoguer/issues/294
-        ctrlc::set_handler(move || {
-            let _ = console::Term::stdout().show_cursor();
-            std::process::exit(0);
-        })
-        .expect("ctrlc::set_handler");
+        restore_cursor_on_sigint();
         let path = cargo_generate::generate(args)?;
-
-        post_create(&path, metadata)
+        post_create(&path)?;
+        Ok(StructuredOutput::Success)
     }
 }
 
+/// If no template is specified, use the default one and set the branch to the latest release.
+///
+/// Allows us to version templates under the v0.5/v0.6 scheme on the templates repo.
+pub(crate) fn resolve_template_and_branch(
+    template: &mut Option<String>,
+    branch: &mut Option<String>,
+) {
+    if template.is_none() {
+        use crate::dx_build_info::{PKG_VERSION_MAJOR, PKG_VERSION_MINOR};
+        *template = Some(DEFAULT_TEMPLATE.to_string());
+
+        if branch.is_none() {
+            *branch = Some(format!("v{PKG_VERSION_MAJOR}.{PKG_VERSION_MINOR}"));
+        }
+    };
+}
+
+/// Prevent hidden cursor if Ctrl+C is pressed when interacting
+/// with cargo-generate's prompts.
+///
+/// See https://github.com/DioxusLabs/dioxus/pull/2603.
+pub(crate) fn restore_cursor_on_sigint() {
+    ctrlc::set_handler(move || {
+        if let Err(err) = console::Term::stdout().show_cursor() {
+            eprintln!("Error showing the cursor again: {err}");
+        }
+        std::process::exit(1); // Ideally should mimic the INT signal.
+    })
+    .expect("ctrlc::set_handler");
+}
+
+/// Extracts the last directory name from the `path`.
+pub(crate) fn name_from_path(path: &Path) -> Result<String> {
+    use path_absolutize::Absolutize;
+
+    Ok(path
+        .absolutize()?
+        .to_path_buf()
+        .file_name()
+        .ok_or("Current path does not include directory name".to_string())?
+        .to_str()
+        .ok_or("Current directory name is not a valid UTF-8 string".to_string())?
+        .to_string())
+}
+
 /// Post-creation actions for newly setup crates.
-// Also used by `init`.
-pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
+pub(crate) fn post_create(path: &Path) -> Result<()> {
+    let parent_dir = path.parent();
+    let metadata = if parent_dir.is_none() {
+        None
+    } else {
+        match cargo_metadata::MetadataCommand::new()
+            .current_dir(parent_dir.unwrap())
+            .exec()
+        {
+            Ok(v) => Some(v),
+            // Only 1 error means that CWD isn't a cargo project.
+            Err(cargo_metadata::Error::CargoMetadata { .. }) => None,
+            Err(err) => {
+                return Err(Error::Other(anyhow::anyhow!(
+                    "Couldn't retrieve cargo metadata: {:?}",
+                    err
+                )));
+            }
+        }
+    };
+
     // 1. Add the new project to the workspace, if it exists.
     //    This must be executed first in order to run `cargo fmt` on the new project.
     metadata.and_then(|metadata| {
@@ -181,4 +221,193 @@ fn remove_triple_newlines(string: &str) -> String {
         new_string.push(char);
     }
     new_string
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use escargot::{CargoBuild, CargoRun};
+    use once_cell::sync::Lazy;
+    use std::fs::{create_dir_all, read_to_string};
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use tempfile::tempdir;
+    use toml::Value;
+
+    static BINARY: Lazy<CargoRun> = Lazy::new(|| {
+        CargoBuild::new()
+            .bin(env!("CARGO_BIN_NAME"))
+            .current_release()
+            .run()
+            .expect("Couldn't build the binary for tests.")
+    });
+
+    // Note: tests below (at least 6 of them) were written to mainly test
+    // correctness of project's directory and its name, because previously it
+    // was broken and tests bring a peace of mind. And also so that I don't have
+    // to run my local hand-made tests every time.
+
+    pub(crate) type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    pub(crate) fn subcommand(name: &str) -> Command {
+        let mut command = BINARY.command();
+        command.arg(name).arg("--yes"); // Skip any questions by choosing default answers.
+        command
+    }
+
+    pub(crate) fn get_cargo_toml_path(project_path: &Path) -> PathBuf {
+        project_path.join("Cargo.toml")
+    }
+
+    pub(crate) fn get_project_name(cargo_toml_path: &Path) -> Result<String> {
+        Ok(toml::from_str::<Value>(&read_to_string(cargo_toml_path)?)?
+            .get("package")
+            .unwrap()
+            .get("name")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string())
+    }
+
+    fn subcommand_new() -> Command {
+        subcommand("new")
+    }
+
+    #[test]
+    fn test_subcommand_new_with_dot_path() -> Result<()> {
+        let project_dir = "dir";
+        let project_name = project_dir;
+
+        let temp_dir = tempdir()?;
+        // Make current dir's name deterministic.
+        let current_dir = temp_dir.path().join(project_dir);
+        create_dir_all(&current_dir)?;
+        let project_path = &current_dir;
+        assert!(project_path.exists());
+
+        assert!(subcommand_new()
+            .arg(".")
+            .current_dir(&current_dir)
+            .status()
+            .is_ok());
+
+        let cargo_toml_path = get_cargo_toml_path(project_path);
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_1_dir_path() -> Result<()> {
+        let project_dir = "dir";
+        let project_name = project_dir;
+
+        let current_dir = tempdir()?;
+
+        assert!(subcommand_new()
+            .arg(project_dir)
+            .current_dir(&current_dir)
+            .status()
+            .is_ok());
+
+        let project_path = current_dir.path().join(project_dir);
+        let cargo_toml_path = get_cargo_toml_path(&project_path);
+        assert!(project_path.exists());
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_2_dir_path() -> Result<()> {
+        let project_dir = "a/b";
+        let project_name = "b";
+
+        let current_dir = tempdir()?;
+
+        assert!(subcommand_new()
+            .arg(project_dir)
+            .current_dir(&current_dir)
+            .status()
+            .is_ok());
+
+        let project_path = current_dir.path().join(project_dir);
+        let cargo_toml_path = get_cargo_toml_path(&project_path);
+        assert!(project_path.exists());
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_dot_path_and_custom_name() -> Result<()> {
+        let project_dir = "dir";
+        let project_name = "project";
+
+        let temp_dir = tempdir()?;
+        // Make current dir's name deterministic.
+        let current_dir = temp_dir.path().join(project_dir);
+        create_dir_all(&current_dir)?;
+        let project_path = &current_dir;
+        assert!(project_path.exists());
+
+        assert!(subcommand_new()
+            .arg("--name")
+            .arg(project_name)
+            .arg(".")
+            .current_dir(&current_dir)
+            .status()
+            .is_ok());
+
+        let cargo_toml_path = get_cargo_toml_path(project_path);
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_1_dir_path_and_custom_name() -> Result<()> {
+        let project_dir = "dir";
+        let project_name = "project";
+
+        let current_dir = tempdir()?;
+
+        assert!(subcommand_new()
+            .arg(project_dir)
+            .arg("--name")
+            .arg(project_name)
+            .current_dir(&current_dir)
+            .status()
+            .is_ok());
+
+        let project_path = current_dir.path().join(project_dir);
+        let cargo_toml_path = get_cargo_toml_path(&project_path);
+        assert!(project_path.exists());
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
+
+    #[test]
+    fn test_subcommand_new_with_2_dir_path_and_custom_name() -> Result<()> {
+        let project_dir = "a/b";
+        let project_name = "project";
+
+        let current_dir = tempdir()?;
+
+        assert!(subcommand_new()
+            .arg(project_dir)
+            .arg("--name")
+            .arg(project_name)
+            .current_dir(&current_dir)
+            .status()
+            .is_ok());
+
+        let project_path = current_dir.path().join(project_dir);
+        let cargo_toml_path = get_cargo_toml_path(&project_path);
+        assert!(project_path.exists());
+        assert!(cargo_toml_path.exists());
+        assert_eq!(get_project_name(&cargo_toml_path)?, project_name);
+        Ok(())
+    }
 }

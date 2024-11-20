@@ -23,7 +23,7 @@ fn app() -> Element {
     rsx! {
         document::Link {
             rel: "stylesheet",
-            href: asset!("./assets/fileexplorer.css")
+            href: asset!("/assets/fileexplorer.css")
         }
         div {
             document::Link { href: "https://fonts.googleapis.com/icon?family=Material+Icons", rel: "stylesheet" }

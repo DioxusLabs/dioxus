@@ -17,7 +17,7 @@ impl HasAnimationData for Synthetic<AnimationEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }
 
@@ -26,7 +26,6 @@ impl WebEventExt for dioxus_html::AnimationData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::AnimationEvent> {
-        self.downcast::<Synthetic<web_sys::AnimationEvent>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::AnimationEvent>().cloned()
     }
 }

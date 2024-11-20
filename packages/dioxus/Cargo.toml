@@ -14,6 +14,7 @@ rust-version = "1.79.0"
 dioxus-core = { workspace = true }
 dioxus-html = { workspace = true, default-features = false, optional = true }
 dioxus-document = { workspace = true, optional = true }
+dioxus-history = { workspace = true, optional = true }
 dioxus-core-macro = { workspace = true, optional = true }
 dioxus-config-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
@@ -23,13 +24,11 @@ dioxus-web = { workspace = true, default-features = false, optional = true }
 dioxus-mobile = { workspace = true, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, default-features = true, optional = true }
-dioxus-static-site-generation = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 manganis = { workspace = true, optional = true }
 
 serde = { version = "1.0.136", optional = true }
-axum = { workspace = true, optional = true }
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
 dioxus-devtools = { workspace = true, optional = true }
@@ -44,22 +43,20 @@ hooks = ["dep:dioxus-hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools", "dioxus-fullstack?/devtools"]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
-asset = ["dep:manganis", "dioxus-core/manganis"]
-document = ["dioxus-web?/document", "dioxus-document"]
+asset = ["dep:manganis"]
+document = ["dioxus-web?/document", "dep:dioxus-document", "dep:dioxus-history"]
 
 launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]
 
 # Platforms
-fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde", "dioxus-router?/fullstack"]
+fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde"]
 desktop = ["dep:dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
 mobile = ["dep:dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
-web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
-ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
-liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
-static-generation = ["dep:dioxus-static-site-generation", "dioxus-config-macro/static-generation"]
-axum = ["server"]
-server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
+web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web"]
+ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
+liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
+server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum"]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []
@@ -89,6 +86,5 @@ features = [
     "hooks",
     "html",
     "liveview",
-    "static-generation",
     "server"
 ]

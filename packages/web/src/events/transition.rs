@@ -17,6 +17,6 @@ impl HasTransitionData for Synthetic<TransitionEvent> {
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
-        self
+        &self.event
     }
 }

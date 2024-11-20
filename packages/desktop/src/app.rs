@@ -55,8 +55,11 @@ pub(crate) struct SharedContext {
 }
 
 impl App {
-    pub fn new(cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
-        let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
+    pub fn new(mut cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
+        let event_loop = cfg
+            .event_loop
+            .take()
+            .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let app = Self {
             window_behavior: cfg.last_window_close_behavior,
@@ -86,6 +89,10 @@ impl App {
         // Wire up the menubar receiver - this way any component can key into the menubar actions
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.set_menubar_receiver();
+
+        // Wire up the tray icon receiver - this way any component can key into the menubar actions
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        app.set_tray_icon_receiver();
 
         // Allow hotreloading to work - but only in debug mode
         #[cfg(all(feature = "devtools", debug_assertions))]
@@ -134,6 +141,29 @@ impl App {
                 }
             }
             _ => (),
+        }
+    }
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_tray_menu_event(&mut self, event: tray_icon::menu::MenuEvent) {
+        _ = event;
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_tray_icon_event(&mut self, event: tray_icon::TrayIconEvent) {
+        if let tray_icon::TrayIconEvent::Click {
+            id: _,
+            position: _,
+            rect: _,
+            button,
+            button_state: _,
+        } = event
+        {
+            if button == tray_icon::MouseButton::Left {
+                for webview in self.webviews.values() {
+                    webview.desktop_context.window.set_visible(true);
+                    webview.desktop_context.window.set_focus();
+                }
+            }
         }
     }
 
@@ -247,8 +277,9 @@ impl App {
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let view = self.webviews.get_mut(&id).unwrap();
 
-        view.dom
-            .rebuild(&mut *view.edits.wry_queue.mutation_state_mut());
+        view.edits
+            .wry_queue
+            .with_mutation_state_mut(|f| view.dom.rebuild(f));
 
         view.edits.wry_queue.send_edits();
 
@@ -377,6 +408,27 @@ impl App {
         muda::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
             _ = receiver.send_event(UserWindowEvent::MudaMenuEvent(t));
+        }));
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    fn set_tray_icon_receiver(&self) {
+        let receiver = self.shared.proxy.clone();
+
+        // The event loop becomes the menu receiver
+        // This means we don't need to poll the receiver on every tick - we just get the events as they come in
+        // This is a bit more efficient than the previous implementation, but if someone else sets a handler, the
+        // receiver will become inert.
+        tray_icon::TrayIconEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::TrayIconEvent(t));
+        }));
+
+        // for whatever reason they had to make it separate
+        let receiver = self.shared.proxy.clone();
+        tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::TrayMenuEvent(t));
         }));
     }
 

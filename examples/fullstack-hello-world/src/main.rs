@@ -1,7 +1,7 @@
 //! Run with:
 //!
 //! ```sh
-//! dx serve --platform fullstack
+//! dx serve --platform web
 //! ```
 
 #![allow(non_snake_case, unused)]
@@ -14,6 +14,7 @@ fn app() -> Element {
     let server_future = use_server_future(get_server_data)?;
 
     rsx! {
+        document::Link { href: asset!("/assets/hello.css"), rel: "stylesheet" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }

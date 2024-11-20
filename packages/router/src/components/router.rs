@@ -46,10 +46,7 @@ where
     use crate::prelude::{outlet::OutletContext, RouterContext};
 
     use_hook(|| {
-        provide_router_context(RouterContext::new(
-            props.config.call(()),
-            schedule_update_any(),
-        ));
+        provide_router_context(RouterContext::new(props.config.call(())));
 
         provide_context(OutletContext::<R> {
             current_level: 0,
