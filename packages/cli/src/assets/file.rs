@@ -63,7 +63,12 @@ pub(crate) fn process_file_to(
         AssetOptions::Image(options) => {
             process_image(options, source, output_path)?;
         }
-        _ => todo!(),
+        AssetOptions::Folder(_) => {
+            process_folder(source, output_path)?;
+        }
+        _ => {
+            tracing::warn!("Unknown asset options: {:?}", options);
+        }
     }
 
     Ok(())
