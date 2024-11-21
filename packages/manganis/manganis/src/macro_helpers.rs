@@ -13,10 +13,25 @@ pub const fn generate_unique_path(
     // Format the unique path with the format `{input_path}-{hash}.{extension}`
     // Start with the input path
     let mut input_path = ConstStr::new(input_path);
-    // Then strip the prefix from the input path
+    // Then strip the prefix from the input path. The path comes from the build platform, but
+    // in wasm, we don't know what the path separator is from the build platform. We need to
+    // split by both unix and windows paths and take the smallest one
     let mut extension = None;
-    if let Some((_, new_input_path)) = input_path.rsplit_once(std::path::MAIN_SEPARATOR) {
-        input_path = new_input_path;
+    match (input_path.rsplit_once('/'), input_path.rsplit_once('\\')) {
+        (Some((_, unix_new_input_path)), Some((_, windows_new_input_path))) => {
+            input_path = if unix_new_input_path.len() < windows_new_input_path.len() {
+                unix_new_input_path
+            } else {
+                windows_new_input_path
+            };
+        }
+        (Some((_, unix_new_input_path)), _) => {
+            input_path = unix_new_input_path;
+        }
+        (_, Some((_, windows_new_input_path))) => {
+            input_path = windows_new_input_path;
+        }
+        _ => {}
     }
     if let Some((new_input_path, new_extension)) = input_path.rsplit_once('.') {
         extension = Some(new_extension);

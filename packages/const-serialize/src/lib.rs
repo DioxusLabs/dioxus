@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-use std::mem::MaybeUninit;
+use std::{char, mem::MaybeUninit};
 
 mod const_buffers;
 mod const_vec;
@@ -295,6 +295,16 @@ impl ConstStr {
                 "Invalid utf8; ConstStr should only ever be constructed from valid utf8 strings"
             ),
         }
+    }
+
+    /// Get the length of the string
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Check if the string is empty
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     /// Push a character onto the string
