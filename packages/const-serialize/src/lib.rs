@@ -299,7 +299,7 @@ impl ConstStr {
 
     /// Get the length of the string
     pub const fn len(&self) -> usize {
-        self.len
+        self.len as usize
     }
 
     /// Check if the string is empty
