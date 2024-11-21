@@ -142,12 +142,15 @@ impl AppRunner {
     }
 
     /// Open an existing app bundle, if it exists
-    pub(crate) async fn open_existing(&self, devserver: &WebServer) {
-        if let Some(address) = devserver.server_address() {
-            let url = format!("http://{address}");
-            tracing::debug!("opening url: {url}");
-            _ = open::that(url);
+    pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
+        if let Some((_, app)) = self
+            .running
+            .iter_mut()
+            .find(|(platform, _)| **platform != Platform::Server)
+        {
+            app.open(devserver.devserver_address(), None, true).await?;
         }
+        Ok(())
     }
 
     pub(crate) fn attempt_hot_reload(

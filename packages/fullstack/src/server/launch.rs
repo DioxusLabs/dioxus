@@ -2,6 +2,7 @@
 
 use std::any::Any;
 
+use dioxus_cli_config::base_path;
 use dioxus_lib::prelude::*;
 
 /// Launch a fullstack app with the given root component, contexts, and config.
@@ -60,9 +61,17 @@ pub fn launch(
                 }
             }
 
-            #[allow(unused_mut)]
-            let mut router =
+            let mut base_path = base_path();
+            let dioxus_router =
                 axum::Router::new().serve_dioxus_application(TryIntoResult(platform_config), root);
+            let router;
+            match base_path.as_deref() {
+                Some(base_path) => {
+                    let base_path = base_path.trim_matches('/');
+                    router = axum::Router::new().nest(&format!("/{base_path}"), dioxus_router);
+                }
+                None => router = dioxus_router,
+            }
 
             let router = router.into_make_service();
             let listener = tokio::net::TcpListener::bind(address).await.unwrap();

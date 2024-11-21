@@ -5,6 +5,7 @@ use crate::{assets::AssetManifest, TraceSrc};
 use crate::{link::LinkAction, BuildArgs};
 use crate::{AppBundle, Platform};
 use anyhow::Context;
+use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -539,6 +540,15 @@ impl BuildRequest {
             // );
             // env_vars.push(("PATH", extended_path));
         };
+
+        // If this is a release build, bake the base path and title
+        // into the binary with env vars
+        if self.build.release {
+            if let Some(base_path) = &self.krate.config.web.app.base_path {
+                env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
+            }
+            env_vars.push((APP_TITLE_ENV, self.krate.config.web.app.title.clone()));
+        }
 
         Ok(env_vars)
     }
