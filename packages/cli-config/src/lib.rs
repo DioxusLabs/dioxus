@@ -104,6 +104,14 @@ extern "C" {
 
 /// Get the path where the application will be served from. This is used by the router to format the URLs.
 pub fn base_path() -> Option<String> {
+    // This may trigger when compiling to the server if you depend on another crate that pulls in
+    // the web feature. It might be better for the renderers to provide the current platform
+    // as a global context
+    #[cfg(all(feature = "web", target_arch = "wasm32"))]
+    {
+        return web_base_path();
+    }
+
     read_env_config!("DIOXUS_ASSET_ROOT")
 }
 

@@ -7528,6 +7528,7 @@ version = "0.6.0-alpha.5"
 dependencies = [
  "const-serialize",
  "dioxus",
+ "dioxus-cli-config",
  "dioxus-core-types",
  "manganis",
  "serde",
