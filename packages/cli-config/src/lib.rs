@@ -122,7 +122,7 @@ pub fn web_base_path() -> Option<String> {
     #[cfg(debug_assertions)]
     {
         thread_local! {
-            static BASE_PATH: std::cell::OnceCell<Option<String>> = std::cell::OnceCell::new();
+            static BASE_PATH: std::cell::OnceCell<Option<String>> = const { std::cell::OnceCell::new() };
         }
         BASE_PATH.with(|f| f.get_or_init(|| get_meta_contents(ASSET_ROOT_ENV)).clone())
     }
