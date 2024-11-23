@@ -189,8 +189,8 @@ impl AppHandle {
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
         if let Some(resource) = self.app.app.assets.assets.get(changed_file).as_ref() {
-            let res = std::fs::copy(changed_file, asset_dir.join(&resource.bundled));
-            bundled_name = Some(PathBuf::from(&resource.bundled));
+            let res = std::fs::copy(changed_file, asset_dir.join(resource.bundled_path()));
+            bundled_name = Some(PathBuf::from(resource.bundled_path()));
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
             }

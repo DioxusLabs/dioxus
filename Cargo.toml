@@ -60,6 +60,8 @@ members = [
     "packages/devtools-types",
     "packages/isrg",
     "packages/rsx-hotreload",
+    "packages/const-serialize",
+    "packages/const-serialize-macro",
     "packages/dx-wire-format",
 
     # Playwright tests
@@ -71,9 +73,8 @@ members = [
 
     # manganis
     "packages/manganis/manganis",
-    "packages/manganis/manganis-macro",
     "packages/manganis/manganis-core",
-
+    "packages/manganis/manganis-macro",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -135,6 +136,8 @@ dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.5" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.5" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.5" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.5", default-features = false }
+const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.5" }
+const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.5" }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-alpha.5" }
 
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.5" }
