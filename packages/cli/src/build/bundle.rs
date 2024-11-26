@@ -1,12 +1,14 @@
+use crate::assets::process_file_to;
 use crate::Result;
 use crate::{assets::AssetManifest, TraceSrc};
 use crate::{BuildRequest, Platform};
 use anyhow::Context;
+use manganis_core::AssetOptions;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::{
-    fs::create_dir_all,
-    path::{Path, PathBuf},
-};
+use std::collections::HashSet;
+use std::future::Future;
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 use wasm_bindgen_cli_support::Bindgen;
@@ -377,21 +379,54 @@ impl AppBundle {
 
         let asset_dir = self.build.asset_dir();
 
-        // First, clear the asset dir
-        // todo(jon): cache the asset dir, removing old files and only copying new ones that changed since the last build
-        _ = std::fs::remove_dir_all(&asset_dir);
-        _ = create_dir_all(&asset_dir);
+        // First, clear the asset dir of any files that don't exist in the new manifest
+        _ = tokio::fs::create_dir_all(&asset_dir).await;
+        // Create a set of all the paths that new files will be bundled to
+        let bundled_output_paths: HashSet<_> = self
+            .app
+            .assets
+            .assets
+            .values()
+            .map(|a| asset_dir.join(a.bundled_path()))
+            .collect();
+        // one possible implementation of walking a directory only visiting files
+        fn remove_old_assets<'a>(
+            path: &'a Path,
+            bundled_output_paths: &'a HashSet<PathBuf>,
+        ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
+            Box::pin(async move {
+                // If this asset is in the manifest, we don't need to remove it
+                if bundled_output_paths.contains(path.canonicalize()?.as_path()) {
+                    return Ok(());
+                }
+                // Otherwise, if it is a directory, we need to walk it and remove child files
+                if path.is_dir() {
+                    for entry in std::fs::read_dir(path)?.flatten() {
+                        let path = entry.path();
+                        remove_old_assets(&path, bundled_output_paths).await?;
+                    }
+                    if path.read_dir()?.next().is_none() {
+                        // If the directory is empty, remove it
+                        tokio::fs::remove_dir(path).await?;
+                    }
+                } else {
+                    // If it is a file, remove it
+                    tokio::fs::remove_file(path).await?;
+                }
+                Ok(())
+            })
+        }
+        remove_old_assets(&asset_dir, &bundled_output_paths).await?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for asset in self.app.assets.assets.keys() {
-            let bundled = self.app.assets.assets.get(asset).unwrap();
-            let from = bundled.absolute.clone();
-            let to = asset_dir.join(&bundled.bundled);
+        for (asset, bundled) in &self.app.assets.assets {
+            let from = asset.clone();
+            let to = asset_dir.join(bundled.bundled_path());
             tracing::debug!("Copying asset {from:?} to {to:?}");
-            assets_to_transfer.push((from, to));
+            assets_to_transfer.push((from, to, *bundled.options()));
         }
 
         // And then queue the legacy assets
@@ -399,35 +434,42 @@ impl AppBundle {
         for from in self.build.krate.legacy_asset_dir_files() {
             let to = asset_dir.join(from.file_name().unwrap());
             tracing::debug!("Copying legacy asset {from:?} to {to:?}");
-            assets_to_transfer.push((from, to));
+            assets_to_transfer.push((from, to, AssetOptions::Unknown));
         }
 
         let asset_count = assets_to_transfer.len();
         let assets_finished = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
-        // todo: we want to use the fastfs variant that knows how to parallelize folders, too
-        assets_to_transfer.par_iter().try_for_each(|(from, to)| {
-            tracing::trace!(
-                "Starting asset copy {current}/{asset_count} from {from:?}",
-                current = assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
-            );
+        let progress = self.build.progress.clone();
+        // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
+        tokio::task::spawn_blocking(move || {
+            assets_to_transfer
+                .par_iter()
+                .try_for_each(|(from, to, options)| {
+                    tracing::trace!(
+                        "Starting asset copy {current}/{asset_count} from {from:?}",
+                        current = assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
+                    );
 
-            // todo(jon): implement optimize + pre_compress on the asset type
-            let res = crate::fastfs::copy_asset(from, to);
+                    let res = process_file_to(options, from, to);
 
-            if let Err(err) = res.as_ref() {
-                tracing::error!("Failed to copy asset {from:?}: {err}");
-            }
+                    if let Err(err) = res.as_ref() {
+                        tracing::error!("Failed to copy asset {from:?}: {err}");
+                    }
 
-            self.build.status_copied_asset(
-                assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
-                asset_count,
-                from.clone(),
-            );
+                    BuildRequest::status_copied_asset(
+                        &progress,
+                        assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
+                        asset_count,
+                        from.to_path_buf(),
+                    );
 
-            res.map(|_| ())
-        })?;
+                    res.map(|_| ())
+                })
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
         Ok(())
     }

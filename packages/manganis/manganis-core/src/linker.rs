@@ -1,3 +1,5 @@
+//! Utilities for working with Manganis assets in the linker. This module defines [`LinkSection`] which has information about what section manganis assets are stored in on each platform.
+
 /// Information about the manganis link section for a given platform
 #[derive(Debug, Clone, Copy)]
 pub struct LinkSection {
