@@ -29,7 +29,7 @@ pub use crate::window::WindowConfig;
 use blitz_dom::net::Resource;
 use blitz_dom::{DocumentLike, HtmlDocument};
 use blitz_net::Provider;
-use blitz_traits::net::SharedCallback;
+use blitz_traits::net::{NetCallback, SharedCallback};
 use dioxus::prelude::{ComponentFunction, Element, VirtualDom};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -91,7 +91,7 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     let event_loop = create_default_event_loop::<BlitzEvent>();
     let proxy = event_loop.create_proxy();
 
-    let net_callback = Arc::new(Callback(proxy));
+    let net_callback = Arc::new(WinitNetCallback(proxy));
     let net_provider = Arc::new(Provider::new(
         rt.handle().clone(),
         Arc::clone(&net_callback) as SharedCallback<Resource>,
@@ -144,7 +144,7 @@ pub fn launch_static_html_cfg(html: &str, cfg: Config) {
     let event_loop = create_default_event_loop::<BlitzEvent>();
     let proxy = event_loop.create_proxy();
 
-    let net_callback = Arc::new(Callback(proxy));
+    let net_callback = Arc::new(WinitNetCallback(proxy));
     let net_provider = Arc::new(Provider::new(
         rt.handle().clone(),
         Arc::clone(&net_callback) as SharedCallback<Resource>,
@@ -221,14 +221,15 @@ pub fn current_android_app(app: android_activity::AndroidApp) -> AndroidApp {
     ANDROID_APP.get().unwrap().clone()
 }
 
-pub struct Callback(EventLoopProxy<BlitzEvent>);
+/// A NetCallback that injects the fetched Resource into our winit event loop
+pub struct WinitNetCallback(EventLoopProxy<BlitzEvent>);
 
-impl Callback {
+impl WinitNetCallback {
     pub fn new(proxy: EventLoopProxy<BlitzEvent>) -> Self {
         Self(proxy)
     }
 }
-impl blitz_traits::net::Callback for Callback {
+impl NetCallback for WinitNetCallback {
     type Data = Resource;
     fn call(&self, doc_id: usize, data: Self::Data) {
         self.0
