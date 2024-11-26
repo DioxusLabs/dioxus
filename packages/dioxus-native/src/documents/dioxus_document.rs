@@ -12,8 +12,8 @@ use blitz_dom::{
     local_name, namespace_url,
     net::Resource,
     node::{Attribute, NodeSpecificData},
-    ns, Atom, Document, DocumentLike, ElementNodeData, Node, NodeData, QualName, Viewport,
-    DEFAULT_CSS,
+    ns, Atom, Document, DocumentLike, ElementNodeData, Node, NodeData, QualName, RestyleHint,
+    Viewport, DEFAULT_CSS,
 };
 
 use blitz_traits::net::NetProvider;
@@ -27,11 +27,6 @@ use dioxus::{
 };
 use futures_util::{pin_mut, FutureExt};
 use rustc_hash::FxHashMap;
-use style::{
-    data::{ElementData, ElementStyles},
-    invalidation::element::restyle_hints::RestyleHint,
-    properties::{style_structs::Font, ComputedValues},
-};
 
 use crate::documents::keyboard_event::BlitzKeyboardData;
 
@@ -406,18 +401,6 @@ impl DioxusDocument {
         let html_element = doc.get_node_mut(html_element_id).unwrap();
         html_element.parent = Some(root_node_id);
         let root_node = doc.get_node_mut(root_node_id).unwrap();
-        // Stylo data on the root node container is needed to render the element
-        let stylo_element_data = ElementData {
-            styles: ElementStyles {
-                primary: Some(
-                    ComputedValues::initial_values_with_font_override(Font::initial_values())
-                        .to_arc(),
-                ),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        *root_node.stylo_element_data.borrow_mut() = Some(stylo_element_data);
         root_node.children.push(html_element_id);
 
         // Include default and user-specified stylesheets
