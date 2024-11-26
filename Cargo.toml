@@ -72,9 +72,9 @@ members = [
     "packages/playwright-tests/nested-suspense",
 
     # manganis
-    "packages/manganis/manganis",
-    "packages/manganis/manganis-core",
-    "packages/manganis/manganis-macro",
+    "packages/manganis",
+    "packages/manganis-core",
+    "packages/manganis-macro",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -141,9 +141,9 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-alpha.5" }
 
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.5" }
-manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.5" }
-manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.5" }
-manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.0-alpha.5" }
+manganis = { path = "packages/manganis", version = "0.6.0-alpha.5" }
+manganis-core = { path = "packages/manganis-core", version = "0.6.0-alpha.5" }
+manganis-macro = { path = "packages/manganis-macro", version = "0.6.0-alpha.5" }
 
 warnings = { version = "0.2.1" }
 
