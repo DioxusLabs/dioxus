@@ -40,10 +40,10 @@ fn app() -> Element {
         use dioxus::desktop::tao::event::WindowEvent;
 
         if let WryEvent::RedrawRequested(_id) = event {
-            graphics_resources
-                .read()
-                .as_ref()
-                .map(|resources| resources.with_resources(|resources| resources.render()));
+            let resources = graphics_resources.read();
+            if let Some(resources) = resources.as_ref() {
+                resources.with_resources(|resources| resources.render());
+            }
         }
 
         if let WryEvent::WindowEvent {
@@ -52,8 +52,7 @@ fn app() -> Element {
         } = event
         {
             let ctx = graphics_resources.value();
-            let ctx: &GraphicsContext = &*ctx.as_ref().unwrap();
-            ctx.with_resources(|srcs| {
+            ctx.as_ref().unwrap().with_resources(|srcs| {
                 let mut cfg = srcs.config.clone();
                 cfg.width = new_size.width;
                 cfg.height = new_size.height;
@@ -72,7 +71,7 @@ fn app() -> Element {
             justify_content: "center",
             align_items: "center",
             font_size: "20px",
-            div { "text overlayed on wgpu surface!" }
+            div { "text overlaied on wgpu surface!" }
         }
     }
 }
