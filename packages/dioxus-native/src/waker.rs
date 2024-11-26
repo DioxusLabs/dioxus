@@ -9,10 +9,22 @@ use blitz_dom::net::Resource;
 
 #[derive(Debug, Clone)]
 pub enum BlitzEvent {
-    Window {
+    Poll {
         window_id: WindowId,
-        data: BlitzWindowEvent,
     },
+
+    ResourceLoad {
+        window_id: WindowId,
+        data: Resource,
+    },
+
+    /// An accessibility event from `accesskit`.
+    #[cfg(feature = "accessibility")]
+    Accessibility {
+        window_id: WindowId,
+        data: Arc<AccessibilityWindowEvent>,
+    },
+
     /// A hotreload event, basically telling us to update our templates.
     #[cfg(all(
         feature = "hot-reload",
@@ -21,12 +33,14 @@ pub enum BlitzEvent {
         not(target_os = "ios")
     ))]
     DevserverEvent(dioxus_devtools::DevserverMsg),
+    // NewWindow,
+    // CloseWindow,
 }
 impl From<(WindowId, Resource)> for BlitzEvent {
     fn from((window_id, resource): (WindowId, Resource)) -> Self {
-        BlitzEvent::Window {
+        BlitzEvent::ResourceLoad {
             window_id,
-            data: BlitzWindowEvent::ResourceLoad(resource),
+            data: resource,
         }
     }
 }
@@ -34,23 +48,11 @@ impl From<(WindowId, Resource)> for BlitzEvent {
 #[cfg(feature = "accessibility")]
 impl From<AccessibilityEvent> for BlitzEvent {
     fn from(value: AccessibilityEvent) -> Self {
-        let window_event = BlitzWindowEvent::Accessibility(Arc::new(value.window_event));
-        Self::Window {
+        Self::Accessibility {
             window_id: value.window_id,
-            data: window_event,
+            data: Arc::new(value.window_event),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum BlitzWindowEvent {
-    Poll,
-    ResourceLoad(Resource),
-    /// An accessibility event from `accesskit`.
-    #[cfg(feature = "accessibility")]
-    Accessibility(Arc<AccessibilityWindowEvent>),
-    // NewWindow,
-    // CloseWindow,
 }
 
 /// Create a waker that will send a poll event to the event loop.
@@ -71,8 +73,7 @@ pub fn create_waker(proxy: &EventLoopProxy<BlitzEvent>, id: WindowId) -> std::ta
 
     impl ArcWake for DomHandle {
         fn wake_by_ref(arc_self: &Arc<Self>) {
-            _ = arc_self.proxy.send_event(BlitzEvent::Window {
-                data: BlitzWindowEvent::Poll,
+            _ = arc_self.proxy.send_event(BlitzEvent::Poll {
                 window_id: arc_self.id,
             })
         }

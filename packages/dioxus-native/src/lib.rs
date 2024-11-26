@@ -24,7 +24,6 @@ mod accessibility;
 use crate::application::Application;
 pub use crate::documents::DioxusDocument;
 pub use crate::waker::BlitzEvent;
-use crate::waker::BlitzWindowEvent;
 use crate::window::View;
 pub use crate::window::WindowConfig;
 use blitz_dom::net::Resource;
@@ -230,15 +229,12 @@ impl Callback {
             CallbackInner::Window(..) => {}
             CallbackInner::Queue(mut queue) => queue
                 .drain(..)
-                .for_each(|res| Self::send_event(&window_id, proxy, res)),
+                .for_each(|res| Self::send_event(window_id, proxy, res)),
         }
     }
-    fn send_event(window_id: &WindowId, proxy: &EventLoopProxy<BlitzEvent>, data: Resource) {
+    fn send_event(window_id: WindowId, proxy: &EventLoopProxy<BlitzEvent>, data: Resource) {
         proxy
-            .send_event(BlitzEvent::Window {
-                window_id: *window_id,
-                data: BlitzWindowEvent::ResourceLoad(data),
-            })
+            .send_event(BlitzEvent::ResourceLoad { window_id, data })
             .unwrap()
     }
 }
@@ -253,7 +249,7 @@ impl blitz_traits::net::Callback for Callback {
     type Data = Resource;
     fn call(&self, data: Self::Data) {
         match self.0.lock().unwrap().deref_mut() {
-            CallbackInner::Window(wid, proxy) => Self::send_event(wid, proxy, data),
+            CallbackInner::Window(wid, proxy) => Self::send_event(*wid, proxy, data),
             CallbackInner::Queue(queue) => queue.push(data),
         }
     }

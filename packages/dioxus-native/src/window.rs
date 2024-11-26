@@ -1,5 +1,5 @@
 use crate::accessibility::AccessibilityState;
-use crate::waker::{create_waker, BlitzEvent, BlitzWindowEvent};
+use crate::waker::{create_waker, BlitzEvent};
 use crate::{stylo_to_winit, Callback};
 use blitz_dom::events::{EventData, RendererEvent};
 use blitz_dom::{DocumentLike, Viewport};
@@ -256,30 +256,9 @@ impl<Doc: DocumentLike> View<Doc> {
         }
     }
 
-    pub fn handle_blitz_event(&mut self, event: BlitzWindowEvent) {
-        match event {
-            BlitzWindowEvent::Poll => {
-                self.poll();
-            }
-            BlitzWindowEvent::ResourceLoad(resource) => {
-                self.dom.as_mut().load_resource(resource);
-                self.request_redraw();
-            }
-            #[cfg(feature = "accessibility")]
-            BlitzWindowEvent::Accessibility(accessibility_event) => {
-                match &*accessibility_event {
-                    accesskit_winit::WindowEvent::InitialTreeRequested => {
-                        self.accessibility.build_tree(self.dom.as_ref());
-                    }
-                    accesskit_winit::WindowEvent::AccessibilityDeactivated => {
-                        // TODO
-                    }
-                    accesskit_winit::WindowEvent::ActionRequested(_req) => {
-                        // TODO
-                    }
-                }
-            }
-        }
+    #[cfg(feature = "accessibility")]
+    pub fn build_accessibility_tree(&mut self) {
+        self.accessibility.build_tree(self.dom.as_ref());
     }
 
     pub fn handle_winit_event(&mut self, event: WindowEvent) {

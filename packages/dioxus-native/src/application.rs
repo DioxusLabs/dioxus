@@ -1,4 +1,4 @@
-use crate::waker::{BlitzEvent, BlitzWindowEvent};
+use crate::waker::BlitzEvent;
 
 use blitz_dom::DocumentLike;
 use std::collections::HashMap;
@@ -63,10 +63,7 @@ impl<Doc: DocumentLike> ApplicationHandler<BlitzEvent> for Application<Doc> {
 
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: winit::event::StartCause) {
         for window_id in self.windows.keys().copied() {
-            _ = self.proxy.send_event(BlitzEvent::Window {
-                data: BlitzWindowEvent::Poll,
-                window_id,
-            });
+            _ = self.proxy.send_event(BlitzEvent::Poll { window_id });
         }
 
         #[cfg(all(feature = "menu", not(any(target_os = "android", target_os = "ios"))))]
@@ -108,10 +105,34 @@ impl<Doc: DocumentLike> ApplicationHandler<BlitzEvent> for Application<Doc> {
         let _ = event_loop;
 
         match event {
-            BlitzEvent::Window { data, window_id } => {
-                if let Some(view) = self.windows.get_mut(&window_id) {
-                    view.handle_blitz_event(data);
+            BlitzEvent::Poll { window_id } => {
+                if let Some(window) = self.windows.get_mut(&window_id) {
+                    window.poll();
                 };
+            }
+
+            BlitzEvent::ResourceLoad { window_id, data } => {
+                if let Some(window) = self.windows.get_mut(&window_id) {
+                    window.dom.as_mut().load_resource(data);
+                    window.request_redraw();
+                }
+            }
+
+            #[cfg(feature = "accessibility")]
+            BlitzEvent::Accessibility { window_id, data } => {
+                if let Some(window) = self.windows.get_mut(&window_id) {
+                    match &*data {
+                        accesskit_winit::WindowEvent::InitialTreeRequested => {
+                            window.build_accessibility_tree();
+                        }
+                        accesskit_winit::WindowEvent::AccessibilityDeactivated => {
+                            // TODO
+                        }
+                        accesskit_winit::WindowEvent::ActionRequested(_req) => {
+                            // TODO
+                        }
+                    }
+                }
             }
 
             #[cfg(all(
@@ -128,7 +149,7 @@ impl<Doc: DocumentLike> ApplicationHandler<BlitzEvent> for Application<Doc> {
                             window.dom.as_any_mut().downcast_mut::<DioxusDocument>()
                         {
                             dioxus_devtools::apply_changes(&dx_doc.vdom, &hotreload_message);
-                            window.handle_blitz_event(BlitzWindowEvent::Poll);
+                            window.poll();
                         }
                     }
                 }
