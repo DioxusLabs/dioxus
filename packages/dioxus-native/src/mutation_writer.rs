@@ -1,6 +1,13 @@
 use crate::{dioxus_document::qual_name, NodeId};
-use blitz_dom::{local_name, namespace_url, node::{Attribute, NodeSpecificData}, ns, Document, ElementNodeData, NodeData, QualName, RestyleHint};
-use dioxus::{dioxus_core::{AttributeValue, ElementId, Template, WriteMutations}, prelude::{TemplateAttribute, TemplateNode}};
+use blitz_dom::{
+    local_name, namespace_url,
+    node::{Attribute, NodeSpecificData},
+    ns, Document, ElementNodeData, NodeData, QualName, RestyleHint,
+};
+use dioxus::{
+    dioxus_core::{AttributeValue, ElementId, Template, WriteMutations},
+    prelude::{TemplateAttribute, TemplateNode},
+};
 use rustc_hash::FxHashMap;
 use std::collections::HashSet;
 
