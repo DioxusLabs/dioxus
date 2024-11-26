@@ -31,12 +31,10 @@ use blitz_dom::{DocumentLike, HtmlDocument};
 use blitz_net::Provider;
 use blitz_traits::net::SharedCallback;
 use dioxus::prelude::{ComponentFunction, Element, VirtualDom};
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use url::Url;
 use winit::event_loop::EventLoopProxy;
-use winit::window::WindowId;
 use winit::{
     dpi::LogicalSize,
     event_loop::{ControlFlow, EventLoop},
@@ -51,6 +49,21 @@ pub mod exports {
 pub struct Config {
     pub stylesheets: Vec<String>,
     pub base_url: Option<String>,
+}
+
+/// Build an event loop for the application
+pub fn create_default_event_loop<Event>() -> EventLoop<Event> {
+    let mut ev_builder = EventLoop::<Event>::with_user_event();
+    #[cfg(target_os = "android")]
+    {
+        use winit::platform::android::EventLoopBuilderExtAndroid;
+        ev_builder.with_android_app(current_android_app());
+    }
+
+    let event_loop = ev_builder.build().unwrap();
+    event_loop.set_control_flow(ControlFlow::Wait);
+
+    event_loop
 }
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
@@ -73,10 +86,12 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         .enable_all()
         .build()
         .unwrap();
-
     let _guard = rt.enter();
 
-    let net_callback = Arc::new(Callback::new());
+    let event_loop = create_default_event_loop::<BlitzEvent>();
+    let proxy = event_loop.create_proxy();
+
+    let net_callback = Arc::new(Callback(proxy));
     let net_provider = Arc::new(Provider::new(
         rt.handle().clone(),
         Arc::clone(&net_callback) as SharedCallback<Resource>,
@@ -87,7 +102,7 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     let vdom = VirtualDom::new_with_props(root, props);
     let document = DioxusDocument::new(vdom, Some(net_provider));
 
-    launch_with_document(document, rt, Some(net_callback))
+    launch_with_document(document, rt, event_loop)
 }
 
 pub fn launch_url(url: &str) {
@@ -124,23 +139,25 @@ pub fn launch_static_html_cfg(html: &str, cfg: Config) {
         .enable_all()
         .build()
         .unwrap();
-
     let _guard = rt.enter();
 
-    let net_callback = Arc::new(Callback::new());
+    let event_loop = create_default_event_loop::<BlitzEvent>();
+    let proxy = event_loop.create_proxy();
+
+    let net_callback = Arc::new(Callback(proxy));
     let net_provider = Arc::new(Provider::new(
         rt.handle().clone(),
         Arc::clone(&net_callback) as SharedCallback<Resource>,
     ));
 
     let document = HtmlDocument::from_html(html, cfg.base_url, cfg.stylesheets, net_provider, None);
-    launch_with_document(document, rt, Some(net_callback));
+    launch_with_document(document, rt, event_loop);
 }
 
 pub fn launch_with_document(
     doc: impl DocumentLike,
     rt: Runtime,
-    net_callback: Option<Arc<Callback>>,
+    event_loop: EventLoop<BlitzEvent>,
 ) {
     let mut window_attrs = Window::default_attributes();
     if !cfg!(all(target_os = "android", target_os = "ios")) {
@@ -152,23 +169,16 @@ pub fn launch_with_document(
             .into(),
         );
     }
-    let window = WindowConfig::new(doc, net_callback);
+    let window = WindowConfig::new(doc);
 
-    launch_with_window(window, rt)
+    launch_with_window(window, rt, event_loop)
 }
 
-fn launch_with_window<Doc: DocumentLike + 'static>(window: WindowConfig<Doc>, rt: Runtime) {
-    // Build an event loop for the application
-    let mut ev_builder = EventLoop::<BlitzEvent>::with_user_event();
-    #[cfg(target_os = "android")]
-    {
-        use winit::platform::android::EventLoopBuilderExtAndroid;
-        ev_builder.with_android_app(current_android_app());
-    }
-    let event_loop = ev_builder.build().unwrap();
-    let proxy = event_loop.create_proxy();
-    event_loop.set_control_flow(ControlFlow::Wait);
-
+fn launch_with_window<Doc: DocumentLike + 'static>(
+    window: WindowConfig<Doc>,
+    rt: Runtime,
+    event_loop: EventLoop<BlitzEvent>,
+) {
     // Setup hot-reloading if enabled.
     #[cfg(all(
         feature = "hot-reload",
@@ -178,7 +188,7 @@ fn launch_with_window<Doc: DocumentLike + 'static>(window: WindowConfig<Doc>, rt
     ))]
     {
         if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
-            let proxy = proxy.clone();
+            let proxy = event_loop.create_proxy();
             dioxus_devtools::connect(endpoint, move |event| {
                 let _ = proxy.send_event(BlitzEvent::DevserverEvent(event));
             })
@@ -186,7 +196,7 @@ fn launch_with_window<Doc: DocumentLike + 'static>(window: WindowConfig<Doc>, rt
     }
 
     // Create application
-    let mut application = Application::new(rt, proxy);
+    let mut application = Application::new(rt, event_loop.create_proxy());
     application.add_window(window);
 
     // Run event loop
@@ -211,46 +221,18 @@ pub fn current_android_app(app: android_activity::AndroidApp) -> AndroidApp {
     ANDROID_APP.get().unwrap().clone()
 }
 
-pub struct Callback(Mutex<CallbackInner>);
-enum CallbackInner {
-    Window(WindowId, EventLoopProxy<BlitzEvent>),
-    Queue(Vec<Resource>),
-}
+pub struct Callback(EventLoopProxy<BlitzEvent>);
+
 impl Callback {
-    pub fn new() -> Self {
-        Default::default()
-    }
-    fn init(self: Arc<Self>, window_id: WindowId, proxy: &EventLoopProxy<BlitzEvent>) {
-        let old = std::mem::replace(
-            self.0.lock().unwrap().deref_mut(),
-            CallbackInner::Window(window_id, proxy.clone()),
-        );
-        match old {
-            CallbackInner::Window(..) => {}
-            CallbackInner::Queue(mut queue) => queue
-                .drain(..)
-                .for_each(|res| Self::send_event(window_id, proxy, res)),
-        }
-    }
-    fn send_event(window_id: WindowId, proxy: &EventLoopProxy<BlitzEvent>, data: Resource) {
-        proxy
-            .send_event(BlitzEvent::ResourceLoad { window_id, data })
-            .unwrap()
+    pub fn new(proxy: EventLoopProxy<BlitzEvent>) -> Self {
+        Self(proxy)
     }
 }
-
-impl Default for Callback {
-    fn default() -> Self {
-        Self(Mutex::new(CallbackInner::Queue(Vec::new())))
-    }
-}
-
 impl blitz_traits::net::Callback for Callback {
     type Data = Resource;
-    fn call(&self, data: Self::Data) {
-        match self.0.lock().unwrap().deref_mut() {
-            CallbackInner::Window(wid, proxy) => Self::send_event(*wid, proxy, data),
-            CallbackInner::Queue(queue) => queue.push(data),
-        }
+    fn call(&self, doc_id: usize, data: Self::Data) {
+        self.0
+            .send_event(BlitzEvent::ResourceLoad { doc_id, data })
+            .unwrap()
     }
 }

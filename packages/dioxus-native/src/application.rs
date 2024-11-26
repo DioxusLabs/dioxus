@@ -35,6 +35,10 @@ impl<Doc: DocumentLike> Application<Doc> {
     pub fn add_window(&mut self, window_config: WindowConfig<Doc>) {
         self.pending_windows.push(window_config);
     }
+
+    fn window_mut_by_doc_id(&mut self, doc_id: usize) -> Option<&mut View<Doc>> {
+        self.windows.values_mut().find(|w| w.dom.id() == doc_id)
+    }
 }
 
 impl<Doc: DocumentLike> ApplicationHandler<BlitzEvent> for Application<Doc> {
@@ -111,8 +115,9 @@ impl<Doc: DocumentLike> ApplicationHandler<BlitzEvent> for Application<Doc> {
                 };
             }
 
-            BlitzEvent::ResourceLoad { window_id, data } => {
-                if let Some(window) = self.windows.get_mut(&window_id) {
+            BlitzEvent::ResourceLoad { doc_id, data } => {
+                // TODO: Handle multiple documents per window
+                if let Some(window) = self.window_mut_by_doc_id(doc_id) {
                     window.dom.as_mut().load_resource(data);
                     window.request_redraw();
                 }

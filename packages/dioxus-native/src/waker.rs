@@ -14,7 +14,7 @@ pub enum BlitzEvent {
     },
 
     ResourceLoad {
-        window_id: WindowId,
+        doc_id: usize,
         data: Resource,
     },
 
@@ -36,12 +36,9 @@ pub enum BlitzEvent {
     // NewWindow,
     // CloseWindow,
 }
-impl From<(WindowId, Resource)> for BlitzEvent {
-    fn from((window_id, resource): (WindowId, Resource)) -> Self {
-        BlitzEvent::ResourceLoad {
-            window_id,
-            data: resource,
-        }
+impl From<(usize, Resource)> for BlitzEvent {
+    fn from((doc_id, data): (usize, Resource)) -> Self {
+        BlitzEvent::ResourceLoad { doc_id, data }
     }
 }
 
