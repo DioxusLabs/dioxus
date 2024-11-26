@@ -274,6 +274,8 @@ reqwest = { workspace = true, features = ["json"], optional = true }
 ciborium = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5", optional = true }
+wgpu = { version = "0.19", optional = true }
+ouroboros = { version = "*", optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
@@ -315,6 +317,7 @@ server = ["dioxus/server"]
 mobile = ["dioxus/mobile"]
 web = ["dioxus/web"]
 http = ["dep:reqwest", "dep:http-range"]
+gpu = ["dep:ouroboros", "dep:wgpu"]
 
 [[example]]
 name = "login_form"
@@ -447,6 +450,10 @@ doc-scrape-examples = true
 name = "window_zoom"
 required-features = ["desktop"]
 doc-scrape-examples = true
+
+[[example]]
+name = "wgpu"
+required-features = ["desktop", "gpu"]
 
 [[example]]
 name = "control_focus"

@@ -49,6 +49,7 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 pub struct Config {
     pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
     pub(crate) window: WindowBuilder,
+    pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) asynchronous_protocols: Vec<AsyncWryProtocol>,
@@ -92,6 +93,7 @@ impl Config {
 
         Self {
             window,
+            as_child_window: false,
             event_loop: None,
             menu: MenuBuilderState::Unset,
             protocols: Vec::new(),
@@ -149,6 +151,12 @@ impl Config {
         if !self.window.window.decorations && matches!(self.menu, MenuBuilderState::Unset) {
             self.menu = MenuBuilderState::Set(None);
         }
+        self
+    }
+
+    /// Set the window as child
+    pub fn with_as_child_window(mut self) -> Self {
+        self.as_child_window = true;
         self
     }
 
