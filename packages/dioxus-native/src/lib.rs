@@ -14,6 +14,7 @@ mod dioxus_document;
 mod event;
 mod event_handler;
 mod keyboard_event;
+mod mutation_writer;
 
 pub use dioxus_application::DioxusNativeApplication;
 pub use dioxus_document::DioxusDocument;
@@ -27,6 +28,8 @@ use blitz_shell::{
 use blitz_traits::net::SharedCallback;
 use dioxus::prelude::{ComponentFunction, Element, VirtualDom};
 use std::sync::Arc;
+
+type NodeId = usize;
 
 pub mod exports {
     pub use dioxus;
