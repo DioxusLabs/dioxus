@@ -10,11 +10,13 @@
 //!  - `tracing`: Enables tracing support.
 
 mod dioxus_application;
-mod documents;
+mod dioxus_document;
 mod event;
+mod event_handler;
+mod keyboard_event;
 
 pub use dioxus_application::DioxusNativeApplication;
-pub use documents::DioxusDocument;
+pub use dioxus_document::DioxusDocument;
 pub use event::DioxusNativeEvent;
 
 use blitz_dom::net::Resource;

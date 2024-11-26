@@ -28,7 +28,7 @@ use dioxus::{
 use futures_util::{pin_mut, FutureExt};
 use rustc_hash::FxHashMap;
 
-use crate::documents::keyboard_event::BlitzKeyboardData;
+use crate::keyboard_event::BlitzKeyboardData;
 
 use super::event_handler::{NativeClickData, NativeConverter, NativeFormData};
 
