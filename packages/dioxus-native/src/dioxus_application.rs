@@ -36,7 +36,7 @@ impl DioxusNativeApplication {
             DioxusNativeEvent::DevserverEvent(event) => match event {
                 dioxus_devtools::DevserverMsg::HotReload(hotreload_message) => {
                     for window in self.inner.windows.values_mut() {
-                        dioxus_devtools::apply_changes(&window.dom.vdom, hotreload_message);
+                        dioxus_devtools::apply_changes(&window.doc.vdom, hotreload_message);
                         window.poll();
                     }
                 }
