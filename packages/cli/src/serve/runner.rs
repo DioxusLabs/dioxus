@@ -141,6 +141,10 @@ impl AppRunner {
         self.running.remove(&platform);
     }
 
+    pub(crate) fn kill_all(&mut self) {
+        self.running.clear();
+    }
+
     /// Open an existing app bundle, if it exists
     pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
         if let Some((_, app)) = self

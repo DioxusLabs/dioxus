@@ -134,10 +134,6 @@ impl WebsysDom {
             suspense_hydration_ids: Default::default(),
         }
     }
-
-    pub fn mount(&mut self) {
-        self.interpreter.mount_to_root();
-    }
 }
 
 fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {

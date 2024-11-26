@@ -17,6 +17,7 @@ use std::{
     sync::Arc,
 };
 use tao::{
+    dpi::PhysicalSize,
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
@@ -220,6 +221,27 @@ impl App {
         {
             self.control_flow = ControlFlow::Exit
         }
+    }
+
+    pub fn resize_window(&self, size: PhysicalSize<u32>) {
+        // TODO: the app layer should avoid directly manipulating the webview webview instance internals.
+        // Window creation and modification is the responsibility of the webview instance so it makes sense to
+        // encapsulate that there.
+        self.webviews.values().for_each(|webview_instance| {
+            use wry::Rect;
+
+            webview_instance
+                .desktop_context
+                .webview
+                .set_bounds(Rect {
+                    position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
+                    size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
+                        size.width,
+                        size.height,
+                    )),
+                })
+                .unwrap();
+        });
     }
 
     pub fn handle_start_cause_init(&mut self) {
