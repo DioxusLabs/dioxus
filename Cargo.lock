@@ -3368,6 +3368,7 @@ version = "0.6.0-alpha.5"
 dependencies = [
  "criterion",
  "dioxus",
+ "dioxus-cli-config",
  "dioxus-config-macro",
  "dioxus-core",
  "dioxus-core-macro",
@@ -3570,6 +3571,9 @@ dependencies = [
 [[package]]
 name = "dioxus-cli-config"
 version = "0.6.0-alpha.5"
+dependencies = [
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "dioxus-config-macro"
@@ -7715,6 +7719,7 @@ version = "0.6.0-alpha.5"
 dependencies = [
  "const-serialize",
  "dioxus",
+ "dioxus-cli-config",
  "dioxus-core-types",
  "manganis",
  "serde",

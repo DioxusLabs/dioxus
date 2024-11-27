@@ -10,3 +10,7 @@ description = "CLI Configuration for dioxus-cli"
 keywords = ["dom", "ui", "gui", "react", ]
 
 [dependencies]
+wasm-bindgen = { workspace = true, optional = true }
+
+[features]
+web = ["dep:wasm-bindgen"]

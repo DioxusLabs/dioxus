@@ -1,3 +1,5 @@
+use dioxus_cli_config::format_base_path_meta_element;
+
 use crate::error::Result;
 use crate::BuildRequest;
 use std::fmt::Write;
@@ -64,6 +66,13 @@ impl BuildRequest {
                 "<script src=\"{}\"></script>",
                 &script.to_str().unwrap(),
             )?;
+        }
+
+        // Add the base path to the head if this is a debug build
+        if self.is_dev_build() {
+            if let Some(base_path) = &self.krate.config.web.app.base_path {
+                head_resources.push_str(&format_base_path_meta_element(base_path));
+            }
         }
 
         if !style_list.is_empty() {

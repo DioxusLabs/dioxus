@@ -231,7 +231,9 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
             }
 
             ServeUpdate::OpenApp => {
-                runner.open_existing(&devserver).await;
+                if let Err(err) = runner.open_existing(&devserver).await {
+                    tracing::error!("Failed to open app: {err}")
+                }
             }
 
             ServeUpdate::Redraw => {
