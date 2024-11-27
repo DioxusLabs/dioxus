@@ -124,8 +124,23 @@ impl Asset {
             return PathBuf::from(self.bundled.absolute_source_path.as_str());
         }
 
+        #[cfg(feature = "dioxus")]
+        let bundle_root = {
+            let base_path = dioxus_cli_config::base_path();
+            let base_path = base_path
+                .as_deref()
+                .map(|base_path| {
+                    let trimmed = base_path.trim_matches('/');
+                    format!("/{trimmed}")
+                })
+                .unwrap_or_default();
+            PathBuf::from(format!("{base_path}/assets/"))
+        };
+        #[cfg(not(feature = "dioxus"))]
+        let bundle_root = PathBuf::from("/assets/");
+
         // Otherwise presumably we're bundled and we can use the bundled path
-        PathBuf::from("/assets/").join(PathBuf::from(
+        bundle_root.join(PathBuf::from(
             self.bundled.bundled_path.as_str().trim_start_matches('/'),
         ))
     }

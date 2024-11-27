@@ -1,6 +1,7 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::document::ServerDocument;
 use crate::streaming::{Mount, StreamingRenderer};
+use dioxus_cli_config::base_path;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{CachedRender, RenderFreshness};
 use dioxus_lib::document::Document;
@@ -169,9 +170,19 @@ impl SsrRendererPool {
             let mut virtual_dom = virtual_dom_factory();
             let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
             virtual_dom.provide_root_context(document.clone());
-            virtual_dom.provide_root_context(Rc::new(
-                dioxus_history::MemoryHistory::with_initial_path(&route),
-            ) as Rc<dyn dioxus_history::History>);
+            // If there is a base path, trim the base path from the route and add the base path formatting to the
+            // history provider
+            let history;
+            if let Some(base_path) = base_path() {
+                let base_path = base_path.trim_matches('/');
+                let base_path = format!("/{base_path}");
+                let route = route.strip_prefix(&base_path).unwrap_or(&route);
+                history =
+                    dioxus_history::MemoryHistory::with_initial_path(route).with_prefix(base_path);
+            } else {
+                history = dioxus_history::MemoryHistory::with_initial_path(&route);
+            }
+            virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
             // poll the future, which may call server_context()

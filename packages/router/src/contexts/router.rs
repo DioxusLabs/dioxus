@@ -47,9 +47,6 @@ pub(crate) type RoutingCallback<R> =
 pub(crate) type AnyRoutingCallback = Arc<dyn Fn(RouterContext) -> Option<NavigationTarget>>;
 
 struct RouterContextInner {
-    /// The current prefix.
-    prefix: Option<String>,
-
     unresolved_error: Option<ExternalNavigationFailure>,
 
     subscribers: Arc<Mutex<HashSet<ReactiveContext>>>,
@@ -105,7 +102,6 @@ impl RouterContext {
         let mapping = consume_child_route_mapping();
 
         let myself = RouterContextInner {
-            prefix: Default::default(),
             unresolved_error: None,
             subscribers: subscribers.clone(),
             routing_callback: cfg.on_update.map(|update| {
@@ -259,7 +255,8 @@ impl RouterContext {
 
     /// The prefix that is currently active.
     pub fn prefix(&self) -> Option<String> {
-        self.inner.read().prefix.clone()
+        let history = history();
+        history.current_prefix()
     }
 
     /// Clear any unresolved errors

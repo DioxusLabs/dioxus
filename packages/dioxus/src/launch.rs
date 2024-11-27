@@ -274,6 +274,19 @@ fn web_launch(
             .unwrap_or_default()
             .hydrate(true);
 
+        // If there is a base path set, call server functions from that base path
+        if let Some(base_path) = dioxus_cli_config::web_base_path() {
+            let base_path = base_path.trim_matches('/');
+            crate::prelude::server_fn::client::set_server_url(
+                format!(
+                    "{}/{}",
+                    crate::prelude::server_fn::client::get_server_url(),
+                    base_path
+                )
+                .leak(),
+            );
+        }
+
         let factory = move || {
             let mut vdom = dioxus_core::VirtualDom::new(root);
             for context in contexts {

@@ -11,6 +11,7 @@ struct MemoryHistoryState {
 /// A [`History`] provider that stores all navigation information in memory.
 pub struct MemoryHistory {
     state: RefCell<MemoryHistoryState>,
+    base_path: Option<String>,
 }
 
 impl Default for MemoryHistory {
@@ -44,16 +45,36 @@ impl MemoryHistory {
     pub fn with_initial_path(path: impl ToString) -> Self {
         Self {
             state: MemoryHistoryState{
-            current: path.to_string().parse().unwrap_or_else(|err| {
-                panic!("index route does not exist:\n{err}\n use MemoryHistory::with_initial_path to set a custom path")
-            }),
-            history: Vec::new(),
-            future: Vec::new(),}.into()
+                current: path.to_string().parse().unwrap_or_else(|err| {
+                    panic!("index route does not exist:\n{err}\n use MemoryHistory::with_initial_path to set a custom path")
+                }),
+                history: Vec::new(),
+                future: Vec::new(),
+            }.into(),
+            base_path: None,
         }
+    }
+
+    /// Set the base path for the history. All routes will be prefixed with this path when rendered.
+    ///
+    /// ```rust
+    /// # use dioxus_history::*;
+    /// let mut history = MemoryHistory::default().with_prefix("/my-app");
+    ///
+    /// // The base path is set to "/my-app"
+    /// assert_eq!(history.current_prefix(), Some("/my-app".to_string()));
+    /// ```
+    pub fn with_prefix(mut self, prefix: impl ToString) -> Self {
+        self.base_path = Some(prefix.to_string());
+        self
     }
 }
 
 impl History for MemoryHistory {
+    fn current_prefix(&self) -> Option<String> {
+        self.base_path.clone()
+    }
+
     fn current_route(&self) -> String {
         self.state.borrow().current.clone()
     }
