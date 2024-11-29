@@ -65,6 +65,7 @@ dioxus-cli-config = { workspace = true, optional = true }
 
 dioxus-devtools = { workspace = true, optional = true }
 aws-lc-rs = { version = "1.8.1", optional = true }
+dioxus-history.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
@@ -84,7 +85,7 @@ file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]
 web = ["dep:dioxus-web", "dep:web-sys"]
 desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
-mobile = ["dep:dioxus-mobile"]
+mobile = ["dep:dioxus-mobile", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
 axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]

@@ -74,7 +74,7 @@ impl ScriptProps {
 ///     rsx! {
 ///         // You can use the Script component to render a script tag into the head of the page
 ///         document::Script {
-///             src: asset!("./assets/script.js"),
+///             src: asset!("/assets/script.js"),
 ///         }
 ///     }
 /// }

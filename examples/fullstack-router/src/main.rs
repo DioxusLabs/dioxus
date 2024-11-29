@@ -1,7 +1,7 @@
 //! Run with:
 //!
 //! ```sh
-//! dx serve --platform fullstack
+//! dx serve --platform web
 //! ```
 
 use dioxus::prelude::*;

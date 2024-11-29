@@ -12,7 +12,9 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 [dependencies]
 dioxus-core = { workspace = true }
 dioxus-core-types = { workspace = true }
+dioxus-cli-config = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
+dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
 dioxus-devtools = { workspace = true }
 dioxus-signals = { workspace = true }
@@ -22,7 +24,7 @@ dioxus-interpreter-js = { workspace = true, features = [
 ] }
 generational-box = { workspace = true }
 
-js-sys = "0.3.56"
+js-sys = "0.3.70"
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4.29"
 tracing = { workspace = true }
@@ -42,7 +44,7 @@ ciborium = { workspace = true, optional = true }
 async-trait = { version = "0.1.58", optional = true }
 
 [dependencies.web-sys]
-version = "0.3.56"
+version = "0.3.70"
 features = [
     "AnimationEvent",
     "ClipboardEvent",
@@ -55,6 +57,7 @@ features = [
     "Document",
     "DragEvent",
     "FocusEvent",
+    "History",
     "HtmlElement",
     "HtmlFormElement",
     "HtmlInputElement",
@@ -67,6 +70,7 @@ features = [
     "PointerEvent",
     "ResizeObserverEntry",
     "ResizeObserverSize",
+    "ScrollRestoration",
     "Text",
     "Touch",
     "TouchEvent",

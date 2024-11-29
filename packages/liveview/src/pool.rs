@@ -1,6 +1,6 @@
 use crate::{
+    document::init_document,
     element::LiveviewElement,
-    eval::init_eval,
     events::SerializedHtmlEventConverter,
     query::{QueryEngine, QueryResult},
     LiveViewError,
@@ -130,9 +130,9 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     // Create the a proxy for query engine
     let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
     let query_engine = QueryEngine::new(query_tx);
-    vdom.in_runtime(|| {
-        ScopeId::ROOT.provide_context(query_engine.clone());
-        init_eval();
+    vdom.runtime().on_scope(ScopeId::ROOT, || {
+        provide_context(query_engine.clone());
+        init_document();
     });
 
     // pin the futures so we can use select!

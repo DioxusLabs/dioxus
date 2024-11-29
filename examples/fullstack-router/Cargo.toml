@@ -14,6 +14,6 @@ serde = { version = "1.0.159", features = ["derive"] }
 
 [features]
 default = []
-server = ["axum", "dioxus/axum"]
+server = ["axum", "dioxus/server"]
 web = ["dioxus/web"]
 

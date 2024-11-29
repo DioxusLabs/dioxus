@@ -1,3 +1,5 @@
+use dioxus_core_types::DioxusFormattable;
+
 use crate::innerlude::VProps;
 use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
@@ -722,9 +724,9 @@ impl Attribute {
     ///
     /// "Volatile" refers to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
-    pub fn new(
+    pub fn new<T>(
         name: &'static str,
-        value: impl IntoAttributeValue,
+        value: impl IntoAttributeValue<T>,
         namespace: Option<&'static str>,
         volatile: bool,
     ) -> Attribute {
@@ -1000,7 +1002,7 @@ where
 }
 
 /// A value that can be converted into an attribute value
-pub trait IntoAttributeValue {
+pub trait IntoAttributeValue<T = ()> {
     /// Convert into an attribute value
     fn into_value(self) -> AttributeValue;
 }
@@ -1034,6 +1036,16 @@ impl IntoAttributeValue for f64 {
     }
 }
 
+impl IntoAttributeValue for i8 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for i16 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i32 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self as _)
@@ -1044,8 +1056,43 @@ impl IntoAttributeValue for i64 {
         AttributeValue::Int(self)
     }
 }
-
+impl IntoAttributeValue for isize {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i128 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+
+impl IntoAttributeValue for u8 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u16 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u64 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for usize {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u128 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self as _)
     }
@@ -1078,21 +1125,24 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
-#[cfg(feature = "manganis")]
-impl IntoAttributeValue for manganis::ImageAsset {
+pub struct AnyFmtMarker;
+impl<T> IntoAttributeValue<AnyFmtMarker> for T
+where
+    T: DioxusFormattable,
+{
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.path().to_string())
+        AttributeValue::Text(self.format().to_string())
     }
 }
 
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {
     /// Push an attribute onto the list of attributes
-    fn push_attribute(
+    fn push_attribute<T>(
         self,
         name: &'static str,
         ns: Option<&'static str>,
-        attr: impl IntoAttributeValue,
+        attr: impl IntoAttributeValue<T>,
         volatile: bool,
     ) -> Self;
 }

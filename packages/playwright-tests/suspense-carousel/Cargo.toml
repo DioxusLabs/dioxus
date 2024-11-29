@@ -11,5 +11,5 @@ serde = "1.0.159"
 
 [features]
 default = []
-server = ["dioxus/axum"]
+server = ["dioxus/server"]
 web = ["dioxus/web"]

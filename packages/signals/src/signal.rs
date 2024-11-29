@@ -221,8 +221,14 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
-    /// Point to another signal
-    pub fn point_to(&mut self, other: Self) -> BorrowResult {
+    /// Point to another signal. This will subscribe the other signal to all subscribers of this signal.
+    pub fn point_to(&self, other: Self) -> BorrowResult {
+        #[allow(clippy::mutable_key_type)]
+        let this_subscribers = self.inner.value.read().subscribers.lock().unwrap().clone();
+        let other_read = other.inner.value.read();
+        for subscriber in this_subscribers.iter() {
+            subscriber.subscribe(other_read.subscribers.clone());
+        }
         self.inner.point_to(other.inner)
     }
 

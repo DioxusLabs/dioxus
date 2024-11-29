@@ -28,7 +28,7 @@ impl<'a, 'b> MacroCollector<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Visit<'b> for MacroCollector<'a, 'b> {
+impl<'b> Visit<'b> for MacroCollector<'_, 'b> {
     fn visit_macro(&mut self, i: &'b Macro) {
         // Visit the regular stuff - this will also ensure paths/attributes are visited
         syn::visit::visit_macro(self, i);

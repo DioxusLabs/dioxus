@@ -2,22 +2,19 @@
 
 use dioxus::prelude::*;
 
-const _STYLE: &str = asset!("public/tailwind.css");
-
 fn main() {
     dioxus::launch(app);
 }
 
 pub fn app() -> Element {
     let grey_background = true;
-    rsx!(
+    rsx! (
+        document::Link { rel: "stylesheet", href: asset!("/public/tailwind.css") }
         div {
             header {
                 class: "text-gray-400 body-font",
                 // you can use optional attributes to optionally apply a tailwind class
-                class: if grey_background {
-                    "bg-gray-900"
-                },
+                class: if grey_background { "bg-gray-900" },
                 div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
                     a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
                         StacksIcon {}
@@ -63,7 +60,7 @@ pub fn app() -> Element {
                             class: "object-cover object-center rounded",
                             src: "https://i.imgur.com/oK6BLtw.png",
                             referrerpolicy: "no-referrer",
-                            alt: "hero"
+                            alt: "hero",
                         }
                     }
                 }
