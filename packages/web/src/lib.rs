@@ -43,10 +43,7 @@ pub use document::WebDocument;
 #[cfg(feature = "file_engine")]
 pub use file_engine::*;
 
-#[cfg(any(
-    all(feature = "devtools", debug_assertions),
-    feature = "devtools-playground"
-))]
+#[cfg(all(feature = "devtools", debug_assertions))]
 mod devtools;
 
 mod hydration;
@@ -74,10 +71,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         console_error_panic_hook::set_once();
     }
 
-    #[cfg(any(
-        all(feature = "devtools", debug_assertions),
-        feature = "devtools-playground"
-    ))]
+    #[cfg(all(feature = "devtools", debug_assertions))]
     let mut hotreload_rx = devtools::init();
 
     let runtime = virtual_dom.runtime();
@@ -133,10 +127,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     loop {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
-        #[cfg(any(
-            all(feature = "devtools", debug_assertions),
-            feature = "devtools-playground"
-        ))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         let template;
         #[allow(unused)]
         let mut hydration_work: Option<SuspenseMessage> = None;
@@ -150,10 +141,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 .flatten();
             let mut rx_hydration = hydration_receiver_iter.select_next_some();
 
-            #[cfg(any(
-                all(feature = "devtools", debug_assertions),
-                feature = "devtools-playground"
-            ))]
+            #[cfg(all(feature = "devtools", debug_assertions))]
             #[allow(unused)]
             {
                 let mut devtools_next = hotreload_rx.select_next_some();
@@ -189,10 +177,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             }
         }
 
-        #[cfg(any(
-            all(feature = "devtools", debug_assertions),
-            feature = "devtools-playground"
-        ))]
+        #[cfg(all(feature = "devtools", debug_assertions))]
         if let Some(hr_msg) = template {
             // Replace all templates
             dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);

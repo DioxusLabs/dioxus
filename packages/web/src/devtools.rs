@@ -2,7 +2,6 @@
 //!
 //! This sets up a websocket connection to the devserver and handles messages from it.
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
-#![allow(unused)]
 
 use std::fmt::Display;
 use std::time::Duration;
@@ -28,10 +27,7 @@ pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     let (tx, rx) = unbounded();
 
     // Wire up the websocket to the devserver
-    #[cfg(not(feature = "devtools-playground"))]
-    make_ws(tx, POLL_INTERVAL_MIN, false);
-
-    #[cfg(feature = "devtools-playground")]
+    make_ws(tx.clone(), POLL_INTERVAL_MIN, false);
     playground(tx);
 
     rx
@@ -246,22 +242,24 @@ pub(crate) fn invalidate_browser_asset_cache() {
 /// Initialize required devtools for dioxus-playground.
 ///
 /// This listens for window message events from other Windows (such as window.top when this is running in an iframe).
-#[cfg(feature = "devtools-playground")]
 fn playground(tx: UnboundedSender<HotReloadMsg>) {
-    let window = web_sys::window().unwrap();
-    window.set_onmessage(Some(
-        Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
-            let Ok(text) = e.data().dyn_into::<JsString>() else {
-                return;
-            };
-            let string: String = text.into();
-            let Ok(hr_msg) = serde_json::from_str::<HotReloadMsg>(&string) else {
-                return;
-            };
-            _ = tx.unbounded_send(hr_msg);
-        })
-        .into_js_value()
-        .as_ref()
-        .unchecked_ref(),
-    ));
+    let window = web_sys::window().expect("this code should be running in a web context");
+
+    let binding = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+        let Ok(text) = e.data().dyn_into::<JsString>() else {
+            return;
+        };
+        let string: String = text.into();
+        let Ok(hr_msg) = serde_json::from_str::<HotReloadMsg>(&string) else {
+            return;
+        };
+        _ = tx.unbounded_send(hr_msg);
+    });
+
+    let callback = binding.as_ref().unchecked_ref();
+    window
+        .add_event_listener_with_callback("message", callback)
+        .expect("event listener should be added successfully");
+
+    binding.forget();
 }
