@@ -22,6 +22,7 @@ fn main() {
 // Turn off rustfmt since we're doing layouts and routes in the same enum
 #[derive(Routable, Clone, Debug, PartialEq)]
 #[rustfmt::skip]
+#[allow(clippy::empty_line_after_outer_attr)]
 enum Route {
     // Wrap Home in a Navbar Layout
     #[layout(NavBar)]

@@ -181,7 +181,6 @@ impl ImageAssetOptions {
     /// # use manganis::{asset, Asset, ImageAssetOptions, ImageSize};
     /// const _: Asset = asset!("/assets/image.png", ImageAssetOptions::new().with_size(ImageSize::Manual { width: 512, height: 512 }));
     /// ```
-
     pub const fn with_size(self, size: ImageSize) -> Self {
         Self { size, ..self }
     }
