@@ -279,8 +279,9 @@ impl DocumentLike for DioxusDocument {
                     }
                 }
             }
-            EventData::Ime(_) => todo!(),
-            EventData::Hover => todo!(),
+            // TODO: Implement IME and Hover events handling
+            EventData::Ime(_) => {}
+            EventData::Hover => {}
         }
 
         if !prevent_default {
