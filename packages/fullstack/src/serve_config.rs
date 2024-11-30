@@ -40,16 +40,10 @@ impl ServeConfigBuilder {
     /// # fn app() -> Element { todo!() }
     /// use dioxus::prelude::*;
     ///
-    /// let mut cfg = dioxus::fullstack::Config::new();
-    ///
-    /// // Only set the server config if the server feature is enabled
-    /// server_only! {
-    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default().incremental(IncrementalRendererConfig::default()));
-    /// }
-    ///
     /// // Finally, launch the app with the config
     /// LaunchBuilder::new()
-    ///     .with_cfg(cfg)
+    ///     // Only set the server config if the server feature is enabled
+    ///     .with_cfg(server_only!(ServeConfigBuilder::default().incremental(IncrementalRendererConfig::default())))
     ///     .launch(app);
     /// ```
     pub fn incremental(mut self, cfg: dioxus_isrg::IncrementalRendererConfig) -> Self {
@@ -92,26 +86,20 @@ impl ServeConfigBuilder {
     /// # fn app() -> Element { todo!() }
     /// use dioxus::prelude::*;
     ///
-    /// let mut cfg = dioxus::fullstack::Config::new();
-    ///
-    /// // Only set the server config if the server feature is enabled
-    /// server_only! {
-    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default().root_id("app"));
-    /// }
-    ///
-    /// // You also need to set the root id in your web config
-    /// web! {
-    ///     cfg = cfg.with_web_config(dioxus::web::Config::default().rootname("app"));
-    /// }
-    ///
-    /// // And desktop config
-    /// desktop! {
-    ///     cfg = cfg.with_desktop_config(dioxus::desktop::Config::default().with_root_name("app"));
-    /// }
-    ///
     /// // Finally, launch the app with the config
     /// LaunchBuilder::new()
-    ///     .with_cfg(cfg)
+    ///     // Only set the server config if the server feature is enabled
+    ///     .with_cfg(server_only! {
+    ///         ServeConfigBuilder::default().root_id("app")
+    ///     })
+    ///     // You also need to set the root id in your web config
+    ///     .with_cfg(web! {
+    ///         dioxus::web::Config::default().rootname("app")
+    ///     })
+    ///     // And desktop config
+    ///     .with_cfg(desktop! {
+    ///         dioxus::desktop::Config::default().with_root_name("app")
+    ///     })
     ///     .launch(app);
     /// ```
     pub fn root_id(mut self, root_id: &'static str) -> Self {
