@@ -1811,9 +1811,9 @@ dependencies = [
 
 [[package]]
 name = "browserslist-rs"
-version = "0.16.1"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e46a40f09cb859277e349307c75d4fb8112aaa1e5bf968ba7075a463a9fd3bc"
+checksum = "fdf0ca73de70c3da94e4194e4a01fe732378f55d47cf4c0588caab22a0dbfa14"
 dependencies = [
  "ahash 0.8.11",
  "chrono",
@@ -1821,6 +1821,7 @@ dependencies = [
  "indexmap 2.7.0",
  "itertools 0.13.0",
  "nom",
+ "once_cell",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
