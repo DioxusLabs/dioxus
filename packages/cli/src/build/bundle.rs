@@ -1,8 +1,7 @@
-use crate::assets::process_file_to;
-use crate::Result;
-use crate::{assets::AssetManifest, TraceSrc};
 use crate::{BuildRequest, Platform};
+use crate::{Result, TraceSrc};
 use anyhow::Context;
+use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis_core::AssetOptions;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashSet;

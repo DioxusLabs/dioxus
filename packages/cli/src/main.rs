@@ -3,7 +3,6 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-mod assets;
 mod build;
 mod bundle_utils;
 mod cli;

@@ -6,6 +6,7 @@ members = [
     "packages/core",
     "packages/core-types",
     "packages/cli",
+    "packages/cli-opt",
     "packages/core-types",
     "packages/core-macro",
     "packages/config-macro",
@@ -131,16 +132,18 @@ dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.6.0-alpha
 dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.5" }
 dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.5" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.5" }
-generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.5" }
+dioxus-cli-opt = { path = "packages/cli-opt", version = "0.6.0-alpha.5" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.5" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.5" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.5" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.5", default-features = false }
-const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.5" }
-const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.5" }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-alpha.5" }
 
+const-serialize = { path = "packages/const-serialize", version = "0.6.0-alpha.5" }
+const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-alpha.5" }
+generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.5" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.5" }
+
 manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.5" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.5" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.0-alpha.5" }

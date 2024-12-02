@@ -3445,7 +3445,6 @@ dependencies = [
  "axum-extra",
  "axum-server",
  "brotli 6.0.0",
- "browserslist-rs",
  "built",
  "cargo-config2",
  "cargo-generate",
@@ -3462,6 +3461,7 @@ dependencies = [
  "dioxus-autofmt",
  "dioxus-check",
  "dioxus-cli-config",
+ "dioxus-cli-opt",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools-types",
@@ -3483,21 +3483,16 @@ dependencies = [
  "hyper-rustls 0.27.3",
  "hyper-util",
  "ignore",
- "image",
- "imagequant",
  "include_dir",
  "itertools 0.13.0",
  "krates",
- "lightningcss",
  "log",
  "manganis-core",
- "mozjpeg",
  "notify",
  "object 0.36.5",
  "once_cell",
  "open",
  "path-absolutize",
- "png",
  "prettyplease",
  "proc-macro2",
  "ratatui",
@@ -3508,6 +3503,54 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.26.3",
+ "syn 2.0.90",
+ "tauri-bundler",
+ "tauri-utils",
+ "tempfile",
+ "thiserror 1.0.69",
+ "throbber-widgets-tui",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "toml_edit 0.22.22",
+ "tower 0.4.13",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-segmentation",
+ "uuid",
+ "walkdir",
+ "walrus 0.22.0",
+ "wasm-bindgen-cli-support",
+ "wasm-bindgen-shared",
+ "wasm-opt",
+]
+
+[[package]]
+name = "dioxus-cli-config"
+version = "0.6.0-alpha.5"
+dependencies = [
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "dioxus-cli-opt"
+version = "0.6.0-alpha.5"
+dependencies = [
+ "anyhow",
+ "browserslist-rs",
+ "const-serialize",
+ "image",
+ "imagequant",
+ "lightningcss",
+ "manganis-core",
+ "mozjpeg",
+ "object 0.36.5",
+ "png",
+ "rayon",
+ "serde",
+ "serde_json",
  "swc",
  "swc_allocator",
  "swc_atoms",
@@ -3559,35 +3602,7 @@ dependencies = [
  "swc_transform_common",
  "swc_typescript",
  "swc_visit",
- "syn 2.0.90",
- "tauri-bundler",
- "tauri-utils",
- "tempfile",
- "thiserror 1.0.69",
- "throbber-widgets-tui",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "toml",
- "toml_edit 0.22.22",
- "tower 0.4.13",
- "tower-http",
  "tracing",
- "tracing-subscriber",
- "unicode-segmentation",
- "uuid",
- "walkdir",
- "walrus 0.22.0",
- "wasm-bindgen-cli-support",
- "wasm-bindgen-shared",
- "wasm-opt",
-]
-
-[[package]]
-name = "dioxus-cli-config"
-version = "0.6.0-alpha.5"
-dependencies = [
- "wasm-bindgen",
 ]
 
 [[package]]

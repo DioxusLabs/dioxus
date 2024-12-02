@@ -1,11 +1,10 @@
 use super::{progress::ProgressTx, BuildArtifacts};
 use crate::dioxus_crate::DioxusCrate;
-use crate::Result;
-use crate::{assets::AssetManifest, TraceSrc};
 use crate::{link::LinkAction, BuildArgs};
-use crate::{AppBundle, Platform};
+use crate::{AppBundle, Platform, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_opt::AssetManifest;
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},

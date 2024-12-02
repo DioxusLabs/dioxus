@@ -1,4 +1,4 @@
-use crate::assets::AssetManifest;
+use dioxus_cli_opt::AssetManifest;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
