@@ -74,7 +74,6 @@ fn app() -> Element {
                 class: animated_classes().join(" "),
                 onvisible: move |evt| {
                     let data = evt.data();
-
                     if let Ok(is_intersecting) = data.is_intersecting() {
                         animated_classes.write()[1] = if is_intersecting { "visible" } else { "" };
                     }

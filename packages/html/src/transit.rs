@@ -36,15 +36,10 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 
         // in debug mode let's try and be helpful as to why the deserialization failed
         let data = deserialize_raw(&name, &data).map_err(|e| {
-            let err = serde::de::Error::custom(format!(
+            serde::de::Error::custom(format!(
                 "Failed to deserialize event data for event {}:  {:#?}\n'{:#?}'",
                 name, e, data,
-            ));
-
-            #[cfg(debug_assertions)]
-            eprintln!("Failed: {err:#?}");
-
-            err
+            ))
         })?;
 
         Ok(HtmlEvent {
