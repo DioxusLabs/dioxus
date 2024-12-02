@@ -45,7 +45,10 @@ impl BuildRequest {
     pub(crate) async fn build_all(self) -> Result<AppBundle> {
         tracing::debug!("Running build command...");
 
-        let (app, server) = self.build_concurrent().await?;
+        let (app, server) = match self.build.force_sequential {
+            true => self.build_sequential().await?,
+            false => self.build_concurrent().await?,
+        };
 
         AppBundle::new(self, app, server).await
     }
@@ -55,6 +58,12 @@ impl BuildRequest {
         let (app, server) =
             futures_util::future::try_join(self.build_app(), self.build_server()).await?;
 
+        Ok((app, server))
+    }
+
+    async fn build_sequential(&self) -> Result<(BuildArtifacts, Option<BuildArtifacts>)> {
+        let app = self.build_app().await?;
+        let server = self.build_server().await?;
         Ok((app, server))
     }
 

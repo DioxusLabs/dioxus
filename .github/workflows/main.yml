@@ -282,7 +282,7 @@ jobs:
         platform:
           - {
               target: x86_64-pc-windows-msvc,
-              os: windows-latest,
+              os: windows-latest-large,
               toolchain: "1.79.0",
               cross: false,
               command: "test",
