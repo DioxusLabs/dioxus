@@ -604,7 +604,6 @@ impl AppBundle {
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
         let name = self.build.krate.executable_name().to_string();
-        let reference_types = self.build.krate.config.web.wasm_opt.reference_types;
         let keep_debug =
             // if we're in debug mode, or we're generating debug symbols, keep debug info
             (self.build.krate.config.web.wasm_opt.debug || self.build.build.debug_symbols)
@@ -620,7 +619,6 @@ impl AppBundle {
                 .debug(keep_debug)
                 .demangle(keep_debug)
                 .keep_debug(keep_debug)
-                .reference_types(keep_debug || reference_types)
                 .remove_name_section(!keep_debug)
                 .remove_producers_section(!keep_debug)
                 .out_name(&name)

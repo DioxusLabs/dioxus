@@ -3444,6 +3444,7 @@ dependencies = [
  "axum-extra",
  "axum-server",
  "brotli 6.0.0",
+ "browserslist-rs",
  "built",
  "cargo-config2",
  "cargo-generate",
