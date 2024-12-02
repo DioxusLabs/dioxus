@@ -131,16 +131,16 @@ export function serializeResizeEventDetail(
     border_box_size:
       detail.borderBoxSize !== undefined
         ? toSerializableResizeObserverSize(
-            detail.borderBoxSize[0],
-            is_inline_width
-          )
+          detail.borderBoxSize[0],
+          is_inline_width
+        )
         : detail.contentRect,
     content_box_size:
       detail.contentBoxSize !== undefined
         ? toSerializableResizeObserverSize(
-            detail.contentBoxSize[0],
-            is_inline_width
-          )
+          detail.contentBoxSize[0],
+          is_inline_width
+        )
         : detail.contentRect,
     content_rect: detail.contentRect,
   };
@@ -154,8 +154,10 @@ export function serializeIntersectionEventDetail(
     intersection_rect: detail.intersectionRect,
     is_intersecting: detail.isIntersecting,
     root_bounds: detail.rootBounds,
-    target: +detail.target.getAttribute?.("data-dioxus-id") || null,
-    time: detail.time,
+
+    // math.floor removes the floating point extra such that we serialize into integer
+    // this *might* become an issue longer term
+    time_ms: Math.floor(Date.now() + detail.time),
   }
 }
 

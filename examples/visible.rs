@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
@@ -72,7 +72,6 @@ fn app() -> Element {
 
             h2 {
                 class: animated_classes().join(" "),
-
                 onvisible: move |evt| {
                     let data = evt.data();
 
