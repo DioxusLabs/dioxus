@@ -38,20 +38,21 @@ pub(crate) fn process_file_to(
             Some("jpg" | "jpeg" | "png" | "webp" | "avif") => {
                 process_image(&ImageAssetOptions::new(), source, output_path)?;
             }
-            None if source.is_dir() => {
-                process_folder(source, output_path)?;
-            }
             Some(_) | None => {
-                let source_file = std::fs::File::open(source)?;
-                let mut reader = std::io::BufReader::new(source_file);
-                let output_file = std::fs::File::create(output_path)?;
-                let mut writer = std::io::BufWriter::new(output_file);
-                std::io::copy(&mut reader, &mut writer).with_context(|| {
-                    format!(
-                        "Failed to write file to output location: {}",
-                        output_path.display()
-                    )
-                })?;
+                if source.is_dir() {
+                    process_folder(source, output_path)?;
+                } else {
+                    let source_file = std::fs::File::open(source)?;
+                    let mut reader = std::io::BufReader::new(source_file);
+                    let output_file = std::fs::File::create(output_path)?;
+                    let mut writer = std::io::BufWriter::new(output_file);
+                    std::io::copy(&mut reader, &mut writer).with_context(|| {
+                        format!(
+                            "Failed to write file to output location: {}",
+                            output_path.display()
+                        )
+                    })?;
+                }
             }
         },
         AssetOptions::Css(options) => {
