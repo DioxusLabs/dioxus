@@ -132,11 +132,22 @@ impl From<Element> for VNode {
 pub(crate) trait AsVNode {
     /// Get the vnode for this element
     fn as_vnode(&self) -> &VNode;
+
+    /// Create a deep clone of this VNode
+    fn deep_clone(&self) -> Self;
 }
 
 impl AsVNode for Element {
     fn as_vnode(&self) -> &VNode {
         AsRef::as_ref(self)
+    }
+
+    fn deep_clone(&self) -> Self {
+        match self {
+            Ok(node) => Ok(node.deep_clone()),
+            Err(RenderError::Aborted(err)) => Err(RenderError::Aborted(err.deep_clone())),
+            Err(RenderError::Suspended(fut)) => Err(RenderError::Suspended(fut.deep_clone())),
+        }
     }
 }
 
@@ -287,6 +298,38 @@ impl VNode {
             .mounted_attributes
             .get(dynamic_attribute_idx)
             .copied()
+    }
+
+    /// Create a deep clone of this VNode
+    pub(crate) fn deep_clone(&self) -> Self {
+        Self {
+            vnode: Rc::new(VNodeInner {
+                key: self.vnode.key.clone(),
+                template: self.vnode.template,
+                dynamic_nodes: self
+                    .vnode
+                    .dynamic_nodes
+                    .iter()
+                    .map(|node| match node {
+                        DynamicNode::Fragment(nodes) => DynamicNode::Fragment(
+                            nodes.iter().map(|node| node.deep_clone()).collect(),
+                        ),
+                        other => other.clone(),
+                    })
+                    .collect(),
+                dynamic_attrs: self
+                    .vnode
+                    .dynamic_attrs
+                    .iter()
+                    .map(|attr| {
+                        attr.iter()
+                            .map(|attribute| attribute.deep_clone())
+                            .collect()
+                    })
+                    .collect(),
+            }),
+            mount: Default::default(),
+        }
     }
 }
 
@@ -737,6 +780,21 @@ impl Attribute {
             value: value.into_value(),
         }
     }
+
+    /// Create a new deep clone of this attribute
+    pub(crate) fn deep_clone(&self) -> Self {
+        Attribute {
+            name: self.name,
+            namespace: self.namespace,
+            volatile: self.volatile,
+            value: match &self.value {
+                AttributeValue::Listener(listener) => {
+                    AttributeValue::Listener(listener.leak_reference().unwrap())
+                }
+                value => value.clone(),
+            },
+        }
+    }
 }
 
 /// Any of the built-in values that the Dioxus VirtualDom supports as dynamic attributes on elements
@@ -812,7 +870,7 @@ impl PartialEq for AttributeValue {
             (Self::Float(l0), Self::Float(r0)) => l0 == r0,
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
-            (Self::Listener(_), Self::Listener(_)) => true,
+            (Self::Listener(l0), Self::Listener(r0)) => l0 == r0,
             (Self::Any(l0), Self::Any(r0)) => l0.as_ref().any_cmp(r0.as_ref()),
             (Self::None, Self::None) => true,
             _ => false,
