@@ -13,22 +13,22 @@ keywords = ["dom", "ui", "gui", "react"]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = [
     "serialize",
-    "native-bind",
     "mounted",
-    "document",
+    "file_engine",
 ] }
+dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
-dioxus-cli-config = { workspace = true, features = ["read-config"] }
+dioxus-cli-config = { workspace = true }
 generational-box = { workspace = true }
 # hotreload only works on desktop platforms.... mobile is still wip
-dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"]}
+dioxus-devtools = { workspace = true, optional = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { version = "0.41.0", default-features = false, features = [
+wry = { workspace = true, default-features = false, features = [
     "os-webview",
     "protocol",
     "drag-drop",
@@ -41,6 +41,7 @@ tokio = { workspace = true, features = [
     "time",
     "macros",
     "fs",
+    "io-util",
 ], optional = true }
 webbrowser = "0.8.0"
 infer = "0.11.0"
@@ -51,14 +52,16 @@ dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
-tao = { version = "0.26.1", features = ["rwh_05"] }
+tao = { workspace = true, features = ["rwh_05"] }
+once_cell = { workspace = true }
+dioxus-history.workspace = true
 
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-wry = { version = "0.41.0", features = [
+wry = { workspace = true, features = [
     "os-webview",
     "protocol",
     "drag-drop",
@@ -70,6 +73,8 @@ global-hotkey = "0.5.0"
 rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 muda = "0.11.3"
 
+[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]
+tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
@@ -78,6 +83,10 @@ objc_id = "0.1.1"
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
 tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
+jni = "0.21.1"
+ndk = { version = "0.9.0" }
+ndk-sys = { version = "0.6.0" }
+ndk-context = { version = "0.1.1" }
 
 # use native tls on other platforms
 [target.'cfg(not(target_os = "android"))'.dependencies]
@@ -88,17 +97,20 @@ cocoa = "0.25"
 core-foundation = "0.9.3"
 objc = "0.2.7"
 
+[build-dependencies]
+lazy-js-bundle = { workspace = true }
+
 [features]
-default = ["tokio_runtime", "wry/objc-exception", "hot-reload", "devtools"]
+default = ["tokio_runtime", "exception", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
+devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
+exception = ["wry/objc-exception"]
 transparent = ["wry/transparent"]
-devtools = ["wry/devtools"]
-hot-reload = ["dep:dioxus-hot-reload", "dioxus-signals"]
 gnu = []
 
 [package.metadata.docs.rs]
-features = ["tokio_runtime", "hot-reload"]
+features = ["tokio_runtime", "devtools"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 default-features = false
 targets = [

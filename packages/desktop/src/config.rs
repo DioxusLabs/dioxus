@@ -1,10 +1,21 @@
+use dioxus_core::LaunchConfig;
 use std::borrow::Cow;
 use std::path::PathBuf;
+use tao::event_loop::{EventLoop, EventLoopWindowTarget};
 use tao::window::{Icon, WindowBuilder};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::RequestAsyncResponder;
 
+use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
+
+type CustomEventHandler = Box<
+    dyn 'static
+        + for<'a> FnMut(
+            &tao::event::Event<'a, UserWindowEvent>,
+            &EventLoopWindowTarget<UserWindowEvent>,
+        ),
+>;
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -36,7 +47,9 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 
 /// The configuration for the desktop application.
 pub struct Config {
+    pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
     pub(crate) window: WindowBuilder,
+    pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) asynchronous_protocols: Vec<AsyncWryProtocol>,
@@ -49,7 +62,10 @@ pub struct Config {
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behavior: WindowCloseBehaviour,
+    pub(crate) custom_event_handler: Option<CustomEventHandler>,
 }
+
+impl LaunchConfig for Config {}
 
 pub(crate) type WryProtocol = (
     String,
@@ -65,24 +81,20 @@ impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
-        let dioxus_config = dioxus_cli_config::CURRENT_CONFIG.as_ref();
-
-        let mut window: WindowBuilder = WindowBuilder::new().with_title(
-            dioxus_config
-                .map(|c| c.application.name.clone())
-                .unwrap_or("Dioxus App".to_string()),
-        );
+        let mut window: WindowBuilder = WindowBuilder::new()
+            .with_title(dioxus_cli_config::app_title().unwrap_or_else(|| "Dioxus App".to_string()));
 
         // During development we want the window to be on top so we can see it while we work
-        let always_on_top = dioxus_config
-            .map(|c| c.desktop.always_on_top)
-            .unwrap_or(true);
+        let always_on_top = dioxus_cli_config::always_on_top().unwrap_or(true);
+
         if cfg!(debug_assertions) {
             window = window.with_always_on_top(always_on_top);
         }
 
         Self {
             window,
+            as_child_window: false,
+            event_loop: None,
             menu: MenuBuilderState::Unset,
             protocols: Vec::new(),
             asynchronous_protocols: Vec::new(),
@@ -95,6 +107,7 @@ impl Config {
             root_name: "main".to_string(),
             background_color: None,
             last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
+            custom_event_handler: None,
         }
     }
 
@@ -124,6 +137,12 @@ impl Config {
         self
     }
 
+    /// Set the event loop to be used
+    pub fn with_event_loop(mut self, event_loop: EventLoop<UserWindowEvent>) -> Self {
+        self.event_loop = Some(event_loop);
+        self
+    }
+
     /// Set the configuration for the window.
     pub fn with_window(mut self, window: WindowBuilder) -> Self {
         // We need to do a swap because the window builder only takes itself as muy self
@@ -135,9 +154,25 @@ impl Config {
         self
     }
 
+    /// Set the window as child
+    pub fn with_as_child_window(mut self) -> Self {
+        self.as_child_window = true;
+        self
+    }
+
     /// Sets the behaviour of the application when the last window is closed.
     pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
         self.last_window_close_behavior = behaviour;
+        self
+    }
+
+    /// Sets a custom callback to run whenever the event pool receives an event.
+    pub fn with_custom_event_handler(
+        mut self,
+        f: impl FnMut(&tao::event::Event<'_, UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
+            + 'static,
+    ) -> Self {
+        self.custom_event_handler = Some(Box::new(f));
         self
     }
 

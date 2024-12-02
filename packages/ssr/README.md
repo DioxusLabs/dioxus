@@ -11,7 +11,7 @@ This crate is a part of the broader Dioxus ecosystem. For more resources about D
 
 - [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
 - [Book](https://dioxuslabs.com/learn/0.5/)
-- [Examples](https://github.com/DioxusLabs/example-projects)
+- [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
 ## Overview
 

@@ -2,7 +2,7 @@ use crate::dom::WebsysDom;
 use dioxus_core::prelude::*;
 use dioxus_core::WriteMutations;
 use dioxus_core::{AttributeValue, ElementId};
-use dioxus_html::event_bubbles;
+use dioxus_core_types::event_bubbles;
 use dioxus_interpreter_js::minimal_bindings;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;

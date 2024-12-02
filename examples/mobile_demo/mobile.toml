@@ -1,8 +1,0 @@
-[app]
-name = "mobile-demo"
-stylized-name = "Mobile Demo"
-domain = "example.com"
-template-pack = "wry"
-
-[apple]
-development-team = "34U4FG9TJ8"

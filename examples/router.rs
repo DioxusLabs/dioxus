@@ -8,12 +8,12 @@
 
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!("./examples/assets/router.css");
+const STYLE: Asset = asset!("/examples/assets/router.css");
 
 fn main() {
-    launch(|| {
+    dioxus::launch(|| {
         rsx! {
-            head::Link { rel: "stylesheet", href: STYLE }
+            document::Link { rel: "stylesheet", href: STYLE }
             Router::<Route> {}
         }
     });
@@ -22,6 +22,7 @@ fn main() {
 // Turn off rustfmt since we're doing layouts and routes in the same enum
 #[derive(Routable, Clone, Debug, PartialEq)]
 #[rustfmt::skip]
+#[allow(clippy::empty_line_after_outer_attr)]
 enum Route {
     // Wrap Home in a Navbar Layout
     #[layout(NavBar)]

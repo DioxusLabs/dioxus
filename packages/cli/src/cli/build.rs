@@ -1,211 +1,190 @@
-use std::str::FromStr;
-
-use anyhow::Context;
-use dioxus_cli_config::Platform;
-
-use crate::{
-    builder::{BuildRequest, TargetPlatform},
-    dioxus_crate::DioxusCrate,
-};
-
 use super::*;
-
-/// Information about the target to build
-#[derive(Clone, Debug, Default, Deserialize, Parser)]
-pub struct TargetArgs {
-    /// Build for nightly [default: false]
-    #[clap(long)]
-    pub nightly: bool,
-
-    /// Build a example [default: ""]
-    #[clap(long)]
-    pub example: Option<String>,
-
-    /// Build a binary [default: ""]
-    #[clap(long)]
-    pub bin: Option<String>,
-
-    /// The package to build
-    #[clap(short, long)]
-    pub package: Option<String>,
-
-    /// Space separated list of features to activate
-    #[clap(long)]
-    pub features: Vec<String>,
-
-    /// The feature to use for the client in a fullstack app [default: "web"]
-    #[clap(long)]
-    pub client_feature: Option<String>,
-
-    /// The feature to use for the server in a fullstack app [default: "server"]
-    #[clap(long)]
-    pub server_feature: Option<String>,
-
-    /// Rustc platform triple
-    #[clap(long)]
-    pub target: Option<String>,
-}
+use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 
 /// Build the Rust Dioxus app and all of its assets.
+///
+/// Produces a final output bundle designed to be run on the target platform.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-#[clap(name = "build")]
-pub struct Build {
+pub(crate) struct BuildArgs {
     /// Build in release mode [default: false]
     #[clap(long, short)]
     #[serde(default)]
-    pub release: bool,
-
-    /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
-    #[clap(long)]
-    #[serde(default)]
-    pub force_debug: bool,
+    pub(crate) release: bool,
 
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub force_sequential: bool,
+    pub(crate) force_sequential: bool,
 
-    // Use verbose output [default: false]
+    /// Build the app with custom a profile
     #[clap(long)]
-    #[serde(default)]
-    pub verbose: bool,
+    pub(crate) profile: Option<String>,
 
-    /// Build with custom profile
-    #[clap(long)]
-    pub profile: Option<String>,
+    /// Build with custom profile for the fullstack server
+    #[clap(long, default_value_t = PROFILE_SERVER.to_string())]
+    pub(crate) server_profile: String,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long, value_enum)]
-    pub platform: Option<Platform>,
+    pub(crate) platform: Option<Platform>,
+
+    /// Build the fullstack variant of this app, using that as the fileserver and backend
+    ///
+    /// This defaults to `false` but will be overridden to true if the `fullstack` feature is enabled.
+    #[clap(long)]
+    pub(crate) fullstack: bool,
+
+    /// Run the ssg config of the app and generate the files
+    #[clap(long)]
+    pub(crate) ssg: bool,
 
     /// Skip collecting assets from dependencies [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub skip_assets: bool,
+    pub(crate) skip_assets: bool,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
-    pub cargo_args: Vec<String>,
+    pub(crate) cargo_args: Vec<String>,
 
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
     #[clap(long, default_value_t = true)]
-    pub inject_loading_scripts: bool,
+    pub(crate) inject_loading_scripts: bool,
+
+    /// Generate debug symbols for the wasm binary [default: true]
+    ///
+    /// This will make the binary larger and take longer to compile, but will allow you to debug the
+    /// wasm binary
+    #[clap(long, default_value_t = true)]
+    pub(crate) debug_symbols: bool,
 
     /// Information about the target to build
     #[clap(flatten)]
-    pub target_args: TargetArgs,
+    pub(crate) target_args: TargetArgs,
 }
 
-impl Build {
-    pub fn resolve(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
-        // Inherit the platform from the defaults
+impl BuildArgs {
+    pub async fn run_cmd(mut self) -> Result<StructuredOutput> {
+        tracing::info!("Building project...");
+
+        let krate =
+            DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
+
+        self.resolve(&krate).await?;
+
+        let bundle = Builder::start(&krate, self.clone())?.finish().await?;
+
+        tracing::info!(path = ?bundle.build.root_dir(), "Build completed successfully! 🚀");
+
+        Ok(StructuredOutput::BuildFinished {
+            path: bundle.build.root_dir(),
+        })
+    }
+
+    /// Update the arguments of the CLI by inspecting the DioxusCrate itself and learning about how
+    /// the user has configured their app.
+    ///
+    /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
+    /// fullstack variant even if they omitted the `--fullstack` flag.
+    pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
+        let default_platform = krate.default_platform();
+        let auto_platform = krate.autodetect_platform();
+
+        // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
+        // We want to strip out the default platform and use the one they passed, setting no-default-features
+        if self.platform.is_some() && default_platform.is_some() {
+            self.target_args.no_default_features = true;
+            self.target_args
+                .features
+                .extend(krate.platformless_features());
+        }
+
+        // Inherit the platform from the args, or auto-detect it
+        if self.platform.is_none() {
+            let (platform, _feature) = auto_platform.ok_or_else(|| {
+                anyhow::anyhow!("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>` or set a default platform using a cargo feature.")
+            })?;
+            self.platform = Some(platform);
+        }
+
         let platform = self
             .platform
-            .unwrap_or_else(|| self.auto_detect_platform(dioxus_crate));
-        self.platform = Some(platform);
+            .expect("Platform to be set after autodetection");
 
-        // Add any features required to turn on the platform we are building for
+        // Add any features required to turn on the client
         self.target_args
-            .features
-            .extend(dioxus_crate.features_for_platform(platform));
+            .client_features
+            .push(krate.feature_for_platform(platform));
 
-        Ok(())
-    }
+        // Add any features required to turn on the server
+        // This won't take effect in the server is not built, so it's fine to just set it here even if it's not used
+        self.target_args
+            .server_features
+            .push(krate.feature_for_platform(Platform::Server));
 
-    pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
-        self.resolve(dioxus_crate)?;
-        let build_requests = BuildRequest::create(false, dioxus_crate, self.clone())?;
-        BuildRequest::build_all_parallel(build_requests).await?;
-        Ok(())
-    }
+        // Make sure we set the fullstack platform so we actually build the fullstack variant
+        // Users need to enable "fullstack" in their default feature set.
+        // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
+        self.fullstack = self.fullstack || krate.has_dioxus_feature("fullstack");
 
-    pub async fn run(&mut self) -> anyhow::Result<()> {
-        let mut dioxus_crate =
-            DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
-        self.build(&mut dioxus_crate).await?;
-        Ok(())
-    }
+        // Make sure we have a server feature if we're building a fullstack app
+        //
+        // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
+        // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
+        if self.fullstack && self.target_args.server_features.is_empty() {
+            return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
+        }
 
-    pub(crate) fn auto_detect_client_platform(
-        &self,
-        resolved: &DioxusCrate,
-    ) -> (Option<String>, TargetPlatform) {
-        self.find_dioxus_feature(resolved, |platform| {
-            matches!(platform, TargetPlatform::Web | TargetPlatform::Desktop)
-        })
-        .unwrap_or_else(|| (Some("web".to_string()), TargetPlatform::Web))
-    }
-
-    pub(crate) fn auto_detect_server_feature(&self, resolved: &DioxusCrate) -> Option<String> {
-        self.find_dioxus_feature(resolved, |platform| {
-            matches!(platform, TargetPlatform::Server)
-        })
-        .map(|(feature, _)| feature)
-        .unwrap_or_else(|| Some("server".to_string()))
-    }
-
-    fn auto_detect_platform(&self, resolved: &DioxusCrate) -> Platform {
-        self.auto_detect_platform_with_filter(resolved, |_| true).1
-    }
-
-    fn auto_detect_platform_with_filter(
-        &self,
-        resolved: &DioxusCrate,
-        filter_platform: fn(&Platform) -> bool,
-    ) -> (Option<String>, Platform) {
-        self.find_dioxus_feature(resolved, filter_platform)
-            .unwrap_or_else(|| {
-                let default_platform = resolved.dioxus_config.application.default_platform;
-
-                (Some(default_platform.to_string()), default_platform)
-            })
-    }
-
-    fn find_dioxus_feature<P: FromStr>(
-        &self,
-        resolved: &DioxusCrate,
-        filter_platform: fn(&P) -> bool,
-    ) -> Option<(Option<String>, P)> {
-        // First check the enabled features for any renderer enabled
-        for dioxus in resolved.krates.krates_by_name("dioxus") {
-            let Some(features) = resolved.krates.get_enabled_features(dioxus.kid) else {
-                continue;
-            };
-
-            if let Some(platform) = features
-                .iter()
-                .find_map(|platform| platform.parse::<P>().ok())
-                .filter(filter_platform)
-            {
-                return Some((None, platform));
+        // Set the profile of the build if it's not already set
+        // We do this for android/wasm since they require
+        if self.profile.is_none() && !self.release {
+            match self.platform {
+                Some(Platform::Android) => {
+                    self.profile = Some(crate::dioxus_crate::PROFILE_ANDROID.to_string());
+                }
+                Some(Platform::Web) => {
+                    self.profile = Some(crate::dioxus_crate::PROFILE_WASM.to_string());
+                }
+                Some(Platform::Server) => {
+                    self.profile = Some(crate::dioxus_crate::PROFILE_SERVER.to_string());
+                }
+                _ => {}
             }
         }
 
-        // Then check the features that might get enabled
-        if let Some(platform) = resolved
-            .package()
-            .features
-            .iter()
-            .find_map(|(feature, enables)| {
-                enables
-                    .iter()
-                    .find_map(|f| {
-                        f.strip_prefix("dioxus/")
-                            .or_else(|| feature.strip_prefix("dep:dioxus/"))
-                            .and_then(|f| f.parse::<P>().ok())
-                            .filter(filter_platform)
-                    })
-                    .map(|platform| (Some(feature.clone()), platform))
-            })
-        {
-            return Some(platform);
+        // Determine arch if android
+        if self.platform == Some(Platform::Android) && self.target_args.arch.is_none() {
+            tracing::debug!("No android arch provided, attempting to auto detect.");
+
+            let arch = Arch::autodetect().await;
+
+            // Some extra logs
+            let arch = match arch {
+                Some(a) => {
+                    tracing::debug!(
+                        "Autodetected `{}` Android arch.",
+                        a.android_target_triplet()
+                    );
+                    a.to_owned()
+                }
+                None => {
+                    let a = Arch::default();
+                    tracing::debug!(
+                        "Could not detect Android arch, defaulting to `{}`",
+                        a.android_target_triplet()
+                    );
+                    a
+                }
+            };
+
+            self.target_args.arch = Some(arch);
         }
 
-        None
+        Ok(())
     }
 
     /// Get the platform from the build arguments
-    pub fn platform(&self) -> Platform {
-        self.platform.unwrap_or_default()
+    pub(crate) fn platform(&self) -> Platform {
+        self.platform.expect("Platform was not set")
     }
 }

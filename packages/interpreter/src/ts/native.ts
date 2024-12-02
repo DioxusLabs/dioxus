@@ -167,6 +167,47 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  // Windows drag-n-drop fix code. Called by wry drag-n-drop handler over the event loop.
+  handleWindowsDragDrop() {
+    if (window.dxDragLastElement) {
+      const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+      window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+
+      let data = new DataTransfer();
+
+      // We need to mimic that there are actually files in this event for our native file engine to pick it up.
+      const file = new File(["content"], "file.txt", { type: "text/plain" });
+      data.items.add(file);
+
+      const dragDropEvent = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data });
+      window.dxDragLastElement.dispatchEvent(dragDropEvent);
+      window.dxDragLastElement = null;
+    }
+  }
+
+  handleWindowsDragOver(xPos, yPos) {
+    const element = document.elementFromPoint(xPos, yPos);
+
+    if (element != window.dxDragLastElement) {
+      if (window.dxDragLastElement) {
+        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+        window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+      }
+
+      const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
+      element.dispatchEvent(dragOverEvent);
+      window.dxDragLastElement = element;
+    }
+  }
+
+  handleWindowsDragLeave() {
+    if (window.dxDragLastElement) {
+      const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+      window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
+      window.dxDragLastElement = null;
+    }
+  }
+
   // ignore the fact the base interpreter uses ptr + len but we use array...
   // @ts-ignore
   loadChild(array: number[]) {
@@ -400,6 +441,15 @@ function handleVirtualdomEventSync(
   // Serialize the event and send it to the custom protocol in the Rust side of things
   xhr.open("POST", endpoint, false);
   xhr.setRequestHeader("Content-Type", "application/json");
+
+  // hack for android since we CANT SEND BODIES (because wry is using shouldInterceptRequest)
+  //
+  // https://issuetracker.google.com/issues/119844519
+  // https://stackoverflow.com/questions/43273640/android-webviewclient-how-to-get-post-request-body
+  // https://developer.android.com/reference/android/webkit/WebViewClient#shouldInterceptRequest(android.webkit.WebView,%20android.webkit.WebResourceRequest)
+  //
+  // the issue here isn't that big, tbh, but there's a small chance we lose the event due to header max size (16k per header, 32k max)
+  xhr.setRequestHeader("dioxus-data", contents);
   xhr.send(contents);
 
   // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
@@ -429,27 +479,3 @@ function getTargetId(target: EventTarget): NodeId | null {
 
   return parseInt(realId);
 }
-
-// function applyFileUpload() {
-//   let inputs = document.querySelectorAll("input");
-//   for (let input of inputs) {
-//     if (!input.getAttribute("data-dioxus-file-listener")) {
-//       // prevent file inputs from opening the file dialog on click
-//       const type = input.getAttribute("type");
-//       if (type === "file") {
-//         input.setAttribute("data-dioxus-file-listener", true);
-//         input.addEventListener("click", (event) => {
-//           let target = event.target;
-//           let target_id = find_real_id(target);
-//           if (target_id !== null) {
-//             const send = (event_name) => {
-//               const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
-//               window.ipc.postMessage(message);
-//             };
-//             send("change&input");
-//           }
-//           event.preventDefault();
-//         });
-//       }
-//     }
-// }

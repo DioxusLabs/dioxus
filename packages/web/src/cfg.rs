@@ -1,3 +1,6 @@
+use dioxus_core::LaunchConfig;
+use wasm_bindgen::JsCast as _;
+
 ///  Configuration for the WebSys renderer for the Dioxus VirtualDOM.
 ///
 /// This struct helps configure the specifics of hydration and render destination for WebSys.
@@ -13,9 +16,11 @@ pub struct Config {
     pub(crate) default_panic_hook: bool,
 }
 
+impl LaunchConfig for Config {}
+
 pub(crate) enum ConfigRoot {
     RootName(String),
-    RootElement(web_sys::Element),
+    RootNode(web_sys::Node),
 }
 
 impl Config {
@@ -52,7 +57,15 @@ impl Config {
     ///
     /// This is akin to calling React.render() on the given element.
     pub fn rootelement(mut self, elem: web_sys::Element) -> Self {
-        self.root = ConfigRoot::RootElement(elem);
+        self.root = ConfigRoot::RootNode(elem.unchecked_into());
+        self
+    }
+
+    /// Set the node that Dioxus will use as root.
+    ///
+    /// This is akin to calling React.render() on the given element.
+    pub fn rootnode(mut self, node: web_sys::Node) -> Self {
+        self.root = ConfigRoot::RootNode(node);
         self
     }
 

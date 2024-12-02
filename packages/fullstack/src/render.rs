@@ -1,12 +1,14 @@
 //! A shared pool of renderers for efficient server side rendering.
+use crate::document::ServerDocument;
 use crate::streaming::{Mount, StreamingRenderer};
+use dioxus_cli_config::base_path;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-use dioxus_ssr::{
-    incremental::{CachedRender, RenderFreshness},
-    Renderer,
-};
+use dioxus_isrg::{CachedRender, RenderFreshness};
+use dioxus_lib::document::Document;
+use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
@@ -48,13 +50,13 @@ where
 
 struct SsrRendererPool {
     renderers: RwLock<Vec<Renderer>>,
-    incremental_cache: Option<RwLock<dioxus_ssr::incremental::IncrementalRenderer>>,
+    incremental_cache: Option<RwLock<dioxus_isrg::IncrementalRenderer>>,
 }
 
 impl SsrRendererPool {
     fn new(
         initial_size: usize,
-        incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
+        incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
     ) -> Self {
         let renderers = RwLock::new((0..initial_size).map(|_| pre_renderer()).collect());
         Self {
@@ -67,7 +69,7 @@ impl SsrRendererPool {
     fn check_cached_route(
         &self,
         route: &str,
-        render_into: &mut Sender<Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
+        render_into: &mut Sender<Result<String, dioxus_isrg::IncrementalRendererError>>,
     ) -> Option<RenderFreshness> {
         if let Some(incremental) = &self.incremental_cache {
             if let Ok(mut incremental) = incremental.write() {
@@ -79,11 +81,7 @@ impl SsrRendererPool {
                             ..
                         } = cached_render;
                         _ = render_into.start_send(String::from_utf8(response.to_vec()).map_err(
-                            |err| {
-                                dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(
-                                    err,
-                                ))
-                            },
+                            |err| dioxus_isrg::IncrementalRendererError::Other(Box::new(err)),
                         ));
                         return Some(freshness);
                     }
@@ -110,19 +108,19 @@ impl SsrRendererPool {
     ) -> Result<
         (
             RenderFreshness,
-            impl Stream<Item = Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
+            impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
         ),
-        dioxus_ssr::incremental::IncrementalRendererError,
+        dioxus_isrg::IncrementalRendererError,
     > {
         struct ReceiverWithDrop {
             receiver: futures_channel::mpsc::Receiver<
-                Result<String, dioxus_ssr::incremental::IncrementalRendererError>,
+                Result<String, dioxus_isrg::IncrementalRendererError>,
             >,
             cancel_task: Option<tokio::task::JoinHandle<()>>,
         }
 
         impl Stream for ReceiverWithDrop {
-            type Item = Result<String, dioxus_ssr::incremental::IncrementalRendererError>;
+            type Item = Result<String, dioxus_isrg::IncrementalRendererError>;
 
             fn poll_next(
                 mut self: std::pin::Pin<&mut Self>,
@@ -142,7 +140,7 @@ impl SsrRendererPool {
         }
 
         let (mut into, rx) = futures_channel::mpsc::channel::<
-            Result<String, dioxus_ssr::incremental::IncrementalRendererError>,
+            Result<String, dioxus_isrg::IncrementalRendererError>,
         >(1000);
 
         // before we even spawn anything, we can check synchronously if we have the route cached
@@ -171,10 +169,23 @@ impl SsrRendererPool {
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
             let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
+            virtual_dom.provide_root_context(document.clone());
+            // If there is a base path, trim the base path from the route and add the base path formatting to the
+            // history provider
+            let history;
+            if let Some(base_path) = base_path() {
+                let base_path = base_path.trim_matches('/');
+                let base_path = format!("/{base_path}");
+                let route = route.strip_prefix(&base_path).unwrap_or(&route);
+                history =
+                    dioxus_history::MemoryHistory::with_initial_path(route).with_prefix(base_path);
+            } else {
+                history = dioxus_history::MemoryHistory::with_initial_path(&route);
+            }
+            virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
             // poll the future, which may call server_context()
-            tracing::info!("Rebuilding vdom");
             with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             let mut pre_body = String::new();
@@ -302,9 +313,7 @@ impl SsrRendererPool {
                             resolved_data,
                             &mut resolved_chunk,
                         ) {
-                            throw_error!(
-                                dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
-                            );
+                            throw_error!(dioxus_isrg::IncrementalRendererError::RenderError(err));
                         }
 
                         stream.render(resolved_chunk);
@@ -339,6 +348,13 @@ impl SsrRendererPool {
             if let Some(incremental) = &self.incremental_cache {
                 let mut cached_render = String::new();
                 if let Err(err) = wrapper.render_head(&mut cached_render, &virtual_dom) {
+                    throw_error!(err);
+                }
+                renderer.reset_hydration();
+                if let Err(err) = renderer.render_to(&mut cached_render, &virtual_dom) {
+                    throw_error!(dioxus_isrg::IncrementalRendererError::RenderError(err));
+                }
+                if let Err(err) = wrapper.render_after_main(&mut cached_render, &virtual_dom) {
                     throw_error!(err);
                 }
                 cached_render.push_str(&post_streaming);
@@ -406,9 +422,9 @@ impl SSRState {
     ) -> Result<
         (
             RenderFreshness,
-            impl Stream<Item = Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
+            impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
         ),
-        dioxus_ssr::incremental::IncrementalRendererError,
+        dioxus_isrg::IncrementalRendererError,
     > {
         self.renderers
             .clone()
@@ -435,15 +451,12 @@ impl FullstackHTMLTemplate {
         &self,
         to: &mut R,
         virtual_dom: &VirtualDom,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         let title = {
-            let document: Option<std::rc::Rc<dyn dioxus_lib::prelude::document::Document>> =
+            let document: Option<std::rc::Rc<ServerDocument>> =
                 virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
-            let document: Option<&crate::document::server::ServerDocument> = document
-                .as_ref()
-                .and_then(|document| document.as_any().downcast_ref());
             // Collect any head content from the document provider and inject that into the head
             document.and_then(|document| document.title())
         };
@@ -456,11 +469,8 @@ impl FullstackHTMLTemplate {
         }
         to.write_str(&index.head_after_title)?;
 
-        let document: Option<std::rc::Rc<dyn dioxus_lib::prelude::document::Document>> =
+        let document: Option<std::rc::Rc<ServerDocument>> =
             virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
-        let document: Option<&crate::document::server::ServerDocument> = document
-            .as_ref()
-            .and_then(|document| document.as_any().downcast_ref());
         if let Some(document) = document {
             // Collect any head content from the document provider and inject that into the head
             document.render(to)?;
@@ -478,7 +488,7 @@ impl FullstackHTMLTemplate {
     fn render_before_body<R: std::fmt::Write>(
         &self,
         to: &mut R,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.close_head)?;
@@ -493,7 +503,7 @@ impl FullstackHTMLTemplate {
         &self,
         to: &mut R,
         virtual_dom: &VirtualDom,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
@@ -512,7 +522,7 @@ impl FullstackHTMLTemplate {
     pub fn render_after_body<R: std::fmt::Write>(
         &self,
         to: &mut R,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.after_closing_body_tag)?;
@@ -526,7 +536,7 @@ impl FullstackHTMLTemplate {
         to: &mut R,
         virtual_dom: &VirtualDom,
         body: impl std::fmt::Display,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<(), dioxus_isrg::IncrementalRendererError> {
         self.render_head(to, virtual_dom)?;
         write!(to, "{body}")?;
         self.render_after_main(to, virtual_dom)?;

@@ -11,8 +11,12 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-html = { workspace = true, features = ["wasm-bind"] }
-dioxus-hot-reload = { workspace = true, features = ["client"] }
+dioxus-core-types = { workspace = true }
+dioxus-cli-config = { workspace = true, features = ["web"] }
+dioxus-html = { workspace = true }
+dioxus-history = { workspace = true }
+dioxus-document = { workspace = true }
+dioxus-devtools = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
@@ -20,7 +24,7 @@ dioxus-interpreter-js = { workspace = true, features = [
 ] }
 generational-box = { workspace = true }
 
-js-sys = "0.3.56"
+js-sys = "0.3.70"
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4.29"
 tracing = { workspace = true }
@@ -37,36 +41,72 @@ serde = { version = "1.0", optional = true }
 serde-wasm-bindgen = { version = "0.5.0", optional = true }
 
 ciborium = { workspace = true, optional = true }
+async-trait = { version = "0.1.58", optional = true }
 
 [dependencies.web-sys]
-version = "0.3.56"
+version = "0.3.70"
 features = [
+    "AnimationEvent",
+    "ClipboardEvent",
+    "CloseEvent",
+    "Comment",
+    "CompositionEvent",
+    "console",
+    "CustomEvent",
+    "DataTransfer",
     "Document",
+    "DragEvent",
+    "FocusEvent",
+    "History",
     "HtmlElement",
+    "HtmlFormElement",
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",
-    "HtmlFormElement",
-    "Text",
-    "Comment",
-    "Window",
-    "DataTransfer",
-    "console",
+    "IntersectionObserverEntry",
+    "InputEvent",
+    "KeyboardEvent",
+    "MouseEvent",
     "NodeList",
-    "CloseEvent",
-    "CustomEvent",
+    "PointerEvent",
+    "ResizeObserverEntry",
+    "ResizeObserverSize",
+    "ScrollRestoration",
+    "Text",
+    "Touch",
+    "TouchEvent",
+    "TouchList",
+    "TransitionEvent",
+    "WheelEvent",
+    "Window",
 ]
 
+[build-dependencies]
+lazy-js-bundle = { workspace = true }
+
 [features]
-default = ["panic_hook", "mounted", "file_engine", "hot_reload", "document"]
+default = ["panic_hook", "mounted", "file_engine", "devtools", "document"]
 panic_hook = ["dep:console_error_panic_hook"]
 hydrate = ["web-sys/Comment", "ciborium", "dep:serde"]
-mounted = ["web-sys/Element", "dioxus-html/mounted"]
-file_engine = [
-    "dioxus-html/file-engine",
+mounted = [
+    "web-sys/Element",
+    "dioxus-html/mounted",
+    "web-sys/Element",
+    "web-sys/DomRect",
+    "web-sys/ScrollIntoViewOptions",
+    "web-sys/ScrollLogicalPosition",
+    "web-sys/ScrollBehavior",
+    "web-sys/HtmlElement",
 ]
-hot_reload = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "dep:serde_json", "dep:serde", "dioxus-core/serialize"]
-document = ["dioxus-html/document", "dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
+file_engine = [
+    "dioxus-html/file_engine",
+    "dep:async-trait",
+    "web-sys/File",
+    "web-sys/FileList",
+    "web-sys/FileReader"
+]
+devtools = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "dep:serde_json", "dep:serde", "dioxus-core/serialize"]
+document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 
 [dev-dependencies]
 dioxus = { workspace = true, default-features = true }

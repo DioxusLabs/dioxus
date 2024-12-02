@@ -1,3 +1,5 @@
+use dioxus_core_types::DioxusFormattable;
+
 use crate::innerlude::VProps;
 use crate::prelude::RenderError;
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
@@ -130,11 +132,22 @@ impl From<Element> for VNode {
 pub(crate) trait AsVNode {
     /// Get the vnode for this element
     fn as_vnode(&self) -> &VNode;
+
+    /// Create a deep clone of this VNode
+    fn deep_clone(&self) -> Self;
 }
 
 impl AsVNode for Element {
     fn as_vnode(&self) -> &VNode {
         AsRef::as_ref(self)
+    }
+
+    fn deep_clone(&self) -> Self {
+        match self {
+            Ok(node) => Ok(node.deep_clone()),
+            Err(RenderError::Aborted(err)) => Err(RenderError::Aborted(err.deep_clone())),
+            Err(RenderError::Suspended(fut)) => Err(RenderError::Suspended(fut.deep_clone())),
+        }
     }
 }
 
@@ -285,6 +298,38 @@ impl VNode {
             .mounted_attributes
             .get(dynamic_attribute_idx)
             .copied()
+    }
+
+    /// Create a deep clone of this VNode
+    pub(crate) fn deep_clone(&self) -> Self {
+        Self {
+            vnode: Rc::new(VNodeInner {
+                key: self.vnode.key.clone(),
+                template: self.vnode.template,
+                dynamic_nodes: self
+                    .vnode
+                    .dynamic_nodes
+                    .iter()
+                    .map(|node| match node {
+                        DynamicNode::Fragment(nodes) => DynamicNode::Fragment(
+                            nodes.iter().map(|node| node.deep_clone()).collect(),
+                        ),
+                        other => other.clone(),
+                    })
+                    .collect(),
+                dynamic_attrs: self
+                    .vnode
+                    .dynamic_attrs
+                    .iter()
+                    .map(|attr| {
+                        attr.iter()
+                            .map(|attribute| attribute.deep_clone())
+                            .collect()
+                    })
+                    .collect(),
+            }),
+            mount: Default::default(),
+        }
     }
 }
 
@@ -722,9 +767,9 @@ impl Attribute {
     ///
     /// "Volatile" refers to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
-    pub fn new(
+    pub fn new<T>(
         name: &'static str,
-        value: impl IntoAttributeValue,
+        value: impl IntoAttributeValue<T>,
         namespace: Option<&'static str>,
         volatile: bool,
     ) -> Attribute {
@@ -733,6 +778,21 @@ impl Attribute {
             namespace,
             volatile,
             value: value.into_value(),
+        }
+    }
+
+    /// Create a new deep clone of this attribute
+    pub(crate) fn deep_clone(&self) -> Self {
+        Attribute {
+            name: self.name,
+            namespace: self.namespace,
+            volatile: self.volatile,
+            value: match &self.value {
+                AttributeValue::Listener(listener) => {
+                    AttributeValue::Listener(listener.leak_reference().unwrap())
+                }
+                value => value.clone(),
+            },
         }
     }
 }
@@ -810,7 +870,7 @@ impl PartialEq for AttributeValue {
             (Self::Float(l0), Self::Float(r0)) => l0 == r0,
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
-            (Self::Listener(_), Self::Listener(_)) => true,
+            (Self::Listener(l0), Self::Listener(r0)) => l0 == r0,
             (Self::Any(l0), Self::Any(r0)) => l0.as_ref().any_cmp(r0.as_ref()),
             (Self::None, Self::None) => true,
             _ => false,
@@ -1000,7 +1060,7 @@ where
 }
 
 /// A value that can be converted into an attribute value
-pub trait IntoAttributeValue {
+pub trait IntoAttributeValue<T = ()> {
     /// Convert into an attribute value
     fn into_value(self) -> AttributeValue;
 }
@@ -1034,6 +1094,16 @@ impl IntoAttributeValue for f64 {
     }
 }
 
+impl IntoAttributeValue for i8 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for i16 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i32 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self as _)
@@ -1044,8 +1114,43 @@ impl IntoAttributeValue for i64 {
         AttributeValue::Int(self)
     }
 }
-
+impl IntoAttributeValue for isize {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i128 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+
+impl IntoAttributeValue for u8 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u16 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u64 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for usize {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
+impl IntoAttributeValue for u128 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self as _)
     }
@@ -1078,21 +1183,24 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
-#[cfg(feature = "manganis")]
-impl IntoAttributeValue for manganis::ImageAsset {
+pub struct AnyFmtMarker;
+impl<T> IntoAttributeValue<AnyFmtMarker> for T
+where
+    T: DioxusFormattable,
+{
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.path().to_string())
+        AttributeValue::Text(self.format().to_string())
     }
 }
 
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {
     /// Push an attribute onto the list of attributes
-    fn push_attribute(
+    fn push_attribute<T>(
         self,
         name: &'static str,
         ns: Option<&'static str>,
-        attr: impl IntoAttributeValue,
+        attr: impl IntoAttributeValue<T>,
         volatile: bool,
     ) -> Self;
 }

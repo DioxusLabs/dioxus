@@ -1,0 +1,22 @@
+[package]
+# Manganese is a rusting catalyst. Manganis makes it faster to collect rust assets (and has almost no google search results)
+name = "manganis"
+version.workspace = true
+authors = ["Evan Almloff"]
+edition = "2021"
+description = "Ergonomic, automatic, cross crate asset collection and optimization"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/manganis/"
+homepage = "https://dioxuslabs.com"
+keywords = ["assets"]
+
+[lib]
+
+[dependencies]
+const-serialize = { workspace = true }
+manganis-core = { workspace = true }
+manganis-macro = { workspace = true }
+
+[features]
+default = []
+dioxus = ["manganis-core/dioxus"]

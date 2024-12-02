@@ -1,4 +1,5 @@
 use crate::innerlude::{throw_error, RenderError, ScopeOrder};
+use crate::nodes::AsVNode;
 use crate::prelude::ReactiveContext;
 use crate::scope_context::SuspenseLocation;
 use crate::{
@@ -69,7 +70,18 @@ impl VirtualDom {
                 let span = tracing::trace_span!("render", scope = %scope.state().name);
                 span.in_scope(|| {
                     scope.reactive_context.reset_and_run_in(|| {
-                        let mut render_return = props.render();
+                        let render_return = props.render();
+                        // After the component is run, we need to do a deep clone of the VNode. This
+                        // breaks any references to mounted parts of the VNode from the component.
+                        // Without this, the component could store a mounted version of the VNode
+                        // which causes a lot of issues for diffing because we expect only the old
+                        // or new node to be mounted.
+                        //
+                        // For example, the dog app example returns rsx from a resource. Every time
+                        // the component runs, it returns a clone of the last rsx that was returned from
+                        // that resource. If we don't deep clone the VNode and the resource changes, then
+                        // we could end up diffing two different versions of the same mounted node
+                        let mut render_return = render_return.deep_clone();
                         self.handle_element_return(&mut render_return, scope_id, &scope.state());
                         render_return
                     })

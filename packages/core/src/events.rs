@@ -1,6 +1,6 @@
 use crate::{properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
 use generational_box::GenerationalBox;
-use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -201,7 +201,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// rsx!{
+/// rsx! {
 ///     MyComponent { onclick: move |evt| tracing::debug!("clicked") }
 /// };
 ///
@@ -211,7 +211,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// fn MyComponent(cx: MyProps) -> Element {
-///     rsx!{
+///     rsx! {
 ///         button {
 ///             onclick: move |evt| cx.onclick.call(evt),
 ///         }
@@ -228,7 +228,7 @@ pub type EventHandler<T = ()> = Callback<T>;
 /// # Example
 ///
 /// ```rust, ignore
-/// rsx!{
+/// rsx! {
 ///     MyComponent { onclick: move |evt| {
 ///         tracing::debug!("clicked");
 ///         42
@@ -241,7 +241,7 @@ pub type EventHandler<T = ()> = Callback<T>;
 /// }
 ///
 /// fn MyComponent(cx: MyProps) -> Element {
-///     rsx!{
+///     rsx! {
 ///         button {
 ///             onclick: move |evt| println!("number: {}", cx.onclick.call(evt)),
 ///         }
@@ -256,7 +256,7 @@ pub struct Callback<Args = (), Ret = ()> {
     /// # use dioxus::prelude::*;
     /// #[component]
     /// fn Child(onclick: EventHandler<MouseEvent>) -> Element {
-    ///     rsx!{
+    ///     rsx! {
     ///         button {
     ///             // Diffing Child will not rerun this component, it will just update the callback in place so that if this callback is called, it will run the latest version of the callback
     ///             onclick: move |evt| onclick(evt),
@@ -425,23 +425,14 @@ impl<Args, Ret> Clone for Callback<Args, Ret> {
 }
 
 impl<Args: 'static, Ret: 'static> PartialEq for Callback<Args, Ret> {
-    fn eq(&self, _: &Self) -> bool {
-        true
+    fn eq(&self, other: &Self) -> bool {
+        self.callback.ptr_eq(&other.callback) && self.origin == other.origin
     }
 }
 
 pub(super) struct ExternalListenerCallback<Args, Ret> {
-    callback: Rc<RefCell<dyn FnMut(Args) -> Ret>>,
+    callback: Box<dyn FnMut(Args) -> Ret>,
     runtime: std::rc::Weak<Runtime>,
-}
-
-impl<Args, Ret> Clone for ExternalListenerCallback<Args, Ret> {
-    fn clone(&self) -> Self {
-        Self {
-            callback: self.callback.clone(),
-            runtime: self.runtime.clone(),
-        }
-    }
 }
 
 impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
@@ -456,9 +447,8 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
             .current_scope_id()
             .unwrap_or_else(|e| panic!("{}", e));
         let owner = crate::innerlude::current_owner::<generational_box::UnsyncStorage>();
-        let callback = owner.insert(Some(ExternalListenerCallback {
-            callback: Rc::new(RefCell::new(move |event: Args| f(event).spawn()))
-                as Rc<RefCell<dyn FnMut(Args) -> Ret>>,
+        let callback = owner.insert_rc(Some(ExternalListenerCallback {
+            callback: Box::new(move |event: Args| f(event).spawn()),
             runtime: Rc::downgrade(&runtime),
         }));
         Self { callback, origin }
@@ -471,12 +461,22 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         let origin = runtime
             .current_scope_id()
             .unwrap_or_else(|e| panic!("{}", e));
-        let callback = GenerationalBox::leak(Some(ExternalListenerCallback {
-            callback: Rc::new(RefCell::new(move |event: Args| f(event).spawn()))
-                as Rc<RefCell<dyn FnMut(Args) -> Ret>>,
-            runtime: Rc::downgrade(&runtime),
-        }));
+        let callback = GenerationalBox::leak_rc(
+            Some(ExternalListenerCallback {
+                callback: Box::new(move |event: Args| f(event).spawn()),
+                runtime: Rc::downgrade(&runtime),
+            }),
+            Location::caller(),
+        );
         Self { callback, origin }
+    }
+
+    /// Leak a new reference to the [`Callback`] that will not be dropped unless the callback is dropped manually
+    pub(crate) fn leak_reference(&self) -> generational_box::BorrowResult<Callback<Args, Ret>> {
+        Ok(Callback {
+            callback: self.callback.leak_reference()?,
+            origin: self.origin,
+        })
     }
 
     /// Call this callback with the appropriate argument type
@@ -484,16 +484,13 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     /// This borrows the callback using a RefCell. Recursively calling a callback will cause a panic.
     #[track_caller]
     pub fn call(&self, arguments: Args) -> Ret {
-        if let Some(callback) = self.callback.read().as_ref() {
+        if let Some(callback) = self.callback.write().as_mut() {
             let runtime = callback
                 .runtime
                 .upgrade()
                 .expect("Callback was called after the runtime was dropped");
             let _guard = RuntimeGuard::new(runtime.clone());
-            runtime.with_scope_on_stack(self.origin, || {
-                let mut callback = callback.callback.borrow_mut();
-                callback(arguments)
-            })
+            runtime.with_scope_on_stack(self.origin, || (callback.callback)(arguments))
         } else {
             panic!("Callback was manually dropped")
         }
@@ -511,24 +508,19 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         self.callback.set(None);
     }
 
-    #[doc(hidden)]
-    /// This should only be used by the `rsx!` macro.
-    pub fn __set(&mut self, value: Rc<RefCell<dyn FnMut(Args) -> Ret>>) {
+    /// Replace the function in the callback with a new one
+    pub fn replace(&mut self, callback: Box<dyn FnMut(Args) -> Ret>) {
+        let runtime = Runtime::current().unwrap_or_else(|e| panic!("{}", e));
         self.callback.set(Some(ExternalListenerCallback {
-            callback: value,
-            runtime: Rc::downgrade(&Runtime::current().unwrap()),
+            callback,
+            runtime: Rc::downgrade(&runtime),
         }));
     }
 
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
-    pub fn __take(&self) -> Rc<RefCell<dyn FnMut(Args) -> Ret>> {
-        self.callback
-            .read()
-            .as_ref()
-            .expect("Callback was manually dropped")
-            .callback
-            .clone()
+    pub fn __point_to(&mut self, other: &Self) {
+        self.callback.point_to(other.callback).unwrap();
     }
 }
 

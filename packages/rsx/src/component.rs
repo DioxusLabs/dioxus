@@ -24,7 +24,7 @@ use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Expr, PathArguments, Result,
+    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -179,29 +179,25 @@ impl Component {
 
     /// Ensure there's no duplicate props - this will be a compile error but we can move it to a
     /// diagnostic, thankfully
-    ///
-    /// Also ensure there's no stringly typed props
     fn validate_fields(&mut self) {
         let mut seen = HashSet::new();
 
         for field in self.fields.iter() {
             match &field.name {
-                AttributeName::Custom(name) => self.diagnostics.push(
-                    name.span()
-                        .error("Custom attributes are not supported for Components. Only known attributes are allowed."),
-                ),
+                AttributeName::Custom(_) => {}
                 AttributeName::BuiltIn(k) => {
                     if !seen.contains(k) {
                         seen.insert(k);
                     } else {
-                        self.diagnostics.push(
-                            k.span()
-                                .error("Duplicate prop field found. Only one prop field per name is allowed."),
-                        );
+                        self.diagnostics.push(k.span().error(
+                            "Duplicate prop field found. Only one prop field per name is allowed.",
+                        ));
                     }
-                },
+                }
                 AttributeName::Spread(_) => {
-                    unreachable!("Spread attributes should be handled in the spread validation step.")
+                    unreachable!(
+                        "Spread attributes should be handled in the spread validation step."
+                    )
                 }
             }
         }
@@ -222,13 +218,9 @@ impl Component {
             quote! { fc_to_builder(#name #generics) }
         };
 
-        for (name, value) in self.make_field_idents() {
-            if manual_props.is_some() {
-                tokens.append_all(quote! { __manual_props.#name = #value; })
-            } else {
-                tokens.append_all(quote! { .#name(#value) })
-            }
-        }
+        tokens.append_all(self.add_fields_to_builder(
+            manual_props.map(|_| Ident::new("__manual_props", proc_macro2::Span::call_site())),
+        ));
 
         if !self.children.is_empty() {
             let children = &self.children;
@@ -253,17 +245,17 @@ impl Component {
     }
 
     // Iterate over the props of the component (without spreads, key, and custom attributes)
-    pub(crate) fn component_props(&self) -> impl Iterator<Item = &Attribute> {
+    pub fn component_props(&self) -> impl Iterator<Item = &Attribute> {
         self.fields
             .iter()
             .filter(move |attr| !attr.name.is_likely_key())
     }
 
-    fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
+    fn add_fields_to_builder(&self, manual_props: Option<Ident>) -> TokenStream2 {
         let mut dynamic_literal_index = 0;
-        self.component_props()
-            .map(|attribute| {
-                let release_value = attribute.value.to_token_stream();
+        let mut tokens = TokenStream2::new();
+        for attribute in self.component_props() {
+            let release_value = attribute.value.to_token_stream();
 
             // In debug mode, we try to grab the value from the dynamic literal pool if possible
             let value = if let AttributeValue::AttrLiteral(literal) = &attribute.value {
@@ -286,9 +278,29 @@ impl Component {
                 release_value
             };
 
-                (attribute.name.to_token_stream(), value)
-            })
-            .collect()
+            match &attribute.name {
+                AttributeName::BuiltIn(name) => {
+                    if let Some(manual_props) = &manual_props {
+                        tokens.append_all(quote! { #manual_props.#name = #value; })
+                    } else {
+                        tokens.append_all(quote! { .#name(#value) })
+                    }
+                }
+                AttributeName::Custom(name) => {
+                    if manual_props.is_some() {
+                        tokens.append_all(name.span().error(
+                            "Custom attributes are not supported for components that are spread",
+                        ).emit_as_expr_tokens());
+                    } else {
+                        tokens.append_all(quote! { .push_attribute(#name, None, #value, false) })
+                    }
+                }
+                // spreads are handled elsewhere
+                AttributeName::Spread(_) => {}
+            }
+        }
+
+        tokens
     }
 
     fn empty(name: syn::Path, generics: Option<AngleBracketedGenericArguments>) -> Self {
