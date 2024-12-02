@@ -89,6 +89,7 @@ args = [
   "test",
   "--doc",
   "--workspace",
+  "--all-features",
 ]
 private = true
 

@@ -161,10 +161,11 @@ mod server_fn_impl {
         /// #[server]
         /// async fn set_headers() -> Result<(), ServerFnError> {
         ///     let server_context = server_context();
-        ///     let cookies = server_context.response_parts()
-        ///         .headers()
+        ///     let response_parts = server_context.response_parts();
+        ///     let cookies = response_parts
+        ///         .headers
         ///         .get("Cookie")
-        ///         .ok_or_else(|| ServerFnError::msg("failed to find Cookie header in the response"))?;
+        ///         .ok_or_else(|| ServerFnError::new("failed to find Cookie header in the response"))?;
         ///     println!("{:?}", cookies);
         ///     Ok(())
         /// }
@@ -185,8 +186,8 @@ mod server_fn_impl {
         /// async fn set_headers() -> Result<(), ServerFnError> {
         ///     let server_context = server_context();
         ///     server_context.response_parts_mut()
-        ///         .headers_mut()
-        ///         .insert("Cookie", "dioxus=fullstack");
+        ///         .headers
+        ///         .insert("Cookie", http::HeaderValue::from_static("dioxus=fullstack"));
         ///     Ok(())
         /// }
         /// ```
@@ -205,10 +206,11 @@ mod server_fn_impl {
         /// #[server]
         /// async fn read_headers() -> Result<(), ServerFnError> {
         ///     let server_context = server_context();
-        ///     let id: &i32 = server_context.request_parts()
+        ///     let request_parts = server_context.request_parts();
+        ///     let id: &i32 = request_parts
         ///         .extensions
         ///         .get()
-        ///         .ok_or_else(|| ServerFnError::msg("failed to find i32 extension in the request"))?;
+        ///         .ok_or_else(|| ServerFnError::new("failed to find i32 extension in the request"))?;
         ///     println!("{:?}", id);
         ///     Ok(())
         /// }
@@ -231,7 +233,7 @@ mod server_fn_impl {
         ///     let id: i32 = server_context.request_parts_mut()
         ///         .extensions
         ///         .remove()
-        ///         .ok_or_else(|| ServerFnError::msg("failed to find i32 extension in the request"))?;
+        ///         .ok_or_else(|| ServerFnError::new("failed to find i32 extension in the request"))?;
         ///     println!("{:?}", id);
         ///     Ok(())
         /// }
