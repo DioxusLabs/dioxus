@@ -10,7 +10,7 @@ fn app() -> Element {
     let mut animated_classes = use_signal(|| ["animated-text", ""]);
 
     rsx! {
-        head::Link { rel: "stylesheet", href: asset!("./examples/assets/visible.css") }
+        document::Link { rel: "stylesheet", href: asset!("./examples/assets/visible.css") }
 
         div {
             class: "container",

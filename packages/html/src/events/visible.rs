@@ -1,6 +1,7 @@
-use std::fmt::{Display, Formatter};
-
-use crate::instant::Instant;
+use std::{
+    fmt::{Display, Formatter},
+    time::SystemTime,
+};
 
 pub struct VisibleData {
     inner: Box<dyn HasVisibleData>,
@@ -46,11 +47,8 @@ impl VisibleData {
     }
 
     /// Get a timestamp indicating the time at which the intersection was recorded
-    pub fn get_time(&self) -> VisibleResult<Instant> {
-        match self.inner.get_time() {
-            Ok(ms) => Ok(Instant::new(ms)),
-            Err(err) => Err(err),
-        }
+    pub fn get_time(&self) -> VisibleResult<SystemTime> {
+        self.inner.get_time()
     }
 
     /// Downcast this event to a concrete event type
@@ -134,7 +132,7 @@ pub struct SerializedVisibleData {
     pub intersection_rect: DOMRect,
     pub is_intersecting: bool,
     pub root_bounds: DOMRect,
-    pub time: f64,
+    pub time_ms: u128,
 }
 
 #[cfg(feature = "serialize")]
@@ -146,7 +144,7 @@ impl SerializedVisibleData {
         intersection_rect: DOMRect,
         is_intersecting: bool,
         root_bounds: DOMRect,
-        time: f64,
+        time_ms: u128,
     ) -> Self {
         Self {
             bounding_client_rect,
@@ -154,7 +152,7 @@ impl SerializedVisibleData {
             intersection_rect,
             is_intersecting,
             root_bounds,
-            time,
+            time_ms,
         }
     }
 }
@@ -168,7 +166,7 @@ impl From<&VisibleData> for SerializedVisibleData {
             data.get_intersection_rect().unwrap().into(),
             data.is_intersecting().unwrap(),
             data.get_root_bounds().unwrap().into(),
-            data.get_time().unwrap().into(),
+            data.get_time().unwrap().elapsed().unwrap().as_millis(),
         )
     }
 }
@@ -201,8 +199,8 @@ impl HasVisibleData for SerializedVisibleData {
     }
 
     /// Get a timestamp indicating the time at which the intersection was recorded
-    fn get_time(&self) -> VisibleResult<f64> {
-        Ok(self.time)
+    fn get_time(&self) -> VisibleResult<SystemTime> {
+        Ok(SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(self.time_ms as u64))
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -254,7 +252,7 @@ pub trait HasVisibleData: std::any::Any {
     }
 
     /// Get a timestamp indicating the time at which the intersection was recorded
-    fn get_time(&self) -> VisibleResult<f64> {
+    fn get_time(&self) -> VisibleResult<SystemTime> {
         Err(VisibleError::NotSupported)
     }
 

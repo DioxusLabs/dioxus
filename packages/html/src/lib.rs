@@ -23,7 +23,6 @@ pub use elements::HtmlCtx;
 pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 pub mod events;
 pub(crate) mod file_data;
-pub mod instant;
 pub use file_data::*;
 mod attribute_groups;
 pub mod geometry;
@@ -51,7 +50,6 @@ pub mod prelude {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::elements::extensions::*;
     pub use crate::events::*;
-    pub use crate::instant::*;
     pub use crate::point_interaction::*;
     pub use keyboard_types::{self, Code, Key, Location, Modifiers};
 }

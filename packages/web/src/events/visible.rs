@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use dioxus_html::{
     geometry::{
         euclid::{Point2D, Size2D},
@@ -64,8 +66,11 @@ impl HasVisibleData for Synthetic<IntersectionObserverEntry> {
     }
 
     /// Get a timestamp indicating the time at which the intersection was recorded
-    fn get_time(&self) -> VisibleResult<f64> {
-        Ok(self.event.time())
+    fn get_time(&self) -> VisibleResult<SystemTime> {
+        let ms_since_epoch = self.event.time();
+        let rounded = ms_since_epoch.round() as u64;
+        let duration = std::time::Duration::from_millis(rounded);
+        Ok(SystemTime::UNIX_EPOCH + duration)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
