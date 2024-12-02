@@ -459,6 +459,14 @@ impl CapturedError {
             Some(std::result::Result::Ok(self.render.clone()))
         }
     }
+
+    /// Create a deep clone of this error
+    pub(crate) fn deep_clone(&self) -> Self {
+        Self {
+            render: self.render.deep_clone(),
+            ..self.clone()
+        }
+    }
 }
 
 impl PartialEq for CapturedError {

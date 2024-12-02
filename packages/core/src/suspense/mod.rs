@@ -70,6 +70,15 @@ impl SuspendedFuture {
     pub fn task(&self) -> Task {
         self.task
     }
+
+    /// Create a deep clone of this suspended future
+    pub(crate) fn deep_clone(&self) -> Self {
+        Self {
+            task: self.task,
+            placeholder: self.placeholder.deep_clone(),
+            origin: self.origin,
+        }
+    }
 }
 
 /// A context with information about suspended components
