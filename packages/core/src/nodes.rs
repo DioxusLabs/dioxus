@@ -305,7 +305,7 @@ impl VNode {
         Self {
             vnode: Rc::new(VNodeInner {
                 key: self.vnode.key.clone(),
-                template: self.vnode.template.clone(),
+                template: self.vnode.template,
                 dynamic_nodes: self
                     .vnode
                     .dynamic_nodes
@@ -785,7 +785,7 @@ impl Attribute {
     pub(crate) fn deep_clone(&self) -> Self {
         Attribute {
             name: self.name,
-            namespace: self.namespace.clone(),
+            namespace: self.namespace,
             volatile: self.volatile,
             value: match &self.value {
                 AttributeValue::Listener(listener) => {
