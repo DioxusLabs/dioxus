@@ -3890,7 +3890,6 @@ dependencies = [
  "serde_repr",
  "tokio",
  "tracing",
- "web-time",
 ]
 
 [[package]]

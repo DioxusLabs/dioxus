@@ -29,7 +29,6 @@ futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
 rustversion = "1.0.17"
-web-time = "1.1.0"
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }

@@ -131,7 +131,6 @@ impl WebviewEdits {
                     data.into_any()
                 }
             }
-            dioxus_html::EventData::Visible(_) => data.into_any(),
             _ => data.into_any(),
         };
 
