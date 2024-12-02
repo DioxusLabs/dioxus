@@ -255,6 +255,9 @@ jobs:
           large-packages: false
           docker-images: false
           swap-storage: false
+      - name: Prebuild CLI
+        run: |
+          cargo build --package dioxus-cli --release
       - name: Playwright
         working-directory: ./packages/playwright-tests
         run: |
