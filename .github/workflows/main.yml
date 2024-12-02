@@ -83,7 +83,6 @@ jobs:
           cache-all-crates: "true"
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
-      - uses: jetli/wasm-pack-action@v0.4.0
       - run: cargo make tests
 
   release-test:
@@ -356,9 +355,12 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.UV_WORKSPACE }}
+          cache-all-crates: "true"
 
       - name: "Install Rust toolchain"
         working-directory: ${{ env.UV_WORKSPACE }}
