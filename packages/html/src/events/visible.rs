@@ -45,11 +45,6 @@ impl VisibleData {
         self.inner.get_root_bounds()
     }
 
-    /// Get the element whose intersection with the root changed
-    pub fn get_target(&self) -> VisibleResult<ElementId> {
-        self.inner.get_target()
-    }
-
     /// Get a timestamp indicating the time at which the intersection was recorded
     pub fn get_time(&self) -> VisibleResult<Instant> {
         match self.inner.get_time() {
@@ -75,7 +70,6 @@ impl std::fmt::Debug for VisibleData {
             .field("intersection_rect", &self.inner.get_intersection_rect())
             .field("is_intersecting", &self.inner.is_intersecting())
             .field("root_bounds", &self.inner.get_root_bounds())
-            .field("target", &self.inner.get_target())
             .field("time", &self.inner.get_time())
             .finish()
     }
@@ -125,8 +119,8 @@ impl From<PixelsRect> for DOMRect {
 impl From<&DOMRect> for PixelsRect {
     fn from(rect: &DOMRect) -> Self {
         PixelsRect::new(
-            Point2D::new(rect.x, rect.y),
-            Size2D::new(rect.width, rect.height),
+            euclid::Point2D::new(rect.x, rect.y),
+            euclid::Size2D::new(rect.width, rect.height),
         )
     }
 }
@@ -140,7 +134,6 @@ pub struct SerializedVisibleData {
     pub intersection_rect: DOMRect,
     pub is_intersecting: bool,
     pub root_bounds: DOMRect,
-    pub target: Option<ElementId>,
     pub time: f64,
 }
 
@@ -153,7 +146,6 @@ impl SerializedVisibleData {
         intersection_rect: DOMRect,
         is_intersecting: bool,
         root_bounds: DOMRect,
-        target: Option<ElementId>,
         time: f64,
     ) -> Self {
         Self {
@@ -162,7 +154,6 @@ impl SerializedVisibleData {
             intersection_rect,
             is_intersecting,
             root_bounds,
-            target,
             time,
         }
     }
@@ -177,7 +168,6 @@ impl From<&VisibleData> for SerializedVisibleData {
             data.get_intersection_rect().unwrap().into(),
             data.is_intersecting().unwrap(),
             data.get_root_bounds().unwrap().into(),
-            data.get_target().ok(),
             data.get_time().unwrap().into(),
         )
     }
@@ -213,11 +203,6 @@ impl HasVisibleData for SerializedVisibleData {
     /// Get a timestamp indicating the time at which the intersection was recorded
     fn get_time(&self) -> VisibleResult<f64> {
         Ok(self.time)
-    }
-
-    /// Get the element whose intersection with the root changed
-    fn get_target(&self) -> VisibleResult<ElementId> {
-        self.target.ok_or(VisibleError::NoElementId)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -268,11 +253,6 @@ pub trait HasVisibleData: std::any::Any {
         Err(VisibleError::NotSupported)
     }
 
-    /// Get the element whose intersection with the root changed
-    fn get_target(&self) -> VisibleResult<ElementId> {
-        Err(VisibleError::NotSupported)
-    }
-
     /// Get a timestamp indicating the time at which the intersection was recorded
     fn get_time(&self) -> VisibleResult<f64> {
         Err(VisibleError::NotSupported)
@@ -282,8 +262,7 @@ pub trait HasVisibleData: std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-use dioxus_core::{ElementId, Event};
-use euclid::{Point2D, Size2D};
+use dioxus_core::Event;
 
 use crate::geometry::PixelsRect;
 

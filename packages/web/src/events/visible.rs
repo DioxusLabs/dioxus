@@ -1,15 +1,12 @@
-use dioxus_core::ElementId;
 use dioxus_html::{
     geometry::{
         euclid::{Point2D, Size2D},
-        PixelsRect, PixelsSize,
+        PixelsRect,
     },
-    HasResizeData, HasVisibleData, ResizeResult, VisibleData, VisibleError, VisibleResult,
+    HasVisibleData, VisibleData, VisibleError, VisibleResult,
 };
 use wasm_bindgen::JsCast;
-use web_sys::{
-    CustomEvent, DomRectReadOnly, Event, IntersectionObserverEntry, ResizeObserverEntry,
-};
+use web_sys::{CustomEvent, DomRectReadOnly, Event, IntersectionObserverEntry};
 
 use super::{Synthetic, WebEventExt};
 
@@ -64,17 +61,6 @@ impl HasVisibleData for Synthetic<IntersectionObserverEntry> {
             Some(root_bounds) => Ok(dom_rect_ro_to_pixel_rect(&root_bounds)),
             None => Err(VisibleError::NotSupported),
         }
-    }
-
-    /// Get the element whose intersection with the root changed
-    fn get_target(&self) -> VisibleResult<ElementId> {
-        todo!()
-        // if let Some(target_id) = self.target().get_attribute("data-dioxus-id") {
-        //     if let Ok(target_id) = target_id.parse::<usize>() {
-        //         return Ok(ElementId(target_id));
-        //     }
-        // }
-        // Err(VisibleError::NoElementId)
     }
 
     /// Get a timestamp indicating the time at which the intersection was recorded
