@@ -25,8 +25,8 @@ mod selection;
 mod toggle;
 mod touch;
 mod transition;
-mod wheel;
 mod visible;
+mod wheel;
 
 /// A wrapper for the websys event that allows us to give it the impls from dioxus-html
 pub(crate) struct Synthetic<T: 'static> {
@@ -196,7 +196,8 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::VisibleData {
-        downcast_event(event).raw.clone().into()
+        Synthetic::<web_sys::IntersectionObserverEntry>::from(downcast_event(event).raw.clone())
+            .into()
     }
 
     #[inline(always)]
