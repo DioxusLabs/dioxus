@@ -25,6 +25,7 @@ mod selection;
 mod toggle;
 mod touch;
 mod transition;
+mod visible;
 mod wheel;
 
 /// A wrapper for the websys event that allows us to give it the impls from dioxus-html
@@ -188,6 +189,15 @@ impl HtmlEventConverter for WebEventConverter {
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::TransitionData {
         Synthetic::<web_sys::TransitionEvent>::from(downcast_event(event).raw.clone()).into()
+    }
+
+    #[inline(always)]
+    fn convert_visible_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::VisibleData {
+        Synthetic::<web_sys::IntersectionObserverEntry>::from(downcast_event(event).raw.clone())
+            .into()
     }
 
     #[inline(always)]

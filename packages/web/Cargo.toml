@@ -63,6 +63,7 @@ features = [
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",
+    "IntersectionObserverEntry",
     "InputEvent",
     "KeyboardEvent",
     "MouseEvent",

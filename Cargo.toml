@@ -437,6 +437,10 @@ name = "streams"
 doc-scrape-examples = true
 
 [[example]]
+name = "visible"
+doc-scrape-examples = true
+
+[[example]]
 name = "window_event"
 required-features = ["desktop"]
 doc-scrape-examples = true

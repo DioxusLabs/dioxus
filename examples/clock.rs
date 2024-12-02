@@ -1,5 +1,4 @@
 //! A simple little clock that updates the time every few milliseconds.
-//!
 
 use async_std::task::sleep;
 use dioxus::prelude::*;
