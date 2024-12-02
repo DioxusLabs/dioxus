@@ -9,10 +9,6 @@ homepage = "https://dioxuslabs.com"
 description = "CLI optimizations for dioxus-cli"
 keywords = ["dom", "ui", "gui", "react"]
 
-# forcing a cdylib makes this faster to compile and cache
-[lib]
-crate-type = ["dylib"]
-
 [dependencies]
 anyhow = "1"
 manganis-core = { workspace = true }
