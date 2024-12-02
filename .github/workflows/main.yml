@@ -52,7 +52,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          # cache-on-failure: "true"
       # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
       - name: install_cargo_msrv
         run: cargo install cargo-msrv --all-features
@@ -82,7 +81,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          # cache-on-failure: "true"
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -100,7 +98,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          # cache-on-failure: "true"
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -124,7 +121,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          # cache-on-failure: "true"
       - run: cargo fmt --all -- --check
 
   typos:
@@ -151,7 +147,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          # cache-on-failure: "true"
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
@@ -193,7 +188,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          # cache-on-failure: "true"
       - run: cargo check --workspace --all-features --all-targets
 
   clippy:
@@ -210,7 +204,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          # cache-on-failure: "true"
       - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
 
   nix:
@@ -248,7 +241,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          # cache-on-failure: "true"
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@v1.3.1
         with: # speed things up a bit
@@ -335,14 +327,12 @@ jobs:
 
       - name: Install cross
         if: ${{ matrix.platform.cross == true }}
-
         uses: taiki-e/install-action@cross
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: "matrix-${{ matrix.platform.target }}"
           cache-all-crates: "true"
-          # cache-on-failure: "true"
 
       - name: test
         run: |
@@ -399,7 +389,7 @@ jobs:
   #     - uses: Swatinem/rust-cache@v2
   #       with:
   #         cache-all-crates: "true"
-          cache-on-failure: "true"
+  #         cache-on-failure: "true"
   #     - name: Check semver
   #       uses: obi1kenobi/cargo-semver-checks-action@v2
   #       with:
