@@ -281,14 +281,6 @@ jobs:
       matrix:
         platform:
           - {
-              target: x86_64-pc-windows-msvc,
-              os: windows-latest-large,
-              toolchain: "1.79.0",
-              cross: false,
-              command: "test",
-              args: "--all --tests",
-            }
-          - {
               target: aarch64-apple-darwin,
               os: macos-latest,
               toolchain: "1.79.0",
@@ -355,6 +347,37 @@ jobs:
       - name: test
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
+
+  # borrowed from uv
+  # https://raw.githubusercontent.com/astral-sh/uv/refs/heads/main/.github/workflows/ci.yml
+  cargo-test-windows:
+    if: github.event.pull_request.draft == false
+    runs-on:
+      labels: "windows-latest"
+    name: "cargo test | windows"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Dev Drive using ReFS
+        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+
+      # actions/checkout does not let us clone into anywhere outside ${{ github.workspace }}, so we have to copy the clone...
+      - name: Copy Git Repo to Dev Drive
+        run: |
+          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.UV_WORKSPACE }}
+
+      - name: "Install Rust toolchain"
+        working-directory: ${{ env.UV_WORKSPACE }}
+        run: rustup show
+
+      - name: "Cargo test"
+        working-directory: ${{ env.UV_WORKSPACE }}
+        run: |
+          cargo test --workspace --tests
 
   # Only run semver checks if the PR is not a draft and does not have the breaking label
   # Breaking PRs don't need to follow semver since they are breaking changes
