@@ -29,7 +29,7 @@ Dioxus is a framework for building cross-platform apps in Rust. With one codebas
 
 ## At a glance
 
-Dioxus is crossplatform app framework that empowers developer to build beautiful, fast, type-safe apps with Rust. By default, Dioxus apps are declared with HTML and CSS though alternative renderers are available. Dioxus includes a number of useful features:
+Dioxus is crossplatform app framework that empowers developer to build beautiful, fast, type-safe apps with Rust. By default, Dioxus apps are declared with HTML and CSS. Dioxus includes a number of useful features:
 
 - Hotreloading of RSX markup and assets
 - Interactive CLI with logging, project templates, linting, and more
@@ -59,7 +59,7 @@ dx serve --platform desktop
 
 All Dioxus apps are built by composing functions return an `Element`.
 
-To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
+To launch an app, we use the `launch` method. In the launch function, we pass the app's root `Component`.
 
 ```rust, no_run
 use dioxus::prelude::*;
@@ -189,7 +189,7 @@ Hooks are sensitive to how they are used. To use hooks, you must abide by the ["
 - Hooks can only be called in the body of a component or another hook. Not inside of another expression like a loop, conditional or function call.
 - Hooks should start with "use\_"
 
-In a sense, hooks let us add a field of state to our component without declaring an explicit state struct. However, this means we need to "load" the struct in the right order. If that order is wrong, then the hook will pick the wrong state and panic.
+Hooks let us add a field of state to our component without declaring an explicit state struct. However, this means we need to "load" the struct in the right order. If that order is wrong, then the hook will pick the wrong state and panic.
 
 Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with [custom hooks](https://dioxuslabs.com/learn/0.6/cookbook/state/custom_hooks).
 
