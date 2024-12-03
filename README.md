@@ -5,8 +5,10 @@
       <!-- <a href="https://dioxuslabs.com">
           <img src="./notes/flat-splash.avif">
       </a> -->
-      <img src="./notes/simple-splash-darkmode.svg#gh-dark-mode-only" >
-      <img src="./notes/simple-splash.svg#gh-light-mode-only" >
+      <img src="./notes/splash-header-darkmode.svg#gh-dark-mode-only" >
+      <img src="./notes/splash-header.svg#gh-light-mode-only" >
+      <img src="./notes/image-splash.avif">
+      <br>
     </p>
 </p>
 <div align="center">
