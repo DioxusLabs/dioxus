@@ -37,9 +37,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: "1"
+  CARGO_INCREMENTAL: 1
   RUST_BACKTRACE: 1
   rust_nightly: nightly-2024-10-20
+  rust_stable: "1.79.0"
 
 jobs:
   check-msrv:
@@ -48,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -77,11 +78,10 @@ jobs:
           swap-storage: false
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-      - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile
 
@@ -99,14 +99,12 @@ jobs:
           swap-storage: false
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-      - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
-      - uses: jetli/wasm-pack-action@v0.4.0
-      - run: cargo test --profile release-unoptimized --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile
+      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile --profile release-unoptimized
 
   fmt:
     if: github.event.pull_request.draft == false
@@ -114,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
@@ -183,7 +181,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -197,7 +195,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -354,7 +352,7 @@ jobs:
         run: |
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -387,7 +385,7 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: dtolnay/rust-toolchain@${{ env.rust_stable }}
   #     - uses: Swatinem/rust-cache@v2
   #       with:
   #         cache-all-crates: "true"
