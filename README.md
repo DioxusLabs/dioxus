@@ -1,6 +1,3 @@
-<p align="center">
-  <a href="https://dioxuslabs.com/blog/release-060/">✨ Dioxus 0.6 is released - check it out here! ✨</a>
-</p>
 <p>
     <p align="center" >
       <img src="./notes/header-light-updated.svg#gh-light-mode-only" >
@@ -62,6 +59,9 @@
   </h3>
 </div>
 <br>
+<p align="center">
+  <a href="https://dioxuslabs.com/blog/release-060/">✨ Dioxus 0.6 is released - check it out here! ✨</a>
+</p>
 <br>
 
 Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hotreloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
