@@ -7,7 +7,7 @@
       </a> -->
       <img src="./notes/splash-header-darkmode.svg#gh-dark-mode-only" >
       <img src="./notes/splash-header.svg#gh-light-mode-only" >
-      <img src="./notes/image-splash.avif">
+      <img src="./notes/image-splash.avif" style="width: 80%; height: auto;">
       <br>
     </p>
 </p>
