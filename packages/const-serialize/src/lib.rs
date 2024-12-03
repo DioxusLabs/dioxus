@@ -217,7 +217,7 @@ impl_serialize_const_tuple!(T1: 0, T2: 1, T3: 2, T4: 3, T5: 4, T6: 5, T7: 6, T8:
 const MAX_STR_SIZE: usize = 256;
 
 /// A string that is stored in a constant sized buffer that can be serialized and deserialized at compile time
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy, Hash)]
+#[derive(PartialEq, PartialOrd, Clone, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstStr {
     #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
@@ -452,6 +452,12 @@ impl ConstStr {
             index += 1
         }
         None
+    }
+}
+
+impl std::fmt::Debug for ConstStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.as_str())
     }
 }
 

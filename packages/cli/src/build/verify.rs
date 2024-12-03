@@ -50,13 +50,15 @@ impl BuildRequest {
                 .await?;
         }
 
+        let our_wasm_bindgen_version = wasm_bindgen_shared::version();
         match self.krate.wasm_bindgen_version() {
-            Some(version) if version == wasm_bindgen_shared::SCHEMA_VERSION  => {
+            Some(version) if version == our_wasm_bindgen_version => {
                 tracing::debug!("wasm-bindgen version {version} is compatible with dioxus-cli ✅");
             },
             Some(version) => {
                 tracing::warn!(
-                    "wasm-bindgen version {version} is not compatible with the cli crate. Attempting to upgrade the target wasm-bindgen crate manually..."
+                    "wasm-bindgen version {version} is not compatible with the cli crate ({}). Attempting to upgrade the target wasm-bindgen crate manually...",
+                    our_wasm_bindgen_version
                 );
 
                 let output = Command::new("cargo")
@@ -65,7 +67,7 @@ impl BuildRequest {
                         "-p",
                         "wasm-bindgen",
                         "--precise",
-                        &wasm_bindgen_shared::version(),
+                        &our_wasm_bindgen_version,
                     ])
                     .stderr(Stdio::piped())
                     .stdout(Stdio::piped())

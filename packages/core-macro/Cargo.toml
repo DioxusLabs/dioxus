@@ -26,8 +26,5 @@ rustversion = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 trybuild = { workspace = true }
 
-[features]
-default = []
-
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
