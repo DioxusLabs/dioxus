@@ -13,20 +13,20 @@ mod image;
 mod js;
 mod json;
 
-pub(crate) use file::process_file_to;
+pub use file::process_file_to;
 
 /// A manifest of all assets collected from dependencies
 ///
 /// This will be filled in primarily by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
-pub(crate) struct AssetManifest {
+pub struct AssetManifest {
     /// Map of bundled asset name to the asset itself
-    pub(crate) assets: HashMap<PathBuf, BundledAsset>,
+    pub assets: HashMap<PathBuf, BundledAsset>,
 }
 
 impl AssetManifest {
     #[allow(dead_code)]
-    pub(crate) fn load_from_file(path: &Path) -> anyhow::Result<Self> {
+    pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {
         let src = std::fs::read_to_string(path)?;
 
         serde_json::from_str(&src)
@@ -34,7 +34,7 @@ impl AssetManifest {
     }
 
     /// Fill this manifest with a file object/rlib files, typically extracted from the linker intercepted
-    pub(crate) fn add_from_object_path(&mut self, path: &Path) -> anyhow::Result<()> {
+    pub fn add_from_object_path(&mut self, path: &Path) -> anyhow::Result<()> {
         let data = std::fs::read(path)?;
 
         match path.extension().and_then(|ext| ext.to_str()) {

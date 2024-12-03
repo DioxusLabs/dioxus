@@ -8,7 +8,7 @@ use super::{
 };
 
 /// Process a specific file asset with the given options reading from the source and writing to the output path
-pub(crate) fn process_file_to(
+pub fn process_file_to(
     options: &AssetOptions,
     source: &Path,
     output_path: &Path,
