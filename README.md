@@ -1,10 +1,12 @@
 <p>
     <p align="center" >
-      <img src="./notes/header-light-updated.svg#gh-light-mode-only" >
-      <img src="./notes/header-dark-updated.svg#gh-dark-mode-only" >
-      <a href="https://dioxuslabs.com">
+      <!-- <img src="./notes/header-light-updated.svg#gh-light-mode-only" >
+      <img src="./notes/header-dark-updated.svg#gh-dark-mode-only" > -->
+      <!-- <a href="https://dioxuslabs.com">
           <img src="./notes/flat-splash.avif">
-      </a>
+      </a> -->
+      <img src="./notes/splash-with-text-light.avif#gh-dark-mode-only" >
+      <img src="./notes/splash-with-text.avif#gh-light-mode-only" >
     </p>
 </p>
 <div align="center">
