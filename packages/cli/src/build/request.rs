@@ -43,7 +43,14 @@ impl BuildRequest {
     /// This will also run the fullstack build. Note that fullstack is handled separately within this
     /// code flow rather than outside of it.
     pub(crate) async fn build_all(self) -> Result<AppBundle> {
-        tracing::debug!("Running build command...");
+        tracing::debug!(
+            "Running build command... {}",
+            if self.build.force_sequential {
+                "(sequentially)"
+            } else {
+                ""
+            }
+        );
 
         let (app, server) = match self.build.force_sequential {
             true => self.build_sequential().await?,
@@ -657,8 +664,8 @@ impl BuildRequest {
             Platform::Server => platform_dir.clone(), // ends up *next* to the public folder
 
             // These might not actually need to be called `.app` but it does let us run these with `open`
-            Platform::MacOS => platform_dir.join(format!("{}.app", self.platform_exe_name())),
-            Platform::Ios => platform_dir.join(format!("{}.app", self.platform_exe_name())),
+            Platform::MacOS => platform_dir.join(format!("{}.app", self.krate.bundled_app_name())),
+            Platform::Ios => platform_dir.join(format!("{}.app", self.krate.bundled_app_name())),
 
             // in theory, these all could end up directly in the root dir
             Platform::Android => platform_dir.join("app"), // .apk (after bundling)
