@@ -6,7 +6,7 @@
       <img src="./notes/header-light-updated.svg#gh-light-mode-only" >
       <img src="./notes/header-dark-updated.svg#gh-dark-mode-only" >
       <a href="https://dioxuslabs.com">
-          <img src="./notes/dioxus_splash_8.avif">
+          <img src="./notes/flat-splash.avif">
       </a>
     </p>
 </p>
@@ -84,7 +84,7 @@ fn app() -> Element {
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
 - Type-safe Routing and server functions to leverage Rust's powerful compile-time guarantees
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
-- And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
+- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
 
 ## Instant hot-reloading
 
