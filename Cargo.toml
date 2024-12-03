@@ -6,6 +6,7 @@ members = [
     "packages/core",
     "packages/core-types",
     "packages/cli",
+    "packages/cli-opt",
     "packages/core-types",
     "packages/core-macro",
     "packages/config-macro",
@@ -60,6 +61,8 @@ members = [
     "packages/devtools-types",
     "packages/isrg",
     "packages/rsx-hotreload",
+    "packages/const-serialize",
+    "packages/const-serialize-macro",
     "packages/dx-wire-format",
 
     # Playwright tests
@@ -71,9 +74,8 @@ members = [
 
     # manganis
     "packages/manganis/manganis",
-    "packages/manganis/manganis-macro",
     "packages/manganis/manganis-core",
-
+    "packages/manganis/manganis-macro",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -99,48 +101,52 @@ members = [
 ]
 
 [workspace.package]
-version = "0.6.0-alpha.5"
+version = "0.6.0-rc.0"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
-dioxus = { path = "packages/dioxus", version = "0.6.0-alpha.5" }
-dioxus-lib = { path = "packages/dioxus-lib", version = "0.6.0-alpha.5" }
-dioxus-core = { path = "packages/core", version = "0.6.0-alpha.5" }
-dioxus-core-types = { path = "packages/core-types", version = "0.6.0-alpha.5" }
-dioxus-core-macro = { path = "packages/core-macro", version = "0.6.0-alpha.5" }
-dioxus-config-macro = { path = "packages/config-macro", version = "0.6.0-alpha.5" }
-dioxus-router = { path = "packages/router", version = "0.6.0-alpha.5" }
-dioxus-router-macro = { path = "packages/router-macro", version = "0.6.0-alpha.5" }
-dioxus-document = { path = "packages/document", version = "0.6.0-alpha.5", default-features = false }
-dioxus-history = { path = "packages/history", version = "0.6.0-alpha.5", default-features = false }
-dioxus-html = { path = "packages/html", version = "0.6.0-alpha.5", default-features = false }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.6.0-alpha.5" }
-dioxus-hooks = { path = "packages/hooks", version = "0.6.0-alpha.5" }
-dioxus-web = { path = "packages/web", version = "0.6.0-alpha.5", default-features = false }
-dioxus-isrg = { path = "packages/isrg", version = "0.6.0-alpha.5" }
-dioxus-ssr = { path = "packages/ssr", version = "0.6.0-alpha.5", default-features = false }
-dioxus-desktop = { path = "packages/desktop", version = "0.6.0-alpha.5", default-features = false }
-dioxus-mobile = { path = "packages/mobile", version = "0.6.0-alpha.5" }
-dioxus-interpreter-js = { path = "packages/interpreter", version = "0.6.0-alpha.5" }
-dioxus-liveview = { path = "packages/liveview", version = "0.6.0-alpha.5" }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.6.0-alpha.5" }
-dioxus-check = { path = "packages/check", version = "0.6.0-alpha.5" }
-dioxus-rsx = { path = "packages/rsx", version = "0.6.0-alpha.5" }
-dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.6.0-alpha.5" }
-dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-alpha.5" }
-dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.5" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.5" }
-generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.5" }
-dioxus-devtools = { path = "packages/devtools", version = "0.6.0-alpha.5" }
-dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-alpha.5" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.5" }
-dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.5", default-features = false }
-dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-alpha.5" }
+dioxus = { path = "packages/dioxus", version = "0.6.0-rc.0" }
+dioxus-lib = { path = "packages/dioxus-lib", version = "0.6.0-rc.0" }
+dioxus-core = { path = "packages/core", version = "0.6.0-rc.0" }
+dioxus-core-types = { path = "packages/core-types", version = "0.6.0-rc.0" }
+dioxus-core-macro = { path = "packages/core-macro", version = "0.6.0-rc.0" }
+dioxus-config-macro = { path = "packages/config-macro", version = "0.6.0-rc.0" }
+dioxus-router = { path = "packages/router", version = "0.6.0-rc.0" }
+dioxus-router-macro = { path = "packages/router-macro", version = "0.6.0-rc.0" }
+dioxus-document = { path = "packages/document", version = "0.6.0-rc.0", default-features = false }
+dioxus-history = { path = "packages/history", version = "0.6.0-rc.0", default-features = false }
+dioxus-html = { path = "packages/html", version = "0.6.0-rc.0", default-features = false }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.6.0-rc.0" }
+dioxus-hooks = { path = "packages/hooks", version = "0.6.0-rc.0" }
+dioxus-web = { path = "packages/web", version = "0.6.0-rc.0", default-features = false }
+dioxus-isrg = { path = "packages/isrg", version = "0.6.0-rc.0" }
+dioxus-ssr = { path = "packages/ssr", version = "0.6.0-rc.0", default-features = false }
+dioxus-desktop = { path = "packages/desktop", version = "0.6.0-rc.0", default-features = false }
+dioxus-mobile = { path = "packages/mobile", version = "0.6.0-rc.0" }
+dioxus-interpreter-js = { path = "packages/interpreter", version = "0.6.0-rc.0" }
+dioxus-liveview = { path = "packages/liveview", version = "0.6.0-rc.0" }
+dioxus-autofmt = { path = "packages/autofmt", version = "0.6.0-rc.0" }
+dioxus-check = { path = "packages/check", version = "0.6.0-rc.0" }
+dioxus-rsx = { path = "packages/rsx", version = "0.6.0-rc.0" }
+dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.6.0-rc.0" }
+dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.6.0-rc.0" }
+dioxus-signals = { path = "packages/signals", version = "0.6.0-rc.0" }
+dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-rc.0" }
+dioxus-cli-opt = { path = "packages/cli-opt", version = "0.6.0-rc.0" }
+dioxus-devtools = { path = "packages/devtools", version = "0.6.0-rc.0" }
+dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-rc.0" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-rc.0" }
+dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-rc.0", default-features = false }
+dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-rc.0" }
 
-lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.5" }
-manganis = { path = "packages/manganis/manganis", version = "0.6.0-alpha.5" }
-manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-alpha.5" }
-manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.0-alpha.5" }
+const-serialize = { path = "packages/const-serialize", version = "0.6.0-rc.0" }
+const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-rc.0" }
+generational-box = { path = "packages/generational-box", version = "0.6.0-rc.0" }
+lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-rc.0" }
+
+manganis = { path = "packages/manganis/manganis", version = "0.6.0-rc.0" }
+manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.0-rc.0" }
+manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.0-rc.0" }
 
 warnings = { version = "0.2.1" }
 
@@ -234,6 +240,10 @@ objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 tray-icon = "0.19"
 
+# disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
+[profile.dev]
+debug = 0
+
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
 [profile.release]
@@ -265,13 +275,15 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.79.0"
 publish = false
-version = "0.6.0-alpha.5"
+version = "0.6.0-rc.0"
 
 [dependencies]
 reqwest = { workspace = true, features = ["json"], optional = true }
 ciborium = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5", optional = true }
+wgpu = { version = "0.19", optional = true }
+ouroboros = { version = "*", optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
@@ -313,6 +325,7 @@ server = ["dioxus/server"]
 mobile = ["dioxus/mobile"]
 web = ["dioxus/web"]
 http = ["dep:reqwest", "dep:http-range"]
+gpu = ["dep:ouroboros", "dep:wgpu"]
 
 [[example]]
 name = "login_form"
@@ -432,6 +445,10 @@ name = "streams"
 doc-scrape-examples = true
 
 [[example]]
+name = "visible"
+doc-scrape-examples = true
+
+[[example]]
 name = "window_event"
 required-features = ["desktop"]
 doc-scrape-examples = true
@@ -445,6 +462,10 @@ doc-scrape-examples = true
 name = "window_zoom"
 required-features = ["desktop"]
 doc-scrape-examples = true
+
+[[example]]
+name = "wgpu"
+required-features = ["desktop", "gpu"]
 
 [[example]]
 name = "control_focus"

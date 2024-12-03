@@ -1,5 +1,4 @@
 use scroll::ScrollPosition;
-use std::path::PathBuf;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::{prelude::Closure, JsValue};
 use web_sys::{window, Window};
@@ -7,9 +6,8 @@ use web_sys::{Event, History, ScrollRestoration};
 
 mod scroll;
 
-#[allow(dead_code)]
-fn base_path() -> Option<PathBuf> {
-    let base_path = dioxus_cli_config::base_path();
+fn base_path() -> Option<String> {
+    let base_path = dioxus_cli_config::web_base_path();
     tracing::trace!("Using base_path from the CLI: {:?}", base_path);
     base_path
 }
@@ -77,9 +75,10 @@ impl WebHistory {
 
         let prefix = prefix
             // If there isn't a base path, try to grab one from the CLI
-            .or_else(|| base_path().map(|s| s.display().to_string()))
+            .or_else(base_path)
             // Normalize the prefix to start and end with no slashes
-            .map(|prefix| prefix.trim_matches('/').to_string())
+            .as_ref()
+            .map(|prefix| prefix.trim_matches('/'))
             // If the prefix is empty, don't add it
             .filter(|prefix| !prefix.is_empty())
             // Otherwise, start with a slash

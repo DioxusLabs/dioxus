@@ -95,6 +95,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "transitionend" => true,
         "toggle" => true,
         "mounted" => false,
+        "visible" => false,
         _ => true,
     }
 }

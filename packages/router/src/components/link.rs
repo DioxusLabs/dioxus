@@ -163,6 +163,8 @@ pub fn Link(props: LinkProps) -> Element {
         NavigationTarget::Internal(url) => url.clone(),
         NavigationTarget::External(route) => route.clone(),
     };
+    // Add the history's prefix to the href for use in the rsx
+    let full_href = router.prefix().unwrap_or_default() + &href;
 
     let mut class_ = String::new();
     if let Some(c) = class {
@@ -240,7 +242,7 @@ pub fn Link(props: LinkProps) -> Element {
         a {
             onclick: action,
             "onclick": liveview_prevent_default,
-            href,
+            href: full_href,
             onmounted: onmounted,
             class,
             rel,

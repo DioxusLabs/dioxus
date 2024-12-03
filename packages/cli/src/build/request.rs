@@ -1,10 +1,10 @@
 use super::{progress::ProgressTx, BuildArtifacts};
 use crate::dioxus_crate::DioxusCrate;
-use crate::Result;
-use crate::{assets::AssetManifest, TraceSrc};
 use crate::{link::LinkAction, BuildArgs};
-use crate::{AppBundle, Platform};
+use crate::{AppBundle, Platform, Result, TraceSrc};
 use anyhow::Context;
+use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_opt::AssetManifest;
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -43,9 +43,19 @@ impl BuildRequest {
     /// This will also run the fullstack build. Note that fullstack is handled separately within this
     /// code flow rather than outside of it.
     pub(crate) async fn build_all(self) -> Result<AppBundle> {
-        tracing::debug!("Running build command...");
+        tracing::debug!(
+            "Running build command... {}",
+            if self.build.force_sequential {
+                "(sequentially)"
+            } else {
+                ""
+            }
+        );
 
-        let (app, server) = self.build_concurrent().await?;
+        let (app, server) = match self.build.force_sequential {
+            true => self.build_sequential().await?,
+            false => self.build_concurrent().await?,
+        };
 
         AppBundle::new(self, app, server).await
     }
@@ -55,6 +65,12 @@ impl BuildRequest {
         let (app, server) =
             futures_util::future::try_join(self.build_app(), self.build_server()).await?;
 
+        Ok((app, server))
+    }
+
+    async fn build_sequential(&self) -> Result<(BuildArtifacts, Option<BuildArtifacts>)> {
+        let app = self.build_app().await?;
+        let server = self.build_server().await?;
         Ok((app, server))
     }
 
@@ -540,6 +556,15 @@ impl BuildRequest {
             // env_vars.push(("PATH", extended_path));
         };
 
+        // If this is a release build, bake the base path and title
+        // into the binary with env vars
+        if self.build.release {
+            if let Some(base_path) = &self.krate.config.web.app.base_path {
+                env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
+            }
+            env_vars.push((APP_TITLE_ENV, self.krate.config.web.app.title.clone()));
+        }
+
         Ok(env_vars)
     }
 
@@ -558,7 +583,7 @@ impl BuildRequest {
         static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
 
         let success = INITIALIZED.get_or_init(|| {
-            _ = remove_dir_all(self.root_dir());
+            _ = remove_dir_all(self.exe_dir());
 
             create_dir_all(self.root_dir())?;
             create_dir_all(self.exe_dir())?;
@@ -639,8 +664,8 @@ impl BuildRequest {
             Platform::Server => platform_dir.clone(), // ends up *next* to the public folder
 
             // These might not actually need to be called `.app` but it does let us run these with `open`
-            Platform::MacOS => platform_dir.join(format!("{}.app", self.platform_exe_name())),
-            Platform::Ios => platform_dir.join(format!("{}.app", self.platform_exe_name())),
+            Platform::MacOS => platform_dir.join(format!("{}.app", self.krate.bundled_app_name())),
+            Platform::Ios => platform_dir.join(format!("{}.app", self.krate.bundled_app_name())),
 
             // in theory, these all could end up directly in the root dir
             Platform::Android => platform_dir.join("app"), // .apk (after bundling)

@@ -58,10 +58,6 @@ pub(crate) struct WasmOptConfig {
     /// Keep debug symbols in the wasm file
     #[serde(default = "false_bool")]
     pub(crate) debug: bool,
-
-    /// Enable reference types
-    #[serde(default = "false_bool")]
-    pub(crate) reference_types: bool,
 }
 
 /// The wasm-opt level to use for release web builds [default: 4]
@@ -101,9 +97,15 @@ pub(crate) struct WebAppConfig {
 impl WebAppConfig {
     /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
     pub(crate) fn base_path(&self) -> &str {
-        match &self.base_path {
-            Some(path) => path.trim_matches('/'),
-            None => ".",
+        let trimmed_path = self
+            .base_path
+            .as_deref()
+            .unwrap_or_default()
+            .trim_matches('/');
+        if trimmed_path.is_empty() {
+            "."
+        } else {
+            trimmed_path
         }
     }
 }

@@ -425,8 +425,8 @@ impl<Args, Ret> Clone for Callback<Args, Ret> {
 }
 
 impl<Args: 'static, Ret: 'static> PartialEq for Callback<Args, Ret> {
-    fn eq(&self, _: &Self) -> bool {
-        true
+    fn eq(&self, other: &Self) -> bool {
+        self.callback.ptr_eq(&other.callback) && self.origin == other.origin
     }
 }
 
@@ -469,6 +469,14 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
             Location::caller(),
         );
         Self { callback, origin }
+    }
+
+    /// Leak a new reference to the [`Callback`] that will not be dropped unless the callback is dropped manually
+    pub(crate) fn leak_reference(&self) -> generational_box::BorrowResult<Callback<Args, Ret>> {
+        Ok(Callback {
+            callback: self.callback.leak_reference()?,
+            origin: self.origin,
+        })
     }
 
     /// Call this callback with the appropriate argument type

@@ -69,7 +69,11 @@ impl AppHandle {
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
-            ("DIOXUS_CLI_ENABLED", "true".to_string()),
+            (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
+            (
+                dioxus_cli_config::APP_TITLE_ENV,
+                self.app.build.krate.config.web.app.title.clone(),
+            ),
             ("RUST_BACKTRACE", "1".to_string()),
             (
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
@@ -79,6 +83,10 @@ impl AppHandle {
             // since the child process will inherit the env vars, we don't want to confuse the downstream process
             ("CARGO_MANIFEST_DIR", "".to_string()),
         ];
+
+        if let Some(base_path) = &self.app.build.krate.config.web.app.base_path {
+            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
+        }
 
         if let Some(addr) = fullstack_address {
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
@@ -109,7 +117,7 @@ impl AppHandle {
             Platform::Web => {
                 // Only the first build we open the web app, after that the user knows it's running
                 if open_browser {
-                    self.open_web(envs, devserver_ip);
+                    self.open_web(devserver_ip);
                 }
 
                 None
@@ -181,8 +189,8 @@ impl AppHandle {
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
         if let Some(resource) = self.app.app.assets.assets.get(changed_file).as_ref() {
-            let res = std::fs::copy(changed_file, asset_dir.join(&resource.bundled));
-            bundled_name = Some(PathBuf::from(&resource.bundled));
+            let res = std::fs::copy(changed_file, asset_dir.join(resource.bundled_path()));
+            bundled_name = Some(PathBuf::from(resource.bundled_path()));
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
             }
@@ -212,7 +220,7 @@ impl AppHandle {
     /// Open the web app by opening the browser to the given address.
     /// Check if we need to use https or not, and if so, add the protocol.
     /// Go to the basepath if that's set too.
-    fn open_web(&self, _envs: Vec<(&str, String)>, address: SocketAddr) {
+    fn open_web(&self, address: SocketAddr) {
         let base_path = self.app.build.krate.config.web.app.base_path.clone();
         let https = self
             .app

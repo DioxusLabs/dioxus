@@ -296,7 +296,11 @@ impl WebviewInstance {
             target_os = "ios",
             target_os = "android"
         ))]
-        let mut webview = WebViewBuilder::new(&window);
+        let mut webview = if cfg.as_child_window {
+            WebViewBuilder::new_as_child(&window)
+        } else {
+            WebViewBuilder::new(&window)
+        };
 
         #[cfg(not(any(
             target_os = "windows",
@@ -319,6 +323,13 @@ impl WebviewInstance {
         }
 
         webview = webview
+            .with_bounds(wry::Rect {
+                position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
+                size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
+                    window.inner_size().width,
+                    window.inner_size().height,
+                )),
+            })
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
