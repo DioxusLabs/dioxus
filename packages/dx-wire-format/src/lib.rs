@@ -2,6 +2,8 @@ use cargo_metadata::CompilerMessage;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+pub use cargo_metadata;
+
 /// The structured output for the CLI
 ///
 /// This is designed such that third party tools can reliably consume the output of the CLI when
