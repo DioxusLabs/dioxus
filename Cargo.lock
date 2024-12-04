@@ -3521,7 +3521,7 @@ dependencies = [
  "unicode-segmentation",
  "uuid",
  "walkdir",
- "walrus 0.22.0",
+ "walrus",
  "wasm-bindgen-cli-support",
  "wasm-bindgen-shared",
  "wasm-opt",
@@ -3530,9 +3530,6 @@ dependencies = [
 [[package]]
 name = "dioxus-cli-config"
 version = "0.6.0-rc.0"
-dependencies = [
- "wasm-bindgen",
-]
 
 [[package]]
 name = "dioxus-cli-opt"
@@ -14804,23 +14801,6 @@ dependencies = [
 
 [[package]]
 name = "walrus"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d68aa3c7b80be75c8458fc087453e5a31a226cfffede2e9b932393b2ea1c624a"
-dependencies = [
- "anyhow",
- "gimli 0.26.2",
- "id-arena",
- "leb128",
- "log",
- "rayon",
- "walrus-macro",
- "wasm-encoder 0.212.0",
- "wasmparser 0.212.0",
-]
-
-[[package]]
-name = "walrus"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba3fbafa56a918167d111b23f6cd12c094bd85b3f41dc6ce390ed4c44b14bc1e"
@@ -14830,8 +14810,9 @@ dependencies = [
  "id-arena",
  "leb128",
  "log",
+ "rayon",
  "walrus-macro",
- "wasm-encoder 0.214.0",
+ "wasm-encoder",
  "wasmparser 0.214.0",
 ]
 
@@ -14936,7 +14917,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "unicode-ident",
- "walrus 0.23.1",
+ "walrus",
  "wasm-bindgen-externref-xform",
  "wasm-bindgen-multi-value-xform",
  "wasm-bindgen-shared",
@@ -14952,7 +14933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e18f2b3830afd01899e1f3252bd310c52eb4e76aae8ee406de26ade3ce80618c"
 dependencies = [
  "anyhow",
- "walrus 0.23.1",
+ "walrus",
  "wasm-bindgen-wasm-conventions",
 ]
 
@@ -14999,7 +14980,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "688e1343d8220793ed018c6d516ab782708e7550152f36f089adde39f69eef5a"
 dependencies = [
  "anyhow",
- "walrus 0.23.1",
+ "walrus",
  "wasm-bindgen-wasm-conventions",
 ]
 
@@ -15042,7 +15023,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa429167b4fe4155e91343b31dba3e8fbd07bcc70bf26d44fed1b241f446acef"
 dependencies = [
  "anyhow",
- "walrus 0.23.1",
+ "walrus",
  "wasm-bindgen-wasm-conventions",
 ]
 
@@ -15055,7 +15036,7 @@ dependencies = [
  "anyhow",
  "leb128",
  "log",
- "walrus 0.23.1",
+ "walrus",
  "wasmparser 0.212.0",
 ]
 
@@ -15067,17 +15048,8 @@ checksum = "170b4ec3be6a888c7fe3e221e18abc5981fc52e06215481e066a85fe25f0e6ad"
 dependencies = [
  "anyhow",
  "log",
- "walrus 0.23.1",
+ "walrus",
  "wasm-bindgen-wasm-conventions",
-]
-
-[[package]]
-name = "wasm-encoder"
-version = "0.212.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "501940df4418b8929eb6d52f1aade1fdd15a5b86c92453cb696e3c906bd3fc33"
-dependencies = [
- "leb128",
 ]
 
 [[package]]

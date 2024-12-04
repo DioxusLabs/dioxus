@@ -70,10 +70,10 @@ impl AppHandle {
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
             (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
-            (
-                dioxus_cli_config::APP_TITLE_ENV,
-                self.app.build.krate.config.web.app.title.clone(),
-            ),
+            // (
+            //     dioxus_cli_config::APP_TITLE_ENV,
+            //     self.app.build.krate.config.web.app.title.clone(),
+            // ),
             ("RUST_BACKTRACE", "1".to_string()),
             (
                 dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
@@ -81,12 +81,12 @@ impl AppHandle {
             ),
             // unset the cargo dirs in the event we're running `dx` locally
             // since the child process will inherit the env vars, we don't want to confuse the downstream process
-            ("CARGO_MANIFEST_DIR", "".to_string()),
+            // ("CARGO_MANIFEST_DIR", "".to_string()),
         ];
 
-        if let Some(base_path) = &self.app.build.krate.config.web.app.base_path {
-            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
-        }
+        // if let Some(base_path) = &self.app.build.krate.config.web.app.base_path {
+        //     envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
+        // }
 
         if let Some(addr) = fullstack_address {
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
