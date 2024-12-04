@@ -220,7 +220,7 @@ web-sys = { version = "0.3.56", default-features = false }
 dirs = "5.0.1"
 cargo-config2 = "0.1.26"
 criterion = { version = "0.5" }
-walrus = "0.22.0"
+walrus = "0.23.2"
 cargo_metadata = "0.18.1"
 
 # desktop
