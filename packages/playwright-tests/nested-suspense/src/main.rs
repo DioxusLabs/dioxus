@@ -12,7 +12,11 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
-    dioxus::launch(app);
+    LaunchBuilder::new()
+        .with_cfg(server_only! {
+            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+        })
+        .launch(app);
 }
 
 fn app() -> Element {
