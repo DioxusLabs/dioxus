@@ -32,6 +32,12 @@ rustversion = "1.0.17"
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
+quote = "1.0"
+proc-macro2 = "1.0"
+toml = "0.7"
+serde = {version="1.0", features=["derive"]}
+prettyplease = "0.2"
+syn = {version="2.0", features=["parsing"]}
 
 [dev-dependencies]
 serde_json = "1"
@@ -39,6 +45,7 @@ dioxus = { workspace = true }
 dioxus-web = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
+serde_derive = "1.0.215"
 
 [features]
 default = ["serialize", "mounted", "file_engine"]
