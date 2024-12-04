@@ -144,6 +144,16 @@ impl ServeConfigBuilder {
     }
 
     /// Set the streaming mode for the server. By default, streaming is disabled.
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn app() -> Element { todo!() }
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context(server_only! {
+    ///         dioxus::fullstack::ServeConfig::builder().streaming_mode(dioxus::fullstack::StreamingMode::OutOfOrder)
+    ///     })
+    ///     .launch(app);
+    /// ```
     pub fn streaming_mode(mut self, mode: StreamingMode) -> Self {
         self.streaming_mode = mode;
         self
@@ -152,6 +162,16 @@ impl ServeConfigBuilder {
     /// Enable out of order streaming. This will cause server futures to be resolved out of order and streamed to the client as they resolve.
     ///
     /// It is equivalent to calling `streaming_mode(StreamingMode::OutOfOrder)`
+    ///
+    /// /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn app() -> Element { todo!() }
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context(server_only! {
+    ///         dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+    ///     })
+    ///     .launch(app);
+    /// ```
     pub fn enable_out_of_order_streaming(mut self) -> Self {
         self.streaming_mode = StreamingMode::OutOfOrder;
         self
