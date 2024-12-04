@@ -56,6 +56,7 @@ use std::future::Future;
 /// }
 /// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
+#[track_caller]
 pub fn use_server_future<T, F>(
     mut future: impl FnMut() -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
@@ -78,6 +79,9 @@ where
             dioxus_web::take_server_data::<T>(),
         )))
     });
+
+    #[cfg(feature = "server")]
+    let caller = std::panic::Location::caller();
 
     let resource = use_resource(move || {
         #[cfg(feature = "server")]
@@ -116,7 +120,7 @@ where
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
             #[cfg(feature = "server")]
-            serialize_context.insert(server_storage_entry, &out);
+            serialize_context.insert(server_storage_entry, &out, caller);
 
             #[allow(clippy::let_and_return)]
             out

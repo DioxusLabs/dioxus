@@ -59,12 +59,13 @@ impl ServerDocument {
 
     /// Write the head element into the serialized context for hydration
     /// We write true if the head element was written to the DOM during server side rendering
+    #[track_caller]
     pub(crate) fn serialize_for_hydration(&self) {
         // We only serialize the head elements if the web document feature is enabled
         #[cfg(feature = "document")]
         {
             let serialize = crate::html_storage::serialize_context();
-            serialize.push(&!self.0.borrow().streaming);
+            serialize.push(&!self.0.borrow().streaming, std::panic::Location::caller());
         }
     }
 }

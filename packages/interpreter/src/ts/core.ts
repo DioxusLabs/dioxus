@@ -238,6 +238,18 @@ export class BaseInterpreter {
         NodeFilter.SHOW_COMMENT
       );
 
+      let nextSibling = under.nextSibling;
+      // Continue to the next node. Returns false if we should stop traversing because we've reached the end of the children
+      // of the root
+      let continueToNextNode = () => {
+        // stop traversing if there are no more nodes
+        if (!treeWalker.nextNode()) {
+          return false;
+        }
+        // stop traversing if we have reached the next sibling of the root node
+        return treeWalker.currentNode !== nextSibling;
+      };
+
       while (treeWalker.currentNode) {
         const currentNode = treeWalker.currentNode as ChildNode;
         if (currentNode.nodeType === Node.COMMENT_NODE) {
@@ -248,7 +260,7 @@ export class BaseInterpreter {
 
           if (placeholderSplit.length > 1) {
             this.nodes[ids[parseInt(placeholderSplit[1])]] = currentNode;
-            if (!treeWalker.nextNode()) {
+            if (!continueToNextNode()) {
               break;
             }
             continue;
@@ -281,7 +293,9 @@ export class BaseInterpreter {
             }
             treeWalker.currentNode = commentAfterText;
             this.nodes[ids[parseInt(textNodeSplit[1])]] = textNode;
-            let exit = !treeWalker.nextNode();
+            // Stop traversing if we started on a comment node (which has no children)
+            // or the next sibling stops the walk
+            let exit = currentNode === under || !continueToNextNode();
             // remove the comment node after the text node
             commentAfterText.remove();
             if (exit) {
@@ -290,7 +304,7 @@ export class BaseInterpreter {
             continue;
           }
         }
-        if (!treeWalker.nextNode()) {
+        if (!continueToNextNode()) {
           break;
         }
       }
