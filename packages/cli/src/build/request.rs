@@ -232,10 +232,10 @@ impl BuildRequest {
         }
 
         // Experimental feature for testing - if the env var is set, we'll use the deeplinker
-        if std::env::var("DEEPLINK").is_ok() {
-            tracing::debug!("Using deeplinker instead of incremental cache");
-            return self.deep_linker_asset_extract().await;
-        }
+        // if std::env::var("DEEPLINK").is_ok() {
+        // tracing::debug!("Using deeplinker instead of incremental cache");
+        // return self.deep_linker_asset_extract().await;
+        // }
 
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
         let mut manifest = AssetManifest::default();
@@ -558,12 +558,12 @@ impl BuildRequest {
 
         // If this is a release build, bake the base path and title
         // into the binary with env vars
-        if self.build.release {
-            if let Some(base_path) = &self.krate.config.web.app.base_path {
-                env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
-            }
-            env_vars.push((APP_TITLE_ENV, self.krate.config.web.app.title.clone()));
-        }
+        // if self.build.release {
+        //     if let Some(base_path) = &self.krate.config.web.app.base_path {
+        //         env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
+        //     }
+        //     env_vars.push((APP_TITLE_ENV, self.krate.config.web.app.title.clone()));
+        // }
 
         Ok(env_vars)
     }
