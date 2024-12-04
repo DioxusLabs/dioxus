@@ -17,6 +17,7 @@ pub struct ServeConfigBuilder {
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
     pub(crate) context_providers: ContextProviders,
+    pub(crate) streaming_mode: StreamingMode,
 }
 
 impl LaunchConfig for ServeConfigBuilder {}
@@ -30,6 +31,7 @@ impl ServeConfigBuilder {
             index_path: None,
             incremental: None,
             context_providers: Default::default(),
+            streaming_mode: StreamingMode::default(),
         }
     }
 
@@ -141,6 +143,40 @@ impl ServeConfigBuilder {
         self
     }
 
+    /// Set the streaming mode for the server. By default, streaming is disabled.
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn app() -> Element { todo!() }
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context(server_only! {
+    ///         dioxus::fullstack::ServeConfig::builder().streaming_mode(dioxus::fullstack::StreamingMode::OutOfOrder)
+    ///     })
+    ///     .launch(app);
+    /// ```
+    pub fn streaming_mode(mut self, mode: StreamingMode) -> Self {
+        self.streaming_mode = mode;
+        self
+    }
+
+    /// Enable out of order streaming. This will cause server futures to be resolved out of order and streamed to the client as they resolve.
+    ///
+    /// It is equivalent to calling `streaming_mode(StreamingMode::OutOfOrder)`
+    ///
+    /// /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn app() -> Element { todo!() }
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context(server_only! {
+    ///         dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+    ///     })
+    ///     .launch(app);
+    /// ```
+    pub fn enable_out_of_order_streaming(mut self) -> Self {
+        self.streaming_mode = StreamingMode::OutOfOrder;
+        self
+    }
+
     /// Build the ServeConfig. This may fail if the index.html file is not found.
     pub fn build(self) -> Result<ServeConfig, UnableToLoadIndex> {
         // The CLI always bundles static assets into the exe/public directory
@@ -164,6 +200,7 @@ impl ServeConfigBuilder {
             index,
             incremental: self.incremental,
             context_providers: self.context_providers,
+            streaming_mode: self.streaming_mode,
         })
     }
 }
@@ -262,6 +299,17 @@ pub(crate) struct IndexHtml {
     pub(crate) after_closing_body_tag: String,
 }
 
+/// The streaming mode to use while rendering the page
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum StreamingMode {
+    /// Streaming is disabled; all server futures should be resolved before hydrating the page on the client
+    #[default]
+    Disabled,
+    /// Out of order streaming is enabled; server futures are resolved out of order and streamed to the client
+    /// as they resolve
+    OutOfOrder,
+}
+
 /// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 /// See [`ServeConfigBuilder`] to create a ServeConfig
 #[derive(Clone)]
@@ -269,6 +317,7 @@ pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
     pub(crate) context_providers: ContextProviders,
+    pub(crate) streaming_mode: StreamingMode,
 }
 
 impl LaunchConfig for ServeConfig {}

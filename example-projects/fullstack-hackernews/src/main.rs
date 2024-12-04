@@ -17,7 +17,11 @@ fn main() {
     #[cfg(feature = "server")]
     tracing_subscriber::fmt::init();
 
-    dioxus::launch(|| rsx! { Router::<Route> {} });
+    LaunchBuilder::new()
+        .with_cfg(server_only! {
+            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+        })
+        .launch(|| rsx! { Router::<Route> {} });
 }
 
 #[derive(Clone, Routable)]
