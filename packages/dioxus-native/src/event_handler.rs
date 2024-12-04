@@ -136,6 +136,10 @@ impl HtmlEventConverter for NativeConverter {
     fn convert_resize_data(&self, _event: &PlatformEventData) -> dioxus::prelude::ResizeData {
         todo!()
     }
+
+    fn convert_visible_data(&self, _event: &PlatformEventData) -> dioxus::prelude::VisibleData {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
