@@ -69,13 +69,13 @@ impl HTMLDataCursor {
         #[allow(unused)] debug_locations: Option<Vec<String>>,
     ) -> Self {
         let mut myself = Self {
+            index: Cell::new(0),
             error: None,
             data,
-            #[allow(unused)]
+            #[cfg(debug_assertions)]
             debug_types,
-            #[allow(unused)]
+            #[cfg(debug_assertions)]
             debug_locations,
-            index: Cell::new(0),
         };
 
         // The first item is always an error if it exists
