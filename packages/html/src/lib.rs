@@ -16,7 +16,9 @@
 //!
 //! Currently, we don't validate for structures, but do validate attributes.
 
-pub mod elements;
+pub mod elements {
+    include!(concat!(env!("OUT_DIR"), "/elements.rs"));
+}
 #[cfg(feature = "hot-reload-context")]
 pub use elements::HtmlCtx;
 #[cfg(feature = "html-to-rsx")]

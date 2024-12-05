@@ -2042,7 +2042,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "time",
- "toml",
+ "toml 0.8.19",
  "walkdir",
 ]
 
@@ -2076,7 +2076,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88da5a13c620b4ca0078845707ea9c3faf11edbc3ffd8497d11d686211cd1ac0"
 dependencies = [
  "serde",
- "toml",
+ "toml 0.8.19",
 ]
 
 [[package]]
@@ -3553,7 +3553,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
- "toml",
+ "toml 0.8.19",
  "toml_edit 0.22.22",
  "tower 0.4.13",
  "tower-http",
@@ -3855,6 +3855,7 @@ name = "dioxus-html"
 version = "0.6.0-alpha.5"
 dependencies = [
  "async-trait",
+ "convert_case 0.6.0",
  "dioxus",
  "dioxus-core",
  "dioxus-core-macro",
@@ -3871,11 +3872,17 @@ dependencies = [
  "keyboard-types",
  "lazy-js-bundle",
  "manganis",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
  "rustversion",
  "serde",
+ "serde_derive",
  "serde_json",
  "serde_repr",
+ "syn 2.0.89",
  "tokio",
+ "toml 0.7.8",
  "tracing",
 ]
 
@@ -4797,7 +4804,7 @@ dependencies = [
  "atomic",
  "pear",
  "serde",
- "toml",
+ "toml 0.8.19",
  "uncased",
  "version_check",
 ]
@@ -13453,7 +13460,7 @@ dependencies = [
  "cfg-expr 0.15.8",
  "heck 0.5.0",
  "pkg-config",
- "toml",
+ "toml 0.8.19",
  "version-compare",
 ]
 
@@ -13637,7 +13644,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "thiserror 1.0.69",
- "toml",
+ "toml 0.8.19",
  "url",
  "urlpattern",
  "uuid",
@@ -13995,6 +14002,18 @@ dependencies = [
 
 [[package]]
 name = "toml"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd79e69d3b627db300ff956027cc6c3798cef26d22526befdfcd12feeb6d2257"
+dependencies = [
+ "serde",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_edit 0.19.15",
+]
+
+[[package]]
+name = "toml"
 version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1ed1f98e3fdc28d6d910e6737ae6ab1a93bf1985935a1193e68f93eeb68d24e"
@@ -14022,6 +14041,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
  "indexmap 2.6.0",
+ "serde",
+ "serde_spanned",
  "toml_datetime",
  "winnow 0.5.40",
 ]
@@ -14312,7 +14333,7 @@ dependencies = [
  "serde_json",
  "target-triple",
  "termcolor",
- "toml",
+ "toml 0.8.19",
 ]
 
 [[package]]
