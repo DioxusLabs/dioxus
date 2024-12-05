@@ -437,10 +437,6 @@ impl<'a> Writer<'a> {
             self.out.indent_level += 1;
 
             if !props_same_line {
-                // match attr {
-                //     AttrType::Attr(attr) => panic!("writing comment {:?}", attr),
-                //     AttrType::Spread(attr) => panic!("writing comment {:?}", attr.expr),
-                // };
                 self.write_attr_comments(
                     brace,
                     match attr {

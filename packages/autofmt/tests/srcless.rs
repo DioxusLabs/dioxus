@@ -23,7 +23,7 @@ fn works(parsed: CallBody, src: &str) {
     let src = src
         .trim()
         .trim_start_matches("parse_quote! {")
-        .trim_end_matches("}");
+        .trim_end_matches('}');
 
     // normalize line endings for windows tests to pass
     pretty_assertions::assert_eq!(
