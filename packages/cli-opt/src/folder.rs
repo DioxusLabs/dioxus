@@ -27,9 +27,9 @@ pub fn process_folder(
         if metadata.is_dir() {
             process_folder(options, &file, &output_path)
         } else {
-            match options.preserve_files() {
-                true => copy_file_to(&file, &output_path),
-                false => process_file_minimal(&file, &output_path),
+            match options.optimize_files() {
+                true => process_file_minimal(&file, &output_path),
+                false => copy_file_to(&file, &output_path),
             }
         }
     })?;
