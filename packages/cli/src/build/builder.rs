@@ -249,6 +249,13 @@ impl Builder {
                     return Ok(bundle);
                 }
                 BuildUpdate::BuildFailed { err } => {
+                    // Flush remaining compiler messages
+                    while let Ok(Some(msg)) = self.rx.try_next() {
+                        if let BuildUpdate::CompilerMessage { message } = msg {
+                            tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
+                        }
+                    }
+
                     tracing::error!(?err, json = ?StructuredOutput::Error { message: err.to_string() });
                     return Err(err);
                 }
