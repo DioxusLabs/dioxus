@@ -1,11 +1,15 @@
+use super::file::process_file_to;
+use crate::file::move_file_to;
+use manganis_core::FolderAssetOptions;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::path::Path;
 
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-
-use super::file::process_file_to;
-
 /// Process a folder, optimizing and copying all assets into the output folder
-pub fn process_folder(source: &Path, output_folder: &Path) -> anyhow::Result<()> {
+pub fn process_folder(
+    options: &FolderAssetOptions,
+    source: &Path,
+    output_folder: &Path,
+) -> anyhow::Result<()> {
     // Create the folder
     std::fs::create_dir_all(output_folder)?;
 
@@ -21,9 +25,12 @@ pub fn process_folder(source: &Path, output_folder: &Path) -> anyhow::Result<()>
         let metadata = file.metadata()?;
         let output_path = output_folder.join(file.strip_prefix(source)?);
         if metadata.is_dir() {
-            process_folder(&file, &output_path)
+            process_folder(options, &file, &output_path)
         } else {
-            process_file_minimal(&file, &output_path)
+            match options.preserve_files() {
+                true => move_file_to(&file, &output_path),
+                false => process_file_minimal(&file, &output_path),
+            }
         }
     })?;
 
