@@ -36,7 +36,7 @@ pub fn process_file_to(
             Some(_) | None => {
                 match source.is_dir() {
                     true => process_folder(&FolderAssetOptions::new(), source, output_path)?,
-                    false => move_file_to(source, output_path)?,
+                    false => copy_file_to(source, output_path)?,
                 };
             }
         },
@@ -60,8 +60,8 @@ pub fn process_file_to(
     Ok(())
 }
 
-/// Moves an asset to it's destination without any processing.
-pub fn move_file_to(source: &Path, output_path: &Path) -> anyhow::Result<()> {
+/// Copies an asset to it's destination without any processing.
+pub fn copy_file_to(source: &Path, output_path: &Path) -> anyhow::Result<()> {
     if check_output_path(output_path)? {
         return Ok(());
     }

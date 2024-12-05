@@ -1,5 +1,5 @@
 use super::file::process_file_to;
-use crate::file::move_file_to;
+use crate::file::copy_file_to;
 use manganis_core::FolderAssetOptions;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::path::Path;
@@ -28,7 +28,7 @@ pub fn process_folder(
             process_folder(options, &file, &output_path)
         } else {
             match options.preserve_files() {
-                true => move_file_to(&file, &output_path),
+                true => copy_file_to(&file, &output_path),
                 false => process_file_minimal(&file, &output_path),
             }
         }
