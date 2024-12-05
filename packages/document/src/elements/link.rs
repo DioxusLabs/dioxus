@@ -106,7 +106,7 @@ pub fn Link(props: LinkProps) -> Element {
     use_hook(|| {
         if let Some(href) = &props.href {
             if !should_insert_link(href) {
-                return;
+                // return;
             }
         }
         let document = document();
