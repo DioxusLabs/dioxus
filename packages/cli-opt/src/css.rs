@@ -75,7 +75,7 @@ pub(crate) fn process_scss(
 
 /// Logger for Grass that re-uses their StdLogger formatting but with tracing.
 #[derive(Debug)]
-pub struct ScssLogger {}
+struct ScssLogger {}
 
 impl grass::Logger for ScssLogger {
     fn debug(&self, location: SpanLoc, message: &str) {
