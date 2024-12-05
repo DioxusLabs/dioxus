@@ -295,23 +295,25 @@ fn Counters() -> Element {
 ```rust
 fn Counters() -> impl IntoView {
     let counters = RwSignal::new(vec![0; 10]);
-
+    
     view! {
-        <button on:click=move |_| counters.update(|n| n.push(n.len()))>"Add Counter"</button>
-        <For
-            each=move || 0..counters.with(Vec::len)
-            key=|idx| *idx
-            let:idx
-        >
-            <li>
-                <button on:click=move |_| counters.update(|n| n[idx] += 1)>
-                    {Memo::new(move |_| counters.with(|n| n[idx]))}
-                </button>
-                <button on:click=move |_| counters.update(|n| { n.remove(idx); })>
-                    "Remove"
-                </button>
-            </li>
-        </For>
+        <button on:click=move |_| counters.update(|c| c.push(c.len()))>"Add Counter"</button>
+        <ul>
+            {move || (0..(counters.read().len())).map(|idx| {
+                view! {
+                    <li>
+                        <button on:click=move |_| counters.write()[idx] += 1>
+                            {counters.read()[idx]}
+                        </button>
+                        <button on:click=move |_| {
+                            counters.write().remove(idx);
+                        }>
+                            "Remove"
+                        </button>
+                    </li>
+                }
+            }).collect_view()}
+        </ul>
     }
 }
 ```
