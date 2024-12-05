@@ -1,17 +1,29 @@
 use dioxus_rsx::CallBody;
-use proc_macro2::TokenStream as TokenStream2;
+use syn::parse_quote;
+
+macro_rules! test_case {
+    (
+        $path:literal
+    ) => {
+        works(include!($path), include_str!($path))
+    };
+}
 
 /// Ensure we can write RSX blocks without a source file
 ///
 /// Useful in code generation use cases where we still want formatted code.
 #[test]
 fn write_block_out() {
-    let src = include_str!("./srcless/basic_expr.rsx");
+    test_case!("./srcless/basic_expr.rsx");
+    test_case!("./srcless/asset.rsx");
+}
 
-    let tokens: TokenStream2 = syn::parse_str(src).unwrap();
-    let parsed: CallBody = syn::parse2(tokens).unwrap();
-
+fn works(parsed: CallBody, src: &str) {
     let block = dioxus_autofmt::write_block_out(&parsed).unwrap();
+    let src = src
+        .trim()
+        .trim_start_matches("parse_quote! {")
+        .trim_end_matches("}");
 
     // normalize line endings for windows tests to pass
     pretty_assertions::assert_eq!(

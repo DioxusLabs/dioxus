@@ -1,3 +1,4 @@
+parse_quote! {
     div {
         "hi"
         {children}
@@ -37,6 +38,23 @@
             let b = 40;
             let c = 50;
         },
+        src1: asset!("/123.png"),
+        src2: asset!("/456.png"),
+        src3: asset!("/789.png"),
+        src4: asset!("/101112.png", WithOptions),
         "hi"
     }
+    p {
+        img {
+            src: asset!("/example-book/assets1/logo.png", ImageAssetOptions::new().with_avif()),
+            alt: "some_local1",
+            title: "",
+        }
+        img {
+            src: asset!("/example-book/assets2/logo.png", ImageAssetOptions::new().with_avif()),
+            alt: "some_local2",
+            title: "",
+        }
+    }
     div { class: "asd", "Jon" }
+}
