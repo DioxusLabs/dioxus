@@ -18,6 +18,9 @@ struct Element {
     name: Option<String>,
     #[serde(default)]
     attributes: HashMap<String, AttributeDefinition>,
+    inherits: Option<String>,
+    #[serde(default)]
+    annotations: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,6 +30,8 @@ struct AttributeDefinition {
     name: Option<String>,
     #[serde(default)]
     volatile: bool,
+    #[serde(default)]
+    annotations: String,
 }
 
 
@@ -149,17 +154,28 @@ rsx! {{
             #(
                 #[doc = #comment_lines]
             )*
-            
-            pub const #rust_attr_name: super::AttributeDescription = (#attr_name, #attr_type, #volatile);
+
+            #[allow(non_upper_case_globals)]
+            // TODO: namespace
+            pub const #rust_attr_name: super::AttributeDescription = (#attr_name, None, #volatile);
         }
     });
 
     let tag_name = element_name.to_string();
 
+    let inherits = element.inherits.clone().map(|x: String| {
+        let rust_inherits_ident = safe_ident(&x);
+        quote!{
+            pub use crate::#rust_inherits_ident::*;
+        }
+    });
+
     quote! {
         pub mod #rust_name {
             pub const TAG_NAME: &'static str = #tag_name;
             pub const NAME_SPACE: Option<&'static str> = #namespace;
+
+            #inherits
 
             #(
                 #attr_consts

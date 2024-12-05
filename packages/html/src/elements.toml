@@ -1,7 +1,1101 @@
+[__html_element.attributes]
+prevent_default.namespace = "dioxus-prevent-default"
+prevent_default.annotations = """
+#[deprecated(note = "This attribute does nothing. For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead. For liveview, you can use `\"onclick\": (evt) => evt.prevent_default()` to prevent the default action for this element.")]
+/// This attribute has been deprecated in favor of [`dioxus_core::Event::prevent_default`]
+"""
+
+
+accesskey = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/accesskey>"}
+
+autocapitalize = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/autocapitalize>"}
+
+autofocus = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/autofocus>"}
+
+class.annotations = """
+/// The HTML class attribute is used to specify a class for an HTML element.
+///
+/// ## Details
+/// Multiple HTML elements can share the same class.
+///
+/// The class global attribute is a space-separated list of the case-sensitive classes of the element.
+/// Classes allow CSS and Javascript to select and access specific elements via the class selectors or
+/// functions like the DOM method document.getElementsByClassName.
+///
+/// ## Multiple Classes
+///
+/// If you include multiple classes in a single element dioxus will automatically join them with a space.
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// rsx! {
+///     div {
+///         class: "my-class",
+///         class: "my-other-class"
+///     }
+/// };
+/// ```
+///
+/// ## Optional Classes
+///
+/// You can include optional attributes with an unterminated if statement as the value of the attribute. This is very useful for conditionally applying css classes:
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// rsx! {
+///     div {
+///         class: if true {
+///             "my-class"
+///         },
+///         class: if false {
+///             "my-other-class"
+///         }
+///     }
+/// };
+/// ```
+///
+/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/class>
+"""
+
+contenteditable = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/contenteditable>"}
+data = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/data>"}
+dir = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/dir>"}
+draggable = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/draggable>"}
+enterkeyhint = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/enterkeyhint>"}
+exportparts = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/exportparts>"}
+hidden = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/hidden>"}
+id = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/id>"}
+inputmode = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/inputmode>"}
+is = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/is>"}
+itemid = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/itemid>"}
+
+itemprop = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/itemprop>"}
+
+itemref = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/itemref>"}
+
+itemscope = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/itemscope>"}
+
+itemtype = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/itemtype>"}
+
+lang = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/lang>"}
+
+nonce = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/nonce>"}
+
+part = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/part>"}
+
+popover = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/popover>"}
+
+role = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/role>"}
+
+slot = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/slot>"}
+
+spellcheck = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/spellcheck>"}
+
+style = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/style>"}
+
+tabindex = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/tabindex>"}
+
+title = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/title>"}
+
+translate = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/translate>"}
+
+
+dangerous_inner_html.annotations = """
+/// dangerous_inner_html is Dioxus's replacement for using innerHTML in the browser DOM. In general, setting
+/// HTML from code is risky because it’s easy to inadvertently expose your users to a cross-site scripting (XSS)
+/// attack. So, you can set HTML directly from Dioxus, but you have to type out dangerous_inner_html to remind
+/// yourself that it’s dangerous"}
+"""
+
+align_content = {name="align-content", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/align-content>"}
+align_items = {name="align-items", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/align-items>"}
+align_self = {name="align-self", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/align-self>"}
+alignment_adjust = {name="alignment-adjust", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/alignment-adjust>"}
+alignment_baseline = {name="alignment-baseline", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/alignment-baseline>"}
+all = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/all>"}
+alt = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/alt>"}
+animation = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation>"}
+animation_delay = {name="animation-delay", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-delay>"}
+animation_direction = {name="animation-direction", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-direction>"}
+animation_duration = {name="animation-duration", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-duration>"}
+animation_fill_mode = {name="animation-fill-mode", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-fill-mode>"}
+animation_iteration_count = {name="animation-iteration-count", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-iteration-count>"}
+animation_name = {name="animation-name", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-name>"}
+animation_play_state = {name="animation-play-state", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-play-state>"}
+animation_timing_function = {name="animation-timing-function", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timing-function>"}
+aspect_ratio = {name="aspect-ratio", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/aspect-ratio>"}
+azimuth = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/azimuth>"}
+backdrop_filter = {name="backdrop-filter", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter>"}
+backface_visibility = {name="backface-visibility", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/backface-visibility>"}
+background = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background>"}
+background_attachment = {name="background-attachment", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-attachment>"}
+background_clip = {name="background-clip", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-clip>"}
+background_color = {name="background-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-color>"}
+background_image = {name="background-image", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-image>"}
+background_origin = {name="background-origin", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-origin>"}
+background_position = {name="background-position", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-position>"}
+background_repeat = {name="background-repeat", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-repeat>"}
+background_size = {name="background-size", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-size>"}
+background_blend_mode = {name="background-blend-mode", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-blend-mode>"}
+baseline_shift = {name="baseline-shift", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/baseline-shift>"}
+bleed = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/bleed>"}
+bookmark_label = {name="bookmark-label", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/bookmark-label>"}
+bookmark_level = {name="bookmark-level", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/bookmark-level>"}
+bookmark_state = {name="bookmark-state", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/bookmark-state>"}
+border = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border>"}
+border_color = {name="border-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-color>"}
+border_style = {name="border-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-style>"}
+border_width = {name="border-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-width>"}
+border_bottom = {name="border-bottom", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom>"}
+border_bottom_color = {name="border-bottom-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-color>"}
+border_bottom_style = {name="border-bottom-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-style>"}
+border_bottom_width = {name="border-bottom-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-width>"}
+border_left = {name="border-left", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-left>"}
+border_left_color = {name="border-left-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-color>"}
+border_left_style = {name="border-left-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-style>"}
+border_left_width = {name="border-left-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-width>"}
+border_right = {name="border-right", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-right>"}
+border_right_color = {name="border-right-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-color>"}
+border_right_style = {name="border-right-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-style>"}
+border_right_width = {name="border-right-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-width>"}
+border_top = {name="border-top", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top>"}
+border_top_color = {name="border-top-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-color>"}
+border_top_style = {name="border-top-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-style>"}
+border_top_width = {name="border-top-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-width>"}
+border_collapse = {name="border-collapse", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-collapse>"}
+border_image = {name="border-image", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image>"}
+border_image_outset = {name="border-image-outset", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-outset>"}
+border_image_repeat = {name="border-image-repeat", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-repeat>"}
+border_image_slice = {name="border-image-slice", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-slice>"}
+border_image_source = {name="border-image-source", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-source>"}
+border_image_width = {name="border-image-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-width>"}
+border_radius = {name="border-radius", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-radius>"}
+border_bottom_left_radius = {name="border-bottom-left-radius", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-left-radius>"}
+border_bottom_right_radius = {name="border-bottom-right-radius", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-right-radius>"}
+border_top_left_radius = {name="border-top-left-radius", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-left-radius>"}
+border_top_right_radius = {name="border-top-right-radius", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-right-radius>"}
+border_spacing = {name="border-spacing", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-spacing>"}
+bottom = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/bottom>"}
+box_decoration_break = {name="box-decoration-break", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/box-decoration-break>"}
+box_shadow = {name="box-shadow", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/box-shadow>"}
+box_sizing = {name="box-sizing", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/box-sizing>"}
+box_snap = {name="box-snap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/box-snap>"}
+break_after = {name="break-after", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/break-after>"}
+break_before = {name="break-before", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/break-before>"}
+break_inside = {name="break-inside", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/break-inside>"}
+buffered_rendering = {name="buffered-rendering", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/buffered-rendering>"}
+caption_side = {name="caption-side", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/caption-side>"}
+clear = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/clear>"}
+clear_side = {name="clear-side", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/clear-side>"}
+clip = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/clip>"}
+clip_path = {name="clip-path", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/clip-path>"}
+clip_rule = {name="clip-rule", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/clip-rule>"}
+color = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/color>"}
+color_adjust = {name="color-adjust", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-adjust>"}
+color_correction = {name="color-correction", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-correction>"}
+color_interpolation = {name="color-interpolation", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-interpolation>"}
+color_interpolation_filters = {name="color-interpolation-filters", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-interpolation-filters>"}
+color_profile = {name="color-profile", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-profile>"}
+color_rendering = {name="color-rendering", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-rendering>"}
+column_fill = {name="column-fill", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-fill>"}
+column_gap = {name="column-gap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-gap>"}
+column_rule = {name="column-rule", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule>"}
+column_rule_color = {name="column-rule-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-color>"}
+column_rule_style = {name="column-rule-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-style>"}
+column_rule_width = {name="column-rule-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-width>"}
+column_span = {name="column-span", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-span>"}
+columns = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/columns>"}
+column_count = {name="column-count", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-count>"}
+column_width = {name="column-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-width>"}
+contain = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/contain>"}
+content = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/content>"}
+counter_increment = {name="counter-increment", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/counter-increment>"}
+counter_reset = {name="counter-reset", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/counter-reset>"}
+counter_set = {name="counter-set", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/counter-set>"}
+cue = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/cue>"}
+cue_after = {name="cue-after", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/cue-after>"}
+cue_before = {name="cue-before", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/cue-before>"}
+cursor = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/cursor>"}
+direction = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/direction>"}
+display = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/display>"}
+display_inside = {name="display-inside", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/display-inside>"}
+display_outside = {name="display-outside", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/display-outside>"}
+display_extras = {name="display-extras", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/display-extras>"}
+display_box = {name="display-box", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/display-box>"}
+dominant_baseline = {name="dominant-baseline", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/dominant-baseline>"}
+elevation = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/elevation>"}
+empty_cells = {name="empty-cells", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/empty-cells>"}
+enable_background = {name="enable-background", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/enable-background>"}
+fill = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/fill>"}
+fill_opacity = {name="fill-opacity", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/fill-opacity>"}
+fill_rule = {name="fill-rule", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/fill-rule>"}
+filter = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/filter>"}
+float = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/float>"}
+float_defer_column = {name="float-defer-column", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/float-defer-column>"}
+float_defer_page = {name="float-defer-page", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/float-defer-page>"}
+float_offset = {name="float-offset", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/float-offset>"}
+float_wrap = {name="float-wrap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/float-wrap>"}
+flow_into = {name="flow-into", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flow-into>"}
+flow_from = {name="flow-from", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flow-from>"}
+flex = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex>"}
+flex_basis = {name="flex-basis", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-basis>"}
+flex_grow = {name="flex-grow", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-grow>"}
+flex_shrink = {name="flex-shrink", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-shrink>"}
+flex_flow = {name="flex-flow", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-flow>"}
+flex_direction = {name="flex-direction", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-direction>"}
+flex_wrap = {name="flex-wrap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-wrap>"}
+flood_color = {name="flood-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flood-color>"}
+flood_opacity = {name="flood-opacity", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/flood-opacity>"}
+font = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font>"}
+font_family = {name="font-family", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-family>"}
+font_size = {name="font-size", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-size>"}
+font_stretch = {name="font-stretch", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-stretch>"}
+font_style = {name="font-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-style>"}
+font_weight = {name="font-weight", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight>"}
+font_feature_settings = {name="font-feature-settings", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-feature-settings>"}
+font_kerning = {name="font-kerning", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-kerning>"}
+font_language_override = {name="font-language-override", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-language-override>"}
+font_size_adjust = {name="font-size-adjust", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-size-adjust>"}
+font_synthesis = {name="font-synthesis", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-synthesis>"}
+font_variant = {name="font-variant", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant>"}
+font_variant_alternates = {name="font-variant-alternates", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-alternates>"}
+font_variant_caps = {name="font-variant-caps", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-caps>"}
+font_variant_east_asian = {name="font-variant-east-asian", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-east-asian>"}
+font_variant_ligatures = {name="font-variant-ligatures", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-ligatures>"}
+font_variant_numeric = {name="font-variant-numeric", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-numeric>"}
+font_variant_position = {name="font-variant-position", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-position>"}
+footnote_policy = {name="footnote-policy", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/footnote-policy>"}
+glyph_orientation_horizontal = {name="glyph-orientation-horizontal", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/glyph-orientation-horizontal>"}
+glyph_orientation_vertical = {name="glyph-orientation-vertical", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/glyph-orientation-vertical>"}
+grid = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid>"}
+grid_auto_flow = {name="grid-auto-flow", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-flow>"}
+grid_auto_columns = {name="grid-auto-columns", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-columns>"}
+grid_auto_rows = {name="grid-auto-rows", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-rows>"}
+grid_template = {name="grid-template", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template>"}
+grid_template_areas = {name="grid-template-areas", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-areas>"}
+grid_template_columns = {name="grid-template-columns", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-columns>"}
+grid_template_rows = {name="grid-template-rows", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-rows>"}
+grid_area = {name="grid-area", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-area>"}
+grid_column = {name="grid-column", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-column>"}
+grid_column_start = {name="grid-column-start", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-column-start>"}
+grid_column_end = {name="grid-column-end", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-column-end>"}
+grid_row = {name="grid-row", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row>"}
+grid_row_start = {name="grid-row-start", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-start>"}
+grid_row_end = {name="grid-row-end", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-end>"}
+hanging_punctuation = {name="hanging-punctuation", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/hanging-punctuation>"}
+height = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/height>"}
+hyphenate_character = {name="hyphenate-character", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-character>"}
+hyphenate_limit_chars = {name="hyphenate-limit-chars", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-chars>"}
+hyphenate_limit_last = {name="hyphenate-limit-last", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-last>"}
+hyphenate_limit_lines = {name="hyphenate-limit-lines", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-lines>"}
+hyphenate_limit_zone = {name="hyphenate-limit-zone", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-zone>"}
+hyphens = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens>"}
+icon = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/icon>"}
+image_orientation = {name="image-orientation", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/image-orientation>"}
+image_resolution = {name="image-resolution", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/image-resolution>"}
+image_rendering = {name="image-rendering", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/image-rendering>"}
+ime = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime>"}
+ime_align = {name="ime-align", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime-align>"}
+ime_mode = {name="ime-mode", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime-mode>"}
+ime_offset = {name="ime-offset", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime-offset>"}
+ime_width = {name="ime-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime-width>"}
+initial_letters = {name="initial-letters", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/initial-letters>"}
+inline_box_align = {name="inline-box-align", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/inline-box-align>"}
+isolation = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/isolation>"}
+justify_content = {name="justify-content", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/justify-content>"}
+justify_items = {name="justify-items", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/justify-items>"}
+justify_self = {name="justify-self", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/justify-self>"}
+kerning = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/kerning>"}
+left = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/left>"}
+letter_spacing = {name="letter-spacing", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/letter-spacing>"}
+lighting_color = {name="lighting-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/lighting-color>"}
+line_box_contain = {name="line-box-contain", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-box-contain>"}
+line_break = {name="line-break", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-break>"}
+line_grid = {name="line-grid", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-grid>"}
+line_height = {name="line-height", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-height>"}
+line_slack = {name="line-slack", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-slack>"}
+line_snap = {name="line-snap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-snap>"}
+list_style = {name="list-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style>"}
+list_style_image = {name="list-style-image", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-image>"}
+list_style_position = {name="list-style-position", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-position>"}
+list_style_type = {name="list-style-type", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-type>"}
+margin = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin>"}
+margin_bottom = {name="margin-bottom", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin-bottom>"}
+margin_left = {name="margin-left", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin-left>"}
+margin_right = {name="margin-right", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin-right>"}
+margin_top = {name="margin-top", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin-top>"}
+marker = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker>"}
+marker_end = {name="marker-end", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-end>"}
+marker_mid = {name="marker-mid", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-mid>"}
+marker_pattern = {name="marker-pattern", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-pattern>"}
+marker_segment = {name="marker-segment", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-segment>"}
+marker_start = {name="marker-start", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-start>"}
+marker_knockout_left = {name="marker-knockout-left", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-knockout-left>"}
+marker_knockout_right = {name="marker-knockout-right", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-knockout-right>"}
+marker_side = {name="marker-side", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-side>"}
+marks = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marks>"}
+marquee_direction = {name="marquee-direction", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marquee-direction>"}
+marquee_play_count = {name="marquee-play-count", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marquee-play-count>"}
+marquee_speed = {name="marquee-speed", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marquee-speed>"}
+marquee_style = {name="marquee-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/marquee-style>"}
+mask = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask>"}
+mask_image = {name="mask-image", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-image>"}
+mask_repeat = {name="mask-repeat", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-repeat>"}
+mask_position = {name="mask-position", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-position>"}
+mask_clip = {name="mask-clip", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-clip>"}
+mask_origin = {name="mask-origin", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-origin>"}
+mask_size = {name="mask-size", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-size>"}
+mask_box = {name="mask-box", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box>"}
+mask_box_outset = {name="mask-box-outset", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-outset>"}
+mask_box_repeat = {name="mask-box-repeat", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-repeat>"}
+mask_box_slice = {name="mask-box-slice", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-slice>"}
+mask_box_source = {name="mask-box-source", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-source>"}
+mask_box_width = {name="mask-box-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-width>"}
+mask_type = {name="mask-type", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-type>"}
+max_height = {name="max-height", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/max-height>"}
+max_lines = {name="max-lines", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/max-lines>"}
+max_width = {name="max-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/max-width>"}
+min_height = {name="min-height", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/min-height>"}
+min_width = {name="min-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/min-width>"}
+mix_blend_mode = {name="mix-blend-mode", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/mix-blend-mode>"}
+nav_down = {name="nav-down", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-down>"}
+nav_index = {name="nav-index", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-index>"}
+nav_left = {name="nav-left", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-left>"}
+nav_right = {name="nav-right", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-right>"}
+nav_up = {name="nav-up", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-up>"}
+object_fit = {name="object-fit", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit>"}
+object_position = {name="object-position", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/object-position>"}
+offset_after = {name="offset-after", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/offset-after>"}
+offset_before = {name="offset-before", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/offset-before>"}
+offset_end = {name="offset-end", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/offset-end>"}
+offset_start = {name="offset-start", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/offset-start>"}
+opacity = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/opacity>"}
+order = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/order>"}
+orphans = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/orphans>"}
+outline = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline>"}
+outline_color = {name="outline-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline-color>"}
+outline_style = {name="outline-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline-style>"}
+outline_width = {name="outline-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline-width>"}
+outline_offset = {name="outline-offset", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline-offset>"}
+overflow = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow>"}
+overflow_x = {name="overflow-x", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-x>"}
+overflow_y = {name="overflow-y", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-y>"}
+overflow_style = {name="overflow-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-style>"}
+overflow_wrap = {name="overflow-wrap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-wrap>"}
+padding = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding>"}
+padding_bottom = {name="padding-bottom", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding-bottom>"}
+padding_left = {name="padding-left", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding-left>"}
+padding_right = {name="padding-right", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding-right>"}
+padding_top = {name="padding-top", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding-top>"}
+page = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/page>"}
+page_break_after = {name="page-break-after", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-after>"}
+page_break_before = {name="page-break-before", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-before>"}
+page_break_inside = {name="page-break-inside", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-inside>"}
+paint_order = {name="paint-order", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/paint-order>"}
+pause = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/pause>"}
+pause_after = {name="pause-after", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/pause-after>"}
+pause_before = {name="pause-before", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/pause-before>"}
+perspective = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/perspective>"}
+perspective_origin = {name="perspective-origin", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/perspective-origin>"}
+pitch = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/pitch>"}
+pitch_range = {name="pitch-range", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/pitch-range>"}
+play_during = {name="play-during", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/play-during>"}
+pointer_events = {name="pointer-events", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/pointer-events>"}
+position = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/position>"}
+quotes = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/quotes>"}
+region_fragment = {name="region-fragment", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/region-fragment>"}
+resize = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/resize>"}
+rest = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/rest>"}
+rest_after = {name="rest-after", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/rest-after>"}
+rest_before = {name="rest-before", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/rest-before>"}
+richness = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/richness>"}
+right = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/right>"}
+ruby_align = {name="ruby-align", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/ruby-align>"}
+ruby_merge = {name="ruby-merge", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/ruby-merge>"}
+ruby_position = {name="ruby-position", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/ruby-position>"}
+scroll_behavior = {name="scroll-behavior", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-behavior>"}
+scroll_snap_coordinate = {name="scroll-snap-coordinate", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-coordinate>"}
+scroll_snap_destination = {name="scroll-snap-destination", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-destination>"}
+scroll_snap_points_x = {name="scroll-snap-points-x", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-points-x>"}
+scroll_snap_points_y = {name="scroll-snap-points-y", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-points-y>"}
+scroll_snap_type = {name="scroll-snap-type", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-type>"}
+shape_image_threshold = {name="shape-image-threshold", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-image-threshold>"}
+shape_inside = {name="shape-inside", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-inside>"}
+shape_margin = {name="shape-margin", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-margin>"}
+shape_outside = {name="shape-outside", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-outside>"}
+shape_padding = {name="shape-padding", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-padding>"}
+shape_rendering = {name="shape-rendering", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-rendering>"}
+size = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/size>"}
+speak = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak>"}
+speak_as = {name="speak-as", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak-as>"}
+speak_header = {name="speak-header", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak-header>"}
+speak_numeral = {name="speak-numeral", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak-numeral>"}
+speak_punctuation = {name="speak-punctuation", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak-punctuation>"}
+speech_rate = {name="speech-rate", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/speech-rate>"}
+stop_color = {name="stop-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stop-color>"}
+stop_opacity = {name="stop-opacity", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stop-opacity>"}
+stress = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stress>"}
+string_set = {name="string-set", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/string-set>"}
+stroke = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke>"}
+stroke_dasharray = {name="stroke-dasharray", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-dasharray>"}
+stroke_dashoffset = {name="stroke-dashoffset", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-dashoffset>"}
+stroke_linecap = {name="stroke-linecap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-linecap>"}
+stroke_linejoin = {name="stroke-linejoin", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-linejoin>"}
+stroke_miterlimit = {name="stroke-miterlimit", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-miterlimit>"}
+stroke_opacity = {name="stroke-opacity", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-opacity>"}
+stroke_width = {name="stroke-width", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-width>"}
+tab_size = {name="tab-size", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/tab-size>"}
+table_layout = {name="table-layout", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/table-layout>"}
+text_align = {name="text-align", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-align>"}
+text_align_all = {name="text-align-all", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-align-all>"}
+text_align_last = {name="text-align-last", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-align-last>"}
+text_anchor = {name="text-anchor", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-anchor>"}
+text_combine_upright = {name="text-combine-upright", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-combine-upright>"}
+text_decoration = {name="text-decoration", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration>"}
+text_decoration_color = {name="text-decoration-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-color>"}
+text_decoration_line = {name="text-decoration-line", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-line>"}
+text_decoration_style = {name="text-decoration-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-style>"}
+text_decoration_skip = {name="text-decoration-skip", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-skip>"}
+text_emphasis = {name="text-emphasis", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis>"}
+text_emphasis_color = {name="text-emphasis-color", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis-color>"}
+text_emphasis_style = {name="text-emphasis-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis-style>"}
+text_emphasis_position = {name="text-emphasis-position", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis-position>"}
+text_emphasis_skip = {name="text-emphasis-skip", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis-skip>"}
+text_height = {name="text-height", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-height>"}
+text_indent = {name="text-indent", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-indent>"}
+text_justify = {name="text-justify", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-justify>"}
+text_orientation = {name="text-orientation", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-orientation>"}
+text_overflow = {name="text-overflow", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-overflow>"}
+text_rendering = {name="text-rendering", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-rendering>"}
+text_shadow = {name="text-shadow", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-shadow>"}
+text_size_adjust = {name="text-size-adjust", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-size-adjust>"}
+text_space_collapse = {name="text-space-collapse", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-space-collapse>"}
+text_spacing = {name="text-spacing", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-spacing>"}
+text_transform = {name="text-transform", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-transform>"}
+text_underline_position = {name="text-underline-position", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-underline-position>"}
+text_wrap = {name="text-wrap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-wrap>"}
+top = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/top>"}
+touch_action = {name="touch-action", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action>"}
+transform = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transform>"}
+transform_box = {name="transform-box", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transform-box>"}
+transform_origin = {name="transform-origin", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transform-origin>"}
+transform_style = {name="transform-style", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transform-style>"}
+transition = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition>"}
+transition_delay = {name="transition-delay", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition-delay>"}
+transition_duration = {name="transition-duration", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition-duration>"}
+transition_property = {name="transition-property", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition-property>"}
+unicode_bidi = {name="unicode-bidi", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/unicode-bidi>"}
+vector_effect = {name="vector-effect", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/vector-effect>"}
+vertical_align = {name="vertical-align", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align>"}
+visibility = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/visibility>"}
+voice_balance = {name="voice-balance", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-balance>"}
+voice_duration = {name="voice-duration", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-duration>"}
+voice_family = {name="voice-family", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-family>"}
+voice_pitch = {name="voice-pitch", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-pitch>"}
+voice_range = {name="voice-range", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-range>"}
+voice_rate = {name="voice-rate", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-rate>"}
+voice_stress = {name="voice-stress", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-stress>"}
+voice_volume = {name="voice-volume", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-volume>"}
+volume = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/volume>"}
+white_space = {name="white-space", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/white-space>"}
+widows = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/widows>"}
+width = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/width>"}
+will_change = {name="will-change", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/will-change>"}
+word_break = {name="word-break", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/word-break>"}
+word_spacing = {name="word-spacing", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/word-spacing>"}
+word_wrap = {name="word-wrap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/word-wrap>"}
+wrap_flow = {name="wrap-flow", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/wrap-flow>"}
+wrap_through = {name="wrap-through", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/wrap-through>"}
+writing_mode = {name="writing-mode", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/writing-mode>"}
+gap = {namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/gap>"}
+list_styler_type = {name="list-style-type", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-type>"}
+row_gap = {name="row-gap", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/row-gap>"}
+transition_timing_function = {name="transition-timing-function", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition-timing-function>"}
+user_select = {name="user-select", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/user-select>"}
+webkit_user_select = {name="-webkit-user-select", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/-webkit-user-select>"}
+z_index = {name="z-index", namespace= "style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/CSS/z-index>"}
+
+# area attribute
+aria_current = {name = "aria-current", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-current>"}
+aria_details = {name = "aria-details", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-details>"}
+aria_disabled = {name = "aria-disabled", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-disabled>"}
+aria_hidden = {name = "aria-hidden", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-hidden>"}
+aria_invalid = {name = "aria-invalid", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-invalid>"}
+aria_keyshortcuts = {name = "aria-keyshortcuts", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-keyshortcuts>"}
+aria_label = {name = "aria-label", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-label>"}
+aria_roledescription = {name = "aria-roledescription", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-roledescription>"}
+
+# Widget Attributes
+aria_autocomplete = {name = "aria-autocomplete", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-autocomplete>"}
+aria_checked = {name = "aria-checked", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-checked>"}
+aria_expanded = {name = "aria-expanded", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-expanded>"}
+aria_haspopup = {name = "aria-haspopup", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-haspopup>"}
+aria_level = {name = "aria-level", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-level>"}
+aria_modal = {name = "aria-modal", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-modal>"}
+aria_multiline = {name = "aria-multiline", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-multiline>"}
+aria_multiselectable = {name = "aria-multiselectable", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-multiselectable>"}
+aria_orientation = {name = "aria-orientation", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-orientation>"}
+aria_placeholder = {name = "aria-placeholder", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-placeholder>"}
+aria_pressed = {name = "aria-pressed", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-pressed>"}
+aria_readonly = {name = "aria-readonly", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-readonly>"}
+aria_required = {name = "aria-required", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-required>"}
+aria_selected = {name = "aria-selected", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-selected>"}
+aria_sort = {name = "aria-sort", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-sort>"}
+aria_valuemax = {name = "aria-valuemax", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-valuemax>"}
+aria_valuemin = {name = "aria-valuemin", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-valuemin>"}
+aria_valuenow = {name = "aria-valuenow", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-valuenow>"}
+aria_valuetext = {name = "aria-valuetext", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-valuetext>"}
+
+# Live Region Attributes
+aria_atomic = {name = "aria-atomic", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-atomic>"}
+aria_busy = {name = "aria-busy", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-busy>"}
+aria_live = {name = "aria-live", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-live>"}
+aria_relevant = {name = "aria-relevant", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-relevant>"}
+aria_dropeffect = {name = "aria-dropeffect", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-dropeffect>"}
+aria_grabbed = {name = "aria-grabbed", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-grabbed>"}
+
+# Relationship Attributes
+aria_activedescendant = {name = "aria-activedescendant", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-activedescendant>"}
+aria_colcount = {name = "aria-colcount", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-colcount>"}
+aria_colindex = {name = "aria-colindex", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-colindex>"}
+aria_colspan = {name = "aria-colspan", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-colspan>"}
+aria_controls = {name = "aria-controls", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-controls>"}
+aria_describedby = {name = "aria-describedby", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-describedby>"}
+aria_errormessage = {name = "aria-errormessage", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-errormessage>"}
+aria_flowto = {name = "aria-flowto", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-flowto>"}
+aria_labelledby = {name = "aria-labelledby", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-labelledby>"}
+aria_owns = {name = "aria-owns", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-owns>"}
+aria_posinset = {name = "aria-posinset", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-posinset>"}
+aria_rowcount = {name = "aria-rowcount", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-rowcount>"}
+aria_rowindex = {name = "aria-rowindex", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-rowindex>"}
+aria_rowspan = {name = "aria-rowspan", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-rowspan>"}
+aria_setsize = {name = "aria-setsize", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-setsize>"}
+
+
+[__svg_element.attributes]
+prevent_default.name = "dioxus-prevent-default"
+prevent_default.annotations = """
+/// Prevent the default action for this element. This attribute is only recommended in the LiveView renderer
+/// which does not support the prevent default method on events.
+///
+///
+/// For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead.
+///
+///
+/// For more information, see the MDN docs:
+<https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
+"""
+
+dangerous_inner_html.annotations = """
+/// dangerous_inner_html is Dioxus's replacement for using innerHTML in the browser DOM. In general, setting
+/// HTML from code is risky because it’s easy to inadvertently expose your users to a cross-site scripting (XSS)
+/// attack. So, you can set HTML directly from Dioxus, but you have to type out dangerous_inner_html to remind
+yourself that it’s dangerous
+"""
+
+accent_height = {name = "accent-height", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/accent-height>"}
+
+accumulate = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/accumulate>"}
+
+additive = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/additive>"}
+
+alignment_baseline = {name = "alignment-baseline", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/alignment-baseline>"}
+
+alphabetic = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/alphabetic>"}
+
+amplitude = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/amplitude>"}
+
+arabic_form = {name = "arabic-form", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/arabic-form>"}
+
+ascent = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ascent>"}
+
+attribute_name = {name = "attributeName", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/attributeName>"}
+
+attribute_type = {name = "attributeType", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/attributeType>"}
+
+azimuth = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/azimuth>"}
+
+base_frequency = {name = "baseFrequency", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/baseFrequency>"}
+
+baseline_shift = {name = "baseline-shift", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/baseline-shift>"}
+
+base_profile = {name = "baseProfile", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/baseProfile>"}
+
+bbox = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/bbox>"}
+
+begin = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/begin>"}
+
+bias = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/bias>"}
+
+by = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/by>"}
+
+calc_mode = {name = "calcMode", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/calcMode>"}
+
+cap_height = {name = "cap-height", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/cap-height>"}
+
+class = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/class>"}
+
+clip = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/clip>"}
+
+clip_path_units = {name = "clipPathUnits", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/clipPathUnits>"}
+
+clip_path = {name = "clip-path", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/clip-path>"}
+
+clip_rule = {name = "clip-rule", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/clip-rule>"}
+
+color = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color>"}
+
+color_interpolation = {name = "color-interpolation", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color-interpolation>"}
+
+color_interpolation_filters = {name = "color-interpolation-filters", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color-interpolation-filters>"}
+
+color_profile = {name = "color-profile", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color-profile>"}
+
+color_rendering = {name = "color-rendering", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color-rendering>"}
+
+content_script_type = {name = "contentScriptType", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/contentScriptType>"}
+
+content_style_type = {name = "contentStyleType", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/contentStyleType>"}
+
+crossorigin = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/crossorigin>"}
+
+cursor = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/cursor>"}
+
+cx = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/cx>"}
+
+cy = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/cy>"}
+
+d = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d>"}
+
+decelerate = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/decelerate>"}
+
+descent = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/descent>"}
+
+diffuse_constant = {name = "diffuseConstant", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/diffuseConstant>"}
+
+direction = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/direction>"}
+
+display = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/display>"}
+
+divisor = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/divisor>"}
+
+dominant_baseline = {name = "dominant-baseline", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/dominant-baseline>"}
+
+dur = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/dur>"}
+
+dx = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/dx>"}
+
+dy = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/dy>"}
+
+edge_mode = {name = "edgeMode", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/edgeMode>"}
+
+elevation = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/elevation>"}
+
+enable_background = {name = "enable-background", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/enable-background>"}
+
+end = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/end>"}
+
+exponent = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/exponent>"}
+
+fill = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill>"}
+
+fill_opacity = {name = "fill-opacity", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill-opacity>"}
+
+fill_rule = {name = "fill-rule", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill-rule>"}
+
+filter = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/filter>"}
+
+filterRes = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/filterRes>"}
+
+filterUnits = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/filterUnits>"}
+
+flood_color = {name = "flood-color", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/flood-color>"}
+
+flood_opacity = {name = "flood-opacity", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/flood-opacity>"}
+
+font_family = {name = "font-family", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/font-family>"}
+
+font_size = {name = "font-size", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/font-size>"}
+
+font_size_adjust = {name = "font-size-adjust", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/font-size-adjust>"}
+
+font_stretch = {name = "font-stretch", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/font-stretch>"}
+
+font_style = {name = "font-style", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/font-style>"}
+
+font_variant = {name = "font-variant", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/font-variant>"}
+
+font_weight = {name = "font-weight", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/font-weight>"}
+
+format = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/format>"}
+
+from = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/from>"}
+
+fr = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fr>"}
+
+fx = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fx>"}
+
+fy = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fy>"}
+
+g1 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/g1>"}
+
+g2 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/g2>"}
+
+glyph_name = {name = "glyph-name", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/glyph-name>"}
+
+glyph_orientation_horizontal = {name = "glyph-orientation-horizontal", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/glyph-orientation-horizontal>"}
+
+glyph_orientation_vertical = {name = "glyph-orientation-vertical", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/glyph-orientation-vertical>"}
+
+glyph_ref = {name = "glyphRef", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/glyphRef>"}
+
+gradient_transform = {name = "gradientTransform", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/gradientTransform>"}
+
+gradient_units = {name = "gradientUnits", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/gradientUnits>"}
+
+hanging = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/hanging>"}
+
+height = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/height>"}
+
+href = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/href>"}
+
+hreflang = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/hreflang>"}
+
+horiz_adv_x = {name = "horiz-adv-x", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/horiz-adv-x>"}
+
+horiz_origin_x = {name = "horiz-origin-x", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/horiz-origin-x>"}
+
+id = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/id>"}
+
+ideographic = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ideographic>"}
+
+image_rendering = {name = "image-rendering", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/image-rendering>"}
+
+_in = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/_in>"}
+
+in2 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/in2>"}
+
+intercept = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/intercept>"}
+
+k = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k>"}
+
+k1 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k1>"}
+
+k2 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k2>"}
+
+k3 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k3>"}
+
+k4 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k4>"}
+
+kernel_matrix = {name = "kernelMatrix", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/kernelMatrix>"}
+
+kernel_unit_length = {name = "kernelUnitLength", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/kernelUnitLength>"}
+
+kerning = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/kerning>"}
+
+key_points = {name = "keyPoints", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/keyPoints>"}
+
+key_splines = {name = "keySplines", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/keySplines>"}
+
+key_times = {name = "keyTimes", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/keyTimes>"}
+
+lang = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/lang>"}
+
+length_adjust = {name = "lengthAdjust", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/lengthAdjust>"}
+
+letter_spacing = {name = "letter-spacing", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/letter-spacing>"}
+
+lighting_color = {name = "lighting-color", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/lighting-color>"}
+
+limiting_cone_angle = {name = "limitingConeAngle", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/limitingConeAngle>"}
+
+local = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/local>"}
+
+marker_end = {name = "marker-end", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/marker-end>"}
+
+marker_mid = {name = "marker-mid", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/marker-mid>"}
+
+marker_start = {name = "marker-start", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/marker-start>"}
+
+marker_height = {name = "markerHeight", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/markerHeight>"}
+
+marker_units = {name = "markerUnits", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/markerUnits>"}
+
+marker_width = {name = "markerWidth", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/markerWidth>"}
+
+mask = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/mask>"}
+
+mask_content_units = {name = "maskContentUnits", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/maskContentUnits>"}
+
+mask_units = {name = "maskUnits", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/maskUnits>"}
+
+mathematical = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/mathematical>"}
+
+max = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/max>"}
+
+media = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/media>"}
+
+method = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/method>"}
+
+min = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/min>"}
+
+mode = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/mode>"}
+
+name = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/name>"}
+
+num_octaves = {name = "numOctaves", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/numOctaves>"}
+
+offset = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/offset>"}
+
+opacity = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/opacity>"}
+
+operator = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/operator>"}
+
+order = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/order>"}
+
+orient = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/orient>"}
+
+orientation = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/orientation>"}
+
+origin = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/origin>"}
+
+overflow = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/overflow>"}
+
+overline_position = {name = "overline-position", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/overline-position>"}
+
+overline_thickness = {name = "overline-thickness", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/overline-thickness>"}
+
+
+panose_1 = {name= "panose-1", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/panose-1>"}
+
+paint_order = {name = "paint-order", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/paint-order>"}
+
+path = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/path>"}
+
+path_length = {name = "pathLength", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pathLength>"}
+
+pattern_content_units = {name = "patternContentUnits", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/patternContentUnits>"}
+
+pattern_transform = {name = "patternTransform", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/patternTransform>"}
+
+pattern_units = {name = "patternUnits", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/patternUnits>"}
+
+ping = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ping>"}
+
+pointer_events = {name = "pointer-events", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointer-events>"}
+
+points = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/points>"}
+
+points_at_x = {name = "pointsAtX", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointsAtX>"}
+
+points_at_y = {name = "pointsAtY", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointsAtY>"}
+
+points_at_z = {name = "pointsAtZ", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointsAtZ>"}
+
+preserve_alpha = {name = "preserveAlpha", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/preserveAlpha>"}
+
+preserve_aspect_ratio = {name = "preserveAspectRatio", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/preserveAspectRatio>"}
+
+primitive_units = {name = "primitiveUnits", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/primitiveUnits>"}
+
+r = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/r>"}
+
+radius = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/radius>"}
+
+referrer_policy = {name = "referrerPolicy", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/referrerPolicy>"}
+
+ref_x = {name = "refX", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/refX>"}
+
+ref_y = {name = "refY", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/refY>"}
+
+rel = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rel>"}
+
+rendering_intent = {name = "rendering-intent", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rendering-intent>"}
+
+repeat_count = {name = "repeatCount", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/repeatCount>"}
+
+repeat_dur = {name = "repeatDur", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/repeatDur>"}
+
+required_extensions = {name = "requiredExtensions", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/requiredExtensions>"}
+
+required_features = {name = "requiredFeatures", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/requiredFeatures>"}
+
+restart = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/restart>"}
+
+result = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/result>"}
+
+role = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/role>"}
+
+rotate = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rotate>"}
+
+rx = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rx>"}
+
+ry = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ry>"}
+
+scale = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/scale>"}
+
+seed = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/seed>"}
+
+shape_rendering = {name = "shape-rendering", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/shape-rendering>"}
+
+slope = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/slope>"}
+
+spacing = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/spacing>"}
+
+specular_constant = {name = "specularConstant", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/specularConstant>"}
+
+specular_exponent = {name = "specularExponent", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/specularExponent>"}
+
+speed = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/speed>"}
+
+spread_method = {name = "spreadMethod", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/spreadMethod>"}
+
+start_offset = {name = "startOffset", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/startOffset>"}
+
+std_deviation = {name = "stdDeviation", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stdDeviation>"}
+
+stemh = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stemh>"}
+
+stemv = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stemv>"}
+
+stitch_tiles = {name = "stitchTiles", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stitchTiles>"}
+
+stop_color = {name = "stop-color", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stop-color>"}
+
+stop_opacity = {name = "stop-opacity", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stop-opacity>"}
+
+strikethrough_position = {name = "strikethrough-position", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/strikethrough-position>"}
+
+strikethrough_thickness = {name = "strikethrough-thickness", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/strikethrough-thickness>"}
+
+string = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/string>"}
+
+stroke = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke>"}
+
+stroke_dasharray = {name = "stroke-dasharray", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-dasharray>"}
+
+stroke_dashoffset = {name = "stroke-dashoffset", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-dashoffset>"}
+
+stroke_linecap = {name = "stroke-linecap", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-linecap>"}
+
+stroke_linejoin = {name = "stroke-linejoin", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-linejoin>"}
+
+stroke_miterlimit = {name = "stroke-miterlimit", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-miterlimit>"}
+
+stroke_opacity = {name = "stroke-opacity", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-opacity>"}
+
+stroke_width = {name = "stroke-width", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-width>"}
+
+style = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/style>"}
+
+surface_scale = {name = "surfaceScale", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/surfaceScale>"}
+
+system_language = {name = "systemLanguage", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/systemLanguage>"}
+
+tabindex = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/tabindex>"}
+
+table_values = {name = "tableValues", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/tableValues>"}
+
+target = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/target>"}
+
+target_x = {name = "targetX", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/targetX>"}
+
+target_y = {name = "targetY", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/targetY>"}
+
+text_anchor = {name = "text-anchor", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/text-anchor>"}
+
+text_decoration = {name = "text-decoration", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/text-decoration>"}
+
+text_rendering = {name = "text-rendering", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/text-rendering>"}
+
+text_length = {name = "textLength", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/textLength>"}
+
+to = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/to>"}
+
+transform = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform>"}
+
+transform_origin = {name = "transform-origin", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform-origin>"}
+
+type = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/type>"}
+
+u1 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/u1>"}
+
+u2 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/u2>"}
+
+underline_position = {name = "underline-position", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/underline-position>"}
+
+underline_thickness = {name = "underline-thickness", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/underline-thickness>"}
+
+unicode = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/unicode>"}
+
+unicode_bidi = {name = "unicode-bidi", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/unicode-bidi>"}
+
+unicode_range = {name = "unicode-range", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/unicode-range>"}
+
+units_per_em = {name = "units-per-em", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/units-per-em>"}
+
+v_alphabetic = {name = "v-alphabetic", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/v-alphabetic>"}
+
+v_hanging = {name = "v-hanging", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/v-hanging>"}
+
+v_ideographic = {name = "v-ideographic", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/v-ideographic>"}
+
+v_mathematical = {name = "v-mathematical", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/v-mathematical>"}
+
+values = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/values>"}
+
+vector_effect = {name = "vector-effect", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/vector-effect>"}
+
+version = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/version>"}
+
+vert_adv_y = {name = "vert-adv-y", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/vert-adv-y>"}
+
+vert_origin_x = {name = "vert-origin-x", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/vert-origin-x>"}
+
+vert_origin_y = {name = "vert-origin-y", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/vert-origin-y>"}
+
+view_box = {name = "viewBox", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/viewBox>"}
+
+view_target = {name = "viewTarget", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/viewTarget>"}
+
+visibility = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/visibility>"}
+
+width = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/width>"}
+
+widths = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/widths>"}
+
+word_spacing = {name = "word-spacing", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/word-spacing>"}
+
+writing_mode = {name = "writing-mode", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/writing-mode>"}
+
+x = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/x>"}
+
+x_height = {name = "x-height", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/x-height>"}
+
+x1 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/x1>"}
+
+x2 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/x2>"}
+
+xmlns = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/xmlns>"}
+
+x_channel_selector = {name = "xChannelSelector", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/xChannelSelector>"}
+
+y = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/y>"}
+
+y1 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/y1>"}
+
+y2 = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/y2>"}
+
+y_channel_selector = {name = "yChannelSelector", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/yChannelSelector>"}
+z = {annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/z>"}
+zoom_and_pan = {name = "zoomAndPan", annotations = "/// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/zoomAndPan>"}
+
+
 # Build a
 # [`<base>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base)
 # element.
 [base]
+inherits = "__html_element"
 
 [base.attributes]
 href = {type = "Uri"}
@@ -12,11 +1106,13 @@ target = {type = "Target"}
 # [`<head>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/head)
 # element.
 [head]
+inherits = "__html_element"
 
 # Build a
 # [`<link>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/link)
 # element.
 [link]
+inherits = "__html_element"
 [link.attributes]
 crossorigin = {type="CrossOrigin"}
 as = {type="Mime"}
@@ -37,6 +1133,7 @@ blocking = {type="Blocking"}
 # [`<meta>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta)
 # element.
 [meta]
+inherits = "__html_element"
 [meta.attributes]
 charset = {type="String"} # FIXME IANA standard names
 content = {type="String"}
@@ -59,6 +1156,7 @@ title = {type="String"} # FIXME
 # [`<title>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title)
 # element.
 [title]
+inherits = "__html_element"
 
 # Sectioning root
 
@@ -66,6 +1164,7 @@ title = {type="String"} # FIXME
 # [`<body>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/body)
 # element.
 [body]
+inherits = "__html_element"
 
 # ------------------
 # Content sectioning
@@ -75,31 +1174,37 @@ title = {type="String"} # FIXME
 # [`<address>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/address)
 # element.
 [address]
+inherits = "__html_element"
 
 # Build a
 # [`<article>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/article)
 # element.
 [article]
+inherits = "__html_element"
 
 # Build a
 # [`<aside>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/aside)
 # element.
 [aside]
+inherits = "__html_element"
 
 # Build a
 # [`<footer>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/footer)
 # element.
 [footer]
+inherits = "__html_element"
 
 # Build a
 # [`<header>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/header)
 # element.
 [header]
+inherits = "__html_element"
 
 # Build a
 # [`<hgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hgroup)
 # element.
 [hgroup]
+inherits = "__html_element"
 
 # Build a
 # [`<h1>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h1)
@@ -156,16 +1261,19 @@ title = {type="String"} # FIXME
 # [`<main>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/main)
 # element.
 [main]
+inherits = "__html_element"
 
 # Build a
 # [`<nav>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/nav)
 # element.
 [nav]
+inherits = "__html_element"
 
 # Build a
 # [`<section>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/section)
 # element.
 [section]
+inherits = "__html_element"
 
 # Text content
 
@@ -173,6 +1281,7 @@ title = {type="String"} # FIXME
 # [`<blockquote>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/blockquote)
 # element.
 [blockquote]
+inherits = "__html_element"
 [blockquote.attributes]
 cite = {type="Uri"}
 
@@ -180,6 +1289,7 @@ cite = {type="Uri"}
 # [`<dd>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dd)
 # element.
 [dd]
+inherits = "__html_element"
 
 # Build a
 # [`<div>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div)
@@ -199,36 +1309,43 @@ cite = {type="Uri"}
 # - <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div>
 # - <https://www.w3schools.com/tags/tag_div.asp>
 [div]
+inherits = "__html_element"
 
 # Build a
 # [`<dl>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dl)
 # element.
 [dl]
+inherits = "__html_element"
 
 # Build a
 # [`<dt>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dt)
 # element.
 [dt]
+inherits = "__html_element"
 
 # Build a
 # [`<figcaption>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/figcaption)
 # element.
 [figcaption]
+inherits = "__html_element"
 
 # Build a
 # [`<figure>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/figure)
 # element.
 [figure]
+inherits = "__html_element"
 
 # Build a
 # [`<hr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hr)
 # element.
 [hr]
+inherits = "__html_element"
 
 # Build a
 # [`<li>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/li)
 # element.
 [li]
+inherits = "__html_element"
 [li.attributes]
 value = {type="isize"}
 
@@ -237,6 +1354,7 @@ value = {type="isize"}
 # [`<ol>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ol)
 # element.
 [ol]
+inherits = "__html_element"
 [ol.attributes]
 reversed = {type="Bool"}
 start = {type="isize"}
@@ -247,16 +1365,19 @@ type = {type="OrderedListType"}
 # [`<p>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/p)
 # element.
 [p]
+inherits = "__html_element"
 
 # Build a
 # [`<pre>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/pre)
 # element.
 [pre]
+inherits = "__html_element"
 
 # Build a
 # [`<ul>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ul)
 # element.
 [ul]
+inherits = "__html_element"
 
 
 # Inline text semantics
@@ -265,6 +1386,7 @@ type = {type="OrderedListType"}
 # [`<a>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a)
 # element.
 [a]
+inherits = "__html_element"
 [a.attributes]
 download = {type="String"}
 href = {type="Uri"}
@@ -281,36 +1403,43 @@ rel = {type="SpacedList"}
 # [`<abbr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/abbr)
 # element.
 [abbr]
+inherits = "__html_element"
 
 # Build a
 # [`<b>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/b)
 # element.
 [b]
+inherits = "__html_element"
 
 # Build a
 # [`<bdi>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdi)
 # element.
 [bdi]
+inherits = "__html_element"
 
 # Build a
 # [`<bdo>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdo)
 # element.
 [bdo]
+inherits = "__html_element"
 
 # Build a
 # [`<br>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/br)
 # element.
 [br]
+inherits = "__html_element"
 
 # Build a
 # [`<cite>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/cite)
 # element.
 [cite]
+inherits = "__html_element"
 
 # Build a
 # [`<code>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/code)
 # element.
 [code]
+inherits = "__html_element"
 [code.attributes]
 language = {type="String"}
 
@@ -319,6 +1448,7 @@ language = {type="String"}
 # [`<data>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/data)
 # element.
 [data]
+inherits = "__html_element"
 [data.attributes]
 value = {type="String"}
 
@@ -327,36 +1457,43 @@ value = {type="String"}
 # [`<dfn>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dfn)
 # element.
 [dfn]
+inherits = "__html_element"
 
 # Build a
 # [`<em>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/em)
 # element.
 [em]
+inherits = "__html_element"
 
 # Build a
 # [`<i>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/i)
 # element.
 [i]
+inherits = "__html_element"
 
 # Build a
 # [`<kbd>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/kbd)
 # element.
 [kbd]
+inherits = "__html_element"
 
 # Build a
 # [`<mark>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/mark)
 # element.
 [mark]
+inherits = "__html_element"
 
 # Build a
 # [`<menu>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/menu)
 # element.
 [menu]
+inherits = "__html_element"
 
 # Build a
 # [`<q>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/q)
 # element.
 [q]
+inherits = "__html_element"
 [q.attributes]
 cite = {type="Uri"}
 
@@ -366,58 +1503,69 @@ cite = {type="Uri"}
 # [`<rp>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rp)
 # element.
 [rp]
+inherits = "__html_element"
 
 
 # Build a
 # [`<rt>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/rt)
 # element.
 [rt]
+inherits = "__html_element"
 
 
 # Build a
 # [`<ruby>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ruby)
 # element.
 [ruby]
+inherits = "__html_element"
 
 # Build a
 # [`<s>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/s)
 # element.
 [s]
+inherits = "__html_element"
 
 # Build a
 # [`<samp>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/samp)
 # element.
 [samp]
+inherits = "__html_element"
 
 # Build a
 # [`<small>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/small)
 # element.
 [small]
+inherits = "__html_element"
 
 # Build a
 # [`<span>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/span)
 # element.
 [span]
+inherits = "__html_element"
 
 # Build a
 # [`<strong>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/strong)
 # element.
 [strong]
+inherits = "__html_element"
 
 # Build a
 # [`<sub>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/sub)
 # element.
 [sub]
+inherits = "__html_element"
 
 # Build a
 # [`<sup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/sup)
 # element.
 [sup]
+inherits = "__html_element"
 
 # Build a
 # [`<time>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time)
 # element.
 [time]
+inherits = "__html_element"
 [time.attributes]
 datetime = {type="Datetime"}
 
@@ -426,16 +1574,19 @@ datetime = {type="Datetime"}
 # [`<u>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/u)
 # element.
 [u]
+inherits = "__html_element"
 
 # Build a
 # [`<var>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/var)
 # element.
 [var]
+inherits = "__html_element"
 
 # Build a
 # [`<wbr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/wbr)
 # element.
 [wbr]
+inherits = "__html_element"
 
 
 # Image and multimedia
@@ -444,6 +1595,7 @@ datetime = {type="Datetime"}
 # [`<area>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/area)
 # element.
 [area]
+inherits = "__html_element"
 [area.attributes]
 alt = {type="String"}
 coords = {type="String"} # TODO could perhaps be validated
@@ -460,6 +1612,7 @@ target = {type="Target"}
 # [`<audio>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/audio)
 # element.
 [audio]
+inherits = "__html_element"
 [audio.attributes]
 autoplay = {type="Bool"}
 controls = {type="Bool"}
@@ -474,6 +1627,7 @@ loop = {type="Bool"}
 # [`<img>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img)
 # element.
 [img]
+inherits = "__html_element"
 [img.attributes]
 alt = {type="String"}
 crossorigin = {type="CrossOrigin"}
@@ -493,6 +1647,7 @@ referrerpolicy = {type="String"}
 # [`<map>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/map)
 # element.
 [map]
+inherits = "__html_element"
 [map.attributes]
 name = {type="Id"}
 
@@ -501,6 +1656,7 @@ name = {type="Id"}
 # [`<track>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/track)
 # element.
 [track]
+inherits = "__html_element"
 [track.attributes]
 default = {type="Bool"}
 kind = {type="VideoKind"}
@@ -513,6 +1669,7 @@ srclang = {type="LanguageTag"}
 # [`<video>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video)
 # element.
 [video]
+inherits = "__html_element"
 [video.attributes]
 autoplay = {type="Bool"}
 controls = {type="Bool"}
@@ -534,6 +1691,7 @@ width = {type="usize"}
 # [`<embed>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/embed)
 # element.
 [embed]
+inherits = "__html_element"
 [embed.attributes]
 height = {type="usize"}
 src = {type="Uri"}
@@ -545,6 +1703,7 @@ width = {type="usize"}
 # [`<iframe>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe)
 # element.
 [iframe]
+inherits = "__html_element"
 [iframe.attributes]
 allow = {type="FeaturePolicy"}
 allowfullscreen = {type="Bool"}
@@ -568,6 +1727,7 @@ frame_border = {type="String", name="frameBorder"}
 # [`<object>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/object)
 # element.
 [object]
+inherits = "__html_element"
 [object.attributes]
 data = {type="Uri"}
 form = {type="Id"}
@@ -583,6 +1743,7 @@ width = {type="usize"}
 # [`<param>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/param)
 # element.
 [param]
+inherits = "__html_element"
 [param.attributes]
 name = {type="String"}
 value = {type="String"}
@@ -592,11 +1753,13 @@ value = {type="String"}
 # [`<picture>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/picture)
 # element.
 [picture]
+inherits = "__html_element"
 
 # Build a
 # [`<source>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/source)
 # element.
 [source]
+inherits = "__html_element"
 [source.attributes]
 src = {type="Uri"}
 type = {type="Mime"}
@@ -609,6 +1772,7 @@ type = {type="Mime"}
 # [`<canvas>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/canvas)
 # element.
 [canvas]
+inherits = "__html_element"
 [canvas.attributes]
 height = {type="usize"}
 width = {type="usize"}
@@ -618,6 +1782,7 @@ width = {type="usize"}
 # [`<noscript>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noscript)
 # element.
 [noscript]
+inherits = "__html_element"
 
 # Build a
 # [`<script>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script)
@@ -627,6 +1792,7 @@ width = {type="usize"}
 # JavaScript code. The [`script`] element can also be used with other languages, such as WebGL's GLSL shader
 # programming language and JSON.
 [script]
+inherits = "__html_element"
 [script.attributes]
     # Normal script elements pass minimal information to the window.onerror for scripts which do not pass the
     # standard CORS checks. To allow error logging for sites which use a separate domain for static media, use
@@ -672,6 +1838,7 @@ script = {type="String"}
 # [`<del>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/del)
 # element.
 [del]
+inherits = "__html_element"
 [del.attributes]
 cite = {type="Uri"}
 datetime = {type="Datetime"}
@@ -681,6 +1848,7 @@ datetime = {type="Datetime"}
 # [`<ins>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ins)
 # element.
 [ins]
+inherits = "__html_element"
 [ins.attributes]
 cite = {type="Uri"}
 datetime = {type="Datetime"}
@@ -693,11 +1861,13 @@ datetime = {type="Datetime"}
 # [`<caption>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/caption)
 # element.
 [caption]
+inherits = "__html_element"
 
 # Build a
 # [`<col>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/col)
 # element.
 [col]
+inherits = "__html_element"
 [col.attributes]
 span = {type="usize"}
 
@@ -706,6 +1876,7 @@ span = {type="usize"}
 # [`<colgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/colgroup)
 # element.
 [colgroup]
+inherits = "__html_element"
 [colgroup.attributes]
 span = {type="usize"}
 
@@ -714,16 +1885,19 @@ span = {type="usize"}
 # [`<table>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/table)
 # element.
 [table]
+inherits = "__html_element"
 
 # Build a
 # [`<tbody>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tbody)
 # element.
 [tbody]
+inherits = "__html_element"
 
 # Build a
 # [`<td>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/td)
 # element.
 [td]
+inherits = "__html_element"
 [td.attributes]
 colspan = {type="usize"}
 rowspan = {type="usize"}
@@ -734,11 +1908,13 @@ rowspan = {type="usize"}
 # [`<tfoot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tfoot)
 # element.
 [tfoot]
+inherits = "__html_element"
 
 # Build a
 # [`<th>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/th)
 # element.
 [th]
+inherits = "__html_element"
 [th.attributes]
 abbr = {type="String"}
 colspan = {type="usize"}
@@ -751,11 +1927,13 @@ scope = {type="TableHeaderScope"}
 # [`<thead>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/thead)
 # element.
 [thead]
+inherits = "__html_element"
 
 # Build a
 # [`<tr>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/tr)
 # element.
 [tr]
+inherits = "__html_element"
 
 
 # Forms
@@ -764,6 +1942,7 @@ scope = {type="TableHeaderScope"}
 # [`<button>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/button)
 # element.
 [button]
+inherits = "__html_element"
 [button.attributes]
 autofocus = {type="Bool"}
 disabled = {type="Bool"}
@@ -784,11 +1963,13 @@ type = {type="String"}
 # [`<datalist>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/datalist)
 # element.
 [datalist]
+inherits = "__html_element"
 
 # Build a
 # [`<fieldset>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset)
 # element.
 [fieldset]
+inherits = "__html_element"
 [fieldset.attributes]
 disabled = {type="Bool"}
 form = {type="Id"}
@@ -799,6 +1980,7 @@ name = {type="Id"}
 # [`<form>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form)
 # element.
 [form]
+inherits = "__html_element"
 [form.attributes]
 # accept-charset: SpacedList<CharacterEncoding>,
 action = {type="Uri"}
@@ -814,6 +1996,7 @@ target = {type="Target"}
 # [`<input>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input)
 # element.
 [input]
+inherits = "__html_element"
 [input.attributes]
 accept = {type="String"}
 alt = {type="String"}
@@ -887,6 +2070,7 @@ initial_value = {type="String"}
 # [`<label>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/label)
 # element.
 [label]
+inherits = "__html_element"
 [label.attributes]
 form = {type="Id"}
 for = {type="Id"}
@@ -896,11 +2080,13 @@ for = {type="Id"}
 # [`<legend>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/legend)
 # element.
 [legend]
+inherits = "__html_element"
 
 # Build a
 # [`<meter>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meter)
 # element.
 [meter]
+inherits = "__html_element"
 [meter.attributes]
 value = {type="isize"}
 min = {type="isize"}
@@ -915,6 +2101,7 @@ form = {type="Id"}
 # [`<optgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/optgroup)
 # element.
 [optgroup]
+inherits = "__html_element"
 [optgroup.attributes]
 disabled = {type="Bool"}
 label = {type="String"}
@@ -924,6 +2111,7 @@ label = {type="String"}
 # [`<option>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/option)
 # element.
 [option]
+inherits = "__html_element"
 [option.attributes]
 disabled = {type="Bool"}
 label = {type="String"}
@@ -939,6 +2127,7 @@ initial_selected = {type="Bool"}
 # [`<output>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/output)
 # element.
 [output]
+inherits = "__html_element"
 [output.attributes]
 form = {type="Id"}
 name = {type="Id"}
@@ -949,6 +2138,7 @@ name = {type="Id"}
 # [`<progress>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress)
 # element.
 [progress]
+inherits = "__html_element"
 [progress.attributes]
 max = {type="f64"}
 value = {type="f64"}
@@ -958,6 +2148,7 @@ value = {type="f64"}
 # [`<select>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select)
 # element.
 [select]
+inherits = "__html_element"
 [select.attributes]
 autocomplete = {type="String"}
 autofocus = {type="Bool"}
@@ -974,6 +2165,7 @@ value = {type="String",volatile=true}
 # [`<textarea>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/textarea)
 # element.
 [textarea]
+inherits = "__html_element"
 [textarea.attributes]
 autocomplete = {type="OnOff"}
 autofocus = {type="Bool"}
@@ -1000,6 +2192,7 @@ initial_value = {type="String"}
 # [`<details>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/details)
 # element.
 [details]
+inherits = "__html_element"
 [details.attributes]
 open = {type="Bool"}
 
@@ -1008,6 +2201,7 @@ open = {type="Bool"}
 # [`<dialog>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
 # element.
 [dialog]
+inherits = "__html_element"
 [dialog.attributes]
 open = {type="Bool"}
 
@@ -1016,6 +2210,7 @@ open = {type="Bool"}
 # [`<summary>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/summary)
 # element.
 [summary]
+inherits = "__html_element"
 
 # Web components
 
@@ -1023,6 +2218,7 @@ open = {type="Bool"}
 # [`<slot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/slot)
 # element.
 [slot]
+inherits = "__html_element"
 [slot.attributes]
 name = {type="String"}
 
@@ -1031,13 +2227,15 @@ name = {type="String"}
 # [`<template>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)
 # element.
 [template]
+inherits = "__html_element"
 
 # SVG components
 # Build a
 # [`<svg>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg)
 # element.
 [svg]
-namespace = "http://www.w3.org/2000/svg" 
+namespace = "http://www.w3.org/2000/svg"
+inherits = "__svg_element"
 
 
 # Build a
@@ -1045,6 +2243,7 @@ namespace = "http://www.w3.org/2000/svg"
 # element.
 [svg_a]
 namespace = "http://www.w3.org/2000/svg"
+inherits = "__svg_element"
 
 
 # Build a
@@ -1052,312 +2251,364 @@ namespace = "http://www.w3.org/2000/svg"
 # element.
 [animate]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<animateMotion>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animateMotion)
 # element.
 [animateMotion]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<animateTransform>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/animateTransform)
 # element.
 [animateTransform]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<circle>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/circle)
 # element.
 [circle]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<clipPath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/clipPath)
 # element.
 [clipPath]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<defs>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/defs)
 # element.
 [defs]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<desc>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/desc)
 # element.
 [desc]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<discard>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/discard)
 # element.
 [discard]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<ellipse>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/ellipse)
 # element.
 [ellipse]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feBlend>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feBlend)
 # element.
 [feBlend]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feColorMatrix>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feColorMatrix)
 # element.
 [feColorMatrix]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feComponentTransfer>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feComponentTransfer)
 # element.
 [feComponentTransfer]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feComposite>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feComposite)
 # element.
 [feComposite]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feConvolveMatrix>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feConvolveMatrix)
 # element.
 [feConvolveMatrix]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feDiffuseLighting>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDiffuseLighting)
 # element.
 [feDiffuseLighting]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feDisplacementMap>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDisplacementMap)
 # element.
 [feDisplacementMap]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feDistantLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDistantLight)
 # element.
 [feDistantLight]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feDropShadow>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feDropShadow)
 # element.
 [feDropShadow]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feFlood>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFlood)
 # element.
 [feFlood]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feFuncA>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncA)
 # element.
 [feFuncA]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feFuncB>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncB)
 # element.
 [feFuncB]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feFuncG>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncG)
 # element.
 [feFuncG]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feFuncR>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncR)
 # element.
 [feFuncR]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feGaussianBlur>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feGaussianBlur)
 # element.
 [feGaussianBlur]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feImage>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feImage)
 # element.
 [feImage]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feMerge>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMerge)
 # element.
 [feMerge]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feMergeNode>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMergeNode)
 # element.
 [feMergeNode]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feMorphology>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feMorphology)
 # element.
 [feMorphology]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feOffset>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feOffset)
 # element.
 [feOffset]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<fePointLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/fePointLight)
 # element.
 [fePointLight]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feSpecularLighting>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feSpecularLighting)
 # element.
 [feSpecularLighting]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feSpotLight>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feSpotLight)
 # element.
 [feSpotLight]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feTile>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feTile)
 # element.
 [feTile]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<feTurbulence>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feTurbulence)
 # element.
 [feTurbulence]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<filter>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/filter)
 # element.
 [filter]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<foreignObject>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/foreignObject)
 # element.
 [foreignObject]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<g>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/g)
 # element.
 [g]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<hatch>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/hatch)
 # element.
 [hatch]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<hatchpath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/hatchpath)
 # element.
 [hatchpath]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<image>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/image)
 # element.
 [image]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<line>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/line)
 # element.
 [line]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<linearGradient>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/linearGradient)
 # element.
 [linearGradient]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<marker>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/marker)
 # element.
 [marker]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<mask>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/mask)
 # element.
 [mask]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<metadata>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/metadata)
 # element.
 [metadata]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<mpath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/mpath)
 # element.
 [mpath]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<path>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/path)
 # element.
 [path]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<pattern>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/pattern)
 # element.
 [pattern]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<polygon>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polygon)
 # element.
 [polygon]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<polyline>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/polyline)
 # element.
 [polyline]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<radialGradient>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/radialGradient)
 # element.
 [radialGradient]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<rect>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/rect)
 # element.
 [rect]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # # Build a
 # # [`<script>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/script)
@@ -1369,12 +2620,14 @@ namespace="http://www.w3.org/2000/svg"
 # element.
 [set]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<stop>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/stop)
 # element.
 [stop]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # # Build a
 # # [`<style>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/style)
@@ -1391,24 +2644,28 @@ namespace="http://www.w3.org/2000/svg"
 # element.
 [switch]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<symbol>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/symbol)
 # element.
 [symbol]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<text>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/text)
 # element.
 [text]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<textPath>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/textPath)
 # element.
 [textPath]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 ## # Build a
 ## # [`<title>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/title)
@@ -1420,18 +2677,21 @@ namespace="http://www.w3.org/2000/svg"
 # element.
 [tspan]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<view>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/view)
 # element.
 [view]
 namespace="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 
 # Build a
 # [`<use>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/use)
 # element.
 [use]
 namespace ="http://www.w3.org/2000/svg"
+inherits= "__svg_element"
 [use.attributes]
 href = {type="String"}
 
