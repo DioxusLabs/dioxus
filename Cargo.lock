@@ -3999,6 +3999,7 @@ name = "dioxus-logger"
 version = "0.6.0-rc.0"
 dependencies = [
  "console_error_panic_hook",
+ "dioxus-cli-config",
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",

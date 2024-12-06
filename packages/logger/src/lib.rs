@@ -96,11 +96,15 @@ pub fn init(level: Level) -> Result<(), SetGlobalDefaultError> {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    return {
-        let sub = tracing_subscriber::FmtSubscriber::builder()
-            .with_max_level(level)
-            .finish();
+    {
+        let sub = tracing_subscriber::FmtSubscriber::builder().with_max_level(level);
 
-        set_global_default(sub)
-    };
+        if !dioxus_cli_config::is_cli_enabled() {
+            return set_global_default(sub.finish());
+        }
+
+        // todo(jon): this is a small hack to clean up logging when running under the CLI
+        // eventually we want to emit everything as json and let the CLI manage the parsing + display
+        set_global_default(sub.without_time().with_target(false).finish())
+    }
 }
