@@ -1,14 +1,13 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 
 fn main() {
     dioxus::launch(app);
 }
 
-pub fn app() -> Element {
+fn app() -> Element {
     let grey_background = true;
-    rsx! (
+
+    rsx! {
         document::Link { rel: "stylesheet", href: asset!("/public/tailwind.css") }
         div {
             header {
@@ -66,11 +65,12 @@ pub fn app() -> Element {
                 }
             }
         }
-    )
+    }
 }
 
+#[component]
 pub fn StacksIcon() -> Element {
-    rsx!(
+    rsx! {
         svg {
             fill: "none",
             stroke: "currentColor",
@@ -81,11 +81,12 @@ pub fn StacksIcon() -> Element {
             view_box: "0 0 24 24",
             path { d: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" }
         }
-    )
+    }
 }
 
+#[component]
 pub fn RightArrowIcon() -> Element {
-    rsx!(
+    rsx! {
         svg {
             fill: "none",
             stroke: "currentColor",
@@ -96,5 +97,5 @@ pub fn RightArrowIcon() -> Element {
             view_box: "0 0 24 24",
             path { d: "M5 12h14M12 5l7 7-7 7" }
         }
-    )
+    }
 }

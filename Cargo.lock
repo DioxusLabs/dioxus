@@ -2414,16 +2414,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 
 [[package]]
-name = "colored"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf2150cce219b664a8a70df7a1f933836724b503f8a413af9365b4dcc4d90b8"
-dependencies = [
- "lazy_static",
- "windows-sys 0.48.0",
-]
-
-[[package]]
 name = "com"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4152,7 +4142,6 @@ dependencies = [
  "reqwest 0.12.9",
  "rustc-hash 1.1.0",
  "serde",
- "simple_logger",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5030,7 +5019,6 @@ dependencies = [
  "execute",
  "http 1.1.0",
  "serde",
- "simple_logger",
  "sqlx",
  "tokio",
  "tower 0.4.13",
@@ -5053,9 +5041,6 @@ dependencies = [
  "dioxus",
  "reqwest 0.12.9",
  "serde",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
 ]
 
 [[package]]
@@ -5065,10 +5050,6 @@ dependencies = [
  "dioxus",
  "reqwest 0.12.9",
  "serde",
- "simple_logger",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
 ]
 
 [[package]]
@@ -5090,11 +5071,7 @@ dependencies = [
  "futures-util",
  "once_cell",
  "serde",
- "simple_logger",
  "tokio",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
 ]
 
 [[package]]
@@ -11339,18 +11316,6 @@ dependencies = [
  "num-traits",
  "thiserror 1.0.69",
  "time",
-]
-
-[[package]]
-name = "simple_logger"
-version = "4.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e7e46c8c90251d47d08b28b8a419ffb4aede0f87c2eea95e17d1d5bacbf3ef1"
-dependencies = [
- "colored",
- "log",
- "time",
- "windows-sys 0.48.0",
 ]
 
 [[package]]

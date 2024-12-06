@@ -28,7 +28,6 @@ warnings = { workspace = true }
 dioxus = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing-subscriber = "0.3.17"
-simple_logger = "4.2.0"
 reqwest = { workspace = true }
 rand = { workspace = true }
 
