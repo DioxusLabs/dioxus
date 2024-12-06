@@ -211,6 +211,7 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
     file.write_all(new_readme.as_bytes())?;
 
     tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}", path.display());
+    tracing::info!(dx_src = ?TraceSrc::Dev, "`cd` to your project and run `dx serve` to start developing. Build cool things! ✌️");
 
     Ok(())
 }
