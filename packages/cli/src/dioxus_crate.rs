@@ -315,7 +315,7 @@ impl DioxusCrate {
             if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_WASM) {
                 let mut client = toml_edit::Table::new();
                 client.insert("inherits", Item::Value("dev".into()));
-                client.insert("opt-level", Item::Value(2.into()));
+                client.insert("opt-level", Item::Value(1.into()));
                 entry.insert(Item::Table(client));
             }
 
