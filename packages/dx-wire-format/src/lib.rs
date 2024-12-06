@@ -63,6 +63,7 @@ pub enum BuildStage {
         path: PathBuf,
     },
     Bundling,
+    RunningGradle,
     Success,
     Failed,
     Aborted,

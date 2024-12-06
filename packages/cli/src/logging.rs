@@ -95,6 +95,10 @@ impl TraceController {
                         return Ok(());
                     }
 
+                    if field.name() == "dx_src" && !args.verbosity.verbose {
+                        return Ok(());
+                    }
+
                     write!(writer, "{}", format_field(field.name(), value))
                 })
                 .delimited(" "),

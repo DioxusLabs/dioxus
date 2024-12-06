@@ -777,6 +777,8 @@ impl AppBundle {
     /// Run any final tools to produce apks or other artifacts we might need.
     async fn assemble(&self) -> Result<()> {
         if let Platform::Android = self.build.build.platform() {
+            self.build.status_running_gradle();
+
             // make sure we can execute the gradlew script
             #[cfg(unix)]
             {

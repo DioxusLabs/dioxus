@@ -488,6 +488,7 @@ impl Output {
             }
             BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
             BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
+            BuildStage::RunningGradle {} => lines.push("Running gradle assemble".yellow()),
             BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
             BuildStage::CopyingAssets {
                 current,
