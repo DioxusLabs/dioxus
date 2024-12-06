@@ -29,6 +29,12 @@ impl BuildRequest {
         });
     }
 
+    pub(crate) fn status_running_gradle(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::RunningGradle,
+        })
+    }
+
     pub(crate) fn status_build_diagnostic(&self, message: CompilerMessage) {
         _ = self
             .progress

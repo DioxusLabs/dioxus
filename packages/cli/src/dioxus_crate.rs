@@ -5,9 +5,9 @@ use anyhow::Context;
 use itertools::Itertools;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::{io::Write, path::Path};
 use toml_edit::Item;
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
@@ -20,9 +20,9 @@ pub(crate) struct DioxusCrate {
     pub(crate) settings: CliSettings,
 }
 
-pub(crate) static PROFILE_WASM: &str = "dioxus-wasm";
-pub(crate) static PROFILE_ANDROID: &str = "dioxus-android";
-pub(crate) static PROFILE_SERVER: &str = "dioxus-server";
+pub(crate) static PROFILE_WASM: &str = "wasm-dev";
+pub(crate) static PROFILE_ANDROID: &str = "android-dev";
+pub(crate) static PROFILE_SERVER: &str = "server-dev";
 
 impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
@@ -291,18 +291,19 @@ impl DioxusCrate {
         self.config.web.pre_compress && release
     }
 
-    // The `opt-level=2` increases build times, but can noticeably decrease time
+    // The `opt-level=1` increases build times, but can noticeably decrease time
     // between saving changes and being able to interact with an app (for wasm/web). The "overall"
     // time difference (between having and not having the optimization) can be
     // almost imperceptible (~1 s) but also can be very noticeable (~6 s) — depends
     // on setup (hardware, OS, browser, idle load).
     //
-    // Find or create the client and server profiles in the .cargo/config.toml file
+    // Find or create the client and server profiles in the top-level Cargo.toml file
+    // todo(jon): we should/could make these optional by placing some defaults somewhere
     pub(crate) fn initialize_profiles(&self) -> crate::Result<()> {
-        let config_path = self.workspace_dir().join(".cargo/config.toml");
+        let config_path = self.workspace_dir().join("Cargo.toml");
         let mut config = match std::fs::read_to_string(&config_path) {
             Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {
-                crate::Error::Other(anyhow::anyhow!("Failed to parse .cargo/config.toml: {}", e))
+                crate::Error::Other(anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))
             })?,
             Err(_) => Default::default(),
         };
@@ -322,7 +323,6 @@ impl DioxusCrate {
             if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_SERVER) {
                 let mut server = toml_edit::Table::new();
                 server.insert("inherits", Item::Value("dev".into()));
-                // server.insert("opt-level", Item::Value(2.into()));
                 entry.insert(Item::Table(server));
             }
 
@@ -333,13 +333,8 @@ impl DioxusCrate {
             }
         }
 
-        // Write the config back to the file
-        if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let file = std::fs::File::create(config_path)?;
-        let mut buf_writer = std::io::BufWriter::new(file);
-        write!(buf_writer, "{}", config)?;
+        std::fs::write(config_path, config.to_string())
+            .context("Failed to write profiles to Cargo.toml")?;
 
         Ok(())
     }
