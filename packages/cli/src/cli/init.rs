@@ -73,7 +73,7 @@ impl Init {
         };
         create::restore_cursor_on_sigint();
         let path = cargo_generate::generate(args)?;
-        create::post_create(&path)?;
+        _ = create::post_create(&path);
         Ok(StructuredOutput::Success)
     }
 }
