@@ -86,10 +86,10 @@ Se você conhece React, então você já conhece o Dioxus.
 <table style="width:100%" align="center">
     <tr>
         <th><a href="https://dioxuslabs.com/learn/0.6">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/reference/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/reference/desktop">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/reference/ssr">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/reference/mobile">Móvel</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6/guides/web">Web</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6/guides/desktop">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6/guides/ssr">SSR</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.6/guides/mobile">Móvel</a></th>
     <tr>
 </table>
 

@@ -91,7 +91,7 @@ fn app() -> Element {
 
 ## 用于 Web 和桌面部署的捆绑包
 
-只需运行 `dx bundle`，您的应用程序将被构建和捆绑，并进行最大化的优化。在 Web 上，利用 [`.avif` 生成，`.wasm` 压缩，代码缩小](https://dioxuslabs.com/learn/0.6/reference/assets)，等等。构建的 Web 应用程序大小 [不到 50kb](https://github.com/ealmloff/tiny-dioxus/)，桌面/移动应用程序小于 15mb。
+只需运行 `dx bundle`，您的应用程序将被构建和捆绑，并进行最大化的优化。在 Web 上，利用 [`.avif` 生成，`.wasm` 压缩，代码缩小](https://dioxuslabs.com/learn/0.6/guides/assets)，等等。构建的 Web 应用程序大小 [不到 50kb](https://github.com/ealmloff/tiny-dioxus/)，桌面/移动应用程序小于 15mb。
 
 <div align="center">
   <img src="../../notes/bundle.gif">

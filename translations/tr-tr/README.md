@@ -93,7 +93,7 @@ Tek bir `dx serve` komutu ile uygulamanı çalıştır. Markup ve styles(html ve
 
 ## Web ve Masaüstü için Paketleyici
 
-Basitçe `dx bundle` komutunu çalıştır ve uygulaman maksimum optimizasyon ile derlenip paketlensin. Web üzerindeki [`.avif` oluşturma, `.wasm` sıkıştırma, küçültme](https://dioxuslabs.com/learn/0.6/reference/assets) ve daha fazlası ile avantajı yakala. [50kb'dan daha küçük](https://github.com/ealmloff/tiny-dioxus/) hafif web uygulamaları ve 15mb'dan daha az boyutlarda masaüstü/mobil uygulamalar üret.
+Basitçe `dx bundle` komutunu çalıştır ve uygulaman maksimum optimizasyon ile derlenip paketlensin. Web üzerindeki [`.avif` oluşturma, `.wasm` sıkıştırma, küçültme](https://dioxuslabs.com/learn/0.6/guides/assets) ve daha fazlası ile avantajı yakala. [50kb'dan daha küçük](https://github.com/ealmloff/tiny-dioxus/) hafif web uygulamaları ve 15mb'dan daha az boyutlarda masaüstü/mobil uygulamalar üret.
 
 <div align="center">
   <img src="../../notes/bundle.gif">

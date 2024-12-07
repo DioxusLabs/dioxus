@@ -191,7 +191,7 @@ Hooks are sensitive to how they are used. To use hooks, you must abide by the ["
 
 Hooks let us add a field of state to our component without declaring an explicit state struct. However, this means we need to "load" the struct in the right order. If that order is wrong, then the hook will pick the wrong state and panic.
 
-Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with [custom hooks](https://dioxuslabs.com/learn/0.6/cookbook/state/custom_hooks).
+Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with custom hooks.
 
 ## Putting it all together
 
@@ -218,18 +218,18 @@ fn App() -> Element {
 
 ## Conclusion
 
-This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.6/guide) and [reference](https://dioxuslabs.com/learn/0.6/reference) on the official
+This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.6/guide) and [guides](https://dioxuslabs.com/learn/0.6/guides) on the official
 website for more details.
 
 Beyond this overview, Dioxus supports:
 
-- [Server-side rendering](https://dioxuslabs.com/learn/0.6/reference/fullstack)
+- Server-side rendering
 - Concurrent rendering (with async support)
 - Web/Desktop/Mobile support
 - Pre-rendering and hydration
 - Fragments, and Suspense
 - Inline-styles
-- [Custom event handlers](https://dioxuslabs.com/learn/0.6/reference/event_handlers#handler-props)
+- Custom event handlers
 - Custom elements
 - Basic fine-grained reactivity (IE SolidJS/Svelte)
 - and more!

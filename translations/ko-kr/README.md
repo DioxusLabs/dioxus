@@ -93,7 +93,7 @@ fn app() -> Element {
 
 ## 웹 및 데스크톱 배포를 위한 번들러
 
-단순히 `dx bundle`을 실행하면 앱이 빌드되고 최적화된 번들로 패키징됩니다. 웹에서는 [`.avif` 생성, `.wasm` 압축, 최소화](https://dioxuslabs.com/learn/0.6/reference/assets) 등을 활용할 수 있습니다. [50kb 미만](https://github.com/ealmloff/tiny-dioxus/)의 웹앱과 15mb 미만의 데스크톱/모바일 앱을 빌드하세요.
+단순히 `dx bundle`을 실행하면 앱이 빌드되고 최적화된 번들로 패키징됩니다. 웹에서는 [`.avif` 생성, `.wasm` 압축, 최소화](https://dioxuslabs.com/learn/0.6/guides/assets) 등을 활용할 수 있습니다. [50kb 미만](https://github.com/ealmloff/tiny-dioxus/)의 웹앱과 15mb 미만의 데스크톱/모바일 앱을 빌드하세요.
 
 <div align="center">
   <img src="../../notes/bundle.gif">
