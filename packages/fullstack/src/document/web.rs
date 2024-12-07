@@ -1,7 +1,7 @@
 #![allow(unused)]
 //! On the client, we use the [`WebDocument`] implementation to render the head for any elements that were not rendered on the server.
 
-use dioxus_lib::document::*;
+use dioxus_lib::{document::*, prelude::queue_effect};
 use dioxus_web::WebDocument;
 
 fn head_element_written_on_server() -> bool {
@@ -12,6 +12,7 @@ fn head_element_written_on_server() -> bool {
 }
 
 /// A document provider for fullstack web clients
+#[derive(Clone)]
 pub struct FullstackWebDocument;
 
 impl Document for FullstackWebDocument {
@@ -19,38 +20,32 @@ impl Document for FullstackWebDocument {
         WebDocument.eval(js)
     }
 
+    /// Set the title of the document
     fn set_title(&self, title: String) {
-        if head_element_written_on_server() {
-            return;
-        }
         WebDocument.set_title(title);
     }
 
+    /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
-        if head_element_written_on_server() {
-            return;
-        }
         WebDocument.create_meta(props);
     }
 
+    /// Create a new script tag in the head
     fn create_script(&self, props: ScriptProps) {
-        if head_element_written_on_server() {
-            return;
-        }
         WebDocument.create_script(props);
     }
 
+    /// Create a new style tag in the head
     fn create_style(&self, props: StyleProps) {
-        if head_element_written_on_server() {
-            return;
-        }
         WebDocument.create_style(props);
     }
 
+    /// Create a new link tag in the head
     fn create_link(&self, props: LinkProps) {
-        if head_element_written_on_server() {
-            return;
-        }
         WebDocument.create_link(props);
+    }
+
+    fn create_head_component(&self) -> bool {
+        !head_element_written_on_server()
     }
 }

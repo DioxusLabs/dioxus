@@ -33,6 +33,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use crate::html_storage::serialize::SerializedHydrationData;
+
 /// Sections are identified by a unique id based on the suspense path. We only track the path of suspense boundaries because the client may render different components than the server.
 #[derive(Clone, Debug, Default)]
 struct MountPath {
@@ -109,7 +111,7 @@ impl<E> StreamingRenderer<E> {
         &self,
         id: Mount,
         html: impl FnOnce(&mut W) -> std::fmt::Result,
-        data: impl Display,
+        resolved_data: SerializedHydrationData,
         into: &mut W,
     ) -> std::fmt::Result {
         // Then replace the suspense placeholder with the new content
@@ -119,10 +121,27 @@ impl<E> StreamingRenderer<E> {
         html(into)?;
         // Restore the old path
         *self.current_path.write().unwrap() = old_path;
+        // dx_hydrate accepts 2-4 arguments. The first two are required, the rest are optional
+        // The arguments are:
+        // 1. The id of the nodes we are hydrating under
+        // 2. The serialized data required to hydrate those components
+        // 3. (in debug mode) The type names of the serialized data
+        // 4. (in debug mode) The locations of the serialized data
+        let raw_data = resolved_data.data;
         write!(
             into,
-            r#"</div><script>window.dx_hydrate([{id}], "{data}")</script>"#
-        )
+            r#"</div><script>window.dx_hydrate([{id}], "{raw_data}""#
+        )?;
+        #[cfg(debug_assertions)]
+        {
+            // In debug mode, we also send down the type names and locations of the serialized data
+            let debug_types = &resolved_data.debug_types;
+            let debug_locations = &resolved_data.debug_locations;
+            write!(into, r#", {debug_types}, {debug_locations}"#,)?;
+        }
+        write!(into, r#")</script>"#)?;
+
+        Ok(())
     }
 
     /// Close the stream with an error
