@@ -66,19 +66,45 @@ pub trait Document: 'static {
     fn eval(&self, js: String) -> Eval;
 
     /// Set the title of the document
-    fn set_title(&self, title: String);
+    fn set_title(&self, title: String) {
+        self.eval(format!("document.title = {title:?};"));
+    }
+
+    /// Create a new element in the head
+    fn create_head_element(
+        &self,
+        name: &str,
+        attributes: &[(&str, String)],
+        contents: Option<String>,
+    ) {
+        // This default implementation remains to make the trait compatible with the 0.6 version, but it should not be used
+        // The element should only be created inside an effect so it is not called while the component is suspended
+        self.eval(create_element_in_head(name, attributes, contents));
+    }
 
     /// Create a new meta tag in the head
-    fn create_meta(&self, props: MetaProps);
+    fn create_meta(&self, props: MetaProps) {
+        let attributes = props.attributes();
+        self.create_head_element("meta", &attributes, None);
+    }
 
     /// Create a new script tag in the head
-    fn create_script(&self, props: ScriptProps);
+    fn create_script(&self, props: ScriptProps) {
+        let attributes = props.attributes();
+        self.create_head_element("script", &attributes, props.script_contents().ok());
+    }
 
     /// Create a new style tag in the head
-    fn create_style(&self, props: StyleProps);
+    fn create_style(&self, props: StyleProps) {
+        let attributes = props.attributes();
+        self.create_head_element("style", &attributes, props.style_contents().ok());
+    }
 
     /// Create a new link tag in the head
-    fn create_link(&self, props: LinkProps);
+    fn create_link(&self, props: LinkProps) {
+        let attributes = props.attributes();
+        self.create_head_element("link", &attributes, None);
+    }
 
     /// Check if we should create a new head component at all. If it returns false, the head component will be skipped.
     ///
