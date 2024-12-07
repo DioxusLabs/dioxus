@@ -30,7 +30,10 @@ fn format_attributes(attributes: &[(&str, String)]) -> String {
     formatted
 }
 
-fn create_element_in_head(
+/// Create a new element in the head with javascript through the [`Document::eval`] method
+///
+/// This can be used to implement the head element creation logic for most [`Document`] implementations.
+pub fn create_element_in_head(
     tag: &str,
     attributes: &[(&str, String)],
     children: Option<String>,
@@ -63,60 +66,19 @@ pub trait Document: 'static {
     fn eval(&self, js: String) -> Eval;
 
     /// Set the title of the document
-    fn set_title(&self, title: String) {
-        self.eval(format!("document.title = {title:?};"));
-    }
-
-    /// Create a new element in the head
-    fn create_head_element(
-        &self,
-        name: &str,
-        attributes: &[(&str, String)],
-        contents: Option<String>,
-    ) {
-        self.eval(create_element_in_head(name, attributes, contents));
-    }
+    fn set_title(&self, title: String);
 
     /// Create a new meta tag in the head
-    fn create_meta(&self, props: MetaProps) {
-        let attributes = props.attributes();
-        self.create_head_element("meta", &attributes, None);
-    }
+    fn create_meta(&self, props: MetaProps);
 
     /// Create a new script tag in the head
-    fn create_script(&self, props: ScriptProps) {
-        let attributes = props.attributes();
-        match (&props.src, props.script_contents()) {
-            // The script has inline contents, render it as a script tag
-            (_, Ok(contents)) => self.create_head_element("script", &attributes, Some(contents)),
-            // The script has a src, render it as a script tag without a body
-            (Some(_), _) => self.create_head_element("script", &attributes, None),
-            // The script has neither contents nor src, log an error
-            (None, Err(err)) => err.log("Script"),
-        }
-    }
+    fn create_script(&self, props: ScriptProps, fresh_url: bool);
 
     /// Create a new style tag in the head
-    fn create_style(&self, props: StyleProps) {
-        let mut attributes = props.attributes();
-        match (&props.href, props.style_contents()) {
-            // The style has inline contents, render it as a style tag
-            (_, Ok(contents)) => self.create_head_element("style", &attributes, Some(contents)),
-            // The style has a src, render it as a link tag
-            (Some(_), _) => {
-                attributes.push(("type", "text/css".into()));
-                self.create_head_element("link", &attributes, None)
-            }
-            // The style has neither contents nor src, log an error
-            (None, Err(err)) => err.log("Style"),
-        };
-    }
+    fn create_style(&self, props: StyleProps, fresh_url: bool);
 
     /// Create a new link tag in the head
-    fn create_link(&self, props: LinkProps) {
-        let attributes = props.attributes();
-        self.create_head_element("link", &attributes, None);
-    }
+    fn create_link(&self, props: LinkProps, fresh_url: bool);
 }
 
 /// A document that does nothing
@@ -148,4 +110,10 @@ impl Document for NoOpDocument {
         }
         Eval::new(owner.insert(Box::new(NoOpEvaluator)))
     }
+
+    fn set_title(&self, _: String) {}
+    fn create_meta(&self, _: MetaProps) {}
+    fn create_script(&self, _: ScriptProps, _: bool) {}
+    fn create_style(&self, _: StyleProps, _: bool) {}
+    fn create_link(&self, _: LinkProps, _: bool) {}
 }

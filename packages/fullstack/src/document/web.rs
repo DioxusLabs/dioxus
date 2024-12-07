@@ -1,7 +1,7 @@
 #![allow(unused)]
 //! On the client, we use the [`WebDocument`] implementation to render the head for any elements that were not rendered on the server.
 
-use dioxus_lib::document::*;
+use dioxus_lib::{document::*, prelude::queue_effect};
 use dioxus_web::WebDocument;
 
 fn head_element_written_on_server() -> bool {
@@ -12,6 +12,7 @@ fn head_element_written_on_server() -> bool {
 }
 
 /// A document provider for fullstack web clients
+#[derive(Clone)]
 pub struct FullstackWebDocument;
 
 impl Document for FullstackWebDocument {
@@ -19,38 +20,72 @@ impl Document for FullstackWebDocument {
         WebDocument.eval(js)
     }
 
+    /// Set the title of the document
     fn set_title(&self, title: String) {
-        if head_element_written_on_server() {
-            return;
-        }
-        WebDocument.set_title(title);
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(format!("document.title = {title:?};"));
+        });
     }
 
+    /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
         if head_element_written_on_server() {
             return;
         }
-        WebDocument.create_meta(props);
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head("meta", &props.attributes(), None));
+        });
     }
 
-    fn create_script(&self, props: ScriptProps) {
+    /// Create a new script tag in the head
+    fn create_script(&self, props: ScriptProps, fresh_url: bool) {
         if head_element_written_on_server() {
             return;
         }
-        WebDocument.create_script(props);
+        if !fresh_url {
+            return;
+        }
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head(
+                "script",
+                &props.attributes(),
+                props.script_contents().ok(),
+            ));
+        });
     }
 
-    fn create_style(&self, props: StyleProps) {
+    /// Create a new style tag in the head
+    fn create_style(&self, props: StyleProps, fresh_url: bool) {
         if head_element_written_on_server() {
             return;
         }
-        WebDocument.create_style(props);
+        if !fresh_url {
+            return;
+        }
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head(
+                "style",
+                &props.attributes(),
+                props.style_contents().ok(),
+            ));
+        });
     }
 
-    fn create_link(&self, props: LinkProps) {
+    /// Create a new link tag in the head
+    fn create_link(&self, props: LinkProps, fresh_url: bool) {
         if head_element_written_on_server() {
             return;
         }
-        WebDocument.create_link(props);
+        if !fresh_url {
+            return;
+        }
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head("link", &props.attributes(), None));
+        });
     }
 }

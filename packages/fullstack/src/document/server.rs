@@ -77,7 +77,6 @@ impl Document for ServerDocument {
 
     fn set_title(&self, title: String) {
         self.warn_if_streaming();
-        self.serialize_for_hydration();
         self.0.borrow_mut().title = Some(title);
     }
 
@@ -96,9 +95,12 @@ impl Document for ServerDocument {
         });
     }
 
-    fn create_script(&self, props: ScriptProps) {
+    fn create_script(&self, props: ScriptProps, fresh_url: bool) {
         self.warn_if_streaming();
         self.serialize_for_hydration();
+        if !fresh_url {
+            return;
+        }
         let children = props.script_contents().ok();
         self.0.borrow_mut().script.push(rsx! {
             script {
@@ -117,9 +119,12 @@ impl Document for ServerDocument {
         });
     }
 
-    fn create_style(&self, props: StyleProps) {
+    fn create_style(&self, props: StyleProps, fresh_url: bool) {
         self.warn_if_streaming();
         self.serialize_for_hydration();
+        if !fresh_url {
+            return;
+        }
         match (&props.href, props.style_contents()) {
             // The style has inline contents, render it as a style tag
             (_, Ok(contents)) => self.0.borrow_mut().script.push(rsx! {
@@ -151,9 +156,12 @@ impl Document for ServerDocument {
         }
     }
 
-    fn create_link(&self, props: LinkProps) {
+    fn create_link(&self, props: LinkProps, fresh_url: bool) {
         self.warn_if_streaming();
         self.serialize_for_hydration();
+        if !fresh_url {
+            return;
+        }
         self.0.borrow_mut().link.push(rsx! {
             link {
                 rel: props.rel,
