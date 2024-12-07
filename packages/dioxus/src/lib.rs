@@ -11,6 +11,7 @@
 //! - `hot-reload`: (default) enables hot rsx reloading in all renderers that support it
 //! - `router`: exports the [router](https://dioxuslabs.com/learn/0.6/router) and enables any router features for the current platform
 //! - `third-party-renderer`: Just disables warnings about no active platform when no renderers are enabled
+//! - `logger`: Enable the default tracing subscriber for Dioxus apps
 //!
 //! Platform features (the current platform determines what platform the [`launch()`] function runs):
 //!
