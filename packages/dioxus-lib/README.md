@@ -1,19 +1,9 @@
 <div align="center">
-    <style>
-        @media (prefers-color-scheme: dark) { .darkmode-image { display: none; } }
-        @media (prefers-color-scheme: light) { .lightmode-image { display: none; } }
-    </style>
     <img
         src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c"
         alt="Build web, desktop, and mobile apps with a single codebase."
         width="100%"
         class="darkmode-image"
-    >
-    <img
-        src="https://github.com/user-attachments/assets/9c6a5fac-806d-4391-80d0-d87d63c406eb"
-        alt="Build web, desktop, and mobile apps with a single codebase."
-        width="100%"
-        class="lightmode-image"
     >
     <div>
         <a href=https://dioxuslabs.com/learn/0.6/getting_started>Getting Started</a> | <a href="https://dioxuslabs.com/learn/0.6">Book (0.6)</a> | <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples">Examples</a>
