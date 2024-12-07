@@ -105,14 +105,19 @@ pub fn Link(props: LinkProps) -> Element {
     use_update_warning(&props, "Link {}");
 
     use_hook(|| {
-        let mut insert_link = true;
+        let document = document();
+        let mut insert_link = document.create_head_component();
         if let Some(href) = &props.href {
             if !should_insert_link(href) {
                 insert_link = false;
             }
         }
-        let document = document();
-        document.create_link(props, insert_link);
+
+        if !insert_link {
+            return;
+        }
+
+        document.create_link(props);
     });
 
     VNode::empty()

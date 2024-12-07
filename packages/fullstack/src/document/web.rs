@@ -22,70 +22,30 @@ impl Document for FullstackWebDocument {
 
     /// Set the title of the document
     fn set_title(&self, title: String) {
-        let myself = self.clone();
-        queue_effect(move || {
-            myself.eval(format!("document.title = {title:?};"));
-        });
+        WebDocument.set_title(title);
     }
 
     /// Create a new meta tag in the head
     fn create_meta(&self, props: MetaProps) {
-        if head_element_written_on_server() {
-            return;
-        }
-        let myself = self.clone();
-        queue_effect(move || {
-            myself.eval(create_element_in_head("meta", &props.attributes(), None));
-        });
+        WebDocument.create_meta(props);
     }
 
     /// Create a new script tag in the head
-    fn create_script(&self, props: ScriptProps, fresh_url: bool) {
-        if head_element_written_on_server() {
-            return;
-        }
-        if !fresh_url {
-            return;
-        }
-        let myself = self.clone();
-        queue_effect(move || {
-            myself.eval(create_element_in_head(
-                "script",
-                &props.attributes(),
-                props.script_contents().ok(),
-            ));
-        });
+    fn create_script(&self, props: ScriptProps) {
+        WebDocument.create_script(props);
     }
 
     /// Create a new style tag in the head
-    fn create_style(&self, props: StyleProps, fresh_url: bool) {
-        if head_element_written_on_server() {
-            return;
-        }
-        if !fresh_url {
-            return;
-        }
-        let myself = self.clone();
-        queue_effect(move || {
-            myself.eval(create_element_in_head(
-                "style",
-                &props.attributes(),
-                props.style_contents().ok(),
-            ));
-        });
+    fn create_style(&self, props: StyleProps) {
+        WebDocument.create_style(props);
     }
 
     /// Create a new link tag in the head
-    fn create_link(&self, props: LinkProps, fresh_url: bool) {
-        if head_element_written_on_server() {
-            return;
-        }
-        if !fresh_url {
-            return;
-        }
-        let myself = self.clone();
-        queue_effect(move || {
-            myself.eval(create_element_in_head("link", &props.attributes(), None));
-        });
+    fn create_link(&self, props: LinkProps) {
+        WebDocument.create_link(props);
+    }
+
+    fn create_head_component(&self) -> bool {
+        !head_element_written_on_server()
     }
 }

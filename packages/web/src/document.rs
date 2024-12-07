@@ -97,10 +97,7 @@ impl Document for WebDocument {
     }
 
     /// Create a new script tag in the head
-    fn create_script(&self, props: ScriptProps, fresh_url: bool) {
-        if !fresh_url {
-            return;
-        }
+    fn create_script(&self, props: ScriptProps) {
         let myself = self.clone();
         queue_effect(move || {
             myself.eval(create_element_in_head(
@@ -112,10 +109,7 @@ impl Document for WebDocument {
     }
 
     /// Create a new style tag in the head
-    fn create_style(&self, props: StyleProps, fresh_url: bool) {
-        if !fresh_url {
-            return;
-        }
+    fn create_style(&self, props: StyleProps) {
         let myself = self.clone();
         queue_effect(move || {
             myself.eval(create_element_in_head(
@@ -127,10 +121,7 @@ impl Document for WebDocument {
     }
 
     /// Create a new link tag in the head
-    fn create_link(&self, props: LinkProps, fresh_url: bool) {
-        if !fresh_url {
-            return;
-        }
+    fn create_link(&self, props: LinkProps) {
         let myself = self.clone();
         queue_effect(move || {
             myself.eval(create_element_in_head("link", &props.attributes(), None));

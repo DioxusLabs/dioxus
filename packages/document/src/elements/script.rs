@@ -91,11 +91,16 @@ pub fn Script(props: ScriptProps) -> Element {
     use_update_warning(&props, "Script {}");
 
     use_hook(|| {
-        let mut insert_script = true;
+        let document = document();
+        let mut insert_script = document.create_head_component();
         if let Some(src) = &props.src {
             if !should_insert_script(src) {
                 insert_script = false;
             }
+        }
+
+        if !insert_script {
+            return;
         }
 
         // Make sure the props are in a valid form - they must either have a source or children
@@ -104,8 +109,7 @@ pub fn Script(props: ScriptProps) -> Element {
             err.log("Script")
         }
 
-        let document = document();
-        document.create_script(props, insert_script);
+        document.create_script(props);
     });
 
     VNode::empty()

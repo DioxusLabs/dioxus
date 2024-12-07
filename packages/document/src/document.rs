@@ -72,13 +72,20 @@ pub trait Document: 'static {
     fn create_meta(&self, props: MetaProps);
 
     /// Create a new script tag in the head
-    fn create_script(&self, props: ScriptProps, fresh_url: bool);
+    fn create_script(&self, props: ScriptProps);
 
     /// Create a new style tag in the head
-    fn create_style(&self, props: StyleProps, fresh_url: bool);
+    fn create_style(&self, props: StyleProps);
 
     /// Create a new link tag in the head
-    fn create_link(&self, props: LinkProps, fresh_url: bool);
+    fn create_link(&self, props: LinkProps);
+
+    /// Check if we should create a new head component at all. If it returns false, the head component will be skipped.
+    ///
+    /// This runs once per head component and is used to hydrate head components in fullstack.
+    fn create_head_component(&self) -> bool {
+        true
+    }
 }
 
 /// A document that does nothing
@@ -113,7 +120,7 @@ impl Document for NoOpDocument {
 
     fn set_title(&self, _: String) {}
     fn create_meta(&self, _: MetaProps) {}
-    fn create_script(&self, _: ScriptProps, _: bool) {}
-    fn create_style(&self, _: StyleProps, _: bool) {}
-    fn create_link(&self, _: LinkProps, _: bool) {}
+    fn create_script(&self, _: ScriptProps) {}
+    fn create_style(&self, _: StyleProps) {}
+    fn create_link(&self, _: LinkProps) {}
 }
