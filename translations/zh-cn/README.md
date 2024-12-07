@@ -107,7 +107,7 @@ fn app() -> Element {
 
 ## 开发者体验的重点
 
-Dioxus 优先考虑开发者体验，我们为端到端工具链付出了大量努力。我们构建了一个 [VSCode 扩展](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)，可以自动格式化您的 RSX 代码，将 HTML 转换为 RSX 等等。我们还建立了一个非常强大的 [CLI](https://dioxuslabs.com/learn/0.6/CLI)，支持创建新应用程序、提供服务和跨平台捆绑，并且部署正在路上。
+Dioxus 优先考虑开发者体验，我们为端到端工具链付出了大量努力。我们构建了一个 [VSCode 扩展](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)，可以自动格式化您的 RSX 代码，将 HTML 转换为 RSX 等等。我们还建立了一个非常强大的 CLI，支持创建新应用程序、提供服务和跨平台捆绑，并且部署正在路上。
 
 <div align="center">
   <img src="./notes/autofmt.gif">

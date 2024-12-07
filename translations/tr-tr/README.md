@@ -109,7 +109,7 @@ Temiz, okunabilir ve kapsayıcı döküman için bir ton uğraştık. Bütün ht
 
 ## Geliştirici Deneyimini Önemse
 
-Dioxus geliştirici deneyimini önceliklendirir, bu kapsamda end-to-end tooling (uçtan uca araç desteği) için tonla efor harcadık. [VSCode eklentisi](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) geliştirdik bu sayede RSX kodlarınızı otomatik formatlayabilir, HTML', RSX e çevirebilir ve daha fazlasını yapabilirsiniz. Aynı zamanda geliştirdiğimiz çok güçlü [CLI](https://dioxuslabs.com/learn/0.6/CLI) sayesinde yeni uygulamalar üretmenize yardım ediyor, onları serve (sunmanızı) ve çapraz platform çalışacak şekilde paketlemenizi sağlıyoruz. Yol haritamızda deployment da mevcut.
+Dioxus geliştirici deneyimini önceliklendirir, bu kapsamda end-to-end tooling (uçtan uca araç desteği) için tonla efor harcadık. [VSCode eklentisi](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) geliştirdik bu sayede RSX kodlarınızı otomatik formatlayabilir, HTML', RSX e çevirebilir ve daha fazlasını yapabilirsiniz. Aynı zamanda geliştirdiğimiz çok güçlü CLI sayesinde yeni uygulamalar üretmenize yardım ediyor, onları serve (sunmanızı) ve çapraz platform çalışacak şekilde paketlemenizi sağlıyoruz. Yol haritamızda deployment da mevcut.
 
 <div align="center">
   <img src="../../notes/autofmt.gif">

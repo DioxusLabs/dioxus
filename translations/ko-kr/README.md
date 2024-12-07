@@ -109,7 +109,7 @@ fn app() -> Element {
 
 ## 개발자 경험에 중점
 
-Dioxus는 개발자 경험을 우선시하며, end-to-end 도구 개발에 많은 노력을 기울였습니다. RSX 코드를 자동으로 포맷하고 HTML을 RSX로 변환하는 등 다양한 기능을 제공하는 [VSCode 확장 프로그램](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)을 제작했습니다. 또한 새로운 앱 생성, 서비스 실행, 크로스 플랫폼 번들링을 지원하는 매우 강력한 [CLI](https://dioxuslabs.com/learn/0.6/CLI)를 개발했으며, 배포는 향후 로드맵에 포함되어 있습니다.
+Dioxus는 개발자 경험을 우선시하며, end-to-end 도구 개발에 많은 노력을 기울였습니다. RSX 코드를 자동으로 포맷하고 HTML을 RSX로 변환하는 등 다양한 기능을 제공하는 [VSCode 확장 프로그램](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)을 제작했습니다. 또한 새로운 앱 생성, 서비스 실행, 크로스 플랫폼 번들링을 지원하는 매우 강력한 CLI 를 개발했으며, 배포는 향후 로드맵에 포함되어 있습니다.
 
 <div align="center">
   <img src="../../notes/autofmt.gif">
