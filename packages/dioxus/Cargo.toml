@@ -27,6 +27,7 @@ dioxus-fullstack = { workspace = true, default-features = true, optional = true 
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
+dioxus-logger = { workspace = true, optional = true }
 
 serde = { version = "1.0.136", optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
@@ -35,7 +36,7 @@ dioxus-cli-config = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "html", "devtools", "signals", "hooks", "launch", "mounted", "file_engine", "document", "asset"]
+default = ["macro", "html", "signals", "hooks", "launch",  "mounted", "file_engine", "document", "asset", "devtools", "logger"]
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]
@@ -46,6 +47,7 @@ mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis"]
 document = ["dioxus-web?/document", "dep:dioxus-document", "dep:dioxus-history"]
+logger = ["dep:dioxus-logger"]
 
 launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]

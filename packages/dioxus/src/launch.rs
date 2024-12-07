@@ -155,6 +155,9 @@ impl LaunchBuilder {
     }
 
     fn launch_inner(self, app: fn() -> Element) {
+        #[cfg(feature = "logger")]
+        dioxus_logger::initialize_default();
+
         #[cfg(all(feature = "fullstack", any(feature = "desktop", feature = "mobile")))]
         {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};

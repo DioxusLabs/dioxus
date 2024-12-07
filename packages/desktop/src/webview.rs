@@ -69,7 +69,6 @@ impl WebviewEdits {
                 self.handle_html_event(event)
             }
             Err(err) => {
-                tracing::error!("cannot decippher format of user event");
                 tracing::error!(
                     "Error parsing user_event: {:?}.Contents: {:?}, raw: {:#?}",
                     err,
