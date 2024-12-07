@@ -29,7 +29,6 @@ wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4.29"
 tracing = { workspace = true }
 rustc-hash = { workspace = true }
-console_error_panic_hook = { version = "0.1.7", optional = true }
 futures-util = { workspace = true, features = [
     "std",
     "async-await",
@@ -85,8 +84,7 @@ features = [
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["panic_hook", "mounted", "file_engine", "devtools", "document"]
-panic_hook = ["dep:console_error_panic_hook"]
+default = ["mounted", "file_engine", "devtools", "document"]
 hydrate = ["web-sys/Comment", "ciborium", "dep:serde"]
 mounted = [
     "web-sys/Element",

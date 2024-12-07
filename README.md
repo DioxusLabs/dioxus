@@ -244,63 +244,20 @@ Tauri is a framework for building desktop mobile apps where your frontend is wri
 
 Leptos is a library for building fullstack web-apps, similar to SolidJS and SolidStart. The two libraries share similar goals on the web, but have several key differences:
 
-- **Reactivity model**: Leptos uses signals to drive both reactivity and rendering, while Dioxus uses signals just for reactivity. For manging re-renders, Dioxus uses a highly optimized VirtualDOM to support desktop and mobile architectures. Both Dioxus and Leptos are extremely fast.
-- **Control flow**: Because Leptos uses signals for reactivity, you are constrained to Leptos' primitives for things like `for` loops and `if` statements. If you get this wrong, your app will lose reactivity, leading to hard to debug UI issues. With Dioxus, you can use iterators, regular Rust `for` loops and `if` statements, and your app will still be reactive. In practice, a Dioxus component to insert counters into a list might look like this:
+- **Reactivity model**: Leptos uses signals to drive both reactivity and rendering, while Dioxus uses signals just for reactivity. For managing re-renders, Dioxus uses a highly optimized VirtualDOM to support desktop and mobile architectures. Both Dioxus and Leptos are extremely fast.
 
-```rust
-fn Counters() -> Element {
-    let mut counters = use_signal(|| vec![0; 10]);
+- **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. Leptos has a tighter focus on the fullstack web with features that Dioxus doesn't have like islands, `<Form />` components, and other web-specific utilities.
 
-    rsx! {
-        button { onclick: move |_| counters.push(counters.len()), "Add Counter" }
-        ul {
-            for idx a.counters.len() {
-                li {
-                    button { onclick: move |_| counters.write()[idx] += 1, "{counters.index(idx)}" }
-                    button { onclick: move |_| { counters.remove(idx); }, "Remove" }
-                }
-            }
-        }
-    }
-}
-```
-
-[While in Leptos you would use the `<For>` component.](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
-
-```rust
-fn Counters() -> impl IntoView {
-    let counters = RwSignal::new(vec![0; 10]);
-
-    view! {
-        <button on:click=move |_| counters.update(|n| n.push(n.len()))>"Add Counter"</button>
-        <For
-            each=move || 0..counters.with(Vec::len)
-            key=|idx| *idx
-            let:idx
-        >
-            <li>
-                <button on:click=move |_| counters.update(|n| n[idx] += 1)>
-                    {Memo::new(move |_| counters.with(|n| n[idx]))}
-                </button>
-                <button on:click=move |_| counters.update(|n| { n.remove(idx); })>
-                    "Remove"
-                </button>
-            </li>
-        </For>
-    }
-}
-```
-
-- **`Copy` state**: Dioxus 0.1 to 0.4 relied on lifetimes to relax the rules of Rust's borrow checker. This worked well for event handlers, but struggled around async. In Dioxus 0.5, we've switched to a [`Copy` state model](https://crates.io/crates/generational-box) borrowed from Leptos.
-
-- **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge. Leptos has a narrower focus on the fullstack web, with features that Dioxus doesn't have like islands, `<Form />` components, and other web-specific features.
-
-- **Different DSLs**: While both frameworks target the web, Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses a more HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL. For example, dioxus will automatically format strings for you while Leptos can split up strings into static and dynamic segments.
+- **Different DSLs**: Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses an HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL including automatic formatting of strings and hot-reloading of simple Rust expressions.
 
 ```rust
 // dioxus
 rsx! {
-  div { class: "my-class", enabled: true, "Hello, {name}" }
+  div {
+    class: "my-class",
+    enabled: true,
+    "Hello, {name}"
+  }
 }
 
 // leptos

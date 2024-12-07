@@ -65,6 +65,10 @@ pub use dioxus_html as html;
 #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
 pub use dioxus_core_macro as core_macro;
 
+#[cfg(feature = "logger")]
+#[cfg_attr(docsrs, doc(cfg(feature = "logger")))]
+pub use dioxus_logger as logger;
+
 pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]

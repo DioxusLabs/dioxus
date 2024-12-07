@@ -1,5 +1,5 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringBuffer, Builder, ServeUpdate, Watcher, WebServer},
+    serve::{ansi_buffer::AnsiStringLine, Builder, ServeUpdate, Watcher, WebServer},
     BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
@@ -488,6 +488,7 @@ impl Output {
             }
             BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
             BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
+            BuildStage::RunningGradle {} => lines.push("Running gradle assemble".yellow()),
             BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
             BuildStage::CopyingAssets {
                 current,
@@ -767,10 +768,9 @@ impl Output {
 
         // Render the log into an ansi string
         // We're going to add some metadata to it like the timestamp and source and then dump it to the raw ansi sequences we need to send to crossterm
-        let output_sequence = Self::tracemsg_to_ansi_string(log, term_size.width);
+        let lines = Self::tracemsg_to_ansi_string(log);
 
         // Get the lines of the output sequence and their overflow
-        let lines = output_sequence.lines().collect::<Vec<_>>();
         let lines_printed = lines
             .iter()
             .map(|line| {
@@ -793,7 +793,7 @@ impl Output {
             .saturating_sub(frame_rect.y + frame_rect.height);
 
         // Calculate how many lines we need to push back
-        let to_push = max_scrollback.saturating_sub(remaining_space + 1);
+        let to_push = max_scrollback.saturating_sub(remaining_space);
 
         // Wipe the viewport clean so it doesn't tear
         crossterm::queue!(
@@ -807,7 +807,7 @@ impl Output {
         // Ratatui will handle this rest.
         // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
         if to_push == 0 {
-            terminal.insert_before(lines_printed.saturating_sub(1), |_| {})?;
+            terminal.insert_before(lines_printed, |_| {})?;
         }
 
         // Start printing the log by writing on top of the topmost line
@@ -847,93 +847,72 @@ impl Output {
         }
     }
 
-    fn tracemsg_to_ansi_string(log: TraceMsg, term_width: u16) -> String {
+    fn tracemsg_to_ansi_string(log: TraceMsg) -> Vec<String> {
+        use ansi_to_tui::IntoText;
+        use chrono::Timelike;
+
         let rendered = match log.content {
             TraceContent::Cargo(msg) => msg.message.rendered.unwrap_or_default(),
             TraceContent::Text(text) => text,
         };
 
-        // Create a paragraph widget using the log line itself
-        // From here on out, we want to work with the escaped ansi string and the "real lines" to be printed
-        //
-        // We make a special case for lines that look like frames (ie ==== or ---- or ------) and make them
-        // dark gray, just for readability.
-        //
-        // todo(jon): refactor this out to accept any widget, not just paragraphs
-        let paragraph = Paragraph::new({
-            use ansi_to_tui::IntoText;
-            use chrono::Timelike;
+        let mut lines = vec![];
 
-            let mut text = Text::default();
-
-            for (idx, raw_line) in rendered.lines().enumerate() {
-                let line_as_text = raw_line.into_text().unwrap();
-                let is_pretending_to_be_frame = raw_line
+        for (idx, raw_line) in rendered.lines().enumerate() {
+            let line_as_text = raw_line.into_text().unwrap();
+            let is_pretending_to_be_frame = !raw_line.is_empty()
+                && raw_line
                     .chars()
                     .all(|c| c == '=' || c == '-' || c == ' ' || c == '─');
 
-                for (subline_idx, line) in line_as_text.lines.into_iter().enumerate() {
-                    let mut out_line = if idx == 0 && subline_idx == 0 {
-                        let mut formatted_line = Line::default();
+            for (subline_idx, mut line) in line_as_text.lines.into_iter().enumerate() {
+                if idx == 0 && subline_idx == 0 {
+                    let mut formatted_line = Line::default();
 
-                        formatted_line.push_span(
-                            Span::raw(format!(
-                                "{:02}:{:02}:{:02} ",
-                                log.timestamp.hour(),
-                                log.timestamp.minute(),
-                                log.timestamp.second()
-                            ))
-                            .dark_gray(),
-                        );
-                        formatted_line.push_span(
-                            Span::raw(format!(
-                                "[{src}] {padding}",
-                                src = log.source,
-                                padding =
-                                    " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
-                            ))
-                            .style(match log.source {
-                                TraceSrc::App(_platform) => Style::new().blue(),
-                                TraceSrc::Dev => Style::new().magenta(),
-                                TraceSrc::Build => Style::new().yellow(),
-                                TraceSrc::Bundle => Style::new().magenta(),
-                                TraceSrc::Cargo => Style::new().yellow(),
-                                TraceSrc::Unknown => Style::new().gray(),
-                            }),
-                        );
+                    formatted_line.push_span(
+                        Span::raw(format!(
+                            "{:02}:{:02}:{:02} ",
+                            log.timestamp.hour(),
+                            log.timestamp.minute(),
+                            log.timestamp.second()
+                        ))
+                        .dark_gray(),
+                    );
 
-                        for span in line.spans {
-                            formatted_line.push_span(span);
-                        }
+                    formatted_line.push_span(
+                        Span::raw(format!(
+                            "[{src}] {padding}",
+                            src = log.source,
+                            padding =
+                                " ".repeat(3usize.saturating_sub(log.source.to_string().len()))
+                        ))
+                        .style(match log.source {
+                            TraceSrc::App(_platform) => Style::new().blue(),
+                            TraceSrc::Dev => Style::new().magenta(),
+                            TraceSrc::Build => Style::new().yellow(),
+                            TraceSrc::Bundle => Style::new().magenta(),
+                            TraceSrc::Cargo => Style::new().yellow(),
+                            TraceSrc::Unknown => Style::new().gray(),
+                        }),
+                    );
 
-                        formatted_line
-                    } else {
-                        line
-                    };
-
-                    if is_pretending_to_be_frame {
-                        out_line = out_line.dark_gray();
+                    for span in line.spans {
+                        formatted_line.push_span(span);
                     }
 
-                    text.lines.push(out_line);
+                    line = formatted_line;
                 }
+
+                if is_pretending_to_be_frame {
+                    line = line.dark_gray();
+                }
+
+                let line_length: usize = line.spans.iter().map(|f| f.content.len()).sum();
+
+                lines.push(AnsiStringLine::new(line_length.max(100) as _).render(&line));
             }
+        }
 
-            text
-        });
-
-        // We want to get the escaped ansii string and then by dumping the paragraph as ascii codes (again)
-        //
-        // This is important because the line_count method on paragraph takes into account the width of these codes
-        // the 3000 clip width is to bound log lines to a reasonable memory usage
-        // We could consider reusing this buffer since it's a lot to allocate, but log printing is not the
-        // slowest thing in the world and allocating is pretty fast...
-        //
-        // After we've dumped the ascii out, we want to call "trim_end" which ensures we don't attempt
-        // to print extra characters as lines, since AnsiStringBuffer will in fact attempt to print empty
-        // cells as characters. That might not actually be important, but we want to shrink the buffer
-        // before printing it
-        let line_count = paragraph.line_count(term_width);
-        AnsiStringBuffer::new(3000, line_count as u16).render(&paragraph)
+        lines
     }
 }

@@ -64,6 +64,7 @@ members = [
     "packages/const-serialize",
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
+    "packages/logger",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -138,7 +139,7 @@ dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.0-rc.
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-rc.0" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-rc.0", default-features = false }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.0-rc.0" }
-
+dioxus-logger = { path = "packages/logger", version = "0.6.0-rc.0" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.0-rc.0" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.0-rc.0" }
 generational-box = { path = "packages/generational-box", version = "0.6.0-rc.0" }
@@ -157,10 +158,12 @@ clap = { version = "4.5.7" }
 askama_escape = "0.10.3"
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
+tracing-subscriber = { version = "0.3.18", default-features = false }
 toml = "0.8"
 tokio = "1.40"
 slab = "0.4.2"
 slotmap = { version = "1.0.7", features = ["serde"] }
+futures = "0.3.30"
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
@@ -207,7 +210,6 @@ fluent-uri = { version = "0.2.0", features = ["serde"] }
 internment = { version = "0.7.0" }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
 env_logger = "0.11.0"
-tracing-subscriber = "0.3.17"
 chrono = { version = "0.4.34" }
 gloo = { version = "0.8.0" }
 gloo-utils = { version = "0.1.6" }
@@ -220,9 +222,11 @@ web-sys = { version = "0.3.56", default-features = false }
 dirs = "5.0.1"
 cargo-config2 = "0.1.26"
 criterion = { version = "0.5" }
-walrus = "0.22.0"
+walrus = "0.23.2"
 cargo_metadata = "0.18.1"
 parking_lot = "0.12.1"
+tracing-wasm = "0.2.1"
+console_error_panic_hook = "0.1.7"
 
 # desktop
 wry = { version = "0.45.0", default-features = false }
@@ -260,6 +264,16 @@ codegen-units = 1
 inherits = "dev"
 debug-assertions = false
 incremental = true
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -473,4 +487,8 @@ doc-scrape-examples = true
 
 [[example]]
 name = "eval"
+doc-scrape-examples = true
+
+[[example]]
+name = "logging"
 doc-scrape-examples = true
