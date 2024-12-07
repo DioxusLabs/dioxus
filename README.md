@@ -1,10 +1,14 @@
 <p>
     <p align="center" >
-      <img src="./notes/header-light.svg#gh-light-mode-only" >
-      <img src="./notes/header-dark.svg#gh-dark-mode-only" >
-      <a href="https://dioxuslabs.com">
-          <img src="./notes/dioxus_splash_8.avif">
-      </a>
+      <!-- <img src="./notes/header-light-updated.svg#gh-light-mode-only" >
+      <img src="./notes/header-dark-updated.svg#gh-dark-mode-only" > -->
+      <!-- <a href="https://dioxuslabs.com">
+          <img src="./notes/flat-splash.avif">
+      </a> -->
+      <img src="./notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
+      <img src="./notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
+      <img src="./notes/image-splash.avif">
+      <br>
     </p>
 </p>
 <div align="center">
@@ -45,7 +49,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.5/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -59,6 +63,9 @@
   </h3>
 </div>
 <br>
+<p align="center">
+  <a href="https://dioxuslabs.com/blog/release-060/">✨ Dioxus 0.6 is released - check it out here! ✨</a>
+</p>
 <br>
 
 Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hotreloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
@@ -79,40 +86,44 @@ fn app() -> Element {
 
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
-- Extremely performant, powered by Rust's fastest wasm-framework [sledgehammer](https://dioxuslabs.com/blog/templates-diffing)
+- Type-safe Routing and server functions to leverage Rust's powerful compile-time guarantees
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
-- And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
+- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
 
 ## Instant hot-reloading
 
-With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time. Rust code hotreloading is not yet 1st class, but possible with [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/).
+With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time.
 
 <div align="center">
-  <img src="./notes/hotreload.gif">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/hotreload-video.webp">
+  <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
+  <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
 </div>
 
-## Bundler for deploying to the web and desktop
 
-Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.5/reference/assets), and more. Build webapps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 15mb.
+## First-class Android and iOS support
+
+Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Native APIs.
+
+<div align="center">
+  <img src="./notes/android_and_ios2.avif" width="500">
+</div>
+
+## Bundle for web, desktop, and mobile
+
+Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.6/guides/assets), and more. Build webapps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 15mb.
 
 <div align="center">
   <img src="./notes/bundle.gif">
 </div>
 
+
 ## Fantastic documentation
 
-We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our docsite runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.5/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new diouxs features - [check it out!](https://github.com/dioxusLabs/docsite)
+We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our docsite runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.6/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new diouxs features - [check it out!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="./notes/docs.avif">
-</div>
-
-## Emphasis on developer experience
-
-Dioxus prioritizes developer experience, and we've put a ton of effort into end-to-end tooling. We've built a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) that autoformats your RSX code, converts HTML to RSX, and more. We've also built a very powerful [CLI](https://dioxuslabs.com/learn/0.5/CLI) that supports creating new apps, serving them, and cross-platform bundling, with deployment on the roadmap.
-
-<div align="center">
-  <img src="./notes/autofmt.gif">
 </div>
 
 ## Community
@@ -134,8 +145,6 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     <tr>
       <td>
       <b>Web</b>
-      <br />
-      <em>Tier 1 Support</em>
       </td>
       <td>
         <ul>
@@ -148,24 +157,7 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     </tr>
     <tr>
       <td>
-      <b>Fullstack</b>
-      <br />
-      <em>Tier 1 Support</em>
-      </td>
-      <td>
-        <ul>
-          <li>Suspense, hydration, and server-side rendering</li>
-          <li>Quickly drop in backend functionality with server functions</li>
-          <li>Extractors, middleware, and routing integrations</li>
-          <li>Compatible with desktop and mobile!</li>
-        </ul>
-      </td>
-    </tr>
-    <tr>
-      <td>
       <b>Desktop</b>
-      <br />
-      <em>Tier 1 Support</em>
       </td>
       <td>
         <ul>
@@ -178,43 +170,27 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     </tr>
     <tr>
       <td>
-      <b>Liveview</b>
-      <br />
-      <em>Tier 1 Support</em>
-      </td>
-      <td>
-        <ul>
-          <li>Render apps - or just a single component - entirely on the server</li>
-          <li>Integrations with popular Rust frameworks like Axum and Warp</li>
-          <li>Extremely low-latency and ability to support 10,000+ simultaneous apps</li>
-        </ul>
-      </td>
-    </tr>
-    <tr>
-      <td>
       <b>Mobile</b>
-      <br />
-      <em>Tier 2 Support</em>
       </td>
       <td>
         <ul>
           <li>Render using Webview or - experimentally - with WGPU or Skia </li>
-          <li>Support for iOS and Android </li>
-          <li>Currently quite experimental, with lots of improvements coming throughout 2024 </li>
+          <li>Build .ipa and .apk files for iOS and Android </li>
+          <li>Call directly into Java and Objective-C with minimal overhead</li>
+          <li>From "hello world" to running on device in seconds</li>
         </ul>
       </td>
     </tr>
     <tr>
       <td>
-      <b>Terminal</b>
-      <br />
-      <em>Tier 2 Support</em>
+      <b>Server-side Rendering</b>
       </td>
       <td>
         <ul>
-          <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
-          <li>Powered by the familiar flexbox and CSS model of the browser</li>
-          <li>Built-in widgets like text input, buttons, and focus system</li>
+          <li>Suspense, hydration, and server-side rendering</li>
+          <li>Quickly drop in backend functionality with server functions</li>
+          <li>Extractors, middleware, and routing integrations</li>
+          <li>Static-site generation and incremental regeneration</li>
         </ul>
       </td>
     </tr>
@@ -223,7 +199,7 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
 
 ## Running the examples
 
-> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.5 branch](https://github.com/DioxusLabs/dioxus/tree/v0.5/examples).
+> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.6 branch](https://github.com/DioxusLabs/dioxus/tree/v0.6/examples).
 
 The examples in the top level of this repository can be run with:
 
@@ -333,7 +309,7 @@ Dioxus and Electron are two entirely different projects with similar goals. Elec
 
 ## Contributing
 
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.5/contributing).
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.6/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 

@@ -3,10 +3,10 @@ name = "dioxus-cli"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
-description = "CLI tool for developing, testing, and publishing Dioxus apps"
+description = "CLI for building fullstack web, desktop, and mobile apps with a single codebase."
 repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT OR Apache-2.0"
-keywords = ["react", "gui", "cli", "dioxus", "wasm"]
+keywords = ["mobile", "gui", "cli", "dioxus", "wasm"]
 rust-version = "1.79.0"
 
 [dependencies]

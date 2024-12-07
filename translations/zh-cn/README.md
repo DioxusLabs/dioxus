@@ -45,7 +45,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> 示例 </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.5/guide"> 指南 </a>
+    <a href="https://dioxuslabs.com/learn/0.6/guide"> 指南 </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/README.md"> English </a>
     <span> | </span>
@@ -79,7 +79,7 @@ fn app() -> Element {
 - [人体工程学的状态管理](https://dioxuslabs.com/blog/release-050)，结合了 React、Solid 和 Svelte 的优点
 - 非常高效，由 Rust 最快的 wasm 框架 [sledgehammer](https://dioxuslabs.com/blog/templates-diffing) 提供支持
 - 集成的捆绑包，可部署到 Web、macOS、Linux 和 Windows
-- 还有更多！阅读 [Dioxus 漫游之旅](https://dioxuslabs.com/learn/0.5/)。
+- 还有更多！阅读 [Dioxus 漫游之旅](https://dioxuslabs.com/learn/0.6/)。
 
 ## 瞬时热重载
 
@@ -91,7 +91,7 @@ fn app() -> Element {
 
 ## 用于 Web 和桌面部署的捆绑包
 
-只需运行 `dx bundle`，您的应用程序将被构建和捆绑，并进行最大化的优化。在 Web 上，利用 [`.avif` 生成，`.wasm` 压缩，代码缩小](https://dioxuslabs.com/learn/0.5/reference/assets)，等等。构建的 Web 应用程序大小 [不到 50kb](https://github.com/ealmloff/tiny-dioxus/)，桌面/移动应用程序小于 15mb。
+只需运行 `dx bundle`，您的应用程序将被构建和捆绑，并进行最大化的优化。在 Web 上，利用 [`.avif` 生成，`.wasm` 压缩，代码缩小](https://dioxuslabs.com/learn/0.6/guides/assets)，等等。构建的 Web 应用程序大小 [不到 50kb](https://github.com/ealmloff/tiny-dioxus/)，桌面/移动应用程序小于 15mb。
 
 <div align="center">
   <img src="../../notes/bundle.gif">
@@ -99,7 +99,7 @@ fn app() -> Element {
 
 ## 出色的文档
 
-我们花费了大量精力构建清晰、易读和全面的文档。所有 HTML 元素和监听器都使用 MDN 文档进行了记录，并且我们的文档站点通过 Dioxus 本身进行持续集成，以确保文档始终保持最新。查看 [Dioxus 网站](https://dioxuslabs.com/learn/0.5/) 获取指南、参考资料、示例和更多信息。有趣的事实：我们将 Dioxus 网站用作新特性的测试平台 - [来看看吧！](https://github.com/dioxusLabs/docsite)
+我们花费了大量精力构建清晰、易读和全面的文档。所有 HTML 元素和监听器都使用 MDN 文档进行了记录，并且我们的文档站点通过 Dioxus 本身进行持续集成，以确保文档始终保持最新。查看 [Dioxus 网站](https://dioxuslabs.com/learn/0.6/) 获取指南、参考资料、示例和更多信息。有趣的事实：我们将 Dioxus 网站用作新特性的测试平台 - [来看看吧！](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="../../notes/docs.avif">
@@ -107,7 +107,7 @@ fn app() -> Element {
 
 ## 开发者体验的重点
 
-Dioxus 优先考虑开发者体验，我们为端到端工具链付出了大量努力。我们构建了一个 [VSCode 扩展](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)，可以自动格式化您的 RSX 代码，将 HTML 转换为 RSX 等等。我们还建立了一个非常强大的 [CLI](https://dioxuslabs.com/learn/0.5/CLI)，支持创建新应用程序、提供服务和跨平台捆绑，并且部署正在路上。
+Dioxus 优先考虑开发者体验，我们为端到端工具链付出了大量努力。我们构建了一个 [VSCode 扩展](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)，可以自动格式化您的 RSX 代码，将 HTML 转换为 RSX 等等。我们还建立了一个非常强大的 [CLI](https://dioxuslabs.com/learn/0.6/CLI)，支持创建新应用程序、提供服务和跨平台捆绑，并且部署正在路上。
 
 <div align="center">
   <img src="./notes/autofmt.gif">
@@ -342,7 +342,7 @@ Dioxus 和 Electron 是两个完全不同的项目，目标相似。Electron 使
 
 ## 贡献
 
-- 查看网站上有关[贡献的部分](https://dioxuslabs.com/learn/0.5/contributing)。
+- 查看网站上有关[贡献的部分](https://dioxuslabs.com/learn/0.6/contributing)。
 - 在我们的 [问题跟踪器](https://github.com/dioxuslabs/dioxus/issues) 上报告问题。
 - [加入](https://discord.gg/XgGxMSkvUM) discord 并提出问题！
 
