@@ -91,7 +91,7 @@ ignore = "0.4.22"
 env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
 
-tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter", "json"] }
+tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter", "json", "registry", "fmt"] }
 console-subscriber = { version = "0.3.0", optional = true }
 tracing = { workspace = true }
 wasm-opt = { version = "0.116.1", optional = true }

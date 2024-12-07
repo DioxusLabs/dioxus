@@ -437,7 +437,7 @@ impl AppBundle {
         }
 
         let asset_count = assets_to_transfer.len();
-        let assets_finished = AtomicUsize::new(0);
+        let current_asset = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
@@ -448,7 +448,7 @@ impl AppBundle {
                 .try_for_each(|(from, to, options)| {
                     tracing::trace!(
                         "Starting asset copy {current}/{asset_count} from {from:?}",
-                        current = assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
+                        current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
                     );
 
                     let res = process_file_to(options, from, to);
@@ -459,7 +459,7 @@ impl AppBundle {
 
                     BuildRequest::status_copied_asset(
                         &progress,
-                        assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
+                        current_asset.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
                         asset_count,
                         from.to_path_buf(),
                     );
@@ -737,7 +737,7 @@ impl AppBundle {
         // Wait a second for the cache to be written by the server
         tracing::info!("Waiting a moment for isrg to propagate...");
 
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
         tracing::info!("SSG complete");
 
@@ -777,6 +777,8 @@ impl AppBundle {
     /// Run any final tools to produce apks or other artifacts we might need.
     async fn assemble(&self) -> Result<()> {
         if let Platform::Android = self.build.build.platform() {
+            self.build.status_running_gradle();
+
             // make sure we can execute the gradlew script
             #[cfg(unix)]
             {

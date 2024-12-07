@@ -7,6 +7,8 @@ rsx! {
         class: "asd",
         class: "asd",
         class: "asd",
+        src: asset!("/123.png"),
+        src: asset!("/456.png"),
         blah: 123,
         onclick: move |_| {
             let blah = 120;

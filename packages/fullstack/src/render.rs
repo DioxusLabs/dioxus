@@ -4,18 +4,19 @@ use crate::html_storage::serialize::SerializedHydrationData;
 use crate::streaming::{Mount, StreamingRenderer};
 use dioxus_cli_config::base_path;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-use dioxus_isrg::{CachedRender, RenderFreshness};
+use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
+use std::fmt::Write;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
 use tokio::task::JoinHandle;
 
-use crate::prelude::*;
+use crate::{prelude::*, StreamingMode};
 use dioxus_lib::prelude::*;
 
 /// A suspense boundary that is pending with a placeholder in the client
@@ -166,6 +167,7 @@ impl SsrRendererPool {
             .unwrap_or_else(pre_renderer);
 
         let myself = self.clone();
+        let streaming_mode = cfg.streaming_mode;
 
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
@@ -203,65 +205,10 @@ impl SsrRendererPool {
             {
                 let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                 let stream = stream.clone();
-                // We use a stack to keep track of what suspense boundaries we are nested in to add children to the correct boundary
-                // The stack starts with the root scope because the root is a suspense boundary
-                let pending_suspense_boundaries_stack = RwLock::new(vec![]);
-                renderer.set_render_components(move |renderer, to, vdom, scope| {
-                    let is_suspense_boundary =
-                        SuspenseContext::downcast_suspense_boundary_from_scope(
-                            &vdom.runtime(),
-                            scope,
-                        )
-                        .filter(|s| s.has_suspended_tasks())
-                        .is_some();
-                    if is_suspense_boundary {
-                        let mount = stream.render_placeholder(
-                            |to| {
-                                {
-                                    pending_suspense_boundaries_stack
-                                        .write()
-                                        .unwrap()
-                                        .push(scope);
-                                }
-                                let out = renderer.render_scope(to, vdom, scope);
-                                {
-                                    pending_suspense_boundaries_stack.write().unwrap().pop();
-                                }
-                                out
-                            },
-                            &mut *to,
-                        )?;
-                        // Add the suspense boundary to the list of pending suspense boundaries
-                        // We will replace the mount with the resolved contents later once the suspense boundary is resolved
-                        let mut scope_to_mount_mapping_write =
-                            scope_to_mount_mapping.write().unwrap();
-                        scope_to_mount_mapping_write.insert(
-                            scope,
-                            PendingSuspenseBoundary {
-                                mount,
-                                children: vec![],
-                            },
-                        );
-                        // Add the scope to the list of children of the parent suspense boundary
-                        let pending_suspense_boundaries_stack =
-                            pending_suspense_boundaries_stack.read().unwrap();
-                        // If there is a parent suspense boundary, add the scope to the list of children
-                        // This suspense boundary will start capturing errors when the parent is resolved
-                        if let Some(parent) = pending_suspense_boundaries_stack.last() {
-                            let parent = scope_to_mount_mapping_write.get_mut(parent).unwrap();
-                            parent.children.push(scope);
-                        }
-                        // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
-                        else {
-                            vdom.in_runtime(|| {
-                                start_capturing_errors(scope);
-                            });
-                        }
-                    } else {
-                        renderer.render_scope(to, vdom, scope)?
-                    }
-                    Ok(())
-                });
+                renderer.set_render_components(streaming_render_component_callback(
+                    stream,
+                    scope_to_mount_mapping,
+                ));
             }
 
             macro_rules! throw_error {
@@ -269,6 +216,12 @@ impl SsrRendererPool {
                     stream.close_with_error($e);
                     return;
                 };
+            }
+
+            // If streaming is disabled, wait for the virtual dom to finish all suspense work
+            // before rendering anything
+            if streaming_mode == StreamingMode::Disabled {
+                virtual_dom.wait_for_suspense().await;
             }
 
             // Render the initial frame with loading placeholders
@@ -378,6 +331,74 @@ impl SsrRendererPool {
                 cancel_task: Some(join_handle),
             },
         ))
+    }
+}
+
+/// Create the streaming render component callback. It will keep track of what scopes are mounted to what pending
+/// suspense boundaries in the DOM.
+///
+/// This mapping is used to replace the DOM mount with the resolved contents once the suspense boundary is finished.
+fn streaming_render_component_callback(
+    stream: Arc<StreamingRenderer<IncrementalRendererError>>,
+    scope_to_mount_mapping: Arc<RwLock<HashMap<ScopeId, PendingSuspenseBoundary>>>,
+) -> impl Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result
+       + Send
+       + Sync
+       + 'static {
+    // We use a stack to keep track of what suspense boundaries we are nested in to add children to the correct boundary
+    // The stack starts with the root scope because the root is a suspense boundary
+    let pending_suspense_boundaries_stack = RwLock::new(vec![]);
+    move |renderer, to, vdom, scope| {
+        let is_suspense_boundary =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope)
+                .filter(|s| s.has_suspended_tasks())
+                .is_some();
+        if is_suspense_boundary {
+            let mount = stream.render_placeholder(
+                |to| {
+                    {
+                        pending_suspense_boundaries_stack
+                            .write()
+                            .unwrap()
+                            .push(scope);
+                    }
+                    let out = renderer.render_scope(to, vdom, scope);
+                    {
+                        pending_suspense_boundaries_stack.write().unwrap().pop();
+                    }
+                    out
+                },
+                &mut *to,
+            )?;
+            // Add the suspense boundary to the list of pending suspense boundaries
+            // We will replace the mount with the resolved contents later once the suspense boundary is resolved
+            let mut scope_to_mount_mapping_write = scope_to_mount_mapping.write().unwrap();
+            scope_to_mount_mapping_write.insert(
+                scope,
+                PendingSuspenseBoundary {
+                    mount,
+                    children: vec![],
+                },
+            );
+            // Add the scope to the list of children of the parent suspense boundary
+            let pending_suspense_boundaries_stack =
+                pending_suspense_boundaries_stack.read().unwrap();
+            // If there is a parent suspense boundary, add the scope to the list of children
+            // This suspense boundary will start capturing errors when the parent is resolved
+            if let Some(parent) = pending_suspense_boundaries_stack.last() {
+                let parent = scope_to_mount_mapping_write.get_mut(parent).unwrap();
+                parent.children.push(scope);
+            }
+            // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
+            else {
+                vdom.in_runtime(|| {
+                    start_capturing_errors(scope);
+                });
+            }
+        } else {
+            renderer.render_scope(to, vdom, scope)?
+        }
+        Ok(())
     }
 }
 

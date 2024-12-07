@@ -3,6 +3,7 @@ use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
 use std::{
+    borrow::Cow,
     collections::{HashMap, VecDeque},
     fmt::{Result, Write},
 };
@@ -910,8 +911,13 @@ impl<'a> Writer<'a> {
     }
 
     #[allow(clippy::map_entry)]
-    fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
+    fn retrieve_formatted_expr(&mut self, expr: &Expr) -> Cow<'_, str> {
         let loc = expr.span().start();
+
+        // never cache expressions that are spanless
+        if loc.line == 1 && loc.column == 0 {
+            return self.unparse_expr(expr).into();
+        }
 
         if !self.cached_formats.contains_key(&loc) {
             let formatted = self.unparse_expr(expr);
@@ -922,6 +928,7 @@ impl<'a> Writer<'a> {
             .get(&loc)
             .expect("Just inserted the parsed expr, so it should be in the cache")
             .as_str()
+            .into()
     }
 
     fn final_span_of_node(node: &BodyNode) -> Span {

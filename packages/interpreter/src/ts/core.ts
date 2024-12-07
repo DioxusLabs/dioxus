@@ -43,6 +43,9 @@ export class BaseInterpreter {
     this.templates = {};
 
     this.handler = handler;
+
+    // make sure to set the root element's ID so it still registers events
+    root.setAttribute("data-dioxus-id", "0");
   }
 
   handleResizeEvent(entry: ResizeObserverEntry) {

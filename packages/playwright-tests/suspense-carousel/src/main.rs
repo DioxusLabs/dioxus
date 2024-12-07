@@ -107,5 +107,9 @@ fn NestedSuspendedComponent(id: i32) -> Element {
 }
 
 fn main() {
-    dioxus::launch(app);
+    LaunchBuilder::new()
+        .with_cfg(server_only! {
+            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+        })
+        .launch(app);
 }
