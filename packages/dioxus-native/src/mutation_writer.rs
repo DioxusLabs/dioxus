@@ -288,9 +288,11 @@ impl WriteMutations for MutationWriter<'_> {
             }
             // FIXME: support other non-text attributes
             else if let AttributeValue::Text(val) = value {
-                // Update text input value
-                if let Some(input_data) = element.text_input_data_mut() {
-                    input_data.set_text(&mut self.doc.font_ctx, &mut self.doc.layout_ctx, val);
+                if name == "value" {
+                    // Update text input value
+                    if let Some(input_data) = element.text_input_data_mut() {
+                        input_data.set_text(&mut self.doc.font_ctx, &mut self.doc.layout_ctx, val);
+                    }
                 }
 
                 // FIXME check namespace
@@ -319,8 +321,10 @@ impl WriteMutations for MutationWriter<'_> {
 
             if let AttributeValue::None = value {
                 // Update text input value
-                if let Some(input_data) = element.text_input_data_mut() {
-                    input_data.set_text(&mut self.doc.font_ctx, &mut self.doc.layout_ctx, "");
+                if name == "value" {
+                    if let Some(input_data) = element.text_input_data_mut() {
+                        input_data.set_text(&mut self.doc.font_ctx, &mut self.doc.layout_ctx, "");
+                    }
                 }
 
                 // FIXME: check namespace
