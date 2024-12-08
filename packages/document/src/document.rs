@@ -105,6 +105,7 @@ pub trait Document: 'static {
             // The style has a src, render it as a link tag
             (Some(_), _) => {
                 attributes.push(("type", "text/css".into()));
+                attributes.push(("rel", "stylesheet".into()));
                 self.create_head_element("link", &attributes, None)
             }
             // The style has neither contents nor src, log an error
