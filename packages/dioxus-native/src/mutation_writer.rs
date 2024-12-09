@@ -4,9 +4,8 @@ use blitz_dom::{
     node::{Attribute, NodeSpecificData},
     ns, Document, ElementNodeData, NodeData, QualName, RestyleHint,
 };
-use dioxus::{
-    dioxus_core::{AttributeValue, ElementId, Template, WriteMutations},
-    prelude::{TemplateAttribute, TemplateNode},
+use dioxus_core::{
+    AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
 };
 use rustc_hash::FxHashMap;
 use std::collections::HashSet;

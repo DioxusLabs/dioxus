@@ -26,14 +26,10 @@ use blitz_shell::{
     create_default_event_loop, BlitzEvent, BlitzShellNetCallback, Config, WindowConfig,
 };
 use blitz_traits::net::SharedCallback;
-use dioxus::prelude::{ComponentFunction, Element, VirtualDom};
+use dioxus_core::{ComponentFunction, Element, VirtualDom};
 use std::sync::Arc;
 
 type NodeId = usize;
-
-pub mod exports {
-    pub use dioxus;
-}
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
 pub fn launch(root: fn() -> Element) {

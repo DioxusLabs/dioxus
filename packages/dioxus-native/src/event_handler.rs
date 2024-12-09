@@ -1,49 +1,57 @@
 use std::collections::HashMap;
 
-use dioxus::{
-    html::{FormValue, HasFileData, HasFormData},
-    prelude::{HtmlEventConverter, PlatformEventData},
+use dioxus_html::{
+    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
+    input_data::{MouseButton, MouseButtonSet},
+    point_interaction::{
+        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
+    },
+    AnimationData, ClipboardData, CompositionData, DragData, FocusData, FormData, FormValue,
+    HasFileData, HasFormData, HasMouseData, HtmlEventConverter, ImageData, KeyboardData, MediaData,
+    MountedData, MouseData, PlatformEventData, PointerData, ResizeData, ScrollData, SelectionData,
+    ToggleData, TouchData, TransitionData, VisibleData, WheelData,
 };
+use keyboard_types::Modifiers;
 
 use super::keyboard_event::BlitzKeyboardData;
 
 #[derive(Clone)]
 pub struct NativeClickData;
 
-impl dioxus::html::point_interaction::InteractionLocation for NativeClickData {
-    fn client_coordinates(&self) -> dioxus::prelude::dioxus_elements::geometry::ClientPoint {
+impl InteractionLocation for NativeClickData {
+    fn client_coordinates(&self) -> ClientPoint {
         todo!()
     }
 
-    fn screen_coordinates(&self) -> dioxus::prelude::dioxus_elements::geometry::ScreenPoint {
+    fn screen_coordinates(&self) -> ScreenPoint {
         todo!()
     }
 
-    fn page_coordinates(&self) -> dioxus::prelude::dioxus_elements::geometry::PagePoint {
+    fn page_coordinates(&self) -> PagePoint {
         todo!()
     }
 }
-impl dioxus::html::point_interaction::InteractionElementOffset for NativeClickData {
-    fn element_coordinates(&self) -> dioxus::prelude::dioxus_elements::geometry::ElementPoint {
+impl InteractionElementOffset for NativeClickData {
+    fn element_coordinates(&self) -> ElementPoint {
         todo!()
     }
 }
-impl dioxus::html::point_interaction::ModifiersInteraction for NativeClickData {
-    fn modifiers(&self) -> dioxus::prelude::Modifiers {
+impl ModifiersInteraction for NativeClickData {
+    fn modifiers(&self) -> Modifiers {
         todo!()
     }
 }
 
-impl dioxus::html::point_interaction::PointerInteraction for NativeClickData {
-    fn trigger_button(&self) -> Option<dioxus::prelude::dioxus_elements::input_data::MouseButton> {
+impl PointerInteraction for NativeClickData {
+    fn trigger_button(&self) -> Option<MouseButton> {
         todo!()
     }
 
-    fn held_buttons(&self) -> dioxus::prelude::dioxus_elements::input_data::MouseButtonSet {
+    fn held_buttons(&self) -> MouseButtonSet {
         todo!()
     }
 }
-impl dioxus::html::HasMouseData for NativeClickData {
+impl HasMouseData for NativeClickData {
     fn as_any(&self) -> &dyn std::any::Any {
         self as &dyn std::any::Any
     }
@@ -52,92 +60,86 @@ impl dioxus::html::HasMouseData for NativeClickData {
 pub struct NativeConverter {}
 
 impl HtmlEventConverter for NativeConverter {
-    fn convert_animation_data(&self, _event: &PlatformEventData) -> dioxus::prelude::AnimationData {
+    fn convert_animation_data(&self, _event: &PlatformEventData) -> AnimationData {
         todo!()
     }
 
-    fn convert_clipboard_data(&self, _event: &PlatformEventData) -> dioxus::prelude::ClipboardData {
+    fn convert_clipboard_data(&self, _event: &PlatformEventData) -> ClipboardData {
         todo!()
     }
 
-    fn convert_composition_data(
-        &self,
-        _event: &PlatformEventData,
-    ) -> dioxus::prelude::CompositionData {
+    fn convert_composition_data(&self, _event: &PlatformEventData) -> CompositionData {
         todo!()
     }
 
-    fn convert_drag_data(&self, _event: &PlatformEventData) -> dioxus::prelude::DragData {
+    fn convert_drag_data(&self, _event: &PlatformEventData) -> DragData {
         todo!()
     }
 
-    fn convert_focus_data(&self, _event: &PlatformEventData) -> dioxus::prelude::FocusData {
+    fn convert_focus_data(&self, _event: &PlatformEventData) -> FocusData {
         todo!()
     }
 
-    fn convert_form_data(&self, event: &PlatformEventData) -> dioxus::prelude::FormData {
+    fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
         let o = event.downcast::<NativeFormData>().unwrap().clone();
-        dioxus::prelude::FormData::from(o)
+        FormData::from(o)
     }
 
-    fn convert_image_data(&self, _event: &PlatformEventData) -> dioxus::prelude::ImageData {
+    fn convert_image_data(&self, _event: &PlatformEventData) -> ImageData {
         todo!()
     }
 
-    fn convert_keyboard_data(&self, event: &PlatformEventData) -> dioxus::prelude::KeyboardData {
+    fn convert_keyboard_data(&self, event: &PlatformEventData) -> KeyboardData {
         let data = event.downcast::<BlitzKeyboardData>().unwrap().clone();
-        dioxus::prelude::KeyboardData::from(data)
+        KeyboardData::from(data)
     }
 
-    fn convert_media_data(&self, _event: &PlatformEventData) -> dioxus::prelude::MediaData {
+    fn convert_media_data(&self, _event: &PlatformEventData) -> MediaData {
         todo!()
     }
 
-    fn convert_mounted_data(&self, _event: &PlatformEventData) -> dioxus::prelude::MountedData {
+    fn convert_mounted_data(&self, _event: &PlatformEventData) -> MountedData {
         todo!()
     }
 
-    fn convert_mouse_data(&self, event: &PlatformEventData) -> dioxus::prelude::MouseData {
+    fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {
         let o = event.downcast::<NativeClickData>().unwrap().clone();
-        dioxus::prelude::MouseData::from(o)
+        MouseData::from(o)
     }
 
-    fn convert_pointer_data(&self, _event: &PlatformEventData) -> dioxus::prelude::PointerData {
+    fn convert_pointer_data(&self, _event: &PlatformEventData) -> PointerData {
         todo!()
     }
 
-    fn convert_scroll_data(&self, _event: &PlatformEventData) -> dioxus::prelude::ScrollData {
+    fn convert_scroll_data(&self, _event: &PlatformEventData) -> ScrollData {
         todo!()
     }
 
-    fn convert_selection_data(&self, _event: &PlatformEventData) -> dioxus::prelude::SelectionData {
+    fn convert_selection_data(&self, _event: &PlatformEventData) -> SelectionData {
         todo!()
     }
 
-    fn convert_toggle_data(&self, _event: &PlatformEventData) -> dioxus::prelude::ToggleData {
+    fn convert_toggle_data(&self, _event: &PlatformEventData) -> ToggleData {
         todo!()
     }
 
-    fn convert_touch_data(&self, _event: &PlatformEventData) -> dioxus::prelude::TouchData {
+    fn convert_touch_data(&self, _event: &PlatformEventData) -> TouchData {
         todo!()
     }
 
-    fn convert_transition_data(
-        &self,
-        _event: &PlatformEventData,
-    ) -> dioxus::prelude::TransitionData {
+    fn convert_transition_data(&self, _event: &PlatformEventData) -> TransitionData {
         todo!()
     }
 
-    fn convert_wheel_data(&self, _event: &PlatformEventData) -> dioxus::prelude::WheelData {
+    fn convert_wheel_data(&self, _event: &PlatformEventData) -> WheelData {
         todo!()
     }
 
-    fn convert_resize_data(&self, _event: &PlatformEventData) -> dioxus::prelude::ResizeData {
+    fn convert_resize_data(&self, _event: &PlatformEventData) -> ResizeData {
         todo!()
     }
 
-    fn convert_visible_data(&self, _event: &PlatformEventData) -> dioxus::prelude::VisibleData {
+    fn convert_visible_data(&self, _event: &PlatformEventData) -> VisibleData {
         todo!()
     }
 }

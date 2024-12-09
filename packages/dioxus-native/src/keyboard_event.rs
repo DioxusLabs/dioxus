@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use dioxus::events::{HasKeyboardData, ModifiersInteraction};
+use dioxus_html::{point_interaction::ModifiersInteraction, HasKeyboardData};
 use keyboard_types::{Code, Key, Location, Modifiers};
 
 use winit::event::KeyEvent as WinitKeyEvent;

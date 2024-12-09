@@ -20,7 +20,8 @@ blitz-traits = { path = "../blitz-traits" }
 blitz-shell = { path = "../blitz-shell" }
 
 # DioxusLabs dependencies
-dioxus = { workspace = true }
+dioxus-core = { workspace = true }
+dioxus-html = { workspace = true }
 dioxus-cli-config = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 

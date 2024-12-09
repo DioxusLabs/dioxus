@@ -12,11 +12,8 @@ use blitz_dom::{
 };
 
 use blitz_traits::net::NetProvider;
-use dioxus::{
-    dioxus_core::{ElementId, Event, VirtualDom},
-    html::{FormValue, PlatformEventData},
-    prelude::set_event_converter,
-};
+use dioxus_core::{ElementId, Event, VirtualDom};
+use dioxus_html::{set_event_converter, FormValue, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 
 use super::event_handler::{NativeClickData, NativeConverter, NativeFormData};
