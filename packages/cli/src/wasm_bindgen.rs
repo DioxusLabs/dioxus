@@ -17,8 +17,14 @@ pub(crate) struct WasmBindgen {
 }
 
 impl WasmBindgen {
-    pub fn verify_install(version: String) -> anyhow::Result<bool> {
-        todo!()
+    pub async fn verify_install(version: String) -> anyhow::Result<bool> {
+        let mut binary = format!("wasm-bindgen-{version}");
+        if cfg!(windows) {
+            binary = format!("{binary}.exe");
+        }
+
+        let path = Self::install_dir().await?.join(binary);
+        Ok(path.exists())
     }
 
     /// Get the github install url.
@@ -44,7 +50,7 @@ impl WasmBindgen {
     async fn install_binstall(version: String) -> anyhow::Result<PathBuf> {
         let package = format!("wasm-bindgen-cli@{version}");
         let tmp_dir = std::env::temp_dir();
-        let install_dir = Self::install_dir();
+        let install_dir = Self::install_dir().await?;
 
         // Run install command
         Command::new("cargo")
@@ -62,10 +68,7 @@ impl WasmBindgen {
             .await?;
 
         // Get the final binary location.
-        let mut installed_name = format!("wasm-bindgen-{version}");
-        if cfg!(windows) {
-            installed_name = format!("{installed_name}.exe");
-        }
+        let installed_name = Self::bindgen_installed_bin_name(version);
         let final_binary = install_dir.join(installed_name);
 
         // Move the install wasm-bindgen binary from tmp directory to it's new location.
@@ -85,8 +88,23 @@ impl WasmBindgen {
     }
 
     /// Get the installation directory for the wasm-bindgen executable.
-    fn install_dir() -> PathBuf {
-        todo!()
+    async fn install_dir() -> anyhow::Result<PathBuf> {
+        let local = dirs::data_local_dir()
+            .expect("user should be running on a compatible operating system");
+
+        let bindgen_dir = local.join("dioxus/wasm-bindgen/");
+        fs::create_dir_all(&bindgen_dir).await?;
+
+        Ok(bindgen_dir)
+        
+    }
+
+    fn bindgen_installed_bin_name(version: String) -> String {
+        let mut name = format!("wasm-bindgen-{version}");
+        if cfg!(windows) {
+            name = format!("{name}.exe");
+        }
+        name
     }
 }
 
