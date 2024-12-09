@@ -233,7 +233,18 @@ pub(crate) fn invalidate_browser_asset_cache() {
         use wasm_bindgen::JsCast;
         let link: web_sys::Element = links.get(x).unwrap().unchecked_into();
         if let Some(href) = link.get_attribute("href") {
-            _ = link.set_attribute("href", &format!("{}?{}", href, noise));
+            let (url, query) = href.split_once('?').unwrap_or((&href, ""));
+            let mut query_params: Vec<&str> = query.split('&').collect();
+            // Remove the old force reload param
+            query_params.retain(|param| !param.starts_with("dx_force_reload="));
+            // Add the new force reload param
+            let force_reload = format!("dx_force_reload={noise}");
+            query_params.push(&force_reload);
+
+            // Rejoin the query
+            let query = query_params.join("&");
+
+            _ = link.set_attribute("href", &format!("{url}?{query}"));
         }
     }
 }

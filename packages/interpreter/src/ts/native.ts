@@ -170,7 +170,10 @@ export class NativeInterpreter extends JSChannel_ {
   // Windows drag-n-drop fix code. Called by wry drag-n-drop handler over the event loop.
   handleWindowsDragDrop() {
     if (window.dxDragLastElement) {
-      const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+      const dragLeaveEvent = new DragEvent("dragleave", {
+        bubbles: true,
+        cancelable: true,
+      });
       window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
 
       let data = new DataTransfer();
@@ -179,7 +182,11 @@ export class NativeInterpreter extends JSChannel_ {
       const file = new File(["content"], "file.txt", { type: "text/plain" });
       data.items.add(file);
 
-      const dragDropEvent = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data });
+      const dragDropEvent = new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: data,
+      });
       window.dxDragLastElement.dispatchEvent(dragDropEvent);
       window.dxDragLastElement = null;
     }
@@ -190,11 +197,17 @@ export class NativeInterpreter extends JSChannel_ {
 
     if (element != window.dxDragLastElement) {
       if (window.dxDragLastElement) {
-        const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+        const dragLeaveEvent = new DragEvent("dragleave", {
+          bubbles: true,
+          cancelable: true,
+        });
         window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
       }
 
-      const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
+      const dragOverEvent = new DragEvent("dragover", {
+        bubbles: true,
+        cancelable: true,
+      });
       element.dispatchEvent(dragOverEvent);
       window.dxDragLastElement = element;
     }
@@ -202,7 +215,10 @@ export class NativeInterpreter extends JSChannel_ {
 
   handleWindowsDragLeave() {
     if (window.dxDragLastElement) {
-      const dragLeaveEvent = new DragEvent("dragleave", { bubbles: true, cancelable: true });
+      const dragLeaveEvent = new DragEvent("dragleave", {
+        bubbles: true,
+        cancelable: true,
+      });
       window.dxDragLastElement.dispatchEvent(dragLeaveEvent);
       window.dxDragLastElement = null;
     }
@@ -382,10 +398,19 @@ export class NativeInterpreter extends JSChannel_ {
     let stylesheets = document.querySelectorAll("link[rel=stylesheet]");
     for (let i = 0; i < stylesheets.length; i++) {
       let sheet = stylesheets[i] as HTMLLinkElement;
-      // Using `cache: reload` will force the browser to re-fetch the stylesheet and bust the cache
-      fetch(sheet.href, { cache: "reload" }).then(() => {
-        sheet.href = sheet.href + "?" + Math.random();
-      });
+      // Split up the url and add a extra random query param to force the browser to reload he asset
+      const splitByQuery = sheet.href.split("?");
+      let url = splitByQuery[0];
+      let query = splitByQuery[1];
+      if (!query) {
+        query = "";
+      }
+      let queryParams = new URLSearchParams(query);
+      // Delete the existing dx_force_reload entry if it exists
+      queryParams.delete("dx_force_reload");
+      // And add a new random dx_force_reload query param to force the browser to reload the asset
+      queryParams.append("dx_force_reload", Math.random().toString());
+      sheet.href = `${url}?${queryParams}`;
     }
   }
 
