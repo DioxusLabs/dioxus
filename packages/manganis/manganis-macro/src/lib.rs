@@ -6,6 +6,7 @@ use quote::{quote, ToTokens};
 use syn::parse_macro_input;
 
 pub(crate) mod asset;
+pub(crate) mod metadata;
 pub(crate) mod linker;
 
 use linker::generate_link_section;
