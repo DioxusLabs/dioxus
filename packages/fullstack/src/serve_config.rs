@@ -163,7 +163,7 @@ impl ServeConfigBuilder {
     ///
     /// It is equivalent to calling `streaming_mode(StreamingMode::OutOfOrder)`
     ///
-    /// /// ```rust, no_run
+    /// ```rust, no_run
     /// # use dioxus::prelude::*;
     /// # fn app() -> Element { todo!() }
     /// dioxus::LaunchBuilder::new()
