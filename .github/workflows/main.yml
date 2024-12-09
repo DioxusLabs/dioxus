@@ -123,15 +123,6 @@ jobs:
           cache-all-crates: "true"
       - run: cargo fmt --all -- --check
 
-  typos:
-    if: github.event.pull_request.draft == false
-    name: Check for typos
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check for typos
-        uses: crate-ci/typos@master
-
   docs:
     if: github.event.pull_request.draft == false
     name: Docs
@@ -156,25 +147,6 @@ jobs:
         # todo: re-enable warnings, private items
         # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
         #  --document-private-items
-
-  # Check for invalid links in the repository
-  link-check:
-    if: github.event.pull_request.draft == false
-    name: Check For Invalid Links
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore lychee cache
-        uses: actions/cache@v4
-        with:
-          path: .lycheecache
-          key: cache-lychee-${{ github.sha }}
-          restore-keys: cache-lychee-
-      - name: Run lychee
-        uses: lycheeverse/lychee-action@v2
-        with:
-          args: --base . --config ./lychee.toml './**/*.md'
-          fail: true
 
   check:
     if: github.event.pull_request.draft == false

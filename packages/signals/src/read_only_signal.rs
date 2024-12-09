@@ -11,6 +11,9 @@ pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage>
     inner: Signal<T, S>,
 }
 
+/// A signal that can only be read from.
+pub type ReadSignal<T, S> = ReadOnlySignal<T, S>;
+
 impl<T: 'static, S: Storage<SignalData<T>>> From<Signal<T, S>> for ReadOnlySignal<T, S> {
     fn from(inner: Signal<T, S>) -> Self {
         Self { inner }

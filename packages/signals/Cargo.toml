@@ -3,7 +3,7 @@ name = "dioxus-signals"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
 edition = "2021"
-description = "Signals for Dioxus"
+description = "Reactivie signals for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
@@ -17,8 +17,8 @@ dioxus-core = { workspace = true }
 generational-box = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-parking_lot = "0.12.1"
-once_cell = { workspace = true }
+parking_lot = { workspace = true}
+once_cell = { workspace = true}
 rustc-hash = { workspace = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true }

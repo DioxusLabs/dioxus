@@ -9,12 +9,13 @@
 //! - `html`: (default) exports `dioxus-html` as the default elements to use in rsx
 //! - `hooks`: (default) re-exports `dioxus-hooks`
 //! - `hot-reload`: (default) enables hot rsx reloading in all renderers that support it
-//! - `router`: exports the [router](https://dioxuslabs.com/learn/0.5/router) and enables any router features for the current platform
+//! - `router`: exports the [router](https://dioxuslabs.com/learn/0.6/router) and enables any router features for the current platform
 //! - `third-party-renderer`: Just disables warnings about no active platform when no renderers are enabled
+//! - `logger`: Enable the default tracing subscriber for Dioxus apps
 //!
 //! Platform features (the current platform determines what platform the [`launch()`] function runs):
 //!
-//! - `fullstack`: enables the fullstack platform. This must be used in combination with the `web` feature for wasm builds and `axum` feature for server builds
+//! - `fullstack`: enables the fullstack platform. This must be used in combination with the `web` feature for wasm builds and `server` feature for server builds
 //! - `desktop`: enables the desktop platform
 //! - `mobile`: enables the mobile platform
 //! - `web`: enables the web platform. If the fullstack platform is enabled, this will set the fullstack platform to client mode

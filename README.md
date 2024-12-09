@@ -1,10 +1,14 @@
 <p>
     <p align="center" >
-      <img src="./notes/header-light.svg#gh-light-mode-only" >
-      <img src="./notes/header-dark.svg#gh-dark-mode-only" >
-      <a href="https://dioxuslabs.com">
-          <img src="./notes/dioxus_splash_8.avif">
-      </a>
+      <!-- <img src="./notes/header-light-updated.svg#gh-light-mode-only" >
+      <img src="./notes/header-dark-updated.svg#gh-dark-mode-only" > -->
+      <!-- <a href="https://dioxuslabs.com">
+          <img src="./notes/flat-splash.avif">
+      </a> -->
+      <img src="./notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
+      <img src="./notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
+      <img src="./notes/image-splash.avif">
+      <br>
     </p>
 </p>
 <div align="center">
@@ -45,7 +49,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.5/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -59,9 +63,12 @@
   </h3>
 </div>
 <br>
+<p align="center">
+  <a href="https://dioxuslabs.com/blog/release-060/">✨ Dioxus 0.6 is released - check it out here! ✨</a>
+</p>
 <br>
 
-Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hotreloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
+Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hot-reloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
 
 ```rust
 fn app() -> Element {
@@ -79,40 +86,44 @@ fn app() -> Element {
 
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
-- Extremely performant, powered by Rust's fastest wasm-framework [sledgehammer](https://dioxuslabs.com/blog/templates-diffing)
+- Type-safe Routing and server functions to leverage Rust's powerful compile-time guarantees
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
-- And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
+- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
 
 ## Instant hot-reloading
 
-With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time. Rust code hotreloading is not yet 1st class, but possible with [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/).
+With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time.
 
 <div align="center">
-  <img src="./notes/hotreload.gif">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/hotreload-video.webp">
+  <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
+  <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
 </div>
 
-## Bundler for deploying to the web and desktop
 
-Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.5/reference/assets), and more. Build webapps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 15mb.
+## First-class Android and iOS support
+
+Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Native APIs.
+
+<div align="center">
+  <img src="./notes/android_and_ios2.avif" width="500">
+</div>
+
+## Bundle for web, desktop, and mobile
+
+Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.6/guides/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
 
 <div align="center">
   <img src="./notes/bundle.gif">
 </div>
 
+
 ## Fantastic documentation
 
-We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our docsite runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.5/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new diouxs features - [check it out!](https://github.com/dioxusLabs/docsite)
+We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.6/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new Dioxus features - [check it out!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="./notes/docs.avif">
-</div>
-
-## Emphasis on developer experience
-
-Dioxus prioritizes developer experience, and we've put a ton of effort into end-to-end tooling. We've built a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) that autoformats your RSX code, converts HTML to RSX, and more. We've also built a very powerful [CLI](https://dioxuslabs.com/learn/0.5/CLI) that supports creating new apps, serving them, and cross-platform bundling, with deployment on the roadmap.
-
-<div align="center">
-  <img src="./notes/autofmt.gif">
 </div>
 
 ## Community
@@ -134,8 +145,6 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     <tr>
       <td>
       <b>Web</b>
-      <br />
-      <em>Tier 1 Support</em>
       </td>
       <td>
         <ul>
@@ -148,28 +157,11 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     </tr>
     <tr>
       <td>
-      <b>Fullstack</b>
-      <br />
-      <em>Tier 1 Support</em>
-      </td>
-      <td>
-        <ul>
-          <li>Suspense, hydration, and server-side rendering</li>
-          <li>Quickly drop in backend functionality with server functions</li>
-          <li>Extractors, middleware, and routing integrations</li>
-          <li>Compatible with desktop and mobile!</li>
-        </ul>
-      </td>
-    </tr>
-    <tr>
-      <td>
       <b>Desktop</b>
-      <br />
-      <em>Tier 1 Support</em>
       </td>
       <td>
         <ul>
-          <li>Render using Webview or - experimentally - with WGPU or <a href="https://freyaui.dev">Freya</a> (skia) </li>
+          <li>Render using Webview or - experimentally - with WGPU or <a href="https://freyaui.dev">Freya</a> (Skia) </li>
           <li>Zero-config setup. Simply `cargo run` or `dx serve` to build your app </li>
           <li>Full support for native system access without IPC </li>
           <li>Supports macOS, Linux, and Windows. Portable <3mb binaries </li>
@@ -178,43 +170,27 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
     </tr>
     <tr>
       <td>
-      <b>Liveview</b>
-      <br />
-      <em>Tier 1 Support</em>
-      </td>
-      <td>
-        <ul>
-          <li>Render apps - or just a single component - entirely on the server</li>
-          <li>Integrations with popular Rust frameworks like Axum and Warp</li>
-          <li>Extremely low-latency and ability to support 10,000+ simultaneous apps</li>
-        </ul>
-      </td>
-    </tr>
-    <tr>
-      <td>
       <b>Mobile</b>
-      <br />
-      <em>Tier 2 Support</em>
       </td>
       <td>
         <ul>
           <li>Render using Webview or - experimentally - with WGPU or Skia </li>
-          <li>Support for iOS and Android </li>
-          <li>Currently quite experimental, with lots of improvements coming throughout 2024 </li>
+          <li>Build .ipa and .apk files for iOS and Android </li>
+          <li>Call directly into Java and Objective-C with minimal overhead</li>
+          <li>From "hello world" to running on device in seconds</li>
         </ul>
       </td>
     </tr>
     <tr>
       <td>
-      <b>Terminal</b>
-      <br />
-      <em>Tier 2 Support</em>
+      <b>Server-side Rendering</b>
       </td>
       <td>
         <ul>
-          <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
-          <li>Powered by the familiar flexbox and CSS model of the browser</li>
-          <li>Built-in widgets like text input, buttons, and focus system</li>
+          <li>Suspense, hydration, and server-side rendering</li>
+          <li>Quickly drop in backend functionality with server functions</li>
+          <li>Extractors, middleware, and routing integrations</li>
+          <li>Static-site generation and incremental regeneration</li>
         </ul>
       </td>
     </tr>
@@ -223,7 +199,7 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
 
 ## Running the examples
 
-> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.5 branch](https://github.com/DioxusLabs/dioxus/tree/v0.5/examples).
+> The examples in the main branch of this repository target the git version of dioxus and the CLI. If you are looking for examples that work with the latest stable release of dioxus, check out the [0.6 branch](https://github.com/DioxusLabs/dioxus/tree/v0.6/examples).
 
 The examples in the top level of this repository can be run with:
 
@@ -252,7 +228,7 @@ Dioxus places an emphasis on a few key points that make it different from other 
 - **React-like**: we rely on concepts like components, props, and hooks to build UIs, with our state management being closer to Svelte than to SolidJS.
 - **HTML and CSS**: we lean completely into HTML and CSS, quirks and all.
 - **Renderer-agnostic**: you can swap out the renderer for any platform you want thanks to [our fast VirtualDOM](https://dioxuslabs.com/blog/templates-diffing).
-- **Collaborative**: whenever possible, we spin out crates like [Taffy](https://github.com/DioxusLabs/taffy), [magnanis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), and [blitz](http://github.com/dioxusLabs/blitz) so the ecosystem can grow together.
+- **Collaborative**: whenever possible, we spin out crates like [Taffy](https://github.com/DioxusLabs/taffy), [manganis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), and [blitz](http://github.com/dioxusLabs/blitz) so the ecosystem can grow together.
 
 ### Dioxus vs Tauri
 
@@ -272,7 +248,7 @@ Leptos is a library for building fullstack web-apps, similar to SolidJS and Soli
 
 - **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. Leptos has a tighter focus on the fullstack web with features that Dioxus doesn't have like islands, `<Form />` components, and other web-specific utilities.
 
-- **Different DSLs**: Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses an HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL including automatic formatting of strings and hot-reloading of simple Rust expressions.
+- **Different DSLs**: Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses an HTML-like syntax. We chose this to retain compatibility with IDE features like code-folding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL including automatic formatting of strings and hot-reloading of simple Rust expressions.
 
 ```rust
 // dioxus
@@ -297,9 +273,9 @@ view! {
 
 Yew is a framework for building single-page web apps and initially served as an inspiration for Dioxus. Unfortunately, the architecture of Yew didn't support the various features we wanted, and thus Dioxus was born.
 
-- **Single-page apps**: Yew is designed exclusively for single-page web apps and is instrinsically tied to the web platform. Dioxus is fullstack and crossplatform, making it suitable for building web, desktop, mobile, and server apps.
+- **Single-page apps**: Yew is designed exclusively for single-page web apps and is intrinsically tied to the web platform. Dioxus is fullstack and cross-platform, making it suitable for building web, desktop, mobile, and server apps.
 
-- **Developer Tooling**: Dioxus provides a number of utilities like autoformatting, hotreloading, and a bundler.
+- **Developer Tooling**: Dioxus provides a number of utilities like autoformatting, hot-reloading, and a bundler.
 
 - **Ongoing support**: Dioxus is very actively maintained with new features and bug fixes being added on a daily basis.
 
@@ -329,11 +305,11 @@ Dioxus and Electron are two entirely different projects with similar goals. Elec
 
 - **Lightweight**: Dioxus uses the system's native WebView - or optionally, a WGPU renderer - to render the UI. This makes a typical Dioxus app about 15mb on macOS in comparison to Electron's 100mb. Electron also ships an embedded chromium instance which cannot share system resources with the host OS in the same way as Dioxus.
 
-- **Maturity**: Electron is a mature project with a large community and a lot of tooling. Dioxus is still quite young in comparison to Electron. Expect to run into features like deeplinking that require extra work to implement.
+- **Maturity**: Electron is a mature project with a large community and a lot of tooling. Dioxus is still quite young in comparison to Electron. Expect to run into features like deep-linking that require extra work to implement.
 
 ## Contributing
 
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.5/contributing).
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.6/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 

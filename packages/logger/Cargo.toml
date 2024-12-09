@@ -2,7 +2,7 @@
 name = "dioxus-logger"
 version = { workspace = true }
 edition = "2021"
-description = "A logging utility to provide a standard interface whether you're targetting web desktop, fullstack, and more."
+description = "A logging utility to provide a standard interface whether you're targeting web desktop, fullstack, and more."
 authors = ["DogeDark", "Jonathan Kelley"]
 repository = "https://github.com/dioxuslabs/dioxus"
 homepage = "https://github.com/dioxuslabs/dioxus"

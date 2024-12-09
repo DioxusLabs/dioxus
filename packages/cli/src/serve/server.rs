@@ -256,6 +256,7 @@ impl WebServer {
             return;
         }
 
+        #[cfg(debug_assertions)]
         tracing::trace!("Sending hotreload to clients {:?}", reload);
 
         let msg = DevserverMsg::HotReload(reload);
