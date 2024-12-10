@@ -1,6 +1,7 @@
 //! Warnings that can be triggered by suspicious usage of signals
 
 use warnings::warning;
+pub use warnings::Warning;
 
 /// A warning that is triggered when a copy value is used in a higher scope that it is owned by
 #[warning]
