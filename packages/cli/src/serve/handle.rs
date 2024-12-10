@@ -1,6 +1,7 @@
 use crate::{AppBundle, Platform, Result};
 use anyhow::Context;
 use std::{
+    fs,
     net::SocketAddr,
     path::{Path, PathBuf},
     process::Stdio,
@@ -187,8 +188,17 @@ impl AppHandle {
             }
         }
 
+        // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
+        let changed_file = match fs::canonicalize(changed_file) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::debug!("Failed to canonicalize hotreloaded asset: {e}");
+                return None;
+            }
+        };
+
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        if let Some(resource) = self.app.app.assets.assets.get(changed_file).as_ref() {
+        if let Some(resource) = self.app.app.assets.assets.get(&changed_file).as_ref() {
             let res = std::fs::copy(changed_file, asset_dir.join(resource.bundled_path()));
             bundled_name = Some(PathBuf::from(resource.bundled_path()));
             if let Err(e) = res {
