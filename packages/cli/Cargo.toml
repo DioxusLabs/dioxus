@@ -118,6 +118,8 @@ strum = { version = "0.26.3", features = ["derive"] }
 tauri-utils = { workspace = true }
 tauri-bundler = { workspace = true }
 include_dir = "0.7.4"
+flate2 = "1.0.35"
+tar = "0.4.43"
 
 [build-dependencies]
 built = { version = "=0.7.4", features = ["git2"] }
