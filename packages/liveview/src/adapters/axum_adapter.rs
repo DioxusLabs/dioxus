@@ -62,6 +62,13 @@ impl LiveviewRouter for Router {
         };
 
         let app = Arc::new(app);
+        // Add an extra catch all segment to the route
+        let mut route = route.trim_matches('/').to_string();
+        if route.is_empty() {
+            route = "/*route".to_string();
+        } else {
+            route = format!("/{route}/*route");
+        }
 
         self.route(
             &ws_path,
@@ -75,7 +82,7 @@ impl LiveviewRouter for Router {
             }),
         )
         .route(
-            route,
+            &route,
             get(move || async move { index_page_with_glue(&interpreter_glue(&ws_path)) }),
         )
     }
