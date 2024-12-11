@@ -265,12 +265,7 @@ impl Output {
     pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
         use cargo_metadata::diagnostic::DiagnosticLevel;
 
-        if self.trace
-            || matches!(
-                message.message.level,
-                DiagnosticLevel::Error | DiagnosticLevel::FailureNote
-            )
-        {
+        if self.trace || !matches!(message.message.level, DiagnosticLevel::Note) {
             self.push_log(TraceMsg::cargo(message));
         }
     }
