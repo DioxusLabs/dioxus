@@ -179,7 +179,7 @@ impl WasmBindgen {
                 "--no-track",
                 "--install-path",
             ])
-            .arg(&tempdir.path())
+            .arg(tempdir.path())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -211,7 +211,7 @@ impl WasmBindgen {
                 "--force",
                 "--root",
             ])
-            .arg(&tempdir.path())
+            .arg(tempdir.path())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
