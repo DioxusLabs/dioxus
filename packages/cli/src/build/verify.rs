@@ -1,7 +1,5 @@
-use std::process::Stdio;
-
-use crate::{BuildRequest, Platform, Result, RustupShow};
-use anyhow::Context;
+use crate::{wasm_bindgen::WasmBindgen, BuildRequest, Platform, Result, RustupShow};
+use anyhow::{anyhow, Context};
 use tokio::process::Command;
 
 impl BuildRequest {
@@ -40,6 +38,7 @@ impl BuildRequest {
     }
 
     pub(crate) async fn verify_web_tooling(&self, rustup: RustupShow) -> Result<()> {
+        // Rust wasm32 target
         if !rustup.has_wasm32_unknown_unknown() {
             tracing::info!(
                 "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
@@ -50,38 +49,16 @@ impl BuildRequest {
                 .await?;
         }
 
-        let our_wasm_bindgen_version = wasm_bindgen_shared::version();
-        match self.krate.wasm_bindgen_version() {
-            Some(version) if version == our_wasm_bindgen_version => {
-                tracing::debug!("wasm-bindgen version {version} is compatible with dioxus-cli ✅");
-            },
-            Some(version) => {
-                tracing::warn!(
-                    "wasm-bindgen version {version} is not compatible with the cli crate ({}). Attempting to upgrade the target wasm-bindgen crate manually...",
-                    our_wasm_bindgen_version
-                );
+        // Wasm bindgen
+        let krate_bindgen_version = self.krate.wasm_bindgen_version().ok_or(anyhow!(
+            "failed to detect wasm-bindgen version, unable to proceed"
+        ))?;
 
-                let output = Command::new("cargo")
-                    .args([
-                        "update",
-                        "-p",
-                        "wasm-bindgen",
-                        "--precise",
-                        &our_wasm_bindgen_version,
-                    ])
-                    .stderr(Stdio::piped())
-                    .stdout(Stdio::piped())
-                    .output()
-                    .await;
-
-                match output {
-                    Ok(output) if output.status.success() => tracing::info!("✅ wasm-bindgen updated successfully"),
-                    Ok(output) => tracing::error!("Failed to update wasm-bindgen: {:?}", output),
-                    Err(err) => tracing::error!("Failed to update wasm-bindgen: {err}"),
-                }
-
-            }
-            None => tracing::debug!("User is attempting a web build without wasm-bindgen detected. This is probably a bug in the dioxus-cli."),
+        let is_installed = WasmBindgen::verify_install(&krate_bindgen_version).await?;
+        if !is_installed {
+            WasmBindgen::install(&krate_bindgen_version)
+                .await
+                .context("failed to install wasm-bindgen-cli")?;
         }
 
         Ok(())
