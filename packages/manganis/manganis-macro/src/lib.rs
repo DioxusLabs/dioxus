@@ -19,11 +19,6 @@ use linker::generate_link_section;
 /// # use manganis::{asset, Asset};
 /// const _: Asset = asset!("/assets/asset.txt");
 /// ```
-/// Or you can use URLs to read the asset at build time from a remote location
-/// ```rust
-/// # use manganis::{asset, Asset};
-/// const _: Asset = asset!("/assets/image.png");
-/// ```
 ///
 /// # Images
 ///
