@@ -227,7 +227,7 @@ impl WasmBindgen {
                 "--no-track",
                 "--force",
                 "--root",
-                tmp_dir.to_str().expect("this should be utf8-compatable"),
+                tmp_dir.to_str().expect("this should be utf8-compatible"),
             ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
