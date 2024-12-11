@@ -425,14 +425,15 @@ mod test {
         verify_installation().await;
     }
 
+    // CI doesn't have binstall.
     // Test the binstall installer
-    #[tokio::test]
-    async fn test_binstall_install() {
-        reset_test().await;
-        WasmBindgen::install_binstall(VERSION).await.unwrap();
-        test_verify_install().await;
-        verify_installation().await;
-    }
+    // #[tokio::test]
+    // async fn test_binstall_install() {
+    //     reset_test().await;
+    //     WasmBindgen::install_binstall(VERSION).await.unwrap();
+    //     test_verify_install().await;
+    //     verify_installation().await;
+    // }
 
     /// Helper to test `WasmBindgen::verify_install` after an installation.
     async fn test_verify_install() {
