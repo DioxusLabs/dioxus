@@ -189,13 +189,9 @@ impl AppHandle {
         }
 
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
-        let changed_file = match fs::canonicalize(changed_file) {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::debug!("Failed to canonicalize hotreloaded asset: {e}");
-                return None;
-            }
-        };
+        let changed_file = fs::canonicalize(changed_file)
+            .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
+            .ok()?;
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
         if let Some(resource) = self.app.app.assets.assets.get(&changed_file).as_ref() {
