@@ -27,8 +27,6 @@ dioxus-dx-wire-format = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
-wasm-bindgen-cli-support = { workspace = true }
-wasm-bindgen-shared = { workspace = true }
 uuid = { version = "1.3.0", features = ["v4"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -120,6 +118,8 @@ strum = { version = "0.26.3", features = ["derive"] }
 tauri-utils = { workspace = true }
 tauri-bundler = { workspace = true }
 include_dir = "0.7.4"
+flate2 = "1.0.35"
+tar = "0.4.43"
 
 [build-dependencies]
 built = { version = "=0.7.4", features = ["git2"] }
