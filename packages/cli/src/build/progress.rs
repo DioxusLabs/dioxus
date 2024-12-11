@@ -41,6 +41,10 @@ impl BuildRequest {
             .unbounded_send(BuildUpdate::CompilerMessage { message });
     }
 
+    pub(crate) fn status_build_error(&self, line: String) {
+        tracing::error!(dx_src = ?TraceSrc::Cargo, "{line}");
+    }
+
     pub(crate) fn status_build_message(&self, line: String) {
         tracing::trace!(dx_src = ?TraceSrc::Cargo, "{line}");
     }
