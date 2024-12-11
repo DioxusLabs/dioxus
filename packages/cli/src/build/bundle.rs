@@ -1,3 +1,4 @@
+use super::templates::InfoPlistData;
 use crate::wasm_bindgen::WasmBindgenBuilder;
 use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
@@ -11,7 +12,6 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
-use super::templates::InfoPlistData;
 
 /// The end result of a build.
 ///
