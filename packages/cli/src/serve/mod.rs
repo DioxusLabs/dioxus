@@ -120,6 +120,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     runner.file_map.force_rebuild();
 
                     // Tell the server to show a loading page for any new requests
+                    devserver.send_reload_start().await;
                     devserver.start_build().await;
                 } else {
                     tracing::warn!(
@@ -227,6 +228,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
 
                 builder.rebuild(args.build_arguments.clone());
                 runner.file_map.force_rebuild();
+                devserver.send_reload_start().await;
                 devserver.start_build().await
             }
 
