@@ -1,3 +1,4 @@
+use crate::wasm_bindgen::WasmBindgenBuilder;
 use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
@@ -10,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
-use wasm_bindgen_cli_support::Bindgen;
+//use wasm_bindgen_cli_support::Bindgen;
 
 use super::templates::InfoPlistData;
 
@@ -610,22 +611,27 @@ impl AppBundle {
             && !self.build.build.release;
 
         let start = std::time::Instant::now();
-        tokio::task::spawn_blocking(move || {
-            Bindgen::new()
-                .input_path(&input_path)
-                .web(true)
-                .unwrap()
-                .debug(keep_debug)
-                .demangle(keep_debug)
-                .keep_debug(keep_debug)
-                .remove_name_section(!keep_debug)
-                .remove_producers_section(!keep_debug)
-                .out_name(&name)
-                .generate(&bindgen_outdir)
-        })
-        .await
-        .context("Wasm-bindgen crashed while optimizing the wasm binary")?
-        .context("Failed to generate wasm-bindgen bindings")?;
+
+        let bindgen_version = self
+            .build
+            .krate
+            .wasm_bindgen_version()
+            .expect("this should have been checked by tool verification");
+
+        WasmBindgenBuilder::new(bindgen_version)
+            .input_path(&input_path)
+            .target("web")
+            .debug(keep_debug)
+            .demangle(keep_debug)
+            .keep_debug(keep_debug)
+            .remove_name_section(!keep_debug)
+            .remove_producers_section(!keep_debug)
+            .out_name(&name)
+            .out_dir(&bindgen_outdir)
+            .build()
+            .run()
+            .await
+            .context("Failed to generate wasm-bindgen bindings")?;
 
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 

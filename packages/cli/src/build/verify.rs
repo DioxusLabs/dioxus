@@ -1,7 +1,5 @@
-use std::process::Stdio;
-
-use crate::{BuildRequest, Platform, Result, RustupShow};
-use anyhow::Context;
+use crate::{wasm_bindgen::WasmBindgen, BuildRequest, Platform, Result, RustupShow};
+use anyhow::{anyhow, Context};
 use tokio::process::Command;
 
 impl BuildRequest {
@@ -40,6 +38,7 @@ impl BuildRequest {
     }
 
     pub(crate) async fn verify_web_tooling(&self, rustup: RustupShow) -> Result<()> {
+        // Rust wasm32 target
         if !rustup.has_wasm32_unknown_unknown() {
             tracing::info!(
                 "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
@@ -50,9 +49,17 @@ impl BuildRequest {
                 .await?;
         }
 
-        let krate_bindgen_version = self.krate.wasm_bindgen_version();
+        // Wasm bindgen
+        let krate_bindgen_version = self.krate.wasm_bindgen_version().ok_or(anyhow!(
+            "failed to detect wasm-bindgen version, unable to proceed"
+        ))?;
 
-        
+        let is_installed = WasmBindgen::verify_install(&krate_bindgen_version).await?;
+        if !is_installed {
+            WasmBindgen::install(&krate_bindgen_version)
+                .await
+                .context("failed to install wasm-bindgen-cli")?;
+        }
 
         Ok(())
     }
