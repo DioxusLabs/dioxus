@@ -199,8 +199,8 @@ impl AppHandle {
         // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
         if self.app.build.build.platform() == Platform::Android {
             if let Some(bundled_name) = bundled_name.as_ref() {
-                let target = format!("/data/local/tmp/dx/{}", bundled_name.display());
-                tracing::debug!("Pushing asset to device: {target}");
+                let target = dioxus_cli_config::android_asset_hotreload_dir().join(bundled_name);
+                tracing::debug!("Pushing asset to device: {}", target.display());
                 let res = tokio::process::Command::new("adb")
                     .arg("push")
                     .arg(changed_file)

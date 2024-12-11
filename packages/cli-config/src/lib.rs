@@ -141,3 +141,7 @@ pub fn format_base_path_meta_element(base_path: &str) -> String {
 pub fn out_dir() -> Option<PathBuf> {
     std::env::var(OUT_DIR).ok().map(PathBuf::from)
 }
+
+pub fn android_asset_hotreload_dir() -> PathBuf {
+    PathBuf::from("/data/local/tmp/dx/")
+}
