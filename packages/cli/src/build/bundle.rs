@@ -11,8 +11,6 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
-//use wasm_bindgen_cli_support::Bindgen;
-
 use super::templates::InfoPlistData;
 
 /// The end result of a build.
