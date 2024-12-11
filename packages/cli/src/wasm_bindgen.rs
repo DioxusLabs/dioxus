@@ -1,10 +1,11 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use flate2::read::GzDecoder;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
 };
 use tar::Archive;
+use tempfile::TempDir;
 use tokio::{fs, process::Command};
 
 pub(crate) struct WasmBindgen {
@@ -22,8 +23,7 @@ pub(crate) struct WasmBindgen {
 
 impl WasmBindgen {
     pub async fn run(&self) -> anyhow::Result<()> {
-        let binary_name = Self::installed_bin_name(&self.version);
-        let binary = Self::install_dir().await?.join(binary_name);
+        let binary = Self::final_binary(&self.version).await?;
 
         let mut args = Vec::new();
 
@@ -102,75 +102,62 @@ impl WasmBindgen {
         tracing::info!("Installing wasm-bindgen-cli@{version}...");
 
         // Attempt installation from GitHub
-        if Self::install_github(version).await.is_ok() {
+        if let Err(e) = Self::install_github(version).await {
+            tracing::error!("Failed to install wasm-bindgen-cli@{version}: {e}");
+        } else {
             tracing::info!("wasm-bindgen-cli@{version} was successfully installed from GitHub.");
             return Ok(());
         }
 
         // Attempt installation from binstall.
-        if Self::install_binstall(version).await.is_ok() {
+        if let Err(e) = Self::install_binstall(version).await {
+            tracing::error!("Failed to install wasm-bindgen-cli@{version}: {e}");
+            tracing::info!("Failed to install prebuilt binary for wasm-bindgen-cli@{version}. Compiling from source instead. This may take a while.");
+        } else {
             tracing::info!(
                 "wasm-bindgen-cli@{version} was successfully installed from cargo-binstall."
             );
             return Ok(());
         }
 
-        tracing::info!("Failed to install prebuilt binary for wasm-bindgen-cli@{version}. Compiling from source instead. This may take a while.");
-
         // Attempt installation from cargo.
-        if Self::install_cargo(version).await.is_ok() {
-            tracing::info!("wasm-bindgen-cli@{version} was successfully installed from source.");
-            return Ok(());
-        }
+        Self::install_cargo(version)
+            .await
+            .context("failed to install wasm-bindgen-cli from cargo")?;
 
-        tracing::error!("Failed to install wasm-bindgen-cli@{version}");
-        Err(anyhow!(
-            "failed to install wasm-bindgen-cli@{version} from available sources"
-        ))
+        tracing::info!("wasm-bindgen-cli@{version} was successfully installed from source.");
+
+        Ok(())
     }
 
     /// Try installing wasm-bindgen-cli from GitHub.
     async fn install_github(version: &str) -> anyhow::Result<()> {
         tracing::debug!("Attempting to install wasm-bindgen-cli@{version} from GitHub");
 
-        let Some(url) = git_install_url(version) else {
-            return Err(anyhow!(
-                "no available GitHub binary for wasm-bindgen-cli@{version}"
-            ));
-        };
+        let url = git_install_url(version)
+            .ok_or_else(|| anyhow!("no available GitHub binary for wasm-bindgen-cli@{version}"))?;
+
+        // Get the final binary location.
+        let final_binary = Self::final_binary(version).await?;
 
         // Download then extract wasm-bindgen-cli.
         let bytes = reqwest::get(url).await?.bytes().await?;
-        let tar = GzDecoder::new(bytes.as_ref());
-        let mut archive = Archive::new(tar);
 
-        // Unpack the tar in the tmp dir
-        let tmp_dir = Self::tmp_dir().await;
-        archive.unpack(&tmp_dir)?;
-
-        // Get the intermediate folder name from the tarball.
-        // This varies by platform so we just read it.
-        let file_name = fs::read_dir(&tmp_dir)
-            .await?
-            .next_entry()
-            .await?
-            .map(|entry| entry.file_name())
-            .ok_or(anyhow!(
-                "wasm-bindgen downloaded tar contained unexpected data"
-            ))?;
-
-        // Get the final binary location.
-        let installed_name = Self::installed_bin_name(version);
-        let install_dir = Self::install_dir().await?;
-        let final_binary = install_dir.join(installed_name);
-
-        // Move the install wasm-bindgen binary from tmp directory to it's new location.
-        let containing_folder = tmp_dir.join(file_name);
-        let mut tmp_install_name = "wasm-bindgen";
-        if cfg!(windows) {
-            tmp_install_name = "wasm-bindgen.exe";
-        }
-        fs::copy(containing_folder.join(tmp_install_name), &final_binary).await?;
+        // Unpack the first tar entry to the final binary location
+        Archive::new(GzDecoder::new(bytes.as_ref()))
+            .entries()?
+            .find(|entry| {
+                entry
+                    .as_ref()
+                    .map(|e| {
+                        e.path_bytes()
+                            .ends_with(Self::downloaded_bin_name().as_bytes())
+                    })
+                    .unwrap_or(false)
+            })
+            .context("Failed to find entry")??
+            .unpack(&final_binary)
+            .context("failed to unpack wasm-bindgen-cli binary")?;
 
         Ok(())
     }
@@ -180,7 +167,7 @@ impl WasmBindgen {
         tracing::debug!("Attempting to install wasm-bindgen-cli@{version} from cargo-binstall");
 
         let package = Self::cargo_bin_name(version);
-        let tmp_dir = Self::tmp_dir().await;
+        let tempdir = TempDir::new()?;
 
         // Run install command
         Command::new("cargo")
@@ -191,24 +178,18 @@ impl WasmBindgen {
                 "--force",
                 "--no-track",
                 "--install-path",
-                tmp_dir.to_str().expect("this should be utf8-compatible"),
             ])
+            .arg(&tempdir.path())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
             .await?;
 
-        // Get the final binary location.
-        let installed_name = Self::installed_bin_name(version);
-        let install_dir = Self::install_dir().await?;
-        let final_binary = install_dir.join(installed_name);
-
-        // Move the install wasm-bindgen binary from tmp directory to it's new location.
-        let mut tmp_install_name = "wasm-bindgen";
-        if cfg!(windows) {
-            tmp_install_name = "wasm-bindgen.exe";
-        }
-        fs::copy(tmp_dir.join(tmp_install_name), &final_binary).await?;
+        fs::copy(
+            tempdir.path().join(Self::downloaded_bin_name()),
+            Self::final_binary(version).await?,
+        )
+        .await?;
 
         Ok(())
     }
@@ -217,55 +198,48 @@ impl WasmBindgen {
     async fn install_cargo(version: &str) -> anyhow::Result<()> {
         tracing::debug!("Attempting to install wasm-bindgen-cli@{version} from cargo-install");
         let package = Self::cargo_bin_name(version);
-        let tmp_dir = Self::tmp_dir().await;
+        let tempdir = TempDir::new()?;
 
         // Run install command
         Command::new("cargo")
             .args([
                 "install",
                 &package,
+                "--bin",
+                "wasm-bindgen",
                 "--no-track",
                 "--force",
                 "--root",
-                tmp_dir.to_str().expect("this should be utf8-compatible"),
             ])
+            .arg(&tempdir.path())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-            .await?;
+            .await
+            .context("failed to install wasm-bindgen-cli from cargo-install")?;
 
-        // Get the final binary location.
-        let installed_name = Self::installed_bin_name(version);
-        let install_dir = Self::install_dir().await?;
-        let final_binary = install_dir.join(installed_name);
+        tracing::info!("Copying into path: {}", tempdir.path().display());
 
-        // Move the install wasm-bindgen binary from tmp directory to it's new location.
-        let mut tmp_install_name = "wasm-bindgen";
-        if cfg!(windows) {
-            tmp_install_name = "wasm-bindgen.exe";
-        }
-
-        let tmp_installed_path = tmp_dir.join("bin").join(tmp_install_name);
-        fs::copy(tmp_installed_path, &final_binary).await?;
+        // copy the wasm-bindgen out of the tempdir to the final location
+        fs::copy(
+            tempdir.path().join("bin").join(Self::downloaded_bin_name()),
+            Self::final_binary(version).await?,
+        )
+        .await
+        .context("failed to copy wasm-bindgen binary")?;
 
         Ok(())
     }
 
     /// Get the installation directory for the wasm-bindgen executable.
     async fn install_dir() -> anyhow::Result<PathBuf> {
-        let local = dirs::data_local_dir()
-            .expect("user should be running on a compatible operating system");
+        let bindgen_dir = dirs::data_local_dir()
+            .expect("user should be running on a compatible operating system")
+            .join("dioxus/wasm-bindgen/");
 
-        let bindgen_dir = local.join("dioxus/wasm-bindgen/");
         fs::create_dir_all(&bindgen_dir).await?;
-        Ok(bindgen_dir)
-    }
 
-    /// Get a temp directory to install files into.
-    async fn tmp_dir() -> PathBuf {
-        let tmp_dir = std::env::temp_dir().join("dx-install-tmp");
-        let _ = fs::remove_dir_all(&tmp_dir).await;
-        tmp_dir
+        Ok(bindgen_dir)
     }
 
     /// Get the name of a potentially installed wasm-bindgen binary.
@@ -280,6 +254,20 @@ impl WasmBindgen {
     /// Get the crates.io package name of wasm-bindgen-cli.
     fn cargo_bin_name(version: &str) -> String {
         format!("wasm-bindgen-cli@{version}")
+    }
+
+    async fn final_binary(version: &str) -> Result<PathBuf, anyhow::Error> {
+        let installed_name = Self::installed_bin_name(version);
+        let install_dir = Self::install_dir().await?;
+        Ok(install_dir.join(installed_name))
+    }
+
+    fn downloaded_bin_name() -> &'static str {
+        if cfg!(windows) {
+            "wasm-bindgen.exe"
+        } else {
+            "wasm-bindgen"
+        }
     }
 }
 
