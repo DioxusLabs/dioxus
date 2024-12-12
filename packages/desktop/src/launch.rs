@@ -12,8 +12,7 @@ use winit::event::{StartCause, WindowEvent};
 
 struct Launch {
     app: App,
-    custom_event_handler:
-        Option<Box<dyn FnMut(&Event<UserWindowEvent>, &winit::event_loop::ActiveEventLoop)>>,
+    custom_event_handler: Option<Box<dyn FnMut(&Event<UserWindowEvent>)>>,
 }
 
 impl ApplicationHandler<UserWindowEvent> for Launch {
@@ -44,7 +43,7 @@ impl ApplicationHandler<UserWindowEvent> for Launch {
         self.app.tick(&custom_event);
 
         if let Some(ref mut f) = self.custom_event_handler {
-            f(&custom_event, event_loop)
+            f(&custom_event)
         }
         match event {
             UserWindowEvent::Poll(id) => self.app.poll_vdom(id),
@@ -137,7 +136,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
     let custom_event_handler = desktop_config.custom_event_handler.take();
     let (event_loop, app) = App::new(desktop_config, virtual_dom);
 
-    event_loop.run_app(&mut Launch {
+    let _ = event_loop.run_app(&mut Launch {
         app,
         custom_event_handler,
     });

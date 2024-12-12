@@ -59,9 +59,12 @@ pub use hooks::*;
 pub use shortcut::{ShortcutHandle, ShortcutRegistryError};
 pub use wry::RequestAsyncResponder;
 
+/// Detect linux display
 #[cfg(target_os = "linux")]
 pub enum DisplayHandler {
+    /// Represent the Wayland
     Wayland,
+    /// Represent x11
     X11,
 }
 

@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 use dioxus_core::Element;
+use winit::event_loop::EventLoop;
 
 pub fn check_app_exits(app: fn() -> Element) {
     use dioxus_desktop::tao::window::WindowBuilder;
@@ -17,8 +18,10 @@ pub fn check_app_exits(app: fn() -> Element) {
         }
     });
 
+    let event_loop = EventLoop::new().expect("unable to create new event loop");
+
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(false)))
+        .with_cfg(Config::new(event_loop).with_window(WindowBuilder::new().with_visible(false)))
         .launch(app);
 
     // Stop deadman's switch

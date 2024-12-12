@@ -21,6 +21,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
+use wry::raw_window_handle::HasWindowHandle;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
@@ -165,7 +166,7 @@ impl WebviewInstance {
         dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
-        let mut window = cfg.window;
+        let window = cfg.window;
 
         // tao makes small windows for some reason, make them bigger on desktop
         //
@@ -173,24 +174,24 @@ impl WebviewInstance {
         // get a window that is not the size of the screen and weird black bars.
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            if cfg.window.inner_size().height == 0 || cfg.window.inner_size().width == 0 {
-                window.request_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
+            if window.inner_size().height == 0 || window.inner_size().width == 0 {
+                let _ = window.request_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
             }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
-        if cfg.window.window.window_icon.is_none() {
-            window = window.with_window_icon(Some(
-                winit::window::Icon::from_rgba(
-                    include_bytes!("./assets/default_icon.bin").to_vec(),
-                    460,
-                    460,
-                )
-                .expect("image parse failed"),
-            ));
-        }
+        // if cfg.window.window_icon.is_none() {
+        //     window = window.with_window_icon(Some(
+        //         winit::window::Icon::from_rgba(
+        //             include_bytes!("./assets/default_icon.bin").to_vec(),
+        //             460,
+        //             460,
+        //         )
+        //         .expect("image parse failed"),
+        //     ));
+        // }
 
-        let window = window.build(&shared.target).unwrap();
+        // let window = window.build(&shared.target).unwrap();
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
@@ -198,7 +199,7 @@ impl WebviewInstance {
             use cocoa::appkit::NSWindowCollectionBehavior;
             use cocoa::base::id;
             use objc::{msg_send, sel, sel_impl};
-            use tao::platform::macos::WindowExtMacOS;
+            use winit::platform::macos::WindowExtMacOS;
 
             unsafe {
                 let window: id = window.ns_window() as id;
@@ -211,7 +212,7 @@ impl WebviewInstance {
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
-        let headless = !cfg.window.is_visible();
+        let headless = !window.is_visible().unwrap_or(false);
 
         let request_handler = {
             to_owned![
@@ -307,12 +308,10 @@ impl WebviewInstance {
             target_os = "ios",
             target_os = "android"
         )))]
-        let mut webview = {
-            use winit::platform::unix::WindowExtUnix;
-            use wry::WebViewBuilderExtUnix;
-            let vbox = window.default_vbox().unwrap();
-            WebViewBuilder::new_gtk(vbox)
-        };
+        let window_handle = window
+            .window_handle()
+            .expect("unable to create window builder");
+        let mut webview = { WebViewBuilder::new(&window_handle) };
 
         // Disable the webview default shortcuts to disable the reload shortcut
         #[cfg(target_os = "windows")]
@@ -329,7 +328,7 @@ impl WebviewInstance {
                     window.inner_size().height,
                 )),
             })
-            .with_transparent(cfg.window.transparent)
+            // .with_transparent(cfg.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(|var| {

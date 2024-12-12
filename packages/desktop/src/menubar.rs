@@ -38,7 +38,7 @@ mod desktop_platforms {
     pub fn init_menu_bar(menu: &Menu, window: &Window) {
         #[cfg(target_os = "windows")]
         {
-            use tao::platform::windows::WindowExtWindows;
+            use winit::platform::windows::WindowExtWindows;
             menu.init_for_hwnd(window.hwnd());
         }
 
@@ -52,13 +52,13 @@ mod desktop_platforms {
                     use winit::platform::x11::WindowExtX11;
                 }
             }
-            menu.init_for_gtk_window(window.gtk_window(), window.default_vbox())
-                .unwrap();
+            // menu.init_for_gtk_window(window.gtk_window(), window.default_vbox())
+            //     .unwrap();
         }
 
         #[cfg(target_os = "macos")]
         {
-            use tao::platform::macos::WindowExtMacOS;
+            use winit::platform::macos::WindowExtMacOS;
             menu.init_for_nsapp();
         }
     }

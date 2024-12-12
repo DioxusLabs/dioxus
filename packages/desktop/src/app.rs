@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::{
     config::{Config, WindowCloseBehaviour},
     event_handlers::WindowEventHandlers,
@@ -20,7 +21,7 @@ use std::{
 };
 use winit::{
     dpi::PhysicalSize,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
+    event_loop::{ControlFlow, EventLoop, EventLoopProxy},
     window::WindowId,
 };
 
@@ -51,7 +52,7 @@ pub(crate) struct SharedContext {
     pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(crate) target: Option<ActiveEventLoop>,
+    pub(crate) target: Option<Event<UserWindowEvent>>,
 }
 
 impl App {
@@ -107,12 +108,8 @@ impl App {
     }
 
     pub fn tick(&mut self, window_event: &Event<UserWindowEvent>) {
-        if let Some(target) = &self.shared.target {
-            self.control_flow = ControlFlow::Wait;
-            self.shared
-                .event_handlers
-                .apply_event(window_event, &target);
-        }
+        self.control_flow = ControlFlow::Wait;
+        self.shared.event_handlers.apply_event(window_event);
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -200,7 +197,10 @@ impl App {
 
                 self.webviews.remove(&id);
                 if self.webviews.is_empty() {
-                    self.control_flow = ControlFlow::Exit
+                    let _ = self
+                        .shared
+                        .proxy
+                        .send_event(UserWindowEvent::CloseWindow(id));
                 }
             }
 
@@ -225,7 +225,10 @@ impl App {
             WindowCloseBehaviour::LastWindowExitsApp
         ) && self.webviews.is_empty()
         {
-            self.control_flow = ControlFlow::Exit
+            let _ = self
+                .shared
+                .proxy
+                .send_event(UserWindowEvent::CloseWindow(id));
         }
     }
 
@@ -303,7 +306,10 @@ impl App {
     pub fn handle_close_msg(&mut self, id: WindowId) {
         self.webviews.remove(&id);
         if self.webviews.is_empty() {
-            self.control_flow = ControlFlow::Exit
+            let _ = self
+                .shared
+                .proxy
+                .send_event(UserWindowEvent::CloseWindow(id));
         }
     }
 
@@ -343,7 +349,7 @@ impl App {
                 // Maybe we could just binary patch ourselves in place without losing window state?
             }
             DevserverMsg::Shutdown => {
-                self.control_flow = ControlFlow::Exit;
+                // self.shared.proxy.send_event(UserWindowEvent::CloseWindow(()))
             }
         }
     }
@@ -541,7 +547,7 @@ struct PreservedWindowState {
 pub fn hide_app_window(window: &wry::WebView) {
     #[cfg(target_os = "windows")]
     {
-        use tao::platform::windows::WindowExtWindows;
+        use winit::platform::windows::WindowExtWindows;
         window.set_visible(false);
     }
 

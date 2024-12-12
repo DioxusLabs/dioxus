@@ -230,6 +230,7 @@ console_error_panic_hook = "0.1.7"
 
 # desktop
 winit = { version = "0.30.5", features = ["rwh_06"] }
+wry = { version = "0.45.0", default-features = false }
 webbrowser = "1.0.1"
 infer = "0.16.0"
 dunce = "1.0.2"
