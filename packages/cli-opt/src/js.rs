@@ -44,6 +44,12 @@ pub(crate) fn minify_js(source: &Path) -> anyhow::Result<String> {
     }
 }
 
+pub(crate) fn update_asset_references(js: &str) -> String {
+    // Placeholder implementation for updating asset references in JS files
+    // This function should identify and update asset references to the new generated names
+    js.to_string()
+}
+
 pub(crate) fn process_js(
     js_options: &JsAssetOptions,
     source: &Path,
@@ -58,7 +64,9 @@ pub(crate) fn process_js(
         source
     };
 
-    std::fs::write(output_path, js).with_context(|| {
+    let updated_js = update_asset_references(&js);
+
+    std::fs::write(output_path, updated_js).with_context(|| {
         format!(
             "Failed to write js to output location: {}",
             output_path.display()
