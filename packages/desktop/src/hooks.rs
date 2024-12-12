@@ -12,7 +12,6 @@ use dioxus_core::{
 use dioxus_core::Event;
 use dioxus_hooks::use_callback;
 use wry::RequestAsyncResponder;
-
 /// Get an imperative handle to the current window
 pub fn use_window() -> DesktopContext {
     use_hook(consume_context::<DesktopContext>)

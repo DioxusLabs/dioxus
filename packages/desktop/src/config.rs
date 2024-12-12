@@ -1,8 +1,8 @@
 use dioxus_core::{Event, LaunchConfig};
 use std::borrow::Cow;
 use std::path::PathBuf;
-use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::window::{Icon, Window};
+use winit::event_loop::EventLoop;
+use winit::window::{Icon, Window, WindowAttributes};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::RequestAsyncResponder;
 
@@ -42,7 +42,7 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
-    pub(crate) window: Window,
+    pub(crate) window_attributes: WindowAttributes,
     pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
     pub(crate) protocols: Vec<WryProtocol>,
@@ -74,20 +74,19 @@ pub(crate) type AsyncWryProtocol = (
 impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
-    pub fn new(event_loop: ActiveEventLoop) -> Self {
+    pub fn new() -> Self {
         let window_attributes = Window::default_attributes()
             .with_title(dioxus_cli_config::app_title().unwrap_or("Dioxus App".to_owned()));
-        let window = event_loop.create_window(window_attributes).unwrap();
 
-        // During development we want the window to be on top so we can see it while we work
         let always_on_top = dioxus_cli_config::always_on_top().unwrap_or(true);
 
+        let cloned_attributes = window_attributes.clone();
         if cfg!(debug_assertions) && always_on_top {
-            window.set_window_level(winit::window::WindowLevel::AlwaysOnTop);
+            cloned_attributes.with_window_level(winit::window::WindowLevel::AlwaysOnTop);
         }
 
         Self {
-            window,
+            window_attributes,
             as_child_window: false,
             event_loop: None,
             menu: MenuBuilderState::Unset,
@@ -141,9 +140,9 @@ impl Config {
     /// Set the configuration for the window.
     pub fn with_window(mut self, window: Window) -> Self {
         // We need to do a swap because the window builder only takes itself as muy self
-        self.window = window.into();
+        self.window_attributes = window.into();
         // If the decorations are off for the window, remove the menu as well
-        if !self.window.is_decorated() && matches!(self.menu, MenuBuilderState::Unset) {
+        if !self.window_attributes.decorations && matches!(self.menu, MenuBuilderState::Unset) {
             self.menu = MenuBuilderState::Set(None);
         }
         self
@@ -216,7 +215,7 @@ impl Config {
 
     /// Set a custom icon for this application
     pub fn with_icon(self, icon: Icon) -> Self {
-        self.window.set_window_icon(Some(icon));
+        self.window_attributes.with_window_icon(Some(icon));
         self
     }
 
@@ -264,7 +263,7 @@ impl Config {
     pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            if self.window.is_decorated() {
+            if self.window_attributes.decorations {
                 self.menu = MenuBuilderState::Set(menu.into())
             }
         }

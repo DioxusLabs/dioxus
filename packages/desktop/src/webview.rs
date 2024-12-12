@@ -21,6 +21,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
+use winit::event_loop::EventLoop;
 use wry::raw_window_handle::HasWindowHandle;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
@@ -166,7 +167,7 @@ impl WebviewInstance {
         dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
-        let window = cfg.window;
+        let mut window_attributes = cfg.window_attributes;
 
         // tao makes small windows for some reason, make them bigger on desktop
         //
@@ -174,24 +175,29 @@ impl WebviewInstance {
         // get a window that is not the size of the screen and weird black bars.
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            if window.inner_size().height == 0 || window.inner_size().width == 0 {
-                let _ = window.request_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
+            if window_attributes.inner_size.is_none() {
+                let _ =
+                    window_attributes.with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
             }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
-        // if cfg.window.window_icon.is_none() {
-        //     window = window.with_window_icon(Some(
-        //         winit::window::Icon::from_rgba(
-        //             include_bytes!("./assets/default_icon.bin").to_vec(),
-        //             460,
-        //             460,
-        //         )
-        //         .expect("image parse failed"),
-        //     ));
-        // }
+        if cfg.window_attributes.window_icon.is_none() {
+            window_attributes = window_attributes.with_window_icon(Some(
+                winit::window::Icon::from_rgba(
+                    include_bytes!("./assets/default_icon.bin").to_vec(),
+                    460,
+                    460,
+                )
+                .expect("image parse failed"),
+            ));
+        }
 
-        // let window = window.build(&shared.target).unwrap();
+        let event_loop = EventLoop::new();
+        let window = event_loop
+            .unwrap()
+            .create_window(window_attributes)
+            .unwrap();
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
@@ -212,7 +218,7 @@ impl WebviewInstance {
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
-        let headless = !window.is_visible().unwrap_or(false);
+        let headless = !window_attributes.visible;
 
         let request_handler = {
             to_owned![
