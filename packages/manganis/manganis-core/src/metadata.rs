@@ -1,5 +1,4 @@
 use const_serialize::{ConstStr, SerializeConst};
-use std::path::PathBuf;
 
 #[derive(
     Debug,
@@ -20,22 +19,20 @@ pub struct BundledMetadata {
 impl BundledMetadata {
     #[doc(hidden)]
     /// This should only be called from the macro
-    /// Create a new asset
+    /// Create a new metadata
     pub const fn new(
-        absolute_source_path: &'static str,
-        bundled_path: &'static str,
-        options: AssetOptions,
+        key: &'static str,
+        value: &'static str,
     ) -> Self {
         Self {
-            absolute_source_path: ConstStr::new(absolute_source_path),
-            bundled_path: ConstStr::new(bundled_path),
-            options,
+            key: ConstStr::new(key),
+            value: ConstStr::new(value),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub struct MetaData {
+pub struct Metadata {
     /// The bundled metadata
     bundled: BundledMetadata,
     /// The link section for the metadata
@@ -48,10 +45,9 @@ impl Metadata {
     #[doc(hidden)]
     /// This should only be called from the macro
     /// Create a new metadata
-    pub const fn new(key: &'static str, value: &'static str, keep_link_section: fn() -> u8) -> Self {
+    pub const fn new(bundled: BundledMetadata, keep_link_section: fn() -> u8) -> Self {
         Self {
-            key: ConstStr::new(key),
-            value: ConstStr::new(value),
+            bundled,
             keep_link_section,
         }
     }
