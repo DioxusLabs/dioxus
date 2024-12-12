@@ -74,14 +74,14 @@ fn PreventDefault() -> Element {
 
 #[component]
 fn OnMounted() -> Element {
-    let mut mounted_triggerd_count = use_signal(|| 0);
+    let mut mounted_triggered_count = use_signal(|| 0);
     rsx! {
         div {
             class: "onmounted-div",
             onmounted: move |_| {
-                mounted_triggerd_count += 1;
+                mounted_triggered_count += 1;
             },
-            "onmounted was called {mounted_triggerd_count} times"
+            "onmounted was called {mounted_triggered_count} times"
         }
     }
 }
