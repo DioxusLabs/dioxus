@@ -1,4 +1,4 @@
-use tao::window::Window;
+use winit::window::Window;
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub type DioxusMenu = muda::Menu;
@@ -29,6 +29,8 @@ pub fn default_menu_bar() -> DioxusMenu {
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod desktop_platforms {
+    use crate::DisplayHandler;
+
     use super::*;
     use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
@@ -42,7 +44,14 @@ mod desktop_platforms {
 
         #[cfg(target_os = "linux")]
         {
-            use winit::platform::unix::WindowExtUnix;
+            match DisplayHandler::detect() {
+                DisplayHandler::Wayland => {
+                    use winit::platform::wayland::WindowExtWayland;
+                }
+                DisplayHandler::X11 => {
+                    use winit::platform::x11::WindowExtX11;
+                }
+            }
             menu.init_for_gtk_window(window.gtk_window(), window.default_vbox())
                 .unwrap();
         }

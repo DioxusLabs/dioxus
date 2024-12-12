@@ -6,7 +6,9 @@ use crate::{
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
+    DisplayHandler,
 };
+use dioxus_core::Event;
 use dioxus_core::{ElementId, VirtualDom};
 use dioxus_html::PlatformEventData;
 use std::{
@@ -18,8 +20,7 @@ use std::{
 };
 use winit::{
     dpi::PhysicalSize,
-    event::Event,
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, ActiveEventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     window::WindowId,
 };
 
@@ -50,15 +51,16 @@ pub(crate) struct SharedContext {
     pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(crate) target: ActiveEventLoop,
+    pub(crate) target: Option<ActiveEventLoop>,
 }
 
 impl App {
     pub fn new(mut cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
-        let event_loop = cfg
-            .event_loop
-            .take()
-            .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
+        let event_loop = cfg.event_loop.take().unwrap_or_else(|| {
+            EventLoop::<UserWindowEvent>::with_user_event()
+                .build()
+                .expect("unable to create window")
+        });
 
         let app = Self {
             window_behavior: cfg.last_window_close_behavior,
@@ -74,7 +76,7 @@ impl App {
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
                 proxy: event_loop.create_proxy(),
-                target: event_loop.clone(),
+                target: None,
             }),
         };
 
@@ -105,10 +107,12 @@ impl App {
     }
 
     pub fn tick(&mut self, window_event: &Event<UserWindowEvent>) {
-        self.control_flow = ControlFlow::Wait;
-        self.shared
-            .event_handlers
-            .apply_event(window_event, &self.shared.target);
+        if let Some(target) = &self.shared.target {
+            self.control_flow = ControlFlow::Wait;
+            self.shared
+                .event_handlers
+                .apply_event(window_event, &target);
+        }
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -122,7 +126,10 @@ impl App {
             "dioxus-float-top" => {
                 for webview in self.webviews.values() {
                     if self.float_all {
-                        webview.desktop_context.window.set_window_level(winit::window::WindowLevel::AlwaysOnTop);
+                        webview
+                            .desktop_context
+                            .window
+                            .set_window_level(winit::window::WindowLevel::AlwaysOnTop);
                     }
                 }
                 self.float_all = !self.float_all;
@@ -245,7 +252,7 @@ impl App {
 
     pub fn handle_start_cause_init(&mut self) {
         let virtual_dom = self.unmounted_dom.take().unwrap();
-        let mut cfg = self.cfg.take().unwrap();
+        let cfg = self.cfg.take().unwrap();
 
         self.is_visible_before_start = cfg.window.is_visible().unwrap_or(false);
         cfg.window.set_visible(false);
@@ -486,7 +493,8 @@ impl App {
                 let window = &webview.desktop_context.window;
                 let position = (state.x, state.y);
                 let size = (state.width, state.height);
-                window.set_outer_position(winit::dpi::PhysicalPosition::new(position.0, position.1));
+                window
+                    .set_outer_position(winit::dpi::PhysicalPosition::new(position.0, position.1));
                 window.request_inner_size(winit::dpi::PhysicalSize::new(size.0, size.1));
             }
         }
@@ -539,8 +547,16 @@ pub fn hide_app_window(window: &wry::WebView) {
 
     #[cfg(target_os = "linux")]
     {
-        use tao::platform::unix::WindowExtUnix;
-        window.set_visible(false);
+        match DisplayHandler::detect() {
+            DisplayHandler::Wayland => {
+                use winit::platform::wayland::WindowExtWayland;
+                window.set_visible(false);
+            }
+            DisplayHandler::X11 => {
+                use winit::platform::x11::WindowExtX11;
+                window.set_visible(false);
+            }
+        }
     }
 
     #[cfg(target_os = "macos")]

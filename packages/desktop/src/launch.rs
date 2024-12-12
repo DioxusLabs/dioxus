@@ -3,26 +3,22 @@ use crate::{
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
 };
+use dioxus_core::Event;
 use dioxus_core::*;
 use dioxus_document::eval;
-use winit::application::ApplicationHandler;
 use std::any::Any;
+use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
 
 struct Launch {
     app: App,
-    custom_event_handler: String,
+    custom_event_handler:
+        Option<Box<dyn FnMut(&Event<UserWindowEvent>, &winit::event_loop::ActiveEventLoop)>>,
 }
 
 impl ApplicationHandler<UserWindowEvent> for Launch {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         self.app.control_flow = event_loop.control_flow();
-
-        self.app.tick(&window_event);
-
-        if let Some(ref mut f) = custom_event_handler {
-            f(&window_event, event_loop)
-        }
     }
 
     fn window_event(
@@ -39,12 +35,22 @@ impl ApplicationHandler<UserWindowEvent> for Launch {
         }
     }
 
-    fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: UserWindowEvent) {
+    fn user_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        event: UserWindowEvent,
+    ) {
+        let custom_event = Event::new(event.clone().into(), false);
+        self.app.tick(&custom_event);
+
+        if let Some(ref mut f) = self.custom_event_handler {
+            f(&custom_event, event_loop)
+        }
         match event {
             UserWindowEvent::Poll(id) => self.app.poll_vdom(id),
             UserWindowEvent::NewWindow => self.app.handle_new_window(),
             UserWindowEvent::CloseWindow(id) => self.app.handle_close_msg(id),
-            UserWindowEvent::Shutdown => self.app.control_flow = winit::event_loop::ControlFlow::Exit,
+            UserWindowEvent::Shutdown => event_loop.exit(),
 
             #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
             UserWindowEvent::GlobalHotKeyEvent(evnt) => self.app.handle_global_hotkey(evnt),
@@ -128,11 +134,12 @@ impl ApplicationHandler<UserWindowEvent> for Launch {
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
 pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: Config) {
-    let mut custom_event_handler = desktop_config.custom_event_handler.take();
+    let custom_event_handler = desktop_config.custom_event_handler.take();
     let (event_loop, app) = App::new(desktop_config, virtual_dom);
 
     event_loop.run_app(&mut Launch {
         app,
+        custom_event_handler,
     });
 }
 
@@ -172,7 +179,7 @@ pub fn launch(
     let platform_config = *platform_config
         .into_iter()
         .find_map(|cfg| cfg.downcast::<Config>().ok())
-        .unwrap_or_default();
+        .expect("unable to get platform config");
 
     launch_virtual_dom(virtual_dom, platform_config)
 }

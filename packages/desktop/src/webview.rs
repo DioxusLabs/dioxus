@@ -165,7 +165,7 @@ impl WebviewInstance {
         dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
-        let mut window = cfg.window.clone();
+        let mut window = cfg.window;
 
         // tao makes small windows for some reason, make them bigger on desktop
         //
@@ -173,8 +173,8 @@ impl WebviewInstance {
         // get a window that is not the size of the screen and weird black bars.
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            if cfg.window.window.inner_size.is_none() {
-                window = window.with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
+            if cfg.window.inner_size().height == 0 || cfg.window.inner_size().width == 0 {
+                window.request_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
             }
         }
 
@@ -211,7 +211,7 @@ impl WebviewInstance {
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
-        let headless = !cfg.window.window.visible;
+        let headless = !cfg.window.is_visible();
 
         let request_handler = {
             to_owned![
@@ -329,7 +329,7 @@ impl WebviewInstance {
                     window.inner_size().height,
                 )),
             })
-            .with_transparent(cfg.window.window.transparent)
+            .with_transparent(cfg.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(|var| {
