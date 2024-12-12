@@ -439,7 +439,25 @@ impl VNode {
                                 let new = new_attributes_iter.next().unwrap();
                                 // Volatile attributes are attributes that the browser may override so we always update them
                                 let volatile = old.volatile;
-                                if volatile || old.value != new.value {
+                                // We only need to write the attribute if the attribute is volatile or the value has changed
+                                // and this is not an event listener.
+                                // Interpreters reference event listeners by name and element id, so we don't need to write them
+                                // even if the closure has changed.
+                                let attribute_changed = match (&old.value, &new.value) {
+                                    (AttributeValue::Text(l), AttributeValue::Text(r)) => l != r,
+                                    (AttributeValue::Float(l), AttributeValue::Float(r)) => l != r,
+                                    (AttributeValue::Int(l), AttributeValue::Int(r)) => l != r,
+                                    (AttributeValue::Bool(l), AttributeValue::Bool(r)) => l != r,
+                                    (AttributeValue::Any(l), AttributeValue::Any(r)) => {
+                                        !l.as_ref().any_cmp(r.as_ref())
+                                    }
+                                    (AttributeValue::None, AttributeValue::None) => false,
+                                    (AttributeValue::Listener(_), AttributeValue::Listener(_)) => {
+                                        false
+                                    }
+                                    _ => true,
+                                };
+                                if volatile || attribute_changed {
                                     self.write_attribute(
                                         path,
                                         new,
