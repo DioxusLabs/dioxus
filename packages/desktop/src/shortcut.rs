@@ -19,7 +19,7 @@ use crate::window;
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
-use tao::keyboard::ModifiersState;
+use winit::keyboard::ModifiersState;
 
 /// An global id for a shortcut.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

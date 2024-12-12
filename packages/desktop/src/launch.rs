@@ -5,110 +5,135 @@ use crate::{
 };
 use dioxus_core::*;
 use dioxus_document::eval;
+use winit::application::ApplicationHandler;
 use std::any::Any;
-use tao::event::{Event, StartCause, WindowEvent};
+use winit::event::{StartCause, WindowEvent};
+
+struct Launch {
+    app: App,
+    custom_event_handler: String,
+}
+
+impl ApplicationHandler<UserWindowEvent> for Launch {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.app.control_flow = event_loop.control_flow();
+
+        self.app.tick(&window_event);
+
+        if let Some(ref mut f) = custom_event_handler {
+            f(&window_event, event_loop)
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => self.app.handle_close_requested(window_id),
+            WindowEvent::Destroyed { .. } => self.app.window_destroyed(window_id),
+            WindowEvent::Resized(new_size) => self.app.resize_window(new_size),
+            _ => (),
+        }
+    }
+
+    fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: UserWindowEvent) {
+        match event {
+            UserWindowEvent::Poll(id) => self.app.poll_vdom(id),
+            UserWindowEvent::NewWindow => self.app.handle_new_window(),
+            UserWindowEvent::CloseWindow(id) => self.app.handle_close_msg(id),
+            UserWindowEvent::Shutdown => self.app.control_flow = winit::event_loop::ControlFlow::Exit,
+
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+            UserWindowEvent::GlobalHotKeyEvent(evnt) => self.app.handle_global_hotkey(evnt),
+
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+            UserWindowEvent::MudaMenuEvent(evnt) => self.app.handle_menu_event(evnt),
+
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+            UserWindowEvent::TrayMenuEvent(evnt) => self.app.handle_tray_menu_event(evnt),
+
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+            UserWindowEvent::TrayIconEvent(evnt) => self.app.handle_tray_icon_event(evnt),
+
+            #[cfg(all(feature = "devtools", debug_assertions))]
+            UserWindowEvent::HotReloadEvent(msg) => self.app.handle_hot_reload_msg(msg),
+
+            // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
+            UserWindowEvent::WindowsDragDrop(id) => {
+                if let Some(webview) = self.app.webviews.get(&id) {
+                    webview.dom.in_runtime(|| {
+                        ScopeId::ROOT.in_runtime(|| {
+                            eval("window.interpreter.handleWindowsDragDrop();");
+                        });
+                    });
+                }
+            }
+            UserWindowEvent::WindowsDragLeave(id) => {
+                if let Some(webview) = self.app.webviews.get(&id) {
+                    webview.dom.in_runtime(|| {
+                        ScopeId::ROOT.in_runtime(|| {
+                            eval("window.interpreter.handleWindowsDragLeave();");
+                        });
+                    });
+                }
+            }
+            UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
+                if let Some(webview) = self.app.webviews.get(&id) {
+                    webview.dom.in_runtime(|| {
+                        ScopeId::ROOT.in_runtime(|| {
+                            let e = eval(
+                                r#"
+                                const xPos = await dioxus.recv();
+                                const yPos = await dioxus.recv();
+                                window.interpreter.handleWindowsDragOver(xPos, yPos)
+                                "#,
+                            );
+
+                            _ = e.send(x_pos);
+                            _ = e.send(y_pos);
+                        });
+                    });
+                }
+            }
+
+            UserWindowEvent::Ipc { id, msg } => match msg.method() {
+                IpcMethod::Initialize => self.app.handle_initialize_msg(id),
+                IpcMethod::FileDialog => self.app.handle_file_dialog_msg(msg, id),
+                IpcMethod::UserEvent => {}
+                IpcMethod::Query => self.app.handle_query_msg(msg, id),
+                IpcMethod::BrowserOpen => self.app.handle_browser_open(msg),
+                IpcMethod::Other(_) => {}
+            },
+        }
+    }
+
+    fn new_events(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, cause: StartCause) {
+        self.app.handle_start_cause_init();
+
+        if let StartCause::Init = cause {
+            self.app.control_flow = event_loop.control_flow();
+        }
+    }
+
+    fn exiting(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.app.handle_loop_destroyed();
+    }
+}
 
 /// Launch the WebView and run the event loop, with configuration and root props.
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: Config) -> ! {
+pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: Config) {
     let mut custom_event_handler = desktop_config.custom_event_handler.take();
-    let (event_loop, mut app) = App::new(desktop_config, virtual_dom);
+    let (event_loop, app) = App::new(desktop_config, virtual_dom);
 
-    event_loop.run(move |window_event, event_loop, control_flow| {
-        // Set the control flow and check if any events need to be handled in the app itself
-        app.tick(&window_event);
-
-        if let Some(ref mut f) = custom_event_handler {
-            f(&window_event, event_loop)
-        }
-
-        match window_event {
-            Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(),
-            Event::LoopDestroyed => app.handle_loop_destroyed(),
-            Event::WindowEvent {
-                event, window_id, ..
-            } => match event {
-                WindowEvent::CloseRequested => app.handle_close_requested(window_id),
-                WindowEvent::Destroyed { .. } => app.window_destroyed(window_id),
-                WindowEvent::Resized(new_size) => app.resize_window(new_size),
-                _ => {}
-            },
-
-            Event::UserEvent(event) => match event {
-                UserWindowEvent::Poll(id) => app.poll_vdom(id),
-                UserWindowEvent::NewWindow => app.handle_new_window(),
-                UserWindowEvent::CloseWindow(id) => app.handle_close_msg(id),
-                UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
-
-                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                UserWindowEvent::GlobalHotKeyEvent(evnt) => app.handle_global_hotkey(evnt),
-
-                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                UserWindowEvent::MudaMenuEvent(evnt) => app.handle_menu_event(evnt),
-
-                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                UserWindowEvent::TrayMenuEvent(evnt) => app.handle_tray_menu_event(evnt),
-
-                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-                UserWindowEvent::TrayIconEvent(evnt) => app.handle_tray_icon_event(evnt),
-
-                #[cfg(all(feature = "devtools", debug_assertions))]
-                UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
-
-                // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
-                UserWindowEvent::WindowsDragDrop(id) => {
-                    if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                eval("window.interpreter.handleWindowsDragDrop();");
-                            });
-                        });
-                    }
-                }
-                UserWindowEvent::WindowsDragLeave(id) => {
-                    if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                eval("window.interpreter.handleWindowsDragLeave();");
-                            });
-                        });
-                    }
-                }
-                UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
-                    if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                let e = eval(
-                                    r#"
-                                    const xPos = await dioxus.recv();
-                                    const yPos = await dioxus.recv();
-                                    window.interpreter.handleWindowsDragOver(xPos, yPos)
-                                    "#,
-                                );
-
-                                _ = e.send(x_pos);
-                                _ = e.send(y_pos);
-                            });
-                        });
-                    }
-                }
-
-                UserWindowEvent::Ipc { id, msg } => match msg.method() {
-                    IpcMethod::Initialize => app.handle_initialize_msg(id),
-                    IpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),
-                    IpcMethod::UserEvent => {}
-                    IpcMethod::Query => app.handle_query_msg(msg, id),
-                    IpcMethod::BrowserOpen => app.handle_browser_open(msg),
-                    IpcMethod::Other(_) => {}
-                },
-            },
-            _ => {}
-        }
-
-        *control_flow = app.control_flow;
-    })
+    event_loop.run_app(&mut Launch {
+        app,
+    });
 }
 
 /// Launches the WebView and runs the event loop, with configuration and root props.

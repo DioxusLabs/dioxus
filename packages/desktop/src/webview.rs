@@ -174,14 +174,14 @@ impl WebviewInstance {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
             if cfg.window.window.inner_size.is_none() {
-                window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+                window = window.with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
             }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
             window = window.with_window_icon(Some(
-                tao::window::Icon::from_rgba(
+                winit::window::Icon::from_rgba(
                     include_bytes!("./assets/default_icon.bin").to_vec(),
                     460,
                     460,
@@ -308,7 +308,7 @@ impl WebviewInstance {
             target_os = "android"
         )))]
         let mut webview = {
-            use tao::platform::unix::WindowExtUnix;
+            use winit::platform::unix::WindowExtUnix;
             use wry::WebViewBuilderExtUnix;
             let vbox = window.default_vbox().unwrap();
             WebViewBuilder::new_gtk(vbox)
