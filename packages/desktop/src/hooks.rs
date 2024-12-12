@@ -11,7 +11,6 @@ use dioxus_core::{
 
 use dioxus_core::Event;
 use dioxus_hooks::use_callback;
-use winit::event_loop::ActiveEventLoop;
 use wry::RequestAsyncResponder;
 
 /// Get an imperative handle to the current window
@@ -21,7 +20,7 @@ pub fn use_window() -> DesktopContext {
 
 /// Register an event handler that runs when a wry event is processed.
 pub fn use_wry_event_handler(
-    mut handler: impl FnMut(&Event<UserWindowEvent>, &ActiveEventLoop) + 'static,
+    mut handler: impl FnMut(&Event<UserWindowEvent>) + 'static,
 ) -> WryEventHandler {
     use dioxus_core::prelude::current_scope_id;
 
@@ -31,8 +30,8 @@ pub fn use_wry_event_handler(
 
     use_hook_with_cleanup(
         move || {
-            window().create_wry_event_handler(move |event: &Event<UserWindowEvent>, target| {
-                runtime.on_scope(scope_id, || handler(event, target))
+            window().create_wry_event_handler(move |event: &Event<UserWindowEvent>| {
+                runtime.on_scope(scope_id, || handler(event))
             })
         },
         move |handler| handler.remove(),
@@ -48,7 +47,7 @@ pub fn use_wry_event_handler(
 pub fn use_muda_event_handler(
     mut handler: impl FnMut(&muda::MenuEvent) + 'static,
 ) -> WryEventHandler {
-    use_wry_event_handler(move |event, _| {
+    use_wry_event_handler(move |event| {
         if let UserWindowEvent::MudaMenuEvent(event) = event.data.as_ref() {
             handler(event);
         }
@@ -64,7 +63,7 @@ pub fn use_muda_event_handler(
 pub fn use_tray_menu_event_handler(
     mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + 'static,
 ) -> WryEventHandler {
-    use_wry_event_handler(move |event, _| {
+    use_wry_event_handler(move |event| {
         if let UserWindowEvent::TrayMenuEvent(event) = event.data.as_ref() {
             handler(event);
         }
@@ -82,7 +81,7 @@ pub fn use_tray_menu_event_handler(
 pub fn use_tray_icon_event_handler(
     mut handler: impl FnMut(&tray_icon::TrayIconEvent) + 'static,
 ) -> WryEventHandler {
-    use_wry_event_handler(move |event, _| {
+    use_wry_event_handler(move |event| {
         if let UserWindowEvent::TrayIconEvent(event) = event.data.as_ref() {
             handler(event);
         }

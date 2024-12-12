@@ -1,7 +1,6 @@
 use dioxus_core::{Event, LaunchConfig};
 use std::borrow::Cow;
 use std::path::PathBuf;
-use std::sync::Arc;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Icon, Window};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
@@ -10,8 +9,7 @@ use wry::RequestAsyncResponder;
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
 
-type CustomEventHandler =
-    Box<dyn 'static + for<'a> FnMut(&Event<UserWindowEvent>, &ActiveEventLoop)>;
+type CustomEventHandler = Box<dyn 'static + for<'a> FnMut(&Event<UserWindowEvent>)>;
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -44,7 +42,7 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
-    pub(crate) window: Arc<Window>,
+    pub(crate) window: Window,
     pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
     pub(crate) protocols: Vec<WryProtocol>,
@@ -79,7 +77,7 @@ impl Config {
     pub fn new(event_loop: ActiveEventLoop) -> Self {
         let window_attributes = Window::default_attributes()
             .with_title(dioxus_cli_config::app_title().unwrap_or("Dioxus App".to_owned()));
-        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let window = event_loop.create_window(window_attributes).unwrap();
 
         // During development we want the window to be on top so we can see it while we work
         let always_on_top = dioxus_cli_config::always_on_top().unwrap_or(true);
@@ -166,7 +164,7 @@ impl Config {
     /// Sets a custom callback to run whenever the event pool receives an event.
     pub fn with_custom_event_handler(
         mut self,
-        f: impl FnMut(&Event<UserWindowEvent>, &ActiveEventLoop) + 'static,
+        f: impl FnMut(&Event<UserWindowEvent>) + 'static,
     ) -> Self {
         self.custom_event_handler = Some(Box::new(f));
         self

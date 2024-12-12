@@ -2423,9 +2423,25 @@ checksum = "f6140449f97a6e97f9511815c5632d84c8aacf8ac271ad77c559218161a1373c"
 dependencies = [
  "bitflags 1.3.2",
  "block",
- "cocoa-foundation",
+ "cocoa-foundation 0.1.2",
  "core-foundation 0.9.4",
  "core-graphics 0.23.2",
+ "foreign-types 0.5.0",
+ "libc",
+ "objc",
+]
+
+[[package]]
+name = "cocoa"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f79398230a6e2c08f5c9760610eb6924b52aa9e7950a619602baba59dcbbdbb2"
+dependencies = [
+ "bitflags 2.6.0",
+ "block",
+ "cocoa-foundation 0.2.0",
+ "core-foundation 0.10.0",
+ "core-graphics 0.24.0",
  "foreign-types 0.5.0",
  "libc",
  "objc",
@@ -2441,6 +2457,20 @@ dependencies = [
  "block",
  "core-foundation 0.9.4",
  "core-graphics-types 0.1.3",
+ "libc",
+ "objc",
+]
+
+[[package]]
+name = "cocoa-foundation"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e14045fb83be07b5acf1c0884b2180461635b433455fa35d1cd6f17f1450679d"
+dependencies = [
+ "bitflags 2.6.0",
+ "block",
+ "core-foundation 0.10.0",
+ "core-graphics-types 0.2.0",
  "libc",
  "objc",
 ]
@@ -3734,7 +3764,7 @@ name = "dioxus-desktop"
 version = "0.6.1"
 dependencies = [
  "async-trait",
- "cocoa",
+ "cocoa 0.25.0",
  "core-foundation 0.9.4",
  "dioxus",
  "dioxus-cli-config",
@@ -3781,6 +3811,7 @@ dependencies = [
  "urlencoding",
  "webbrowser",
  "winit",
+ "wry",
 ]
 
 [[package]]
@@ -5322,6 +5353,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "gdkx11"
+version = "0.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3caa00e14351bebbc8183b3c36690327eb77c49abc2268dd4bd36b856db3fbfe"
+dependencies = [
+ "gdk",
+ "gdkx11-sys",
+ "gio",
+ "glib",
+ "libc",
+ "x11",
+]
+
+[[package]]
+name = "gdkx11-sys"
+version = "0.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e2e7445fe01ac26f11601db260dd8608fe172514eb63b3b5e261ea6b0f4428d"
+dependencies = [
+ "gdk-sys",
+ "glib-sys",
+ "libc",
+ "system-deps",
+ "x11",
+]
+
+[[package]]
 name = "generational-box"
 version = "0.6.1"
 dependencies = [
@@ -5753,7 +5811,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b436093d1598b05e3b7fddc097b2bad32763f53a1beb25ab6f9718c6a60acd09"
 dependencies = [
  "bitflags 2.6.0",
- "cocoa",
+ "cocoa 0.25.0",
  "crossbeam-channel",
  "keyboard-types",
  "objc",
@@ -5914,7 +5972,7 @@ dependencies = [
  "presser",
  "thiserror 1.0.69",
  "winapi",
- "windows",
+ "windows 0.52.0",
 ]
 
 [[package]]
@@ -6544,7 +6602,7 @@ dependencies = [
  "iana-time-zone-haiku",
  "js-sys",
  "wasm-bindgen",
- "windows-core",
+ "windows-core 0.52.0",
 ]
 
 [[package]]
@@ -7089,6 +7147,29 @@ name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75a2a4b1b190afb6f5425f10f6a8f959d2ea0b9c2b1d79553551850539e4674"
+
+[[package]]
+name = "javascriptcore-rs"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca5671e9ffce8ffba57afc24070e906da7fc4b1ba66f2cabebf61bf2ea257fcc"
+dependencies = [
+ "bitflags 1.3.2",
+ "glib",
+ "javascriptcore-rs-sys",
+]
+
+[[package]]
+name = "javascriptcore-rs-sys"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af1be78d14ffa4b75b66df31840478fef72b51f8c2465d4ca7c194da9f7a5124"
+dependencies = [
+ "glib-sys",
+ "gobject-sys",
+ "libc",
+ "system-deps",
+]
 
 [[package]]
 name = "jni"
@@ -7993,7 +8074,7 @@ version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c47e7625990fc1af2226ea4f34fb2412b03c12639fcb91868581eb3a6893453"
 dependencies = [
- "cocoa",
+ "cocoa 0.25.0",
  "crossbeam-channel",
  "gtk",
  "keyboard-types",
@@ -11591,6 +11672,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "soup3"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "471f924a40f31251afc77450e781cb26d55c0b650842efafc9c6cbd2f7cc4f9f"
+dependencies = [
+ "futures-channel",
+ "gio",
+ "glib",
+ "libc",
+ "soup3-sys",
+]
+
+[[package]]
+name = "soup3-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ebe8950a680a12f24f15ebe1bf70db7af98ad242d9db43596ad3108aab86c27"
+dependencies = [
+ "gio-sys",
+ "glib-sys",
+ "gobject-sys",
+ "libc",
+ "system-deps",
+]
+
+[[package]]
 name = "sourcemap"
 version = "9.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13627,6 +13734,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tao-macros"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4e16beb8b2ac17db28eab8bca40e62dbfbb34c0fcdc6d9826b11b7b5d047dfd"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
 name = "tap"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15372,6 +15490,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "webkit2gtk"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76b1bc1e54c581da1e9f179d0b38512ba358fb1af2d634a1affe42e37172361a"
+dependencies = [
+ "bitflags 1.3.2",
+ "cairo-rs",
+ "gdk",
+ "gdk-sys",
+ "gio",
+ "gio-sys",
+ "glib",
+ "glib-sys",
+ "gobject-sys",
+ "gtk",
+ "gtk-sys",
+ "javascriptcore-rs",
+ "libc",
+ "once_cell",
+ "soup3",
+ "webkit2gtk-sys",
+]
+
+[[package]]
+name = "webkit2gtk-sys"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62daa38afc514d1f8f12b8693d30d5993ff77ced33ce30cd04deebc267a6d57c"
+dependencies = [
+ "bitflags 1.3.2",
+ "cairo-sys-rs",
+ "gdk-sys",
+ "gio-sys",
+ "glib-sys",
+ "gobject-sys",
+ "gtk-sys",
+ "javascriptcore-rs-sys",
+ "libc",
+ "pkg-config",
+ "soup3-sys",
+ "system-deps",
+]
+
+[[package]]
 name = "webpki-roots"
 version = "0.25.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15384,6 +15546,42 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d642ff16b7e79272ae451b7322067cdc17cadf68c23264be9d94a32319efe7e"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "webview2-com"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f61ff3d9d0ee4efcb461b14eb3acfda2702d10dc329f339303fc3e57215ae2c"
+dependencies = [
+ "webview2-com-macros",
+ "webview2-com-sys",
+ "windows 0.58.0",
+ "windows-core 0.58.0",
+ "windows-implement",
+ "windows-interface",
+]
+
+[[package]]
+name = "webview2-com-macros"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d228f15bba3b9d56dde8bddbee66fa24545bd17b48d5128ccf4a8742b18e431"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
+name = "webview2-com-sys"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3a3e2eeb58f82361c93f9777014668eb3d07e7d174ee4c819575a9208011886"
+dependencies = [
+ "thiserror 1.0.69",
+ "windows 0.58.0",
+ "windows-core 0.58.0",
 ]
 
 [[package]]
@@ -15587,7 +15785,17 @@ version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e48a53791691ab099e5e2ad123536d0fff50652600abaf43bbf952894110d0be"
 dependencies = [
- "windows-core",
+ "windows-core 0.52.0",
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows"
+version = "0.58.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd04d41d93c4992d421894c18c8b43496aa748dd4c081bac0dc93eb0489272b6"
+dependencies = [
+ "windows-core 0.58.0",
  "windows-targets 0.52.6",
 ]
 
@@ -15598,6 +15806,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
 dependencies = [
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-core"
+version = "0.58.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ba6d44ec8c2591c134257ce647b7ea6b20335bf6379a27dac5f1641fcf59f99"
+dependencies = [
+ "windows-implement",
+ "windows-interface",
+ "windows-result",
+ "windows-strings 0.1.0",
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-implement"
+version = "0.58.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bbd5b46c938e506ecbce286b6628a02171d56153ba733b6c741fc627ec9579b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
+name = "windows-interface"
+version = "0.58.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "053c4c462dc91d3b1504c6fe5a726dd15e216ba718e84a0e46a88fbe5ded3515"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
 ]
 
 [[package]]
@@ -15730,6 +15973,15 @@ dependencies = [
  "windows_x86_64_gnu 0.52.6",
  "windows_x86_64_gnullvm 0.52.6",
  "windows_x86_64_msvc 0.52.6",
+]
+
+[[package]]
+name = "windows-version"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6998aa457c9ba8ff2fb9f13e9d2a930dabcea28f1d0ab94d687d8b3654844515"
+dependencies = [
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -15955,6 +16207,46 @@ name = "writeable"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e9df38ee2d2c3c5948ea468a8406ff0db0b29ae1ffde1bcf20ef305bcc95c51"
+
+[[package]]
+name = "wry"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac0099a336829fbf54c26b5f620c68980ebbe37196772aeaf6118df4931b5cb0"
+dependencies = [
+ "base64 0.22.1",
+ "block",
+ "cocoa 0.26.0",
+ "core-graphics 0.24.0",
+ "crossbeam-channel",
+ "dpi",
+ "dunce",
+ "gdkx11",
+ "gtk",
+ "html5ever",
+ "http 1.1.0",
+ "javascriptcore-rs",
+ "jni",
+ "kuchikiki",
+ "libc",
+ "ndk",
+ "objc",
+ "objc_id",
+ "once_cell",
+ "percent-encoding",
+ "raw-window-handle 0.6.2",
+ "sha2",
+ "soup3",
+ "tao-macros",
+ "thiserror 1.0.69",
+ "webkit2gtk",
+ "webkit2gtk-sys",
+ "webview2-com",
+ "windows 0.58.0",
+ "windows-core 0.58.0",
+ "windows-version",
+ "x11-dl",
+]
 
 [[package]]
 name = "wyz"
