@@ -1,8 +1,8 @@
 use dioxus_core::LaunchConfig;
 use std::borrow::Cow;
 use std::path::PathBuf;
-use tao::event_loop::{EventLoop, EventLoopWindowTarget};
-use tao::window::{Icon, WindowBuilder};
+use winit::event_loop::{EventLoop, ActiveEventLoop};
+use winit::window::{Icon, Window};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::RequestAsyncResponder;
 
@@ -12,8 +12,8 @@ use crate::menubar::{default_menu_bar, DioxusMenu};
 type CustomEventHandler = Box<
     dyn 'static
         + for<'a> FnMut(
-            &tao::event::Event<'a, UserWindowEvent>,
-            &EventLoopWindowTarget<UserWindowEvent>,
+            &winit::event::Event<UserWindowEvent>,
+            &ActiveEventLoop,
         ),
 >;
 
@@ -48,7 +48,7 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
-    pub(crate) window: WindowBuilder,
+    pub(crate) window: Window,
     pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
     pub(crate) protocols: Vec<WryProtocol>,
@@ -144,11 +144,11 @@ impl Config {
     }
 
     /// Set the configuration for the window.
-    pub fn with_window(mut self, window: WindowBuilder) -> Self {
+    pub fn with_window(mut self, window: Window) -> Self {
         // We need to do a swap because the window builder only takes itself as muy self
         self.window = window;
         // If the decorations are off for the window, remove the menu as well
-        if !self.window.window.decorations && matches!(self.menu, MenuBuilderState::Unset) {
+        if !self.window.is_decorated() && matches!(self.menu, MenuBuilderState::Unset) {
             self.menu = MenuBuilderState::Set(None);
         }
         self
@@ -169,7 +169,7 @@ impl Config {
     /// Sets a custom callback to run whenever the event pool receives an event.
     pub fn with_custom_event_handler(
         mut self,
-        f: impl FnMut(&tao::event::Event<'_, UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
+        f: impl FnMut(&winit::event::Event<UserWindowEvent>, &ActiveEventLoop)
             + 'static,
     ) -> Self {
         self.custom_event_handler = Some(Box::new(f));
@@ -222,7 +222,7 @@ impl Config {
 
     /// Set a custom icon for this application
     pub fn with_icon(mut self, icon: Icon) -> Self {
-        self.window.window.window_icon = Some(icon);
+        self.window.set_window_icon(Some(icon));
         self
     }
 
@@ -270,7 +270,7 @@ impl Config {
     pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            if self.window.window.decorations {
+            if self.window.is_decorated() {
                 self.menu = MenuBuilderState::Set(menu.into())
             }
         }

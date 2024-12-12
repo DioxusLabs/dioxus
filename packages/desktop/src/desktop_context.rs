@@ -13,9 +13,9 @@ use dioxus_core::{
     VirtualDom,
 };
 use std::rc::{Rc, Weak};
-use tao::{
+use winit::{
     event::Event,
-    event_loop::EventLoopWindowTarget,
+    event_loop::ActiveEventLoop,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
 use wry::{RequestAsyncResponder, WebView};
@@ -193,7 +193,7 @@ impl DesktopService {
     /// The id this function returns can be used to remove the event handler with [`DesktopContext::remove_wry_event_handler`]
     pub fn create_wry_event_handler(
         &self,
-        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+        handler: impl FnMut(&Event<UserWindowEvent>, &ActiveEventLoop) + 'static,
     ) -> WryEventHandler {
         self.shared.event_handlers.add(self.window.id(), handler)
     }

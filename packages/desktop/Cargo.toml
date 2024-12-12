@@ -28,6 +28,11 @@ serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
+wry = { workspace = true, default-features = false, features = [
+    "os-webview",
+    "protocol",
+    "drag-drop",
+] }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
     "sync",
@@ -55,6 +60,14 @@ dioxus-history.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+wry = { workspace = true, features = [
+    "os-webview",
+    "protocol",
+    "drag-drop",
+    "linux-body"
+] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.5.0"
@@ -91,14 +104,10 @@ lazy-js-bundle = { workspace = true }
 [features]
 default = ["tokio_runtime", "exception", "transparent", "devtools"]
 tokio_runtime = ["dep:tokio"]
-fullscreen = []
-devtools = []
-transparent = []
-exception = []
-# fullscreen = ["wry/fullscreen"]
-# devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
-# exception = ["wry/objc-exception"]
-# transparent = ["wry/transparent"]
+fullscreen = ["wry/fullscreen"]
+devtools = ["wry/devtools", "dep:dioxus-devtools", "dioxus-signals"]
+exception = ["wry/objc-exception"]
+transparent = ["wry/transparent"]
 gnu = []
 
 [package.metadata.docs.rs]

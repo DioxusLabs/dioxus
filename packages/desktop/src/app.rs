@@ -16,10 +16,10 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
-use tao::{
+use winit::{
     dpi::PhysicalSize,
     event::Event,
-    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, ActiveEventLoop},
     window::WindowId,
 };
 
@@ -50,7 +50,7 @@ pub(crate) struct SharedContext {
     pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
+    pub(crate) target: ActiveEventLoop,
 }
 
 impl App {
@@ -104,7 +104,7 @@ impl App {
         (event_loop, app)
     }
 
-    pub fn tick(&mut self, window_event: &Event<'_, UserWindowEvent>) {
+    pub fn tick(&mut self, window_event: &Event<UserWindowEvent>) {
         self.control_flow = ControlFlow::Wait;
         self.shared
             .event_handlers
@@ -121,10 +121,9 @@ impl App {
         match event.id().0.as_str() {
             "dioxus-float-top" => {
                 for webview in self.webviews.values() {
-                    webview
-                        .desktop_context
-                        .window
-                        .set_always_on_top(self.float_all);
+                    if self.float_all {
+                        webview.desktop_context.window.set_window_level(winit::window::WindowLevel::AlwaysOnTop);
+                    }
                 }
                 self.float_all = !self.float_all;
             }
@@ -160,7 +159,7 @@ impl App {
             if button == tray_icon::MouseButton::Left {
                 for webview in self.webviews.values() {
                     webview.desktop_context.window.set_visible(true);
-                    webview.desktop_context.window.set_focus();
+                    webview.desktop_context.window.focus_window();
                 }
             }
         }
@@ -248,8 +247,8 @@ impl App {
         let virtual_dom = self.unmounted_dom.take().unwrap();
         let mut cfg = self.cfg.take().unwrap();
 
-        self.is_visible_before_start = cfg.window.window.visible;
-        cfg.window = cfg.window.with_visible(false);
+        self.is_visible_before_start = cfg.window.is_visible().unwrap_or(false);
+        cfg.window.set_visible(false);
 
         let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
@@ -487,8 +486,8 @@ impl App {
                 let window = &webview.desktop_context.window;
                 let position = (state.x, state.y);
                 let size = (state.width, state.height);
-                window.set_outer_position(tao::dpi::PhysicalPosition::new(position.0, position.1));
-                window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+                window.set_outer_position(winit::dpi::PhysicalPosition::new(position.0, position.1));
+                window.request_inner_size(winit::dpi::PhysicalSize::new(size.0, size.1));
             }
         }
     }
