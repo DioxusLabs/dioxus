@@ -257,8 +257,8 @@ impl App {
         let virtual_dom = self.unmounted_dom.take().unwrap();
         let cfg = self.cfg.take().unwrap();
 
-        self.is_visible_before_start = cfg.window.is_visible().unwrap_or(false);
-        cfg.window.set_visible(false);
+        self.is_visible_before_start = cfg.window_attributes.visible;
+        cfg.window_attributes.with_visible(false);
 
         let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 

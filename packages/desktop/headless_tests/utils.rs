@@ -5,7 +5,7 @@ use dioxus_core::Element;
 use winit::event_loop::EventLoop;
 
 pub fn check_app_exits(app: fn() -> Element) {
-    use dioxus_desktop::tao::window::WindowBuilder;
+    use dioxus_desktop::winit::window::Window;
     use dioxus_desktop::Config;
     // This is a deadman's switch to ensure that the app exits
     let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -21,7 +21,7 @@ pub fn check_app_exits(app: fn() -> Element) {
     let event_loop = EventLoop::new().expect("unable to create new event loop");
 
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new(event_loop).with_window(WindowBuilder::new().with_visible(false)))
+        .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(false)))
         .launch(app);
 
     // Stop deadman's switch
