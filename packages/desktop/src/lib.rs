@@ -31,6 +31,8 @@ mod mobile_shortcut;
 /// The main entrypoint for this crate
 pub mod launch;
 
+use std::env;
+
 // Reexport tao and wry, might want to re-export other important things
 // pub use tao;
 // pub use tao::dpi::{LogicalPosition, LogicalSize};
@@ -56,3 +58,20 @@ pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{ShortcutHandle, ShortcutRegistryError};
 pub use wry::RequestAsyncResponder;
+
+#[cfg(target_os = "linux")]
+pub enum DisplayHandler {
+    Wayland,
+    X11,
+}
+
+#[cfg(target_os = "linux")]
+impl DisplayHandler {
+    fn detect() -> Self {
+        if env::var("DISPLAY").is_ok() {
+            DisplayHandler::X11
+        } else {
+            DisplayHandler::Wayland
+        }
+    }
+}

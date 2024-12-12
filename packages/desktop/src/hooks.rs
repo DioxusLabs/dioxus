@@ -9,8 +9,9 @@ use dioxus_core::{
     use_hook, Runtime,
 };
 
+use dioxus_core::Event;
 use dioxus_hooks::use_callback;
-use winit::{event::Event, event_loop::ActiveEventLoop};
+use winit::event_loop::ActiveEventLoop;
 use wry::RequestAsyncResponder;
 
 /// Get an imperative handle to the current window
@@ -30,7 +31,7 @@ pub fn use_wry_event_handler(
 
     use_hook_with_cleanup(
         move || {
-            window().create_wry_event_handler(move |event, target| {
+            window().create_wry_event_handler(move |event: &Event<UserWindowEvent>, target| {
                 runtime.on_scope(scope_id, || handler(event, target))
             })
         },
@@ -48,7 +49,7 @@ pub fn use_muda_event_handler(
     mut handler: impl FnMut(&muda::MenuEvent) + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event, _| {
-        if let Event::UserEvent(UserWindowEvent::MudaMenuEvent(event)) = event {
+        if let UserWindowEvent::MudaMenuEvent(event) = event.data.as_ref() {
             handler(event);
         }
     })
@@ -64,7 +65,7 @@ pub fn use_tray_menu_event_handler(
     mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event, _| {
-        if let Event::UserEvent(UserWindowEvent::TrayMenuEvent(event)) = event {
+        if let UserWindowEvent::TrayMenuEvent(event) = event.data.as_ref() {
             handler(event);
         }
     })
@@ -82,7 +83,7 @@ pub fn use_tray_icon_event_handler(
     mut handler: impl FnMut(&tray_icon::TrayIconEvent) + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event, _| {
-        if let Event::UserEvent(UserWindowEvent::TrayIconEvent(event)) = event {
+        if let UserWindowEvent::TrayIconEvent(event) = event.data.as_ref() {
             handler(event);
         }
     })

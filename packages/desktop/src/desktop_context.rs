@@ -8,13 +8,13 @@ use crate::{
     webview::WebviewInstance,
     AssetRequest, Config, WryEventHandler,
 };
+use dioxus_core::Event;
 use dioxus_core::{
     prelude::{Callback, ScopeId},
     VirtualDom,
 };
 use std::rc::{Rc, Weak};
 use winit::{
-    event::Event,
     event_loop::ActiveEventLoop,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };

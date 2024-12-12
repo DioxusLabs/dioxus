@@ -1,7 +1,8 @@
-use dioxus_core::LaunchConfig;
+use dioxus_core::{Event, LaunchConfig};
 use std::borrow::Cow;
 use std::path::PathBuf;
-use winit::event_loop::{EventLoop, ActiveEventLoop};
+use std::sync::Arc;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Icon, Window};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::RequestAsyncResponder;
@@ -9,13 +10,8 @@ use wry::RequestAsyncResponder;
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
 
-type CustomEventHandler = Box<
-    dyn 'static
-        + for<'a> FnMut(
-            &winit::event::Event<UserWindowEvent>,
-            &ActiveEventLoop,
-        ),
->;
+type CustomEventHandler =
+    Box<dyn 'static + for<'a> FnMut(&Event<UserWindowEvent>, &ActiveEventLoop)>;
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -48,7 +44,7 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
-    pub(crate) window: Window,
+    pub(crate) window: Arc<Window>,
     pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
     pub(crate) protocols: Vec<WryProtocol>,
@@ -80,15 +76,16 @@ pub(crate) type AsyncWryProtocol = (
 impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
-    pub fn new() -> Self {
-        let mut window: WindowBuilder = WindowBuilder::new()
-            .with_title(dioxus_cli_config::app_title().unwrap_or_else(|| "Dioxus App".to_string()));
+    pub fn new(event_loop: ActiveEventLoop) -> Self {
+        let window_attributes = Window::default_attributes()
+            .with_title(dioxus_cli_config::app_title().unwrap_or("Dioxus App".to_owned()));
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         // During development we want the window to be on top so we can see it while we work
         let always_on_top = dioxus_cli_config::always_on_top().unwrap_or(true);
 
-        if cfg!(debug_assertions) {
-            window = window.with_always_on_top(always_on_top);
+        if cfg!(debug_assertions) && always_on_top {
+            window.set_window_level(winit::window::WindowLevel::AlwaysOnTop);
         }
 
         Self {
@@ -146,7 +143,7 @@ impl Config {
     /// Set the configuration for the window.
     pub fn with_window(mut self, window: Window) -> Self {
         // We need to do a swap because the window builder only takes itself as muy self
-        self.window = window;
+        self.window = window.into();
         // If the decorations are off for the window, remove the menu as well
         if !self.window.is_decorated() && matches!(self.menu, MenuBuilderState::Unset) {
             self.menu = MenuBuilderState::Set(None);
@@ -169,8 +166,7 @@ impl Config {
     /// Sets a custom callback to run whenever the event pool receives an event.
     pub fn with_custom_event_handler(
         mut self,
-        f: impl FnMut(&winit::event::Event<UserWindowEvent>, &ActiveEventLoop)
-            + 'static,
+        f: impl FnMut(&Event<UserWindowEvent>, &ActiveEventLoop) + 'static,
     ) -> Self {
         self.custom_event_handler = Some(Box::new(f));
         self
@@ -221,7 +217,7 @@ impl Config {
     }
 
     /// Set a custom icon for this application
-    pub fn with_icon(mut self, icon: Icon) -> Self {
+    pub fn with_icon(self, icon: Icon) -> Self {
         self.window.set_window_icon(Some(icon));
         self
     }
@@ -278,11 +274,11 @@ impl Config {
     }
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// impl Default for Config {
+//     fn default() -> Self {
+//         Self::new()
+//     }
+// }
 
 // dirty trick, avoid introducing `image` at runtime
 // TODO: use serde when `Icon` impl serde
