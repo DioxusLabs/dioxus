@@ -501,7 +501,7 @@ impl App {
                 let size = (state.width, state.height);
                 window
                     .set_outer_position(winit::dpi::PhysicalPosition::new(position.0, position.1));
-                window.request_inner_size(winit::dpi::PhysicalSize::new(size.0, size.1));
+                let _ = window.request_inner_size(winit::dpi::PhysicalSize::new(size.0, size.1));
             }
         }
     }
