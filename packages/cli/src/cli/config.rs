@@ -100,7 +100,7 @@ impl Config {
             Config::FormatPrint {} => {
                 tracing::info!(
                     "{:#?}",
-                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())?.config
+                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default(), None)?.config
                 );
             }
             Config::CustomHtml {} => {

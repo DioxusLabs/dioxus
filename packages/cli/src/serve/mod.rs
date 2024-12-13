@@ -47,7 +47,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     // Note that starting the builder will queue up a build immediately
     let mut builder = Builder::start(&krate, args.build_args())?;
     let mut devserver = WebServer::start(&krate, &args)?;
-    let mut watcher = Watcher::start(&krate, &args);
+    let mut watcher = Watcher::start(&krate);
     let mut runner = AppRunner::start(&krate);
     let mut screen = Output::start(&args)?;
 
@@ -82,7 +82,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
 
         match msg {
             ServeUpdate::FilesChanged { files } => {
-                if files.is_empty() || !args.should_hotreload() {
+                if files.is_empty() || !krate.settings.should_hot_reload() {
                     continue;
                 }
 
@@ -171,7 +171,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                                 bundle,
                                 devserver.devserver_address(),
                                 devserver.proxied_server_address(),
-                                args.open.unwrap_or(false),
+                                krate.settings.should_open_browser(),
                             )
                             .await;
 
