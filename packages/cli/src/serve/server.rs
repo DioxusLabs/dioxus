@@ -82,7 +82,7 @@ impl WebServer {
             .then(|| get_available_port(devserver_ip))
             .flatten();
 
-        let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_ip, port));
+        let proxied_address = proxied_port.map(|port| SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), port));
 
         // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
