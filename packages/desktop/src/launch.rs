@@ -3,19 +3,18 @@ use crate::{
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
 };
-use dioxus_core::Event;
-use dioxus_core::*;
+use dioxus_core::{Element, ScopeId, VirtualDom};
 use dioxus_document::eval;
 use std::any::Any;
 use winit::application::ApplicationHandler;
-use winit::event::{StartCause, WindowEvent};
+use winit::event::{Event, StartCause, WindowEvent};
 
 struct Launch {
     app: App,
-    custom_event_handler: Option<Box<dyn FnMut(&Event<UserWindowEvent>)>>,
+    custom_event_handler: Option<Box<dyn FnMut(&winit::event::Event<UserWindowEvent>)>>,
 }
 
-impl ApplicationHandler<UserWindowEvent> for Launch {
+impl ApplicationHandler<winit::event::Event<UserWindowEvent>> for Launch {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         self.app.control_flow = event_loop.control_flow();
     }
@@ -37,81 +36,82 @@ impl ApplicationHandler<UserWindowEvent> for Launch {
     fn user_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
-        event: UserWindowEvent,
+        event: winit::event::Event<UserWindowEvent>,
     ) {
-        let custom_event = Event::new(event.clone().into(), false);
-        self.app.tick(&custom_event);
+        self.app.tick(&event);
 
         if let Some(ref mut f) = self.custom_event_handler {
-            f(&custom_event)
+            f(&event)
         }
-        match event {
-            UserWindowEvent::Poll(id) => self.app.poll_vdom(id),
-            UserWindowEvent::NewWindow => self.app.handle_new_window(),
-            UserWindowEvent::CloseWindow(id) => self.app.handle_close_msg(id),
-            UserWindowEvent::Shutdown => event_loop.exit(),
+        if let Event::UserEvent(event) = event {
+            match event {
+                UserWindowEvent::Poll(id) => self.app.poll_vdom(id),
+                UserWindowEvent::NewWindow => self.app.handle_new_window(),
+                UserWindowEvent::CloseWindow(id) => self.app.handle_close_msg(id),
+                UserWindowEvent::Shutdown => event_loop.exit(),
 
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            UserWindowEvent::GlobalHotKeyEvent(evnt) => self.app.handle_global_hotkey(evnt),
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::GlobalHotKeyEvent(evnt) => self.app.handle_global_hotkey(evnt),
 
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            UserWindowEvent::MudaMenuEvent(evnt) => self.app.handle_menu_event(evnt),
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::MudaMenuEvent(evnt) => self.app.handle_menu_event(evnt),
 
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            UserWindowEvent::TrayMenuEvent(evnt) => self.app.handle_tray_menu_event(evnt),
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::TrayMenuEvent(evnt) => self.app.handle_tray_menu_event(evnt),
 
-            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-            UserWindowEvent::TrayIconEvent(evnt) => self.app.handle_tray_icon_event(evnt),
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::TrayIconEvent(evnt) => self.app.handle_tray_icon_event(evnt),
 
-            #[cfg(all(feature = "devtools", debug_assertions))]
-            UserWindowEvent::HotReloadEvent(msg) => self.app.handle_hot_reload_msg(msg),
+                #[cfg(all(feature = "devtools", debug_assertions))]
+                UserWindowEvent::HotReloadEvent(msg) => self.app.handle_hot_reload_msg(msg),
 
-            // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
-            UserWindowEvent::WindowsDragDrop(id) => {
-                if let Some(webview) = self.app.webviews.get(&id) {
-                    webview.dom.in_runtime(|| {
-                        ScopeId::ROOT.in_runtime(|| {
-                            eval("window.interpreter.handleWindowsDragDrop();");
+                // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
+                UserWindowEvent::WindowsDragDrop(id) => {
+                    if let Some(webview) = self.app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                eval("window.interpreter.handleWindowsDragDrop();");
+                            });
                         });
-                    });
+                    }
                 }
-            }
-            UserWindowEvent::WindowsDragLeave(id) => {
-                if let Some(webview) = self.app.webviews.get(&id) {
-                    webview.dom.in_runtime(|| {
-                        ScopeId::ROOT.in_runtime(|| {
-                            eval("window.interpreter.handleWindowsDragLeave();");
+                UserWindowEvent::WindowsDragLeave(id) => {
+                    if let Some(webview) = self.app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                eval("window.interpreter.handleWindowsDragLeave();");
+                            });
                         });
-                    });
+                    }
                 }
-            }
-            UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
-                if let Some(webview) = self.app.webviews.get(&id) {
-                    webview.dom.in_runtime(|| {
-                        ScopeId::ROOT.in_runtime(|| {
-                            let e = eval(
-                                r#"
+                UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
+                    if let Some(webview) = self.app.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                let e = eval(
+                                    r#"
                                 const xPos = await dioxus.recv();
                                 const yPos = await dioxus.recv();
                                 window.interpreter.handleWindowsDragOver(xPos, yPos)
                                 "#,
-                            );
+                                );
 
-                            _ = e.send(x_pos);
-                            _ = e.send(y_pos);
+                                _ = e.send(x_pos);
+                                _ = e.send(y_pos);
+                            });
                         });
-                    });
+                    }
                 }
-            }
 
-            UserWindowEvent::Ipc { id, msg } => match msg.method() {
-                IpcMethod::Initialize => self.app.handle_initialize_msg(id),
-                IpcMethod::FileDialog => self.app.handle_file_dialog_msg(msg, id),
-                IpcMethod::UserEvent => {}
-                IpcMethod::Query => self.app.handle_query_msg(msg, id),
-                IpcMethod::BrowserOpen => self.app.handle_browser_open(msg),
-                IpcMethod::Other(_) => {}
-            },
+                UserWindowEvent::Ipc { id, msg } => match msg.method() {
+                    IpcMethod::Initialize => self.app.handle_initialize_msg(id),
+                    IpcMethod::FileDialog => self.app.handle_file_dialog_msg(msg, id),
+                    IpcMethod::UserEvent => {}
+                    IpcMethod::Query => self.app.handle_query_msg(msg, id),
+                    IpcMethod::BrowserOpen => self.app.handle_browser_open(msg),
+                    IpcMethod::Other(_) => {}
+                },
+            }
         }
     }
 
@@ -178,7 +178,7 @@ pub fn launch(
     let platform_config = *platform_config
         .into_iter()
         .find_map(|cfg| cfg.downcast::<Config>().ok())
-        .expect("unable to get platform config");
+        .unwrap_or_default();
 
     launch_virtual_dom(virtual_dom, platform_config)
 }

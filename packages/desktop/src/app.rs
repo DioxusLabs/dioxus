@@ -9,7 +9,6 @@ use crate::{
     webview::WebviewInstance,
     DisplayHandler,
 };
-use dioxus_core::Event;
 use dioxus_core::{ElementId, VirtualDom};
 use dioxus_html::PlatformEventData;
 use std::{
@@ -19,6 +18,7 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
+use winit::event::Event;
 use winit::{
     dpi::PhysicalSize,
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
@@ -51,14 +51,17 @@ pub(crate) struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
     pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
-    pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
+    pub(crate) proxy: EventLoopProxy<Event<UserWindowEvent>>,
     pub(crate) target: Option<Event<UserWindowEvent>>,
 }
 
 impl App {
-    pub fn new(mut cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
+    pub fn new(
+        mut cfg: Config,
+        virtual_dom: VirtualDom,
+    ) -> (EventLoop<Event<UserWindowEvent>>, Self) {
         let event_loop = cfg.event_loop.take().unwrap_or_else(|| {
-            EventLoop::<UserWindowEvent>::with_user_event()
+            EventLoop::<Event<UserWindowEvent>>::with_user_event()
                 .build()
                 .expect("unable to create window")
         });
@@ -174,7 +177,9 @@ impl App {
         if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
             let proxy = self.shared.proxy.clone();
             dioxus_devtools::connect(endpoint, move |msg| {
-                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+                _ = proxy.send_event(winit::event::Event::UserEvent(
+                    UserWindowEvent::HotReloadEvent(msg),
+                ));
             })
         }
     }
@@ -183,7 +188,10 @@ impl App {
         for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
             let id = handler.desktop_context.window.id();
             self.webviews.insert(id, handler);
-            _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
+            _ = self
+                .shared
+                .proxy
+                .send_event(winit::event::Event::UserEvent(UserWindowEvent::Poll(id)));
         }
     }
 
@@ -197,10 +205,9 @@ impl App {
 
                 self.webviews.remove(&id);
                 if self.webviews.is_empty() {
-                    let _ = self
-                        .shared
-                        .proxy
-                        .send_event(UserWindowEvent::CloseWindow(id));
+                    let _ = self.shared.proxy.send_event(winit::event::Event::UserEvent(
+                        UserWindowEvent::CloseWindow(id),
+                    ));
                 }
             }
 
@@ -225,10 +232,9 @@ impl App {
             WindowCloseBehaviour::LastWindowExitsApp
         ) && self.webviews.is_empty()
         {
-            let _ = self
-                .shared
-                .proxy
-                .send_event(UserWindowEvent::CloseWindow(id));
+            let _ = self.shared.proxy.send_event(winit::event::Event::UserEvent(
+                UserWindowEvent::CloseWindow(id),
+            ));
         }
     }
 
@@ -255,10 +261,10 @@ impl App {
 
     pub fn handle_start_cause_init(&mut self) {
         let virtual_dom = self.unmounted_dom.take().unwrap();
-        let cfg = self.cfg.take().unwrap();
+        let mut cfg = self.cfg.take().unwrap();
 
         self.is_visible_before_start = cfg.window_attributes.visible;
-        cfg.window_attributes.with_visible(false);
+        cfg.window_attributes = cfg.window_attributes.with_visible(false);
 
         let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
@@ -297,7 +303,10 @@ impl App {
             .window
             .set_visible(self.is_visible_before_start);
 
-        _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
+        _ = self
+            .shared
+            .proxy
+            .send_event(winit::event::Event::UserEvent(UserWindowEvent::Poll(id)));
     }
 
     /// Todo: maybe we should poll the virtualdom asking if it has any final actions to apply before closing the webview
@@ -306,10 +315,9 @@ impl App {
     pub fn handle_close_msg(&mut self, id: WindowId) {
         self.webviews.remove(&id);
         if self.webviews.is_empty() {
-            let _ = self
-                .shared
-                .proxy
-                .send_event(UserWindowEvent::CloseWindow(id));
+            let _ = self.shared.proxy.send_event(winit::event::Event::UserEvent(
+                UserWindowEvent::CloseWindow(id),
+            ));
         }
     }
 
@@ -406,7 +414,9 @@ impl App {
         // receiver will become inert.
         global_hotkey::GlobalHotKeyEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
-            _ = receiver.send_event(UserWindowEvent::GlobalHotKeyEvent(t));
+            _ = receiver.send_event(winit::event::Event::UserEvent(
+                UserWindowEvent::GlobalHotKeyEvent(t),
+            ));
         }));
     }
 
@@ -420,7 +430,9 @@ impl App {
         // receiver will become inert.
         muda::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
-            _ = receiver.send_event(UserWindowEvent::MudaMenuEvent(t));
+            _ = receiver.send_event(winit::event::Event::UserEvent(
+                UserWindowEvent::MudaMenuEvent(t),
+            ));
         }));
     }
 
@@ -434,14 +446,18 @@ impl App {
         // receiver will become inert.
         tray_icon::TrayIconEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
-            _ = receiver.send_event(UserWindowEvent::TrayIconEvent(t));
+            _ = receiver.send_event(winit::event::Event::UserEvent(
+                UserWindowEvent::TrayIconEvent(t),
+            ));
         }));
 
         // for whatever reason they had to make it separate
         let receiver = self.shared.proxy.clone();
         tray_icon::menu::MenuEvent::set_event_handler(Some(move |t| {
             // todo: should we unset the event handler when the app shuts down?
-            _ = receiver.send_event(UserWindowEvent::TrayMenuEvent(t));
+            _ = receiver.send_event(winit::event::Event::UserEvent(
+                UserWindowEvent::TrayMenuEvent(t),
+            ));
         }));
     }
 
@@ -520,7 +536,10 @@ impl App {
                 let sigkill = signal_hook::iterator::Signals::new([SIGTERM, SIGINT]);
                 if let Ok(mut sigkill) = sigkill {
                     for _ in sigkill.forever() {
-                        if target.send_event(UserWindowEvent::Shutdown).is_err() {
+                        if target
+                            .send_event(winit::event::Event::UserEvent(UserWindowEvent::Shutdown))
+                            .is_err()
+                        {
                             std::process::exit(0);
                         }
 

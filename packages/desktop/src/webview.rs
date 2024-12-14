@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
@@ -167,23 +168,22 @@ impl WebviewInstance {
         dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
-        let mut window_attributes = cfg.window_attributes;
-
         // tao makes small windows for some reason, make them bigger on desktop
         //
         // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
         // get a window that is not the size of the screen and weird black bars.
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            if window_attributes.inner_size.is_none() {
-                let _ =
-                    window_attributes.with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
+            if cfg.window_attributes.inner_size.is_none() {
+                cfg.window_attributes = cfg
+                    .window_attributes
+                    .with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
             }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window_attributes.window_icon.is_none() {
-            window_attributes = window_attributes.with_window_icon(Some(
+            cfg.window_attributes = cfg.window_attributes.with_window_icon(Some(
                 winit::window::Icon::from_rgba(
                     include_bytes!("./assets/default_icon.bin").to_vec(),
                     460,
@@ -192,11 +192,12 @@ impl WebviewInstance {
                 .expect("image parse failed"),
             ));
         }
+        let headless = !cfg.window_attributes.visible;
 
         let event_loop = EventLoop::new();
         let window = event_loop
             .unwrap()
-            .create_window(window_attributes)
+            .create_window(cfg.window_attributes)
             .unwrap();
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
@@ -218,7 +219,6 @@ impl WebviewInstance {
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
-        let headless = !window_attributes.visible;
 
         let request_handler = {
             to_owned![
@@ -249,7 +249,10 @@ impl WebviewInstance {
                 // defer the event to the main thread
                 let body = payload.into_body();
                 if let Ok(msg) = serde_json::from_str(&body) {
-                    _ = proxy.send_event(UserWindowEvent::Ipc { id: window_id, msg });
+                    _ = proxy.send_event(winit::event::Event::UserEvent(UserWindowEvent::Ipc {
+                        id: window_id,
+                        msg,
+                    }));
                 }
             }
         };

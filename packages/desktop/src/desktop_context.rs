@@ -8,12 +8,12 @@ use crate::{
     webview::WebviewInstance,
     AssetRequest, Config, WryEventHandler,
 };
-use dioxus_core::Event;
 use dioxus_core::{
     prelude::{Callback, ScopeId},
     VirtualDom,
 };
 use std::rc::{Rc, Weak};
+use winit::event::Event;
 use winit::window::{Fullscreen as WryFullscreen, Window, WindowId};
 use wry::{RequestAsyncResponder, WebView};
 
@@ -109,7 +109,7 @@ impl DesktopService {
 
         self.shared
             .proxy
-            .send_event(UserWindowEvent::NewWindow)
+            .send_event(winit::event::Event::UserEvent(UserWindowEvent::NewWindow))
             .unwrap();
 
         self.shared.pending_webviews.borrow_mut().push(window);
@@ -138,18 +138,16 @@ impl DesktopService {
 
     /// Close this window
     pub fn close(&self) {
-        let _ = self
-            .shared
-            .proxy
-            .send_event(UserWindowEvent::CloseWindow(self.id()));
+        let _ = self.shared.proxy.send_event(winit::event::Event::UserEvent(
+            UserWindowEvent::CloseWindow(self.id()),
+        ));
     }
 
     /// Close a particular window, given its ID
     pub fn close_window(&self, id: WindowId) {
-        let _ = self
-            .shared
-            .proxy
-            .send_event(UserWindowEvent::CloseWindow(id));
+        let _ = self.shared.proxy.send_event(winit::event::Event::UserEvent(
+            UserWindowEvent::CloseWindow(id),
+        ));
     }
 
     /// change window to fullscreen

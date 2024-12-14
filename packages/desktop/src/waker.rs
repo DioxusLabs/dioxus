@@ -1,7 +1,7 @@
 use crate::ipc::UserWindowEvent;
 use futures_util::task::ArcWake;
 use std::sync::Arc;
-use winit::{event_loop::EventLoopProxy, window::WindowId};
+use winit::{event::Event, event_loop::EventLoopProxy, window::WindowId};
 
 /// Create a waker that will send a poll event to the event loop.
 ///
@@ -9,9 +9,9 @@ use winit::{event_loop::EventLoopProxy, window::WindowId};
 ///
 /// All IO and multithreading lives on other threads. Thanks to tokio's work stealing approach, the main thread can never
 /// claim a task while it's blocked by the event loop.
-pub fn tao_waker(proxy: EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::task::Waker {
+pub fn tao_waker(proxy: EventLoopProxy<Event<UserWindowEvent>>, id: WindowId) -> std::task::Waker {
     struct DomHandle {
-        proxy: EventLoopProxy<UserWindowEvent>,
+        proxy: EventLoopProxy<Event<UserWindowEvent>>,
         id: WindowId,
     }
 
@@ -24,7 +24,9 @@ pub fn tao_waker(proxy: EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::t
         fn wake_by_ref(arc_self: &Arc<Self>) {
             _ = arc_self
                 .proxy
-                .send_event(UserWindowEvent::Poll(arc_self.id));
+                .send_event(winit::event::Event::UserEvent(UserWindowEvent::Poll(
+                    arc_self.id,
+                )));
         }
     }
 

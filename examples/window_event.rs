@@ -9,18 +9,20 @@
 //!
 //! The entire featuresuite of wry and tao is available to you
 
-use dioxus::desktop::{window, Config, WindowBuilder};
+#![allow(deprecated)]
+
+use dioxus::desktop::winit::event_loop::EventLoop;
+use dioxus::desktop::{window, Config};
+use dioxus::mobile::winit::window::{WindowAttributes, WindowLevel};
 use dioxus::prelude::*;
 
 fn main() {
+    let window = EventLoop::new()
+        .unwrap()
+        .create_window(WindowAttributes::default())
+        .unwrap();
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(
-            Config::new().with_window(
-                WindowBuilder::new()
-                    .with_title("Borderless Window")
-                    .with_decorations(false),
-            ),
-        )
+        .with_cfg(Config::new().with_window(window))
         .launch(app)
 }
 
@@ -93,7 +95,11 @@ fn SetOnTop() -> Element {
                 class: "inline-flex items-center text-white bg-green-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
                 onmousedown: |evt| evt.stop_propagation(),
                 onclick: move |_| {
-                    window().set_always_on_top(!always_on_top());
+                    if always_on_top() {
+                        window().set_window_level(WindowLevel::AlwaysOnTop);
+                    } else {
+                        window().set_window_level(WindowLevel::Normal);
+                    }
                     always_on_top.toggle();
                 },
                 "Always On Top"

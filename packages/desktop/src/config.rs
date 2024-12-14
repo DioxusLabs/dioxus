@@ -1,6 +1,7 @@
-use dioxus_core::{Event, LaunchConfig};
+use dioxus_core::LaunchConfig;
 use std::borrow::Cow;
 use std::path::PathBuf;
+use winit::event::Event;
 use winit::event_loop::EventLoop;
 use winit::window::{Icon, Window, WindowAttributes};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
@@ -41,7 +42,7 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 
 /// The configuration for the desktop application.
 pub struct Config {
-    pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
+    pub(crate) event_loop: Option<EventLoop<Event<UserWindowEvent>>>,
     pub(crate) window_attributes: WindowAttributes,
     pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
@@ -132,7 +133,7 @@ impl Config {
     }
 
     /// Set the event loop to be used
-    pub fn with_event_loop(mut self, event_loop: EventLoop<UserWindowEvent>) -> Self {
+    pub fn with_event_loop(mut self, event_loop: EventLoop<Event<UserWindowEvent>>) -> Self {
         self.event_loop = Some(event_loop);
         self
     }
@@ -140,7 +141,7 @@ impl Config {
     /// Set the configuration for the window.
     pub fn with_window(mut self, window: Window) -> Self {
         // We need to do a swap because the window builder only takes itself as muy self
-        self.window_attributes = window.into();
+        self.window_attributes = window.window_attributes();
         // If the decorations are off for the window, remove the menu as well
         if !self.window_attributes.decorations && matches!(self.menu, MenuBuilderState::Unset) {
             self.menu = MenuBuilderState::Set(None);
@@ -214,8 +215,8 @@ impl Config {
     }
 
     /// Set a custom icon for this application
-    pub fn with_icon(self, icon: Icon) -> Self {
-        self.window_attributes.with_window_icon(Some(icon));
+    pub fn with_icon(mut self, icon: Icon) -> Self {
+        self.window_attributes = self.window_attributes.with_window_icon(Some(icon));
         self
     }
 
@@ -271,11 +272,11 @@ impl Config {
     }
 }
 
-// impl Default for Config {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // dirty trick, avoid introducing `image` at runtime
 // TODO: use serde when `Icon` impl serde

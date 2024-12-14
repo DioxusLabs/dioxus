@@ -5,9 +5,12 @@
 //!
 //! We also add a global shortcut to toggle the overlay on and off, so you could build a raycast-type app with this.
 
-use dioxus::desktop::{
-    tao::dpi::PhysicalPosition, use_global_shortcut, LogicalSize, WindowBuilder,
-};
+#![allow(deprecated)]
+
+use dioxus::desktop::{use_global_shortcut, winit::dpi::PhysicalPosition, LogicalSize};
+use dioxus::mobile::winit::event_loop::EventLoop;
+use dioxus::mobile::winit::window::WindowAttributes;
+use dioxus::mobile::Window;
 use dioxus::prelude::*;
 
 fn main() {
@@ -50,12 +53,17 @@ fn make_config() -> dioxus::desktop::Config {
     dioxus::desktop::Config::default().with_window(make_window())
 }
 
-fn make_window() -> WindowBuilder {
-    WindowBuilder::new()
-        .with_transparent(true)
-        .with_decorations(false)
-        .with_resizable(false)
-        .with_always_on_top(true)
-        .with_position(PhysicalPosition::new(0, 0))
-        .with_max_inner_size(LogicalSize::new(100000, 50))
+fn make_window() -> Window {
+    EventLoop::new()
+        .unwrap()
+        .create_window(
+            WindowAttributes::default()
+                .with_decorations(false)
+                .with_transparent(true)
+                .with_resizable(false)
+                .with_position(PhysicalPosition::new(0, 0))
+                .with_max_inner_size(LogicalSize::new(100000, 50))
+                .with_window_level(dioxus::mobile::winit::window::WindowLevel::AlwaysOnTop),
+        )
+        .unwrap()
 }

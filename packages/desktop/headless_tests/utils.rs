@@ -1,8 +1,8 @@
-#![allow(unused)] // for whatever reason, the compiler is not recognizing the use of these functions
+#![allow(unused, deprecated)] // for whatever reason, the compiler is not recognizing the use of these functions
 
 use dioxus::prelude::*;
 use dioxus_core::Element;
-use winit::event_loop::EventLoop;
+use winit::{event_loop::EventLoop, window::WindowAttributes};
 
 pub fn check_app_exits(app: fn() -> Element) {
     use dioxus_desktop::winit::window::Window;
@@ -20,8 +20,14 @@ pub fn check_app_exits(app: fn() -> Element) {
 
     let event_loop = EventLoop::new().expect("unable to create new event loop");
 
+    let window = EventLoop::new()
+        .unwrap()
+        .create_window(WindowAttributes::default())
+        .unwrap();
+
+    window.set_visible(false);
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(false)))
+        .with_cfg(Config::new().with_window(window))
         .launch(app);
 
     // Stop deadman's switch
