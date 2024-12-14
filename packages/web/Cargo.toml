@@ -54,6 +54,7 @@ features = [
     "CustomEvent",
     "DataTransfer",
     "Document",
+    "DomRectReadOnly",
     "DragEvent",
     "FocusEvent",
     "History",
@@ -101,9 +102,16 @@ file_engine = [
     "dep:async-trait",
     "web-sys/File",
     "web-sys/FileList",
-    "web-sys/FileReader"
+    "web-sys/FileReader",
 ]
-devtools = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "dep:serde_json", "dep:serde", "dioxus-core/serialize"]
+devtools = [
+    "web-sys/MessageEvent",
+    "web-sys/WebSocket",
+    "web-sys/Location",
+    "dep:serde_json",
+    "dep:serde",
+    "dioxus-core/serialize",
+]
 document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
 
 [dev-dependencies]
