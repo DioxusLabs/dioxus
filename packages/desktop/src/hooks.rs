@@ -9,8 +9,8 @@ use dioxus_core::{
     use_hook, Runtime,
 };
 
-use dioxus_core::Event;
 use dioxus_hooks::use_callback;
+use winit::event::Event;
 use wry::RequestAsyncResponder;
 /// Get an imperative handle to the current window
 pub fn use_window() -> DesktopContext {
@@ -47,8 +47,8 @@ pub fn use_muda_event_handler(
     mut handler: impl FnMut(&muda::MenuEvent) + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event| {
-        if let UserWindowEvent::MudaMenuEvent(event) = event.data.as_ref() {
-            handler(event);
+        if let Event::UserEvent(UserWindowEvent::MudaMenuEvent(event)) = event {
+            handler(&event);
         }
     })
 }
@@ -63,9 +63,9 @@ pub fn use_tray_menu_event_handler(
     mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event| {
-        if let UserWindowEvent::TrayMenuEvent(event) = event.data.as_ref() {
+        if let Event::UserEvent(UserWindowEvent::TrayMenuEvent(event)) = event {
             handler(event);
-        }
+        };
     })
 }
 
@@ -81,7 +81,7 @@ pub fn use_tray_icon_event_handler(
     mut handler: impl FnMut(&tray_icon::TrayIconEvent) + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event| {
-        if let UserWindowEvent::TrayIconEvent(event) = event.data.as_ref() {
+        if let Event::UserEvent(UserWindowEvent::TrayIconEvent(event)) = event {
             handler(event);
         }
     })

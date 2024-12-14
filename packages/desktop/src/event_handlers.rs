@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
 use crate::{ipc::UserWindowEvent, window};
-use dioxus_core::Event;
 use slab::Slab;
 use std::cell::RefCell;
+use winit::event::Event;
 use winit::window::WindowId;
 
 /// The unique identifier of a window event handler. This can be used to later remove the handler.

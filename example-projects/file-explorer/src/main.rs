@@ -5,16 +5,23 @@
 //! This example is interesting because it's mixing filesystem operations and GUI, which is typically hard for UI to do.
 //! We store the state entirely in a single signal, making the explorer logic fairly easy to reason about.
 
+#![allow(deprecated)]
 use std::env::current_dir;
 use std::path::PathBuf;
 
-use dioxus::desktop::{Config, WindowBuilder};
+use dioxus::desktop::Config;
+use dioxus::mobile::winit::event_loop::EventLoop;
+use dioxus::mobile::winit::window::WindowAttributes;
 use dioxus::prelude::*;
 
 fn main() {
+    let window = EventLoop::new()
+        .unwrap()
+        .create_window(WindowAttributes::default())
+        .unwrap();
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_window(WindowBuilder::new().with_resizable(true)))
-        .launch(app)
+        .with_cfg(Config::new().with_window(window))
+        .launch(app);
 }
 
 fn app() -> Element {
