@@ -30,7 +30,7 @@ winit = { workspace = true }
 keyboard-types = { workspace = true }
 
 # IO & Networking
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 # Other dependencies
 tracing = { workspace = true, optional = true }
