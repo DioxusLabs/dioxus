@@ -3,14 +3,14 @@ use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate, Platform, Resul
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct RunArgs {
+pub struct RunArgs {
     /// Information about the target to build
     #[clap(flatten)]
-    pub(crate) build_args: BuildArgs,
+    pub build_args: BuildArgs,
 }
 
 impl RunArgs {
-    pub(crate) async fn run(mut self) -> Result<StructuredOutput> {
+    pub async fn run(mut self) -> Result<StructuredOutput> {
         let krate = DioxusCrate::new(&self.build_args.target_args)
             .context("Failed to load Dioxus workspace")?;
 

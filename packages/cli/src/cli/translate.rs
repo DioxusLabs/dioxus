@@ -4,27 +4,27 @@ use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
 
 /// Translate some source file into Dioxus code
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct Translate {
+pub struct Translate {
     /// Activate debug mode
     // short and long flags (-d, --debug) will be deduced from the field's name
     #[clap(short, long)]
-    pub(crate) component: bool,
+    pub component: bool,
 
     /// Input file
     #[clap(short, long)]
-    pub(crate) file: Option<String>,
+    pub file: Option<String>,
 
     /// Input file
     #[clap(short, long)]
-    pub(crate) raw: Option<String>,
+    pub raw: Option<String>,
 
     /// Output file, stdout if not present
     #[arg(short, long)]
-    pub(crate) output: Option<PathBuf>,
+    pub output: Option<PathBuf>,
 }
 
 impl Translate {
-    pub(crate) fn translate(self) -> Result<StructuredOutput> {
+    pub fn translate(self) -> Result<StructuredOutput> {
         // Get the right input for the translation
         let contents = determine_input(self.file, self.raw)?;
 

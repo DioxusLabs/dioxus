@@ -14,18 +14,18 @@ pub enum LinkAction {
 }
 
 impl LinkAction {
-    pub(crate) const ENV_VAR_NAME: &'static str = "dx_magic_link_file";
+    pub const ENV_VAR_NAME: &'static str = "dx_magic_link_file";
 
     /// Should we write the input arguments to a file (aka act as a linker subprocess)?
     ///
     /// Just check if the magic env var is set
-    pub(crate) fn from_env() -> Option<Self> {
+    pub fn from_env() -> Option<Self> {
         std::env::var(Self::ENV_VAR_NAME)
             .ok()
             .map(|var| serde_json::from_str(&var).expect("Failed to parse magic env var"))
     }
 
-    pub(crate) fn to_json(&self) -> String {
+    pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap()
     }
 
@@ -38,7 +38,7 @@ impl LinkAction {
     ///
     /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
     /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
-    pub(crate) fn run(self) {
+    pub fn run(self) {
         match self {
             // Literally just run the android linker :)
             LinkAction::LinkAndroid {

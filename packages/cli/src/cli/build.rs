@@ -5,62 +5,62 @@ use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 ///
 /// Produces a final output bundle designed to be run on the target platform.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-pub(crate) struct BuildArgs {
+pub struct BuildArgs {
     /// Build in release mode [default: false]
     #[clap(long, short)]
     #[serde(default)]
-    pub(crate) release: bool,
+    pub release: bool,
 
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub(crate) force_sequential: bool,
+    pub force_sequential: bool,
 
     /// Build the app with custom a profile
     #[clap(long)]
-    pub(crate) profile: Option<String>,
+    pub profile: Option<String>,
 
     /// Build with custom profile for the fullstack server
     #[clap(long, default_value_t = PROFILE_SERVER.to_string())]
-    pub(crate) server_profile: String,
+    pub server_profile: String,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long, value_enum)]
-    pub(crate) platform: Option<Platform>,
+    pub platform: Option<Platform>,
 
     /// Build the fullstack variant of this app, using that as the fileserver and backend
     ///
     /// This defaults to `false` but will be overridden to true if the `fullstack` feature is enabled.
     #[clap(long)]
-    pub(crate) fullstack: bool,
+    pub fullstack: bool,
 
     /// Run the ssg config of the app and generate the files
     #[clap(long)]
-    pub(crate) ssg: bool,
+    pub ssg: bool,
 
     /// Skip collecting assets from dependencies [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub(crate) skip_assets: bool,
+    pub skip_assets: bool,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
-    pub(crate) cargo_args: Vec<String>,
+    pub cargo_args: Vec<String>,
 
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
     #[clap(long, default_value_t = true)]
-    pub(crate) inject_loading_scripts: bool,
+    pub inject_loading_scripts: bool,
 
     /// Generate debug symbols for the wasm binary [default: true]
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
     /// wasm binary
     #[clap(long, default_value_t = true)]
-    pub(crate) debug_symbols: bool,
+    pub debug_symbols: bool,
 
     /// Information about the target to build
     #[clap(flatten)]
-    pub(crate) target_args: TargetArgs,
+    pub target_args: TargetArgs,
 }
 
 impl BuildArgs {

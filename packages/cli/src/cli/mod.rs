@@ -1,23 +1,23 @@
-pub(crate) mod autoformat;
-pub(crate) mod build;
-pub(crate) mod bundle;
-pub(crate) mod check;
-pub(crate) mod clean;
-pub(crate) mod config;
-pub(crate) mod create;
-pub(crate) mod doctor;
-pub(crate) mod init;
-pub(crate) mod link;
-pub(crate) mod run;
-pub(crate) mod serve;
-pub(crate) mod target;
-pub(crate) mod translate;
-pub(crate) mod verbosity;
+pub mod autoformat;
+pub mod build;
+pub mod bundle;
+pub mod check;
+pub mod clean;
+pub mod config;
+pub mod create;
+pub mod doctor;
+pub mod init;
+pub mod link;
+pub mod run;
+pub mod serve;
+pub mod target;
+pub mod translate;
+pub mod verbosity;
 
-pub(crate) use build::*;
-pub(crate) use serve::*;
-pub(crate) use target::*;
-pub(crate) use verbosity::*;
+pub use build::*;
+pub use serve::*;
+pub use target::*;
+pub use verbosity::*;
 
 use crate::{error::Result, Error, StructuredOutput};
 use anyhow::Context;
@@ -36,16 +36,16 @@ use std::{
 /// Build, Bundle & Ship Dioxus Apps.
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
-pub(crate) struct Cli {
+pub struct Cli {
     #[command(subcommand)]
-    pub(crate) action: Commands,
+    pub action: Commands,
 
     #[command(flatten)]
-    pub(crate) verbosity: Verbosity,
+    pub verbosity: Verbosity,
 }
 
 #[derive(Subcommand)]
-pub(crate) enum Commands {
+pub enum Commands {
     /// Build the Dioxus project and all of its assets.
     #[clap(name = "build")]
     Build(build::BuildArgs),

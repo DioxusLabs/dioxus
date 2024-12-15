@@ -34,11 +34,11 @@ pub struct Bundle {
 
     /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub(crate) build_arguments: BuildArgs,
+    pub build_arguments: BuildArgs,
 }
 
 impl Bundle {
-    pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
+    pub async fn bundle(mut self) -> Result<StructuredOutput> {
         tracing::info!("Bundling project...");
 
         let krate = DioxusCrate::new(&self.build_arguments.target_args)
