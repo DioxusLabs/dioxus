@@ -91,7 +91,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = runner.attempt_hot_reload(files) {
+                if let Some(hr) = runner.attempt_hot_reload(files).await {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty()
                         && hr.assets.is_empty()
@@ -120,6 +120,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     runner.file_map.force_rebuild();
 
                     // Tell the server to show a loading page for any new requests
+                    devserver.send_reload_start().await;
                     devserver.start_build().await;
                 } else {
                     tracing::warn!(
@@ -227,6 +228,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
 
                 builder.rebuild(args.build_arguments.clone());
                 runner.file_map.force_rebuild();
+                devserver.send_reload_start().await;
                 devserver.start_build().await
             }
 

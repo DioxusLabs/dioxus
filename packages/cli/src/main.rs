@@ -15,12 +15,10 @@ mod filemap;
 mod logging;
 mod metadata;
 mod platform;
-mod profiles;
 mod rustup;
 mod serve;
 mod settings;
-mod slog;
-mod tooling;
+mod wasm_bindgen;
 
 pub(crate) use build::*;
 pub(crate) use cli::*;

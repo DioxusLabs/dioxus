@@ -275,6 +275,19 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
 
 #[cfg(target_os = "android")]
 pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
+    let normalized = filepath
+        .trim_start_matches("/assets/")
+        .trim_start_matches('/');
+
+    // in debug mode, the asset might be under `/data/local/tmp/dx/` - attempt to read it from there if it exists
+    #[cfg(debug_assertions)]
+    {
+        let path = std::path::PathBuf::from("/data/local/tmp/dx/").join(normalized);
+        if path.exists() {
+            return std::fs::read(path).ok();
+        }
+    }
+
     use std::{io::Read, ptr::NonNull};
 
     let ctx = ndk_context::android_context();
@@ -300,10 +313,6 @@ pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
         let asset_manager = ndk::asset::AssetManager::from_ptr(
             NonNull::new(asset_manager).expect("Invalid asset manager"),
         );
-
-        let normalized = filepath
-            .trim_start_matches("/assets/")
-            .trim_start_matches('/');
 
         let cstr = std::ffi::CString::new(normalized).unwrap();
 
