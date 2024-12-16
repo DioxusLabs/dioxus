@@ -17,7 +17,16 @@ pub mod verbosity;
 pub use build::*;
 pub use serve::*;
 pub use target::*;
+pub use translate::*;
 pub use verbosity::*;
+pub use init::*;
+pub use clean::*;
+pub use bundle::*;
+pub use autoformat::*;
+pub use check::*;
+pub use run::*;
+pub use doctor::*;
+pub use config::*;
 
 use crate::{error::Result, Error, StructuredOutput};
 use anyhow::Context;
