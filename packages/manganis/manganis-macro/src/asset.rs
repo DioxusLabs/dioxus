@@ -11,12 +11,6 @@ use syn::{
 };
 
 fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
-    if raw.is_empty() {
-        return Err(AssetParseError::InvalidPath {
-            path: PathBuf::new(),
-        });
-    }
-
     // Get the location of the root of the crate which is where all assets are relative to
     //
     // IE
