@@ -25,22 +25,24 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     // /users/dioxus/dev/app/assets/blah.css
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
+        .map(std::path::absolute)
+        .unwrap()
         .unwrap();
 
     // 1. the input file should be a pathbuf
     let input = PathBuf::from(raw);
 
     // 2. absolute path to the asset
-    let path = manifest_dir
-        .join(raw.trim_start_matches('/'))
-        .canonicalize()
-        .map_err(|err| AssetParseError::AssetDoesntExist {
-            err,
-            path: input.clone(),
+    let path =
+        std::path::absolute(manifest_dir.join(raw.trim_start_matches('/'))).map_err(|err| {
+            AssetParseError::AssetDoesntExist {
+                err,
+                path: input.clone(),
+            }
         })?;
 
     // 3. Ensure the path is not the current dir or exist outside the current dir
-    if path == manifest_dir || !path.starts_with(manifest_dir) {
+    if path == manifest_dir || !path.starts_with(manifest_dir) || !path.exists() {
         return Err(AssetParseError::InvalidPath { path });
     }
 
