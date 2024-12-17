@@ -19,6 +19,8 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     // /users/dioxus/dev/app/assets/blah.css
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
+        .unwrap()
+        .canonicalize()
         .unwrap();
 
     // 1. the input file should be a pathbuf
@@ -31,16 +33,20 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
         });
     };
 
-    // 3. Ensure the path doesn't escape the crate dir
-    if path == manifest_dir || !path.starts_with(manifest_dir) {
-        return Err(AssetParseError::InvalidPath { path });
-    }
-
-    // 4. Ensure the path exists
-    if !path.exists() {
+    // 3. Ensure the path exists
+    let Ok(path) = path.canonicalize() else {
         return Err(AssetParseError::AssetDoesntExist {
             path: input.clone(),
         });
+    };
+
+    // 4. Ensure the path doesn't escape the crate dir
+    //
+    // - Note: since we called canonicalize on both paths, we can safely compare the parent dirs.
+    //   On windows, we can only compare the prefix if both paths are canonicalized (not just absolute)
+    //   https://github.com/rust-lang/rust/issues/42869
+    if path == manifest_dir || !path.starts_with(manifest_dir) {
+        return Err(AssetParseError::InvalidPath { path });
     }
 
     Ok(path)
