@@ -31,7 +31,7 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
         });
     };
 
-    // 3. Ensure the path doesn't escape the workspace
+    // 3. Ensure the path doesn't escape the crate dir
     if path == manifest_dir || !path.starts_with(manifest_dir) {
         return Err(AssetParseError::InvalidPath { path });
     }
