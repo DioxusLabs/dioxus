@@ -25,25 +25,28 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     // /users/dioxus/dev/app/assets/blah.css
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
-        .map(std::path::absolute)
-        .unwrap()
         .unwrap();
 
     // 1. the input file should be a pathbuf
     let input = PathBuf::from(raw);
 
     // 2. absolute path to the asset
-    let path =
-        std::path::absolute(manifest_dir.join(raw.trim_start_matches('/'))).map_err(|err| {
-            AssetParseError::AssetDoesntExist {
-                err,
-                path: input.clone(),
-            }
-        })?;
+    let Ok(path) = std::path::absolute(manifest_dir.join(raw.trim_start_matches('/'))) else {
+        return Err(AssetParseError::InvalidPath {
+            path: input.clone(),
+        });
+    };
 
-    // 3. Ensure the path is not the current dir or exist outside the current dir
-    if path == manifest_dir || !path.starts_with(manifest_dir) || !path.exists() {
+    // 3. Ensure the path doesn't escape the workspace
+    if path == manifest_dir || !path.starts_with(manifest_dir) {
         return Err(AssetParseError::InvalidPath { path });
+    }
+
+    // 4. Ensure the path exists
+    if !path.exists() {
+        return Err(AssetParseError::AssetDoesntExist {
+            path: input.clone(),
+        });
     }
 
     Ok(path)
@@ -55,11 +58,10 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
 
     // If this is a folder, hash the folder contents
     if file_path.is_dir() {
-        let files =
-            std::fs::read_dir(file_path).map_err(|err| AssetParseError::AssetDoesntExist {
-                err,
-                path: file_path.to_path_buf(),
-            })?;
+        let files = std::fs::read_dir(file_path).map_err(|err| AssetParseError::IoError {
+            err,
+            path: file_path.to_path_buf(),
+        })?;
         for file in files.flatten() {
             let path = file.path();
             hash_file_contents(&path)?;
@@ -68,11 +70,10 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
     }
 
     // Otherwise, open the file to get its contents
-    let mut file =
-        std::fs::File::open(file_path).map_err(|err| AssetParseError::AssetDoesntExist {
-            err,
-            path: file_path.to_path_buf(),
-        })?;
+    let mut file = std::fs::File::open(file_path).map_err(|err| AssetParseError::IoError {
+        err,
+        path: file_path.to_path_buf(),
+    })?;
 
     // We add a hash to the end of the file so it is invalidated when the bundled version of the file changes
     // The hash includes the file contents, the options, and the version of manganis. From the macro, we just
@@ -93,21 +94,20 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
 
 #[derive(Debug)]
 pub(crate) enum AssetParseError {
-    AssetDoesntExist {
-        err: std::io::Error,
-        path: std::path::PathBuf,
-    },
-    InvalidPath {
-        path: std::path::PathBuf,
-    },
+    AssetDoesntExist { path: PathBuf },
+    IoError { err: std::io::Error, path: PathBuf },
+    InvalidPath { path: PathBuf },
     FailedToReadAsset(std::io::Error),
 }
 
 impl std::fmt::Display for AssetParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AssetParseError::AssetDoesntExist { err, path } => {
-                write!(f, "Asset at {} doesn't exist: {}", path.display(), err)
+            AssetParseError::AssetDoesntExist { path } => {
+                write!(f, "Asset at {} doesn't exist", path.display())
+            }
+            AssetParseError::IoError { path, err } => {
+                write!(f, "Failed to read file: {}; {}", path.display(), err)
             }
             AssetParseError::InvalidPath { path } => {
                 write!(
