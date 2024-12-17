@@ -766,7 +766,7 @@ impl Output {
         let lines = Self::tracemsg_to_ansi_string(log);
 
         // Get the lines of the output sequence and their overflow
-        let lines_printed = lines
+        let lines_to_print = lines
             .iter()
             .map(|line| {
                 // Very important to strip ansi codes before counting graphemes - the ansi codes count as multiple graphemes!
@@ -780,7 +780,7 @@ impl Output {
 
         // We don't need to add any pushback if the frame is in the middle of the viewport
         // We'll then add some pushback to ensure the log scrolls up above the viewport.
-        let max_scrollback = lines_printed.min(actual_vh_height.saturating_sub(1));
+        let max_scrollback = lines_to_print.min(actual_vh_height.saturating_sub(1));
 
         // Move the terminal's cursor down to the number of lines printed
         let remaining_space = term_size
@@ -802,7 +802,7 @@ impl Output {
         // Ratatui will handle this rest.
         // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
         if to_push == 0 {
-            terminal.insert_before(lines_printed, |_| {})?;
+            terminal.insert_before(lines_to_print, |_| {})?;
         }
 
         // Start printing the log by writing on top of the topmost line
