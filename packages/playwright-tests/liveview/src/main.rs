@@ -20,6 +20,21 @@ fn app() -> Element {
         }
         input { value: "hello input" }
         div { class: "style-div", color: "red", "colored text" }
+        OnMounted {}
+    }
+}
+
+#[component]
+fn OnMounted() -> Element {
+    let mut mounted_triggered_count = use_signal(|| 0);
+    rsx! {
+        div {
+            class: "onmounted-div",
+            onmounted: move |_| {
+                mounted_triggered_count += 1;
+            },
+            "onmounted was called {mounted_triggered_count} times"
+        }
     }
 }
 

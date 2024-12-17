@@ -32,4 +32,8 @@ test("hydration", async ({ page }) => {
   // Make sure the error that was thrown on the server is shown in the error boundary on the client
   const errors = page.locator("#errors");
   await expect(errors).toContainText("Hmm, something went wrong.");
+
+  // Expect the onmounted event to be called exactly once.
+  const mountedDiv = page.locator("div.onmounted-div");
+  await expect(mountedDiv).toHaveText("onmounted was called 1 times");
 });
