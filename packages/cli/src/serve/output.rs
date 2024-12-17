@@ -788,7 +788,26 @@ impl Output {
             .saturating_sub(frame_rect.y + frame_rect.height);
 
         // Calculate how many lines we need to push back
-        let to_push = max_scrollback.saturating_sub(remaining_space);
+        // - to_push equals lines_printed when the frame is at the bottom
+        // - to_push is zero when the remaining space is greater/equal than the scrollback (the frame will get pushed naturally)
+        let mut padding = max_scrollback.saturating_sub(remaining_space);
+
+        // The only reliable way we can force the terminal downards is through "insert_before"
+        // If we need to push the terminal down, we'll use this method with the number of lines
+        // Ratatui will handle this rest.
+        // FIXME(jon): eventuallay insert_before will get scroll regions, breaking this, but making the logic here simpler
+        if padding == 0 {
+            terminal.insert_before(remaining_space.min(lines_printed), |_| {})?;
+
+            // Determine what extra padding is remaining after we've shifted the terminal down
+            // this will be the distance between the final line and the top of the frame, only if the
+            // final line has extended into the frame
+            let frame_top = term_size.height - actual_vh_height;
+            let end_y = (frame_rect.y + lines_printed).min(term_size.height);
+            if end_y > frame_top {
+                padding = end_y.saturating_sub(frame_top);
+            }
+        }
 
         // Wipe the viewport clean so it doesn't tear
         crossterm::queue!(
@@ -796,14 +815,6 @@ impl Output {
             crossterm::cursor::MoveTo(0, frame_rect.y),
             crossterm::terminal::Clear(ClearType::FromCursorDown),
         )?;
-
-        // The only reliable way we can force the terminal downards is through "insert_before"
-        // If we need to push the terminal down, we'll use this method with the number of lines
-        // Ratatui will handle this rest.
-        // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
-        if to_push == 0 {
-            terminal.insert_before(lines_printed, |_| {})?;
-        }
 
         // Start printing the log by writing on top of the topmost line
         for (idx, line) in lines.into_iter().enumerate() {
@@ -819,7 +830,7 @@ impl Output {
         }
 
         // Scroll the terminal if we need to
-        for _ in 0..to_push {
+        for _ in 0..padding {
             crossterm::queue!(
                 std::io::stdout(),
                 crossterm::cursor::MoveTo(0, term_size.height - 1),
