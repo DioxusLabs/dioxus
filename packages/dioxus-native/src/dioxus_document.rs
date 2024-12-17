@@ -7,11 +7,10 @@ use blitz_dom::{
     local_name, namespace_url,
     net::Resource,
     node::NodeSpecificData,
-    ns, Atom, ColorScheme, Document, DocumentLike, ElementNodeData, Node, NodeData, QualName,
-    Viewport, DEFAULT_CSS,
+    ns, Atom, Document, DocumentLike, ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
 };
 
-use blitz_traits::net::NetProvider;
+use blitz_traits::{net::NetProvider, ColorScheme, Viewport};
 use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{set_event_converter, FormValue, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
