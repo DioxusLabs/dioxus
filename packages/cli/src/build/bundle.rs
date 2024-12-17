@@ -414,6 +414,8 @@ impl AppBundle {
                 Ok(())
             })
         }
+
+        tracing::debug!("Removing old assets");
         remove_old_assets(&asset_dir, &bundled_output_paths).await?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't

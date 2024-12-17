@@ -77,7 +77,7 @@ impl Bundle {
                 for bundle in bundles {
                     for src in bundle.bundle_paths {
                         let src = if let Some(outdir) = &self.outdir {
-                            let dest = outdir.join(src.file_name().unwrap());
+                            let dest = outdir.join(src.file_name().expect("Filename to exist"));
                             crate::fastfs::copy_asset(&src, &dest)?;
                             dest
                         } else {
@@ -177,7 +177,7 @@ impl Bundle {
 
         for entry in std::fs::read_dir(bundle.build.asset_dir())?.flatten() {
             let old = entry.path().canonicalize()?;
-            let new = PathBuf::from("assets").join(old.file_name().unwrap());
+            let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
             tracing::debug!("Bundled asset: {old:?} -> {new:?}");
 
             bundle_settings
