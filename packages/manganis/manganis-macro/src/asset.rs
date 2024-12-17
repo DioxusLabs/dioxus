@@ -11,6 +11,12 @@ use syn::{
 };
 
 fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
+    if raw.is_empty() {
+        return Err(AssetParseError::InvalidPath {
+            path: PathBuf::new(),
+        });
+    }
+
     // Get the location of the root of the crate which is where all assets are relative to
     //
     // IE
@@ -25,13 +31,20 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     let input = PathBuf::from(raw);
 
     // 2. absolute path to the asset
-    manifest_dir
+    let path = manifest_dir
         .join(raw.trim_start_matches('/'))
         .canonicalize()
         .map_err(|err| AssetParseError::AssetDoesntExist {
             err,
             path: input.clone(),
-        })
+        })?;
+
+    // 3. Ensure the path is not the current dir or exist outside the current dir
+    if path == manifest_dir || !path.starts_with(manifest_dir) {
+        return Err(AssetParseError::InvalidPath { path });
+    }
+
+    Ok(path)
 }
 
 fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
@@ -82,6 +95,9 @@ pub(crate) enum AssetParseError {
         err: std::io::Error,
         path: std::path::PathBuf,
     },
+    InvalidPath {
+        path: std::path::PathBuf,
+    },
     FailedToReadAsset(std::io::Error),
 }
 
@@ -90,6 +106,13 @@ impl std::fmt::Display for AssetParseError {
         match self {
             AssetParseError::AssetDoesntExist { err, path } => {
                 write!(f, "Asset at {} doesn't exist: {}", path.display(), err)
+            }
+            AssetParseError::InvalidPath { path } => {
+                write!(
+                    f,
+                    "Asset path {} is invalid. Make sure the asset exists within this crate.",
+                    path.display()
+                )
             }
             AssetParseError::FailedToReadAsset(err) => write!(f, "Failed to read asset: {}", err),
         }
