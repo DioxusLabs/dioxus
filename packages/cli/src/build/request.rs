@@ -210,7 +210,7 @@ impl BuildRequest {
                 Message::BuildFinished(finished) => {
                     if !finished.success {
                         return Err(anyhow::anyhow!(
-                            "Cargo build failed, signaled by the compiler"
+                            "Cargo build failed, signaled by the compiler. Toggle tracing mode (press `t`) for more information."
                         )
                         .into());
                     }
@@ -220,7 +220,7 @@ impl BuildRequest {
         }
 
         if output_location.is_none() {
-            tracing::error!("Cargo build failed - no output location");
+            tracing::error!("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.");
         }
 
         let out_location = output_location.context("Build did not return an executable")?;

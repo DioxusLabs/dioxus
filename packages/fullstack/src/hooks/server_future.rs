@@ -72,8 +72,6 @@ where
     // If this is the first run and we are on the web client, the data might be cached
     #[cfg(feature = "web")]
     let initial_web_result = use_hook(|| {
-        tracing::info!("First run of use_server_future");
-
         std::rc::Rc::new(std::cell::RefCell::new(Some(
             dioxus_web::take_server_data::<T>(),
         )))
