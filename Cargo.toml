@@ -220,7 +220,6 @@ trybuild = "1.0"
 dirs = "5.0.1"
 cargo-config2 = "0.1.26"
 criterion = { version = "0.5" }
-walrus = "0.23.2"
 cargo_metadata = "0.18.1"
 parking_lot = "0.12.1"
 tracing-wasm = "0.2.1"

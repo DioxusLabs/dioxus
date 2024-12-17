@@ -174,10 +174,9 @@ impl BuildRequest {
                 else => break,
             };
 
-            let message = Message::parse_stream(std::io::Cursor::new(line))
-                .next()
-                .unwrap()
-                .unwrap();
+            let Some(Ok(message)) = Message::parse_stream(std::io::Cursor::new(line)).next() else {
+                continue;
+            };
 
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
