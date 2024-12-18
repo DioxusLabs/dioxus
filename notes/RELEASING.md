@@ -34,22 +34,23 @@ This involves making sure the metadata of the crates is correct before we publis
 18. [ ] Go to `http://github.com/dioxusLabs/dioxus-template` and make sure a branch exists for the new major version. IE a v0.5, v0.6, v0.7, etc branch. If it doesn't exist, create it. This *needs* to exist for `dx new` to work. It's likely that this already exists since we tend to try `dx new` frequently before releasing.
 19. [ ] If performing a major release, make sure all the links in `dioxus` are updated to point to the new version. This involves basically CTRL-F'ing for `/0.6/` and replacing it with `/0.7/` etc.
 20. [ ] It's likely that docsite links might not be updated just yet. If nightly docs are released, there shouldn't need to be any changes. It's fine to bypass the link checker for now, but you should be ready to fix links once the docsite is ready. Any links that are broken are "frozen in time" and will need to be fixed. We can't change links in published crates, so if the link never exists, it's just broken forever.
+21. [ ] Inform "VIP" community projects that that a final RC is out (ie projects like [Freya](http://freyaui.dev)) so their authors can test new versions.
 
 ### Releasing the workspace:
 
 1. [ ] Make sure all latent commits have been merged into the `main` branch and pushed to github.
 2. [ ] Ensure you've published a pre-release of the same code (only necessary for for major releases... patch releases are generally fine to skip a prerelease)
-4. [ ] Make sure the version you're releasing is correct (see above)
-5. [ ] Make sure you're on the `main` branch (cargo workspaces publish requires you to be on the main branch)
-6. [ ] Run the release: `cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-individual-tags`. This will publish the crates to crates.io. It might take a while. Only `jkelleyrtp` currently has sufficient rate-limits to publish all the crates at once. If any crate fails, you might need to fix the problems manually and then run the command again. If an error occurs, you might also need to reset the most recent git commit and wipe the tag. `git reset --hard HEAD~1` and `git tag -d <tag>`. Be careful with these commands, especially if you're on the `main` branch.
-7. [ ] Once the release is up, commit the most recent changes to the `main` branch and push it.
-8. [ ] Also push the tag to the `main` branch. eg `git push origin v0.6.0`
-9. [ ] Verify crates.io is showing the new version
-10. [ ] Verify `docs.rs` builds the new docs for each crate. IE go to `https://docs.rs/crate/dioxus/latest` and ensure you there's no errors.
-11. [ ] Verify you can create a new project with the new version and it works. IE `dx new app`. Do a dry-run of building a new app to make sure it works and no obvious errors are present.
-12. [ ] Release the GitHub release using the tag we pushed earlier.
-13. [ ] Execute the [`Publish CLI` github action](https://github.com/DioxusLabs/dioxus/actions/workflows/publish.yml) using a manual trigger. Fill in the small form with the appropriate information. This should be the version you just released IE `v0.6.1`. The corresponding github release post must exist for the binstall to be published! You need to be part of the dioxuslabs/publish org to trigger this action.
-14. [ ] If you're about to start working on a "dev" version of Dioxus, create a new branch for the last version that we backport fixes to. See
+3. [ ] Make sure the version you're releasing is correct (see above)
+4. [ ] Make sure you're on the `main` branch (cargo workspaces publish requires you to be on the main branch)
+5. [ ] Run the release: `cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-individual-tags`. This will publish the crates to crates.io. It might take a while. Only `jkelleyrtp` currently has sufficient rate-limits to publish all the crates at once. If any crate fails, you might need to fix the problems manually and then run the command again. If an error occurs, you might also need to reset the most recent git commit and wipe the tag. `git reset --hard HEAD~1` and `git tag -d <tag>`. Be careful with these commands, especially if you're on the `main` branch.
+6. [ ] Once the release is up, commit the most recent changes to the `main` branch and push it.
+7. [ ] Also push the tag to the `main` branch. eg `git push origin v0.6.0`
+8. [ ] Verify crates.io is showing the new version
+9.  [ ] Verify `docs.rs` builds the new docs for each crate. IE go to `https://docs.rs/crate/dioxus/latest` and ensure you there's no errors.
+10. [ ] Verify you can create a new project with the new version and it works. IE `dx new app`. Do a dry-run of building a new app to make sure it works and no obvious errors are present.
+11. [ ] Release the GitHub release using the tag we pushed earlier.
+12. [ ] Execute the [`Publish CLI` github action](https://github.com/DioxusLabs/dioxus/actions/workflows/publish.yml) using a manual trigger. Fill in the small form with the appropriate information. This should be the version you just released IE `v0.6.1`. The corresponding github release post must exist for the binstall to be published! You need to be part of the dioxuslabs/publish org to trigger this action.
+13. [ ] If you're about to start working on a "dev" version of Dioxus, create a new branch for the last version that we backport fixes to. See
 
 ### Releasing the docsite
 
@@ -84,17 +85,18 @@ There are a number of crates that are part of the Dioxus ecosystem that we usual
 1. [ ] [dioxus-sdk](https://github.com/DioxusLabs/sdk): folks use this and we like to release it with the rest of the ecosystem
 2. [ ] [blitz](https://github.com/DioxusLabs/blitz): integrates with dioxus-native and thus dioxus-native needs to be version matched
 3. [ ] [taffy](https://github.com/DioxusLabs/taffy): usually exists on its own version system and is used by major projects like Bevy and Zed
-4. [ ] [icons](https://github.com/dioxus-community/dioxus-free-icons)
-5. [ ] [use-mounted](https://crates.io/crates/dioxus-use-mounted)
-6. [ ] [resize-observer](https://crates.io/crates/dioxus-resize-observer)
-7. [ ] [charts](https://crates.io/crates/dioxus-charts)
-8. [ ] [lazy](https://crates.io/crates/dioxus-lazy)
-9. [ ] [free-icons](https://crates.io/crates/dioxus-free-icons)
-10. [ ] [query](https://crates.io/crates/dioxus-query)
-11. [ ] [radio](https://crates.io/crates/dioxus-radio)
-12. [ ] [i18n](https://crates.io/crates/dioxus-i18n)
-13. [ ] [clipboard](https://crates.io/crates/dioxus-clipboard)
-14. [ ] [use-computed](https://crates.io/crates/dioxus-use-computed)
+4. [ ] [icons](https://github.com/dioxus-community/dioxus-free-icons): a community crate that is usually updated by marc
+5. [ ] [use-mounted](https://crates.io/crates/dioxus-use-mounted): a community crate that is usually updated by marc
+6. [ ] [resize-observer](https://crates.io/crates/dioxus-resize-observer): a community crate that is usually updated by marc
+7. [ ] [charts](https://crates.io/crates/dioxus-charts): a community crate that is usually updated by marc
+8. [ ] [lazy](https://crates.io/crates/dioxus-lazy): a community crate that is usually updated by marc
+9. [ ] [free-icons](https://crates.io/crates/dioxus-free-icons): a community crate that is usually updated by marc
+10. [ ] [query](https://crates.io/crates/dioxus-query): a community crate that is usually updated by marc
+11. [ ] [radio](https://crates.io/crates/dioxus-radio): a community crate that is usually updated by marc
+12. [ ] [i18n](https://crates.io/crates/dioxus-i18n): a community crate that is usually updated by marc
+13. [ ] [clipboard](https://crates.io/crates/dioxus-clipboard): a community crate that is usually updated by marc
+14. [ ] [use-computed](https://crates.io/crates/dioxus-use-computed): a community crate that is usually updated by marc
+15. [ ] there might be more...
 
 
 ## Marketing
@@ -126,3 +128,4 @@ Actually marketing:
 - We should automate the release of the vscode extension.
 - We move examples to the `examples/untested` folder when we release a new version. Ideally we have a workspace with all versions of dioxus and can include the examples in the relevant frames.
 - SSG is flakey and occasionally fails. This needs to be fixed.
+- We should promote "community" crates to enjoy auto-updates via codemods whenever a new version is released.
