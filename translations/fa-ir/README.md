@@ -55,7 +55,6 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
      <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/fa-ir"> فارسی </a>
   </h3>
 </div>
 <br>
