@@ -30,7 +30,10 @@ pub async fn test_stream() -> Result<TextStream, ServerFnError> {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             dioxus::logger::tracing::info!("Sending new chunk!");
-            let _ = tx.unbounded_send(Ok("Hello, world!".to_string()));
+            if tx.unbounded_send(Ok("Hello, world!".to_string())).is_err() {
+                // If the channel is closed, stop sending chunks
+                break;
+            }
         }
     });
 
