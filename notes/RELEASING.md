@@ -55,7 +55,7 @@ This involves making sure the metadata of the crates is correct before we publis
 
 ### Releasing the docsite
 
-1. [ ] Stabilize the current docs version on the docsite. This will be manual, unfortunately, and involves changing URLs in the navbar and the sidebar.
+1. [ ] Stabilize the current docs version on the docsite. This will be manual, unfortunately, and involves changing URLs in the navbar and the sidebar. See [this PR for an example for v0.6](https://github.com/DioxusLabs/docsite/pull/342).
 2. [ ] Make sure to update the "current version" and any stability bools in the version switcher.
 3. [ ] Update the deploy.yml to point to the new binstall version
 4. [ ] Remove any latent `git` or `path` dependencies and `crates.io` patches.
