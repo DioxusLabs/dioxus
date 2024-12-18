@@ -210,7 +210,18 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
-    tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}\n\n`cd` to your project and run `dx serve` to start developing.\nIf using Tailwind, make sure to run the Tailwind CLI.\nMore information is available in the generated `README.md`.\n\nBuild cool things! ✌️", path.display());
+    tracing::info!(
+        dx_src = ?TraceSrc::Dev,
+        "Generated project at {}\n\
+        \n\
+        `cd` to your project and run `dx serve` (if you didn't choose to use Dioxus Fullstack\n\
+        or `dx serve --platform <PLATFORM>` if you did) to start developing.\n\
+        If you are using Tailwind, make sure to run the Tailwind CLI.\n\
+        More information is available in the generated `README.md`.\n\
+        \n\
+        Build cool things! ✌️",
+        path.display()
+    );
 
     Ok(())
 }
