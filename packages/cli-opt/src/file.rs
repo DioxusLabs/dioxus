@@ -4,6 +4,8 @@ use manganis_core::{
 };
 use std::path::Path;
 
+use crate::css::process_scss;
+
 use super::{
     css::process_css, folder::process_folder, image::process_image, js::process_js,
     json::process_json,
@@ -23,6 +25,9 @@ pub fn process_file_to(
         AssetOptions::Unknown => match source.extension().map(|e| e.to_string_lossy()).as_deref() {
             Some("css") => {
                 process_css(&CssAssetOptions::new(), source, output_path)?;
+            }
+            Some("scss" | "sass") => {
+                process_scss(&CssAssetOptions::new(), source, output_path)?;
             }
             Some("js") => {
                 process_js(&JsAssetOptions::new(), source, output_path)?;

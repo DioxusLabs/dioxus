@@ -3,11 +3,11 @@ name = "dioxus-core"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
-description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
+description = "Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react"]
+keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 
 [dependencies]
 dioxus-core-types = { workspace = true }
@@ -31,7 +31,7 @@ dioxus-html = { workspace = true, features = ["serialize"] }
 tokio = { workspace = true, features = ["full"] }
 rand = { workspace = true }
 reqwest = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true, default-features = true }
 tracing-fluent-assertions = "0.3.0"
 pretty_assertions = "1.3.0"
 

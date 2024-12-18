@@ -1,3 +1,5 @@
+use super::templates::InfoPlistData;
+use crate::wasm_bindgen::WasmBindgenBuilder;
 use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
@@ -10,9 +12,6 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
-use wasm_bindgen_cli_support::Bindgen;
-
-use super::templates::InfoPlistData;
 
 /// The end result of a build.
 ///
@@ -415,6 +414,8 @@ impl AppBundle {
                 Ok(())
             })
         }
+
+        tracing::debug!("Removing old assets");
         remove_old_assets(&asset_dir, &bundled_output_paths).await?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
@@ -437,7 +438,7 @@ impl AppBundle {
         }
 
         let asset_count = assets_to_transfer.len();
-        let assets_finished = AtomicUsize::new(0);
+        let current_asset = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
@@ -448,7 +449,7 @@ impl AppBundle {
                 .try_for_each(|(from, to, options)| {
                     tracing::trace!(
                         "Starting asset copy {current}/{asset_count} from {from:?}",
-                        current = assets_finished.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
+                        current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
                     );
 
                     let res = process_file_to(options, from, to);
@@ -459,7 +460,7 @@ impl AppBundle {
 
                     BuildRequest::status_copied_asset(
                         &progress,
-                        assets_finished.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1,
+                        current_asset.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
                         asset_count,
                         from.to_path_buf(),
                     );
@@ -610,22 +611,27 @@ impl AppBundle {
             && !self.build.build.release;
 
         let start = std::time::Instant::now();
-        tokio::task::spawn_blocking(move || {
-            Bindgen::new()
-                .input_path(&input_path)
-                .web(true)
-                .unwrap()
-                .debug(keep_debug)
-                .demangle(keep_debug)
-                .keep_debug(keep_debug)
-                .remove_name_section(!keep_debug)
-                .remove_producers_section(!keep_debug)
-                .out_name(&name)
-                .generate(&bindgen_outdir)
-        })
-        .await
-        .context("Wasm-bindgen crashed while optimizing the wasm binary")?
-        .context("Failed to generate wasm-bindgen bindings")?;
+
+        let bindgen_version = self
+            .build
+            .krate
+            .wasm_bindgen_version()
+            .expect("this should have been checked by tool verification");
+
+        WasmBindgenBuilder::new(bindgen_version)
+            .input_path(&input_path)
+            .target("web")
+            .debug(keep_debug)
+            .demangle(keep_debug)
+            .keep_debug(keep_debug)
+            .remove_name_section(!keep_debug)
+            .remove_producers_section(!keep_debug)
+            .out_name(&name)
+            .out_dir(&bindgen_outdir)
+            .build()
+            .run()
+            .await
+            .context("Failed to generate wasm-bindgen bindings")?;
 
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 
@@ -737,7 +743,7 @@ impl AppBundle {
         // Wait a second for the cache to be written by the server
         tracing::info!("Waiting a moment for isrg to propagate...");
 
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
         tracing::info!("SSG complete");
 
@@ -777,6 +783,8 @@ impl AppBundle {
     /// Run any final tools to produce apks or other artifacts we might need.
     async fn assemble(&self) -> Result<()> {
         if let Platform::Android = self.build.build.platform() {
+            self.build.status_running_gradle();
+
             // make sure we can execute the gradlew script
             #[cfg(unix)]
             {

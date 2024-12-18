@@ -3,11 +3,11 @@ name = "dioxus-fullstack"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
 edition = "2021"
-description = "Fullstack Dioxus Utilities"
+description = "Fullstack utilities for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["ui", "gui", "react", "server", "fullstack"]
+keywords = ["web", "desktop", "mobile", "gui", "server"]
 resolver = "2"
 
 [dependencies]
@@ -58,7 +58,7 @@ thiserror = { workspace = true, optional = true }
 bytes = "1.4.0"
 tower = { workspace = true, features = ["util"], optional = true }
 tower-layer = { version = "0.3.2", optional = true }
-parking_lot = { version = "0.12.1", features = ["send_guard"], optional = true }
+parking_lot = { workspace = true, features = ["send_guard"], optional = true }
 web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
 dioxus-cli-config = { workspace = true, optional = true }
@@ -77,8 +77,7 @@ tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], option
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["devtools", "panic_hook", "document", "file_engine", "mounted"]
-panic_hook = ["dioxus-web?/panic_hook"]
+default = ["devtools", "document", "file_engine", "mounted"]
 devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]

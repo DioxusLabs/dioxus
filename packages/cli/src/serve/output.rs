@@ -265,12 +265,7 @@ impl Output {
     pub fn push_cargo_log(&mut self, message: cargo_metadata::CompilerMessage) {
         use cargo_metadata::diagnostic::DiagnosticLevel;
 
-        if self.trace
-            || matches!(
-                message.message.level,
-                DiagnosticLevel::Error | DiagnosticLevel::FailureNote
-            )
-        {
+        if self.trace || !matches!(message.message.level, DiagnosticLevel::Note) {
             self.push_log(TraceMsg::cargo(message));
         }
     }
@@ -488,6 +483,7 @@ impl Output {
             }
             BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
             BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
+            BuildStage::RunningGradle {} => lines.push("Running gradle assemble".yellow()),
             BuildStage::Bundling {} => lines.push("Bundling app".yellow()),
             BuildStage::CopyingAssets {
                 current,
@@ -782,17 +778,32 @@ impl Output {
         // The viewport might be clipped, but the math still needs to work out.
         let actual_vh_height = self.viewport_current_height().min(term_size.height);
 
-        // We don't need to add any pushback if the frame is in the middle of the viewport
-        // We'll then add some pushback to ensure the log scrolls up above the viewport.
-        let max_scrollback = lines_printed.min(actual_vh_height.saturating_sub(1));
-
         // Move the terminal's cursor down to the number of lines printed
         let remaining_space = term_size
             .height
             .saturating_sub(frame_rect.y + frame_rect.height);
 
         // Calculate how many lines we need to push back
-        let to_push = max_scrollback.saturating_sub(remaining_space);
+        // - padding equals lines_printed when the frame is at the bottom
+        // - padding is zero when the remaining space is greater/equal than the scrollback (the frame will get pushed naturally)
+        // Determine what extra padding is remaining after we've shifted the terminal down
+        // this will be the distance between the final line and the top of the frame, only if the
+        // final line has extended into the frame
+        let final_line = frame_rect.y + lines_printed;
+        let max_frame_top = term_size.height - actual_vh_height;
+        let padding = final_line
+            .saturating_sub(max_frame_top)
+            .clamp(0, actual_vh_height - 1);
+
+        // The only reliable way we can force the terminal downards is through "insert_before".
+        //
+        // If we need to push the terminal down, we'll use this method with the number of lines
+        // Ratatui will handle this rest.
+        //
+        // This also calls `.clear()` so we don't need to call clear at the end of this function.
+        //
+        // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
+        terminal.insert_before(remaining_space.min(lines_printed), |_| {})?;
 
         // Wipe the viewport clean so it doesn't tear
         crossterm::queue!(
@@ -800,14 +811,6 @@ impl Output {
             crossterm::cursor::MoveTo(0, frame_rect.y),
             crossterm::terminal::Clear(ClearType::FromCursorDown),
         )?;
-
-        // The only reliable way we can force the terminal downards is through "insert_before"
-        // If we need to push the terminal down, we'll use this method with the number of lines
-        // Ratatui will handle this rest.
-        // FIXME(jon): eventually insert_before will get scroll regions, breaking this, but making the logic here simpler
-        if to_push == 0 {
-            terminal.insert_before(lines_printed, |_| {})?;
-        }
 
         // Start printing the log by writing on top of the topmost line
         for (idx, line) in lines.into_iter().enumerate() {
@@ -823,18 +826,13 @@ impl Output {
         }
 
         // Scroll the terminal if we need to
-        for _ in 0..to_push {
+        for _ in 0..padding {
             crossterm::queue!(
                 std::io::stdout(),
                 crossterm::cursor::MoveTo(0, term_size.height - 1),
                 crossterm::style::Print("\n"),
             )?;
         }
-
-        // Force a clear
-        // Might've been triggered by insert_before already, but supposedly double-queuing is fine
-        // since this isn't a "real" synchronous clear
-        terminal.clear()?;
 
         Ok(())
     }

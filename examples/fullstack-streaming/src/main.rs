@@ -29,6 +29,7 @@ pub async fn test_stream() -> Result<TextStream, ServerFnError> {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            dioxus::logger::tracing::info!("Sending new chunk!");
             let _ = tx.unbounded_send(Ok("Hello, world!".to_string()));
         }
     });

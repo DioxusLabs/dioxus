@@ -81,7 +81,7 @@ impl Create {
         };
         restore_cursor_on_sigint();
         let path = cargo_generate::generate(args)?;
-        post_create(&path)?;
+        _ = post_create(&path);
         Ok(StructuredOutput::Success)
     }
 }
@@ -183,7 +183,10 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
     // 3. Format the `Cargo.toml` and `Dioxus.toml` files.
     let toml_paths = [path.join("Cargo.toml"), path.join("Dioxus.toml")];
     for toml_path in &toml_paths {
-        let toml = std::fs::read_to_string(toml_path)?;
+        let Ok(toml) = std::fs::read_to_string(toml_path) else {
+            continue;
+        };
+
         let mut toml = toml.parse::<toml_edit::DocumentMut>().map_err(|e| {
             anyhow::anyhow!(
                 "failed to parse toml at {}: {}",
@@ -207,7 +210,7 @@ pub(crate) fn post_create(path: &Path) -> Result<()> {
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
-    tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}", path.display());
+    tracing::info!(dx_src = ?TraceSrc::Dev, "Generated project at {}\n\n`cd` to your project and run `dx serve` to start developing.\nIf using Tailwind, make sure to run the Tailwind CLI.\nMore information is available in the generated `README.md`.\n\nBuild cool things! ✌️", path.display());
 
     Ok(())
 }

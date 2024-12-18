@@ -11,7 +11,7 @@ use std::cell::RefCell;
 
 #[test]
 fn reading_subscribes() {
-    simple_logger::SimpleLogger::new().init().unwrap();
+    tracing_subscriber::fmt::init();
 
     #[derive(Default)]
     struct RunCounter {

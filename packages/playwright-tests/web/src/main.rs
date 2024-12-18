@@ -52,6 +52,7 @@ fn app() -> Element {
         }
         div { class: "eval-result", "{eval_result}" }
         PreventDefault {}
+        OnMounted {}
     }
 }
 
@@ -67,6 +68,20 @@ fn PreventDefault() -> Element {
                 text.set("Psych!".to_string());
             },
             "{text}"
+        }
+    }
+}
+
+#[component]
+fn OnMounted() -> Element {
+    let mut mounted_triggered_count = use_signal(|| 0);
+    rsx! {
+        div {
+            class: "onmounted-div",
+            onmounted: move |_| {
+                mounted_triggered_count += 1;
+            },
+            "onmounted was called {mounted_triggered_count} times"
         }
     }
 }

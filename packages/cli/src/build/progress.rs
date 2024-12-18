@@ -29,10 +29,20 @@ impl BuildRequest {
         });
     }
 
+    pub(crate) fn status_running_gradle(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::RunningGradle,
+        })
+    }
+
     pub(crate) fn status_build_diagnostic(&self, message: CompilerMessage) {
         _ = self
             .progress
             .unbounded_send(BuildUpdate::CompilerMessage { message });
+    }
+
+    pub(crate) fn status_build_error(&self, line: String) {
+        tracing::error!(dx_src = ?TraceSrc::Cargo, "{line}");
     }
 
     pub(crate) fn status_build_message(&self, line: String) {

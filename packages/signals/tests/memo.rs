@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
 fn memos_rerun() {
-    let _ = simple_logger::SimpleLogger::new().init();
+    tracing_subscriber::fmt::init();
 
     #[derive(Default)]
     struct RunCounter {
@@ -53,8 +53,6 @@ fn memos_rerun() {
 
 #[test]
 fn memos_prevents_component_rerun() {
-    let _ = simple_logger::SimpleLogger::new().init();
-
     #[derive(Default)]
     struct RunCounter {
         component: usize,

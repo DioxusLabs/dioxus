@@ -1,0 +1,25 @@
+[package]
+name = "dioxus-logger"
+version = { workspace = true }
+edition = "2021"
+description = "A logging utility to provide a standard interface whether you're targeting web desktop, fullstack, and more."
+authors = ["DogeDark", "Jonathan Kelley"]
+repository = "https://github.com/dioxuslabs/dioxus"
+homepage = "https://github.com/dioxuslabs/dioxus"
+readme = "README.md"
+license = "MIT"
+keywords = ["dioxus", "log", "logging"]
+categories = ["development-tools::debugging"]
+
+
+[dependencies]
+dioxus-cli-config = { workspace =  true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["registry", "std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tracing-wasm = { workspace = true }
+console_error_panic_hook = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = { workspace = true, features = [ "fmt" ] }

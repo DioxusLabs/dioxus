@@ -34,6 +34,10 @@ image = { version = "0.25", features = ["avif"] }
 # CSS Minification
 lightningcss = "1.0.0-alpha.60"
 
+# SCSS Processing
+grass = "0.13.4"
+codemap = "0.1.3"
+
 # Js minification - swc has introduces minor versions with breaking changes in the past so we pin all of their crates
 swc = "=0.283.0"
 swc_allocator = { version = "=0.1.8", default-features = false }

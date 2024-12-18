@@ -40,6 +40,21 @@ fn app() -> Element {
             id: "errors",
             Errors {}
         }
+        OnMounted {}
+    }
+}
+
+#[component]
+fn OnMounted() -> Element {
+    let mut mounted_triggered_count = use_signal(|| 0);
+    rsx! {
+        div {
+            class: "onmounted-div",
+            onmounted: move |_| {
+                mounted_triggered_count += 1;
+            },
+            "onmounted was called {mounted_triggered_count} times"
+        }
     }
 }
 
