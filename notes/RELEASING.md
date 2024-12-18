@@ -42,15 +42,16 @@ This involves making sure the metadata of the crates is correct before we publis
 2. [ ] Ensure you've published a pre-release of the same code (only necessary for for major releases... patch releases are generally fine to skip a prerelease)
 3. [ ] Make sure the version you're releasing is correct (see above)
 4. [ ] Make sure you're on the `main` branch (cargo workspaces publish requires you to be on the main branch)
-5. [ ] Run the release: `cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-individual-tags`. This will publish the crates to crates.io. It might take a while. Only `jkelleyrtp` currently has sufficient rate-limits to publish all the crates at once. If any crate fails, you might need to fix the problems manually and then run the command again. If an error occurs, you might also need to reset the most recent git commit and wipe the tag. `git reset --hard HEAD~1` and `git tag -d <tag>`. Be careful with these commands, especially if you're on the `main` branch.
-6. [ ] Once the release is up, commit the most recent changes to the `main` branch and push it.
-7. [ ] Also push the tag to the `main` branch. eg `git push origin v0.6.0`
-8. [ ] Verify crates.io is showing the new version
-9.  [ ] Verify `docs.rs` builds the new docs for each crate. IE go to `https://docs.rs/crate/dioxus/latest` and ensure you there's no errors.
-10. [ ] Verify you can create a new project with the new version and it works. IE `dx new app`. Do a dry-run of building a new app to make sure it works and no obvious errors are present.
-11. [ ] Release the GitHub release using the tag we pushed earlier.
-12. [ ] Execute the [`Publish CLI` github action](https://github.com/DioxusLabs/dioxus/actions/workflows/publish.yml) using a manual trigger. Fill in the small form with the appropriate information. This should be the version you just released IE `v0.6.1`. The corresponding github release post must exist for the binstall to be published! You need to be part of the dioxuslabs/publish org to trigger this action.
-13. [ ] If you're about to start working on a "dev" version of Dioxus, create a new branch for the last version that we backport fixes to. See
+5. [ ] Make sure you have [`cargo-workspaces` installed](https://crates.io/crates/cargo-workspaces). There are other tools but this one is the one we've used in the past. It has some small bugs but is generally reliable.
+6. [ ] Run the release: `cargo workspaces publish --publish-as-is --allow-dirty --no-git-push --no-individual-tags`. This will publish the crates to crates.io. It might take a while. Only `jkelleyrtp` currently has sufficient rate-limits to publish all the crates at once. If any crate fails, you might need to fix the problems manually and then run the command again. If an error occurs, you might also need to reset the most recent git commit and wipe the tag. `git reset --hard HEAD~1` and `git tag -d <tag>`. Be careful with these commands, especially if you're on the `main` branch.
+7. [ ] Once the release is up, commit the most recent changes to the `main` branch and push it.
+8. [ ] Also push the tag to the `main` branch. eg `git push origin v0.6.0`
+9. [ ] Verify crates.io is showing the new version
+10. [ ] Verify `docs.rs` builds the new docs for each crate. IE go to `https://docs.rs/crate/dioxus/latest` and ensure you there's no errors.
+11. [ ] Verify you can create a new project with the new version and it works. IE `dx new app`. Do a dry-run of building a new app to make sure it works and no obvious errors are present.
+12. [ ] Release the GitHub release using the tag we pushed earlier.
+13. [ ] Execute the [`Publish CLI` github action](https://github.com/DioxusLabs/dioxus/actions/workflows/publish.yml) using a manual trigger. Fill in the small form with the appropriate information. This should be the version you just released IE `v0.6.1`. The corresponding github release post must exist for the binstall to be published! You need to be part of the dioxuslabs/publish org to trigger this action.
+14. [ ] If you're about to start working on a "dev" version of Dioxus, create a new branch for the last version that we backport fixes to. See
 
 ### Releasing the docsite
 
