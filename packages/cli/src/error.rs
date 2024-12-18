@@ -1,10 +1,10 @@
 use crate::metadata::CargoError;
 use thiserror::Error as ThisError;
 
-pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(ThisError, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     /// Used when errors need to propagate but are too unique to be typed
     #[error("{0}")]
     Unique(String),

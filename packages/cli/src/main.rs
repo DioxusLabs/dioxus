@@ -3,34 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-mod build;
-mod bundle_utils;
-mod cli;
-mod config;
-mod dioxus_crate;
-mod dx_build_info;
-mod error;
-mod fastfs;
-mod filemap;
-mod logging;
-mod metadata;
-mod platform;
-mod rustup;
-mod serve;
-mod settings;
-mod wasm_bindgen;
-
-pub(crate) use build::*;
-pub(crate) use cli::*;
-pub(crate) use config::*;
-pub(crate) use dioxus_crate::*;
-pub(crate) use dioxus_dx_wire_format::*;
-pub(crate) use error::*;
-pub(crate) use filemap::*;
-pub(crate) use logging::*;
-pub(crate) use platform::*;
-pub(crate) use rustup::*;
-pub(crate) use settings::*;
+pub use dioxus_cli::*;
 
 #[tokio::main]
 async fn main() {
