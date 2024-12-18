@@ -47,7 +47,7 @@ This involves making sure the metadata of the crates is correct before we publis
 7. [ ] Once the release is up, commit the most recent changes to the `main` branch and push it.
 8. [ ] Also push the tag to the `main` branch. eg `git push origin v0.6.0`
 9. [ ] Verify crates.io is showing the new version
-10. [ ] Verify `docs.rs` builds the new docs for each crate. IE go to `https://docs.rs/crate/dioxus/latest` and ensure you there's no errors.
+10. [ ] Verify `docs.rs` builds the new docs for each crate. IE go to `https://docs.rs/crate/dioxus/latest` and ensure there's no errors. We've had issues before with docs.rs [not building properly](https://docs.rs/crate/dioxus/0.6.0).
 11. [ ] Verify you can create a new project with the new version and it works. IE `dx new app`. Do a dry-run of building a new app to make sure it works and no obvious errors are present.
 12. [ ] Release the GitHub release using the tag we pushed earlier.
 13. [ ] Execute the [`Publish CLI` github action](https://github.com/DioxusLabs/dioxus/actions/workflows/publish.yml) using a manual trigger. Fill in the small form with the appropriate information. This should be the version you just released IE `v0.6.1`. The corresponding github release post must exist for the binstall to be published! You need to be part of the dioxuslabs/publish org to trigger this action.
