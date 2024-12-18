@@ -5,7 +5,8 @@ license.workspace = true
 edition = "2021"
 
 [features]
-default = ["accessibility", "hot-reload", "menu", "tracing"]
+default = ["accessibility", "hot-reload", "menu", "tracing", "net"]
+net = ["dep:tokio", "dep:blitz-net", "blitz-shell/net"]
 accessibility = ["blitz-shell/accessibility"]
 menu = ["blitz-shell/menu"]
 tracing = ["dep:tracing", "blitz-shell/tracing"]
@@ -15,9 +16,9 @@ hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
 # Blitz dependencies
 blitz-renderer-vello = { path = "../blitz-renderer-vello" }
 blitz-dom = { path = "../blitz-dom" }
-blitz-net = { path = "../blitz-net" }
+blitz-net = { path = "../blitz-net", optional = true }
 blitz-traits = { path = "../blitz-traits" }
-blitz-shell = { path = "../blitz-shell" }
+blitz-shell = { path = "../blitz-shell", default-features = false }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
@@ -30,7 +31,7 @@ winit = { workspace = true }
 keyboard-types = { workspace = true }
 
 # IO & Networking
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 
 # Other dependencies
 tracing = { workspace = true, optional = true }

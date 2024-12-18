@@ -11,9 +11,9 @@ pub struct DioxusNativeApplication {
 }
 
 impl DioxusNativeApplication {
-    pub fn new(rt: tokio::runtime::Runtime, proxy: EventLoopProxy<BlitzEvent>) -> Self {
+    pub fn new(proxy: EventLoopProxy<BlitzEvent>) -> Self {
         Self {
-            inner: BlitzApplication::new(rt, proxy.clone()),
+            inner: BlitzApplication::new(proxy.clone()),
         }
     }
 

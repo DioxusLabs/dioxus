@@ -20,14 +20,8 @@ pub use dioxus_application::DioxusNativeApplication;
 pub use dioxus_document::DioxusDocument;
 pub use event::DioxusNativeEvent;
 
-use blitz_dom::net::Resource;
-use blitz_net::Provider;
-use blitz_shell::{
-    create_default_event_loop, BlitzEvent, BlitzShellNetCallback, Config, WindowConfig,
-};
-use blitz_traits::net::SharedCallback;
+use blitz_shell::{create_default_event_loop, BlitzEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
-use std::sync::Arc;
 
 type NodeId = usize;
 
@@ -46,26 +40,34 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     props: P,
     _cfg: Config,
 ) {
-    // Turn on the runtime and enter it
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    let _guard = rt.enter();
-
     let event_loop = create_default_event_loop::<BlitzEvent>();
-    let proxy = event_loop.create_proxy();
 
-    let net_callback = Arc::new(BlitzShellNetCallback::new(proxy));
-    let net_provider = Arc::new(Provider::new(
-        rt.handle().clone(),
-        Arc::clone(&net_callback) as SharedCallback<Resource>,
-    ));
+    #[cfg(feature = "net")]
+    let net_provider = {
+        use blitz_net::Provider;
+        use blitz_shell::BlitzShellNetCallback;
+
+        // Turn on the runtime and enter it
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _guard = rt.enter();
+
+        let proxy = event_loop.create_proxy();
+        let net_callback = BlitzShellNetCallback::shared(proxy);
+        let net_provider = Provider::shared(net_callback);
+
+        Some(net_provider)
+    };
+
+    #[cfg(not(feature = "net"))]
+    let net_provider = None;
 
     // Spin up the virtualdom
     // We're going to need to hit it with a special waker
     let vdom = VirtualDom::new_with_props(root, props);
-    let doc = DioxusDocument::new(vdom, Some(net_provider));
+    let doc = DioxusDocument::new(vdom, net_provider);
     let window = WindowConfig::new(doc);
 
     // Setup hot-reloading if enabled.
@@ -87,7 +89,7 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     }
 
     // Create application
-    let mut application = DioxusNativeApplication::new(rt, event_loop.create_proxy());
+    let mut application = DioxusNativeApplication::new(event_loop.create_proxy());
     application.add_window(window);
 
     // Run event loop
