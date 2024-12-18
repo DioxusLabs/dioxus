@@ -18,4 +18,12 @@ pub(crate) struct SuspenseMessage {
     #[cfg(feature = "hydrate")]
     /// The data to hydrate the suspense boundary with
     data: Vec<u8>,
+    #[cfg(feature = "hydrate")]
+    #[cfg(debug_assertions)]
+    /// The type names of the data
+    debug_types: Option<Vec<String>>,
+    #[cfg(feature = "hydrate")]
+    #[cfg(debug_assertions)]
+    /// The location of the data in the source code
+    debug_locations: Option<Vec<String>>,
 }

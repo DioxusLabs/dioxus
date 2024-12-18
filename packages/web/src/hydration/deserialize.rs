@@ -11,6 +11,7 @@ thread_local! {
 /// Try to take the next item from the server data cursor. This will only be set during the first run of a component before hydration.
 /// This will return `None` if no data was pushed for this instance or if serialization fails
 // TODO: evan better docs
+#[track_caller]
 pub fn take_server_data<T: DeserializeOwned>() -> Result<Option<T>, TakeDataError> {
     SERVER_DATA.with_borrow(|data| match data.as_ref() {
         Some(data) => data.take(),
@@ -40,13 +41,21 @@ fn remove_server_data() {
 pub(crate) struct HTMLDataCursor {
     error: Option<CapturedError>,
     data: Vec<Option<Vec<u8>>>,
+    #[cfg(debug_assertions)]
+    debug_types: Option<Vec<String>>,
+    #[cfg(debug_assertions)]
+    debug_locations: Option<Vec<String>>,
     index: Cell<usize>,
 }
 
 impl HTMLDataCursor {
-    pub(crate) fn from_serialized(data: &[u8]) -> Self {
+    pub(crate) fn from_serialized(
+        data: &[u8],
+        debug_types: Option<Vec<String>>,
+        debug_locations: Option<Vec<String>>,
+    ) -> Self {
         let deserialized = ciborium::from_reader(Cursor::new(data)).unwrap();
-        Self::new(deserialized)
+        Self::new(deserialized, debug_types, debug_locations)
     }
 
     /// Get the error if there is one
@@ -54,11 +63,19 @@ impl HTMLDataCursor {
         self.error.clone()
     }
 
-    fn new(data: Vec<Option<Vec<u8>>>) -> Self {
+    fn new(
+        data: Vec<Option<Vec<u8>>>,
+        #[allow(unused)] debug_types: Option<Vec<String>>,
+        #[allow(unused)] debug_locations: Option<Vec<String>>,
+    ) -> Self {
         let mut myself = Self {
+            index: Cell::new(0),
             error: None,
             data,
-            index: Cell::new(0),
+            #[cfg(debug_assertions)]
+            debug_types,
+            #[cfg(debug_assertions)]
+            debug_locations,
         };
 
         // The first item is always an error if it exists
@@ -73,6 +90,7 @@ impl HTMLDataCursor {
         myself
     }
 
+    #[track_caller]
     pub fn take<T: DeserializeOwned>(&self) -> Result<Option<T>, TakeDataError> {
         let current = self.index.get();
         if current >= self.data.len() {
@@ -88,9 +106,33 @@ impl HTMLDataCursor {
         match bytes {
             Some(bytes) => match ciborium::from_reader(Cursor::new(bytes)) {
                 Ok(x) => Ok(Some(x)),
-                Err(e) => {
-                    tracing::error!("Error deserializing data: {:?}", e);
-                    Err(TakeDataError::DeserializationError(e))
+                Err(err) => {
+                    #[cfg(debug_assertions)]
+                    {
+                        let debug_type = self
+                            .debug_types
+                            .as_ref()
+                            .and_then(|types| types.get(current));
+                        let debug_locations = self
+                            .debug_locations
+                            .as_ref()
+                            .and_then(|locations| locations.get(current));
+
+                        if let (Some(debug_type), Some(debug_locations)) =
+                            (debug_type, debug_locations)
+                        {
+                            let client_type = std::any::type_name::<T>();
+                            let client_location = std::panic::Location::caller();
+                            // We we have debug types and a location, we can provide a more helpful error message
+                            tracing::error!(
+                                "Error deserializing data: {err:?}\n\nThis type was serialized on the server at {debug_locations} with the type name {debug_type}. The client failed to deserialize the type {client_type} at {client_location}.",
+                            );
+                            return Err(TakeDataError::DeserializationError(err));
+                        }
+                    }
+                    // Otherwise, just log the generic deserialization error
+                    tracing::error!("Error deserializing data: {:?}", err);
+                    Err(TakeDataError::DeserializationError(err))
                 }
             },
             None => Ok(None),
