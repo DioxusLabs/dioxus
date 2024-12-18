@@ -29,9 +29,9 @@ This involves making sure the metadata of the crates is correct before we publis
 13. [ ] Make sure all the workspace crates are actually owned by either Jonathan Kelley or the Dioxus Labs publish org (`cargo owner --add github:dioxuslabs:publish <crate>`)
 14. [ ] If there's *any* crates used by dioxus but not in dioxuslabs/dioxus make sure they're owned by the Dioxus Labs github org in case we need to fix them later
 15. [ ] Run through all the examples and make sure they compile and actually *work*. `cargo run --example <example>` and `dx run <example>` should both work.
-16. [ ] Install the current CLI version and make sure it works (cargo install --path packages/cli). Ideally `cargo update` as well since `crates.io` doesn't use a locked install.
+16. [ ] Install the current CLI version and make sure it works (`cargo install --path packages/cli`). Ideally `cargo update` as well since `crates.io` doesn't use a locked install.
 17. [ ] Update the dioxus crate versions to be the intended release version. We set all the versions *manually* instead of relying on `cargo workspaces`. This involves going to `Cargo.toml` and updating the `[workspace.package]` version and each crate's version to the new version in the [workspace.dependencies] section.
-18. [ ] Go to `http://github.com/dioxusLabs/dioxus-template` and make sure a branch exists for the new major version. IE a v0.5, v0.6, v0.7, etc branch. If it doesn't exist, create it. This *needs* to exist for `dx new` to work. It's likely that this already exists since we tend to try `dx new` frequently before releasing.
+18. [ ] Go to the [template repo](http://github.com/dioxusLabs/dioxus-template) and make sure a branch exists for the new major version. IE a v0.5, v0.6, v0.7, etc branch. If it doesn't exist, create it. This *needs* to exist for `dx new` to work. It's likely that this already exists since we tend to try `dx new` frequently before releasing.
 19. [ ] If performing a major release, make sure all the links in `dioxus` are updated to point to the new version. This involves basically CTRL-F'ing for `/0.6/` and replacing it with `/0.7/` etc.
 20. [ ] It's likely that docsite links might not be updated just yet. If nightly docs are released, there shouldn't need to be any changes. It's fine to bypass the link checker for now, but you should be ready to fix links once the docsite is ready. Any links that are broken are "frozen in time" and will need to be fixed. We can't change links in published crates, so if the link never exists, it's just broken forever.
 21. [ ] Inform "VIP" community projects that that a final RC is out (ie projects like [Freya](http://freyaui.dev)) so their authors can test new versions.
@@ -130,3 +130,4 @@ Actually marketing:
 - We move examples to the `examples/untested` folder when we release a new version. Ideally we have a workspace with all versions of dioxus and can include the examples in the relevant frames.
 - SSG is flakey and occasionally fails. This needs to be fixed.
 - We should promote "community" crates to enjoy auto-updates via codemods whenever a new version is released.
+- We should be running `docs` CI using DOCS_RS env var to ensure docs are built the same way as docs.rs
