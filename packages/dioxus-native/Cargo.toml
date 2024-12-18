@@ -5,17 +5,18 @@ license.workspace = true
 edition = "2021"
 
 [features]
-default = ["accessibility", "hot-reload", "menu", "tracing", "net"]
+default = ["accessibility", "hot-reload", "menu", "tracing", "net", "svg"]
+svg = ["blitz-dom/svg", "blitz-renderer-vello/svg"]
 net = ["dep:tokio", "dep:blitz-net", "blitz-shell/net"]
 accessibility = ["blitz-shell/accessibility"]
 menu = ["blitz-shell/menu"]
-tracing = ["dep:tracing", "blitz-shell/tracing"]
+tracing = ["dep:tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
 hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
 
 [dependencies]
 # Blitz dependencies
 blitz-renderer-vello = { path = "../blitz-renderer-vello" }
-blitz-dom = { path = "../blitz-dom" }
+blitz-dom = { path = "../blitz-dom", default-features = false }
 blitz-net = { path = "../blitz-net", optional = true }
 blitz-traits = { path = "../blitz-traits" }
 blitz-shell = { path = "../blitz-shell", default-features = false }
