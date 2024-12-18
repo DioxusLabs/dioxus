@@ -51,7 +51,7 @@ This involves making sure the metadata of the crates is correct before we publis
 11. [ ] Verify you can create a new project with the new version and it works. IE `dx new app`. Do a dry-run of building a new app to make sure it works and no obvious errors are present.
 12. [ ] Release the GitHub release using the tag we pushed earlier.
 13. [ ] Execute the [`Publish CLI` github action](https://github.com/DioxusLabs/dioxus/actions/workflows/publish.yml) using a manual trigger. Fill in the small form with the appropriate information. This should be the version you just released IE `v0.6.1`. The corresponding github release post must exist for the binstall to be published! You need to be part of the dioxuslabs/publish org to trigger this action.
-14. [ ] If you're about to start working on a "dev" version of Dioxus, create a new branch for the last version that we backport fixes to. See
+14. [ ] If you're about to start working on a "dev" version of Dioxus, create a new branch for the last version that we backport fixes to. IE the dioxus repo has a v0.4, v0.5, v0.6, etc branch. We generally only create this branch when we're ready to start merging breaking PRs.
 
 ### Releasing the docsite
 
@@ -67,7 +67,6 @@ This involves making sure the metadata of the crates is correct before we publis
 10. [ ] Ensure that `ssg` is properly generating *all* the pages. Currently it's flakey and occasionally fails.
 11. [ ] Ensure google analytics is working. Check the console and make sure we haven't "gone silent"
 12. [ ] Double-check that we're generating OpenGraph images. Twitter/Discord/Reddit/etc will use these images.
-
 
 ### Releasing the vscode extension
 
