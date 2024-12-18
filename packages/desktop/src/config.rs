@@ -1,21 +1,16 @@
 use dioxus_core::LaunchConfig;
 use std::borrow::Cow;
 use std::path::PathBuf;
-use tao::event_loop::{EventLoop, EventLoopWindowTarget};
-use tao::window::{Icon, WindowBuilder};
+use winit::event::Event;
+use winit::event_loop::EventLoop;
+use winit::window::{Icon, Window, WindowAttributes};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::RequestAsyncResponder;
 
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
 
-type CustomEventHandler = Box<
-    dyn 'static
-        + for<'a> FnMut(
-            &tao::event::Event<'a, UserWindowEvent>,
-            &EventLoopWindowTarget<UserWindowEvent>,
-        ),
->;
+type CustomEventHandler = Box<dyn 'static + for<'a> FnMut(&Event<UserWindowEvent>)>;
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -47,8 +42,8 @@ impl From<MenuBuilderState> for Option<DioxusMenu> {
 
 /// The configuration for the desktop application.
 pub struct Config {
-    pub(crate) event_loop: Option<EventLoop<UserWindowEvent>>,
-    pub(crate) window: WindowBuilder,
+    pub(crate) event_loop: Option<EventLoop<Event<UserWindowEvent>>>,
+    pub(crate) window_attributes: WindowAttributes,
     pub(crate) as_child_window: bool,
     pub(crate) menu: MenuBuilderState,
     pub(crate) protocols: Vec<WryProtocol>,
@@ -81,18 +76,18 @@ impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
-        let mut window: WindowBuilder = WindowBuilder::new()
-            .with_title(dioxus_cli_config::app_title().unwrap_or_else(|| "Dioxus App".to_string()));
+        let window_attributes = Window::default_attributes()
+            .with_title(dioxus_cli_config::app_title().unwrap_or("Dioxus App".to_owned()));
 
-        // During development we want the window to be on top so we can see it while we work
         let always_on_top = dioxus_cli_config::always_on_top().unwrap_or(true);
 
-        if cfg!(debug_assertions) {
-            window = window.with_always_on_top(always_on_top);
+        let cloned_attributes = window_attributes.clone();
+        if cfg!(debug_assertions) && always_on_top {
+            cloned_attributes.with_window_level(winit::window::WindowLevel::AlwaysOnTop);
         }
 
         Self {
-            window,
+            window_attributes,
             as_child_window: false,
             event_loop: None,
             menu: MenuBuilderState::Unset,
@@ -138,17 +133,17 @@ impl Config {
     }
 
     /// Set the event loop to be used
-    pub fn with_event_loop(mut self, event_loop: EventLoop<UserWindowEvent>) -> Self {
+    pub fn with_event_loop(mut self, event_loop: EventLoop<Event<UserWindowEvent>>) -> Self {
         self.event_loop = Some(event_loop);
         self
     }
 
     /// Set the configuration for the window.
-    pub fn with_window(mut self, window: WindowBuilder) -> Self {
+    pub fn with_window(mut self, window: Window) -> Self {
         // We need to do a swap because the window builder only takes itself as muy self
-        self.window = window;
+        self.window_attributes = window.window_attributes();
         // If the decorations are off for the window, remove the menu as well
-        if !self.window.window.decorations && matches!(self.menu, MenuBuilderState::Unset) {
+        if !self.window_attributes.decorations && matches!(self.menu, MenuBuilderState::Unset) {
             self.menu = MenuBuilderState::Set(None);
         }
         self
@@ -169,8 +164,7 @@ impl Config {
     /// Sets a custom callback to run whenever the event pool receives an event.
     pub fn with_custom_event_handler(
         mut self,
-        f: impl FnMut(&tao::event::Event<'_, UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
-            + 'static,
+        f: impl FnMut(&Event<UserWindowEvent>) + 'static,
     ) -> Self {
         self.custom_event_handler = Some(Box::new(f));
         self
@@ -222,7 +216,7 @@ impl Config {
 
     /// Set a custom icon for this application
     pub fn with_icon(mut self, icon: Icon) -> Self {
-        self.window.window.window_icon = Some(icon);
+        self.window_attributes = self.window_attributes.with_window_icon(Some(icon));
         self
     }
 
@@ -270,7 +264,7 @@ impl Config {
     pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            if self.window.window.decorations {
+            if self.window_attributes.decorations {
                 self.menu = MenuBuilderState::Set(menu.into())
             }
         }

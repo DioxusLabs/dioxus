@@ -52,7 +52,8 @@ dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
-tao = { workspace = true, features = ["rwh_05"] }
+# tao = { workspace = true, features = ["rwh_05"] }
+winit = { workspace = true }
 once_cell = { workspace = true }
 dioxus-history.workspace = true
 

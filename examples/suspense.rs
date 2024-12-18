@@ -11,17 +11,24 @@
 //! We can achieve the majority of suspense functionality by composing "suspenseful"
 //! primitives in our own custom components.
 
-use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
+#![allow(deprecated)]
+
+use dioxus::mobile::winit::event_loop::EventLoop;
+use dioxus::mobile::winit::window::WindowAttributes;
+use dioxus::mobile::Config;
+use dioxus::mobile::LogicalSize;
 use dioxus::prelude::*;
 
 fn main() {
+    let window = EventLoop::new()
+        .unwrap()
+        .create_window(WindowAttributes::default())
+        .unwrap();
+
+    let _ = window.request_inner_size(LogicalSize::new(600.0, 800.0));
     dioxus::LaunchBuilder::new()
         .with_cfg(desktop! {
-            Config::new().with_window(
-                WindowBuilder::new()
-                    .with_title("Doggo Fetcher")
-                    .with_inner_size(LogicalSize::new(600.0, 800.0)),
-            )
+            Config::new().with_window(window);
         })
         .launch(app)
 }

@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
@@ -21,6 +22,8 @@ use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
+use winit::event_loop::EventLoop;
+use wry::raw_window_handle::HasWindowHandle;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
@@ -165,23 +168,23 @@ impl WebviewInstance {
         dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
-        let mut window = cfg.window.clone();
-
         // tao makes small windows for some reason, make them bigger on desktop
         //
         // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
         // get a window that is not the size of the screen and weird black bars.
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            if cfg.window.window.inner_size.is_none() {
-                window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+            if cfg.window_attributes.inner_size.is_none() {
+                cfg.window_attributes = cfg
+                    .window_attributes
+                    .with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
             }
         }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
-        if cfg.window.window.window_icon.is_none() {
-            window = window.with_window_icon(Some(
-                tao::window::Icon::from_rgba(
+        if cfg.window_attributes.window_icon.is_none() {
+            cfg.window_attributes = cfg.window_attributes.with_window_icon(Some(
+                winit::window::Icon::from_rgba(
                     include_bytes!("./assets/default_icon.bin").to_vec(),
                     460,
                     460,
@@ -189,8 +192,13 @@ impl WebviewInstance {
                 .expect("image parse failed"),
             ));
         }
+        let headless = !cfg.window_attributes.visible;
 
-        let window = window.build(&shared.target).unwrap();
+        let event_loop = EventLoop::new();
+        let window = event_loop
+            .unwrap()
+            .create_window(cfg.window_attributes)
+            .unwrap();
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
@@ -198,7 +206,7 @@ impl WebviewInstance {
             use cocoa::appkit::NSWindowCollectionBehavior;
             use cocoa::base::id;
             use objc::{msg_send, sel, sel_impl};
-            use tao::platform::macos::WindowExtMacOS;
+            use winit::platform::macos::WindowExtMacOS;
 
             unsafe {
                 let window: id = window.ns_window() as id;
@@ -211,7 +219,6 @@ impl WebviewInstance {
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
-        let headless = !cfg.window.window.visible;
 
         let request_handler = {
             to_owned![
@@ -242,7 +249,10 @@ impl WebviewInstance {
                 // defer the event to the main thread
                 let body = payload.into_body();
                 if let Ok(msg) = serde_json::from_str(&body) {
-                    _ = proxy.send_event(UserWindowEvent::Ipc { id: window_id, msg });
+                    _ = proxy.send_event(winit::event::Event::UserEvent(UserWindowEvent::Ipc {
+                        id: window_id,
+                        msg,
+                    }));
                 }
             }
         };
@@ -307,12 +317,10 @@ impl WebviewInstance {
             target_os = "ios",
             target_os = "android"
         )))]
-        let mut webview = {
-            use tao::platform::unix::WindowExtUnix;
-            use wry::WebViewBuilderExtUnix;
-            let vbox = window.default_vbox().unwrap();
-            WebViewBuilder::new_gtk(vbox)
-        };
+        let window_handle = window
+            .window_handle()
+            .expect("unable to create window builder");
+        let mut webview = { WebViewBuilder::new(&window_handle) };
 
         // Disable the webview default shortcuts to disable the reload shortcut
         #[cfg(target_os = "windows")]
@@ -329,7 +337,7 @@ impl WebviewInstance {
                     window.inner_size().height,
                 )),
             })
-            .with_transparent(cfg.window.window.transparent)
+            // .with_transparent(cfg.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(|var| {

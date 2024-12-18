@@ -224,8 +224,9 @@ tracing-wasm = "0.2.1"
 console_error_panic_hook = "0.1.7"
 
 # desktop
+# winit = { version = "0.30.5", features = ["rwh_06"] }
+winit = { path = "/home/mob/projects/rusts/winit", features = ["rwh_06"]}
 wry = { version = "0.45.0", default-features = false }
-tao = { version = "=0.30.0", features = ["rwh_05"] }
 webbrowser = "1.0.1"
 infer = "0.16.0"
 dunce = "1.0.2"

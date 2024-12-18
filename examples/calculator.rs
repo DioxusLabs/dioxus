@@ -8,22 +8,27 @@
 //! Notice how our logic is consolidated into just a few callbacks instead of a single struct. This is a rather organic
 //! way to start building state management in Dioxus, and it's a great way to start.
 
+#![allow(deprecated)]
+
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
+use dioxus::mobile::winit::event_loop::EventLoop;
+use dioxus::mobile::winit::window::WindowAttributes;
 use dioxus::prelude::*;
 
 const STYLE: Asset = asset!("/examples/assets/calculator.css");
 
 fn main() {
+    use dioxus::desktop::{Config, LogicalSize};
+
+    let window = EventLoop::new()
+        .unwrap()
+        .create_window(WindowAttributes::default())
+        .unwrap();
+
+    let _ = window.request_inner_size(LogicalSize::new(300.0, 525.0));
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(desktop!({
-            use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
-            Config::new().with_window(
-                WindowBuilder::default()
-                    .with_title("Calculator")
-                    .with_inner_size(LogicalSize::new(300.0, 525.0)),
-            )
-        }))
+        .with_cfg(desktop!(Config::new().with_window(window)))
         .launch(app);
 }
 

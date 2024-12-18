@@ -9,14 +9,23 @@
 //! We implement a number of important details here too, like focusing inputs, handling form submits, navigating the router,
 //! platform-specific configuration, and importing 3rd party CSS libraries.
 
-use dioxus::prelude::*;
+#![allow(deprecated)]
+
+use dioxus::{
+    mobile::{
+        winit::{event_loop::EventLoop, window::WindowAttributes},
+        LogicalSize,
+    },
+    prelude::*,
+};
 
 fn main() {
     dioxus::LaunchBuilder::new()
         .with_cfg(desktop!({
-            use dioxus::desktop::{LogicalSize, WindowBuilder};
+            let window = EventLoop::new().unwrap().create_window(WindowAttributes::default()).unwrap();
+            let _ = window.request_inner_size(LogicalSize::new(800,600));
             dioxus::desktop::Config::default()
-                .with_window(WindowBuilder::new().with_inner_size(LogicalSize::new(800, 600)))
+                .with_window(window)
         }))
         .launch(|| {
             rsx! {

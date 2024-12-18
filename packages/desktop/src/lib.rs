@@ -31,11 +31,18 @@ mod mobile_shortcut;
 /// The main entrypoint for this crate
 pub mod launch;
 
+use std::env;
+
 // Reexport tao and wry, might want to re-export other important things
-pub use tao;
-pub use tao::dpi::{LogicalPosition, LogicalSize};
-pub use tao::event::WindowEvent;
-pub use tao::window::WindowBuilder;
+// pub use tao;
+// pub use tao::dpi::{LogicalPosition, LogicalSize};
+// pub use tao::event::WindowEvent;
+// pub use tao::window::WindowBuilder;
+pub use ipc::UserWindowEvent;
+pub use winit;
+pub use winit::dpi::{LogicalPosition, LogicalSize};
+pub use winit::event::WindowEvent;
+pub use winit::window::Window;
 pub use wry;
 // Reexport muda only if we are on desktop platforms that support menus
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -53,3 +60,23 @@ pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{ShortcutHandle, ShortcutRegistryError};
 pub use wry::RequestAsyncResponder;
+
+/// Detect linux display
+#[cfg(target_os = "linux")]
+pub enum DisplayHandler {
+    /// Represent the Wayland
+    Wayland,
+    /// Represent x11
+    X11,
+}
+
+#[cfg(target_os = "linux")]
+impl DisplayHandler {
+    fn detect() -> Self {
+        if env::var("DISPLAY").is_ok() {
+            DisplayHandler::X11
+        } else {
+            DisplayHandler::Wayland
+        }
+    }
+}

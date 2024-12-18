@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
-use tao::window::WindowId;
+use winit::window::WindowId;
 
+/// User Custom Events
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum UserWindowEvent {
@@ -8,12 +9,15 @@ pub enum UserWindowEvent {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     GlobalHotKeyEvent(global_hotkey::GlobalHotKeyEvent),
 
+    /// Muda
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     MudaMenuEvent(muda::MenuEvent),
 
+    /// Tray
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     TrayIconEvent(tray_icon::TrayIconEvent),
 
+    /// Window
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     TrayMenuEvent(tray_icon::menu::MenuEvent),
 
@@ -22,7 +26,9 @@ pub enum UserWindowEvent {
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview
     Ipc {
+        /// Window id
         id: WindowId,
+        /// IPC Message
         msg: IpcMessage,
     },
 
@@ -31,8 +37,11 @@ pub enum UserWindowEvent {
     HotReloadEvent(dioxus_devtools::DevserverMsg),
 
     // Windows-only drag-n-drop fix events.
+    /// Window drag and drop
     WindowsDragDrop(WindowId),
+    /// Window drag and over
     WindowsDragOver(WindowId, i32, i32),
+    /// Window drag and leavve
     WindowsDragLeave(WindowId),
 
     /// Create a new window

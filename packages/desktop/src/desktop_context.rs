@@ -13,15 +13,12 @@ use dioxus_core::{
     VirtualDom,
 };
 use std::rc::{Rc, Weak};
-use tao::{
-    event::Event,
-    event_loop::EventLoopWindowTarget,
-    window::{Fullscreen as WryFullscreen, Window, WindowId},
-};
+use winit::event::Event;
+use winit::window::{Fullscreen as WryFullscreen, Window, WindowId};
 use wry::{RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
-use tao::platform::ios::WindowExtIOS;
+use winit::platform::ios::WindowExtIOS;
 
 /// Get an imperative handle to the current window without using a hook
 ///
@@ -112,7 +109,7 @@ impl DesktopService {
 
         self.shared
             .proxy
-            .send_event(UserWindowEvent::NewWindow)
+            .send_event(winit::event::Event::UserEvent(UserWindowEvent::NewWindow))
             .unwrap();
 
         self.shared.pending_webviews.borrow_mut().push(window);
@@ -141,18 +138,16 @@ impl DesktopService {
 
     /// Close this window
     pub fn close(&self) {
-        let _ = self
-            .shared
-            .proxy
-            .send_event(UserWindowEvent::CloseWindow(self.id()));
+        let _ = self.shared.proxy.send_event(winit::event::Event::UserEvent(
+            UserWindowEvent::CloseWindow(self.id()),
+        ));
     }
 
     /// Close a particular window, given its ID
     pub fn close_window(&self, id: WindowId) {
-        let _ = self
-            .shared
-            .proxy
-            .send_event(UserWindowEvent::CloseWindow(id));
+        let _ = self.shared.proxy.send_event(winit::event::Event::UserEvent(
+            UserWindowEvent::CloseWindow(id),
+        ));
     }
 
     /// change window to fullscreen
@@ -193,7 +188,7 @@ impl DesktopService {
     /// The id this function returns can be used to remove the event handler with [`DesktopContext::remove_wry_event_handler`]
     pub fn create_wry_event_handler(
         &self,
-        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+        handler: impl FnMut(&Event<UserWindowEvent>) + 'static,
     ) -> WryEventHandler {
         self.shared.event_handlers.add(self.window.id(), handler)
     }
