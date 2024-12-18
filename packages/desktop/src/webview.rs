@@ -12,6 +12,7 @@ use crate::{
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
+use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
@@ -59,10 +60,15 @@ impl WebviewEdits {
         let data_from_header = request
             .headers()
             .get("dioxus-data")
-            .map(|f| f.as_bytes())
-            .expect("dioxus-data header is not a string");
+            .map(|f| {
+                std::str::from_utf8(f.as_bytes())
+                    .expect("dioxus-data header is not a valid (utf-8) string")
+            })
+            .expect("dioxus-data header not set");
+        let data_from_header = base64::Engine::decode(&BASE64_STANDARD, data_from_header)
+            .expect("dioxus-data header is not a base64 string");
 
-        let response = match serde_json::from_slice(data_from_header) {
+        let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
                 let _lock = crate::android_sync_lock::android_runtime_lock();
