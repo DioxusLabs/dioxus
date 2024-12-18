@@ -23,7 +23,7 @@ js-sys = { version = "0.3.56", optional = true }
 euclid = "0.22.7"
 enumset = "1.1.2"
 keyboard-types = { version = "0.7", default-features = false }
-async-trait = { version = "0.1.58", optional = true }
+async-trait = { version = "0.1.58" }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
@@ -41,7 +41,7 @@ tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
 
 [features]
-default = ["serialize", "mounted", "file_engine"]
+default = ["serialize"]
 serialize = [
     "dep:serde",
     "dep:serde_json",
@@ -50,10 +50,10 @@ serialize = [
     "keyboard-types/serde",
     "dioxus-core/serialize"
 ]
+# TODO: Remove the mounted feature flag in the next major release. It no longer activates any extra code
 mounted = []
-file_engine = [
-    "dep:async-trait",
-]
+# TODO: Remove the file engine feature flag in the next major release. It no longer activates any extra code
+file_engine = []
 hot-reload-context = ["dep:dioxus-rsx"]
 html-to-rsx = []
 

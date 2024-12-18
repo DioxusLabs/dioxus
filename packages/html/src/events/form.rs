@@ -105,7 +105,6 @@ impl FormData {
     }
 
     /// Get the files of the form event
-    #[cfg(feature = "file_engine")]
     pub fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.inner.files()
     }
@@ -177,7 +176,6 @@ pub struct SerializedFormData {
     #[serde(default)]
     valid: bool,
 
-    #[cfg(feature = "file_engine")]
     #[serde(default)]
     files: Option<crate::file_data::SerializedFileEngine>,
 }
@@ -190,12 +188,10 @@ impl SerializedFormData {
             value,
             values,
             valid: true,
-            #[cfg(feature = "file_engine")]
             files: None,
         }
     }
 
-    #[cfg(feature = "file_engine")]
     /// Add files to the serialized form data object
     pub fn with_files(mut self, files: crate::file_data::SerializedFileEngine) -> Self {
         self.files = Some(files);
@@ -208,7 +204,6 @@ impl SerializedFormData {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
-            #[cfg(feature = "file_engine")]
             files: {
                 match data.files() {
                     Some(files) => {
@@ -234,7 +229,6 @@ impl SerializedFormData {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
-            #[cfg(feature = "file_engine")]
             files: None,
         }
     }
@@ -261,7 +255,6 @@ impl HasFormData for SerializedFormData {
 
 #[cfg(feature = "serialize")]
 impl HasFileData for SerializedFormData {
-    #[cfg(feature = "file_engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
         self.files
             .as_ref()
@@ -269,7 +262,6 @@ impl HasFileData for SerializedFormData {
     }
 }
 
-#[cfg(feature = "file_engine")]
 impl HasFileData for FormData {
     fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
         self.inner.files()

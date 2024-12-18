@@ -1,15 +1,10 @@
 pub trait HasFileData: std::any::Any {
-    // NOTE: The methods of this trait are config'ed out instead of the trait
-    // itself because several other traits inherit from this trait and there isn't a clean way to
-    // conditionally inherit from a trait based on a config.
-    #[cfg(feature = "file_engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
         None
     }
 }
 
 #[cfg(feature = "serialize")]
-#[cfg(feature = "file_engine")]
 /// A file engine that serializes files to bytes
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFileEngine {
@@ -17,7 +12,6 @@ pub struct SerializedFileEngine {
 }
 
 #[cfg(feature = "serialize")]
-#[cfg(feature = "file_engine")]
 #[async_trait::async_trait(?Send)]
 impl FileEngine for SerializedFileEngine {
     fn files(&self) -> Vec<String> {
@@ -46,7 +40,6 @@ impl FileEngine for SerializedFileEngine {
     }
 }
 
-#[cfg(feature = "file_engine")]
 #[async_trait::async_trait(?Send)]
 pub trait FileEngine {
     // get a list of file names
