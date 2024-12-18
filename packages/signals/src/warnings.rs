@@ -121,7 +121,7 @@ fn app() -> Element {
     let mut count2 = use_signal(|| 0);
 
     use_effect(move || {
-        count1.write(count2());
+        count1.set(count2());
     });
 }
 2) Reading and Writing to the same signal in different scopes:
@@ -134,7 +134,7 @@ fn app() -> Element {
     use_effect(move || {
         // This effect both reads and writes to count
         println!("{}", count());
-        count.write(count());
+        count.set(1);
     });
 }
 
@@ -145,7 +145,7 @@ fn app() -> Element {
     let mut count = use_signal(|| 0);
 
     use_effect(move || {
-        count.write(count());
+        count.set(1);
     });
     use_effect(move || {
         println!("{}", count());

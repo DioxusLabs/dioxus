@@ -157,7 +157,7 @@ impl AppRunner {
         Ok(())
     }
 
-    pub(crate) fn attempt_hot_reload(
+    pub(crate) async fn attempt_hot_reload(
         &mut self,
         modified_files: Vec<PathBuf>,
     ) -> Option<HotReloadMsg> {
@@ -183,7 +183,7 @@ impl AppRunner {
 
             // Otherwise, it might be an asset and we should look for it in all the running apps
             for runner in self.running.values() {
-                if let Some(bundled_name) = runner.hotreload_bundled_asset(&path) {
+                if let Some(bundled_name) = runner.hotreload_bundled_asset(&path).await {
                     // todo(jon): don't hardcode this here
                     let asset_relative = PathBuf::from("/assets/").join(bundled_name);
                     assets.push(asset_relative);

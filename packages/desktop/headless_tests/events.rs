@@ -54,6 +54,7 @@ fn app() -> Element {
 
 fn test_mounted() -> Element {
     use_hook(|| utils::EXPECTED_EVENTS.with_mut(|x| *x += 1));
+    let mut onmounted_triggered = use_signal(|| false);
 
     rsx! {
         div {
@@ -65,6 +66,10 @@ fn test_mounted() -> Element {
                 assert_eq!(rect.width(), 100.0);
                 assert_eq!(rect.height(), 100.0);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
+                // Onmounted should only be called once
+                let mut onmounted_triggered_write = onmounted_triggered.write();
+                assert!(!*onmounted_triggered_write);
+                *onmounted_triggered_write = true;
             }
         }
     }
