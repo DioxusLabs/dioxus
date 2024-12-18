@@ -57,7 +57,7 @@ This involves making sure the metadata of the crates is correct before we publis
 
 1. [ ] Stabilize the current docs version on the docsite. This will be manual, unfortunately, and involves changing URLs in the navbar and the sidebar. See [this PR for an example for v0.6](https://github.com/DioxusLabs/docsite/pull/342).
 2. [ ] Make sure to update the "current version" and any stability bools in the version switcher.
-3. [ ] Update the deploy.yml to point to the new binstall version
+3. [ ] Update the `deploy.yml` to point to the new binstall version
 4. [ ] Remove any latent `git` or `path` dependencies and `crates.io` patches.
 5. [ ] todo: discourage any old versions of dioxus from ending up in robots.txt - ideally for better AI support
 6. [ ] Move any non-working examples to the relevant `examples/untested` folder.
@@ -65,7 +65,7 @@ This involves making sure the metadata of the crates is correct before we publis
 8. [ ] run `dx serve` and make sure it works
 9. [ ] Commit to main and ensure the build and checks CI passes
 10. [ ] Ensure that `ssg` is properly generating *all* the pages. Currently it's flakey and occasionally fails.
-11. [ ] Ensure google analytics is working. Check the console and make sure we haven't "gone silent"
+11. [ ] Ensure google analytics is working. Check the console and make sure we haven't "gone silent."
 12. [ ] Double-check that we're generating OpenGraph images. Twitter/Discord/Reddit/etc will use these images.
 
 ### Releasing the vscode extension
