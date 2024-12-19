@@ -80,7 +80,10 @@ impl WebsysDom {
 
         let interpreter = Interpreter::default();
 
-        let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
+        // The closure type we pass to the dom may be invoked recursively if one event triggers another. For example,
+        // one event could focus another element which triggers the focus event of the new element like inhttps://github.com/DioxusLabs/dioxus/issues/2882.
+        // The Closure<dyn Fn(_)> type can invoked recursively, but Closure<dyn FnMut()> cannot
+        let handler: Closure<dyn Fn(&Event)> = Closure::wrap(Box::new({
             let runtime = runtime.clone();
             move |web_sys_event: &web_sys::Event| {
                 let name = web_sys_event.type_();
