@@ -74,7 +74,7 @@ impl Runtime {
 
         Rc::new(Self {
             sender,
-            rendering: Cell::new(true),
+            rendering: Cell::new(false),
             scope_states: Default::default(),
             scope_stack: Default::default(),
             suspense_stack: Default::default(),
@@ -106,6 +106,14 @@ impl Runtime {
                 f(input)
             }
         }
+    }
+
+    /// Run a closure with the rendering flag set to true
+    pub(crate) fn while_rendering<T>(&self, f: impl FnOnce() -> T) -> T {
+        self.rendering.set(true);
+        let result = f();
+        self.rendering.set(false);
+        result
     }
 
     /// Create a scope context. This slab is synchronized with the scope slab.
@@ -380,9 +388,7 @@ impl Runtime {
             );
             for listener in listeners.into_iter().rev() {
                 if let AttributeValue::Listener(listener) = listener {
-                    self.rendering.set(false);
                     listener.call(uievent.clone());
-                    self.rendering.set(true);
                     let metadata = uievent.metadata.borrow();
 
                     if !metadata.propagates {
@@ -420,9 +426,7 @@ impl Runtime {
                 // Only call the listener if this is the exact target element.
                 if attr.name.get(2..) == Some(name) && target_path == this_path {
                     if let AttributeValue::Listener(listener) = &attr.value {
-                        self.rendering.set(false);
                         listener.call(uievent.clone());
-                        self.rendering.set(true);
                         break;
                     }
                 }
