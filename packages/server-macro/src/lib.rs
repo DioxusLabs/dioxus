@@ -31,23 +31,39 @@ use syn::__private::ToTokens;
 ///
 /// ## Named Arguments
 ///
-/// You can any combination of the following named arguments:
+/// You can use any combination of the following named arguments:
 /// - `name`: sets the identifier for the server function’s type, which is a struct created
-///    to hold the arguments (defaults to the function identifier in PascalCase)
-/// - `prefix`: a prefix at which the server function handler will be mounted (defaults to `/api`)
+///    to hold the arguments (defaults to the function identifier in PascalCase).
+///    Example: `name = MyServerFunction`.
+/// - `prefix`: a prefix at which the server function handler will be mounted (defaults to `/api`).
+///    Example: `prefix = "/my_api"`.
 /// - `endpoint`: specifies the exact path at which the server function handler will be mounted,
-///   relative to the prefix (defaults to the function name followed by unique hash)
-/// - `input`: the encoding for the arguments (defaults to `PostUrl`)
-/// - `output`: the encoding for the response (defaults to `Json`)
-/// - `client`: a custom `Client` implementation that will be used for this server fn
+///   relative to the prefix (defaults to the function name followed by unique hash).
+///    Example: `endpoint = "my_fn"`.
+/// - `input`: the encoding for the arguments (defaults to `PostUrl`).
+///     - The `input` argument specifies how the function arguments are encoded for transmission.
+///     - Acceptable values include:
+///       - `PostUrl`: A `POST` request with URL-encoded arguments, suitable for form-like submissions.  
+///       - `Json`: A `POST` request where the arguments are encoded as JSON. This is a common choice for modern APIs.
+///       - `Cbor`: A `POST` request with CBOR-encoded arguments, useful for binary data transmission with compact encoding.
+///       - `GetUrl`: A `GET` request with URL-encoded arguments, suitable for simple queries or when data fits in the URL.
+///       - `GetCbor`: A `GET` request with CBOR-encoded arguments, useful for query-style APIs when the payload is binary.
+/// - `output`: the encoding for the response (defaults to `Json`).
+///     - The `output` argument specifies how the server should encode the response data.
+///     - Acceptable values include:
+///       - `Json`: A response encoded as JSON (default). This is ideal for most web applications.
+///       - `Cbor`: A response encoded in the CBOR format for efficient, binary-encoded data.
+/// - `client`: a custom `Client` implementation that will be used for this server function. This allows
+///   customization of the client-side behavior if needed.
 /// - `encoding`: (legacy, may be deprecated in future) specifies the encoding, which may be one
-///   of the following (not case sensitive)
+///   of the following (not case sensitive):
 ///     - `"Url"`: `POST` request with URL-encoded arguments and JSON response
 ///     - `"GetUrl"`: `GET` request with URL-encoded arguments and JSON response
 ///     - `"Cbor"`: `POST` request with CBOR-encoded arguments and response
 ///     - `"GetCbor"`: `GET` request with URL-encoded arguments and CBOR response
-/// - `req` and `res` specify the HTTP request and response types to be used on the server (these
-///   should usually only be necessary if you are integrating with a server other than Actix/Axum)
+/// - `req` and `res`: specify the HTTP request and response types to be used on the server. These
+///   are typically necessary if you are integrating with a custom server framework (other than Actix/Axum).
+///   Example: `req = SomeRequestType`, `res = SomeResponseType`.
 /// ```rust,ignore
 /// #[server(
 ///   name = SomeStructName,
@@ -143,15 +159,30 @@ use syn::__private::ToTokens;
 /// ```
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
+    let default_prefix: &str = "/api";
+    let default_input: Option<syn::Path> = Some(syn::parse_quote!(server_fn));
+    let default_output: Option<syn::Type> = None;
+    let default_preset: Option<syn::Type> = None;
+
     match server_macro_impl(
         args.into(),
         s.into(),
-        Some(syn::parse_quote!(server_fn)),
-        "/api",
-        None,
-        None,
+        default_input,
+        default_prefix,
+        default_output,
+        default_preset,
     ) {
-        Err(e) => e.to_compile_error().into(),
+        // Generate detailed error message with context when macro fails.
+        Err(e) => {
+            let detailed_error = format!(
+                "Failed to process the `server` macro. Check your arguments and function signature. Error: {}",
+                e
+            );
+            syn::Error::new(proc_macro2::Span::call_site(), detailed_error)
+                .to_compile_error()
+                .into()
+        }
+        // Successful case: return the generated token stream.
         Ok(s) => s.to_token_stream().into(),
     }
 }
