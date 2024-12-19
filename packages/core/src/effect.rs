@@ -1,5 +1,4 @@
 use crate::innerlude::ScopeOrder;
-use crate::Runtime;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -29,13 +28,11 @@ impl Effect {
         self.effect.borrow_mut().push_back(Box::new(f));
     }
 
-    pub(crate) fn run(&self, runtime: &Runtime) {
-        runtime.rendering.set(false);
+    pub(crate) fn run(&self) {
         let mut effect = self.effect.borrow_mut();
         while let Some(f) = effect.pop_front() {
             f();
         }
-        runtime.rendering.set(true);
     }
 }
 

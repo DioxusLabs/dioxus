@@ -115,3 +115,12 @@ test("onmounted", async ({ page }) => {
   const mountedDiv = page.locator("div.onmounted-div");
   await expect(mountedDiv).toHaveText("onmounted was called 1 times");
 });
+
+test("web-sys closure", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the div is mounted
+  await page.waitForSelector("div#web-sys-closure-div");
+  await page.keyboard.press("Enter");
+  const scrollDiv = page.locator("div#web-sys-closure-div");
+  await expect(scrollDiv).toHaveText("the keydown event was triggered");
+});

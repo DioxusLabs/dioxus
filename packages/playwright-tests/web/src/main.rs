@@ -1,6 +1,7 @@
 // This test is used by playwright configured in the root of the repo
 
 use dioxus::prelude::*;
+use wasm_bindgen::prelude::*;
 
 fn app() -> Element {
     let mut num = use_signal(|| 0);
@@ -53,6 +54,7 @@ fn app() -> Element {
         div { class: "eval-result", "{eval_result}" }
         PreventDefault {}
         OnMounted {}
+        WebSysClosure {}
     }
 }
 
@@ -82,6 +84,49 @@ fn OnMounted() -> Element {
                 mounted_triggered_count += 1;
             },
             "onmounted was called {mounted_triggered_count} times"
+        }
+    }
+}
+
+// This component tests attaching an event listener to the document with a web-sys closure
+// and effect
+#[component]
+fn WebSysClosure() -> Element {
+    static TRIGGERED: GlobalSignal<bool> = GlobalSignal::new(|| false);
+    use_effect(|| {
+        let window = web_sys::window().expect("window not available");
+
+        // Assert the component contents have been mounted
+        window
+            .document()
+            .unwrap()
+            .get_element_by_id("web-sys-closure-div")
+            .expect("Effects should only be run after all contents have bene mounted to the dom");
+
+        // Make sure passing the runtime into the closure works
+        let callback = Callback::new(|_| {
+            assert!(!dioxus::dioxus_core::vdom_is_rendering());
+            *TRIGGERED.write() = true;
+        });
+        let closure: Closure<dyn Fn()> = Closure::new({
+            move || {
+                callback(());
+            }
+        });
+
+        window
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+            .expect("Failed to add keydown event listener");
+
+        closure.forget();
+    });
+
+    rsx! {
+        div {
+            id: "web-sys-closure-div",
+            if TRIGGERED() {
+                "the keydown event was triggered"
+            }
         }
     }
 }

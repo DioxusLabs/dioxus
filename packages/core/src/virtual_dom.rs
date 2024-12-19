@@ -511,7 +511,7 @@ impl VirtualDom {
 
             // At this point, we have finished running all tasks that are pending and we haven't found any scopes to rerun. This means it is safe to run our lowest priority work: effects
             while let Some(effect) = self.pop_effect() {
-                effect.run(&self.runtime);
+                effect.run();
                 // Check if any new scopes are queued for rerun
                 self.queue_events();
                 if self.has_dirty_scopes() {
@@ -562,7 +562,10 @@ impl VirtualDom {
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        let new_nodes = self.run_scope(ScopeId::ROOT);
+        let new_nodes = self
+            .runtime
+            .clone()
+            .while_rendering(|| self.run_scope(ScopeId::ROOT));
 
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
@@ -593,7 +596,9 @@ impl VirtualDom {
                 }
                 Work::RerunScope(scope) => {
                     // If the scope is dirty, run the scope and get the mutations
-                    self.run_and_diff_scope(Some(to), scope.id);
+                    self.runtime.clone().while_rendering(|| {
+                        self.run_and_diff_scope(Some(to), scope.id);
+                    });
                 }
             }
         }
@@ -700,7 +705,9 @@ impl VirtualDom {
                         .is_some();
                     if run_scope {
                         // If the scope is dirty, run the scope and get the mutations
-                        self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
+                        self.runtime.clone().while_rendering(|| {
+                            self.run_and_diff_scope(None::<&mut NoOpMutations>, scope_id);
+                        });
 
                         tracing::trace!("Ran scope {:?} during suspense", scope_id);
                     } else {
