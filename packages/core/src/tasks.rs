@@ -275,7 +275,6 @@ impl Runtime {
 
         // poll the future with the scope on the stack
         let poll_result = self.with_scope_on_stack(task.scope, || {
-            self.rendering.set(false);
             self.current_task.set(Some(id));
 
             let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
@@ -293,7 +292,6 @@ impl Runtime {
 
             poll_result
         });
-        self.rendering.set(true);
         self.current_task.set(None);
 
         poll_result
