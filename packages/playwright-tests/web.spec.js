@@ -119,8 +119,8 @@ test("onmounted", async ({ page }) => {
 test("web-sys closure", async ({ page }) => {
   await page.goto("http://localhost:9999");
   // wait until the div is mounted
-  await page.waitForSelector("div#web-sys-closure-div");
-  await page.keyboard.press("Enter");
   const scrollDiv = page.locator("div#web-sys-closure-div");
+  await scrollDiv.waitFor({ state: "attached" });
+  await page.keyboard.press("Enter");
   await expect(scrollDiv).toHaveText("the keydown event was triggered");
 });
