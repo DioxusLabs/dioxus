@@ -15,6 +15,7 @@ pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
+    pub(crate) public_path: Option<PathBuf>,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
     pub(crate) context_providers: ContextProviders,
     pub(crate) streaming_mode: StreamingMode,
@@ -29,6 +30,7 @@ impl ServeConfigBuilder {
             root_id: None,
             index_html: None,
             index_path: None,
+            public_path: None,
             incremental: None,
             context_providers: Default::default(),
             streaming_mode: StreamingMode::default(),
@@ -62,6 +64,13 @@ impl ServeConfigBuilder {
     /// Set the path of the index.html file to be served. (defaults to {assets_path}/index.html)
     pub fn index_path(mut self, index_path: PathBuf) -> Self {
         self.index_path = Some(index_path);
+        self
+    }
+
+    /// Set the path of the public directory be served. (defaults to public in the same directory
+    /// as the executable)
+    pub fn public_path(mut self, public_path: PathBuf) -> Self {
+        self.public_path = Some(public_path);
         self
     }
 
@@ -180,7 +189,7 @@ impl ServeConfigBuilder {
     /// Build the ServeConfig. This may fail if the index.html file is not found.
     pub fn build(self) -> Result<ServeConfig, UnableToLoadIndex> {
         // The CLI always bundles static assets into the exe/public directory
-        let public_path = public_path();
+        let public_path = self.public_path.unwrap_or_else(|| public_path());
 
         let index_path = self
             .index_path
@@ -198,6 +207,7 @@ impl ServeConfigBuilder {
 
         Ok(ServeConfig {
             index,
+            public_path,
             incremental: self.incremental,
             context_providers: self.context_providers,
             streaming_mode: self.streaming_mode,
@@ -315,6 +325,7 @@ pub enum StreamingMode {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
+    pub(crate) public_path: PathBuf,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
     pub(crate) context_providers: ContextProviders,
     pub(crate) streaming_mode: StreamingMode,
