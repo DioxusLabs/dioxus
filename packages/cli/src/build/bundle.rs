@@ -447,10 +447,9 @@ impl AppBundle {
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
-                    tracing::trace!(
-                        "Starting asset copy {current}/{asset_count} from {from:?}",
-                        current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-                    );
+                    let current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+                    tracing::trace!("Starting asset copy {current}/{asset_count} from {from:?}");
 
                     let res = process_file_to(options, from, to);
 
@@ -460,7 +459,7 @@ impl AppBundle {
 
                     BuildRequest::status_copied_asset(
                         &progress,
-                        current_asset.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
+                        current,
                         asset_count,
                         from.to_path_buf(),
                     );
