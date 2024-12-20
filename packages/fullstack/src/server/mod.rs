@@ -71,6 +71,7 @@ use axum::{
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
 
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::prelude::*;
@@ -133,7 +134,7 @@ pub trait DioxusRouterExt<S> {
     ///     let addr = dioxus_cli_config::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Server side render the application, serve static assets, and register server functions
-    ///         .serve_static_assets()
+    ///         .serve_static_assets(std::path::Path::new("/assets"))
     ///         // Server render the application
     ///         // ...
     ///         .into_make_service();
@@ -141,7 +142,7 @@ pub trait DioxusRouterExt<S> {
     ///     axum::serve(listener, router).await.unwrap();
     /// }
     /// ```
-    fn serve_static_assets(self) -> Self
+    fn serve_static_assets(self, pubic_path: &Path) -> Self
     where
         Self: Sized;
 
@@ -200,10 +201,8 @@ where
         self
     }
 
-    fn serve_static_assets(mut self) -> Self {
+    fn serve_static_assets(mut self, public_path: &Path) -> Self {
         use tower_http::services::{ServeDir, ServeFile};
-
-        let public_path = crate::public_path();
 
         if !public_path.exists() {
             return self;
@@ -255,9 +254,14 @@ where
             .map(|cfg| cfg.context_providers.clone())
             .unwrap_or_default();
 
+        let public_path = cfg
+            .as_ref()
+            .map(|x| x.public_path.clone())
+            .unwrap_or_else(|_| crate::public_path());
+
         // Add server functions and render index.html
         let server = self
-            .serve_static_assets()
+            .serve_static_assets(&public_path)
             .register_server_functions_with_context(context_providers);
 
         match cfg {
