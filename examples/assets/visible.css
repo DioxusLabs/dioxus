@@ -1,0 +1,27 @@
+* {
+  box-sizing: border-box;
+}
+
+.container {
+  height: 500px;
+  width: 500px;
+  margin: 100px auto;
+}
+
+p {
+  line-height: 30px;
+
+}
+
+.animated-text {
+  font-size: 30px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(100px);
+  transition: opacity 1s ease, transform 1s ease;
+}
+
+.animated-text.visible {
+  opacity: 1;
+  transform: translateX(0);
+}

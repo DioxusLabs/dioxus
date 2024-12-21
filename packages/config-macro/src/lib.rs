@@ -19,7 +19,7 @@ macro_rules! define_config_macro {
                 }
             } else {
                 quote! {
-                    {}
+                    ()
                 }
             }
             .into()

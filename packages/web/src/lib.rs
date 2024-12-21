@@ -66,15 +66,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     #[cfg(feature = "document")]
     virtual_dom.in_runtime(document::init_document);
 
-    #[cfg(feature = "panic_hook")]
-    if web_config.default_panic_hook {
-        console_error_panic_hook::set_once();
-    }
+    let runtime = virtual_dom.runtime();
 
     #[cfg(all(feature = "devtools", debug_assertions))]
-    let mut hotreload_rx = devtools::init();
-
-    let runtime = virtual_dom.runtime();
+    let mut hotreload_rx = devtools::init(runtime.clone());
 
     let should_hydrate = web_config.hydrate;
 

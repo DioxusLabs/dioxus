@@ -3,7 +3,6 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-mod assets;
 mod build;
 mod bundle_utils;
 mod cli;
@@ -16,12 +15,10 @@ mod filemap;
 mod logging;
 mod metadata;
 mod platform;
-mod profiles;
 mod rustup;
 mod serve;
 mod settings;
-mod slog;
-mod tooling;
+mod wasm_bindgen;
 
 pub(crate) use build::*;
 pub(crate) use cli::*;

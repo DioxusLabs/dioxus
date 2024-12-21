@@ -2,13 +2,15 @@ use anyhow::Context;
 use manganis_core::{AssetOptions, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
 use std::path::Path;
 
+use crate::css::process_scss;
+
 use super::{
     css::process_css, folder::process_folder, image::process_image, js::process_js,
     json::process_json,
 };
 
 /// Process a specific file asset with the given options reading from the source and writing to the output path
-pub(crate) fn process_file_to(
+pub fn process_file_to(
     options: &AssetOptions,
     source: &Path,
     output_path: &Path,
@@ -29,6 +31,9 @@ pub(crate) fn process_file_to(
             Some("css") => {
                 process_css(&CssAssetOptions::new(), source, output_path)?;
             }
+            Some("scss" | "sass") => {
+                process_scss(&CssAssetOptions::new(), source, output_path)?;
+            }
             Some("js") => {
                 process_js(&JsAssetOptions::new(), source, output_path)?;
             }
@@ -38,20 +43,21 @@ pub(crate) fn process_file_to(
             Some("jpg" | "jpeg" | "png" | "webp" | "avif") => {
                 process_image(&ImageAssetOptions::new(), source, output_path)?;
             }
-            None if source.is_dir() => {
-                process_folder(source, output_path)?;
-            }
             Some(_) | None => {
-                let source_file = std::fs::File::open(source)?;
-                let mut reader = std::io::BufReader::new(source_file);
-                let output_file = std::fs::File::create(output_path)?;
-                let mut writer = std::io::BufWriter::new(output_file);
-                std::io::copy(&mut reader, &mut writer).with_context(|| {
-                    format!(
-                        "Failed to write file to output location: {}",
-                        output_path.display()
-                    )
-                })?;
+                if source.is_dir() {
+                    process_folder(source, output_path)?;
+                } else {
+                    let source_file = std::fs::File::open(source)?;
+                    let mut reader = std::io::BufReader::new(source_file);
+                    let output_file = std::fs::File::create(output_path)?;
+                    let mut writer = std::io::BufWriter::new(output_file);
+                    std::io::copy(&mut reader, &mut writer).with_context(|| {
+                        format!(
+                            "Failed to write file to output location: {}",
+                            output_path.display()
+                        )
+                    })?;
+                }
             }
         },
         AssetOptions::Css(options) => {

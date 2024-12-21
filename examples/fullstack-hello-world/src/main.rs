@@ -45,11 +45,5 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 }
 
 fn main() {
-    #[cfg(feature = "web")]
-    tracing_wasm::set_as_global_default();
-
-    #[cfg(feature = "server")]
-    tracing_subscriber::fmt::init();
-
     dioxus::launch(app);
 }

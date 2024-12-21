@@ -9,9 +9,3 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["web"] }
-
-log = "0.4.6"
-
-# WebAssembly Debug
-wasm-logger = "0.2.0"
-console_error_panic_hook = "0.1.7"

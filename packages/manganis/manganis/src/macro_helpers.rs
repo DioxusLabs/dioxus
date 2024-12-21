@@ -74,12 +74,36 @@ pub const fn generate_unique_path(
         None => {
             if let Some(extension) = extension {
                 macro_output_path = macro_output_path.push('.');
-                macro_output_path = macro_output_path.push_str(extension.as_str())
+
+                let ext_bytes = extension.as_str().as_bytes();
+
+                // Rewrite scss as css
+                if bytes_equal(ext_bytes, b"scss") || bytes_equal(ext_bytes, b"sass") {
+                    macro_output_path = macro_output_path.push_str("css")
+                } else {
+                    macro_output_path = macro_output_path.push_str(extension.as_str())
+                }
             }
         }
     }
 
     macro_output_path
+}
+
+const fn bytes_equal(left: &[u8], right: &[u8]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+
+    let mut i = 0;
+    while i < left.len() {
+        if left[i] != right[i] {
+            return false;
+        }
+        i += 1;
+    }
+
+    true
 }
 
 #[test]

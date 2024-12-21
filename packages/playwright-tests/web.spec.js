@@ -107,3 +107,20 @@ test("prevent default", async ({ page }) => {
   // Check that the <a> element changed.
   await expect(a).toHaveText("Psych!");
 });
+
+test("onmounted", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+
+  // Expect the onmounted event to be called exactly once.
+  const mountedDiv = page.locator("div.onmounted-div");
+  await expect(mountedDiv).toHaveText("onmounted was called 1 times");
+});
+
+test("web-sys closure", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the div is mounted
+  const scrollDiv = page.locator("div#web-sys-closure-div");
+  await scrollDiv.waitFor({ state: "attached" });
+  await page.keyboard.press("Enter");
+  await expect(scrollDiv).toHaveText("the keydown event was triggered");
+});

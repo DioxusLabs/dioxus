@@ -8,8 +8,4 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
-
-# Debug
-log = "0.4.19"
-dioxus-logger = "0.4.1"
 open = "5.1.2"

@@ -1,11 +1,10 @@
 use super::{progress::ProgressTx, BuildArtifacts};
 use crate::dioxus_crate::DioxusCrate;
-use crate::Result;
-use crate::{assets::AssetManifest, TraceSrc};
 use crate::{link::LinkAction, BuildArgs};
-use crate::{AppBundle, Platform};
+use crate::{AppBundle, Platform, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_opt::AssetManifest;
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -44,9 +43,19 @@ impl BuildRequest {
     /// This will also run the fullstack build. Note that fullstack is handled separately within this
     /// code flow rather than outside of it.
     pub(crate) async fn build_all(self) -> Result<AppBundle> {
-        tracing::debug!("Running build command...");
+        tracing::debug!(
+            "Running build command... {}",
+            if self.build.force_sequential {
+                "(sequentially)"
+            } else {
+                ""
+            }
+        );
 
-        let (app, server) = self.build_concurrent().await?;
+        let (app, server) = match self.build.force_sequential {
+            true => self.build_sequential().await?,
+            false => self.build_concurrent().await?,
+        };
 
         AppBundle::new(self, app, server).await
     }
@@ -56,6 +65,12 @@ impl BuildRequest {
         let (app, server) =
             futures_util::future::try_join(self.build_app(), self.build_server()).await?;
 
+        Ok((app, server))
+    }
+
+    async fn build_sequential(&self) -> Result<(BuildArtifacts, Option<BuildArtifacts>)> {
+        let app = self.build_app().await?;
+        let server = self.build_server().await?;
         Ok((app, server))
     }
 
@@ -148,6 +163,7 @@ impl BuildRequest {
         let mut stdout = stdout.lines();
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
+        let mut emitting_error = false;
 
         loop {
             use cargo_metadata::Message;
@@ -158,15 +174,27 @@ impl BuildRequest {
                 else => break,
             };
 
-            let mut deserializer = serde_json::Deserializer::from_str(line.trim());
-            deserializer.disable_recursion_limit();
-
-            let message =
-                Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));
+            let Some(Ok(message)) = Message::parse_stream(std::io::Cursor::new(line)).next() else {
+                continue;
+            };
 
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
-                Message::TextLine(line) => self.status_build_message(line),
+                Message::TextLine(line) => {
+                    // For whatever reason, if there's an error while building, we still receive the TextLine
+                    // instead of an "error" message. However, the following messages *also* tend to
+                    // be the error message, and don't start with "error:". So we'll check if we've already
+                    // emitted an error message and if so, we'll emit all following messages as errors too.
+                    if line.trim_start().starts_with("error:") {
+                        emitting_error = true;
+                    }
+
+                    if emitting_error {
+                        self.status_build_error(line);
+                    } else {
+                        self.status_build_message(line)
+                    }
+                }
                 Message::CompilerMessage(msg) => self.status_build_diagnostic(msg),
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
@@ -182,7 +210,7 @@ impl BuildRequest {
                 Message::BuildFinished(finished) => {
                     if !finished.success {
                         return Err(anyhow::anyhow!(
-                            "Cargo build failed, signaled by the compiler"
+                            "Cargo build failed, signaled by the compiler. Toggle tracing mode (press `t`) for more information."
                         )
                         .into());
                     }
@@ -192,7 +220,7 @@ impl BuildRequest {
         }
 
         if output_location.is_none() {
-            tracing::error!("Cargo build failed - no output location");
+            tracing::error!("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.");
         }
 
         let out_location = output_location.context("Build did not return an executable")?;
@@ -649,8 +677,8 @@ impl BuildRequest {
             Platform::Server => platform_dir.clone(), // ends up *next* to the public folder
 
             // These might not actually need to be called `.app` but it does let us run these with `open`
-            Platform::MacOS => platform_dir.join(format!("{}.app", self.platform_exe_name())),
-            Platform::Ios => platform_dir.join(format!("{}.app", self.platform_exe_name())),
+            Platform::MacOS => platform_dir.join(format!("{}.app", self.krate.bundled_app_name())),
+            Platform::Ios => platform_dir.join(format!("{}.app", self.krate.bundled_app_name())),
 
             // in theory, these all could end up directly in the root dir
             Platform::Android => platform_dir.join("app"), // .apk (after bundling)

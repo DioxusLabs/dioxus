@@ -7,7 +7,7 @@ description = "Configuration macros for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react"]
+keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 
 [lib]
 proc-macro = true

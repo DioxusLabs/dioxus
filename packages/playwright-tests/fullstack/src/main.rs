@@ -9,6 +9,9 @@ use dioxus::{prelude::*, CapturedError};
 
 fn main() {
     dioxus::LaunchBuilder::new()
+        .with_cfg(server_only! {
+            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+        })
         .with_context(1234u32)
         .launch(app);
 }
@@ -36,6 +39,21 @@ fn app() -> Element {
         div {
             id: "errors",
             Errors {}
+        }
+        OnMounted {}
+    }
+}
+
+#[component]
+fn OnMounted() -> Element {
+    let mut mounted_triggered_count = use_signal(|| 0);
+    rsx! {
+        div {
+            class: "onmounted-div",
+            onmounted: move |_| {
+                mounted_triggered_count += 1;
+            },
+            "onmounted was called {mounted_triggered_count} times"
         }
     }
 }

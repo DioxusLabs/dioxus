@@ -245,6 +245,7 @@ impl WebServer {
                 self.build_status.set(Status::BuildError {
                     error: ansi_to_html::convert(&error).unwrap_or(error),
                 });
+                self.send_reload_failed().await;
                 self.send_build_status().await;
             }
         }
@@ -256,6 +257,7 @@ impl WebServer {
             return;
         }
 
+        #[cfg(debug_assertions)]
         tracing::trace!("Sending hotreload to clients {:?}", reload);
 
         let msg = DevserverMsg::HotReload(reload);

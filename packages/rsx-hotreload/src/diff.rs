@@ -621,7 +621,20 @@ impl HotReloadResult {
             // If it isn't a literal, try to find an exact match for the attribute value from the last build
             _ => {
                 let value_index = self.full_rebuild_state.dynamic_attributes.position(|a| {
-                    !matches!(a.name, AttributeName::Spread(_)) && a.value == attribute.value
+                    // Spread attributes are not hot reloaded
+                    if matches!(a.name, AttributeName::Spread(_)) {
+                        return false;
+                    }
+                    if a.value != attribute.value {
+                        return false;
+                    }
+                    // The type of event handlers is influenced by the event name, so te cannot hot reload between different event
+                    // names
+                    if matches!(a.value, AttributeValue::EventTokens(_)) && a.name != attribute.name
+                    {
+                        return false;
+                    }
+                    true
                 })?;
                 HotReloadAttributeValue::Dynamic(value_index)
             }

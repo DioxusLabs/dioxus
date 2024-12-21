@@ -139,8 +139,8 @@ pub trait Readable {
     ///     let doubled = use_memo(move || {
     ///         // We want to log the value of the event_source, but we don't need to rerun the doubled value if the event_source changes (because the value of doubled doesn't depend on the event_source)
     ///         // We can read the value with peek without subscribing to updates
-    ///         let click_count = count.peek();
-    ///         tracing::info!("Click count: {click_count:?}");
+    ///         let source = event_source.peek();
+    ///         tracing::info!("Clicked: {source:?}");
     ///         count() * 2
     ///     });
     ///     rsx! {
@@ -149,6 +149,7 @@ pub trait Readable {
     ///         button {
     ///             onclick: move |_| {
     ///                 event_source.set(Some("Click me button"));
+    ///                 count += 1;
     ///             },
     ///             "Click me"
     ///         }

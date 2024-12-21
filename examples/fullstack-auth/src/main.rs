@@ -15,6 +15,9 @@ use dioxus_fullstack::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
+    // Set the logger ahead of time since we don't use `dioxus::launch` on the server
+    dioxus::logger::initialize_default();
+
     #[cfg(feature = "web")]
     // Hydrate the application on the client
     dioxus_web::launch::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
@@ -27,7 +30,6 @@ fn main() {
         use axum_session::SessionStore;
         use axum_session_auth::AuthConfig;
         use axum_session_auth::SessionSqlitePool;
-        simple_logger::SimpleLogger::new().init().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {

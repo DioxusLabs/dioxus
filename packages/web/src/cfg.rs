@@ -13,7 +13,6 @@ use wasm_bindgen::JsCast as _;
 pub struct Config {
     pub(crate) hydrate: bool,
     pub(crate) root: ConfigRoot,
-    pub(crate) default_panic_hook: bool,
 }
 
 impl LaunchConfig for Config {}
@@ -68,14 +67,6 @@ impl Config {
         self.root = ConfigRoot::RootNode(node);
         self
     }
-
-    /// Set whether or not Dioxus should use the built-in panic hook or defer to your own.
-    ///
-    /// The panic hook is set to true normally so even the simplest apps have helpful error messages.
-    pub fn with_default_panic_hook(mut self, f: bool) -> Self {
-        self.default_panic_hook = f;
-        self
-    }
 }
 
 impl Default for Config {
@@ -83,7 +74,6 @@ impl Default for Config {
         Self {
             hydrate: false,
             root: ConfigRoot::RootName("main".to_string()),
-            default_panic_hook: true,
         }
     }
 }

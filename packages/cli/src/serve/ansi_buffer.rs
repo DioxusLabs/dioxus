@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Formatter};
 ///
 /// This is taken from a PR on the ratatui repo (https://github.com/ratatui/ratatui/pull/1065) and
 /// modified to be more appropriate for our use case.
-pub struct AnsiStringBuffer {
+pub struct AnsiStringLine {
     buf: Buffer,
 }
 
@@ -13,11 +13,11 @@ pub struct AnsiStringBuffer {
 // Not sure if we actually still need this....
 const SENTINEL: &str = "✆";
 
-impl AnsiStringBuffer {
+impl AnsiStringLine {
     /// Creates a new `AnsiStringBuffer` with the given width and height.
-    pub(crate) fn new(width: u16, height: u16) -> Self {
+    pub(crate) fn new(width: u16) -> Self {
         Self {
-            buf: Buffer::empty(Rect::new(0, 0, width, height)),
+            buf: Buffer::empty(Rect::new(0, 0, width, 1)),
         }
     }
 
@@ -50,7 +50,6 @@ impl AnsiStringBuffer {
             for x in 0..self.buf.area.width {
                 let cell = self.buf.cell((x, y)).unwrap();
                 if cell.symbol() == SENTINEL {
-                    f.write_str("\n")?;
                     break;
                 }
 
@@ -66,7 +65,7 @@ impl AnsiStringBuffer {
     }
 }
 
-impl Display for AnsiStringBuffer {
+impl Display for AnsiStringLine {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.write_fmt(f)
     }

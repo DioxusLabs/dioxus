@@ -1,6 +1,7 @@
 use crate::{AppBundle, Platform, Result};
 use anyhow::Context;
 use std::{
+    fs,
     net::SocketAddr,
     path::{Path, PathBuf},
     process::Stdio,
@@ -163,7 +164,7 @@ impl AppHandle {
     /// This will return the bundled name of the asset such that we can send it to the clients letting
     /// them know what to reload. It's not super important that this is robust since most clients will
     /// kick all stylsheets without necessarily checking the name.
-    pub(crate) fn hotreload_bundled_asset(&self, changed_file: &PathBuf) -> Option<PathBuf> {
+    pub(crate) async fn hotreload_bundled_asset(&self, changed_file: &PathBuf) -> Option<PathBuf> {
         let mut bundled_name = None;
 
         // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
@@ -187,12 +188,36 @@ impl AppHandle {
             }
         }
 
+        // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
+        let changed_file = fs::canonicalize(changed_file)
+            .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
+            .ok()?;
+
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        if let Some(resource) = self.app.app.assets.assets.get(changed_file).as_ref() {
-            let res = std::fs::copy(changed_file, asset_dir.join(resource.bundled_path()));
+        if let Some(resource) = self.app.app.assets.assets.get(&changed_file).as_ref() {
+            let res = std::fs::copy(&changed_file, asset_dir.join(resource.bundled_path()));
             bundled_name = Some(PathBuf::from(resource.bundled_path()));
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
+            }
+        }
+
+        // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
+        if self.app.build.build.platform() == Platform::Android {
+            if let Some(bundled_name) = bundled_name.as_ref() {
+                let target = format!("/data/local/tmp/dx/{}", bundled_name.display());
+                tracing::debug!("Pushing asset to device: {target}");
+                let res = tokio::process::Command::new("adb")
+                    .arg("push")
+                    .arg(&changed_file)
+                    .arg(target)
+                    .output()
+                    .await
+                    .context("Failed to push asset to device");
+
+                if let Err(e) = res {
+                    tracing::debug!("Failed to push asset to device: {e}");
+                }
             }
         }
 
