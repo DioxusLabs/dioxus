@@ -41,7 +41,7 @@ impl Bundle {
     pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
         tracing::info!("Bundling project...");
 
-        let krate = DioxusCrate::new(&self.build_arguments.target_args)
+        let krate = DioxusCrate::new(&self.build_arguments.target_args, None)
             .context("Failed to load Dioxus workspace")?;
 
         // We always use `release` mode for bundling
