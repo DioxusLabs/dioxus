@@ -40,14 +40,10 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
         });
     };
 
-    // 4. Ensure the path doesn't escape the crate dir
-    //
-    // - Note: since we called canonicalize on both paths, we can safely compare the parent dirs.
-    //   On windows, we can only compare the prefix if both paths are canonicalized (not just absolute)
-    //   https://github.com/rust-lang/rust/issues/42869
-    if path == manifest_dir || !path.starts_with(manifest_dir) {
+    // 4. Strip the manifest dir from the path
+    let Ok(path) = path.strip_prefix(&manifest_dir).map(|x| x.to_path_buf()) else {
         return Err(AssetParseError::InvalidPath { path });
-    }
+    };
 
     Ok(path)
 }
