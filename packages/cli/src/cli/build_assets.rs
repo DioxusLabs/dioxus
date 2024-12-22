@@ -1,7 +1,4 @@
-use std::{
-    fs::create_dir_all,
-    path::{Path, PathBuf},
-};
+use std::{fs::create_dir_all, path::PathBuf};
 
 use crate::{Result, StructuredOutput};
 use clap::Parser;
@@ -27,8 +24,7 @@ impl BuildAssets {
 
         create_dir_all(&self.destination)?;
         for (path, asset) in manifest.assets.iter() {
-            let relative_path = turn_asset_path_into_relative_path(path);
-            let source_path = self.source.join(relative_path);
+            let source_path = self.source.join(path);
             let destination_path = self.destination.join(asset.bundled_path());
             debug!(
                 "Processing asset {} --> {} {:#?}",
@@ -41,23 +37,4 @@ impl BuildAssets {
 
         Ok(StructuredOutput::Success)
     }
-}
-
-/// Hack to turn an absolute path into a relative path.
-///
-/// For example, the executable path might have the absolute path:
-/// "/build/lknys4lnckh88mxvi7pba1zsvgfyh1a1-source/assets/header.svg
-///
-/// And we need a relative path to the source directory:
-/// "assets/header.svg"
-fn turn_asset_path_into_relative_path(asset_path: &Path) -> PathBuf {
-    let components = asset_path
-        .components()
-        .skip_while(|c| c.as_os_str() != "assets")
-        .collect::<Vec<_>>();
-
-    components.iter().fold(PathBuf::new(), |mut acc, c| {
-        acc.push(c);
-        acc
-    })
 }
