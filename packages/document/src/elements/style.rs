@@ -17,7 +17,8 @@ pub struct StyleProps {
 }
 
 impl StyleProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    /// Get all the attributes for the style tag
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(href) = &self.href {
             attributes.push(("href", href.clone()));
@@ -71,13 +72,44 @@ pub fn Style(props: StyleProps) -> Element {
     use_update_warning(&props, "Style {}");
 
     use_hook(|| {
+        let document = document();
+        let mut insert_style = document.create_head_component();
         if let Some(href) = &props.href {
             if !should_insert_style(href) {
-                return;
+                insert_style = false;
             }
         }
-        let document = document();
-        document.create_style(props);
+        if !insert_style {
+            return;
+        }
+        let mut attributes = props.attributes();
+        match (&props.href, props.style_contents()) {
+            // The style has inline contents, render it as a style tag
+            (_, Ok(_)) => document.create_style(props),
+            // The style has a src, render it as a link tag
+            (Some(_), _) => {
+                attributes.push(("type", "text/css".into()));
+                document.create_link(LinkProps {
+                    media: props.media,
+                    title: props.title,
+                    r#type: Some("text/css".to_string()),
+                    additional_attributes: props.additional_attributes,
+                    href: props.href,
+                    rel: None,
+                    disabled: None,
+                    r#as: None,
+                    sizes: None,
+                    crossorigin: None,
+                    referrerpolicy: None,
+                    fetchpriority: None,
+                    hreflang: None,
+                    integrity: None,
+                    blocking: None,
+                });
+            }
+            // The style has neither contents nor src, log an error
+            (None, Err(err)) => err.log("Style"),
+        };
     });
 
     VNode::empty()
