@@ -257,13 +257,15 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let routable_impl = route_enum.routable_impl();
 
     (quote! {
-        #error_type
+        const _: () = {
+            #error_type
 
-        #display_impl
+            #display_impl
 
-        #routable_impl
+            #routable_impl
 
-        #parse_impl
+            #parse_impl
+        };
     })
     .into()
 }
