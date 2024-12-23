@@ -64,6 +64,53 @@ use syn::__private::ToTokens;
 /// - `req` and `res`: specify the HTTP request and response types to be used on the server. These
 ///   are typically necessary if you are integrating with a custom server framework (other than Actix/Axum).
 ///   Example: `req = SomeRequestType`, `res = SomeResponseType`.
+/// 
+///
+/// ## Advanced Usage of `input` and `output` Fields
+///
+/// The `input` and `output` fields allow you to customize how arguments and responses are encoded and decoded.
+/// These fields impose specific trait bounds on the types you use. Here are detailed examples for different scenarios:
+///
+/// ### `output = StreamingJson`
+///
+/// Setting the `output` type to `StreamingJson` requires the return type to implement `From<JsonStream<T>>`,
+/// where `T` implements `serde::Serialize` and `serde::de::DeserializeOwned`.
+///
+/// ```rust,ignore
+/// #[server(output = StreamingJson)]
+/// pub async fn json_stream_fn() -> Result<JsonStream<String>, ServerFnError> {
+///     todo!()
+/// }
+/// ```
+///
+/// ### `output = StreamingText`
+///
+/// Setting the `output` type to `StreamingText` requires the return type to implement `From<TextStream>`.
+///
+/// ```rust,ignore
+/// #[server(output = StreamingText)]
+/// pub async fn text_stream_fn() -> Result<TextStream, ServerFnError> {
+///     todo!()
+/// }
+/// ```
+///
+/// ### `output = PostUrl`
+///
+/// Setting the `output` type to `PostUrl` requires the return type to implement `Serialize` and `Deserialize`.
+/// Note that this uses `serde_qs`, which imposes the following constraints:
+/// - The structure must be less than 5 levels deep.
+/// - The structure must not contain any `serde(flatten)` attributes.
+///
+/// ```rust,ignore
+/// #[server(output = PostUrl)]
+/// pub async fn form_fn() -> Result<TextStream, ServerFnError> {
+///     todo!()
+/// }
+/// ```
+///
+/// These examples illustrate how the `output` type impacts the bounds and expectations for your server function. Ensure your return types comply with these requirements.
+/// 
+/// 
 /// ```rust,ignore
 /// #[server(
 ///   name = SomeStructName,
