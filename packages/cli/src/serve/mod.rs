@@ -59,7 +59,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 • Press `ctrl+c` to exit the server
                 • Press `r` to rebuild the app
                 • Press `o` to open the app
+                • Press `p` to toggle automatic rebuilds
                 • Press `v` to toggle verbose logging
+                • Press `t` to toggle tracing
+                • Press `c` to clean logs
                 • Press `/` for more commands and shortcuts
                 Learn more at https://dioxuslabs.com/learn/0.6/getting_started
                ----------------------------------------------------------------"#,
