@@ -179,7 +179,7 @@ impl BuildRequest {
             ResourceType::Script => "web.resource.script",
         };
 
-        tracing::debug!(
+        tracing::warn!(
             "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
         );
     }
