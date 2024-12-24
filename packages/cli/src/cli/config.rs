@@ -4,7 +4,7 @@ use crate::{metadata::crate_root, CliSettings};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
-pub(crate) enum Config {
+pub enum Config {
     /// Init `Dioxus.toml` for project/folder.
     Init {
         /// Init project name
@@ -35,7 +35,7 @@ pub(crate) enum Config {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Subcommand)]
-pub(crate) enum Setting {
+pub enum Setting {
     /// Set the value of the always-hot-reload setting.
     AlwaysHotReload { value: BoolValue },
     /// Set the value of the always-open-browser setting.
@@ -60,7 +60,7 @@ impl Display for Setting {
 // Clap complains if we use a bool directly and I can't find much info about it.
 // "Argument 'value` is positional and it must take a value but action is SetTrue"
 #[derive(Debug, Clone, Copy, Deserialize, clap::ValueEnum)]
-pub(crate) enum BoolValue {
+pub enum BoolValue {
     True,
     False,
 }
@@ -75,7 +75,7 @@ impl From<BoolValue> for bool {
 }
 
 impl Config {
-    pub(crate) fn config(self) -> Result<StructuredOutput> {
+    pub fn config(self) -> Result<StructuredOutput> {
         let crate_root = crate_root()?;
         match self {
             Config::Init {
