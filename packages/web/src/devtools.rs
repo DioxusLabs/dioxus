@@ -23,6 +23,7 @@ const POLL_INTERVAL_SCALE_FACTOR: i32 = 2;
 
 /// Amount of time that toats should be displayed.
 const TOAST_TIMEOUT: Duration = Duration::from_secs(5);
+const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
 pub(crate) fn init(runtime: Rc<Runtime>) -> UnboundedReceiver<HotReloadMsg> {
     // Create the tx/rx pair that we'll use for the top-level future in the dioxus loop
@@ -84,7 +85,7 @@ fn make_ws(
                     "Your app is being rebuilt.",
                     "A non-hot-reloadable change occurred and we must rebuild.",
                     ToastLevel::Info,
-                    TOAST_TIMEOUT,
+                    TOAST_TIMEOUT_LONG,
                     false,
                 ),
                 // The devserver is telling us that the full rebuild failed.
@@ -93,7 +94,7 @@ fn make_ws(
                     "Oops! The build failed.",
                     "We tried to rebuild your app, but something went wrong.",
                     ToastLevel::Error,
-                    TOAST_TIMEOUT,
+                    TOAST_TIMEOUT_LONG,
                     false,
                 ),
 
