@@ -59,6 +59,10 @@
             name = "dioxus-cli";
             src = ./.;
             cargoBuildOptions = prev: prev ++ [ "-p" "dioxus-cli" ];
+
+            meta = {
+              mainProgram = "dx";
+            };
           };
 
           devShells.default = pkgs.mkShell {
