@@ -192,27 +192,44 @@ impl App {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                self.webviews.remove(&id);
+                if let Some(webview) = self.webviews.remove(&id) {
+                    hide_app_window(&webview.desktop_context.window); // temporary fix
+                }
                 if self.webviews.is_empty() {
                     self.control_flow = ControlFlow::Exit
                 }
             }
 
             LastWindowHides => {
-                let Some(webview) = self.webviews.get(&id) else {
-                    return;
-                };
-                hide_app_window(&webview.desktop_context.webview);
+                if self.webviews.len() > 1 {
+                    if let Some(webview) = self.webviews.remove(&id) {
+                        hide_app_window(&webview.desktop_context.window); // temporary fix
+                    }
+                } else {
+                    if let Some(webview) = self.webviews.get(&id) {
+                        hide_app_window(&webview.desktop_context.window);
+                    }
+                }
             }
 
             CloseWindow => {
-                self.webviews.remove(&id);
+                if let Some(webview) = self.webviews.remove(&id) {
+                    hide_app_window(&webview.desktop_context.window); // temporary fix
+                }
+            }
+
+            WindowHides => {
+                if let Some(webview) = self.webviews.get(&id) {
+                    hide_app_window(&webview.desktop_context.window);
+                }
             }
         }
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
-        self.webviews.remove(&id);
+        if let Some(webview) = self.webviews.remove(&id) {
+            hide_app_window(&webview.desktop_context.window); // temporary fix
+        }
 
         if matches!(
             self.window_behavior,
@@ -531,19 +548,13 @@ struct PreservedWindowState {
 
 /// Different hide implementations per platform
 #[allow(unused)]
-pub fn hide_app_window(window: &wry::WebView) {
-    #[cfg(target_os = "windows")]
+pub fn hide_app_window(window: &tao::window::Window) {
+    window.set_visible(false);
+    /* I cannot test for macos, remove this if working
+    #[cfg(any(target_os = "windows",target_os = "linux"))]
     {
-        use tao::platform::windows::WindowExtWindows;
         window.set_visible(false);
     }
-
-    #[cfg(target_os = "linux")]
-    {
-        use tao::platform::unix::WindowExtUnix;
-        window.set_visible(false);
-    }
-
     #[cfg(target_os = "macos")]
     {
         // window.set_visible(false); has the wrong behaviour on macOS
@@ -556,7 +567,7 @@ pub fn hide_app_window(window: &wry::WebView) {
             let nil = std::ptr::null_mut::<Object>();
             let _: () = msg_send![app, hide: nil];
         });
-    }
+    }*/
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later

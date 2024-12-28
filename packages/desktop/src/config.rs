@@ -23,8 +23,10 @@ type CustomEventHandler = Box<
 pub enum WindowCloseBehaviour {
     /// Default behaviour, closing the last window exits the app
     LastWindowExitsApp,
-    /// Closing the last window will not actually close it, just hide it
+    /// Closes all windows, except for the last window which will get hidden
     LastWindowHides,
+    /// All windows will just hide on close
+    WindowHides,
     /// Closing the last window will close it but the app will keep running so that new windows can be opened
     CloseWindow,
 }
