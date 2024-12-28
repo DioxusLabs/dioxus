@@ -9,7 +9,7 @@ use dioxus::desktop::*;
 use dioxus::prelude::*;
 fn main() {
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::LastWindowHides))
+        .with_cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::WindowHides))
         .launch(app);
 }
 
