@@ -105,6 +105,61 @@ impl DocumentLike for DioxusDocument {
         let mut stop_propagation = false;
 
         match &event.data {
+            EventData::MouseDown { .. } => {
+                let click_event_data = wrap_event_data(NativeClickData);
+
+                for &DxNodeIds { node_id, dioxus_id } in chain.iter() {
+                    if let Some(id) = dioxus_id {
+                        let click_event = Event::new(click_event_data.clone(), true);
+                        self.vdom
+                            .runtime()
+                            .handle_event("mousedown", click_event.clone(), id);
+                        prevent_default |= !click_event.default_action_enabled();
+                        stop_propagation |= !click_event.propagates();
+                    }
+
+                    if !prevent_default {
+                        let default_event = RendererEvent {
+                            target: node_id,
+                            data: renderer_event.data.clone(),
+                        };
+                        self.inner.as_mut().handle_event(default_event);
+                    }
+
+                    if stop_propagation {
+                        break;
+                    }
+                }
+            }
+            EventData::MouseUp { .. } => {
+                let click_event_data = wrap_event_data(NativeClickData);
+
+                for &DxNodeIds {
+                    node_id, dioxus_id, ..
+                } in chain.iter()
+                {
+                    if let Some(id) = dioxus_id {
+                        let click_event = Event::new(click_event_data.clone(), true);
+                        self.vdom
+                            .runtime()
+                            .handle_event("mouseup", click_event.clone(), id);
+                        prevent_default |= !click_event.default_action_enabled();
+                        stop_propagation |= !click_event.propagates();
+                    }
+
+                    if !prevent_default {
+                        let default_event = RendererEvent {
+                            target: node_id,
+                            data: renderer_event.data.clone(),
+                        };
+                        self.inner.as_mut().handle_event(default_event);
+                    }
+
+                    if stop_propagation {
+                        break;
+                    }
+                }
+            }
             EventData::Click { .. } => {
                 // look for the data-dioxus-id attribute on the element
                 // todo: we might need to walk upwards to find the first element with a data-dioxus-id attribute
