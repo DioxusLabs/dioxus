@@ -625,18 +625,30 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// ```
     fn is_child_of(&self, other: &Self) -> bool {
         let self_str = self.to_string();
-        let (self_str, _) = self_str.split_once('#').unwrap_or((&self_str, ""));
-        let (self_str, _) = self_str.split_once('?').unwrap_or((&self_str, ""));
+        let self_str = self_str
+            .split_once('#')
+            .map(|(route, _)| route)
+            .unwrap_or(&self_str);
+        let self_str = self_str
+            .split_once('?')
+            .map(|(route, _)| route)
+            .unwrap_or(self_str);
         let self_str = self_str.trim_end_matches('/');
         let other_str = other.to_string();
-        let (other_str, _) = other_str.split_once('#').unwrap_or((&other_str, ""));
-        let (other_str, _) = other_str.split_once('?').unwrap_or((&other_str, ""));
+        let other_str = other_str
+            .split_once('#')
+            .map(|(route, _)| route)
+            .unwrap_or(&other_str);
+        let other_str = other_str
+            .split_once('?')
+            .map(|(route, _)| route)
+            .unwrap_or(other_str);
         let other_str = other_str.trim_end_matches('/');
 
         let mut self_segments = self_str.split('/');
         let mut other_segments = other_str.split('/');
         loop {
-            match dbg!((self_segments.next(), other_segments.next())) {
+            match (self_segments.next(), other_segments.next()) {
                 // If the two routes are the same length, or this route has less segments, then this segment
                 // cannot be the child of the other segment
                 (None, Some(_)) | (None, None) => {
