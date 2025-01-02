@@ -140,6 +140,9 @@ wasm-opt = ["dep:wasm-opt"]
 path = "src/main.rs"
 name = "dx"
 
+[lib]
+path = "src/lib.rs"
+
 [dev-dependencies]
 escargot = "0.5"
 
