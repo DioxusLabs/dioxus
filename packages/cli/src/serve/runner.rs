@@ -147,12 +147,15 @@ impl AppRunner {
 
     /// Open an existing app bundle, if it exists
     pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
+        let fullstack_address = devserver.proxied_server_address();
+
         if let Some((_, app)) = self
             .running
             .iter_mut()
             .find(|(platform, _)| **platform != Platform::Server)
         {
-            app.open(devserver.devserver_address(), None, true).await?;
+            app.open(devserver.devserver_address(), fullstack_address, true)
+                .await?;
         }
         Ok(())
     }

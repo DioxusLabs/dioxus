@@ -1,4 +1,4 @@
-use crate::{AppBundle, Platform, Result};
+use crate::{AppBundle, DioxusCrate, Platform, Result};
 use anyhow::Context;
 use std::{
     fs,
@@ -207,7 +207,7 @@ impl AppHandle {
             if let Some(bundled_name) = bundled_name.as_ref() {
                 let target = format!("/data/local/tmp/dx/{}", bundled_name.display());
                 tracing::debug!("Pushing asset to device: {target}");
-                let res = tokio::process::Command::new("adb")
+                let res = tokio::process::Command::new(DioxusCrate::android_adb())
                     .arg("push")
                     .arg(&changed_file)
                     .arg(target)
@@ -494,7 +494,7 @@ impl AppHandle {
         tokio::task::spawn(async move {
             // Install
             // adb install -r app-debug.apk
-            let _output = Command::new("adb")
+            let _output = Command::new(DioxusCrate::android_adb())
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
@@ -507,7 +507,7 @@ impl AppHandle {
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 
-            let _output = Command::new("adb")
+            let _output = Command::new(DioxusCrate::android_adb())
                 .arg("shell")
                 .arg("am")
                 .arg("start")

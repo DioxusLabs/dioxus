@@ -39,15 +39,10 @@ macro_rules! read_env_config {
 ///
 /// This is not a websocket! There's no protocol!
 pub fn devserver_raw_addr() -> Option<SocketAddr> {
-    // On android, 10.0.2.2 is the default loopback
-    if cfg!(target_os = "android") {
-        return Some("10.0.2.2:8080".parse().unwrap());
-    }
-
     std::env::var(DEVSERVER_RAW_ADDR_ENV)
-        .map(|s| s.parse().ok())
+        .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
+        .parse()
         .ok()
-        .flatten()
 }
 
 pub fn devserver_ws_endpoint() -> Option<String> {
