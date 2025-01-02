@@ -3,7 +3,7 @@ use crate::Result;
 
 /// Clean build artifacts.
 ///
-/// Simlpy runs `cargo clean`
+/// Simply runs `cargo clean`
 #[derive(Clone, Debug, Parser)]
 pub(crate) struct Clean {}
 

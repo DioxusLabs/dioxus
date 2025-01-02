@@ -369,7 +369,7 @@ impl DioxusCrate {
         for path in self.default_ignore_list() {
             ignore_builder
                 .add_line(None, path)
-                .expect("failed to add path to file excluder");
+                .expect("failed to add path to file excluded");
         }
 
         ignore_builder.build().unwrap()
@@ -490,7 +490,7 @@ impl DioxusCrate {
         for path in self.default_ignore_list() {
             ignore_builder
                 .add_line(None, path)
-                .expect("failed to add path to file excluder");
+                .expect("failed to add path to file excluded");
         }
         ignore_builder.build().unwrap()
     }
