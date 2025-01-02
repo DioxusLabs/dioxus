@@ -97,6 +97,7 @@ members = [
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
     "packages/playwright-tests/fullstack",
+    "packages/playwright-tests/fullstack-mounted",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
 ]
