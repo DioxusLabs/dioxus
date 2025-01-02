@@ -146,7 +146,7 @@ impl Bundle {
             &bundle.app.exe,
             krate
                 .bundle_dir(self.build_arguments.platform())
-                .join(krate.executable_name()),
+                .join(&name),
         )?;
 
         let binaries = vec![
@@ -203,7 +203,7 @@ impl Bundle {
                 description: package.description.clone().unwrap_or_default(),
                 homepage: Some(package.homepage.clone().unwrap_or_default()),
                 authors: Some(package.authors.clone()),
-                default_run: Some(krate.executable_name().to_string()),
+                default_run: Some(name.display().to_string()),
             })
             .log_level(log::Level::Debug)
             .binaries(binaries)
