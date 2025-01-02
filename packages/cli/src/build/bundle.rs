@@ -689,7 +689,9 @@ impl AppBundle {
         use futures_util::StreamExt;
         use tokio::process::Command;
 
-        const PORT: u16 = 9999;
+        let fullstack_address = dioxus_cli_config::fullstack_address_or_localhost();
+        let address = fullstack_address.ip().to_string();
+        let port = fullstack_address.port().to_string();
 
         tracing::info!("Running SSG");
 
@@ -698,8 +700,8 @@ impl AppBundle {
             self.server_exe()
                 .context("Failed to find server executable")?,
         )
-        .env(dioxus_cli_config::SERVER_PORT_ENV, PORT.to_string())
-        .env(dioxus_cli_config::SERVER_IP_ENV, "127.0.0.1")
+        .env(dioxus_cli_config::SERVER_PORT_ENV, port.clone())
+        .env(dioxus_cli_config::SERVER_IP_ENV, address.clone())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
@@ -711,7 +713,7 @@ impl AppBundle {
         // Get the routes from the `/static_routes` endpoint
         let mut routes = reqwest::Client::builder()
             .build()?
-            .post(format!("http://127.0.0.1:{PORT}/api/static_routes"))
+            .post(format!("http://{address}:{port}/api/static_routes"))
             .send()
             .await
             .context("Failed to get static routes from server")?
@@ -721,14 +723,18 @@ impl AppBundle {
             .inspect(|text| tracing::debug!("Got static routes: {text:?}"))
             .context("Failed to parse static routes from server")?
             .into_iter()
-            .map(|line| async move {
-                tracing::info!("SSG: {line}");
-                reqwest::Client::builder()
-                    .build()?
-                    .get(format!("http://127.0.0.1:{PORT}{line}"))
-                    .header("Accept", "text/html")
-                    .send()
-                    .await
+            .map(|line| {
+                let port = port.clone();
+                let address = address.clone();
+                async move {
+                    tracing::info!("SSG: {line}");
+                    reqwest::Client::builder()
+                        .build()?
+                        .get(format!("http://{address}:{port}{line}"))
+                        .header("Accept", "text/html")
+                        .send()
+                        .await
+                }
             })
             .collect::<FuturesUnordered<_>>();
 
