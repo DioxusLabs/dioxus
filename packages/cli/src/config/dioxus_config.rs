@@ -24,6 +24,7 @@ impl Default for DioxusConfig {
             application: ApplicationConfig {
                 asset_dir: asset_dir_default(),
                 sub_package: None,
+                out_dir: out_dir_default(),
             },
             web: WebConfig {
                 app: WebAppConfig {
