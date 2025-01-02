@@ -625,17 +625,43 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// ```
     fn is_child_of(&self, other: &Self) -> bool {
         let self_str = self.to_string();
-        let self_str = self_str.trim_matches('/');
+        let self_str = self_str
+            .split_once('#')
+            .map(|(route, _)| route)
+            .unwrap_or(&self_str);
+        let self_str = self_str
+            .split_once('?')
+            .map(|(route, _)| route)
+            .unwrap_or(self_str);
+        let self_str = self_str.trim_end_matches('/');
         let other_str = other.to_string();
-        let other_str = other_str.trim_matches('/');
-        if other_str.is_empty() {
-            return true;
-        }
-        let self_segments = self_str.split('/');
-        let other_segments = other_str.split('/');
-        for (self_seg, other_seg) in self_segments.zip(other_segments) {
-            if self_seg != other_seg {
-                return false;
+        let other_str = other_str
+            .split_once('#')
+            .map(|(route, _)| route)
+            .unwrap_or(&other_str);
+        let other_str = other_str
+            .split_once('?')
+            .map(|(route, _)| route)
+            .unwrap_or(other_str);
+        let other_str = other_str.trim_end_matches('/');
+
+        let mut self_segments = self_str.split('/');
+        let mut other_segments = other_str.split('/');
+        loop {
+            match (self_segments.next(), other_segments.next()) {
+                // If the two routes are the same length, or this route has less segments, then this segment
+                // cannot be the child of the other segment
+                (None, Some(_)) | (None, None) => {
+                    return false;
+                }
+                // If two segments are not the same, then this segment cannot be the child of the other segment
+                (Some(self_seg), Some(other_seg)) => {
+                    if self_seg != other_seg {
+                        return false;
+                    }
+                }
+                // If the other route has less segments, then this route is the child of the other route
+                (Some(_), None) => break,
             }
         }
         true
@@ -667,17 +693,14 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// ```
     fn parent(&self) -> Option<Self> {
         let as_str = self.to_string();
-        let as_str = as_str.trim_matches('/');
-        let segments = as_str.split('/');
+        let (route_and_query, _) = as_str.split_once('#').unwrap_or((&as_str, ""));
+        let (route, _) = route_and_query
+            .split_once('?')
+            .unwrap_or((route_and_query, ""));
+        let route = route.trim_end_matches('/');
+        let segments = route.split_inclusive('/');
         let segment_count = segments.clone().count();
-        let new_route = segments
-            .take(segment_count - 1)
-            .fold(String::new(), |mut acc, segment| {
-                acc.push('/');
-                acc.push_str(segment);
-                acc
-            });
-
+        let new_route: String = segments.take(segment_count.saturating_sub(1)).collect();
         Self::from_str(&new_route).ok()
     }
 
