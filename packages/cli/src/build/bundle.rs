@@ -385,7 +385,7 @@ impl AppBundle {
             .assets
             .assets
             .values()
-            .map(|a| asset_dir.join(a.bundled_path()))
+            .flat_map(|a| a.keys().cloned())
             .collect();
         // one possible implementation of walking a directory only visiting files
         fn remove_old_assets<'a>(
@@ -422,11 +422,12 @@ impl AppBundle {
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for (asset, bundled) in &self.app.assets.assets {
-            let from = asset.clone();
-            let to = asset_dir.join(bundled.bundled_path());
-            tracing::debug!("Copying asset {from:?} to {to:?}");
-            assets_to_transfer.push((from, to, *bundled.options()));
+        for (from, bundled) in &self.app.assets.assets {
+            for (bundled_path, bundled) in bundled.iter() {
+                let to = asset_dir.join(bundled_path);
+                tracing::debug!("Copying asset {from:?} to {to:?}");
+                assets_to_transfer.push((from.clone(), to, *bundled.options()));
+            }
         }
 
         // And then queue the legacy assets

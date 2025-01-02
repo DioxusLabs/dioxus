@@ -20,8 +20,8 @@ pub use file::process_file_to;
 /// This will be filled in primarily by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct AssetManifest {
-    /// Map of bundled asset name to the asset itself
-    pub assets: HashMap<PathBuf, BundledAsset>,
+    /// Map of bundled asset name to the destination assets.
+    pub assets: HashMap<PathBuf, HashMap<PathBuf, BundledAsset>>,
 }
 
 impl AssetManifest {
@@ -98,8 +98,18 @@ impl AssetManifest {
             while let Some((remaining_buffer, asset)) =
                 const_serialize::deserialize_const!(BundledAsset, buffer)
             {
-                self.assets
-                    .insert(asset.absolute_source_path().into(), asset);
+                match self.assets.entry(asset.absolute_source_path().into()) {
+                    std::collections::hash_map::Entry::Occupied(occupied_entry) => {
+                        occupied_entry
+                            .into_mut()
+                            .insert(asset.bundled_path().into(), asset);
+                    }
+                    std::collections::hash_map::Entry::Vacant(vacant_entry) => {
+                        let mut map = HashMap::new();
+                        map.insert(asset.bundled_path().into(), asset);
+                        vacant_entry.insert(map);
+                    }
+                }
                 buffer = remaining_buffer;
             }
         }
