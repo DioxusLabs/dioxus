@@ -1,12 +1,4 @@
-use crate::{
-    config::{Config, WindowCloseBehaviour},
-    event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
-    ipc::{IpcMessage, UserWindowEvent},
-    query::QueryResult,
-    shortcut::ShortcutRegistry,
-    webview::WebviewInstance,
-};
+use crate::{config::{Config, WindowCloseBehaviour}, event_handlers::WindowEventHandlers, file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine}, ipc::{IpcMessage, UserWindowEvent}, query::QueryResult, shortcut::ShortcutRegistry, webview::WebviewInstance, window};
 use dioxus_core::{ElementId, VirtualDom};
 use dioxus_html::PlatformEventData;
 use std::{
@@ -22,6 +14,9 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
 };
+use tao::platform::unix::{EventLoopWindowTargetExtUnix, WindowExtUnix};
+use tracing::instrument::WithSubscriber;
+use wry::WebViewExtUnix;
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
@@ -178,6 +173,7 @@ impl App {
 
     pub fn handle_new_window(&mut self) {
         for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
+            println!("Create handler strong count: {}", Rc::strong_count(&handler.desktop_context));
             let id = handler.desktop_context.window.id();
             self.webviews.insert(id, handler);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
@@ -189,10 +185,20 @@ impl App {
 
         match self.window_behavior {
             LastWindowExitsApp => {
-                #[cfg(debug_assertions)]
-                self.persist_window_state();
+                // #[cfg(debug_assertions)]
+                // self.persist_window_state();
+                if let Some(webview) = self.webviews.remove(&id)
+                {
+                    // println!("Exit strong count: {}", Rc::strong_count(&webview.desktop_context));
+                    // let mut raw = Rc::into_raw(webview.desktop_context);
+                    // unsafe {
+                    //     Rc::decrement_strong_count(raw);
+                    //     Rc::decrement_strong_count(raw);
+                    //     Rc::decrement_strong_count(raw);
+                    //     Rc::decrement_strong_count(raw);
+                    // }
+                }
 
-                self.webviews.remove(&id);
                 if self.webviews.is_empty() {
                     self.control_flow = ControlFlow::Exit
                 }

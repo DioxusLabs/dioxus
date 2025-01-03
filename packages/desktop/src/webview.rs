@@ -10,7 +10,7 @@ use crate::{
     ipc::UserWindowEvent,
     protocol,
     waker::tao_waker,
-    Config, DesktopContext, DesktopService,
+    Config, DesktopContext, DesktopService, WeakDesktopContext
 };
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
@@ -21,13 +21,14 @@ use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
+use std::rc::Weak;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
     runtime: Rc<Runtime>,
     pub wry_queue: WryQueue,
-    desktop_context: Rc<OnceCell<DesktopContext>>,
+    desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
 impl WebviewEdits {
@@ -39,7 +40,7 @@ impl WebviewEdits {
         }
     }
 
-    fn set_desktop_context(&self, context: DesktopContext) {
+    fn set_desktop_context(&self, context: WeakDesktopContext) {
         _ = self.desktop_context.set(context);
     }
 
@@ -97,10 +98,14 @@ impl WebviewEdits {
             bubbles,
             data,
         } = event;
-        let Some(desktop_context) = self.desktop_context.get() else {
+        let Some(weak_desktop_context) = self.desktop_context.get() else {
             tracing::error!(
                 "Tried to handle event before setting the desktop context on the event handler"
             );
+            return Default::default();
+        };
+
+        let Some(desktop_context) = weak_desktop_context.upgrade() else {
             return Default::default();
         };
 
@@ -110,7 +115,7 @@ impl WebviewEdits {
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
+                let element = DesktopElement::new(element, weak_desktop_context.clone(), query.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
             dioxus_html::EventData::Drag(ref drag) => {
@@ -400,15 +405,22 @@ impl WebviewInstance {
             file_hover,
         ));
 
+
+        println!("Create handler strong count in webview::new before edits and dom runtime: {}", Rc::strong_count(&desktop_context));
+
+        let weak_desktop: WeakDesktopContext = Rc::downgrade(&desktop_context);
+
         // Provide the desktop context to the virtual dom and edit handler
-        edits.set_desktop_context(desktop_context.clone());
-        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
+        edits.set_desktop_context(weak_desktop.clone());
+        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(weak_desktop.clone()));
         let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
         dom.in_runtime(|| {
-            ScopeId::ROOT.provide_context(desktop_context.clone());
+            ScopeId::ROOT.provide_context(weak_desktop.clone());
             ScopeId::ROOT.provide_context(provider);
             ScopeId::ROOT.provide_context(history_provider);
         });
+
+        println!("Create handler strong count in webview::new after: {}", Rc::strong_count(&desktop_context));
 
         WebviewInstance {
             dom,

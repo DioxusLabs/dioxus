@@ -1,18 +1,22 @@
+use std::default;
+use std::rc::Weak;
+use webbrowser::Browser::Default;
 use dioxus_document::{Document, Eval, EvalError, Evaluator};
+use dioxus_html::track::default;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
-use crate::{query::Query, DesktopContext};
+use crate::{query::Query, DesktopContext, WeakDesktopContext};
 
 /// Code for the Dioxus channel used to communicate between the dioxus and javascript code
 pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
 
 /// Represents the desktop-target's provider of evaluators.
 pub struct DesktopDocument {
-    pub(crate) desktop_ctx: DesktopContext,
+    pub(crate) desktop_ctx: WeakDesktopContext,
 }
 
 impl DesktopDocument {
-    pub fn new(desktop_ctx: DesktopContext) -> Self {
+    pub fn new(desktop_ctx: WeakDesktopContext) -> Self {
         Self { desktop_ctx }
     }
 }
@@ -23,7 +27,9 @@ impl Document for DesktopDocument {
     }
 
     fn set_title(&self, title: String) {
-        self.desktop_ctx.window.set_title(&title);
+        if let Some(desktop_ctx) = self.desktop_ctx.upgrade() {
+            desktop_ctx.set_title(&title);
+        }
     }
 }
 
@@ -34,9 +40,9 @@ pub(crate) struct DesktopEvaluator {
 
 impl DesktopEvaluator {
     /// Creates a new evaluator for desktop-based targets.
-    pub fn create(desktop_ctx: DesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        let ctx = desktop_ctx.clone();
-        let query = desktop_ctx.query.new_query(&js, ctx);
+    pub fn create(weak_desktop_ctx: WeakDesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
+        let desktop_ctx = weak_desktop_ctx.upgrade().unwrap(); // todo: implement error or Default
+        let query = desktop_ctx.query.new_query(&js, weak_desktop_ctx);
 
         // We create a generational box that is owned by the query slot so that when we drop the query slot, the generational box is also dropped.
         let owner = UnsyncStorage::owner();

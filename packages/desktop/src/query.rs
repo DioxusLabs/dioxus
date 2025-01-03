@@ -1,10 +1,11 @@
-use crate::DesktopContext;
+use crate::{DesktopContext, WeakDesktopContext};
 use futures_util::{FutureExt, StreamExt};
 use generational_box::Owner;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use slab::Slab;
 use std::{cell::RefCell, rc::Rc};
+use std::rc::Weak;
 use thiserror::Error;
 
 /// Tracks what query ids are currently active
@@ -45,7 +46,7 @@ impl QueryEngine {
     pub fn new_query<V: DeserializeOwned>(
         &self,
         script: &str,
-        context: DesktopContext,
+        weak_context: WeakDesktopContext,
     ) -> Query<V> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let (return_tx, return_rx) = futures_channel::oneshot::channel();
@@ -54,6 +55,7 @@ impl QueryEngine {
             return_sender: Some(return_tx),
             owner: None,
         });
+        let context = weak_context.upgrade().unwrap(); // todo: implement error or Default
 
         // start the query
         // We embed the return of the eval in a function so we can send it back to the main thread
@@ -107,7 +109,7 @@ impl QueryEngine {
             id: request_id,
             receiver: rx,
             return_receiver: Some(return_rx),
-            desktop: context,
+            desktop: weak_context,
             phantom: std::marker::PhantomData,
         }
     }
@@ -140,7 +142,7 @@ impl QueryEngine {
 }
 
 pub(crate) struct Query<V: DeserializeOwned> {
-    desktop: DesktopContext,
+    desktop: WeakDesktopContext,
     receiver: futures_channel::mpsc::UnboundedReceiver<Value>,
     return_receiver: Option<futures_channel::oneshot::Receiver<Result<Value, String>>>,
     pub id: usize,
@@ -161,7 +163,7 @@ impl<V: DeserializeOwned> Query<V> {
         let data = message.to_string();
         let script = format!(r#"window.getQuery({queue_id}).rustSend({data});"#);
 
-        self.desktop
+        self.desktop.upgrade().unwrap()
             .webview
             .evaluate_script(&script)
             .map_err(|e| QueryError::Send(e.to_string()))?;

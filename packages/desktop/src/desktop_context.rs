@@ -29,11 +29,17 @@ use tao::platform::ios::WindowExtIOS;
 ///
 /// This function will panic if it is called outside of the context of a Dioxus App.
 pub fn window() -> DesktopContext {
-    dioxus_core::prelude::consume_context()
+    let ctx: WeakDesktopContext = dioxus_core::prelude::consume_context();
+    ctx.upgrade().unwrap() // todo: implement error
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.
 pub type DesktopContext = Rc<DesktopService>;
+
+/// A weak handle to the [`DesktopService`] to ensure safe passing.
+/// The problem without this is that the tao window is never dropped and therefore cannot be closed.
+/// This was due to the Rc that had still references because of multiple copies when creating a webview.
+pub type WeakDesktopContext = Weak<DesktopService>;
 
 /// An imperative interface to the current window.
 ///
@@ -101,12 +107,12 @@ impl DesktopService {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> WeakDesktopContext {
         let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
         let cx = window.dom.in_runtime(|| {
             ScopeId::ROOT
-                .consume_context::<Rc<DesktopService>>()
+                .consume_context()
                 .unwrap()
         });
 
@@ -115,9 +121,12 @@ impl DesktopService {
             .send_event(UserWindowEvent::NewWindow)
             .unwrap();
 
+
+        // println!("Create handler strong count in new_window: {}", Rc::strong_count(&window.desktop_context));
+
         self.shared.pending_webviews.borrow_mut().push(window);
 
-        Rc::downgrade(&cx)
+        cx
     }
 
     /// trigger the drag-window event
@@ -142,9 +151,9 @@ impl DesktopService {
     /// Close this window
     pub fn close(&self) {
         let _ = self
-            .shared
-            .proxy
-            .send_event(UserWindowEvent::CloseWindow(self.id()));
+          .shared
+          .proxy
+          .send_event(UserWindowEvent::CloseWindow(self.id()));
     }
 
     /// Close a particular window, given its ID
