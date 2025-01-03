@@ -173,7 +173,7 @@ impl App {
 
     pub fn handle_new_window(&mut self) {
         for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
-            println!("Create handler strong count: {}", Rc::strong_count(&handler.desktop_context));
+            // println!("Create handler strong count: {}", Rc::strong_count(&handler.desktop_context));
             let id = handler.desktop_context.window.id();
             self.webviews.insert(id, handler);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
@@ -197,11 +197,15 @@ impl App {
                     //     Rc::decrement_strong_count(raw);
                     //     Rc::decrement_strong_count(raw);
                     // }
+                    // self.webviews.iter().for_each(|wv| {
+                    //     wv.1.desktop_context.webview.
+                    //     // _ = self.shared.proxy.send_event(UserWindowEvent::Poll(wv.0.clone()));
+                    // });
                 }
 
-                if self.webviews.is_empty() {
-                    self.control_flow = ControlFlow::Exit
-                }
+                // if self.webviews.is_empty() {
+                //     self.control_flow = ControlFlow::Exit
+                // }
             }
 
             LastWindowHides => {

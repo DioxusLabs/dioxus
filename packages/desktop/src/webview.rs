@@ -406,7 +406,7 @@ impl WebviewInstance {
         ));
 
 
-        println!("Create handler strong count in webview::new before edits and dom runtime: {}", Rc::strong_count(&desktop_context));
+        // println!("Create handler strong count in webview::new before edits and dom runtime: {}", Rc::strong_count(&desktop_context));
 
         let weak_desktop: WeakDesktopContext = Rc::downgrade(&desktop_context);
 
@@ -420,7 +420,7 @@ impl WebviewInstance {
             ScopeId::ROOT.provide_context(history_provider);
         });
 
-        println!("Create handler strong count in webview::new after: {}", Rc::strong_count(&desktop_context));
+        // println!("Create handler strong count in webview::new after: {}", Rc::strong_count(&desktop_context));
 
         WebviewInstance {
             dom,
