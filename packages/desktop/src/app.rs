@@ -14,9 +14,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
 };
-use tao::platform::unix::{EventLoopWindowTargetExtUnix, WindowExtUnix};
 use tracing::instrument::WithSubscriber;
-use wry::WebViewExtUnix;
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
