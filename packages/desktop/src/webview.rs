@@ -405,9 +405,6 @@ impl WebviewInstance {
             file_hover,
         ));
 
-
-        // println!("Create handler strong count in webview::new before edits and dom runtime: {}", Rc::strong_count(&desktop_context));
-
         let weak_desktop: WeakDesktopContext = Rc::downgrade(&desktop_context);
 
         // Provide the desktop context to the virtual dom and edit handler
@@ -419,8 +416,6 @@ impl WebviewInstance {
             ScopeId::ROOT.provide_context(provider);
             ScopeId::ROOT.provide_context(history_provider);
         });
-
-        // println!("Create handler strong count in webview::new after: {}", Rc::strong_count(&desktop_context));
 
         WebviewInstance {
             dom,

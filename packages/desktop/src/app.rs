@@ -171,7 +171,6 @@ impl App {
 
     pub fn handle_new_window(&mut self) {
         for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
-            // println!("Create handler strong count: {}", Rc::strong_count(&handler.desktop_context));
             let id = handler.desktop_context.window.id();
             self.webviews.insert(id, handler);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
@@ -183,27 +182,14 @@ impl App {
 
         match self.window_behavior {
             LastWindowExitsApp => {
-                // #[cfg(debug_assertions)]
-                // self.persist_window_state();
-                if let Some(webview) = self.webviews.remove(&id)
-                {
-                    // println!("Exit strong count: {}", Rc::strong_count(&webview.desktop_context));
-                    // let mut raw = Rc::into_raw(webview.desktop_context);
-                    // unsafe {
-                    //     Rc::decrement_strong_count(raw);
-                    //     Rc::decrement_strong_count(raw);
-                    //     Rc::decrement_strong_count(raw);
-                    //     Rc::decrement_strong_count(raw);
-                    // }
-                    // self.webviews.iter().for_each(|wv| {
-                    //     wv.1.desktop_context.webview.
-                    //     // _ = self.shared.proxy.send_event(UserWindowEvent::Poll(wv.0.clone()));
-                    // });
-                }
+                #[cfg(debug_assertions)]
+                self.persist_window_state();
 
-                // if self.webviews.is_empty() {
-                //     self.control_flow = ControlFlow::Exit
-                // }
+                self.webviews.remove(&id);
+
+                if self.webviews.is_empty() {
+                    self.control_flow = ControlFlow::Exit
+                }
             }
 
             LastWindowHides => {

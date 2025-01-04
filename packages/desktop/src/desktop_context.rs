@@ -121,9 +121,6 @@ impl DesktopService {
             .send_event(UserWindowEvent::NewWindow)
             .unwrap();
 
-
-        // println!("Create handler strong count in new_window: {}", Rc::strong_count(&window.desktop_context));
-
         self.shared.pending_webviews.borrow_mut().push(window);
 
         cx
