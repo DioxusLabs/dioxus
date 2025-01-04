@@ -64,7 +64,7 @@ fn main() {
                     .layer(axum_session::SessionLayer::new(session_store));
 
                 // run it
-                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+                let addr = dioxus_cli_config::fullstack_address_or_localhost();
                 let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
                 axum::serve(listener, app.into_make_service())
