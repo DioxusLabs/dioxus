@@ -94,20 +94,22 @@ impl AppHandle {
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
         }
 
-        // Launch the server if we have one and consume its stdout/stderr
-        if let Some(server) = self.app.server_exe() {
-            tracing::debug!("Launching server from path: {server:?}");
-            let mut child = Command::new(server)
-                .envs(envs.clone())
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
-                .kill_on_drop(true)
-                .spawn()?;
-            let stdout = BufReader::new(child.stdout.take().unwrap());
-            let stderr = BufReader::new(child.stderr.take().unwrap());
-            self.server_stdout = Some(stdout.lines());
-            self.server_stderr = Some(stderr.lines());
-            self.server_child = Some(child);
+        if self.server_child.is_none() {
+            // Launch the server if we have one and consume its stdout/stderr
+            if let Some(server) = self.app.server_exe() {
+                tracing::debug!("Launching server from path: {server:?}");
+                let mut child = Command::new(server)
+                    .envs(envs.clone())
+                    .stderr(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .kill_on_drop(true)
+                    .spawn()?;
+                let stdout = BufReader::new(child.stdout.take().unwrap());
+                let stderr = BufReader::new(child.stderr.take().unwrap());
+                self.server_stdout = Some(stdout.lines());
+                self.server_stderr = Some(stderr.lines());
+                self.server_child = Some(child);
+            }
         }
 
         // We try to use stdin/stdout to communicate with the app
