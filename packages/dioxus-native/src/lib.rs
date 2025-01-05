@@ -20,7 +20,7 @@ pub use dioxus_application::DioxusNativeApplication;
 pub use dioxus_document::DioxusDocument;
 pub use event::DioxusNativeEvent;
 
-use blitz_shell::{create_default_event_loop, BlitzEvent, Config, WindowConfig};
+use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
 
 type NodeId = usize;
@@ -40,7 +40,7 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     props: P,
     _cfg: Config,
 ) {
-    let event_loop = create_default_event_loop::<BlitzEvent>();
+    let event_loop = create_default_event_loop::<BlitzShellEvent>();
 
     #[cfg(feature = "net")]
     let net_provider = {
@@ -83,7 +83,7 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
             let proxy = event_loop.create_proxy();
             dioxus_devtools::connect(endpoint, move |event| {
                 let dxn_event = DioxusNativeEvent::DevserverEvent(event);
-                let _ = proxy.send_event(BlitzEvent::embedder_event(dxn_event));
+                let _ = proxy.send_event(BlitzShellEvent::embedder_event(dxn_event));
             })
         }
     }

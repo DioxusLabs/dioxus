@@ -5,14 +5,14 @@ use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::WindowId;
 
-use crate::{BlitzEvent, DioxusDocument, DioxusNativeEvent, WindowConfig};
+use crate::{BlitzShellEvent, DioxusDocument, DioxusNativeEvent, WindowConfig};
 
 pub struct DioxusNativeApplication {
     inner: BlitzApplication<DioxusDocument, BlitzVelloRenderer>,
 }
 
 impl DioxusNativeApplication {
-    pub fn new(proxy: EventLoopProxy<BlitzEvent>) -> Self {
+    pub fn new(proxy: EventLoopProxy<BlitzShellEvent>) -> Self {
         Self {
             inner: BlitzApplication::new(proxy.clone()),
         }
@@ -62,7 +62,7 @@ impl DioxusNativeApplication {
     }
 }
 
-impl ApplicationHandler<BlitzEvent> for DioxusNativeApplication {
+impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.inner.resumed(event_loop);
     }
@@ -84,9 +84,9 @@ impl ApplicationHandler<BlitzEvent> for DioxusNativeApplication {
         self.inner.window_event(event_loop, window_id, event);
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: BlitzEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: BlitzShellEvent) {
         match event {
-            BlitzEvent::Embedder(event) => {
+            BlitzShellEvent::Embedder(event) => {
                 if let Some(event) = event.downcast_ref::<DioxusNativeEvent>() {
                     self.handle_blitz_shell_event(event_loop, event);
                 }
