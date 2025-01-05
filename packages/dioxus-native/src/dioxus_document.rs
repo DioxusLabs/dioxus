@@ -3,7 +3,7 @@
 use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
 
 use blitz_dom::{
-    events::{EventData, RendererEvent},
+    events::{DomEvent, DomEventData},
     local_name, namespace_url,
     net::Resource,
     node::NodeSpecificData,
@@ -74,7 +74,7 @@ impl DocumentLike for DioxusDocument {
         true
     }
 
-    fn handle_event(&mut self, event: blitz_dom::events::RendererEvent) {
+    fn handle_event(&mut self, event: blitz_dom::events::DomEvent) {
         // Collect the nodes into a chain by traversing upwards
         // This is important so the "capture" phase can be implemented
         let mut next_node_id = Some(event.target);
@@ -105,7 +105,7 @@ impl DocumentLike for DioxusDocument {
         let mut stop_propagation = false;
 
         match &event.data {
-            EventData::MouseDown { .. } => {
+            DomEventData::MouseDown { .. } => {
                 let click_event_data = wrap_event_data(NativeClickData);
 
                 for &DxNodeIds { node_id, dioxus_id } in chain.iter() {
@@ -119,7 +119,7 @@ impl DocumentLike for DioxusDocument {
                     }
 
                     if !prevent_default {
-                        let default_event = RendererEvent {
+                        let default_event = DomEvent {
                             target: node_id,
                             data: renderer_event.data.clone(),
                         };
@@ -131,7 +131,7 @@ impl DocumentLike for DioxusDocument {
                     }
                 }
             }
-            EventData::MouseUp { .. } => {
+            DomEventData::MouseUp { .. } => {
                 let click_event_data = wrap_event_data(NativeClickData);
 
                 for &DxNodeIds {
@@ -148,7 +148,7 @@ impl DocumentLike for DioxusDocument {
                     }
 
                     if !prevent_default {
-                        let default_event = RendererEvent {
+                        let default_event = DomEvent {
                             target: node_id,
                             data: renderer_event.data.clone(),
                         };
@@ -160,7 +160,7 @@ impl DocumentLike for DioxusDocument {
                     }
                 }
             }
-            EventData::Click { .. } => {
+            DomEventData::Click { .. } => {
                 // look for the data-dioxus-id attribute on the element
                 // todo: we might need to walk upwards to find the first element with a data-dioxus-id attribute
 
@@ -179,7 +179,7 @@ impl DocumentLike for DioxusDocument {
                         stop_propagation |= !click_event.propagates();
 
                         if !prevent_default {
-                            let default_event = RendererEvent {
+                            let default_event = DomEvent {
                                 target: node_id,
                                 data: renderer_event.data.clone(),
                             };
@@ -214,7 +214,7 @@ impl DocumentLike for DioxusDocument {
 
                             // Handle default DOM event
                             if click_event.default_action_enabled() {
-                                let &EventData::Click { mods, .. } = &renderer_event.data else {
+                                let &DomEventData::Click { mods, .. } = &renderer_event.data else {
                                     unreachable!();
                                 };
                                 let input_click_data = self
@@ -222,7 +222,7 @@ impl DocumentLike for DioxusDocument {
                                     .get_node(node_id)
                                     .unwrap()
                                     .synthetic_click_event(mods);
-                                let default_event = RendererEvent {
+                                let default_event = DomEvent {
                                     target: node_id,
                                     data: input_click_data,
                                 };
@@ -261,7 +261,7 @@ impl DocumentLike for DioxusDocument {
                     }
                 }
             }
-            EventData::KeyPress {
+            DomEventData::KeyPress {
                 event: wevent,
                 mods,
             } => {
@@ -292,7 +292,7 @@ impl DocumentLike for DioxusDocument {
 
                                 if !prevent_default {
                                     // Handle default DOM event
-                                    let default_event = RendererEvent {
+                                    let default_event = DomEvent {
                                         target: node_id,
                                         data: renderer_event.data.clone(),
                                     };
@@ -331,8 +331,8 @@ impl DocumentLike for DioxusDocument {
                 }
             }
             // TODO: Implement IME and Hover events handling
-            EventData::Ime(_) => {}
-            EventData::Hover => {}
+            DomEventData::Ime(_) => {}
+            DomEventData::Hover => {}
         }
 
         if !prevent_default {
