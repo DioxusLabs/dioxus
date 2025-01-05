@@ -3,14 +3,11 @@
 use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
 
 use blitz_dom::{
-    events::{DomEvent, DomEventData},
-    local_name, namespace_url,
-    net::Resource,
-    node::NodeSpecificData,
-    ns, Atom, BaseDocument, DocumentLike, ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
+    local_name, namespace_url, net::Resource, node::NodeSpecificData, ns, Atom, BaseDocument,
+    ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
 };
 
-use blitz_traits::{net::NetProvider, ColorScheme, Viewport};
+use blitz_traits::{net::NetProvider, ColorScheme, Document, DomEvent, DomEventData, Viewport};
 use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{set_event_converter, FormValue, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
@@ -56,7 +53,9 @@ impl From<DioxusDocument> for BaseDocument {
         doc.inner
     }
 }
-impl DocumentLike for DioxusDocument {
+impl Document for DioxusDocument {
+    type Doc = BaseDocument;
+
     fn poll(&mut self, mut cx: std::task::Context) -> bool {
         {
             let fut = self.vdom.wait_for_work();
@@ -74,7 +73,11 @@ impl DocumentLike for DioxusDocument {
         true
     }
 
-    fn handle_event(&mut self, event: blitz_dom::events::DomEvent) {
+    fn id(&self) -> usize {
+        self.inner.id()
+    }
+
+    fn handle_event(&mut self, event: DomEvent) {
         // Collect the nodes into a chain by traversing upwards
         // This is important so the "capture" phase can be implemented
         let mut next_node_id = Some(event.target);
@@ -214,14 +217,14 @@ impl DocumentLike for DioxusDocument {
 
                             // Handle default DOM event
                             if click_event.default_action_enabled() {
-                                let &DomEventData::Click { mods, .. } = &renderer_event.data else {
+                                let DomEventData::Click(event) = &renderer_event.data else {
                                     unreachable!();
                                 };
                                 let input_click_data = self
                                     .inner
                                     .get_node(node_id)
                                     .unwrap()
-                                    .synthetic_click_event(mods);
+                                    .synthetic_click_event(event.mods);
                                 let default_event = DomEvent {
                                     target: node_id,
                                     data: input_click_data,
@@ -261,18 +264,14 @@ impl DocumentLike for DioxusDocument {
                     }
                 }
             }
-            DomEventData::KeyPress {
-                event: wevent,
-                mods,
-            } => {
-                let key_event_data =
-                    wrap_event_data(BlitzKeyboardData::from_winit(wevent, mods.state()));
+            DomEventData::KeyPress(kevent) => {
+                let key_event_data = wrap_event_data(BlitzKeyboardData(kevent.clone()));
 
                 for &DxNodeIds { node_id, dioxus_id } in chain.iter() {
                     println!("{} {:?}", node_id, dioxus_id);
 
                     if let Some(id) = dioxus_id {
-                        if wevent.state.is_pressed() {
+                        if kevent.state.is_pressed() {
                             // Handle keydown event
                             let event = Event::new(key_event_data.clone(), true);
                             self.vdom
@@ -281,7 +280,7 @@ impl DocumentLike for DioxusDocument {
                             prevent_default |= !event.default_action_enabled();
                             stop_propagation |= !event.propagates();
 
-                            if !prevent_default && wevent.text.is_some() {
+                            if !prevent_default && kevent.text.is_some() {
                                 // Handle keypress event
                                 let event = Event::new(key_event_data.clone(), true);
                                 self.vdom
