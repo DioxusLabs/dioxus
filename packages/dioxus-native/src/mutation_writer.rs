@@ -2,7 +2,7 @@ use crate::{dioxus_document::qual_name, NodeId};
 use blitz_dom::{
     local_name, namespace_url,
     node::{Attribute, NodeSpecificData},
-    ns, Document, ElementNodeData, NodeData, QualName, RestyleHint,
+    ns, BaseDocument, ElementNodeData, NodeData, QualName, RestyleHint,
 };
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
@@ -24,7 +24,7 @@ pub struct DioxusState {
 /// A writer for mutations that can be used with the RealDom.
 pub struct MutationWriter<'a> {
     /// The realdom associated with this writer
-    pub doc: &'a mut Document,
+    pub doc: &'a mut BaseDocument,
 
     /// The state associated with this writer
     pub state: &'a mut DioxusState,
@@ -33,7 +33,7 @@ pub struct MutationWriter<'a> {
 }
 
 impl<'a> MutationWriter<'a> {
-    pub fn new(doc: &'a mut Document, state: &'a mut DioxusState) -> Self {
+    pub fn new(doc: &'a mut BaseDocument, state: &'a mut DioxusState) -> Self {
         MutationWriter {
             doc,
             state,
@@ -75,7 +75,7 @@ impl Drop for MutationWriter<'_> {
 
 impl DioxusState {
     /// Initialize the DioxusState in the RealDom
-    pub fn create(doc: &mut Document) -> Self {
+    pub fn create(doc: &mut BaseDocument) -> Self {
         let root = doc.root_element();
         let root_id = root.id;
 
@@ -436,7 +436,7 @@ fn set_input_checked_state(element: &mut ElementNodeData, value: &AttributeValue
     }
 }
 
-fn create_template_node(doc: &mut Document, node: &TemplateNode) -> NodeId {
+fn create_template_node(doc: &mut BaseDocument, node: &TemplateNode) -> NodeId {
     match node {
         TemplateNode::Element {
             tag,

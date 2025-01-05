@@ -7,7 +7,7 @@ use blitz_dom::{
     local_name, namespace_url,
     net::Resource,
     node::NodeSpecificData,
-    ns, Atom, Document, DocumentLike, ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
+    ns, Atom, BaseDocument, DocumentLike, ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
 };
 
 use blitz_traits::{net::NetProvider, ColorScheme, Viewport};
@@ -31,7 +31,7 @@ pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
 pub struct DioxusDocument {
     pub(crate) vdom: VirtualDom,
     vdom_state: DioxusState,
-    inner: Document,
+    inner: BaseDocument,
 }
 
 // Implement DocumentLike and required traits for DioxusDocument
@@ -41,18 +41,18 @@ pub struct DxNodeIds {
     dioxus_id: Option<ElementId>,
 }
 
-impl AsRef<Document> for DioxusDocument {
-    fn as_ref(&self) -> &Document {
+impl AsRef<BaseDocument> for DioxusDocument {
+    fn as_ref(&self) -> &BaseDocument {
         &self.inner
     }
 }
-impl AsMut<Document> for DioxusDocument {
-    fn as_mut(&mut self) -> &mut Document {
+impl AsMut<BaseDocument> for DioxusDocument {
+    fn as_mut(&mut self) -> &mut BaseDocument {
         &mut self.inner
     }
 }
-impl From<DioxusDocument> for Document {
-    fn from(doc: DioxusDocument) -> Document {
+impl From<DioxusDocument> for BaseDocument {
+    fn from(doc: DioxusDocument) -> BaseDocument {
         doc.inner
     }
 }
@@ -426,7 +426,7 @@ impl DioxusDocument {
         net_provider: Option<Arc<dyn NetProvider<Data = Resource>>>,
     ) -> Self {
         let viewport = Viewport::new(0, 0, 1.0, ColorScheme::Light);
-        let mut doc = Document::new(viewport);
+        let mut doc = BaseDocument::new(viewport);
 
         // Set net provider
         if let Some(net_provider) = net_provider {
