@@ -150,9 +150,7 @@ impl Bundle {
                 .bundle_dir(self.build_arguments.platform())
                 .join(&name),
         )
-        .with_context(|| {
-            format!("Failed to copy the output executable into the bundle directory")
-        })?;
+        .with_context(|| "Failed to copy the output executable into the bundle directory")?;
 
         let binaries = vec![
             // We use the name of the exe but it has to be in the same directory

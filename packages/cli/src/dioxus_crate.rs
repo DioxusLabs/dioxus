@@ -64,7 +64,7 @@ impl DioxusCrate {
                 .targets
                 .iter()
                 .filter_map(|target| {
-                    target.kind.contains(kind).then(|| target.name.as_str())
+                    target.kind.contains(kind).then_some(target.name.as_str())
                 }).collect::<Vec<_>>();
                 filtered_packages.join(", ")};
                 if let Some(example) = &target.example {
