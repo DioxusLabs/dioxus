@@ -78,7 +78,8 @@ impl Bundle {
                     for src in bundle.bundle_paths {
                         let src = if let Some(outdir) = &self.outdir {
                             let dest = outdir.join(src.file_name().expect("Filename to exist"));
-                            crate::fastfs::copy_asset(&src, &dest)?;
+                            crate::fastfs::copy_asset(&src, &dest)
+                                .context("Failed to copy or compress optimized asset")?;
                             dest
                         } else {
                             src.clone()
@@ -141,13 +142,17 @@ impl Bundle {
         if cfg!(windows) {
             name.set_extension("exe");
         }
-        std::fs::create_dir_all(krate.bundle_dir(self.build_arguments.platform()))?;
+        std::fs::create_dir_all(krate.bundle_dir(self.build_arguments.platform()))
+            .context("Failed to create bundle directory")?;
         std::fs::copy(
             &bundle.app.exe,
             krate
                 .bundle_dir(self.build_arguments.platform())
                 .join(&name),
-        )?;
+        )
+        .with_context(|| {
+            format!("Failed to copy the output executable into the bundle directory")
+        })?;
 
         let binaries = vec![
             // We use the name of the exe but it has to be in the same directory
@@ -175,8 +180,14 @@ impl Bundle {
             bundle_settings.resources_map = Some(HashMap::new());
         }
 
-        for entry in std::fs::read_dir(bundle.build.asset_dir())?.flatten() {
-            let old = entry.path().canonicalize()?;
+        let asset_dir = bundle.build.asset_dir();
+        let asset_dir_entries = std::fs::read_dir(&asset_dir)
+            .with_context(|| format!("failed to read asset directory {:?}", asset_dir))?;
+        for entry in asset_dir_entries.flatten() {
+            let old = entry
+                .path()
+                .canonicalize()
+                .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
             let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
             tracing::debug!("Bundled asset: {old:?} -> {new:?}");
 
@@ -221,7 +232,9 @@ impl Bundle {
             settings = settings.target("aarch64-apple-ios".to_string());
         }
 
-        let settings = settings.build()?;
+        let settings = settings
+            .build()
+            .context("failed to bundle tauri bundle settings")?;
         tracing::debug!("Bundling project with settings: {:#?}", settings);
         if cfg!(target_os = "macos") {
             std::env::set_var("CI", "true");
