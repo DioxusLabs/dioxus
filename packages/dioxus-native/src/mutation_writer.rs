@@ -316,6 +316,10 @@ impl WriteMutations for MutationWriter<'_> {
                         });
                     }
                 }
+
+                if name == "style" {
+                    element.flush_style_attribute(&self.doc.guard);
+                }
             }
 
             if let AttributeValue::None = value {
