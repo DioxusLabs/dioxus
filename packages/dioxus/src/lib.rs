@@ -167,3 +167,7 @@ pub use dioxus_liveview as liveview;
 #[cfg(feature = "ssr")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
 pub use dioxus_ssr as ssr;
+
+#[cfg(feature = "warnings")]
+#[cfg_attr(docsrs, doc(cfg(feature = "warnings")))]
+pub use warnings;

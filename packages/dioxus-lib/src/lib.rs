@@ -28,6 +28,9 @@ pub use dioxus_rsx as rsx;
 #[cfg(feature = "macro")]
 pub use dioxus_core_macro as core_macro;
 
+#[cfg(feature = "warnings")]
+pub use warnings;
+
 pub mod prelude {
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
