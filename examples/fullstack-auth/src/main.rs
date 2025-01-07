@@ -63,8 +63,8 @@ fn main() {
                     )
                     .layer(axum_session::SessionLayer::new(session_store));
 
-                // run it
-                let addr = dioxus_cli_config::fullstack_address_or_localhost();
+                // serve the app using the address passed by the CLI
+                let addr = dioxus::cli_config::fullstack_address_or_localhost();
                 let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
                 axum::serve(listener, app.into_make_service())

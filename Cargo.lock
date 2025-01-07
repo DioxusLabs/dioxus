@@ -5021,6 +5021,7 @@ dependencies = [
  "axum_session",
  "axum_session_auth",
  "dioxus",
+ "dioxus-cli-config",
  "dioxus-fullstack",
  "dioxus-web",
  "execute",

@@ -93,7 +93,7 @@ use dioxus::prelude::*;
 async fn main() {
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
-    let address = dioxus_cli_config::fullstack_address_or_localhost();
+    let address = dioxus::cli_config::fullstack_address_or_localhost();
 
     // Set up the axum router
     let router = axum::Router::new()
