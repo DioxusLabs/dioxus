@@ -226,13 +226,8 @@ pub fn base_path() -> Option<String> {
     read_env_config!("DIOXUS_ASSET_ROOT")
 }
 
-/// Get the path where the application is served from in the browser.
-///
-/// This uses wasm_bindgen on the browser to extract the base path from a meta element.
 #[cfg(feature = "web")]
-pub fn web_base_path() -> Option<String> {
-    #[cfg(feature = "web")]
-    #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
         export function getMetaContents(meta_name) {
             const selector = document.querySelector(`meta[name="${meta_name}"]`);
             if (!selector) {
@@ -241,11 +236,16 @@ pub fn web_base_path() -> Option<String> {
             return selector.content;
         }
     "#)]
-    extern "C" {
-        #[wasm_bindgen(js_name = getMetaContents)]
-        pub fn get_meta_contents(selector: &str) -> Option<String>;
-    }
+extern "C" {
+    #[wasm_bindgen(js_name = getMetaContents)]
+    pub fn get_meta_contents(selector: &str) -> Option<String>;
+}
 
+/// Get the path where the application is served from in the browser.
+///
+/// This uses wasm_bindgen on the browser to extract the base path from a meta element.
+#[cfg(feature = "web")]
+pub fn web_base_path() -> Option<String> {
     // In debug mode, we get the base path from the meta element which can be hot reloaded and changed without recompiling
     #[cfg(debug_assertions)]
     {
