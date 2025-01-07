@@ -64,7 +64,7 @@ pub const ALWAYS_ON_TOP_ENV: &str = "DIOXUS_ALWAYS_ON_TOP";
 pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
 pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 
-#[deprecated(since="0.6.0", note="The CLI currently does not set this.")]
+#[deprecated(since = "0.6.0", note = "The CLI currently does not set this.")]
 #[doc(hidden)]
 pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
 
@@ -122,7 +122,6 @@ pub fn devserver_ws_endpoint() -> Option<String> {
     Some(format!("ws://{addr}/_dioxus"))
 }
 
-
 /// Get the IP that the server should be bound to.
 ///
 /// This is set by the CLI and is used to bind the server to a specific address.
@@ -136,7 +135,6 @@ pub fn server_ip() -> Option<IpAddr> {
         .ok()
         .and_then(|s| s.parse().ok())
 }
-
 
 /// Get the port that the server should listen on.
 ///
@@ -203,13 +201,12 @@ pub fn always_on_top() -> Option<bool> {
 ///
 /// ## Note
 ///
-/// On Android and the Web, this *might* not be reliable since there isn't always a consitent way to
+/// On Android and the Web, this *might* not be reliable since there isn't always a consistent way to
 /// pass off the CLI environment variables to the application.
 pub fn is_cli_enabled() -> bool {
     // todo: (jon) - on android and web we should fix this...
     std::env::var(CLI_ENABLED_ENV).is_ok()
 }
-
 
 /// Get the path where the application will be served from.
 ///
@@ -275,6 +272,13 @@ pub fn format_base_path_meta_element(base_path: &str) -> String {
 ///
 /// This might not return a valid path - we don't recommend relying on this.
 #[doc(hidden)]
+#[deprecated(
+    since = "0.6.0",
+    note = "The does not set the OUT_DIR environment variable."
+)]
 pub fn out_dir() -> Option<PathBuf> {
-    std::env::var(OUT_DIR).ok().map(PathBuf::from)
+    #[allow(deprecated)]
+    {
+        std::env::var(OUT_DIR).ok().map(PathBuf::from)
+    }
 }
