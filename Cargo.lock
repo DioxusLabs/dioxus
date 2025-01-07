@@ -3404,6 +3404,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "warnings",
 ]
 
 [[package]]
@@ -3963,6 +3964,7 @@ dependencies = [
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-signals",
+ "warnings",
 ]
 
 [[package]]
