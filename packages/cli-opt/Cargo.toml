@@ -32,7 +32,7 @@ png = "0.17.9"
 image = { version = "0.25", features = ["avif"] }
 
 # CSS Minification
-lightningcss = "1.0.0-alpha.60"
+lightningcss = { version = "1.0.0-alpha.60", features = ["browserslist", "into_owned"] }
 
 # SCSS Processing
 grass = "0.13.4"
