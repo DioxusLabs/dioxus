@@ -27,9 +27,9 @@ sqlx = { version = "0.7.0", features = [
 http = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 
-serde = "1.0.159"
 execute = "0.2.12"
-anyhow = "1.0.71"
+serde = { workspace = true }
+anyhow = { workspace = true }
 
 [dependencies.axum_session]
 workspace = true

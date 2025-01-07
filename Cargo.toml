@@ -152,6 +152,7 @@ warnings = { version = "0.2.1" }
 
 # a fork of pretty please for tests - let's get off of this if we can!
 prettier-please = { version = "0.3.0", features = ["verbatim"]}
+anyhow = "1.0.95"
 clap = { version = "4.5.7" }
 askama_escape = "0.10.3"
 tracing = "0.1.37"
