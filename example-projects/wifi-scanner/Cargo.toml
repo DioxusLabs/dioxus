@@ -7,10 +7,9 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.52"
-pretty_env_logger = "0.5.0"
+anyhow = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true, features = ["desktop"] }
+futures-channel = { workspace = true }
+futures = { workspace = true }
 wifiscanner = "0.5.1"
-futures-channel = "0.3.19"
-futures = "0.3.19"

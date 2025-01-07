@@ -152,6 +152,7 @@ warnings = { version = "0.2.1" }
 
 # a fork of pretty please for tests - let's get off of this if we can!
 prettier-please = { version = "0.3.0", features = ["verbatim"]}
+anyhow = "1.0.95"
 clap = { version = "4.5.7" }
 askama_escape = "0.10.3"
 tracing = "0.1.37"
@@ -161,8 +162,8 @@ toml = "0.8"
 tokio = "1.40"
 slab = "0.4.2"
 slotmap = { version = "1.0.7", features = ["serde"] }
-futures = "0.3.30"
-futures-channel = "0.3.21"
+futures = "0.3.31"
+futures-channel = "0.3.31"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
 wasm-bindgen = "0.2.99"
@@ -297,7 +298,7 @@ ouroboros = { version = "*", optional = true }
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
-futures-util = "0.3.21"
+futures-util = "0.3.31"
 separator = "0.4.1"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"

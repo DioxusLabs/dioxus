@@ -10,7 +10,7 @@ description = "CLI optimizations for dioxus-cli"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-anyhow = "1"
+anyhow = { workspace = true }
 manganis-core = { workspace = true }
 object = {version="0.36.0", features=["wasm"]}
 serde = { workspace = true, features = ["derive"] }
