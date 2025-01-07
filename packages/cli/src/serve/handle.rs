@@ -129,7 +129,7 @@ impl AppHandle {
 
             // https://developer.android.com/studio/run/emulator-commandline
             Platform::Android => {
-                self.open_android_sim(envs).await?;
+                self.open_android_sim(envs).await;
                 None
             }
 
@@ -494,7 +494,7 @@ impl AppHandle {
         unimplemented!("dioxus-cli doesn't support ios devices yet.")
     }
 
-    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) -> Result<()> {
+    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) {
         let apk_path = self.app.apk_path();
         let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
 
@@ -502,20 +502,23 @@ impl AppHandle {
         tokio::task::spawn(async move {
             // Install
             // adb install -r app-debug.apk
-            let _output = Command::new("adb")
+            if let Err(e) = Command::new("adb")
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .output()
-                .await?;
+                .await
+            {
+                tracing::error!("Failed to install apk with `adb`: {e}");
+            };
 
             // eventually, use the user's MainAcitivty, not our MainAcitivty
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 
-            let _output = Command::new("adb")
+            if let Err(e) = Command::new("adb")
                 .arg("shell")
                 .arg("am")
                 .arg("start")
@@ -525,11 +528,10 @@ impl AppHandle {
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .output()
-                .await?;
-
-            Result::<()>::Ok(())
+                .await
+            {
+                tracing::error!("Failed to start app with `adb`: {e}");
+            };
         });
-
-        Ok(())
     }
 }
