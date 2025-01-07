@@ -70,6 +70,10 @@ pub use dioxus_core_macro as core_macro;
 #[cfg_attr(docsrs, doc(cfg(feature = "logger")))]
 pub use dioxus_logger as logger;
 
+#[cfg(feature = "cli-config")]
+#[cfg_attr(docsrs, doc(cfg(feature = "cli-config")))]
+pub use dioxus_cli_config as cli_config;
+
 pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
