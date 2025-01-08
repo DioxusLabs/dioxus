@@ -58,7 +58,27 @@ impl DioxusCrate {
             .find(|target| {
                 target_name == target.name.as_str() && target.kind.contains(&target_kind)
             })
-            .with_context(|| format!("Failed to find target {target_name}"))?
+            .with_context(|| {
+                let target_of_kind = |kind|-> String {
+                    let filtered_packages = main_package
+                .targets
+                .iter()
+                .filter_map(|target| {
+                    target.kind.contains(kind).then_some(target.name.as_str())
+                }).collect::<Vec<_>>();
+                filtered_packages.join(", ")};
+                if let Some(example) = &target.example {
+                    let examples = target_of_kind(&TargetKind::Example);
+                    format!("Failed to find example {example}. \nAvailable examples are:\n{}", examples)
+                } else if let Some(bin) = &target.bin {
+                    let binaries = target_of_kind(&TargetKind::Bin);
+                    format!("Failed to find binary {bin}. \nAvailable binaries are:\n{}", binaries)
+                } else {
+                    format!("Failed to find target {target_name}. \nIt looks like you are trying to build dioxus in a library crate. \
+                    You either need to run dx from inside a binary crate or build a specific example with the `--example` flag. \
+                    Available examples are:\n{}", target_of_kind(&TargetKind::Example))
+                }
+            })?
             .clone();
 
         let settings = CliSettings::load();
@@ -686,7 +706,15 @@ fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId>
 
     let kid = closest_parent
         .map(|(id, _)| id)
-        .context("Failed to find current package")?;
+        .with_context(|| {
+            let bin_targets = krates.workspace_members().filter_map(|krate|match krate {
+                krates::Node::Krate { krate, .. } if krate.targets.iter().any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))=> {
+                    Some(format!("- {}", krate.name))
+                }
+                _ => None
+            }).collect::<Vec<_>>();
+            format!("Failed to find binary package to build.\nYou need to either run dx from inside a binary crate or specify a binary package to build with the `--package` flag. Try building again with one of the binary packages in the workspace:\n{}", bin_targets.join("\n"))
+        })?;
 
     let package = krates.nid_for_kid(kid).unwrap();
     Ok(package)
