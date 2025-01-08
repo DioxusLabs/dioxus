@@ -229,7 +229,9 @@ impl WebsysDom {
                 });
             };
         let closure = wasm_bindgen::closure::Closure::new(closure);
-        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming(&closure);
+        dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming_debug(
+            &closure,
+        );
         closure.forget();
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
