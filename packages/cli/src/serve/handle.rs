@@ -2,7 +2,6 @@ use crate::{AppBundle, Platform, Result};
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use std::{
-    fs,
     net::SocketAddr,
     path::{Path, PathBuf},
     process::Stdio,
@@ -190,7 +189,7 @@ impl AppHandle {
         }
 
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
-        let changed_file = fs::canonicalize(changed_file)
+        let changed_file = dunce::canonicalize(changed_file)
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
             .ok()?;
 

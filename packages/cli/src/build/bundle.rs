@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 
@@ -394,7 +395,8 @@ impl AppBundle {
         ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
             Box::pin(async move {
                 // If this asset is in the manifest, we don't need to remove it
-                if bundled_output_paths.contains(path.canonicalize()?.as_path()) {
+                let canon_path = dunce::canonicalize(path)?;
+                if bundled_output_paths.contains(canon_path.as_path()) {
                     return Ok(());
                 }
                 // Otherwise, if it is a directory, we need to walk it and remove child files
@@ -438,7 +440,8 @@ impl AppBundle {
         }
 
         let asset_count = assets_to_transfer.len();
-        let current_asset = AtomicUsize::new(0);
+        let started_processing = AtomicUsize::new(0);
+        let copied = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
@@ -447,19 +450,18 @@ impl AppBundle {
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
-                    let current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-                    tracing::trace!("Starting asset copy {current}/{asset_count} from {from:?}");
+                    let processing = started_processing.fetch_add(1, Ordering::SeqCst);
+                    tracing::trace!("Starting asset copy {processing}/{asset_count} from {from:?}");
 
                     let res = process_file_to(options, from, to);
-
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
 
+                    let finished = copied.fetch_add(1, Ordering::SeqCst);
                     BuildRequest::status_copied_asset(
                         &progress,
-                        current,
+                        finished,
                         asset_count,
                         from.to_path_buf(),
                     );

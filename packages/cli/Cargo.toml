@@ -61,6 +61,7 @@ syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mu
 
 headers = "0.4.0"
 walkdir = "2"
+dunce = { workspace = true }
 
 # tools download
 dirs = { workspace = true }
