@@ -1,20 +1,27 @@
-use std::{path::Path, time::Duration};
-
 use anyhow::Context;
+use dioxus_cli_config::{server_ip, server_port};
+use futures_util::stream::FuturesUnordered;
+use futures_util::StreamExt;
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::Path,
+    time::Duration,
+};
+use tokio::process::Command;
 
 pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
-    use futures_util::stream::FuturesUnordered;
-    use futures_util::StreamExt;
-    use tokio::process::Command;
-
-    let fullstack_address = dioxus_cli_config::fullstack_address_or_localhost();
+    // Use the address passed in through environment variables or default to localhost:9999. We need
+    // to default to a value that is different than the CLI default address to avoid conflicts
+    let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    let port = server_port().unwrap_or(9999);
+    let fullstack_address = SocketAddr::new(ip, port);
     let address = fullstack_address.ip().to_string();
     let port = fullstack_address.port().to_string();
     // Borrow port and address so we can easily moe them into multiple tasks below
     let address = &address;
     let port = &port;
 
-    tracing::info!("Running SSG");
+    tracing::info!("Running SSG at http://{address}:{port}");
 
     // Run the server executable
     let _child = Command::new(server_exe)
