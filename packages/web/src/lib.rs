@@ -85,7 +85,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
                 export function get_initial_hydration_data() {
-                    const decoded = atob(window.initial_dioxus_hydration_data);
+                    const decoded = atob(window.initial_dioxus_hydration_data || "");
                     return Uint8Array.from(decoded, (c) => c.charCodeAt(0))
                 }
                 export function get_initial_hydration_debug_types() {
