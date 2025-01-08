@@ -445,6 +445,8 @@ impl WebviewInstance {
             }
 
             {
+                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                let _lock = crate::android_sync_lock::android_runtime_lock();
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
 
