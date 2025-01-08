@@ -10,7 +10,7 @@ description = "CLI optimizations for dioxus-cli"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-anyhow = "1"
+anyhow = { workspace = true }
 manganis-core = { workspace = true }
 object = {version="0.36.0", features=["wasm"]}
 serde = { workspace = true, features = ["derive"] }
@@ -32,7 +32,7 @@ png = "0.17.9"
 image = { version = "0.25", features = ["avif"] }
 
 # CSS Minification
-lightningcss = "1.0.0-alpha.60"
+lightningcss = { version = "1.0.0-alpha.60", features = ["browserslist", "into_owned"] }
 
 # SCSS Processing
 grass = "0.13.4"

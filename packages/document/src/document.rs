@@ -30,7 +30,10 @@ fn format_attributes(attributes: &[(&str, String)]) -> String {
     formatted
 }
 
-fn create_element_in_head(
+/// Create a new element in the head with javascript through the [`Document::eval`] method
+///
+/// This can be used to implement the head element creation logic for most [`Document`] implementations.
+pub fn create_element_in_head(
     tag: &str,
     attributes: &[(&str, String)],
     children: Option<String>,
@@ -74,6 +77,8 @@ pub trait Document: 'static {
         attributes: &[(&str, String)],
         contents: Option<String>,
     ) {
+        // This default implementation remains to make the trait compatible with the 0.6 version, but it should not be used
+        // The element should only be created inside an effect so it is not called while the component is suspended
         self.eval(create_element_in_head(name, attributes, contents));
     }
 
@@ -86,36 +91,26 @@ pub trait Document: 'static {
     /// Create a new script tag in the head
     fn create_script(&self, props: ScriptProps) {
         let attributes = props.attributes();
-        match (&props.src, props.script_contents()) {
-            // The script has inline contents, render it as a script tag
-            (_, Ok(contents)) => self.create_head_element("script", &attributes, Some(contents)),
-            // The script has a src, render it as a script tag without a body
-            (Some(_), _) => self.create_head_element("script", &attributes, None),
-            // The script has neither contents nor src, log an error
-            (None, Err(err)) => err.log("Script"),
-        }
+        self.create_head_element("script", &attributes, props.script_contents().ok());
     }
 
     /// Create a new style tag in the head
     fn create_style(&self, props: StyleProps) {
-        let mut attributes = props.attributes();
-        match (&props.href, props.style_contents()) {
-            // The style has inline contents, render it as a style tag
-            (_, Ok(contents)) => self.create_head_element("style", &attributes, Some(contents)),
-            // The style has a src, render it as a link tag
-            (Some(_), _) => {
-                attributes.push(("type", "text/css".into()));
-                self.create_head_element("link", &attributes, None)
-            }
-            // The style has neither contents nor src, log an error
-            (None, Err(err)) => err.log("Style"),
-        };
+        let attributes = props.attributes();
+        self.create_head_element("style", &attributes, props.style_contents().ok());
     }
 
     /// Create a new link tag in the head
     fn create_link(&self, props: LinkProps) {
         let attributes = props.attributes();
         self.create_head_element("link", &attributes, None);
+    }
+
+    /// Check if we should create a new head component at all. If it returns false, the head component will be skipped.
+    ///
+    /// This runs once per head component and is used to hydrate head components in fullstack.
+    fn create_head_component(&self) -> bool {
+        true
     }
 }
 
@@ -148,4 +143,10 @@ impl Document for NoOpDocument {
         }
         Eval::new(owner.insert(Box::new(NoOpEvaluator)))
     }
+
+    fn set_title(&self, _: String) {}
+    fn create_meta(&self, _: MetaProps) {}
+    fn create_script(&self, _: ScriptProps) {}
+    fn create_style(&self, _: StyleProps) {}
+    fn create_link(&self, _: LinkProps) {}
 }

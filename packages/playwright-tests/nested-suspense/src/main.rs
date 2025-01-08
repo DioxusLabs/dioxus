@@ -23,6 +23,9 @@ fn app() -> Element {
     rsx! {
         SuspenseBoundary {
             fallback: move |_| rsx! {},
+            document::Style {
+                href: asset!("/assets/style.css")
+            }
             LoadTitle {}
         }
         MessageWithLoader { id: 0 }
@@ -48,6 +51,7 @@ fn LoadTitle() -> Element {
         .unwrap();
 
     rsx! {
+        "title loaded"
         document::Title { "{title.title}" }
     }
 }

@@ -20,16 +20,18 @@ dioxus-config-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
+warnings = { workspace = true, optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
 
 [features]
-default = ["macro", "html", "signals", "hooks"]
+default = ["macro", "html", "signals", "hooks", "warnings"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro", "dep:dioxus-rsx", "dep:dioxus-config-macro"]
 html = ["dep:dioxus-html", "dep:dioxus-document", "dep:dioxus-history"]
 hooks = ["dep:dioxus-hooks"]
+warnings = ["dep:warnings"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

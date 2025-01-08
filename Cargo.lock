@@ -234,9 +234,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.94"
+version = "1.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1fd03a028ef38ba2276dce7e33fcd6369c158a1bca17946c4b1b701891c1ff7"
+checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 
 [[package]]
 name = "anymap2"
@@ -3413,6 +3413,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "warnings",
 ]
 
 [[package]]
@@ -3972,6 +3973,7 @@ dependencies = [
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-signals",
+ "warnings",
 ]
 
 [[package]]
@@ -3990,7 +3992,6 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
- "pretty_env_logger",
  "rustc-hash 1.1.0",
  "serde",
  "serde_json",
@@ -4023,6 +4024,15 @@ dependencies = [
  "jni",
  "libc",
  "once_cell",
+]
+
+[[package]]
+name = "dioxus-playwright-fullstack-mounted-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -5020,6 +5030,7 @@ dependencies = [
  "axum_session",
  "axum_session_auth",
  "dioxus",
+ "dioxus-cli-config",
  "dioxus-fullstack",
  "dioxus-web",
  "execute",
@@ -7525,6 +7536,7 @@ checksum = "20c9e1f991b3861d25bf872ecca2eb6a73f7a9fe671da047cd1f9b49c65cbc40"
 dependencies = [
  "ahash 0.8.11",
  "bitflags 2.6.0",
+ "browserslist-rs",
  "const-str",
  "cssparser 0.33.0",
  "cssparser-color",
@@ -7542,6 +7554,7 @@ dependencies = [
  "rayon",
  "serde",
  "smallvec",
+ "static-self",
 ]
 
 [[package]]
@@ -8904,6 +8917,7 @@ dependencies = [
  "precomputed-hash",
  "rustc-hash 2.1.0",
  "smallvec",
+ "static-self",
 ]
 
 [[package]]
@@ -9555,16 +9569,6 @@ checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
 dependencies = [
  "diff",
  "yansi",
-]
-
-[[package]]
-name = "pretty_env_logger"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
-dependencies = [
- "env_logger 0.10.2",
- "log",
 ]
 
 [[package]]
@@ -11786,6 +11790,27 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.90",
+]
+
+[[package]]
+name = "static-self"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "253e76c8c993a7b1b201b0539228b334582153cd4364292822d2c30776d469c7"
+dependencies = [
+ "smallvec",
+ "static-self-derive",
+]
+
+[[package]]
+name = "static-self-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5268c96d4b907c558a9a52d8492522d6c7b559651a5e1d8f2d551e461b9425d5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -15288,7 +15313,6 @@ dependencies = [
  "dioxus",
  "futures",
  "futures-channel",
- "pretty_env_logger",
  "tokio",
  "wifiscanner",
 ]

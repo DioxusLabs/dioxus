@@ -689,7 +689,9 @@ impl AppBundle {
         use futures_util::StreamExt;
         use tokio::process::Command;
 
-        const PORT: u16 = 9999;
+        let fullstack_address = dioxus_cli_config::fullstack_address_or_localhost();
+        let address = fullstack_address.ip().to_string();
+        let port = fullstack_address.port().to_string();
 
         tracing::info!("Running SSG");
 
@@ -698,8 +700,8 @@ impl AppBundle {
             self.server_exe()
                 .context("Failed to find server executable")?,
         )
-        .env(dioxus_cli_config::SERVER_PORT_ENV, PORT.to_string())
-        .env(dioxus_cli_config::SERVER_IP_ENV, "127.0.0.1")
+        .env(dioxus_cli_config::SERVER_PORT_ENV, port.clone())
+        .env(dioxus_cli_config::SERVER_IP_ENV, address.clone())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
@@ -716,7 +718,7 @@ impl AppBundle {
         const RETRY_ATTEMPTS: usize = 5;
         for i in 0..=RETRY_ATTEMPTS {
             let request = reqwest_client
-                .post(format!("http://127.0.0.1:{PORT}/api/static_routes"))
+                .post(format!("http://{address}:{port}/api/static_routes"))
                 .send()
                 .await;
             match request {
@@ -750,7 +752,7 @@ impl AppBundle {
                 tracing::info!("Rendering {route} for SSG");
                 // For each route, ping the server to force it to cache the response for ssg
                 let request = reqwest_client
-                    .get(format!("http://127.0.0.1:{PORT}{route}"))
+                    .get(format!("http://{address}:{port}{route}"))
                     .header("Accept", "text/html")
                     .send()
                     .await?;

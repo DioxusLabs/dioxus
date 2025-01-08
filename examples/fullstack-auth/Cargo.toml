@@ -11,6 +11,7 @@ publish = false
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 dioxus = { features = ["fullstack"], workspace = true }
 dioxus-fullstack = { workspace = true }
+dioxus-cli-config = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 tower-http = { workspace = true, features = ["auth"], optional = true }
@@ -27,9 +28,9 @@ sqlx = { version = "0.7.0", features = [
 http = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 
-serde = "1.0.159"
 execute = "0.2.12"
-anyhow = "1.0.71"
+serde = { workspace = true }
+anyhow = { workspace = true }
 
 [dependencies.axum_session]
 workspace = true
@@ -43,5 +44,17 @@ optional = true
 
 [features]
 default = []
-server = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "async-trait", "sqlx", "axum_session", "axum_session_auth", "http", "tower"]
+server = [
+    "dioxus-cli-config",
+    "axum",
+    "tokio",
+    "dioxus-fullstack/axum",
+    "tower-http",
+    "async-trait",
+    "sqlx",
+    "axum_session",
+    "axum_session_auth",
+    "http",
+    "tower",
+]
 web = ["dioxus-web"]
