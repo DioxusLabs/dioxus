@@ -15,3 +15,12 @@ tokio = { workspace = true, features = ["full"], optional = true }
 default = []
 server = ["dioxus/server", "tokio"]
 web = ["dioxus/web"]
+
+# We need a separate bin for the SSG build to avoid conflicting server caches
+[[bin]]
+name = "nested-suspense-ssg"
+path = "src/ssg.rs"
+
+[[bin]]
+name = "nested-suspense"
+path = "src/main.rs"
