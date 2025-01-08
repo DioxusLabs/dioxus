@@ -179,21 +179,23 @@ impl Bundle {
         }
 
         let asset_dir = bundle.build.asset_dir();
-        let asset_dir_entries = std::fs::read_dir(&asset_dir)
-            .with_context(|| format!("failed to read asset directory {:?}", asset_dir))?;
-        for entry in asset_dir_entries.flatten() {
-            let old = entry
-                .path()
-                .canonicalize()
-                .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
-            let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
-            tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+        if asset_dir.exists() {
+            let asset_dir_entries = std::fs::read_dir(&asset_dir)
+                .with_context(|| format!("failed to read asset directory {:?}", asset_dir))?;
+            for entry in asset_dir_entries.flatten() {
+                let old = entry
+                    .path()
+                    .canonicalize()
+                    .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
+                let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
+                tracing::debug!("Bundled asset: {old:?} -> {new:?}");
 
-            bundle_settings
-                .resources_map
-                .as_mut()
-                .expect("to be set")
-                .insert(old.display().to_string(), new.display().to_string());
+                bundle_settings
+                    .resources_map
+                    .as_mut()
+                    .expect("to be set")
+                    .insert(old.display().to_string(), new.display().to_string());
+            }
         }
 
         for resource_path in bundle_settings.resources.take().into_iter().flatten() {
