@@ -95,15 +95,12 @@ where
         async move {
             // If this is the first run and we are on the web client, the data might be cached
             #[cfg(feature = "web")]
-            match initial_web_result.borrow_mut().take() {
+            match initial_web_result.take() {
                 // The data was deserialized successfully from the server
                 Some(Ok(Some(o))) => return o,
 
                 // The data is still pending from the server. Don't try to resolve it on the client
-                Some(Ok(None)) => {
-                    tracing::trace!("Waiting for server data");
-                    std::future::pending::<()>().await;
-                }
+                Some(Ok(None)) => std::future::pending::<()>().await,
 
                 // The data was not available on the server, rerun the future
                 Some(Err(_)) => {}
