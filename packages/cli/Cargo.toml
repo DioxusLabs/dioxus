@@ -66,9 +66,8 @@ walkdir = "2"
 dirs = { workspace = true }
 reqwest = { workspace = true, features = [
     "rustls-tls",
-    "stream",
     "trust-dns",
-    "blocking",
+    "json"
 ] }
 tower = { workspace = true }
 once_cell = "1.19.0"
