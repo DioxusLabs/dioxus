@@ -456,15 +456,13 @@ impl WebviewInstance {
                 }
             }
 
-            {
-                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
-                let _lock = crate::android_sync_lock::android_runtime_lock();
+            // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            let _lock = crate::android_sync_lock::android_runtime_lock();
 
-                self.edits
-                    .wry_queue
-                    .with_mutation_state_mut(|f| self.dom.render_immediate(f));
-                self.edits.wry_queue.send_edits();
-            }
+            self.edits
+                .wry_queue
+                .with_mutation_state_mut(|f| self.dom.render_immediate(f));
+            self.edits.wry_queue.send_edits();
         }
     }
 
