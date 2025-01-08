@@ -3679,6 +3679,7 @@ name = "dioxus-desktop"
 version = "0.6.1"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "cocoa 0.25.0",
  "core-foundation 0.9.4",
  "dioxus",

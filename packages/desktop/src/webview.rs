@@ -12,6 +12,7 @@ use crate::{
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
+use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
@@ -48,7 +49,9 @@ impl WebviewEdits {
         request: wry::http::Request<Vec<u8>>,
         responder: wry::RequestAsyncResponder,
     ) {
-        let body = self.try_handle_event(request).unwrap_or_default();
+        let body = self
+            .try_handle_event(request)
+            .expect("Writing bodies to succeed");
         responder.respond(wry::http::Response::new(body))
     }
 
@@ -56,13 +59,27 @@ impl WebviewEdits {
         &self,
         request: wry::http::Request<Vec<u8>>,
     ) -> Result<Vec<u8>, serde_json::Error> {
-        let data_from_header = request
+        use serde::de::Error;
+
+        // todo(jon):
+        //
+        // I'm a small bit worried about the size of the header being too big on some platforms.
+        // It's unlikely we'll hit the 256k limit (from 2010 browsers...) but it's important to think about
+        // https://stackoverflow.com/questions/3326210/can-http-headers-be-too-big-for-browsers
+        //
+        // Also important to remember here that we don't pass a body from the JavaScript side of things
+        let data = request
             .headers()
             .get("dioxus-data")
-            .map(|f| f.as_bytes())
-            .expect("dioxus-data header is not a string");
+            .ok_or_else(|| Error::custom("dioxus-data header not set"))?;
 
-        let response = match serde_json::from_slice(data_from_header) {
+        let as_utf = std::str::from_utf8(data.as_bytes())
+            .map_err(|_| Error::custom("dioxus-data header is not a valid (utf-8) string"))?;
+
+        let data_from_header = base64::Engine::decode(&BASE64_STANDARD, as_utf)
+            .map_err(|_| Error::custom("dioxus-data header is not a base64 string"))?;
+
+        let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
                 let _lock = crate::android_sync_lock::android_runtime_lock();
@@ -79,15 +96,9 @@ impl WebviewEdits {
             }
         };
 
-        let body = match serde_json::to_vec(&response) {
-            Ok(body) => body,
-            Err(err) => {
-                tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
-                return Err(err);
-            }
-        };
-
-        Ok(body)
+        serde_json::to_vec(&response).inspect_err(|err| {
+            tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
+        })
     }
 
     pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
