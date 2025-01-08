@@ -56,6 +56,7 @@ use std::future::Future;
 /// }
 /// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
+#[track_caller]
 pub fn use_server_future<T, F>(
     mut future: impl FnMut() -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
@@ -65,9 +66,13 @@ where
 {
     #[cfg(feature = "server")]
     let serialize_context = crate::html_storage::use_serialize_context();
+
     // We always create a storage entry, even if the data isn't ready yet to make it possible to deserialize pending server futures on the client
     #[cfg(feature = "server")]
     let server_storage_entry = use_hook(|| serialize_context.create_entry());
+
+    #[cfg(feature = "server")]
+    let caller = std::panic::Location::caller();
 
     // If this is the first run and we are on the web client, the data might be cached
     #[cfg(feature = "web")]
@@ -80,33 +85,28 @@ where
     let resource = use_resource(move || {
         #[cfg(feature = "server")]
         let serialize_context = serialize_context.clone();
+
         let user_fut = future();
+
         #[cfg(feature = "web")]
         let initial_web_result = initial_web_result.clone();
 
+        #[allow(clippy::let_and_return)]
         async move {
             // If this is the first run and we are on the web client, the data might be cached
             #[cfg(feature = "web")]
-            {
-                let initial = initial_web_result.borrow_mut().take();
-                match initial {
-                    // This isn't the first run
-                    None => {}
-                    // This is the first run
-                    Some(first_run) => {
-                        match first_run {
-                            // THe data was deserialized successfully from the server
-                            Ok(Some(o)) => return o,
-                            // The data is still pending from the server. Don't try to resolve it on the client
-                            Ok(None) => {
-                                tracing::trace!("Waiting for server data");
-                                std::future::pending::<()>().await;
-                            }
-                            // The data was not available on the server, rerun the future
-                            Err(_) => {}
-                        }
-                    }
-                }
+            match initial_web_result.take() {
+                // The data was deserialized successfully from the server
+                Some(Ok(Some(o))) => return o,
+
+                // The data is still pending from the server. Don't try to resolve it on the client
+                Some(Ok(None)) => std::future::pending::<()>().await,
+
+                // The data was not available on the server, rerun the future
+                Some(Err(_)) => {}
+
+                // This isn't the first run, so we don't need do anything
+                None => {}
             }
 
             // Otherwise just run the future itself
@@ -114,9 +114,8 @@ where
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
             #[cfg(feature = "server")]
-            serialize_context.insert(server_storage_entry, &out);
+            serialize_context.insert(server_storage_entry, &out, caller);
 
-            #[allow(clippy::let_and_return)]
             out
         }
     });
@@ -127,14 +126,12 @@ where
     });
 
     // Suspend if the value isn't ready
-    match resource.state().cloned() {
-        UseResourceState::Pending => {
-            let task = resource.task();
-            if !task.paused() {
-                return Err(suspend(task).unwrap_err());
-            }
-            Ok(resource)
+    if resource.state().cloned() == UseResourceState::Pending {
+        let task = resource.task();
+        if !task.paused() {
+            return Err(suspend(task).unwrap_err());
         }
-        _ => Ok(resource),
     }
+
+    Ok(resource)
 }

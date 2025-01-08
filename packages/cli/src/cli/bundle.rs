@@ -78,7 +78,8 @@ impl Bundle {
                     for src in bundle.bundle_paths {
                         let src = if let Some(outdir) = &self.outdir {
                             let dest = outdir.join(src.file_name().expect("Filename to exist"));
-                            crate::fastfs::copy_asset(&src, &dest)?;
+                            crate::fastfs::copy_asset(&src, &dest)
+                                .context("Failed to copy or compress optimized asset")?;
                             dest
                         } else {
                             src.clone()
@@ -141,13 +142,15 @@ impl Bundle {
         if cfg!(windows) {
             name.set_extension("exe");
         }
-        std::fs::create_dir_all(krate.bundle_dir(self.build_arguments.platform()))?;
+        std::fs::create_dir_all(krate.bundle_dir(self.build_arguments.platform()))
+            .context("Failed to create bundle directory")?;
         std::fs::copy(
             &bundle.app.exe,
             krate
                 .bundle_dir(self.build_arguments.platform())
-                .join(krate.executable_name()),
-        )?;
+                .join(&name),
+        )
+        .with_context(|| "Failed to copy the output executable into the bundle directory")?;
 
         let binaries = vec![
             // We use the name of the exe but it has to be in the same directory
@@ -175,16 +178,24 @@ impl Bundle {
             bundle_settings.resources_map = Some(HashMap::new());
         }
 
-        for entry in std::fs::read_dir(bundle.build.asset_dir())?.flatten() {
-            let old = entry.path().canonicalize()?;
-            let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
-            tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+        let asset_dir = bundle.build.asset_dir();
+        if asset_dir.exists() {
+            let asset_dir_entries = std::fs::read_dir(&asset_dir)
+                .with_context(|| format!("failed to read asset directory {:?}", asset_dir))?;
+            for entry in asset_dir_entries.flatten() {
+                let old = entry
+                    .path()
+                    .canonicalize()
+                    .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
+                let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
+                tracing::debug!("Bundled asset: {old:?} -> {new:?}");
 
-            bundle_settings
-                .resources_map
-                .as_mut()
-                .expect("to be set")
-                .insert(old.display().to_string(), new.display().to_string());
+                bundle_settings
+                    .resources_map
+                    .as_mut()
+                    .expect("to be set")
+                    .insert(old.display().to_string(), new.display().to_string());
+            }
         }
 
         for resource_path in bundle_settings.resources.take().into_iter().flatten() {
@@ -203,7 +214,7 @@ impl Bundle {
                 description: package.description.clone().unwrap_or_default(),
                 homepage: Some(package.homepage.clone().unwrap_or_default()),
                 authors: Some(package.authors.clone()),
-                default_run: Some(krate.executable_name().to_string()),
+                default_run: Some(name.display().to_string()),
             })
             .log_level(log::Level::Debug)
             .binaries(binaries)
@@ -221,7 +232,9 @@ impl Bundle {
             settings = settings.target("aarch64-apple-ios".to_string());
         }
 
-        let settings = settings.build()?;
+        let settings = settings
+            .build()
+            .context("failed to bundle tauri bundle settings")?;
         tracing::debug!("Bundling project with settings: {:#?}", settings);
         if cfg!(target_os = "macos") {
             std::env::set_var("CI", "true");

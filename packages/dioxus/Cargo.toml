@@ -28,6 +28,7 @@ dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
+warnings = { workspace = true, optional = true }
 
 serde = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
@@ -36,18 +37,20 @@ dioxus-cli-config = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "html", "signals", "hooks", "launch",  "mounted", "file_engine", "document", "asset", "devtools", "logger"]
+default = ["macro", "html", "signals", "hooks", "launch",  "mounted", "file_engine", "document", "asset", "devtools", "logger", "warnings", "cli-config"]
 minimal = ["macro", "html", "signals", "hooks", "launch"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
 devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools", "dioxus-fullstack?/devtools"]
-mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
+mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis"]
 document = ["dioxus-web?/document", "dep:dioxus-document", "dep:dioxus-history"]
 logger = ["dep:dioxus-logger"]
+cli-config = ["dep:dioxus-cli-config"]
+warnings = ["dep:warnings"]
 
 launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]
@@ -56,7 +59,7 @@ router = ["dep:dioxus-router"]
 fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde"]
 desktop = ["dep:dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
 mobile = ["dep:dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
-web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus-cli-config", "dioxus-cli-config/web"]
+web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dep:dioxus-cli-config", "dioxus-cli-config?/web"]
 ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
 server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum"]
@@ -89,5 +92,6 @@ features = [
     "hooks",
     "html",
     "liveview",
-    "server"
+    "server",
+    "warnings"
 ]

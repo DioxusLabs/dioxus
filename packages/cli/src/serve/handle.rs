@@ -1,5 +1,6 @@
 use crate::{AppBundle, Platform, Result};
 use anyhow::Context;
+use dioxus_cli_opt::process_file_to;
 use std::{
     fs,
     net::SocketAddr,
@@ -128,7 +129,7 @@ impl AppHandle {
 
             // https://developer.android.com/studio/run/emulator-commandline
             Platform::Android => {
-                self.open_android_sim(envs).await?;
+                self.open_android_sim(envs).await;
                 None
             }
 
@@ -195,7 +196,14 @@ impl AppHandle {
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
         if let Some(resource) = self.app.app.assets.assets.get(&changed_file).as_ref() {
-            let res = std::fs::copy(&changed_file, asset_dir.join(resource.bundled_path()));
+            let output_path = asset_dir.join(resource.bundled_path());
+            // Remove the old asset if it exists
+            _ = std::fs::remove_file(&output_path);
+            // And then process the asset with the options into the **old** asset location. If we recompiled,
+            // the asset would be in a new location because the contents and hash have changed. Since we are
+            // hotreloading, we need to use the old asset location it was originally written to.
+            let options = *resource.options();
+            let res = process_file_to(&options, &changed_file, &output_path);
             bundled_name = Some(PathBuf::from(resource.bundled_path()));
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
@@ -486,7 +494,7 @@ impl AppHandle {
         unimplemented!("dioxus-cli doesn't support ios devices yet.")
     }
 
-    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) -> Result<()> {
+    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) {
         let apk_path = self.app.apk_path();
         let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
 
@@ -494,20 +502,23 @@ impl AppHandle {
         tokio::task::spawn(async move {
             // Install
             // adb install -r app-debug.apk
-            let _output = Command::new("adb")
+            if let Err(e) = Command::new("adb")
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .output()
-                .await?;
+                .await
+            {
+                tracing::error!("Failed to install apk with `adb`: {e}");
+            };
 
             // eventually, use the user's MainAcitivty, not our MainAcitivty
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 
-            let _output = Command::new("adb")
+            if let Err(e) = Command::new("adb")
                 .arg("shell")
                 .arg("am")
                 .arg("start")
@@ -517,11 +528,10 @@ impl AppHandle {
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .output()
-                .await?;
-
-            Result::<()>::Ok(())
+                .await
+            {
+                tracing::error!("Failed to start app with `adb`: {e}");
+            };
         });
-
-        Ok(())
     }
 }
