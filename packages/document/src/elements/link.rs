@@ -25,7 +25,8 @@ pub struct LinkProps {
 }
 
 impl LinkProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    /// Get all the attributes for the link tag
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(rel) = &self.rel {
             attributes.push(("rel", rel.clone()));
@@ -104,12 +105,18 @@ pub fn Link(props: LinkProps) -> Element {
     use_update_warning(&props, "Link {}");
 
     use_hook(|| {
+        let document = document();
+        let mut insert_link = document.create_head_component();
         if let Some(href) = &props.href {
             if !should_insert_link(href) {
-                return;
+                insert_link = false;
             }
         }
-        let document = document();
+
+        if !insert_link {
+            return;
+        }
+
         document.create_link(props);
     });
 
