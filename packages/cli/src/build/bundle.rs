@@ -440,8 +440,8 @@ impl AppBundle {
         }
 
         let asset_count = assets_to_transfer.len();
-        let assets_processing = AtomicUsize::new(0);
-        let assets_copied = AtomicUsize::new(0);
+        let started_processing = AtomicUsize::new(0);
+        let copied = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
@@ -450,7 +450,7 @@ impl AppBundle {
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
-                    let processing = assets_processing.fetch_add(1, Ordering::SeqCst);
+                    let processing = started_processing.fetch_add(1, Ordering::SeqCst);
                     tracing::trace!("Starting asset copy {processing}/{asset_count} from {from:?}");
 
                     let res = process_file_to(options, from, to);
@@ -458,7 +458,7 @@ impl AppBundle {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
 
-                    let finished = assets_copied.fetch_add(1, Ordering::SeqCst);
+                    let finished = copied.fetch_add(1, Ordering::SeqCst);
                     BuildRequest::status_copied_asset(
                         &progress,
                         finished,
