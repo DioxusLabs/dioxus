@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 
@@ -439,7 +440,8 @@ impl AppBundle {
         }
 
         let asset_count = assets_to_transfer.len();
-        let current_asset = AtomicUsize::new(0);
+        let assets_processing = AtomicUsize::new(0);
+        let assets_copied = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
@@ -448,20 +450,21 @@ impl AppBundle {
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
-                    let current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-                    tracing::trace!("Starting asset copy {current}/{asset_count} from {from:?}");
-                    BuildRequest::status_copied_asset(
-                        &progress,
-                        current,
-                        asset_count,
-                        from.to_path_buf(),
-                    );
+                    let processing = assets_processing.fetch_add(1, Ordering::SeqCst);
+                    tracing::trace!("Starting asset copy {processing}/{asset_count} from {from:?}");
 
                     let res = process_file_to(options, from, to);
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
+
+                    let finished = assets_copied.fetch_add(1, Ordering::SeqCst);
+                    BuildRequest::status_copied_asset(
+                        &progress,
+                        finished,
+                        asset_count,
+                        from.to_path_buf(),
+                    );
 
                     res.map(|_| ())
                 })
