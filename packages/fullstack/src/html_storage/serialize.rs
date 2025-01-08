@@ -1,25 +1,8 @@
-use dioxus_lib::prelude::dioxus_core::DynamicNode;
-use dioxus_lib::prelude::{
-    has_context, try_consume_context, ErrorContext, ScopeId, SuspenseBoundaryProps,
-    SuspenseContext, VNode, VirtualDom,
-};
-use serde::Serialize;
-
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use dioxus_lib::prelude::dioxus_core::DynamicNode;
+use dioxus_lib::prelude::{has_context, ErrorContext, ScopeId, SuspenseContext, VNode, VirtualDom};
 
 use super::SerializeContext;
-
-#[allow(unused)]
-pub(crate) fn serde_to_writable<T: Serialize>(
-    value: &T,
-    write_to: &mut impl std::fmt::Write,
-) -> Result<(), ciborium::ser::Error<std::fmt::Error>> {
-    let mut serialized = Vec::new();
-    ciborium::into_writer(value, &mut serialized).unwrap();
-    write_to.write_str(STANDARD.encode(serialized).as_str())?;
-    Ok(())
-}
 
 impl super::HTMLData {
     /// Walks through the suspense boundary in a depth first order and extracts the data from the context API.
@@ -35,16 +18,12 @@ impl super::HTMLData {
     fn serialize_errors(&mut self, vdom: &VirtualDom, scope: ScopeId) {
         // If there is an error boundary on the suspense boundary, grab the error from the context API
         // and throw it on the client so that it bubbles up to the nearest error boundary
-        let mut error = vdom.in_runtime(|| {
+        let error = vdom.in_runtime(|| {
             scope
                 .consume_context::<ErrorContext>()
                 .and_then(|error_context| error_context.errors().first().cloned())
         });
         self.push(&error, std::panic::Location::caller());
-    }
-
-    fn take_from_virtual_dom(&mut self, vdom: &VirtualDom) {
-        self.take_from_scope(vdom, ScopeId::ROOT)
     }
 
     fn take_from_scope(&mut self, vdom: &VirtualDom, scope: ScopeId) {
@@ -53,9 +32,7 @@ impl super::HTMLData {
                 // Grab any serializable server context from this scope
                 let context: Option<SerializeContext> = has_context();
                 if let Some(context) = context {
-                    let borrow = context.data.borrow();
-                    let mut data = borrow.data.iter().cloned();
-                    self.extend(&borrow);
+                    self.extend(&context.data.borrow());
                 }
             });
         });
@@ -99,6 +76,7 @@ impl super::HTMLData {
     pub(crate) fn serialized(&self) -> SerializedHydrationData {
         let mut serialized = Vec::new();
         ciborium::into_writer(&self.data, &mut serialized).unwrap();
+
         let data = base64::engine::general_purpose::STANDARD.encode(serialized);
 
         let format_js_list_of_strings = |list: &[Option<String>]| {
