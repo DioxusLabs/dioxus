@@ -3479,6 +3479,7 @@ dependencies = [
  "dioxus-rsx-hotreload",
  "dioxus-rsx-rosetta",
  "dirs",
+ "dunce",
  "env_logger 0.11.5",
  "escargot",
  "flate2",
@@ -7766,6 +7767,7 @@ dependencies = [
 name = "manganis-macro"
 version = "0.6.1"
 dependencies = [
+ "dunce",
  "manganis",
  "manganis-core",
  "proc-macro2",

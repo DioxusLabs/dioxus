@@ -394,7 +394,8 @@ impl AppBundle {
         ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
             Box::pin(async move {
                 // If this asset is in the manifest, we don't need to remove it
-                if bundled_output_paths.contains(path.canonicalize()?.as_path()) {
+                let canon_path = dunce::canonicalize(path)?;
+                if bundled_output_paths.contains(canon_path.as_path()) {
                     return Ok(());
                 }
                 // Otherwise, if it is a directory, we need to walk it and remove child files
@@ -450,19 +451,17 @@ impl AppBundle {
                     let current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
                     tracing::trace!("Starting asset copy {current}/{asset_count} from {from:?}");
-
-                    let res = process_file_to(options, from, to);
-
-                    if let Err(err) = res.as_ref() {
-                        tracing::error!("Failed to copy asset {from:?}: {err}");
-                    }
-
                     BuildRequest::status_copied_asset(
                         &progress,
                         current,
                         asset_count,
                         from.to_path_buf(),
                     );
+
+                    let res = process_file_to(options, from, to);
+                    if let Err(err) = res.as_ref() {
+                        tracing::error!("Failed to copy asset {from:?}: {err}");
+                    }
 
                     res.map(|_| ())
                 })
