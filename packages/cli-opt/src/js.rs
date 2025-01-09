@@ -3,6 +3,8 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use manganis_core::JsAssetOptions;
+use swc_common::errors::Emitter;
+use swc_common::errors::Handler;
 use swc_ecma_minifier::option::{
     CompressOptions, ExtraOptions, MangleOptions, MinifyOptions, TopLevelOptions,
 };
@@ -17,9 +19,28 @@ use swc_common::{
     errors::HANDLER, sync::Lrc, FileName, FilePathMapping, Globals, Mark, SourceMap, Span, GLOBALS,
 };
 use swc_ecma_ast::*;
-use swc_ecma_codegen::{text_writer::JsWriter, Emitter};
+use swc_ecma_codegen::text_writer::JsWriter;
 use swc_ecma_loader::{resolvers::node::NodeModulesResolver, TargetEnv};
 use swc_ecma_parser::{parse_file_as_module, Syntax};
+
+struct TracingEmitter;
+
+impl Emitter for TracingEmitter {
+    fn emit(&mut self, db: &swc_common::errors::DiagnosticBuilder<'_>) {
+        match db.level {
+            swc_common::errors::Level::Bug
+            | swc_common::errors::Level::Fatal
+            | swc_common::errors::Level::PhaseFatal
+            | swc_common::errors::Level::Error => tracing::error!("{}", db.message()),
+            swc_common::errors::Level::Warning
+            | swc_common::errors::Level::FailureNote
+            | swc_common::errors::Level::Cancelled => tracing::warn!("{}", db.message()),
+            swc_common::errors::Level::Note | swc_common::errors::Level::Help => {
+                tracing::trace!("{}", db.message())
+            }
+        }
+    }
+}
 
 fn bundle_js_to_writer(
     file: PathBuf,
@@ -27,6 +48,20 @@ fn bundle_js_to_writer(
     write_to: &mut impl std::io::Write,
 ) -> anyhow::Result<()> {
     let globals = Globals::new();
+    let handler = Handler::with_emitter_and_flags(Box::new(TracingEmitter), Default::default());
+    GLOBALS.set(&globals, || {
+        HANDLER.set(&handler, || {
+            bundle_js_to_writer_inside_handler(&globals, file, minify, write_to)
+        })
+    })
+}
+
+fn bundle_js_to_writer_inside_handler(
+    globals: &Globals,
+    file: PathBuf,
+    minify: bool,
+    write_to: &mut impl std::io::Write,
+) -> anyhow::Result<()> {
     let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
     let node_resolver = NodeModulesResolver::new(TargetEnv::Browser, Default::default(), true);
     let mut bundler = Bundler::new(
@@ -53,35 +88,33 @@ fn bundle_js_to_writer(
 
     let mut module = bundle.module;
     if minify {
-        GLOBALS.set(&globals, || {
-            module = swc_ecma_minifier::optimize(
-                std::mem::take(&mut module).into(),
-                cm.clone(),
-                None,
-                None,
-                &MinifyOptions {
-                    compress: Some(CompressOptions {
-                        top_level: Some(TopLevelOptions { functions: true }),
-                        ..Default::default()
-                    }),
-                    mangle: Some(MangleOptions {
-                        top_level: Some(true),
-                        ..Default::default()
-                    }),
+        module = swc_ecma_minifier::optimize(
+            std::mem::take(&mut module).into(),
+            cm.clone(),
+            None,
+            None,
+            &MinifyOptions {
+                compress: Some(CompressOptions {
+                    top_level: Some(TopLevelOptions { functions: true }),
                     ..Default::default()
-                },
-                &ExtraOptions {
-                    unresolved_mark: Mark::new(),
-                    top_level_mark: Mark::new(),
-                    mangle_name_cache: None,
-                },
-            )
-            .expect_module();
-            module.visit_mut_with(&mut fixer(None));
-        })
+                }),
+                mangle: Some(MangleOptions {
+                    top_level: Some(true),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            &ExtraOptions {
+                unresolved_mark: Mark::new(),
+                top_level_mark: Mark::new(),
+                mangle_name_cache: None,
+            },
+        )
+        .expect_module();
+        module.visit_mut_with(&mut fixer(None));
     }
 
-    let mut emitter = Emitter {
+    let mut emitter = swc_ecma_codegen::Emitter {
         cfg: swc_ecma_codegen::Config::default().with_minify(minify),
         cm: cm.clone(),
         comments: None,

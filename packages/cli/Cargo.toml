@@ -103,6 +103,7 @@ log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
 tempfile = "3.3"
+manganis = { workspace = true }
 manganis-core = { workspace = true }
 
 # Extracting data from an executable

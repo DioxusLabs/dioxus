@@ -4,7 +4,7 @@ use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
-use manganis_core::AssetOptions;
+use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashSet;
 use std::future::Future;
@@ -263,7 +263,7 @@ impl AppBundle {
         app: BuildArtifacts,
         server: Option<BuildArtifacts>,
     ) -> Result<Self> {
-        let bundle = Self { app, server, build };
+        let mut bundle = Self { app, server, build };
 
         tracing::debug!("Assembling app bundle");
 
@@ -298,7 +298,7 @@ impl AppBundle {
     /// For wasm, we'll want to run `wasm-bindgen` to make it a wasm binary along with some other optimizations
     /// Other platforms we might do some stripping or other optimizations
     /// Move the executable to the workdir
-    async fn write_main_executable(&self) -> Result<()> {
+    async fn write_main_executable(&mut self) -> Result<()> {
         match self.build.build.platform() {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
             // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
@@ -325,7 +325,7 @@ impl AppBundle {
             Platform::Web => {
                 // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
                 self.build.status_wasm_bindgen_start();
-                self.run_wasm_bindgen(&self.app.exe.with_extension("wasm"), &self.build.exe_dir())
+                self.run_wasm_bindgen(&self.app.exe.with_extension("wasm"))
                     .await?;
 
                 // Only run wasm-opt if the feature is enabled
@@ -336,7 +336,7 @@ impl AppBundle {
                 // Write the index.html file with the pre-configured contents we got from pre-rendering
                 std::fs::write(
                     self.build.root_dir().join("index.html"),
-                    self.build.prepare_html()?,
+                    self.prepare_html()?,
                 )?;
             }
 
@@ -470,6 +470,9 @@ impl AppBundle {
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
+        // Remove the wasm bindgen output directory if it exists
+        _ = std::fs::remove_dir_all(&self.build.wasm_bindgen_out_dir());
+
         Ok(())
     }
 
@@ -593,15 +596,14 @@ impl AppBundle {
         None
     }
 
-    pub(crate) async fn run_wasm_bindgen(
-        &self,
-        input_path: &Path,
-        bindgen_outdir: &Path,
-    ) -> anyhow::Result<()> {
+    pub(crate) async fn run_wasm_bindgen(&mut self, input_path: &Path) -> anyhow::Result<()> {
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
 
         let input_path = input_path.to_path_buf();
-        let bindgen_outdir = bindgen_outdir.to_path_buf();
+        // Make sure the bindgen output directory exists
+        let bindgen_outdir = self.build.wasm_bindgen_out_dir();
+        std::fs::create_dir_all(&bindgen_outdir)?;
+
         let name = self.build.krate.executable_name().to_string();
         let keep_debug =
             // if we're in debug mode, or we're generating debug symbols, keep debug info
@@ -631,6 +633,29 @@ impl AppBundle {
             .run()
             .await
             .context("Failed to generate wasm-bindgen bindings")?;
+
+        // After running wasm-bindgen, add the js and wasm asset to the manifest
+        let js_output_path = self.build.wasm_bindgen_js_output_file();
+        let wasm_output_path = self.build.wasm_bindgen_wasm_output_file();
+        let new_assets = [
+            (
+                js_output_path,
+                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+            ),
+            (wasm_output_path, AssetOptions::Unknown),
+        ];
+        for (asset_path, options) in new_assets {
+            let hash = manganis_core::hash::AssetHash::hash_file_contents(&asset_path)?;
+            let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(
+                "Failed to convert wasm bindgen output path to string"
+            ))?;
+            let bundled_asset = manganis::macro_helpers::create_bundled_asset(
+                output_path_str,
+                hash.bytes(),
+                options,
+            );
+            self.app.assets.assets.insert(asset_path, bundled_asset);
+        }
 
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 
