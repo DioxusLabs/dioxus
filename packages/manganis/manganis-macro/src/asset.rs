@@ -177,9 +177,6 @@ impl ToTokens for AssetParser {
                 // Note: into_asset_options is not a trait, so we cannot accept the options directly
                 // in the constructor. Stable rust doesn't have support for constant functions in traits
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
-                // Get the reference to the string that was generated. We cannot return &'static str from
-                // generate_unique_path because it would return a reference to data generated in the function
-                const __ASSET_BUNDLED_PATH_STR: &'static str = __ASSET_BUNDLED_PATH.as_str();
                 // Create the asset that the crate will use. This is used both in the return value and
                 // added to the linker for the bundler to copy later
                 const __ASSET: manganis::BundledAsset = manganis::macro_helpers::#constructor(__ASSET_SOURCE_PATH, __ASSET_HASH, __ASSET_OPTIONS);
