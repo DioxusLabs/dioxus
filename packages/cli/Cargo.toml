@@ -7,7 +7,7 @@ description = "CLI for building fullstack web, desktop, and mobile apps with a s
 repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT OR Apache-2.0"
 keywords = ["mobile", "gui", "cli", "dioxus", "wasm"]
-rust-version = "1.79.0"
+rust-version = "1.81.0"
 
 [dependencies]
 dioxus-autofmt = { workspace = true }
