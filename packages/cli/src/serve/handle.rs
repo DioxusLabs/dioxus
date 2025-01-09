@@ -67,13 +67,19 @@ impl AppHandle {
             tracing::debug!("Proxying fullstack server from port {:?}", addr);
         }
 
+        let krate = &self.app.build.krate;
+
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
             (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
             (
+                dioxus_cli_config::ALWAYS_ON_TOP_ENV,
+                krate.settings.get_always_on_top().to_string(),
+            ),
+            (
                 dioxus_cli_config::APP_TITLE_ENV,
-                self.app.build.krate.config.web.app.title.clone(),
+                krate.config.web.app.title.clone(),
             ),
             ("RUST_BACKTRACE", "1".to_string()),
             (
@@ -85,7 +91,7 @@ impl AppHandle {
             ("CARGO_MANIFEST_DIR", "".to_string()),
         ];
 
-        if let Some(base_path) = &self.app.build.krate.config.web.app.base_path {
+        if let Some(base_path) = &krate.config.web.app.base_path {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
         }
 

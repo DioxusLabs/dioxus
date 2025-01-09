@@ -25,7 +25,7 @@ pub(crate) static PROFILE_ANDROID: &str = "android-dev";
 pub(crate) static PROFILE_SERVER: &str = "server-dev";
 
 impl DioxusCrate {
-    pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
+    pub(crate) fn new(target: &TargetArgs, settings_override: Option<CliSettings>) -> Result<Self> {
         tracing::debug!("Loading crate");
         let cmd = Cmd::new();
         let builder = krates::Builder::new();
@@ -81,7 +81,7 @@ impl DioxusCrate {
             })?
             .clone();
 
-        let settings = CliSettings::load();
+        let settings = CliSettings::load(settings_override);
 
         Ok(Self {
             krates: Arc::new(krates),
