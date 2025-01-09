@@ -94,14 +94,9 @@ fn bundle_js_to_writer_inside_handler(
             None,
             None,
             &MinifyOptions {
-                compress: Some(CompressOptions {
-                    top_level: Some(TopLevelOptions { functions: true }),
-                    ..Default::default()
-                }),
-                mangle: Some(MangleOptions {
-                    top_level: Some(true),
-                    ..Default::default()
-                }),
+                rename: true,
+                compress: Some(CompressOptions::default()),
+                mangle: None,
                 ..Default::default()
             },
             &ExtraOptions {
