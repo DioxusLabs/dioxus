@@ -61,15 +61,18 @@ pub mod launch;
 pub(crate) type ContextProviders =
     Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
-use axum::routing::*;
 use axum::{
     body::{self, Body},
     extract::State,
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
+use axum::{routing::*, ServiceExt};
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
+use tower::util::MapResponse;
+use tower::ServiceExt as _;
+use tower_http::services::fs::ServeFileSystemResponseBody;
 
 use std::sync::Arc;
 
@@ -234,10 +237,18 @@ where
                 .collect::<Vec<_>>()
                 .join("/");
             let route = format!("/{}", route);
+            // Asset paths are hashed, so we can cache the response on the client side forever. If the
+            // asset changes, the hash in the path will also change and the client will refetch it.
             if path.is_dir() {
-                self = self.nest_service(&route, ServeDir::new(path).precompressed_br());
+                self = self.nest_service(
+                    &route,
+                    cache_response_forever(ServeDir::new(path).precompressed_br()),
+                );
             } else {
-                self = self.nest_service(&route, ServeFile::new(path).precompressed_br());
+                self = self.nest_service(
+                    &route,
+                    cache_response_forever(ServeFile::new(path).precompressed_br()),
+                );
             }
         }
 
@@ -274,6 +285,23 @@ where
             }
         }
     }
+}
+
+fn cache_response_forever<
+    S: ServiceExt<Request<Body>, Response = Response<ServeFileSystemResponseBody>>,
+>(
+    service: S,
+) -> MapResponse<
+    S,
+    fn(Response<ServeFileSystemResponseBody>) -> Response<ServeFileSystemResponseBody>,
+> {
+    service.map_response(|mut response: Response<ServeFileSystemResponseBody>| {
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        );
+        response
+    })
 }
 
 fn apply_request_parts_to_response<B>(
