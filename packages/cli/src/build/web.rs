@@ -91,21 +91,21 @@ impl AppBundle {
                 AssetOptions::Css(css_options) => {
                     if css_options.preloaded() {
                         head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"style\" href=\"{asset_path}\" crossorigin=\"\">"
+                            "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
                         ))
                     }
                 }
                 AssetOptions::Image(image_options) => {
                     if image_options.preloaded() {
                         head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"image\" href=\"{asset_path}\" crossorigin=\"\">"
+                            "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
                         ))
                     }
                 }
                 AssetOptions::Js(js_options) => {
                     if js_options.preloaded() {
                         head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"script\" href=\"{asset_path}\" crossorigin=\"\">"
+                            "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
                         ))
                     }
                 }
@@ -122,7 +122,7 @@ impl AppBundle {
             .expect("WASM asset should exist in web bundles")
             .bundled_path();
         head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"{wasm_path}\" crossorigin=\"\">"
+            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
         ));
 
         replace_or_insert_before("{style_include}", "</head", &head_resources, html);

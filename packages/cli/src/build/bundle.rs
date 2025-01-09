@@ -553,9 +553,9 @@ impl AppBundle {
                     .krate
                     .should_pre_compress_web_assets(self.build.build.release);
 
-                let bindgen_dir = self.build.exe_dir();
+                let asset_dir = self.build.asset_dir();
                 tokio::task::spawn_blocking(move || {
-                    crate::fastfs::pre_compress_folder(&bindgen_dir, pre_compress)
+                    crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
                 })
                 .await
                 .unwrap()?;
