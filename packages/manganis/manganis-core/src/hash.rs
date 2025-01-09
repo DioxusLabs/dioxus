@@ -27,9 +27,10 @@ impl std::fmt::Display for AssetHashError {
 
 impl Error for AssetHashError {}
 
-/// The hash of an asset
+/// The opaque hash type manganis uses to identify assets. Each time an asset or asset options change, this hash will
+/// change. This hash is included in the URL of the bundled asset for cache busting.
 pub struct AssetHash {
-    /// We use a wrapper type here to hide the exact size of the hash so we can switch to a sha hash in a minor version bump{}
+    /// We use a wrapper type here to hide the exact size of the hash so we can switch to a sha hash in a minor version bump
     hash: [u8; 8],
 }
 

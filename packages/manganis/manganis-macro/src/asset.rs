@@ -30,7 +30,7 @@ impl std::fmt::Display for AssetParseError {
     }
 }
 
-pub fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
+fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     // Get the location of the root of the crate which is where all assets are relative to
     //
     // IE
