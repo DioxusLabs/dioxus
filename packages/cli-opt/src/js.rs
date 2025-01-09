@@ -5,9 +5,7 @@ use anyhow::Context;
 use manganis_core::JsAssetOptions;
 use swc_common::errors::Emitter;
 use swc_common::errors::Handler;
-use swc_ecma_minifier::option::{
-    CompressOptions, ExtraOptions, MangleOptions, MinifyOptions, TopLevelOptions,
-};
+use swc_ecma_minifier::option::{CompressOptions, ExtraOptions, MinifyOptions};
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_visit::VisitMutWith;
 

@@ -287,14 +287,16 @@ where
     }
 }
 
+type MappedAxumService<S> = MapResponse<
+    S,
+    fn(Response<ServeFileSystemResponseBody>) -> Response<ServeFileSystemResponseBody>,
+>;
+
 fn cache_response_forever<
     S: ServiceExt<Request<Body>, Response = Response<ServeFileSystemResponseBody>>,
 >(
     service: S,
-) -> MapResponse<
-    S,
-    fn(Response<ServeFileSystemResponseBody>) -> Response<ServeFileSystemResponseBody>,
-> {
+) -> MappedAxumService<S> {
     service.map_response(|mut response: Response<ServeFileSystemResponseBody>| {
         response.headers_mut().insert(
             CACHE_CONTROL,
