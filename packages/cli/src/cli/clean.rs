@@ -5,11 +5,11 @@ use crate::Result;
 ///
 /// Simply runs `cargo clean`
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct Clean {}
+pub struct Clean {}
 
 impl Clean {
     /// todo(jon): we should add a config option that just wipes target/dx and target/dioxus-client instead of doing a full clean
-    pub(crate) async fn clean(self) -> Result<StructuredOutput> {
+    pub async fn clean(self) -> Result<StructuredOutput> {
         let output = tokio::process::Command::new("cargo")
             .arg("clean")
             .stdout(Stdio::piped())

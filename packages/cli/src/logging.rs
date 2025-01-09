@@ -50,7 +50,7 @@ static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
 static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
 pub static VERBOSITY: OnceCell<Verbosity> = OnceCell::new();
 
-pub(crate) struct TraceController {
+pub struct TraceController {
     pub(crate) tui_rx: UnboundedReceiver<TraceMsg>,
 }
 
