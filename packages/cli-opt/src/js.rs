@@ -63,7 +63,7 @@ fn bundle_js_to_writer_inside_handler(
     let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
     let node_resolver = NodeModulesResolver::new(TargetEnv::Browser, Default::default(), true);
     let mut bundler = Bundler::new(
-        &globals,
+        globals,
         cm.clone(),
         PathLoader { cm: cm.clone() },
         node_resolver,
@@ -141,7 +141,7 @@ impl Load for PathLoader {
                 &mut Vec::new(),
             )
             .map_err(|err| {
-                let message = err.into_diagnostic(&handler).message();
+                let message = err.into_diagnostic(handler).message();
                 anyhow::anyhow!("{}", message)
             })
             .context("Failed to parse javascript")

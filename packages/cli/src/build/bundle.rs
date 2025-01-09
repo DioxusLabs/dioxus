@@ -471,7 +471,7 @@ impl AppBundle {
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
         // Remove the wasm bindgen output directory if it exists
-        _ = std::fs::remove_dir_all(&self.build.wasm_bindgen_out_dir());
+        _ = std::fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
 
         Ok(())
     }

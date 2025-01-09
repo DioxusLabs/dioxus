@@ -80,7 +80,7 @@ impl AssetHash {
             let read = file
                 .read(&mut buffer)
                 .map_err(|err| AssetHashError::IoError {
-                    err: err.into(),
+                    err,
                     path: file_path.to_path_buf(),
                 })?;
             if read == 0 {

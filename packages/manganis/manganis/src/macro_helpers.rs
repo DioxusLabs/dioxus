@@ -77,7 +77,7 @@ const fn generate_unique_path_with_byte_hash(
     // Hash the contents along with the asset config to create a unique hash for the asset
     // When this hash changes, the client needs to re-fetch the asset
     let mut hasher = ConstHasher::new();
-    hasher = hasher.write(&content_hash);
+    hasher = hasher.write(content_hash);
     hasher = hasher.hash_by_bytes(asset_config);
     let hash = hasher.finish();
 
