@@ -79,7 +79,7 @@ impl AppRunner {
                     },
                     Some(status) = OptionFuture::from(handle.server_child.as_mut().map(|f| f.wait())) => {
                         match status {
-                            Ok(status) => ProcessExited { status, platform: Platform::Server },
+                            Ok(status) => ProcessExited { status, platform },
                             Err(_err) => todo!("handle error in process joining?"),
                         }
                     }

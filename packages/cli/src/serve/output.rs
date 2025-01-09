@@ -482,6 +482,7 @@ impl Output {
                 lines.push(krate.as_str().dark_gray())
             }
             BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
+            BuildStage::PrerenderingRoutes {} => lines.push("Prerendering static routes".yellow()),
             BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
             BuildStage::RunningGradle {} => lines.push("Running gradle assemble".yellow()),
             BuildStage::Bundling {} => lines.push("Bundling app".yellow()),

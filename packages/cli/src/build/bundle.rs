@@ -1,3 +1,4 @@
+use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
 use crate::wasm_bindgen::WasmBindgenBuilder;
 use crate::{BuildRequest, Platform};
@@ -284,6 +285,7 @@ impl AppBundle {
             .context("Failed to write assets")?;
         bundle.write_metadata().await?;
         bundle.optimize().await?;
+        bundle.pre_render_ssg_routes().await?;
         bundle
             .assemble()
             .await
@@ -558,11 +560,6 @@ impl AppBundle {
                 })
                 .await
                 .unwrap()?;
-
-                // Run SSG and cache static routes
-                if self.build.build.ssg {
-                    self.run_ssg().await?;
-                }
             }
             Platform::MacOS => {}
             Platform::Windows => {}
@@ -686,76 +683,18 @@ impl AppBundle {
         Ok(())
     }
 
-    async fn run_ssg(&self) -> anyhow::Result<()> {
-        use futures_util::stream::FuturesUnordered;
-        use futures_util::StreamExt;
-        use tokio::process::Command;
-
-        let fullstack_address = dioxus_cli_config::fullstack_address_or_localhost();
-        let address = fullstack_address.ip().to_string();
-        let port = fullstack_address.port().to_string();
-
-        tracing::info!("Running SSG");
-
-        // Run the server executable
-        let _child = Command::new(
-            self.server_exe()
+    async fn pre_render_ssg_routes(&self) -> Result<()> {
+        // Run SSG and cache static routes
+        if !self.build.build.ssg {
+            return Ok(());
+        }
+        self.build.status_prerendering_routes();
+        pre_render_static_routes(
+            &self
+                .server_exe()
                 .context("Failed to find server executable")?,
         )
-        .env(dioxus_cli_config::SERVER_PORT_ENV, port.clone())
-        .env(dioxus_cli_config::SERVER_IP_ENV, address.clone())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
-
-        // Wait a second for the server to start
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        // Get the routes from the `/static_routes` endpoint
-        let mut routes = reqwest::Client::builder()
-            .build()?
-            .post(format!("http://{address}:{port}/api/static_routes"))
-            .send()
-            .await
-            .context("Failed to get static routes from server")?
-            .text()
-            .await
-            .map(|raw| serde_json::from_str::<Vec<String>>(&raw).unwrap())
-            .inspect(|text| tracing::debug!("Got static routes: {text:?}"))
-            .context("Failed to parse static routes from server")?
-            .into_iter()
-            .map(|line| {
-                let port = port.clone();
-                let address = address.clone();
-                async move {
-                    tracing::info!("SSG: {line}");
-                    reqwest::Client::builder()
-                        .build()?
-                        .get(format!("http://{address}:{port}{line}"))
-                        .header("Accept", "text/html")
-                        .send()
-                        .await
-                }
-            })
-            .collect::<FuturesUnordered<_>>();
-
-        while let Some(route) = routes.next().await {
-            match route {
-                Ok(route) => tracing::debug!("ssg success: {route:?}"),
-                Err(err) => tracing::error!("ssg error: {err:?}"),
-            }
-        }
-
-        // Wait a second for the cache to be written by the server
-        tracing::info!("Waiting a moment for isrg to propagate...");
-
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-
-        tracing::info!("SSG complete");
-
-        drop(_child);
-
+        .await?;
         Ok(())
     }
 
