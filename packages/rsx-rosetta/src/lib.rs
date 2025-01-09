@@ -57,6 +57,10 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 .attributes
                 .iter()
                 .map(|(name, value)| {
+                    // xlink attributes are deprecated and technically we can't handle them.
+                    // todo(jon): apply the namespaces to the attributes
+                    let (_namespace, name) = name.split_once(':').unwrap_or(("", name));
+
                     let value = HotLiteral::from_raw_text(value.as_deref().unwrap_or("false"));
                     let attr = if let Some(name) = map_html_attribute_to_rsx(name) {
                         let name = if let Some(name) = name.strip_prefix("r#") {
