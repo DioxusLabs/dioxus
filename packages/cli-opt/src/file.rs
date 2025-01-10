@@ -17,7 +17,7 @@ pub fn process_file_to(
     source: &Path,
     output_path: &Path,
 ) -> anyhow::Result<()> {
-    if check_output_path(output_path)? {
+    if asset_exists(output_path)? {
         return Ok(());
     }
 
@@ -57,6 +57,9 @@ pub fn process_file_to(
         AssetOptions::Folder(options) => {
             process_folder(options, source, output_path)?;
         }
+        AssetOptions::PreservedFolder(options) => {
+            process_folder(options, source, output_path)?;
+        }
         _ => {
             tracing::warn!("Unknown asset options: {:?}", options);
         }
@@ -67,7 +70,7 @@ pub fn process_file_to(
 
 /// Copies an asset to it's destination without any processing.
 pub fn copy_file_to(source: &Path, output_path: &Path) -> anyhow::Result<()> {
-    if check_output_path(output_path)? {
+    if asset_exists(output_path)? {
         return Ok(());
     }
 
@@ -90,7 +93,7 @@ pub fn copy_file_to(source: &Path, output_path: &Path) -> anyhow::Result<()> {
 /// 2. That the parent path exists or is created.
 ///
 /// Returns true if asset processing should be skipped.
-fn check_output_path(output_path: &Path) -> anyhow::Result<bool> {
+fn asset_exists(output_path: &Path) -> anyhow::Result<bool> {
     // If the file already exists, then we must have a file with the same hash
     // already. The hash has the file contents and options, so if we find a file
     // with the same hash, we probably already created this file in the past

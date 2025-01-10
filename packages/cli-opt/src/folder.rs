@@ -1,12 +1,12 @@
 use super::file::process_file_to;
 use crate::file::copy_file_to;
-use manganis_core::FolderAssetOptions;
+use manganis_core::FolderOptions;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::path::Path;
 
 /// Process a folder, optimizing and copying all assets into the output folder
 pub fn process_folder(
-    options: &FolderAssetOptions,
+    options: &impl FolderOptions,
     source: &Path,
     output_folder: &Path,
 ) -> anyhow::Result<()> {
