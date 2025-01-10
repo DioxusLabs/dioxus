@@ -1,6 +1,6 @@
 use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
-use crate::wasm_bindgen::WasmBindgenBuilder;
+use crate::tools::wasm_bindgen::WasmBindgenBuilder;
 use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
