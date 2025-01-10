@@ -137,7 +137,7 @@ fn test_unique_path() {
     let asset_config = AssetOptions::Unknown;
     let output_path =
         generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
-    assert_eq!(output_path.as_str(), "test-c8c4cfad21cac262");
+    assert_eq!(output_path.as_str(), "test-8d6e32dc0b45f853");
 
     // Just changing the content hash should change the total hash
     let mut input_path = PathBuf::from("test");
@@ -147,7 +147,7 @@ fn test_unique_path() {
     let asset_config = AssetOptions::Unknown;
     let output_path =
         generate_unique_path(&input_path.to_string_lossy(), content_hash, &asset_config);
-    assert_eq!(output_path.as_str(), "test-7bced03789ff865c");
+    assert_eq!(output_path.as_str(), "test-40783366737abc4d");
 }
 
 /// Serialize an asset to a const buffer
