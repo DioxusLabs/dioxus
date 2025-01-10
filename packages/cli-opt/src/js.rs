@@ -4,8 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use manganis_core::JsAssetOptions;
-use swc::JsMinifyExtras;
-use swc::{config::JsMinifyOptions, try_with_handler, BoolOrDataConfig};
+use swc::{config::JsMinifyOptions, try_with_handler, BoolOrDataConfig, JsMinifyExtras};
 use swc_common::{sync::Lrc, FileName};
 use swc_common::{SourceMap, GLOBALS};
 use swc_ecma_minifier::option::MangleOptions;
