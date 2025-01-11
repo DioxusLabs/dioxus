@@ -8,6 +8,7 @@ use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis_core::AssetOptions;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashSet;
+use std::ffi::OsString;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -362,7 +363,35 @@ impl AppBundle {
             | Platform::Ios
             | Platform::Liveview
             | Platform::Server => {
-                std::fs::copy(&self.app.exe, self.main_exe())?;
+                // On Unix-like systems you can't do `cp from to` where `to` is a running binary.
+                // But you can `mv from to`! To keep the binary produced by cargo intact, we need
+                // to first copy it to some temporary disposable path and then use to replace
+                // the main binary.
+                if matches!(self.build.build.platform(), Platform::Linux) {
+                    let mut tmp_file_name = OsString::from(".tmp_");
+                    tmp_file_name.push(self.app.exe.file_name().unwrap());
+                    let tmp_file_path = self.app.exe.with_file_name(tmp_file_name);
+                    tracing::trace!(
+                        "Copying binary from {:?} to {:?}",
+                        &self.app.exe,
+                        &tmp_file_path
+                    );
+                    std::fs::copy(&self.app.exe, &tmp_file_path)?;
+
+                    tracing::trace!(
+                        "Moving binary from {:?} to {:?}",
+                        &tmp_file_path,
+                        &self.main_exe()
+                    );
+                    std::fs::rename(tmp_file_path, self.main_exe())?;
+                } else {
+                    tracing::trace!(
+                        "Copying binary from {:?} to {:?}",
+                        &self.app.exe,
+                        &self.main_exe()
+                    );
+                    std::fs::copy(&self.app.exe, self.main_exe())?;
+                }
             }
         }
 
