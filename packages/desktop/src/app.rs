@@ -1,4 +1,12 @@
-use crate::{config::{Config, WindowCloseBehaviour}, event_handlers::WindowEventHandlers, file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine}, ipc::{IpcMessage, UserWindowEvent}, query::QueryResult, shortcut::ShortcutRegistry, webview::WebviewInstance, window};
+use crate::{
+    config::{Config, WindowCloseBehaviour},
+    event_handlers::WindowEventHandlers,
+    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
+    ipc::{IpcMessage, UserWindowEvent},
+    query::QueryResult,
+    shortcut::ShortcutRegistry,
+    webview::WebviewInstance,
+};
 use dioxus_core::{ElementId, VirtualDom};
 use dioxus_html::PlatformEventData;
 use std::{
@@ -12,9 +20,8 @@ use tao::{
     dpi::PhysicalSize,
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
-    window::WindowId,
+    window::{Window, WindowId},
 };
-use tracing::instrument::WithSubscriber;
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
@@ -186,17 +193,23 @@ impl App {
                 self.persist_window_state();
 
                 self.webviews.remove(&id);
-
                 if self.webviews.is_empty() {
                     self.control_flow = ControlFlow::Exit
                 }
+            }
+
+            LastWindowHides if self.webviews.len() > 1 => {
+                let view = self.webviews.remove(&id).unwrap();
+
+                println!("rc harcount {:?}", Rc::strong_count(&view.desktop_context));
             }
 
             LastWindowHides => {
                 let Some(webview) = self.webviews.get(&id) else {
                     return;
                 };
-                hide_app_window(&webview.desktop_context.webview);
+
+                hide_app_window(&webview.desktop_context.window);
             }
 
             CloseWindow => {
@@ -525,7 +538,7 @@ struct PreservedWindowState {
 
 /// Different hide implementations per platform
 #[allow(unused)]
-pub fn hide_app_window(window: &wry::WebView) {
+fn hide_app_window(window: &Window) {
     #[cfg(target_os = "windows")]
     {
         use tao::platform::windows::WindowExtWindows;
@@ -540,16 +553,18 @@ pub fn hide_app_window(window: &wry::WebView) {
 
     #[cfg(target_os = "macos")]
     {
+        window.set_visible(false);
+
         // window.set_visible(false); has the wrong behaviour on macOS
         // It will hide the window but not show it again when the user switches
         // back to the app. `NSApplication::hide:` has the correct behaviour
-        use objc::runtime::Object;
-        use objc::{msg_send, sel, sel_impl};
-        objc::rc::autoreleasepool(|| unsafe {
-            let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
-            let nil = std::ptr::null_mut::<Object>();
-            let _: () = msg_send![app, hide: nil];
-        });
+        // use objc::runtime::Object;
+        // use objc::{msg_send, sel, sel_impl};
+        // objc::rc::autoreleasepool(|| unsafe {
+        //     let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
+        //     let nil = std::ptr::null_mut::<Object>();
+        //     let _: () = msg_send![app, hide: nil];
+        // });
     }
 }
 

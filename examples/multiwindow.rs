@@ -5,9 +5,12 @@
 //! own context, root elements, etc.
 
 use dioxus::prelude::*;
+use dioxus::{desktop::Config, desktop::WindowCloseBehaviour};
 
 fn main() {
-    dioxus::LaunchBuilder::desktop().launch(app);
+    dioxus::LaunchBuilder::desktop()
+        .with_cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::LastWindowHides))
+        .launch(app);
 }
 
 fn app() -> Element {

@@ -29,8 +29,7 @@ use tao::platform::ios::WindowExtIOS;
 ///
 /// This function will panic if it is called outside of the context of a Dioxus App.
 pub fn window() -> DesktopContext {
-    let ctx: WeakDesktopContext = dioxus_core::prelude::consume_context();
-    ctx.upgrade().unwrap() // todo: implement error
+    dioxus_core::prelude::consume_context()
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.
@@ -107,12 +106,12 @@ impl DesktopService {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> WeakDesktopContext {
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
         let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
         let cx = window.dom.in_runtime(|| {
             ScopeId::ROOT
-                .consume_context()
+                .consume_context::<Rc<DesktopService>>()
                 .unwrap()
         });
 
@@ -123,7 +122,7 @@ impl DesktopService {
 
         self.shared.pending_webviews.borrow_mut().push(window);
 
-        cx
+        Rc::downgrade(&cx)
     }
 
     /// trigger the drag-window event
@@ -148,9 +147,9 @@ impl DesktopService {
     /// Close this window
     pub fn close(&self) {
         let _ = self
-          .shared
-          .proxy
-          .send_event(UserWindowEvent::CloseWindow(self.id()));
+            .shared
+            .proxy
+            .send_event(UserWindowEvent::CloseWindow(self.id()));
     }
 
     /// Close a particular window, given its ID

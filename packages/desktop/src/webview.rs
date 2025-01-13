@@ -10,7 +10,7 @@ use crate::{
     ipc::UserWindowEvent,
     protocol,
     waker::tao_waker,
-    Config, DesktopContext, DesktopService, WeakDesktopContext
+    Config, DesktopContext, DesktopService,
 };
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
@@ -19,17 +19,16 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
-use std::cell::OnceCell;
 use std::sync::Arc;
+use std::{cell::OnceCell, rc::Weak};
 use std::{rc::Rc, task::Waker};
-use std::rc::Weak;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
     runtime: Rc<Runtime>,
     pub wry_queue: WryQueue,
-    desktop_context: Rc<OnceCell<WeakDesktopContext>>,
+    desktop_context: Rc<OnceCell<Weak<DesktopService>>>,
 }
 
 impl WebviewEdits {
@@ -41,7 +40,7 @@ impl WebviewEdits {
         }
     }
 
-    fn set_desktop_context(&self, context: WeakDesktopContext) {
+    fn set_desktop_context(&self, context: Weak<DesktopService>) {
         _ = self.desktop_context.set(context);
     }
 
@@ -109,16 +108,14 @@ impl WebviewEdits {
             bubbles,
             data,
         } = event;
-        let Some(weak_desktop_context) = self.desktop_context.get() else {
+        let Some(desktop_context) = self.desktop_context.get() else {
             tracing::error!(
                 "Tried to handle event before setting the desktop context on the event handler"
             );
             return Default::default();
         };
 
-        let Some(desktop_context) = weak_desktop_context.upgrade() else {
-            return Default::default();
-        };
+        let desktop_context = desktop_context.upgrade().unwrap();
 
         let query = desktop_context.query.clone();
         let recent_file = desktop_context.file_hover.clone();
@@ -126,7 +123,7 @@ impl WebviewEdits {
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, weak_desktop_context.clone(), query.clone());
+                let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
             }
             dioxus_html::EventData::Drag(ref drag) => {
@@ -416,14 +413,12 @@ impl WebviewInstance {
             file_hover,
         ));
 
-        let weak_desktop: WeakDesktopContext = Rc::downgrade(&desktop_context);
-
         // Provide the desktop context to the virtual dom and edit handler
-        edits.set_desktop_context(weak_desktop.clone());
-        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(weak_desktop.clone()));
+        edits.set_desktop_context(Rc::downgrade(&desktop_context));
+        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
         let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
         dom.in_runtime(|| {
-            ScopeId::ROOT.provide_context(weak_desktop.clone());
+            ScopeId::ROOT.provide_context(desktop_context.clone());
             ScopeId::ROOT.provide_context(provider);
             ScopeId::ROOT.provide_context(history_provider);
         });

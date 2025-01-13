@@ -1,11 +1,11 @@
+use crate::{query::Query, DesktopContext, WeakDesktopContext};
 use dioxus_core::prelude::queue_effect;
 use dioxus_document::{
     create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,
     ScriptProps, StyleProps,
 };
-use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
-use crate::{query::Query, DesktopContext, WeakDesktopContext};
+use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 /// Code for the Dioxus channel used to communicate between the dioxus and javascript code
 pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
@@ -17,20 +17,24 @@ pub struct DesktopDocument {
 }
 
 impl DesktopDocument {
-    pub fn new(desktop_ctx: WeakDesktopContext) -> Self {
+    pub fn new(desktop_ctx: DesktopContext) -> Self {
+        let desktop_ctx = std::rc::Rc::downgrade(&desktop_ctx);
         Self { desktop_ctx }
     }
 }
 
 impl Document for DesktopDocument {
     fn eval(&self, js: String) -> Eval {
-        Eval::new(DesktopEvaluator::create(self.desktop_ctx.clone(), js))
+        Eval::new(DesktopEvaluator::create(
+            self.desktop_ctx
+                .upgrade()
+                .expect("Window to exist when document is alive"),
+            js,
+        ))
     }
 
     fn set_title(&self, title: String) {
-        if let Some(desktop_ctx) = self.desktop_ctx.upgrade() {
-            desktop_ctx.set_title(&title);
-        }
+        self.desktop_ctx.upgrade().unwrap().window.set_title(&title);
     }
 
     /// Create a new meta tag in the head
@@ -81,12 +85,9 @@ pub(crate) struct DesktopEvaluator {
 
 impl DesktopEvaluator {
     /// Creates a new evaluator for desktop-based targets.
-    pub fn create(
-        weak_desktop_ctx: WeakDesktopContext,
-        js: String,
-    ) -> GenerationalBox<Box<dyn Evaluator>> {
-        let desktop_ctx = weak_desktop_ctx.upgrade().unwrap(); // todo: implement error or Default
-        let query = desktop_ctx.query.new_query(&js, weak_desktop_ctx);
+    pub fn create(desktop_ctx: DesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
+        let ctx = desktop_ctx.clone();
+        let query = desktop_ctx.query.new_query(&js, ctx);
 
         // We create a generational box that is owned by the query slot so that when we drop the query slot, the generational box is also dropped.
         let owner = UnsyncStorage::owner();
