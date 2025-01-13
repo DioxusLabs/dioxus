@@ -19,6 +19,7 @@ proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full", "extra-traits"] }
 manganis-core = { workspace = true }
+dunce = { workspace = true }
 
 [features]
 default = []

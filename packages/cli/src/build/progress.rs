@@ -90,6 +90,12 @@ impl BuildRequest {
         });
     }
 
+    pub(crate) fn status_prerendering_routes(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::PrerenderingRoutes {},
+        });
+    }
+
     pub(crate) fn status_installing_tooling(&self) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::InstallingTooling {},

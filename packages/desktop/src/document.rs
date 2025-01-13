@@ -1,8 +1,8 @@
-use std::default;
-use std::rc::Weak;
-use webbrowser::Browser::Default;
-use dioxus_document::{Document, Eval, EvalError, Evaluator};
-use dioxus_html::track::default;
+use dioxus_core::prelude::queue_effect;
+use dioxus_document::{
+    create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,
+    ScriptProps, StyleProps,
+};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 use crate::{query::Query, DesktopContext, WeakDesktopContext};
@@ -11,6 +11,7 @@ use crate::{query::Query, DesktopContext, WeakDesktopContext};
 pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
 
 /// Represents the desktop-target's provider of evaluators.
+#[derive(Clone)]
 pub struct DesktopDocument {
     pub(crate) desktop_ctx: WeakDesktopContext,
 }
@@ -31,6 +32,46 @@ impl Document for DesktopDocument {
             desktop_ctx.set_title(&title);
         }
     }
+
+    /// Create a new meta tag in the head
+    fn create_meta(&self, props: MetaProps) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head("meta", &props.attributes(), None));
+        });
+    }
+
+    /// Create a new script tag in the head
+    fn create_script(&self, props: ScriptProps) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head(
+                "script",
+                &props.attributes(),
+                props.script_contents().ok(),
+            ));
+        });
+    }
+
+    /// Create a new style tag in the head
+    fn create_style(&self, props: StyleProps) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head(
+                "style",
+                &props.attributes(),
+                props.style_contents().ok(),
+            ));
+        });
+    }
+
+    /// Create a new link tag in the head
+    fn create_link(&self, props: LinkProps) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head("link", &props.attributes(), None));
+        });
+    }
 }
 
 /// Represents a desktop-target's JavaScript evaluator.
@@ -40,7 +81,10 @@ pub(crate) struct DesktopEvaluator {
 
 impl DesktopEvaluator {
     /// Creates a new evaluator for desktop-based targets.
-    pub fn create(weak_desktop_ctx: WeakDesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
+    pub fn create(
+        weak_desktop_ctx: WeakDesktopContext,
+        js: String,
+    ) -> GenerationalBox<Box<dyn Evaluator>> {
         let desktop_ctx = weak_desktop_ctx.upgrade().unwrap(); // todo: implement error or Default
         let query = desktop_ctx.query.new_query(&js, weak_desktop_ctx);
 

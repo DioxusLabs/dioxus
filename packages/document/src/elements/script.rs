@@ -22,7 +22,8 @@ pub struct ScriptProps {
 }
 
 impl ScriptProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    /// Get all the attributes for the script tag
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(defer) = &self.defer {
             attributes.push(("defer", defer.to_string()));
@@ -90,13 +91,24 @@ pub fn Script(props: ScriptProps) -> Element {
     use_update_warning(&props, "Script {}");
 
     use_hook(|| {
+        let document = document();
+        let mut insert_script = document.create_head_component();
         if let Some(src) = &props.src {
             if !should_insert_script(src) {
-                return;
+                insert_script = false;
             }
         }
 
-        let document = document();
+        if !insert_script {
+            return;
+        }
+
+        // Make sure the props are in a valid form - they must either have a source or children
+        if let (None, Err(err)) = (&props.src, props.script_contents()) {
+            // If the script has neither contents nor src, log an error
+            err.log("Script")
+        }
+
         document.create_script(props);
     });
 

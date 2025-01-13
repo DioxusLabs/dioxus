@@ -64,7 +64,11 @@ impl EnumLayout {
             i += 1;
         }
 
-        let variants_offset = (discriminant.size / max_align) + max_align;
+        let variants_offset_raw = discriminant.size;
+        let padding = (max_align - (variants_offset_raw % max_align)) % max_align;
+        let variants_offset = variants_offset_raw + padding;
+
+        assert!(variants_offset % max_align == 0);
 
         Self {
             size,
@@ -588,7 +592,7 @@ const fn serialize_const_struct(
     while i < layout.data.len() {
         // Serialize the field at the offset pointer in the struct
         let StructFieldLayout { offset, layout } = &layout.data[i];
-        let field = unsafe { ptr.byte_add(*offset) };
+        let field = ptr.wrapping_byte_add(*offset as _);
         to = serialize_const_ptr(field, to, layout);
         i += 1;
     }
@@ -610,11 +614,11 @@ const fn serialize_const_enum(
         let byte = if cfg!(target_endian = "big") {
             unsafe {
                 byte_ptr
-                    .byte_add(layout.discriminant.size - offset - 1)
+                    .wrapping_byte_add((layout.discriminant.size - offset - 1) as _)
                     .read()
             }
         } else {
-            unsafe { byte_ptr.byte_add(offset).read() }
+            unsafe { byte_ptr.wrapping_byte_add(offset as _).read() }
         };
         to = to.push(byte);
         discriminant |= (byte as u32) << (offset * 8);
@@ -626,7 +630,7 @@ const fn serialize_const_enum(
         // If the variant is the discriminated one, serialize it
         let EnumVariant { tag, data, .. } = &layout.variants[i];
         if discriminant == *tag {
-            let data_ptr = unsafe { ptr.byte_add(layout.variants_offset) };
+            let data_ptr = ptr.wrapping_byte_offset(layout.variants_offset as _);
             to = serialize_const_struct(data_ptr, to, data);
             break;
         }
@@ -646,9 +650,12 @@ const fn serialize_const_primitive(
     while offset < layout.size {
         // If the bytes are reversed, walk backwards from the end of the number when pushing bytes
         if cfg!(any(target_endian = "big", feature = "test-big-endian")) {
-            to = to.push(unsafe { ptr.byte_add(layout.size - offset - 1).read() });
+            to = to.push(unsafe {
+                ptr.wrapping_byte_offset((layout.size - offset - 1) as _)
+                    .read()
+            });
         } else {
-            to = to.push(unsafe { ptr.byte_add(offset).read() });
+            to = to.push(unsafe { ptr.wrapping_byte_offset(offset as _).read() });
         }
         offset += 1;
     }
@@ -664,7 +671,7 @@ const fn serialize_const_list(
     let len = layout.len;
     let mut i = 0;
     while i < len {
-        let field = unsafe { ptr.byte_add(i * layout.item_layout.size()) };
+        let field = ptr.wrapping_byte_offset((i * layout.item_layout.size()) as _);
         to = serialize_const_ptr(field, to, layout.item_layout);
         i += 1;
     }

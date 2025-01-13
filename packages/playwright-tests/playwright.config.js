@@ -103,6 +103,15 @@ module.exports = defineConfig({
       stdout: "pipe",
     },
     {
+      cwd: path.join(process.cwd(), "fullstack-mounted"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 7777',
+      port: 7777,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
       cwd: path.join(process.cwd(), "suspense-carousel"),
       command:
         'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 4040',
@@ -116,6 +125,15 @@ module.exports = defineConfig({
       command:
         'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 5050',
       port: 5050,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
+      cwd: path.join(process.cwd(), "nested-suspense"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
+      port: 6060,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
