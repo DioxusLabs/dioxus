@@ -5,7 +5,10 @@ use anyhow::Context;
 use manganis_core::JsAssetOptions;
 use swc_common::errors::Emitter;
 use swc_common::errors::Handler;
+use swc_common::input::SourceFileInput;
 use swc_ecma_minifier::option::{CompressOptions, ExtraOptions, MinifyOptions};
+use swc_ecma_parser::lexer::Lexer;
+use swc_ecma_parser::Parser;
 use swc_ecma_transforms_base::fixer::fixer;
 use swc_ecma_visit::VisitMutWith;
 
@@ -42,6 +45,7 @@ impl Emitter for TracingEmitter {
 
 fn bundle_js_to_writer(
     file: PathBuf,
+    bundle: bool,
     minify: bool,
     write_to: &mut impl std::io::Write,
 ) -> anyhow::Result<()> {
@@ -49,7 +53,7 @@ fn bundle_js_to_writer(
     let handler = Handler::with_emitter_and_flags(Box::new(TracingEmitter), Default::default());
     GLOBALS.set(&globals, || {
         HANDLER.set(&handler, || {
-            bundle_js_to_writer_inside_handler(&globals, file, minify, write_to)
+            bundle_js_to_writer_inside_handler(&globals, file, bundle, minify, write_to)
         })
     })
 }
@@ -57,34 +61,54 @@ fn bundle_js_to_writer(
 fn bundle_js_to_writer_inside_handler(
     globals: &Globals,
     file: PathBuf,
+    bundle: bool,
     minify: bool,
     write_to: &mut impl std::io::Write,
 ) -> anyhow::Result<()> {
     let cm = Lrc::new(SourceMap::new(FilePathMapping::empty()));
-    let node_resolver = NodeModulesResolver::new(TargetEnv::Browser, Default::default(), true);
-    let mut bundler = Bundler::new(
-        globals,
-        cm.clone(),
-        PathLoader { cm: cm.clone() },
-        node_resolver,
-        Config {
-            require: true,
-            ..Default::default()
-        },
-        Box::new(Hook),
-    );
-    let mut entries = HashMap::default();
-    entries.insert("main".to_string(), FileName::Real(file));
+    let mut module = if bundle {
+        let node_resolver = NodeModulesResolver::new(TargetEnv::Browser, Default::default(), true);
+        let mut bundler = Bundler::new(
+            globals,
+            cm.clone(),
+            PathLoader { cm: cm.clone() },
+            node_resolver,
+            Config {
+                require: true,
+                ..Default::default()
+            },
+            Box::new(Hook),
+        );
+        let mut entries = HashMap::default();
+        entries.insert("main".to_string(), FileName::Real(file));
 
-    let mut bundles = bundler
-        .bundle(entries)
-        .context("failed to bundle javascript with swc")?;
-    // Since we only inserted one entry, there should only be one bundle in the output
-    let bundle = bundles
-        .pop()
-        .ok_or_else(|| anyhow::anyhow!("swc did not output any bundles"))?;
+        let mut bundles = bundler
+            .bundle(entries)
+            .context("failed to bundle javascript with swc")?;
+        // Since we only inserted one entry, there should only be one bundle in the output
+        let bundle = bundles
+            .pop()
+            .ok_or_else(|| anyhow::anyhow!("swc did not output any bundles"))?;
+        bundle.module
+    } else {
+        let fm = cm.load_file(Path::new(&file)).expect("Failed to load file");
 
-    let mut module = bundle.module;
+        let lexer = Lexer::new(
+            Default::default(),
+            Default::default(),
+            SourceFileInput::from(&*fm),
+            None,
+        );
+        let mut parser = Parser::new_from(lexer);
+
+        parser.parse_module().map_err(|err| {
+            HANDLER.with(|handler| {
+                let message = err.into_diagnostic(handler).message();
+                anyhow::anyhow!("{}", message)
+            })
+        })?
+    };
+
     if minify {
         module = swc_ecma_minifier::optimize(
             std::mem::take(&mut module).into(),
@@ -198,24 +222,22 @@ pub(crate) fn process_js(
     js_options: &JsAssetOptions,
     source: &Path,
     output_path: &Path,
+    bundle: bool,
 ) -> anyhow::Result<()> {
-    let mut writer = std::io::BufWriter::new(std::fs::File::create(output_path)?);
+    let mut writer = std::io::BufWriter::new(std::fs::File::create(&output_path)?);
     if js_options.minified() {
-        match bundle_js_to_writer(source.to_path_buf(), true, &mut writer) {
-            Ok(_) => return Ok(()),
-            Err(err) => {
-                tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
-            }
+        if let Err(err) = bundle_js_to_writer(source.to_path_buf(), bundle, true, &mut writer) {
+            tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
         }
+    } else {
+        let mut source_file = std::fs::File::open(source)?;
+        std::io::copy(&mut source_file, &mut writer).with_context(|| {
+            format!(
+                "Failed to write js to output location: {}",
+                output_path.display()
+            )
+        })?;
     }
-
-    let mut source_file = std::fs::File::open(source)?;
-    std::io::copy(&mut source_file, &mut writer).with_context(|| {
-        format!(
-            "Failed to write js to output location: {}",
-            output_path.display()
-        )
-    })?;
 
     Ok(())
 }
