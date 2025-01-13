@@ -320,7 +320,7 @@ impl History for LiveviewHistory {
         visited_indices
             .iter()
             .position(|&rhs| timeline.current_index == rhs)
-            .map_or(false, |index| {
+            .is_some_and(|index| {
                 index > 0 && visited_indices[index - 1] == timeline.current_index - 1
             })
     }
@@ -332,7 +332,7 @@ impl History for LiveviewHistory {
         visited_indices
             .iter()
             .rposition(|&rhs| timeline.current_index == rhs)
-            .map_or(false, |index| {
+            .is_some_and(|index| {
                 index < visited_indices.len() - 1
                     && visited_indices[index + 1] == timeline.current_index + 1
             })

@@ -215,6 +215,7 @@ impl WebviewInstance {
 
             unsafe {
                 let window: id = window.ns_window() as id;
+                #[allow(unexpected_cfgs)]
                 let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
             }
         }
