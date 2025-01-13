@@ -1,4 +1,3 @@
-use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
@@ -12,6 +11,7 @@ use crate::{
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
+use crate::{document::DesktopDocument, WeakDesktopContext};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
@@ -28,7 +28,7 @@ use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 pub(crate) struct WebviewEdits {
     runtime: Rc<Runtime>,
     pub wry_queue: WryQueue,
-    desktop_context: Rc<OnceCell<DesktopContext>>,
+    desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
 impl WebviewEdits {
@@ -40,7 +40,7 @@ impl WebviewEdits {
         }
     }
 
-    fn set_desktop_context(&self, context: DesktopContext) {
+    fn set_desktop_context(&self, context: WeakDesktopContext) {
         _ = self.desktop_context.set(context);
     }
 
@@ -114,6 +114,8 @@ impl WebviewEdits {
             );
             return Default::default();
         };
+
+        let desktop_context = desktop_context.upgrade().unwrap();
 
         let query = desktop_context.query.clone();
         let recent_file = desktop_context.file_hover.clone();
@@ -412,7 +414,7 @@ impl WebviewInstance {
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
-        edits.set_desktop_context(desktop_context.clone());
+        edits.set_desktop_context(Rc::downgrade(&desktop_context));
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
         let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
         dom.in_runtime(|| {

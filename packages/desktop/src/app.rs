@@ -20,7 +20,7 @@ use tao::{
     dpi::PhysicalSize,
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
-    window::WindowId,
+    window::{Window, WindowId},
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
@@ -198,11 +198,14 @@ impl App {
                 }
             }
 
+            LastWindowHides if self.webviews.len() > 1 => {
+                self.webviews.remove(&id);
+            }
+
             LastWindowHides => {
-                let Some(webview) = self.webviews.get(&id) else {
-                    return;
-                };
-                hide_app_window(&webview.desktop_context.webview);
+                if let Some(webview) = self.webviews.get(&id) {
+                    hide_last_window(&webview.desktop_context.window);
+                }
             }
 
             CloseWindow => {
@@ -529,9 +532,13 @@ struct PreservedWindowState {
     monitor: String,
 }
 
-/// Different hide implementations per platform
+/// Hide the last window when using LastWindowHides.
+///
+/// On macOS, if we use `set_visibility(false)` on the window, it will hide the window but not show
+/// it again when the user switches back to the app. `NSApplication::hide:` has the correct behaviour,
+/// so we need to special case it.
 #[allow(unused)]
-pub fn hide_app_window(window: &wry::WebView) {
+fn hide_last_window(window: &Window) {
     #[cfg(target_os = "windows")]
     {
         use tao::platform::windows::WindowExtWindows;
