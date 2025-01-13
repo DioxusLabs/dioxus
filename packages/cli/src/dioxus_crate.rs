@@ -45,13 +45,36 @@ impl DioxusCrate {
             TargetKind::Bin
         };
 
+        let main_package = &krates[package];
+
         let target_name = target
             .example
             .clone()
             .or(target.bin.clone())
+            .or_else(|| {
+                if let Some(default_run) = &main_package.default_run {
+                    return Some(default_run.to_string());
+                }
+
+                let bin_count = main_package
+                    .targets
+                    .iter()
+                    .filter(|x| x.kind.contains(&target_kind))
+                    .count();
+                if bin_count != 1 {
+                    return None;
+                }
+
+                main_package.targets.iter().find_map(|x| {
+                    if x.kind.contains(&target_kind) {
+                        Some(x.name.clone())
+                    } else {
+                        None
+                    }
+                })
+            })
             .unwrap_or(package_name);
 
-        let main_package = &krates[package];
         let target = main_package
             .targets
             .iter()
