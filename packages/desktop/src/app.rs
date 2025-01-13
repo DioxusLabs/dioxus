@@ -199,17 +199,13 @@ impl App {
             }
 
             LastWindowHides if self.webviews.len() > 1 => {
-                let view = self.webviews.remove(&id).unwrap();
-
-                println!("rc harcount {:?}", Rc::strong_count(&view.desktop_context));
+                self.webviews.remove(&id);
             }
 
             LastWindowHides => {
-                let Some(webview) = self.webviews.get(&id) else {
-                    return;
-                };
-
-                hide_app_window(&webview.desktop_context.window);
+                if let Some(webview) = self.webviews.get(&id) {
+                    hide_last_window(&webview.desktop_context.window);
+                }
             }
 
             CloseWindow => {
@@ -536,9 +532,13 @@ struct PreservedWindowState {
     monitor: String,
 }
 
-/// Different hide implementations per platform
+/// Hide the last window when using LastWindowHides.
+///
+/// On macOS, if we use `set_visibility(false)` on the window, it will hide the window but not show
+/// it again when the user switches back to the app. `NSApplication::hide:` has the correct behaviour,
+/// so we need to special case it.
 #[allow(unused)]
-fn hide_app_window(window: &Window) {
+fn hide_last_window(window: &Window) {
     #[cfg(target_os = "windows")]
     {
         use tao::platform::windows::WindowExtWindows;
@@ -553,18 +553,16 @@ fn hide_app_window(window: &Window) {
 
     #[cfg(target_os = "macos")]
     {
-        window.set_visible(false);
-
         // window.set_visible(false); has the wrong behaviour on macOS
         // It will hide the window but not show it again when the user switches
         // back to the app. `NSApplication::hide:` has the correct behaviour
-        // use objc::runtime::Object;
-        // use objc::{msg_send, sel, sel_impl};
-        // objc::rc::autoreleasepool(|| unsafe {
-        //     let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
-        //     let nil = std::ptr::null_mut::<Object>();
-        //     let _: () = msg_send![app, hide: nil];
-        // });
+        use objc::runtime::Object;
+        use objc::{msg_send, sel, sel_impl};
+        objc::rc::autoreleasepool(|| unsafe {
+            let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
+            let nil = std::ptr::null_mut::<Object>();
+            let _: () = msg_send![app, hide: nil];
+        });
     }
 }
 
