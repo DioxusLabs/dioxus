@@ -314,26 +314,56 @@ The `extends` attribute lets you extend your props with all the attributes from 
 ```rust, no_run
 # use dioxus::prelude::*;
 #[derive(Props, PartialEq, Clone)]
-struct ButtonProps {
+struct CardProps {
     /// You can use the `extends` attribute on a field with the type `Vec<Attribute>` to extend the props with all the attributes from an element or the global element attributes.
     #[props(extends = GlobalAttributes)]
     attributes: Vec<Attribute>,
 }
 
 #[component]
-fn Button(props: ButtonProps) -> Element {
+fn Card(props: CardProps) -> Element {
     rsx! {
-        // Instead of copying over every single attribute, we can just spread the attributes from the props into the button.
-        button { ..props.attributes, "button" }
+        // Instead of copying over every single attribute, we can just spread the attributes from the props into the element.
+        div { ..props.attributes, "card" }
     }
 }
 
 rsx! {
-    // Since we extend global attributes, you can use any attribute that would normally appear on the button element.
-    Button {
+    // Since we extend global attributes, you can use any attribute that would normally appear on elements.
+    Card {
         width: "10px",
         height: "10px",
         color: "red",
     }
 };
 ```
+
+To extend the props with both the global attributes and the attributes of a specific element, you can use the `extends` attribute multiple times:
+
+```rust, no_run
+# use dioxus::prelude::*;
+
+#[derive(Props, PartialEq, Clone)]
+struct ButtonProps {
+    #[props(extends = GlobalAttributes, extends = button)]
+    attributes: Vec<Attribute>,
+}
+
+#[component]
+fn Button(props: ButtonProps) -> Element {
+    rsx! {
+        button { ..props.attributes, "button" }
+    }
+}
+
+rsx! {
+    Button {
+        // A global attribute
+        width: "10px",
+        // A button specific attribute
+        disabled: true,
+    }
+};
+```
+
+Note that extending from multiple elements will only work if the elements don't have conflicting attributes.
