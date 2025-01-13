@@ -772,10 +772,19 @@ impl BuildRequest {
         struct HbsTypes {
             application_id: String,
             app_name: String,
+            permissions: Vec<String>,
         }
         let hbs_data = HbsTypes {
             application_id: self.krate.full_mobile_app_name(),
             app_name: self.krate.bundled_app_name(),
+            permissions: self
+                .krate
+                .config
+                .bundle
+                .android.clone()
+                .unwrap_or_default()
+                .permissions.clone()
+                .unwrap_or_default(),
         };
 
         // Top-level gradle config
