@@ -34,7 +34,9 @@ impl Document for DesktopDocument {
     }
 
     fn set_title(&self, title: String) {
-        self.desktop_ctx.upgrade().unwrap().window.set_title(&title);
+        if let Some(ctx) = self.desktop_ctx.upgrade() {
+            ctx.set_title(&title);
+        }
     }
 
     /// Create a new meta tag in the head

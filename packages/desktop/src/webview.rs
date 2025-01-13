@@ -1,4 +1,3 @@
-use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
@@ -12,6 +11,7 @@ use crate::{
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
+use crate::{document::DesktopDocument, WeakDesktopContext};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
@@ -19,8 +19,8 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
+use std::cell::OnceCell;
 use std::sync::Arc;
-use std::{cell::OnceCell, rc::Weak};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
@@ -28,7 +28,7 @@ use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 pub(crate) struct WebviewEdits {
     runtime: Rc<Runtime>,
     pub wry_queue: WryQueue,
-    desktop_context: Rc<OnceCell<Weak<DesktopService>>>,
+    desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
 impl WebviewEdits {
@@ -40,7 +40,7 @@ impl WebviewEdits {
         }
     }
 
-    fn set_desktop_context(&self, context: Weak<DesktopService>) {
+    fn set_desktop_context(&self, context: WeakDesktopContext) {
         _ = self.desktop_context.set(context);
     }
 

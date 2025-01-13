@@ -106,7 +106,7 @@ impl DesktopService {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> WeakDesktopContext {
         let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
         let cx = window.dom.in_runtime(|| {
