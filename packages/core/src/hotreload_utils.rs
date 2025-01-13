@@ -147,13 +147,19 @@ impl DynamicLiteralPool {
         }
     }
 
-    pub fn get_component_property<'a, T>(
+    pub fn get_component_property<'a, T: Default>(
         &self,
         id: usize,
         hot_reload: &'a HotReloadedTemplate,
         f: impl FnOnce(&'a HotReloadLiteral) -> Option<T>,
     ) -> Option<T> {
-        f(hot_reload.component_values.get(id)?)
+        let Some(value) = hot_reload.component_values.get(id) else {
+            // If the component was removed since the last hot reload, the hot reload template may not
+            // have the property. If that is the case, just use a default value since the component is
+            // never rendered.
+            return Some(T::default());
+        };
+        f(value)
     }
 
     /// Get a component property of a specific type at the component property index
@@ -172,8 +178,7 @@ impl DynamicLiteralPool {
             self.get_component_property(id, hot_reload, HotReloadLiteral::as_float).unwrap_or_else(|| {
                 tracing::error!("Expected a float component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
                 Default::default()
-
-        })
+            })
         };
         let grab_int = || {
             self.get_component_property(id, hot_reload, HotReloadLiteral::as_int).unwrap_or_else(|| {
