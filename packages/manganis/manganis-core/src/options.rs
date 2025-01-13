@@ -1,6 +1,9 @@
 use const_serialize::SerializeConst;
 
-use crate::{CssAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptions};
+use crate::{
+    CssAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptions,
+    PreservedFolderAssetOptions,
+};
 
 /// Settings for a generic asset
 #[derive(
@@ -21,6 +24,9 @@ pub enum AssetOptions {
     Image(ImageAssetOptions),
     /// A folder asset
     Folder(FolderAssetOptions),
+    /// A preserved folder asset.
+    #[doc(hidden)]
+    PreservedFolder(PreservedFolderAssetOptions),
     /// A css asset
     Css(CssAssetOptions),
     /// A javascript asset
@@ -37,6 +43,7 @@ impl AssetOptions {
             AssetOptions::Css(_) => Some("css"),
             AssetOptions::Js(_) => Some("js"),
             AssetOptions::Folder(_) => None,
+            AssetOptions::PreservedFolder(_) => None,
             AssetOptions::Unknown => None,
         }
     }
