@@ -474,8 +474,10 @@ function handleVirtualdomEventSync(
   // https://developer.android.com/reference/android/webkit/WebViewClient#shouldInterceptRequest(android.webkit.WebView,%20android.webkit.WebResourceRequest)
   //
   // the issue here isn't that big, tbh, but there's a small chance we lose the event due to header max size (16k per header, 32k max)
-  xhr.setRequestHeader("dioxus-data", contents);
-  xhr.send(contents);
+  const contents_bytes = new TextEncoder().encode(contents);
+  const contents_base64 = btoa(String.fromCharCode.apply(null, contents_bytes));
+  xhr.setRequestHeader("dioxus-data", contents_base64)
+  xhr.send();
 
   // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
   return JSON.parse(xhr.responseText);

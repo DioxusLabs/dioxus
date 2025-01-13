@@ -2,7 +2,6 @@ use crate::{AppBundle, Platform, Result};
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use std::{
-    fs,
     net::SocketAddr,
     path::{Path, PathBuf},
     process::Stdio,
@@ -61,13 +60,9 @@ impl AppHandle {
     pub(crate) async fn open(
         &mut self,
         devserver_ip: SocketAddr,
-        fullstack_address: Option<SocketAddr>,
+        start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
     ) -> Result<()> {
-        if let Some(addr) = fullstack_address {
-            tracing::debug!("Proxying fullstack server from port {:?}", addr);
-        }
-
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
@@ -90,13 +85,12 @@ impl AppHandle {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
         }
 
-        if let Some(addr) = fullstack_address {
+        // Launch the server if we were given an address to start it on, and the build includes a server. After we
+        // start the server, consume its stdout/stderr.
+        if let (Some(addr), Some(server)) = (start_fullstack_on_address, self.app.server_exe()) {
+            tracing::debug!("Proxying fullstack server from port {:?}", addr);
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
-        }
-
-        // Launch the server if we have one and consume its stdout/stderr
-        if let Some(server) = self.app.server_exe() {
             tracing::debug!("Launching server from path: {server:?}");
             let mut child = Command::new(server)
                 .envs(envs.clone())
@@ -190,7 +184,7 @@ impl AppHandle {
         }
 
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
-        let changed_file = fs::canonicalize(changed_file)
+        let changed_file = dunce::canonicalize(changed_file)
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
             .ok()?;
 

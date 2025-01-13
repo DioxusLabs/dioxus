@@ -37,11 +37,12 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     // /users/dioxus/dev/app/
     // is the root of
     // /users/dioxus/dev/app/assets/blah.css
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .map(PathBuf::from)
-        .unwrap()
-        .canonicalize()
-        .unwrap();
+    let manifest_dir = dunce::canonicalize(
+        std::env::var("CARGO_MANIFEST_DIR")
+            .map(PathBuf::from)
+            .unwrap(),
+    )
+    .unwrap();
 
     // 1. the input file should be a pathbuf
     let input = PathBuf::from(raw);
@@ -54,7 +55,7 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     };
 
     // 3. Ensure the path exists
-    let Ok(path) = path.canonicalize() else {
+    let Ok(path) = dunce::canonicalize(path) else {
         return Err(AssetParseError::AssetDoesntExist {
             path: input.clone(),
         });

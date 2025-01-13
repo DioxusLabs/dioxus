@@ -48,6 +48,7 @@ fn app() -> Element {
             test_form_input {}
             test_form_submit {}
             test_select_multiple_options {}
+            test_unicode {}
         }
     }
 }
@@ -573,6 +574,32 @@ fn test_select_multiple_options() -> Element {
             option { id: "usa", value: "usa", "USA" }
             option { id: "canada", value: "canada", "Canada" }
             option { id: "mexico", value: "mexico", selected: true, "Mexico" }
+        }
+    }
+}
+
+fn test_unicode() -> Element {
+    // emulate an oninput event with a unicode character
+    utils::mock_event_with_extra(
+        "unicode",
+        r#"new InputEvent("input", {
+            inputType: 'insertText',
+            bubbles: true,
+            cancelable: true,
+        })"#,
+        r#"
+            element.value = "🦀";
+        "#,
+    );
+
+    rsx! {
+        input {
+            id: "unicode",
+            oninput: move |event| {
+                println!("{:?}", event.data);
+                assert_eq!(event.data.value(), "🦀");
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            }
         }
     }
 }
