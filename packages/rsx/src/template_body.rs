@@ -147,6 +147,10 @@ impl ToTokens for TemplateBody {
             dioxus_core::Element::Ok({
                 #diagnostics
 
+                let __dynamic_nodes = [ #( #dynamic_nodes ),* ];
+                let __dynamic_attributes = [ #( #dyn_attr_printer ),* ];
+                static __TEMPLATE_ROOTS: &[dioxus_core::TemplateNode] = &[ #( #roots ),* ];
+
                 #[cfg(debug_assertions)]
                 {
                     static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
@@ -184,8 +188,8 @@ impl ToTokens for TemplateBody {
                         vec![ #( #dynamic_text.to_string() ),* ],
                     );
                     let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
-                        vec![ #( #dynamic_nodes ),* ],
-                        vec![ #( #dyn_attr_printer ),* ],
+                        Vec::from(__dynamic_nodes),
+                        Vec::from(__dynamic_attributes),
                         __dynamic_literal_pool
                     );
                     __dynamic_value_pool.render_with(__template_read)
@@ -194,7 +198,7 @@ impl ToTokens for TemplateBody {
                 {
                     #[doc(hidden)] // vscode please stop showing these in symbol search
                     static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                        roots: &[ #( #roots ),* ],
+                        roots: __template_roots,
                         node_paths: &[ #( #node_paths ),* ],
                         attr_paths: &[ #( #attr_paths ),* ],
                     };
@@ -204,8 +208,8 @@ impl ToTokens for TemplateBody {
                     let __vnodes = dioxus_core::VNode::new(
                         #key_tokens,
                         ___TEMPLATE,
-                        Box::new([ #( #dynamic_nodes ),* ]),
-                        Box::new([ #( #dyn_attr_printer ),* ]),
+                        Box::new(__dynamic_nodes),
+                        Box::new(__dynamic_attributes),
                     );
                     __vnodes
                 }
@@ -343,7 +347,6 @@ impl TemplateBody {
         } else {
             quote! { None }
         };
-        let roots = self.quote_roots();
         let dynamic_nodes = self.dynamic_nodes().map(|node| {
             let id = node.get_dyn_idx();
             quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) }
@@ -361,7 +364,7 @@ impl TemplateBody {
                 vec![ #( #dynamic_nodes ),* ],
                 vec![ #( #dyn_attr_printer ),* ],
                 vec![ #( #component_values ),* ],
-                &[ #( #roots ),* ],
+                __TEMPLATE_ROOTS,
             )
         }
     }
