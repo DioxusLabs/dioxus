@@ -149,6 +149,47 @@ impl ToTokens for TemplateBody {
             dioxus_core::Element::Ok({
                 #diagnostics
 
+                // Components pull in the dynamic literal pool and template in debug mode, so they need to be defined before dynamic nodes
+                #[cfg(debug_assertions)]
+                fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
+                    static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
+                    if __ORIGINAL_TEMPLATE.get().is_none() {
+                        _ = __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
+                    }
+                    __ORIGINAL_TEMPLATE.get().unwrap()
+                }
+                #[cfg(debug_assertions)]
+                let __template_read = {
+                    static __NORMALIZED_FILE: &'static str = {
+                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                        dioxus_core::const_format::str_replace!(PATH, '\\', "/")
+                    };
+
+                    // The key is important here - we're creating a new GlobalSignal each call to this
+                    // But the key is what's keeping it stable
+                    static __TEMPLATE: GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = GlobalSignal::with_location(
+                        || None::<dioxus_core::internal::HotReloadedTemplate>,
+                        __NORMALIZED_FILE,
+                        line!(),
+                        column!(),
+                        #index
+                    );
+
+                    dioxus_core::Runtime::current().ok().map(|_| __TEMPLATE.read())
+                };
+                // If the template has not been hot reloaded, we always use the original template
+                // Templates nested within macros may be merged because they have the same file-line-column-index
+                // They cannot be hot reloaded, so this prevents incorrect rendering
+                #[cfg(debug_assertions)]
+                let __template_read = match __template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
+                    Some(Some(__template_read)) => &__template_read,
+                    _ => __original_template(),
+                };
+                #[cfg(debug_assertions)]
+                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                    vec![ #( #dynamic_text.to_string() ),* ],
+                );
+
                 // These items are used in both the debug and release expansions of rsx. Pulling them out makes the expansion
                 // slightly smaller and easier to understand. Rust analyzer also doesn't autocomplete well when it sees an ident show up twice in the expansion
                 let __dynamic_nodes: [dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
@@ -158,40 +199,6 @@ impl ToTokens for TemplateBody {
 
                 #[cfg(debug_assertions)]
                 {
-                    static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
-                    fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
-                        if __ORIGINAL_TEMPLATE.get().is_none() {
-                            _ = __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
-                        }
-                        __ORIGINAL_TEMPLATE.get().unwrap()
-                    }
-
-                    static __NORMALIZED_FILE: &'static str = {
-                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                        dioxus_core::const_format::str_replace!(PATH, '\\', "/")
-                    };
-
-                    // The key is important here - we're creating a new GlobalSignal each call to this
-                    // But the key is what's keeping it stable
-                    let __template = GlobalSignal::with_location(
-                        || None::<dioxus_core::internal::HotReloadedTemplate>,
-                        __NORMALIZED_FILE,
-                        line!(),
-                        column!(),
-                        #index
-                    );
-
-                    // If the template has not been hot reloaded, we always use the original template
-                    // Templates nested within macros may be merged because they have the same file-line-column-index
-                    // They cannot be hot reloaded, so this prevents incorrect rendering
-                    let __template_read = dioxus_core::Runtime::current().ok().map(|_| __template.read());
-                    let __template_read = match __template_read.as_ref().map(|__template_read| __template_read.as_ref()) {
-                        Some(Some(__template_read)) => &__template_read,
-                        _ => __original_template(),
-                    };
-                    let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                        vec![ #( #dynamic_text.to_string() ),* ],
-                    );
                     let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
                         Vec::from(__dynamic_nodes),
                         Vec::from(__dynamic_attributes),
