@@ -26,13 +26,8 @@ impl Parse for ExprNode {
 impl ToTokens for ExprNode {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let expr = &self.expr;
-        let doc = format!("{:?}", self.span());
         tokens.append_all(quote! {
-            {
-                #doc;
-                let ___nodes = (#expr).into_dyn_node();
-                ___nodes
-            }
+            { let ___nodes = (#expr).into_dyn_node(); ___nodes }
         })
     }
 }
@@ -43,19 +38,6 @@ fn no_commas() {
     let input = quote! {
         div {
             {label("Hello, world!")},
-        }
-    };
-
-    let _expr: crate::BodyNode = syn::parse2(input).unwrap();
-    println!("{}", _expr.to_token_stream().pretty_unparse());
-}
-
-#[test]
-fn autocomplete() {
-    use prettier_please::PrettyUnparse;
-    let input = quote! {
-        div {
-            {label(xy)},
         }
     };
 
