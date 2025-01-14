@@ -311,3 +311,15 @@ struct Inner {
     // The scope that this reactive context is associated with
     scope: Option<ScopeId>,
 }
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let self_ = self
+            .self_
+            .expect("self_ should be set during initialization");
+        let old_subscribers = std::mem::take(&mut self.subscribers);
+        for subscriber in old_subscribers {
+            subscriber.0.lock().unwrap().remove(&self_);
+        }
+    }
+}
