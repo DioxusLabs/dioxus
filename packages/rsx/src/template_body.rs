@@ -92,19 +92,6 @@ impl Parse for TemplateBody {
             .diagnostics
             .extend(children.diagnostics.into_diagnostics());
 
-        // If the nodes are completely empty, insert a placeholder node
-        // Core expects at least one node in the template to make it easier to replace
-        if myself.is_empty() {
-            // Create an empty template body with a placeholder and diagnostics + the template index from the original
-            let empty = Self::new(vec![BodyNode::RawExpr(parse_quote! {()})]);
-            let default = Self {
-                diagnostics: myself.diagnostics.clone(),
-                template_idx: myself.template_idx.clone(),
-                ..empty
-            };
-            return Ok(default);
-        }
-
         Ok(myself)
     }
 }
@@ -113,34 +100,37 @@ impl Parse for TemplateBody {
 /// This is because the parsing phase filled in all the additional metadata we need
 impl ToTokens for TemplateBody {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
+        // First normalize the template body for rendering
+        let node = self.normalized();
+
         // If we have an implicit key, then we need to write its tokens
-        let key_tokens = match self.implicit_key() {
+        let key_tokens = match node.implicit_key() {
             Some(tok) => quote! { Some( #tok.to_string() ) },
             None => quote! { None },
         };
 
-        let roots = self.quote_roots();
+        let roots = node.quote_roots();
 
         // Print paths is easy - just print the paths
-        let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
-        let attr_paths = self.attr_paths.iter().map(|(it, _)| quote!(&[#(#it),*]));
+        let node_paths = node.node_paths.iter().map(|it| quote!(&[#(#it),*]));
+        let attr_paths = node.attr_paths.iter().map(|(it, _)| quote!(&[#(#it),*]));
 
         // For printing dynamic nodes, we rely on the ToTokens impl
         // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
-        let dynamic_nodes: Vec<_> = self.dynamic_nodes().collect();
+        let dynamic_nodes: Vec<_> = node.dynamic_nodes().collect();
 
         // We could add a ToTokens for Attribute but since we use that for both components and elements
         // They actually need to be different, so we just localize that here
-        let dyn_attr_printer: Vec<_> = self
+        let dyn_attr_printer: Vec<_> = node
             .dynamic_attributes()
             .map(|attr| attr.rendered_as_dynamic_attr())
             .collect();
 
-        let dynamic_text = self.dynamic_text_segments.iter();
+        let dynamic_text = node.dynamic_text_segments.iter();
 
-        let diagnostics = &self.diagnostics;
-        let index = self.template_idx.get();
-        let hot_reload_mapping = self.hot_reload_mapping();
+        let diagnostics = &node.diagnostics;
+        let index = node.template_idx.get();
+        let hot_reload_mapping = node.hot_reload_mapping();
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
@@ -236,6 +226,23 @@ impl TemplateBody {
         body.roots = nodes;
 
         body
+    }
+
+    /// Normalize the Template body for rendering. If the body is completely empty, insert a placeholder node
+    pub fn normalized(&self) -> Self {
+        // If the nodes are completely empty, insert a placeholder node
+        // Core expects at least one node in the template to make it easier to replace
+        if self.is_empty() {
+            // Create an empty template body with a placeholder and diagnostics + the template index from the original
+            let empty = Self::new(vec![BodyNode::RawExpr(parse_quote! {()})]);
+            let default = Self {
+                diagnostics: self.diagnostics.clone(),
+                template_idx: self.template_idx.clone(),
+                ..empty
+            };
+            return default;
+        }
+        self.clone()
     }
 
     pub fn is_empty(&self) -> bool {
