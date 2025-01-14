@@ -129,6 +129,7 @@ impl ToTokens for TemplateBody {
         // For printing dynamic nodes, we rely on the ToTokens impl
         // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
         let dynamic_nodes: Vec<_> = self.dynamic_nodes().collect();
+        let dynamic_nodes_len = dynamic_nodes.len();
 
         // We could add a ToTokens for Attribute but since we use that for both components and elements
         // They actually need to be different, so we just localize that here
@@ -136,6 +137,7 @@ impl ToTokens for TemplateBody {
             .dynamic_attributes()
             .map(|attr| attr.rendered_as_dynamic_attr())
             .collect();
+        let dynamic_attr_len = dyn_attr_printer.len();
 
         let dynamic_text = self.dynamic_text_segments.iter();
 
@@ -147,8 +149,11 @@ impl ToTokens for TemplateBody {
             dioxus_core::Element::Ok({
                 #diagnostics
 
-                let __dynamic_nodes = [ #( #dynamic_nodes ),* ];
-                let __dynamic_attributes = [ #( #dyn_attr_printer ),* ];
+                // These items are used in both the debug and release expansions of rsx. Pulling them out makes the expansion
+                // slightly smaller and easier to understand. Rust analyzer also doesn't autocomplete well when it sees an ident show up twice in the expansion
+                let __dynamic_nodes: [dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
+                let __dynamic_attributes: [Box<[dioxus_core::Attribute]>; #dynamic_attr_len] = [ #( #dyn_attr_printer ),* ];
+                #[doc(hidden)]
                 static __TEMPLATE_ROOTS: &[dioxus_core::TemplateNode] = &[ #( #roots ),* ];
 
                 #[cfg(debug_assertions)]
@@ -198,7 +203,7 @@ impl ToTokens for TemplateBody {
                 {
                     #[doc(hidden)] // vscode please stop showing these in symbol search
                     static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                        roots: __template_roots,
+                        roots: __TEMPLATE_ROOTS,
                         node_paths: &[ #( #node_paths ),* ],
                         attr_paths: &[ #( #attr_paths ),* ],
                     };
