@@ -737,6 +737,11 @@ impl BuildRequest {
         }
     }
 
+    /// Get the path to the asset optimizer version file
+    pub fn asset_optimizer_version_file(&self) -> PathBuf {
+        self.platform_dir().join(".cli-version")
+    }
+
     pub fn platform_exe_name(&self) -> String {
         match self.build.platform() {
             Platform::MacOS => self.krate.executable_name().to_string(),

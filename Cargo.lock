@@ -3596,6 +3596,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-cli-optimization-test"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+ "flate2",
+ "reqwest 0.12.9",
+ "tar",
+]
+
+[[package]]
 name = "dioxus-config-macro"
 version = "0.6.1"
 dependencies = [
@@ -10192,6 +10202,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2 0.4.7",

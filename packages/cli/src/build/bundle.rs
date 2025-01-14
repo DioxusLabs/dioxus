@@ -383,29 +383,41 @@ impl AppBundle {
         // First, clear the asset dir of any files that don't exist in the new manifest
         _ = tokio::fs::create_dir_all(&asset_dir).await;
         // Create a set of all the paths that new files will be bundled to
-        let bundled_output_paths: HashSet<_> = self
+        let mut keep_bundled_output_paths: HashSet<_> = self
             .app
             .assets
             .assets
             .values()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
+        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
+        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
+        // all assets.
+        let version_file = self.build.asset_optimizer_version_file();
+        let clear_cache = std::fs::read_to_string(&version_file)
+            .ok()
+            .filter(|s| s == crate::VERSION.as_str())
+            .is_none();
+        if clear_cache {
+            keep_bundled_output_paths.clear();
+        }
+
         // one possible implementation of walking a directory only visiting files
         fn remove_old_assets<'a>(
             path: &'a Path,
-            bundled_output_paths: &'a HashSet<PathBuf>,
+            keep_bundled_output_paths: &'a HashSet<PathBuf>,
         ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
             Box::pin(async move {
                 // If this asset is in the manifest, we don't need to remove it
                 let canon_path = dunce::canonicalize(path)?;
-                if bundled_output_paths.contains(canon_path.as_path()) {
+                if keep_bundled_output_paths.contains(canon_path.as_path()) {
                     return Ok(());
                 }
                 // Otherwise, if it is a directory, we need to walk it and remove child files
                 if path.is_dir() {
                     for entry in std::fs::read_dir(path)?.flatten() {
                         let path = entry.path();
-                        remove_old_assets(&path, bundled_output_paths).await?;
+                        remove_old_assets(&path, keep_bundled_output_paths).await?;
                     }
                     if path.read_dir()?.next().is_none() {
                         // If the directory is empty, remove it
@@ -420,7 +432,7 @@ impl AppBundle {
         }
 
         tracing::debug!("Removing old assets");
-        remove_old_assets(&asset_dir, &bundled_output_paths).await?;
+        remove_old_assets(&asset_dir, &keep_bundled_output_paths).await?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
@@ -476,6 +488,12 @@ impl AppBundle {
 
         // Remove the wasm bindgen output directory if it exists
         _ = std::fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
+
+        // Write the version file so we know what version of the optimizer we used
+        std::fs::write(
+            self.build.asset_optimizer_version_file(),
+            crate::VERSION.as_str(),
+        )?;
 
         Ok(())
     }
