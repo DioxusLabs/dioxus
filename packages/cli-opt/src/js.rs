@@ -6,6 +6,7 @@ use manganis_core::JsAssetOptions;
 use swc_common::errors::Emitter;
 use swc_common::errors::Handler;
 use swc_common::input::SourceFileInput;
+use swc_ecma_minifier::option::MangleOptions;
 use swc_ecma_minifier::option::{CompressOptions, ExtraOptions, MinifyOptions};
 use swc_ecma_parser::lexer::Lexer;
 use swc_ecma_parser::Parser;
@@ -117,7 +118,7 @@ fn bundle_js_to_writer_inside_handler(
             None,
             &MinifyOptions {
                 rename: true,
-                compress: Some(CompressOptions::default()),
+                compress: None,
                 mangle: None,
                 ..Default::default()
             },
