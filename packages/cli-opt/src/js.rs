@@ -224,7 +224,7 @@ pub(crate) fn process_js(
     output_path: &Path,
     bundle: bool,
 ) -> anyhow::Result<()> {
-    let mut writer = std::io::BufWriter::new(std::fs::File::create(&output_path)?);
+    let mut writer = std::io::BufWriter::new(std::fs::File::create(output_path)?);
     if js_options.minified() {
         if let Err(err) = bundle_js_to_writer(source.to_path_buf(), bundle, true, &mut writer) {
             tracing::error!("Failed to minify js. Falling back to non-minified: {err}");
