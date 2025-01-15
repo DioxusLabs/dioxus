@@ -1,65 +1,21 @@
 use crate::{resolve_path, AssetParseError};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::{
-    hash::Hasher,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::path::PathBuf;
 use syn::{
     parse::{Parse, ParseStream},
     LitStr, Token,
 };
 
-fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
-    // Create a hasher
-    let mut hash = std::collections::hash_map::DefaultHasher::new();
-
-    // If this is a folder, hash the folder contents
-    if file_path.is_dir() {
-        let files = std::fs::read_dir(file_path).map_err(|err| AssetParseError::IoError {
-            err,
-            path: file_path.to_path_buf(),
-        })?;
-        for file in files.flatten() {
-            let path = file.path();
-            hash_file_contents(&path)?;
-        }
-        return Ok(hash.finish());
-    }
-
-    // Otherwise, open the file to get its contents
-    let mut file = std::fs::File::open(file_path).map_err(|err| AssetParseError::IoError {
-        err,
-        path: file_path.to_path_buf(),
-    })?;
-
-    // We add a hash to the end of the file so it is invalidated when the bundled version of the file changes
-    // The hash includes the file contents, the options, and the version of manganis. From the macro, we just
-    // know the file contents, so we only include that hash
-    let mut buffer = [0; 8192];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(AssetParseError::FailedToReadAsset)?;
-        if read == 0 {
-            break;
-        }
-        hash.write(&buffer[..read]);
-    }
-
-    Ok(hash.finish())
-}
-
 pub struct AssetParser {
     /// The span of the source string
-    path_span: proc_macro2::Span,
+    pub(crate) path_span: proc_macro2::Span,
 
     /// The asset itself
-    asset: Result<PathBuf, AssetParseError>,
+    pub(crate) asset: Result<PathBuf, AssetParseError>,
 
     /// The source of the trailing options
-    options: TokenStream2,
+    pub(crate) options: TokenStream2,
 }
 
 impl Parse for AssetParser {
@@ -118,7 +74,7 @@ impl ToTokens for AssetParser {
         let mut asset_str = proc_macro2::Literal::string(&asset_str);
         asset_str.set_span(self.path_span);
 
-        let hash = match hash_file_contents(asset) {
+        let hash = match crate::hash_file_contents(asset) {
             Ok(hash) => hash,
             Err(err) => {
                 let err = err.to_string();
