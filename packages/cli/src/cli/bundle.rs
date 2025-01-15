@@ -101,7 +101,15 @@ impl Bundle {
             }
 
             Platform::Web => {
-                tracing::info!("App available at: {}", bundle.build.root_dir().display());
+                if let Some(outdir) = &self.outdir {
+                    let out_path = krate.workspace_dir().join(outdir);
+                    _ = std::fs::remove_dir_all(&out_path);
+                    crate::fastfs::copy_dir_to(&bundle.build.root_dir(), &out_path, false)
+                        .with_context(|| "Failed to copy the app to output directory")?;
+                    tracing::info!("App available at: {:?}", out_path);
+                } else {
+                    tracing::info!("App available at: {}", bundle.build.root_dir().display());
+                }
             }
 
             Platform::Ios => {
