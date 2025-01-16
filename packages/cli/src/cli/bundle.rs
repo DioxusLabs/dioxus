@@ -10,17 +10,6 @@ use super::*;
 #[derive(Clone, Debug, Parser)]
 pub struct Bundle {
     /// The package types to bundle
-    ///
-    /// Any of:
-    /// - macos: The macOS application bundle (.app).
-    /// - ios: The iOS app bundle.
-    /// - msi: The Windows bundle (.msi).
-    /// - nsis: The NSIS bundle (.exe).
-    /// - deb: The Linux Debian package bundle (.deb).
-    /// - rpm: The Linux RPM bundle (.rpm).
-    /// - appimage: The Linux AppImage bundle (.AppImage).
-    /// - dmg: The macOS DMG bundle (.dmg).
-    /// - updater: The Updater bundle.
     #[clap(long)]
     pub package_types: Option<Vec<crate::PackageType>>,
 
