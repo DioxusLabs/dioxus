@@ -30,7 +30,7 @@ pub struct Bundle {
     /// We will flatten the artifacts into this directory - there will be no differentiation between
     /// artifacts produced by different platforms.
     #[clap(long)]
-    pub outdir: Option<PathBuf>,
+    pub out_dir: Option<PathBuf>,
 
     /// The arguments for the dioxus build
     #[clap(flatten)]
@@ -54,80 +54,38 @@ impl Bundle {
             .finish()
             .await?;
 
-        tracing::info!("Copying app to output directory...");
-
         // If we're building for iOS, we need to bundle the iOS bundle
         if self.build_arguments.platform() == Platform::Ios && self.package_types.is_none() {
             self.package_types = Some(vec![crate::PackageType::IosBundle]);
         }
 
-        let mut cmd_result = StructuredOutput::Success;
+        let mut bundles = vec![];
 
+        // Copy the server over if it exists
+        if bundle.build.build.fullstack {
+            bundles.push(bundle.server_exe().unwrap());
+        }
+
+        // Create a list of bundles that we might need to copy
         match self.build_arguments.platform() {
             // By default, mac/win/linux work with tauri bundle
             Platform::MacOS | Platform::Linux | Platform::Windows => {
-                let bundles = self.bundle_desktop(krate, bundle)?;
-
-                tracing::info!("Bundled app successfully!");
-                tracing::info!("App produced {} outputs:", bundles.len());
-                tracing::debug!("Bundling produced bundles: {:#?}", bundles);
-
-                // Copy the bundles to the output directory and log their locations
-                let mut bundle_paths = vec![];
-                for bundle in bundles {
-                    for src in bundle.bundle_paths {
-                        let src = if let Some(outdir) = &self.outdir {
-                            let dest = outdir.join(src.file_name().expect("Filename to exist"));
-                            crate::fastfs::copy_asset(&src, &dest)
-                                .context("Failed to copy or compress optimized asset")?;
-                            dest
-                        } else {
-                            src.clone()
-                        };
-
-                        tracing::info!(
-                            "{} - [{}]",
-                            bundle.package_type.short_name(),
-                            src.display()
-                        );
-
-                        bundle_paths.push(src);
-                    }
-                }
-
-                cmd_result = StructuredOutput::BundleOutput {
-                    bundles: bundle_paths,
-                };
-            }
-
-            Platform::Web => {
-                if let Some(outdir) = &self.outdir {
-                    let out_path = krate.workspace_dir().join(outdir);
-                    _ = std::fs::remove_dir_all(&out_path);
-                    crate::fastfs::copy_dir_to(&bundle.build.root_dir(), &out_path, false)
-                        .with_context(|| "Failed to copy the app to output directory")?;
-                    tracing::info!("App available at: {:?}", out_path);
-                } else {
-                    tracing::info!("App available at: {}", bundle.build.root_dir().display());
+                tracing::info!("Running desktop bundler...");
+                for bundle in self.bundle_desktop(&krate, &bundle)? {
+                    bundles.extend(bundle.bundle_paths);
                 }
             }
 
+            // Web/ios can just use their root_dir
+            Platform::Web => bundles.push(bundle.build.root_dir()),
             Platform::Ios => {
-                tracing::warn!("Signed iOS bundles are not yet supported");
-                tracing::info!(
-                    "The bundle is available at: {}",
-                    bundle.build.root_dir().display()
-                );
+                tracing::warn!("iOS bundles are not currently codesigned! You will need to codesign the app before distributing.");
+                bundles.push(bundle.build.root_dir())
             }
+            Platform::Server => bundles.push(bundle.build.root_dir()),
+            Platform::Liveview => bundles.push(bundle.build.root_dir()),
 
-            Platform::Server => {
-                tracing::info!("Server available at: {}", bundle.build.root_dir().display())
-            }
-            Platform::Liveview => tracing::info!(
-                "Liveview server available at: {}",
-                bundle.build.root_dir().display()
-            ),
-
+            // todo(jon): we can technically create apks (already do...) just need to expose it
             Platform::Android => {
                 return Err(Error::UnsupportedFeature(
                     "Android bundles are not yet supported".into(),
@@ -135,13 +93,54 @@ impl Bundle {
             }
         };
 
-        Ok(cmd_result)
+        // Copy the bundles to the output directory if one was specified
+        let crate_outdir = bundle.build.krate.crate_out_dir();
+        if let Some(outdir) = self.out_dir.clone().or(crate_outdir) {
+            let outdir = outdir
+                .canonicalize()
+                .context("Failed to canonicalize output directory")?;
+
+            tracing::info!("Copying bundles to output directory: {}", outdir.display());
+
+            std::fs::create_dir_all(&outdir)?;
+
+            for bundle_path in bundles.iter_mut() {
+                let destination = outdir.join(bundle_path.file_name().unwrap());
+
+                tracing::debug!(
+                    "Copying from {} to {}",
+                    bundle_path.display(),
+                    destination.display()
+                );
+
+                if bundle_path.is_dir() {
+                    dircpy::CopyBuilder::new(&bundle_path, &destination)
+                        .overwrite(true)
+                        .run_par()
+                        .context("Failed to copy the app to output directory")?;
+                } else {
+                    std::fs::copy(&bundle_path, &destination)
+                        .context("Failed to copy the app to output directory")?;
+                }
+
+                *bundle_path = destination;
+            }
+        }
+
+        for bundle_path in bundles.iter() {
+            tracing::info!(
+                "Bundled app at: {}",
+                bundle_path.canonicalize().unwrap().display()
+            );
+        }
+
+        Ok(StructuredOutput::BundleOutput { bundles })
     }
 
     fn bundle_desktop(
         &self,
-        krate: DioxusCrate,
-        bundle: AppBundle,
+        krate: &DioxusCrate,
+        bundle: &AppBundle,
     ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
         _ = std::fs::remove_dir_all(krate.bundle_dir(self.build_arguments.platform()));
 
