@@ -52,6 +52,9 @@ impl WasmBindgen {
             args.push("--remove-producers-section");
         }
 
+        // wbg generates typescript bindnings by default - we don't want those
+        args.push("--no-typescript");
+
         // Out name
         args.push("--out-name");
         args.push(&self.out_name);
@@ -308,10 +311,10 @@ impl WasmBindgenBuilder {
     pub fn new(version: String) -> Self {
         Self {
             version,
+            target: String::new(),
             input_path: PathBuf::new(),
             out_dir: PathBuf::new(),
             out_name: String::new(),
-            target: String::new(),
             debug: true,
             keep_debug: true,
             demangle: true,
