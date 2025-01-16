@@ -1,5 +1,6 @@
 use crate::{AppBundle, BuildArgs, Builder, DioxusCrate, Platform};
 use anyhow::Context;
+use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
 
@@ -97,8 +98,8 @@ impl Bundle {
         let crate_outdir = bundle.build.krate.crate_out_dir();
         if let Some(outdir) = self.out_dir.clone().or(crate_outdir) {
             let outdir = outdir
-                .canonicalize()
-                .context("Failed to canonicalize output directory")?;
+                .absolutize()
+                .context("Failed to absolutize output directory")?;
 
             tracing::info!("Copying bundles to output directory: {}", outdir.display());
 
@@ -130,7 +131,7 @@ impl Bundle {
         for bundle_path in bundles.iter() {
             tracing::info!(
                 "Bundled app at: {}",
-                bundle_path.canonicalize().unwrap().display()
+                bundle_path.absolutize().unwrap().display()
             );
         }
 
