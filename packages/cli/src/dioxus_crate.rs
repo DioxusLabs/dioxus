@@ -115,17 +115,28 @@ impl DioxusCrate {
         })
     }
 
-    /// Compose an asset directory. Represents the typical "public" directory
-    /// with publicly available resources (configurable in the `Dioxus.toml`).
-    pub(crate) fn legacy_asset_dir(&self) -> PathBuf {
-        self.crate_dir().join(&self.config.application.asset_dir)
+    /// The asset dir we used to support before manganis became the default.
+    /// This generally was just a folder in your Dioxus.toml called "assets" or "public" where users
+    /// would store their assets.
+    ///
+    /// With manganis you now use `asset!()` and we pick it up automatically.
+    pub(crate) fn legacy_asset_dir(&self) -> Option<PathBuf> {
+        self.config
+            .application
+            .asset_dir
+            .clone()
+            .map(|dir| self.crate_dir().join(dir))
     }
 
     /// Get the list of files in the "legacy" asset directory
     pub(crate) fn legacy_asset_dir_files(&self) -> Vec<PathBuf> {
         let mut files = vec![];
 
-        let Ok(read_dir) = self.legacy_asset_dir().read_dir() else {
+        let Some(legacy_asset_dir) = self.legacy_asset_dir() else {
+            return files;
+        };
+
+        let Ok(read_dir) = legacy_asset_dir.read_dir() else {
             return files;
         };
 
@@ -136,10 +147,20 @@ impl DioxusCrate {
         files
     }
 
+    /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
+    /// We don't support workspaces yet since that would cause a collision of bundles per project.
+    pub(crate) fn crate_out_dir(&self) -> Option<PathBuf> {
+        self.config
+            .application
+            .out_dir
+            .as_ref()
+            .map(|out_dir| self.crate_dir().join(out_dir))
+    }
+
     /// Compose an out directory. Represents the typical "dist" directory that
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
-    fn out_dir(&self) -> PathBuf {
+    fn internal_out_dir(&self) -> PathBuf {
         let dir = self.workspace_dir().join("target").join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -153,7 +174,7 @@ impl DioxusCrate {
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
     pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
-        self.out_dir()
+        self.internal_out_dir()
             .join(self.executable_name())
             .join(if release { "release" } else { "debug" })
             .join(platform.build_folder_name())
@@ -164,7 +185,7 @@ impl DioxusCrate {
     /// target/dx/bundle/app/blah.exe
     /// target/dx/bundle/app/public/
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
-        self.out_dir()
+        self.internal_out_dir()
             .join(self.executable_name())
             .join("bundle")
             .join(platform.build_folder_name())
