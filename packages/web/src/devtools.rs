@@ -23,13 +23,15 @@ const POLL_INTERVAL_SCALE_FACTOR: i32 = 2;
 
 /// Amount of time that toats should be displayed.
 const TOAST_TIMEOUT: Duration = Duration::from_secs(5);
+const TOAST_TIMEOUT_LONG: Duration = Duration::from_secs(3600); // Duration::MAX is too long for JS.
 
 pub(crate) fn init(runtime: Rc<Runtime>) -> UnboundedReceiver<HotReloadMsg> {
     // Create the tx/rx pair that we'll use for the top-level future in the dioxus loop
     let (tx, rx) = unbounded();
 
     // Wire up the websocket to the devserver
-    make_ws(runtime, tx, POLL_INTERVAL_MIN, false);
+    make_ws(runtime, tx.clone(), POLL_INTERVAL_MIN, false);
+    playground(tx);
 
     rx
 }
@@ -84,7 +86,7 @@ fn make_ws(
                     "Your app is being rebuilt.",
                     "A non-hot-reloadable change occurred and we must rebuild.",
                     ToastLevel::Info,
-                    TOAST_TIMEOUT,
+                    TOAST_TIMEOUT_LONG,
                     false,
                 ),
                 // The devserver is telling us that the full rebuild failed.
@@ -93,7 +95,7 @@ fn make_ws(
                     "Oops! The build failed.",
                     "We tried to rebuild your app, but something went wrong.",
                     ToastLevel::Error,
-                    TOAST_TIMEOUT,
+                    TOAST_TIMEOUT_LONG,
                     false,
                 ),
 
@@ -263,4 +265,29 @@ pub(crate) fn invalidate_browser_asset_cache() {
             _ = link.set_attribute("href", &format!("{url}?{query}"));
         }
     }
+}
+
+/// Initialize required devtools for dioxus-playground.
+///
+/// This listens for window message events from other Windows (such as window.top when this is running in an iframe).
+fn playground(tx: UnboundedSender<HotReloadMsg>) {
+    let window = web_sys::window().expect("this code should be running in a web context");
+
+    let binding = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+        let Ok(text) = e.data().dyn_into::<JsString>() else {
+            return;
+        };
+        let string: String = text.into();
+        let Ok(hr_msg) = serde_json::from_str::<HotReloadMsg>(&string) else {
+            return;
+        };
+        _ = tx.unbounded_send(hr_msg);
+    });
+
+    let callback = binding.as_ref().unchecked_ref();
+    window
+        .add_event_listener_with_callback("message", callback)
+        .expect("event listener should be added successfully");
+
+    binding.forget();
 }

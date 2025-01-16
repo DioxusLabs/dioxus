@@ -68,6 +68,9 @@ impl WasmBindgen {
         args.push("--out-name");
         args.push(&self.out_name);
 
+        // wbg generates typescript bindnings by default - we don't want those
+        args.push("--no-typescript");
+
         // Out dir
         let out_dir = self
             .out_dir

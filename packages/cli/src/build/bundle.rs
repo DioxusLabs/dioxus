@@ -1,3 +1,4 @@
+use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
 use crate::tools::wasm_bindgen::WasmBindgenBuilder;
 use crate::{BuildRequest, Platform};
@@ -10,6 +11,7 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 
@@ -283,6 +285,7 @@ impl AppBundle {
             .context("Failed to write assets")?;
         bundle.write_metadata().await?;
         bundle.optimize().await?;
+        bundle.pre_render_ssg_routes().await?;
         bundle
             .assemble()
             .await
@@ -394,7 +397,8 @@ impl AppBundle {
         ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
             Box::pin(async move {
                 // If this asset is in the manifest, we don't need to remove it
-                if bundled_output_paths.contains(path.canonicalize()?.as_path()) {
+                let canon_path = dunce::canonicalize(path)?;
+                if bundled_output_paths.contains(canon_path.as_path()) {
                     return Ok(());
                 }
                 // Otherwise, if it is a directory, we need to walk it and remove child files
@@ -438,7 +442,8 @@ impl AppBundle {
         }
 
         let asset_count = assets_to_transfer.len();
-        let current_asset = AtomicUsize::new(0);
+        let started_processing = AtomicUsize::new(0);
+        let copied = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
@@ -447,20 +452,18 @@ impl AppBundle {
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
-                    tracing::trace!(
-                        "Starting asset copy {current}/{asset_count} from {from:?}",
-                        current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-                    );
+                    let processing = started_processing.fetch_add(1, Ordering::SeqCst);
+                    tracing::trace!("Starting asset copy {processing}/{asset_count} from {from:?}");
 
                     let res = process_file_to(options, from, to);
-
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
 
+                    let finished = copied.fetch_add(1, Ordering::SeqCst);
                     BuildRequest::status_copied_asset(
                         &progress,
-                        current_asset.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
+                        finished,
                         asset_count,
                         from.to_path_buf(),
                     );
@@ -557,11 +560,6 @@ impl AppBundle {
                 })
                 .await
                 .unwrap()?;
-
-                // Run SSG and cache static routes
-                if self.build.build.ssg {
-                    self.run_ssg().await?;
-                }
             }
             Platform::MacOS => {}
             Platform::Windows => {}
@@ -685,70 +683,18 @@ impl AppBundle {
         Ok(())
     }
 
-    async fn run_ssg(&self) -> anyhow::Result<()> {
-        use futures_util::stream::FuturesUnordered;
-        use futures_util::StreamExt;
-        use tokio::process::Command;
-
-        const PORT: u16 = 9999;
-
-        tracing::info!("Running SSG");
-
-        // Run the server executable
-        let _child = Command::new(
-            self.server_exe()
+    async fn pre_render_ssg_routes(&self) -> Result<()> {
+        // Run SSG and cache static routes
+        if !self.build.build.ssg {
+            return Ok(());
+        }
+        self.build.status_prerendering_routes();
+        pre_render_static_routes(
+            &self
+                .server_exe()
                 .context("Failed to find server executable")?,
         )
-        .env(dioxus_cli_config::SERVER_PORT_ENV, PORT.to_string())
-        .env(dioxus_cli_config::SERVER_IP_ENV, "127.0.0.1")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
-
-        // Wait a second for the server to start
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        // Get the routes from the `/static_routes` endpoint
-        let mut routes = reqwest::Client::builder()
-            .build()?
-            .post(format!("http://127.0.0.1:{PORT}/api/static_routes"))
-            .send()
-            .await
-            .context("Failed to get static routes from server")?
-            .text()
-            .await
-            .map(|raw| serde_json::from_str::<Vec<String>>(&raw).unwrap())
-            .inspect(|text| tracing::debug!("Got static routes: {text:?}"))
-            .context("Failed to parse static routes from server")?
-            .into_iter()
-            .map(|line| async move {
-                tracing::info!("SSG: {line}");
-                reqwest::Client::builder()
-                    .build()?
-                    .get(format!("http://127.0.0.1:{PORT}{line}"))
-                    .header("Accept", "text/html")
-                    .send()
-                    .await
-            })
-            .collect::<FuturesUnordered<_>>();
-
-        while let Some(route) = routes.next().await {
-            match route {
-                Ok(route) => tracing::debug!("ssg success: {route:?}"),
-                Err(err) => tracing::error!("ssg error: {err:?}"),
-            }
-        }
-
-        // Wait a second for the cache to be written by the server
-        tracing::info!("Waiting a moment for isrg to propagate...");
-
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-
-        tracing::info!("SSG complete");
-
-        drop(_child);
-
+        .await?;
         Ok(())
     }
 

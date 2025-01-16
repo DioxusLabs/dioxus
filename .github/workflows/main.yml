@@ -54,7 +54,7 @@ jobs:
           cache-all-crates: "true"
       # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
       - name: install_cargo_msrv
-        run: cargo install cargo-msrv --all-features
+        run: cargo install cargo-msrv --all-features --version 0.16.3 --locked
       - name: version_of_cargo_msrv
         run: cargo msrv --version
       - name: run_cargo_msrv

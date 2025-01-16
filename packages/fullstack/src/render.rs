@@ -1,5 +1,6 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::document::ServerDocument;
+use crate::html_storage::serialize::SerializedHydrationData;
 use crate::streaming::{Mount, StreamingRenderer};
 use dioxus_cli_config::base_path;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
@@ -220,7 +221,8 @@ impl SsrRendererPool {
             // If streaming is disabled, wait for the virtual dom to finish all suspense work
             // before rendering anything
             if streaming_mode == StreamingMode::Disabled {
-                virtual_dom.wait_for_suspense().await;
+                ProvideServerContext::new(virtual_dom.wait_for_suspense(), server_context.clone())
+                    .await
             }
 
             // Render the initial frame with loading placeholders
@@ -408,7 +410,7 @@ fn start_capturing_errors(suspense_scope: ScopeId) {
     suspense_scope.in_runtime(provide_error_boundary);
 }
 
-fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> String {
+fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
     // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
     // Extract any data we serialized for hydration (from server futures)
     let html_data =
@@ -530,10 +532,27 @@ impl FullstackHTMLTemplate {
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
         // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
         let resolved_data = serialize_server_data(virtual_dom, ScopeId::ROOT);
+        // We always send down the data required to hydrate components on the client
+        let raw_data = resolved_data.data;
         write!(
             to,
-            r#"<script>window.initial_dioxus_hydration_data="{resolved_data}";</script>"#,
+            r#"<script>window.initial_dioxus_hydration_data="{raw_data}";"#,
         )?;
+        #[cfg(debug_assertions)]
+        {
+            // In debug mode, we also send down the type names and locations of the serialized data
+            let debug_types = &resolved_data.debug_types;
+            let debug_locations = &resolved_data.debug_locations;
+            write!(
+                to,
+                r#"window.initial_dioxus_hydration_debug_types={debug_types};"#,
+            )?;
+            write!(
+                to,
+                r#"window.initial_dioxus_hydration_debug_locations={debug_locations};"#,
+            )?;
+        }
+        write!(to, r#"</script>"#,)?;
         to.write_str(&index.post_main)?;
 
         Ok(())

@@ -22,8 +22,9 @@ impl Default for DioxusConfig {
     fn default() -> Self {
         Self {
             application: ApplicationConfig {
-                asset_dir: asset_dir_default(),
+                asset_dir: None,
                 sub_package: None,
+                out_dir: None,
             },
             web: WebConfig {
                 app: WebAppConfig {

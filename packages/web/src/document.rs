@@ -1,5 +1,9 @@
+use dioxus_core::prelude::queue_effect;
 use dioxus_core::ScopeId;
-use dioxus_document::{Document, Eval, EvalError, Evaluator};
+use dioxus_document::{
+    create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,
+    ScriptProps, StyleProps,
+};
 use dioxus_history::History;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
@@ -69,10 +73,59 @@ pub fn init_document() {
 }
 
 /// The web-target's document provider.
+#[derive(Clone)]
 pub struct WebDocument;
 impl Document for WebDocument {
     fn eval(&self, js: String) -> Eval {
         Eval::new(WebEvaluator::create(js))
+    }
+
+    /// Set the title of the document
+    fn set_title(&self, title: String) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(format!("document.title = {title:?};"));
+        });
+    }
+
+    /// Create a new meta tag in the head
+    fn create_meta(&self, props: MetaProps) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head("meta", &props.attributes(), None));
+        });
+    }
+
+    /// Create a new script tag in the head
+    fn create_script(&self, props: ScriptProps) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head(
+                "script",
+                &props.attributes(),
+                props.script_contents().ok(),
+            ));
+        });
+    }
+
+    /// Create a new style tag in the head
+    fn create_style(&self, props: StyleProps) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head(
+                "style",
+                &props.attributes(),
+                props.style_contents().ok(),
+            ));
+        });
+    }
+
+    /// Create a new link tag in the head
+    fn create_link(&self, props: LinkProps) {
+        let myself = self.clone();
+        queue_effect(move || {
+            myself.eval(create_element_in_head("link", &props.attributes(), None));
+        });
     }
 }
 

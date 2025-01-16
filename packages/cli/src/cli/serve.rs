@@ -103,7 +103,8 @@ impl ServeArgs {
     pub(crate) fn should_proxy_build(&self) -> bool {
         match self.build_arguments.platform() {
             Platform::Server => true,
-            _ => self.build_arguments.fullstack,
+            // During SSG, just serve the static files instead of running the server
+            _ => self.build_arguments.fullstack && !self.build_arguments.ssg,
         }
     }
 }
