@@ -52,6 +52,9 @@ impl WasmBindgen {
             args.push("--remove-producers-section");
         }
 
+        // wbg generates typescript bindnings by default - we don't want those
+        args.push("--no-typescript");
+
         // Out name
         args.push("--out-name");
         args.push(&self.out_name);
