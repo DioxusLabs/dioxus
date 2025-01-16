@@ -115,17 +115,28 @@ impl DioxusCrate {
         })
     }
 
-    /// Compose an asset directory. Represents the typical "public" directory
-    /// with publicly available resources (configurable in the `Dioxus.toml`).
-    pub(crate) fn legacy_asset_dir(&self) -> PathBuf {
-        self.crate_dir().join(&self.config.application.asset_dir)
+    /// The asset dir we used to support before manganis became the default.
+    /// This generally was just a folder in your Dioxus.toml called "assets" or "public" where users
+    /// would store their assets.
+    ///
+    /// With manganis you now use `asset!()` and we pick it up automatically.
+    pub(crate) fn legacy_asset_dir(&self) -> Option<PathBuf> {
+        self.config
+            .application
+            .asset_dir
+            .clone()
+            .map(|dir| self.crate_dir().join(dir))
     }
 
     /// Get the list of files in the "legacy" asset directory
     pub(crate) fn legacy_asset_dir_files(&self) -> Vec<PathBuf> {
         let mut files = vec![];
 
-        let Ok(read_dir) = self.legacy_asset_dir().read_dir() else {
+        let Some(legacy_asset_dir) = self.legacy_asset_dir() else {
+            return files;
+        };
+
+        let Ok(read_dir) = legacy_asset_dir.read_dir() else {
             return files;
         };
 

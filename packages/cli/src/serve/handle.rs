@@ -172,14 +172,15 @@ impl AppHandle {
         tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
         // If the asset shares the same name in the bundle, reload that
-        let legacy_asset_dir = self.app.build.krate.legacy_asset_dir();
-        if changed_file.starts_with(&legacy_asset_dir) {
-            tracing::debug!("Hotreloading legacy asset {changed_file:?}");
-            let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
-            let res = std::fs::copy(changed_file, asset_dir.join(trimmed));
-            bundled_name = Some(trimmed.to_path_buf());
-            if let Err(e) = res {
-                tracing::debug!("Failed to hotreload legacy asset {e}");
+        if let Some(legacy_asset_dir) = self.app.build.krate.legacy_asset_dir() {
+            if changed_file.starts_with(&legacy_asset_dir) {
+                tracing::debug!("Hotreloading legacy asset {changed_file:?}");
+                let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
+                let res = std::fs::copy(changed_file, asset_dir.join(trimmed));
+                bundled_name = Some(trimmed.to_path_buf());
+                if let Err(e) = res {
+                    tracing::debug!("Failed to hotreload legacy asset {e}");
+                }
             }
         }
 
