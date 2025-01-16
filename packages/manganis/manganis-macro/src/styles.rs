@@ -119,7 +119,7 @@ impl ToTokens for StyleParser {
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
                 pub(super) const __ASSET_HASH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::hash_asset(&__ASSET_OPTIONS, #hash);
 
-                pub struct Styles<'a> {
+                pub(super) struct Styles<'a> {
                     #( #fields )*
                 }
             }
