@@ -311,10 +311,10 @@ impl WasmBindgenBuilder {
     pub fn new(version: String) -> Self {
         Self {
             version,
-            target: String::new(),
             input_path: PathBuf::new(),
             out_dir: PathBuf::new(),
             out_name: String::new(),
+            target: String::new(),
             debug: true,
             keep_debug: true,
             demangle: true,
