@@ -17,7 +17,7 @@ pub(crate) struct DioxusCrate {
     pub(crate) package: NodeId,
     pub(crate) config: DioxusConfig,
     pub(crate) target: Target,
-    pub(crate) settings: CliSettings,
+    pub(crate) settings: Arc<CliSettings>,
 }
 
 pub(crate) static PROFILE_WASM: &str = "wasm-dev";

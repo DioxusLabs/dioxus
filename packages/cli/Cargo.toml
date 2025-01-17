@@ -73,6 +73,9 @@ reqwest = { workspace = true, features = [
 tower = { workspace = true }
 once_cell = "1.19.0"
 
+# path lookup
+which = { version = "7.0.1" }
+
 # plugin packages
 open = "5.0.1"
 cargo-generate = "=0.21.3"
@@ -129,6 +132,7 @@ default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
 bundle = []
+no-downloads = []
 
 # when releasing dioxus, we want to enable wasm-opt
 # and then also maybe developing it too.
