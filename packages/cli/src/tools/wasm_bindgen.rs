@@ -1,23 +1,145 @@
-use super::WasmBindgenBinary;
+use crate::{CliSettings, Result};
 use anyhow::{anyhow, Context};
 use flate2::read::GzDecoder;
 use std::path::PathBuf;
+use std::{path::Path, process::Stdio};
 use tar::Archive;
 use tempfile::TempDir;
 use tokio::{fs, process::Command};
 
-pub(super) struct ManagedBinary {
+pub(crate) struct WasmBindgen {
     version: String,
+    input_path: PathBuf,
+    out_dir: PathBuf,
+    out_name: String,
+    target: String,
+    debug: bool,
+    keep_debug: bool,
+    demangle: bool,
+    remove_name_section: bool,
+    remove_producers_section: bool,
 }
 
-impl WasmBindgenBinary for ManagedBinary {
-    fn new(version: &str) -> Self {
+impl WasmBindgen {
+    pub fn new(version: &str) -> Self {
         Self {
             version: version.to_string(),
+            input_path: PathBuf::new(),
+            out_dir: PathBuf::new(),
+            out_name: String::new(),
+            target: String::new(),
+            debug: true,
+            keep_debug: true,
+            demangle: true,
+            remove_name_section: false,
+            remove_producers_section: false,
         }
     }
 
-    async fn verify_install(&self) -> anyhow::Result<()> {
+    /// Run the bindgen command with the current settings
+    pub async fn run(&self) -> Result<()> {
+        let binary = self.get_binary_path().await?;
+
+        let mut args = Vec::new();
+
+        // Target
+        args.push("--target");
+        args.push(&self.target);
+
+        // Options
+        if self.debug {
+            args.push("--debug");
+        }
+
+        if !self.demangle {
+            args.push("--no-demangle");
+        }
+
+        if self.keep_debug {
+            args.push("--keep-debug");
+        }
+
+        if self.remove_name_section {
+            args.push("--remove-name-section");
+        }
+
+        if self.remove_producers_section {
+            args.push("--remove-producers-section");
+        }
+
+        // Out name
+        args.push("--out-name");
+        args.push(&self.out_name);
+
+        // wbg generates typescript bindnings by default - we don't want those
+        args.push("--no-typescript");
+
+        // Out dir
+        let out_dir = self
+            .out_dir
+            .to_str()
+            .expect("input_path should be valid utf8");
+
+        args.push("--out-dir");
+        args.push(out_dir);
+
+        // Input path
+        let input_path = self
+            .input_path
+            .to_str()
+            .expect("input_path should be valid utf8");
+        args.push(input_path);
+
+        // Run bindgen
+        Command::new(binary)
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+
+        Ok(())
+    }
+
+    /// Verify the installed version of wasm-bindgen-cli
+    pub async fn verify_install(version: &str) -> anyhow::Result<()> {
+        let settings = Self::new(version);
+        if CliSettings::prefer_no_downloads() {
+            settings.verify_local_install().await
+        } else {
+            settings.verify_managed_install().await
+        }
+    }
+
+    async fn verify_local_install(&self) -> anyhow::Result<()> {
+        tracing::info!(
+            "Verifying wasm-bindgen-cli@{} is installed in the path",
+            self.version
+        );
+
+        let binary = self.get_binary_path().await?;
+        let output = Command::new(binary)
+            .args(["--version"])
+            .output()
+            .await
+            .context("Failed to check wasm-bindgen-cli version")?;
+
+        let stdout = String::from_utf8(output.stdout)
+            .context("Failed to extract wasm-bindgen-cli output")?;
+
+        let installed_version = stdout.trim_start_matches("wasm-bindgen").trim();
+        if installed_version != self.version {
+            return Err(anyhow!(
+                "Incorrect wasm-bindgen-cli version: project requires version {} but version {} is installed",
+                self.version,
+                installed_version,
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn verify_managed_install(&self) -> anyhow::Result<()> {
         tracing::info!(
             "Verifying wasm-bindgen-cli@{} is installed in the tool directory",
             self.version
@@ -34,13 +156,70 @@ impl WasmBindgenBinary for ManagedBinary {
     }
 
     async fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
-        let installed_name = self.installed_bin_name();
-        let install_dir = self.install_dir().await?;
-        Ok(install_dir.join(installed_name))
+        if CliSettings::prefer_no_downloads() {
+            which::which("wasm-bindgen")
+                .map_err(|_| anyhow!("Missing wasm-bindgen-cli@{}", self.version))
+        } else {
+            let installed_name = self.installed_bin_name();
+            let install_dir = self.install_dir().await?;
+            Ok(install_dir.join(installed_name))
+        }
     }
-}
 
-impl ManagedBinary {
+    pub fn input_path(self, input_path: &Path) -> Self {
+        Self {
+            input_path: input_path.to_path_buf(),
+            ..self
+        }
+    }
+
+    pub fn out_dir(self, out_dir: &Path) -> Self {
+        Self {
+            out_dir: out_dir.to_path_buf(),
+            ..self
+        }
+    }
+
+    pub fn out_name(self, out_name: &str) -> Self {
+        Self {
+            out_name: out_name.to_string(),
+            ..self
+        }
+    }
+
+    pub fn target(self, target: &str) -> Self {
+        Self {
+            target: target.to_string(),
+            ..self
+        }
+    }
+
+    pub fn debug(self, debug: bool) -> Self {
+        Self { debug, ..self }
+    }
+
+    pub fn keep_debug(self, keep_debug: bool) -> Self {
+        Self { keep_debug, ..self }
+    }
+
+    pub fn demangle(self, demangle: bool) -> Self {
+        Self { demangle, ..self }
+    }
+
+    pub fn remove_name_section(self, remove_name_section: bool) -> Self {
+        Self {
+            remove_name_section,
+            ..self
+        }
+    }
+
+    pub fn remove_producers_section(self, remove_producers_section: bool) -> Self {
+        Self {
+            remove_producers_section,
+            ..self
+        }
+    }
+
     async fn install(&self) -> anyhow::Result<()> {
         tracing::info!("Installing wasm-bindgen-cli@{}...", self.version);
 
@@ -250,7 +429,7 @@ mod test {
     /// Test the github installer.
     #[tokio::test]
     async fn test_github_install() {
-        let binary = ManagedBinary::new(VERSION);
+        let binary = WasmBindgen::new(VERSION);
         reset_test().await;
         binary.install_github().await.unwrap();
         test_verify_install().await;
@@ -260,7 +439,7 @@ mod test {
     /// Test the cargo installer.
     #[tokio::test]
     async fn test_cargo_install() {
-        let binary = ManagedBinary::new(VERSION);
+        let binary = WasmBindgen::new(VERSION);
         reset_test().await;
         binary.install_cargo().await.unwrap();
         test_verify_install().await;
@@ -271,7 +450,7 @@ mod test {
     // Test the binstall installer
     // #[tokio::test]
     // async fn test_binstall_install() {
-    //     let binary = ManagedBinary::new(VERSION);
+    //     let binary = WasmBindgen::new(VERSION);
     //     reset_test().await;
     //     binary.install_binstall().await.unwrap();
     //     test_verify_install().await;
@@ -280,12 +459,11 @@ mod test {
 
     /// Helper to test `verify_install` after an installation.
     async fn test_verify_install() {
-        let binary = ManagedBinary::new(VERSION);
-        binary.verify_install().await.unwrap();
+        WasmBindgen::verify_install(VERSION).await.unwrap();
     }
 
     /// Helper to test that the installed binary actually exists.
-    async fn verify_installation(binary: &ManagedBinary) {
+    async fn verify_installation(binary: &WasmBindgen) {
         let path = binary.install_dir().await.unwrap();
         let name = binary.installed_bin_name();
         let binary_path = path.join(name);
@@ -297,7 +475,7 @@ mod test {
 
     /// Delete the installed binary. The temp folder should be automatically deleted.
     async fn reset_test() {
-        let binary = ManagedBinary::new(VERSION);
+        let binary = WasmBindgen::new(VERSION);
         let path = binary.install_dir().await.unwrap();
         let name = binary.installed_bin_name();
         let binary_path = path.join(name);
