@@ -1,6 +1,4 @@
-use crate::{
-    tools::wasm_bindgen::WasmBindgen, BuildRequest, Error, Platform, Result, RustcDetails,
-};
+use crate::{wasm_bindgen::WasmBindgen, BuildRequest, Error, Platform, Result, RustcDetails};
 use anyhow::{anyhow, Context};
 
 impl BuildRequest {

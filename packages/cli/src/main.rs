@@ -18,7 +18,7 @@ mod platform;
 mod rustc;
 mod serve;
 mod settings;
-mod tools;
+mod wasm_bindgen;
 
 pub(crate) use build::*;
 pub(crate) use cli::*;

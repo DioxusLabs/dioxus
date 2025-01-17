@@ -111,8 +111,8 @@ impl CliSettings {
     /// Modify the settings toml file - doesn't change the settings for this session
     pub(crate) fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<()> {
         let mut _settings = CliSettings::load();
-        let mut settings: &mut CliSettings = Arc::make_mut(&mut _settings);
-        with(&mut settings);
+        let settings: &mut CliSettings = Arc::make_mut(&mut _settings);
+        with(settings);
         settings.save()?;
 
         Ok(())
