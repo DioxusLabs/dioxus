@@ -78,15 +78,7 @@ struct RenderState<'a> {
 impl Output {
     pub(crate) fn start(cfg: &ServeArgs) -> io::Result<Self> {
         let mut output = Self {
-            term: Rc::new(RefCell::new(
-                Terminal::with_options(
-                    CrosstermBackend::new(stdout()),
-                    TerminalOptions {
-                        viewport: Viewport::Inline(VIEWPORT_HEIGHT_SMALL),
-                    },
-                )
-                .ok(),
-            )),
+            term: Rc::new(RefCell::new(None)),
             interactive: cfg.is_interactive_tty(),
             dx_version: format!(
                 "{}-{}",
@@ -95,7 +87,6 @@ impl Output {
             ),
             platform: cfg.build_arguments.platform.expect("To be resolved by now"),
             events: None,
-            // messages: Vec::new(),
             more_modal_open: false,
             pending_logs: VecDeque::new(),
             throbber: RefCell::new(throbber_widgets_tui::ThrobberState::default()),
@@ -126,6 +117,16 @@ impl Output {
                 _ = stdout().execute(Show);
                 original_hook(info);
             }));
+
+            self.term.replace(
+                Terminal::with_options(
+                    CrosstermBackend::new(stdout()),
+                    TerminalOptions {
+                        viewport: Viewport::Inline(VIEWPORT_HEIGHT_SMALL),
+                    },
+                )
+                .ok(),
+            );
 
             enable_raw_mode()?;
             stdout()
@@ -323,6 +324,10 @@ impl Output {
     /// re-render when external state changes. Ratatui will diff the intermediate buffer, so we at least
     /// we won't be drawing it.
     pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
+        if !self.interactive {
+            return;
+        }
+
         match update {
             BuildUpdate::Progress {
                 stage: BuildStage::Starting { .. },
