@@ -5,7 +5,7 @@ use crate::{
 use dioxus_core::internal::TemplateGlobalKey;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
-use futures_util::{future::OptionFuture, stream::FuturesUnordered};
+use futures_util::{future::OptionFuture, stream::FuturesUnordered, FutureExt};
 use ignore::gitignore::Gitignore;
 use std::{
     collections::{HashMap, HashSet},
@@ -105,7 +105,7 @@ impl AppRunner {
         // Drop the old handle
         // todo(jon): we should instead be sending the kill signal rather than dropping the process
         // This would allow a more graceful shutdown and fix bugs like desktop not retaining its size
-        self.kill(platform);
+        self.kill(platform).await;
 
         // wait a tiny sec for the processes to die so we don't have fullstack servers on top of each other
         // todo(jon): we should allow rebinding to the same port in fullstack itself
@@ -137,12 +137,59 @@ impl AppRunner {
         Ok(self.running.get(&platform).unwrap())
     }
 
-    pub(crate) fn kill(&mut self, platform: Platform) {
-        self.running.remove(&platform);
+    /// Gracefully kill the process and all of its children
+    ///
+    /// Uses the `SIGTERM` signal on unix and `taskkill` on windows.
+    /// This complex logic is necessary for things like window state preservation to work properly.
+    pub(crate) async fn kill(&mut self, platform: Platform) {
+        use tokio::process::Command;
+
+        let Some(mut process) = self.running.remove(&platform) else {
+            return;
+        };
+
+        let server_process = process.server_child.take();
+        let client_process = process.app_child.take();
+        let processes = [server_process, client_process]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        for mut process in processes {
+            let Some(pid) = process.id() else {
+                _ = process.kill().await;
+                continue;
+            };
+
+            // on unix, we can send a signal to the process to shut down
+            #[cfg(unix)]
+            {
+                _ = Command::new("kill")
+                    .args(["-s", "TERM", &pid.to_string()])
+                    .spawn();
+            }
+
+            // on windows, use the `taskkill` command
+            #[cfg(windows)]
+            {
+                _ = Command::new("taskkill")
+                    .args(["/F", "/PID", &pid.to_string()])
+                    .spawn();
+            }
+
+            // join the wait with a 100ms timeout
+            futures_util::select! {
+                _ = process.wait().fuse() => {}
+                _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
+            };
+        }
     }
 
-    pub(crate) fn kill_all(&mut self) {
-        self.running.clear();
+    pub(crate) async fn kill_all(&mut self) {
+        let keys = self.running.keys().cloned().collect::<Vec<_>>();
+        for platform in keys {
+            self.kill(platform).await;
+        }
     }
 
     /// Open an existing app bundle, if it exists

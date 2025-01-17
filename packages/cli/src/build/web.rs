@@ -211,10 +211,13 @@ impl AppBundle {
                     // If the path is absolute, make it relative to the current directory before we join it
                     // The path is actually a web path which is relative to the root of the website
                     let path = path.strip_prefix("/").unwrap_or(path);
-                    let asset_dir_path = self.build.krate.legacy_asset_dir().join(path);
-                    if let Ok(absolute_path) = asset_dir_path.canonicalize() {
-                        let absolute_crate_root =
-                            self.build.krate.crate_dir().canonicalize().unwrap();
+                    let asset_dir_path = self
+                        .krate
+                        .legacy_asset_dir()
+                        .map(|dir| dir.join(path).canonicalize());
+
+                    if let Some(Ok(absolute_path)) = asset_dir_path {
+                        let absolute_crate_root = self.krate.crate_dir().canonicalize().unwrap();
                         PathBuf::from("./")
                             .join(absolute_path.strip_prefix(absolute_crate_root).unwrap())
                     } else {
@@ -237,7 +240,7 @@ impl AppBundle {
             ResourceType::Script => "web.resource.script",
         };
 
-        tracing::debug!(
+        tracing::warn!(
             "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
         );
     }

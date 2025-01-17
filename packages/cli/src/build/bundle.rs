@@ -1,6 +1,6 @@
 use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
-use crate::wasm_bindgen::WasmBindgenBuilder;
+use crate::wasm_bindgen::WasmBindgen;
 use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
@@ -636,7 +636,7 @@ impl AppBundle {
             .wasm_bindgen_version()
             .expect("this should have been checked by tool verification");
 
-        WasmBindgenBuilder::new(bindgen_version)
+        WasmBindgen::new(&bindgen_version)
             .input_path(&input_path)
             .target("web")
             .debug(keep_debug)
@@ -646,7 +646,6 @@ impl AppBundle {
             .remove_producers_section(!keep_debug)
             .out_name(&name)
             .out_dir(&bindgen_outdir)
-            .build()
             .run()
             .await
             .context("Failed to generate wasm-bindgen bindings")?;
