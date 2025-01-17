@@ -212,12 +212,14 @@ impl AppBundle {
                     // The path is actually a web path which is relative to the root of the website
                     let path = path.strip_prefix("/").unwrap_or(path);
                     let asset_dir_path = self
+                        .build
                         .krate
                         .legacy_asset_dir()
                         .map(|dir| dir.join(path).canonicalize());
 
                     if let Some(Ok(absolute_path)) = asset_dir_path {
-                        let absolute_crate_root = self.krate.crate_dir().canonicalize().unwrap();
+                        let absolute_crate_root =
+                            self.build.krate.crate_dir().canonicalize().unwrap();
                         PathBuf::from("./")
                             .join(absolute_path.strip_prefix(absolute_crate_root).unwrap())
                     } else {
