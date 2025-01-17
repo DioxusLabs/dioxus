@@ -318,8 +318,7 @@ impl Drop for Inner {
             return;
         };
 
-        let old_subscribers = std::mem::take(&mut self.subscribers);
-        for subscriber in old_subscribers {
+        for subscriber in std::mem::take(&mut self.subscribers) {
             if let Ok(mut subscriber) = subscriber.0.lock() {
                 subscriber.remove(&self_);
             }
