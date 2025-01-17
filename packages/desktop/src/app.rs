@@ -226,14 +226,14 @@ impl App {
         }
     }
 
-    pub fn resize_window(&self, size: PhysicalSize<u32>) {
+    pub fn resize_window(&self, id: WindowId, size: PhysicalSize<u32>) {
         // TODO: the app layer should avoid directly manipulating the webview webview instance internals.
         // Window creation and modification is the responsibility of the webview instance so it makes sense to
         // encapsulate that there.
-        self.webviews.values().for_each(|webview_instance| {
+        if let Some(webview) = self.webviews.get(&id) {
             use wry::Rect;
 
-            webview_instance
+            webview
                 .desktop_context
                 .webview
                 .set_bounds(Rect {
@@ -244,7 +244,7 @@ impl App {
                     )),
                 })
                 .unwrap();
-        });
+        }
     }
 
     pub fn handle_start_cause_init(&mut self) {
