@@ -270,6 +270,11 @@ impl BuildRequest {
                 true => cargo_args.push("release".to_string()),
                 false => cargo_args.push(self.build.server_profile.to_string()),
             };
+
+            if let Some(target) = self.build.target_args.target.as_deref() {
+                cargo_args.push("--target".to_string());
+                cargo_args.push(target.to_string());
+            }
         } else {
             // Add required profile flags. --release overrides any custom profiles.
             let custom_profile = &self.build.profile.as_ref();
