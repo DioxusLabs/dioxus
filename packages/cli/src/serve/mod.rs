@@ -109,7 +109,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
 
                     // Kill any running executables on Windows
                     if cfg!(windows) {
-                        runner.kill_all();
+                        runner.kill_all().await;
                     }
 
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
@@ -200,7 +200,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     );
                 }
 
-                runner.kill(platform);
+                runner.kill(platform).await;
             }
 
             ServeUpdate::StdoutReceived { platform, msg } => {
@@ -223,7 +223,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
 
                 // Kill any running executables on Windows
                 if cfg!(windows) {
-                    runner.kill_all();
+                    runner.kill_all().await;
                 }
 
                 builder.rebuild(args.build_arguments.clone());
