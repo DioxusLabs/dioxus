@@ -191,16 +191,42 @@ pub struct CustomSignCommandSettings {
     pub args: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
 pub(crate) enum PackageType {
+    /// The macOS application bundle (.app).
+    #[clap(name = "macos")]
     MacOsBundle,
+
+    /// The iOS app bundle.
+    #[clap(name = "ios")]
     IosBundle,
+
+    /// The Windows bundle (.msi).
+    #[clap(name = "msi")]
     WindowsMsi,
+
+    /// The NSIS bundle (.exe).
+    #[clap(name = "nsis")]
     Nsis,
+
+    /// The Linux Debian package bundle (.deb).
+    #[clap(name = "deb")]
     Deb,
+
+    /// The Linux RPM bundle (.rpm).
+    #[clap(name = "rpm")]
     Rpm,
+
+    /// The Linux AppImage bundle (.AppImage).
+    #[clap(name = "appimage")]
     AppImage,
+
+    /// The macOS DMG bundle (.dmg).
+    #[clap(name = "dmg")]
     Dmg,
+
+    /// The Updater bundle (a patch of an existing app)
+    #[clap(name = "updater")]
     Updater,
 }
 
