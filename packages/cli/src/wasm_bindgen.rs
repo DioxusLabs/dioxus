@@ -36,6 +36,60 @@ impl WasmBindgen {
         }
     }
 
+    pub fn input_path(self, input_path: &Path) -> Self {
+        Self {
+            input_path: input_path.to_path_buf(),
+            ..self
+        }
+    }
+
+    pub fn out_dir(self, out_dir: &Path) -> Self {
+        Self {
+            out_dir: out_dir.to_path_buf(),
+            ..self
+        }
+    }
+
+    pub fn out_name(self, out_name: &str) -> Self {
+        Self {
+            out_name: out_name.to_string(),
+            ..self
+        }
+    }
+
+    pub fn target(self, target: &str) -> Self {
+        Self {
+            target: target.to_string(),
+            ..self
+        }
+    }
+
+    pub fn debug(self, debug: bool) -> Self {
+        Self { debug, ..self }
+    }
+
+    pub fn keep_debug(self, keep_debug: bool) -> Self {
+        Self { keep_debug, ..self }
+    }
+
+    pub fn demangle(self, demangle: bool) -> Self {
+        Self { demangle, ..self }
+    }
+
+    pub fn remove_name_section(self, remove_name_section: bool) -> Self {
+        Self {
+            remove_name_section,
+            ..self
+        }
+    }
+
+    pub fn remove_producers_section(self, remove_producers_section: bool) -> Self {
+        Self {
+            remove_producers_section,
+            ..self
+        }
+    }
+
     /// Run the bindgen command with the current settings
     pub async fn run(&self) -> Result<()> {
         let binary = self.get_binary_path().await?;
@@ -102,6 +156,9 @@ impl WasmBindgen {
     }
 
     /// Verify the installed version of wasm-bindgen-cli
+    ///
+    /// For local installations, this will check that the installed version matches the specified version.
+    /// For managed installations, this will check that the version managed by `dx` is the specified version.
     pub async fn verify_install(version: &str) -> anyhow::Result<()> {
         let settings = Self::new(version);
         if CliSettings::prefer_no_downloads() {
@@ -111,115 +168,14 @@ impl WasmBindgen {
         }
     }
 
-    async fn verify_local_install(&self) -> anyhow::Result<()> {
-        tracing::info!(
-            "Verifying wasm-bindgen-cli@{} is installed in the path",
-            self.version
-        );
-
-        let binary = self.get_binary_path().await?;
-        let output = Command::new(binary)
-            .args(["--version"])
-            .output()
-            .await
-            .context("Failed to check wasm-bindgen-cli version")?;
-
-        let stdout = String::from_utf8(output.stdout)
-            .context("Failed to extract wasm-bindgen-cli output")?;
-
-        let installed_version = stdout.trim_start_matches("wasm-bindgen").trim();
-        if installed_version != self.version {
-            return Err(anyhow!(
-                "Incorrect wasm-bindgen-cli version: project requires version {} but version {} is installed",
-                self.version,
-                installed_version,
-            ));
-        }
-
-        Ok(())
-    }
-
-    async fn verify_managed_install(&self) -> anyhow::Result<()> {
-        tracing::info!(
-            "Verifying wasm-bindgen-cli@{} is installed in the tool directory",
-            self.version
-        );
-
-        let binary_name = self.installed_bin_name();
-        let path = self.install_dir().await?.join(binary_name);
-
-        if !path.exists() {
-            self.install().await?;
-        }
-
-        Ok(())
-    }
-
-    async fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
-        if CliSettings::prefer_no_downloads() {
-            which::which("wasm-bindgen")
-                .map_err(|_| anyhow!("Missing wasm-bindgen-cli@{}", self.version))
-        } else {
-            let installed_name = self.installed_bin_name();
-            let install_dir = self.install_dir().await?;
-            Ok(install_dir.join(installed_name))
-        }
-    }
-
-    pub fn input_path(self, input_path: &Path) -> Self {
-        Self {
-            input_path: input_path.to_path_buf(),
-            ..self
-        }
-    }
-
-    pub fn out_dir(self, out_dir: &Path) -> Self {
-        Self {
-            out_dir: out_dir.to_path_buf(),
-            ..self
-        }
-    }
-
-    pub fn out_name(self, out_name: &str) -> Self {
-        Self {
-            out_name: out_name.to_string(),
-            ..self
-        }
-    }
-
-    pub fn target(self, target: &str) -> Self {
-        Self {
-            target: target.to_string(),
-            ..self
-        }
-    }
-
-    pub fn debug(self, debug: bool) -> Self {
-        Self { debug, ..self }
-    }
-
-    pub fn keep_debug(self, keep_debug: bool) -> Self {
-        Self { keep_debug, ..self }
-    }
-
-    pub fn demangle(self, demangle: bool) -> Self {
-        Self { demangle, ..self }
-    }
-
-    pub fn remove_name_section(self, remove_name_section: bool) -> Self {
-        Self {
-            remove_name_section,
-            ..self
-        }
-    }
-
-    pub fn remove_producers_section(self, remove_producers_section: bool) -> Self {
-        Self {
-            remove_producers_section,
-            ..self
-        }
-    }
-
+    /// Install the specified wasm-bingen version.
+    ///
+    /// This will overwrite any existing wasm-bindgen binaries of the same version.
+    ///
+    /// This will attempt to install wasm-bindgen from:
+    /// 1. Direct GitHub release download.
+    /// 2. `cargo binstall` if installed.
+    /// 3. Compile from source with `cargo install`.
     async fn install(&self) -> anyhow::Result<()> {
         tracing::info!("Installing wasm-bindgen-cli@{}...", self.version);
 
@@ -368,6 +324,61 @@ impl WasmBindgen {
         .context("failed to copy wasm-bindgen binary")?;
 
         Ok(())
+    }
+
+    async fn verify_local_install(&self) -> anyhow::Result<()> {
+        tracing::info!(
+            "Verifying wasm-bindgen-cli@{} is installed in the path",
+            self.version
+        );
+
+        let binary = self.get_binary_path().await?;
+        let output = Command::new(binary)
+            .args(["--version"])
+            .output()
+            .await
+            .context("Failed to check wasm-bindgen-cli version")?;
+
+        let stdout = String::from_utf8(output.stdout)
+            .context("Failed to extract wasm-bindgen-cli output")?;
+
+        let installed_version = stdout.trim_start_matches("wasm-bindgen").trim();
+        if installed_version != self.version {
+            return Err(anyhow!(
+                "Incorrect wasm-bindgen-cli version: project requires version {} but version {} is installed",
+                self.version,
+                installed_version,
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn verify_managed_install(&self) -> anyhow::Result<()> {
+        tracing::info!(
+            "Verifying wasm-bindgen-cli@{} is installed in the tool directory",
+            self.version
+        );
+
+        let binary_name = self.installed_bin_name();
+        let path = self.install_dir().await?.join(binary_name);
+
+        if !path.exists() {
+            self.install().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn get_binary_path(&self) -> anyhow::Result<PathBuf> {
+        if CliSettings::prefer_no_downloads() {
+            which::which("wasm-bindgen")
+                .map_err(|_| anyhow!("Missing wasm-bindgen-cli@{}", self.version))
+        } else {
+            let installed_name = self.installed_bin_name();
+            let install_dir = self.install_dir().await?;
+            Ok(install_dir.join(installed_name))
+        }
     }
 
     async fn install_dir(&self) -> anyhow::Result<PathBuf> {
