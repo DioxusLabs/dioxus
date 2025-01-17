@@ -6299,9 +6299,9 @@ dependencies = [
 
 [[package]]
 name = "hstr"
-version = "0.2.15"
+version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63d6824358c0fd9a68bb23999ed2ef76c84f79408a26ef7ae53d5f370c94ad36"
+checksum = "dae404c0c5d4e95d4858876ab02eecd6a196bb8caa42050dfa809938833fc412"
 dependencies = [
  "hashbrown 0.14.5",
  "new_debug_unreachable",
@@ -11877,9 +11877,9 @@ dependencies = [
 
 [[package]]
 name = "static-self"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "253e76c8c993a7b1b201b0539228b334582153cd4364292822d2c30776d469c7"
+checksum = "f6635404b73efc136af3a7956e53c53d4f34b2f16c95a15c438929add0f69412"
 dependencies = [
  "smallvec",
  "static-self-derive",
