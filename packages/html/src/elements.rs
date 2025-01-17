@@ -188,7 +188,7 @@ macro_rules! impl_attribute_match {
         $attr:ident $fil:ident: $vil:ident (in $ns:literal),
     ) => {
         if $attr == stringify!($fil) {
-            return Some((stringify!(fil), Some($ns)));
+            return Some((stringify!($fil), Some($ns)));
         }
     };
 }

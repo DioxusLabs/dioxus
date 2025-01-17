@@ -1,7 +1,7 @@
 use crate::{AppBundle, DioxusCrate, Platform, Result};
 use anyhow::Context;
+use dioxus_cli_opt::process_file_to;
 use std::{
-    fs,
     net::SocketAddr,
     path::{Path, PathBuf},
     process::Stdio,
@@ -60,13 +60,9 @@ impl AppHandle {
     pub(crate) async fn open(
         &mut self,
         devserver_ip: SocketAddr,
-        fullstack_address: Option<SocketAddr>,
+        start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
     ) -> Result<()> {
-        if let Some(addr) = fullstack_address {
-            tracing::debug!("Proxying fullstack server from port {:?}", addr);
-        }
-
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
@@ -89,13 +85,12 @@ impl AppHandle {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
         }
 
-        if let Some(addr) = fullstack_address {
+        // Launch the server if we were given an address to start it on, and the build includes a server. After we
+        // start the server, consume its stdout/stderr.
+        if let (Some(addr), Some(server)) = (start_fullstack_on_address, self.app.server_exe()) {
+            tracing::debug!("Proxying fullstack server from port {:?}", addr);
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
-        }
-
-        // Launch the server if we have one and consume its stdout/stderr
-        if let Some(server) = self.app.server_exe() {
             tracing::debug!("Launching server from path: {server:?}");
             let mut child = Command::new(server)
                 .envs(envs.clone())
@@ -128,7 +123,7 @@ impl AppHandle {
 
             // https://developer.android.com/studio/run/emulator-commandline
             Platform::Android => {
-                self.open_android_sim(envs).await?;
+                self.open_android_sim(envs).await;
                 None
             }
 
@@ -177,25 +172,33 @@ impl AppHandle {
         tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
         // If the asset shares the same name in the bundle, reload that
-        let legacy_asset_dir = self.app.build.krate.legacy_asset_dir();
-        if changed_file.starts_with(&legacy_asset_dir) {
-            tracing::debug!("Hotreloading legacy asset {changed_file:?}");
-            let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
-            let res = std::fs::copy(changed_file, asset_dir.join(trimmed));
-            bundled_name = Some(trimmed.to_path_buf());
-            if let Err(e) = res {
-                tracing::debug!("Failed to hotreload legacy asset {e}");
+        if let Some(legacy_asset_dir) = self.app.build.krate.legacy_asset_dir() {
+            if changed_file.starts_with(&legacy_asset_dir) {
+                tracing::debug!("Hotreloading legacy asset {changed_file:?}");
+                let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
+                let res = std::fs::copy(changed_file, asset_dir.join(trimmed));
+                bundled_name = Some(trimmed.to_path_buf());
+                if let Err(e) = res {
+                    tracing::debug!("Failed to hotreload legacy asset {e}");
+                }
             }
         }
 
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
-        let changed_file = fs::canonicalize(changed_file)
+        let changed_file = dunce::canonicalize(changed_file)
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
             .ok()?;
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
         if let Some(resource) = self.app.app.assets.assets.get(&changed_file).as_ref() {
-            let res = std::fs::copy(&changed_file, asset_dir.join(resource.bundled_path()));
+            let output_path = asset_dir.join(resource.bundled_path());
+            // Remove the old asset if it exists
+            _ = std::fs::remove_file(&output_path);
+            // And then process the asset with the options into the **old** asset location. If we recompiled,
+            // the asset would be in a new location because the contents and hash have changed. Since we are
+            // hotreloading, we need to use the old asset location it was originally written to.
+            let options = *resource.options();
+            let res = process_file_to(&options, &changed_file, &output_path);
             bundled_name = Some(PathBuf::from(resource.bundled_path()));
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
@@ -486,7 +489,7 @@ impl AppHandle {
         unimplemented!("dioxus-cli doesn't support ios devices yet.")
     }
 
-    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) -> Result<()> {
+    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) {
         let apk_path = self.app.apk_path();
         let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
 
@@ -494,20 +497,25 @@ impl AppHandle {
         tokio::task::spawn(async move {
             // Install
             // adb install -r app-debug.apk
-            let _output = Command::new(DioxusCrate::android_adb())
+            // let _output = Command::new(DioxusCrate::android_adb())
+            if let Err(e) = Command::new("adb")
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .output()
-                .await?;
+                .await
+            {
+                tracing::error!("Failed to install apk with `adb`: {e}");
+            };
 
             // eventually, use the user's MainAcitivty, not our MainAcitivty
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 
-            let _output = Command::new(DioxusCrate::android_adb())
+            // let _output = Command::new(DioxusCrate::android_adb())
+            if let Err(e) = Command::new("adb")
                 .arg("shell")
                 .arg("am")
                 .arg("start")
@@ -517,11 +525,10 @@ impl AppHandle {
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .output()
-                .await?;
-
-            Result::<()>::Ok(())
+                .await
+            {
+                tracing::error!("Failed to start app with `adb`: {e}");
+            };
         });
-
-        Ok(())
     }
 }

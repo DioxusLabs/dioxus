@@ -3,13 +3,12 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ApplicationConfig {
-    #[serde(default = "asset_dir_default")]
-    pub(crate) asset_dir: PathBuf,
+    #[serde(default)]
+    pub(crate) asset_dir: Option<PathBuf>,
 
     #[serde(default)]
     pub(crate) sub_package: Option<String>,
-}
 
-pub(crate) fn asset_dir_default() -> PathBuf {
-    PathBuf::from("assets")
+    #[serde(default)]
+    pub(crate) out_dir: Option<PathBuf>,
 }

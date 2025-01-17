@@ -15,7 +15,7 @@ mod filemap;
 mod logging;
 mod metadata;
 mod platform;
-mod rustup;
+mod rustc;
 mod serve;
 mod settings;
 mod wasm_bindgen;
@@ -29,7 +29,7 @@ pub(crate) use error::*;
 pub(crate) use filemap::*;
 pub(crate) use logging::*;
 pub(crate) use platform::*;
-pub(crate) use rustup::*;
+pub(crate) use rustc::*;
 pub(crate) use settings::*;
 
 #[tokio::main]
@@ -52,7 +52,6 @@ async fn main() {
         Commands::Serve(opts) => opts.serve().await,
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
-        Commands::Doctor(opts) => opts.run().await,
     };
 
     // Provide a structured output for third party tools that can consume the output of the CLI

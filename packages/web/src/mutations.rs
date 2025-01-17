@@ -59,7 +59,7 @@ impl WebsysDom {
     }
 
     #[cfg(feature = "mounted")]
-    fn flush_queued_mounted_events(&mut self) {
+    pub(crate) fn flush_queued_mounted_events(&mut self) {
         for id in self.queued_mounted_events.drain(..) {
             let node = self.interpreter.base().get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<web_sys::Element>() {

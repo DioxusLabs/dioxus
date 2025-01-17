@@ -4,9 +4,10 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use manganis_core::JsAssetOptions;
-use swc::{config::JsMinifyOptions, try_with_handler, BoolOrDataConfig};
+use swc::{config::JsMinifyOptions, try_with_handler, BoolOrDataConfig, JsMinifyExtras};
 use swc_common::{sync::Lrc, FileName};
 use swc_common::{SourceMap, GLOBALS};
+use swc_ecma_minifier::option::MangleOptions;
 
 pub(crate) fn minify_js(source: &Path) -> anyhow::Result<String> {
     let mut source_file = std::fs::File::open(source)?;
@@ -26,9 +27,13 @@ pub(crate) fn minify_js(source: &Path) -> anyhow::Result<String> {
                     handler,
                     &JsMinifyOptions {
                         compress: BoolOrDataConfig::from_bool(true),
-                        mangle: BoolOrDataConfig::from_bool(true),
+                        mangle: BoolOrDataConfig::from_obj(MangleOptions {
+                            keep_fn_names: true,
+                            ..Default::default()
+                        }),
                         ..Default::default()
                     },
+                    JsMinifyExtras::default(),
                 )
                 .context("failed to minify javascript")
             })

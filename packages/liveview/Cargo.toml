@@ -22,7 +22,7 @@ tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.4", features = ["rt"] }
 serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
-dioxus-html = { workspace = true, features = ["serialize", "mounted"] }
+dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-document = { workspace = true }
 dioxus-history = { workspace = true }
 rustc-hash = { workspace = true }
@@ -36,7 +36,6 @@ generational-box = { workspace = true }
 axum = { workspace = true, optional = true, features = ["ws"] }
 
 [dev-dependencies]
-pretty_env_logger = { version = "0.5.0" }
 tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true, features = ["ws"] }
 tower = { workspace = true }
