@@ -314,18 +314,14 @@ struct Inner {
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        let Some(self_) = self.self_ else {
-            tracing::error!(
-                "self_ was None during ReactiveContext drop. self_ should be set during initialization. This is an internal dioxus error"
-            );
+        let Some(self_) = self.self_.take() else {
             return;
         };
+
         let old_subscribers = std::mem::take(&mut self.subscribers);
         for subscriber in old_subscribers {
             if let Ok(mut subscriber) = subscriber.0.lock() {
                 subscriber.remove(&self_);
-            } else {
-                tracing::error!("The subscriber lock was poisoned during the ReactiveContext drop, so subscribers were not removed.");
             }
         }
     }
