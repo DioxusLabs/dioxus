@@ -497,8 +497,7 @@ impl AppHandle {
         tokio::task::spawn(async move {
             // Install
             // adb install -r app-debug.apk
-            // let _output = Command::new(DioxusCrate::android_adb())
-            if let Err(e) = Command::new("adb")
+            if let Err(e) = Command::new(DioxusCrate::android_adb())
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
@@ -514,8 +513,7 @@ impl AppHandle {
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 
-            // let _output = Command::new(DioxusCrate::android_adb())
-            if let Err(e) = Command::new("adb")
+            if let Err(e) = Command::new(DioxusCrate::android_adb())
                 .arg("shell")
                 .arg("am")
                 .arg("start")
