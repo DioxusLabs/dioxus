@@ -265,7 +265,16 @@ impl Output {
                 stdout()
                     .execute(Clear(ClearType::All))?
                     .execute(Clear(ClearType::Purge))?;
-                _ = self.term.borrow_mut().as_mut().map(|t| t.clear());
+
+                // Clear the terminal and push the frame to the bottom
+                _ = self.term.borrow_mut().as_mut().map(|t| {
+                    let frame_rect = t.get_frame().area();
+                    let term_size = t.size().unwrap();
+                    let remaining_space = term_size
+                        .height
+                        .saturating_sub(frame_rect.y + frame_rect.height);
+                    t.insert_before(remaining_space, |_| {})
+                });
             }
 
             // Toggle the more modal by swapping the the terminal with a new one
@@ -989,9 +998,12 @@ impl Output {
                     line = line.dark_gray();
                 }
 
-                let line_length: usize = line.spans.iter().map(|f| f.content.len()).sum();
-
-                lines.push(AnsiStringLine::new(line_length.max(100) as _).render(&line));
+                // Create the ansi -> raw string line with a width of either the viewport width or the max width
+                let line_length = line.styled_graphemes(Style::default()).count();
+                lines.push(
+                    AnsiStringLine::new(line_length.max(VIEWPORT_MAX_WIDTH.into()) as _)
+                        .render(&line),
+                );
             }
         }
 
