@@ -485,6 +485,10 @@ impl App {
     // Write this to the target dir so we can pick back up
     #[cfg(debug_assertions)]
     fn resume_from_state(&mut self, webview: &WebviewInstance) {
+        if cfg!(target_os = "android") || cfg!(target_os = "ios") {
+            return;
+        }
+
         if let Ok(state) = std::fs::read_to_string(restore_file()) {
             if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
                 let window = &webview.desktop_context.window;
