@@ -49,7 +49,7 @@ use tower_http::{
 /// and better tooling on the pages that we serve.
 pub(crate) struct WebServer {
     devserver_exposed_ip: IpAddr,
-    _devserver_bind_ip: IpAddr,
+    devserver_bind_ip: IpAddr,
     devserver_port: u16,
     proxied_port: Option<u16>,
     hot_reload_sockets: Vec<WebSocket>,
@@ -130,7 +130,7 @@ impl WebServer {
         Ok(Self {
             build_status,
             proxied_port,
-            _devserver_bind_ip: devserver_bind_ip,
+            devserver_bind_ip,
             devserver_exposed_ip,
             devserver_port,
             hot_reload_sockets: Default::default(),
@@ -347,6 +347,19 @@ impl WebServer {
             Platform::Web | Platform::Server => Some(self.devserver_address()),
             _ => self.proxied_server_address(),
         }
+    }
+
+    /// Get the address the server is running - showing 127.0.0.1 if the devserver is bound to 0.0.0.0
+    /// This is designed this way to not confuse users who expect the devserver to be bound to localhost
+    /// ... which it is, but they don't know that 0.0.0.0 also serves localhost.
+    pub fn displayed_address(&self) -> Option<SocketAddr> {
+        let mut address = self.server_address()?;
+
+        if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+            address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), address.port());
+        }
+
+        Some(address)
     }
 }
 

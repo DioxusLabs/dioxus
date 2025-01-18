@@ -1,6 +1,7 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, Builder, ServeUpdate, Watcher, WebServer},
-    BuildStage, BuildUpdate, DioxusCrate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
+    BuildStage, BuildUpdate, DioxusCrate, Platform, RustcDetails, ServeArgs, TraceContent,
+    TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
@@ -28,7 +29,7 @@ use tracing::Level;
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 100;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
-const VIEWPORT_HEIGHT_BIG: u16 = 12;
+const VIEWPORT_HEIGHT_BIG: u16 = 13;
 
 /// The TUI that drives the console output.
 ///
@@ -63,6 +64,8 @@ pub struct Output {
     // ! needs to be wrapped in an &mut since `render stateful widget` requires &mut... but our
     // "render" method only borrows &self (for no particular reason at all...)
     throbber: RefCell<throbber_widgets_tui::ThrobberState>,
+
+    rustc_details: RustcDetails,
 }
 
 #[allow(unused)]
@@ -76,7 +79,7 @@ struct RenderState<'a> {
 }
 
 impl Output {
-    pub(crate) async fn start(cfg: &ServeArgs) -> io::Result<Self> {
+    pub(crate) async fn start(cfg: &ServeArgs) -> crate::Result<Self> {
         let mut output = Self {
             term: Rc::new(RefCell::new(None)),
             interactive: cfg.is_interactive_tty(),
@@ -98,6 +101,7 @@ impl Output {
                 interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                 interval
             },
+            rustc_details: RustcDetails::from_cli().await?,
         };
 
         output.startup().await?;
@@ -121,7 +125,7 @@ impl Output {
             // Check if writing the terminal is going to block infinitely.
             // If it does, we should disable interactive mode. This ensures we work with programs like `bg`
             // which suspend the process and cause us to block when writing output.
-            if !Self::enable_raw_mode().await.unwrap_or(false) {
+            if Self::enable_raw_mode().is_err() {
                 self.term.take();
                 self.interactive = false;
                 return Ok(());
@@ -150,7 +154,7 @@ impl Output {
     ///
     /// This lets us check if writing to tty is going to block forever and then recover, allowing
     /// interopability with programs like `bg`.
-    async fn enable_raw_mode() -> io::Result<bool> {
+    fn enable_raw_mode() -> io::Result<()> {
         use tokio::signal::unix::{signal, SignalKind};
 
         // Ignore SIGTSTP, SIGTTIN, and SIGTTOU
@@ -161,7 +165,7 @@ impl Output {
         use std::io::IsTerminal;
 
         if !stdout().is_terminal() {
-            return Ok(false);
+            return io::Result::Err(io::Error::new(io::ErrorKind::Other, "Not a terminal"));
         }
 
         enable_raw_mode()?;
@@ -170,7 +174,7 @@ impl Output {
             .execute(EnableFocusChange)?
             .execute(EnableBracketedPaste)?;
 
-        Ok(true)
+        Ok(())
     }
 
     /// Call the shutdown functions that might mess with the terminal settings - see the related code
@@ -646,7 +650,7 @@ impl Output {
         self.render_feature_list(frame, app_features, state);
 
         // todo(jon) should we write https ?
-        let address = match state.server.server_address() {
+        let address = match state.server.displayed_address() {
             Some(address) => format!("http://{}", address).blue(),
             None => "no server address".dark_gray(),
         };
@@ -691,16 +695,20 @@ impl Output {
         );
     }
 
-    fn render_more_modal(&self, frame: &mut Frame<'_>, area: Rect, _state: RenderState) {
+    fn render_more_modal(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
+        let [col1, col2] =
+            Layout::horizontal([Constraint::Length(50), Constraint::Fill(1)]).areas(area);
+
         let [top, bottom] = Layout::vertical([Constraint::Fill(1), Constraint::Length(2)])
             .horizontal_margin(1)
-            .areas(area);
+            .areas(col1);
 
-        let meta_list: [_; 5] = Layout::vertical([
+        let meta_list: [_; 6] = Layout::vertical([
             Constraint::Length(1), // spacing
             Constraint::Length(1), // item 1
             Constraint::Length(1), // item 2
             Constraint::Length(1), // item 3
+            Constraint::Length(1), // item 4
             Constraint::Length(1), // Spacing
         ])
         .areas(top);
@@ -715,13 +723,25 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "rustc: ".gray(),
-                "1.79.9 (nightly)".yellow(),
+                self.rustc_details.version.as_str().yellow(),
             ])),
             meta_list[2],
         );
         frame.render_widget(
-            Paragraph::new(Line::from(vec!["Hotreload: ".gray(), "rsx only".yellow()])),
+            Paragraph::new(Line::from(vec![
+                "Hotreload: ".gray(),
+                "rsx and assets".yellow(),
+            ])),
             meta_list[3],
+        );
+
+        let server_address = match state.server.server_address() {
+            Some(address) => format!("http://{}", address).yellow(),
+            None => "no address".dark_gray(),
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(vec!["Network: ".gray(), server_address])),
+            meta_list[4],
         );
 
         let links_list: [_; 2] =
@@ -742,6 +762,35 @@ impl Output {
             ])),
             links_list[1],
         );
+
+        let cmds = [
+            "",
+            "r: rebuild the app",
+            "o: open the app",
+            "p: pause rebuilds",
+            "v: toggle verbose logs",
+            "t: toggle tracing logs ",
+            "c: clear the screen",
+            "/: toggle more commands",
+        ];
+        let layout: [_; 8] = Layout::vertical(cmds.iter().map(|_| Constraint::Length(1)))
+            .horizontal_margin(1)
+            .areas(col2);
+        for (idx, cmd) in cmds.iter().enumerate() {
+            if cmd.is_empty() {
+                continue;
+            }
+
+            let (cmd, detail) = cmd.split_once(": ").unwrap_or((cmd, ""));
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    cmd.gray(),
+                    ": ".gray(),
+                    detail.dark_gray(),
+                ])),
+                layout[idx],
+            );
+        }
     }
 
     /// Render borders around the terminal, forcing an inner clear while we're at it
