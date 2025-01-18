@@ -4,18 +4,18 @@
 
 pub use dioxus_desktop::*;
 use dioxus_lib::prelude::*;
+use std::any::Any;
 use std::sync::Mutex;
 
 pub mod launch_bindings {
-    use std::any::Any;
 
     use super::*;
     pub fn launch(
         root: fn() -> Element,
-        _contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
-        _platform_config: Vec<Box<dyn Any>>,
+        contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+        platform_config: Vec<Box<dyn Any>>,
     ) {
-        super::launch(root);
+        super::launch_cfg(root, contexts, platform_config);
     }
 
     pub fn launch_virtual_dom(_virtual_dom: VirtualDom, _desktop_config: Config) -> ! {
@@ -24,27 +24,56 @@ pub mod launch_bindings {
 }
 
 /// Launch via the binding API
-pub fn launch(incoming: fn() -> Element) {
+pub fn launch(root: fn() -> Element) {
+    launch_cfg(root, vec![], vec![]);
+}
+
+pub fn launch_cfg(
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    platform_config: Vec<Box<dyn Any>>,
+) {
     #[cfg(target_os = "android")]
     {
-        *APP_FN_PTR.lock().unwrap() = Some(incoming);
+        *APP_OBJECTS.lock().unwrap() = Some(BoundLaunchObjects {
+            root,
+            contexts,
+            platform_config,
+        });
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        dioxus_desktop::launch::launch(incoming, vec![], Default::default());
+        dioxus_desktop::launch::launch(root, contexts, platform_config);
     }
 }
 
-static APP_FN_PTR: Mutex<Option<fn() -> Element>> = Mutex::new(None);
+static APP_OBJECTS: Mutex<Option<BoundLaunchObjects>> = Mutex::new(None);
 
+struct BoundLaunchObjects {
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    platform_config: Vec<Box<dyn Any>>,
+}
+
+unsafe impl Send for BoundLaunchObjects {}
+unsafe impl Sync for BoundLaunchObjects {}
+
+#[doc(hidden)]
 pub fn root() {
-    let app = APP_FN_PTR
+    let app = APP_OBJECTS
         .lock()
         .expect("APP_FN_PTR lock failed")
+        .take()
         .expect("Android to have set the app trampoline");
 
-    dioxus_desktop::launch::launch(app, vec![], Default::default());
+    let BoundLaunchObjects {
+        root,
+        contexts,
+        platform_config,
+    } = app;
+
+    dioxus_desktop::launch::launch(root, contexts, platform_config);
 }
 
 /// Expose the `Java_dev_dioxus_main_WryActivity_create` function to the JNI layer.

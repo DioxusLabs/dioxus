@@ -71,19 +71,28 @@ impl WebServer {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
-        let devserver_bind_ip = args.address.addr;
-        let devserver_port = args.address.port;
-        let devserver_bind_address = SocketAddr::new(devserver_bind_ip, devserver_port);
+        const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+
+        // Use 0.0.0.0 as the default address if none is specified - this will let us expose the
+        // devserver to the network (for other devices like phones/embedded)
+        let devserver_bind_ip = args.address.addr.unwrap_or_else(|| SELF_IP);
+
+        // If the user specified a port, use that, otherwise use any available port, preferring 8080
+        let devserver_port = args
+            .address
+            .port
+            .unwrap_or_else(|| get_available_port(devserver_bind_ip, Some(8080)).unwrap_or(8080));
 
         // All servers will end up behind us (the devserver) but on a different port
         // This is so we can serve a loading screen as well as devtools without anything particularly fancy
         let proxied_port = args
             .should_proxy_build()
-            .then(|| get_available_port(devserver_bind_ip))
+            .then(|| get_available_port(devserver_bind_ip, None))
             .flatten();
 
         // Create the listener that we'll pass into the devserver, but save its IP here so
         // we can display it to the user in the tui
+        let devserver_bind_address = SocketAddr::new(devserver_bind_ip, devserver_port);
         let listener = std::net::TcpListener::bind(devserver_bind_address).with_context(|| {
             anyhow::anyhow!(
                 "Failed to bind server to: {devserver_bind_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
@@ -92,7 +101,7 @@ impl WebServer {
 
         // If the IP is 0.0.0.0, we need to get the actual IP of the machine
         // This will let ios/android/network clients connect to the devserver
-        let devserver_exposed_ip = if devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+        let devserver_exposed_ip = if devserver_bind_ip == SELF_IP {
             local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
         } else {
             devserver_bind_ip
@@ -626,7 +635,15 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
 ///
 /// Todo: we might want to do this on every new build in case the OS tries to bind things to this port
 /// and we don't already have something bound to it. There's no great way of "reserving" a port.
-fn get_available_port(address: IpAddr) -> Option<u16> {
+fn get_available_port(address: IpAddr, prefer: Option<u16>) -> Option<u16> {
+    // First, try to bind to the preferred port
+    if let Some(port) = prefer {
+        if let Ok(_listener) = TcpListener::bind((address, port)) {
+            return Some(port);
+        }
+    }
+
+    // Otherwise, try to bind to any port and return the first one we can
     TcpListener::bind((address, 0))
         .map(|listener| listener.local_addr().unwrap().port())
         .ok()

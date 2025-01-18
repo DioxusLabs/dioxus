@@ -288,7 +288,7 @@ pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
         }
     }
 
-    use std::{io::Read, ptr::NonNull};
+    use std::ptr::NonNull;
 
     let ctx = ndk_context::android_context();
     let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.unwrap();
