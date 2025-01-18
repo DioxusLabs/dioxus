@@ -76,7 +76,7 @@ struct RenderState<'a> {
 }
 
 impl Output {
-    pub(crate) fn start(cfg: &ServeArgs) -> io::Result<Self> {
+    pub(crate) async fn start(cfg: &ServeArgs) -> io::Result<Self> {
         let mut output = Self {
             term: Rc::new(RefCell::new(None)),
             interactive: cfg.is_interactive_tty(),
@@ -100,14 +100,14 @@ impl Output {
             },
         };
 
-        output.startup()?;
+        output.startup().await?;
 
         Ok(output)
     }
 
     /// Call the startup functions that might mess with the terminal settings.
     /// This is meant to be paired with "shutdown" to restore the terminal to its original state.
-    fn startup(&mut self) -> io::Result<()> {
+    async fn startup(&mut self) -> io::Result<()> {
         if self.interactive {
             // set the panic hook to fix the terminal in the event of a panic
             // The terminal might be left in a wonky state if a panic occurs, and we don't want it to be completely broken
@@ -117,6 +117,15 @@ impl Output {
                 _ = stdout().execute(Show);
                 original_hook(info);
             }));
+
+            // Check if writing the terminal is going to block infinitely.
+            // If it does, we should disable interactive mode. This ensures we work with programs like `bg`
+            // which suspend the process and cause us to block when writing output.
+            if !Self::enable_raw_mode().await.unwrap_or(false) {
+                self.term.take();
+                self.interactive = false;
+                return Ok(());
+            }
 
             self.term.replace(
                 Terminal::with_options(
@@ -128,12 +137,6 @@ impl Output {
                 .ok(),
             );
 
-            enable_raw_mode()?;
-            stdout()
-                .execute(Hide)?
-                .execute(EnableFocusChange)?
-                .execute(EnableBracketedPaste)?;
-
             // Initialize the event stream here - this is optional because an EvenStream in a non-interactive
             // terminal will cause a panic instead of simply doing nothing.
             // https://github.com/crossterm-rs/crossterm/issues/659
@@ -141,6 +144,33 @@ impl Output {
         }
 
         Ok(())
+    }
+
+    /// Enable raw mode, but don't let it block forever.
+    ///
+    /// This lets us check if writing to tty is going to block forever and then recover, allowing
+    /// interopability with programs like `bg`.
+    async fn enable_raw_mode() -> io::Result<bool> {
+        use tokio::signal::unix::{signal, SignalKind};
+
+        // Ignore SIGTSTP, SIGTTIN, and SIGTTOU
+        _ = signal(SignalKind::from_raw(20))?; // SIGTSTP
+        _ = signal(SignalKind::from_raw(21))?; // SIGTTIN
+        _ = signal(SignalKind::from_raw(22))?; // SIGTTOU
+
+        use std::io::IsTerminal;
+
+        if !stdout().is_terminal() {
+            return Ok(false);
+        }
+
+        enable_raw_mode()?;
+        stdout()
+            .execute(Hide)?
+            .execute(EnableFocusChange)?
+            .execute(EnableBracketedPaste)?;
+
+        Ok(true)
     }
 
     /// Call the shutdown functions that might mess with the terminal settings - see the related code
@@ -163,6 +193,10 @@ impl Output {
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         use futures_util::future::OptionFuture;
         use futures_util::StreamExt;
+
+        if !self.interactive {
+            return std::future::pending().await;
+        }
 
         // Wait for the next user event or animation tick
         loop {
@@ -324,10 +358,6 @@ impl Output {
     /// re-render when external state changes. Ratatui will diff the intermediate buffer, so we at least
     /// we won't be drawing it.
     pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
-        if !self.interactive {
-            return;
-        }
-
         match update {
             BuildUpdate::Progress {
                 stage: BuildStage::Starting { .. },

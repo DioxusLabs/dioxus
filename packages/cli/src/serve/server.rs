@@ -82,7 +82,23 @@ impl WebServer {
             .then(|| get_available_port(devserver_bind_ip))
             .flatten();
 
-        let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_bind_ip, port));
+        // Create the listener that we'll pass into the devserver, but save its IP here so
+        // we can display it to the user in the tui
+        let listener = std::net::TcpListener::bind(devserver_bind_address).with_context(|| {
+            anyhow::anyhow!(
+                "Failed to bind server to: {devserver_bind_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
+            )
+        })?;
+
+        // If the IP is 0.0.0.0, we need to get the actual IP of the machine
+        // This will let ios/android/network clients connect to the devserver
+        let devserver_exposed_ip = if devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+            local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
+        } else {
+            devserver_bind_ip
+        };
+
+        let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_exposed_ip, port));
 
         // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
@@ -95,28 +111,12 @@ impl WebServer {
             build_status.clone(),
         )?;
 
-        // Create the listener that we'll pass into the devserver, but save its IP here so
-        // we can display it to the user in the tui
-        let listener = std::net::TcpListener::bind(devserver_bind_address).with_context(|| {
-            anyhow::anyhow!(
-                "Failed to bind server to: {devserver_bind_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
-            )
-        })?;
-
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
             krate.config.web.https.clone(),
             listener,
             router,
         ));
-
-        // If the IP is 0.0.0.0, we need to get the actual IP of the machine
-        // This will let ios/android/network clients connect to the devserver
-        let devserver_exposed_ip = if devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
-            local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
-        } else {
-            devserver_bind_ip
-        };
 
         Ok(Self {
             build_status,
@@ -391,6 +391,7 @@ fn build_devserver_router(
     if args.should_proxy_build() {
         // For fullstack, liveview, and server, forward all requests to the inner server
         let address = fullstack_address.unwrap();
+        tracing::debug!("Proxying requests to fullstack server at {address}");
         router = router.nest_service("/",super::proxy::proxy_to(
             format!("http://{address}").parse().unwrap(),
             true,

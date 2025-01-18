@@ -45,11 +45,11 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     let krate = args.load_krate().await?;
 
     // Note that starting the builder will queue up a build immediately
+    let mut screen = Output::start(&args).await?;
     let mut builder = Builder::start(&krate, args.build_args())?;
     let mut devserver = WebServer::start(&krate, &args)?;
     let mut watcher = Watcher::start(&krate, &args);
     let mut runner = AppRunner::start(&krate);
-    let mut screen = Output::start(&args)?;
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now

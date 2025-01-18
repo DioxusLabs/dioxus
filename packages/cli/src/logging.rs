@@ -18,7 +18,7 @@ use crate::{serve::ServeUpdate, Cli, Commands, Platform as TargetPlatform, Verbo
 use cargo_metadata::{diagnostic::DiagnosticLevel, CompilerMessage};
 use clap::Parser;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 use std::{
     collections::HashMap,
     env,
@@ -27,7 +27,7 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Mutex,
+        Arc, Mutex,
     },
     time::Instant,
 };
@@ -46,6 +46,8 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 const LOG_FILE_NAME: &str = "dx.log";
 const DX_SRC_FLAG: &str = "dx_src";
 
+pub static TUI_INTERACTIVE_DISABLED: Lazy<Arc<AtomicBool>> =
+    Lazy::new(|| Arc::new(AtomicBool::new(false)));
 static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
 static TUI_TX: OnceCell<UnboundedSender<TraceMsg>> = OnceCell::new();
 pub static VERBOSITY: OnceCell<Verbosity> = OnceCell::new();
@@ -135,6 +137,7 @@ impl TraceController {
         let (tui_tx, tui_rx) = unbounded();
         TUI_ACTIVE.store(true, Ordering::Relaxed);
         TUI_TX.set(tui_tx.clone()).unwrap();
+
         Self { tui_rx }
     }
 
