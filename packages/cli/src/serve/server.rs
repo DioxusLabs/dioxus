@@ -75,7 +75,7 @@ impl WebServer {
 
         // Use 0.0.0.0 as the default address if none is specified - this will let us expose the
         // devserver to the network (for other devices like phones/embedded)
-        let devserver_bind_ip = args.address.addr.unwrap_or_else(|| SELF_IP);
+        let devserver_bind_ip = args.address.addr.unwrap_or(SELF_IP);
 
         // If the user specified a port, use that, otherwise use any available port, preferring 8080
         let devserver_port = args

@@ -467,7 +467,7 @@ impl AppHandle {
 
     #[allow(unused)]
     async fn codesign_ios(&self) -> Result<()> {
-        const CODESIGN_ERROR: &'static str = r#"This is likely because you haven't
+        const CODESIGN_ERROR: &str = r#"This is likely because you haven't
 - Created a provisioning profile before
 - Accepted the Apple Developer Program License Agreement
 
