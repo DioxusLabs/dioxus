@@ -17,8 +17,7 @@ pub struct DesktopDocument {
 }
 
 impl DesktopDocument {
-    pub fn new(desktop_ctx: DesktopContext) -> Self {
-        let desktop_ctx = std::rc::Rc::downgrade(&desktop_ctx);
+    pub fn new(desktop_ctx: WeakDesktopContext) -> Self {
         Self { desktop_ctx }
     }
 }
@@ -26,9 +25,7 @@ impl DesktopDocument {
 impl Document for DesktopDocument {
     fn eval(&self, js: String) -> Eval {
         Eval::new(DesktopEvaluator::create(
-            self.desktop_ctx
-                .upgrade()
-                .expect("Window to exist when document is alive"),
+            self.desktop_ctx.clone(),
             js,
         ))
     }
@@ -87,9 +84,9 @@ pub(crate) struct DesktopEvaluator {
 
 impl DesktopEvaluator {
     /// Creates a new evaluator for desktop-based targets.
-    pub fn create(desktop_ctx: DesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        let ctx = desktop_ctx.clone();
-        let query = desktop_ctx.query.new_query(&js, ctx);
+    pub fn create(weak_desktop_ctx: WeakDesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
+        let desktop_ctx = weak_desktop_ctx.upgrade().unwrap();
+        let query = desktop_ctx.query.new_query(&js, weak_desktop_ctx);
 
         // We create a generational box that is owned by the query slot so that when we drop the query slot, the generational box is also dropped.
         let owner = UnsyncStorage::owner();
