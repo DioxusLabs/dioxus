@@ -231,6 +231,11 @@ impl AppRunner {
                 continue;
             }
 
+            // Special-case the Cargo.toml file - we want updates here to cause a full rebuild
+            if path.file_name().and_then(|v| v.to_str()) == Some("Cargo.toml") {
+                return None;
+            }
+
             // Otherwise, it might be an asset and we should look for it in all the running apps
             for runner in self.running.values() {
                 if let Some(bundled_name) = runner.hotreload_bundled_asset(&path).await {

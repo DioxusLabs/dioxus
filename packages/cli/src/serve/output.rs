@@ -104,14 +104,14 @@ impl Output {
             rustc_details: RustcDetails::from_cli().await?,
         };
 
-        output.startup().await?;
+        output.startup()?;
 
         Ok(output)
     }
 
     /// Call the startup functions that might mess with the terminal settings.
     /// This is meant to be paired with "shutdown" to restore the terminal to its original state.
-    async fn startup(&mut self) -> io::Result<()> {
+    fn startup(&mut self) -> io::Result<()> {
         if self.interactive {
             // set the panic hook to fix the terminal in the event of a panic
             // The terminal might be left in a wonky state if a panic occurs, and we don't want it to be completely broken

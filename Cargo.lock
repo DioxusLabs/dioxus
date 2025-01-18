@@ -3517,6 +3517,7 @@ dependencies = [
  "once_cell",
  "open",
  "path-absolutize",
+ "plist",
  "prettyplease",
  "proc-macro2",
  "ratatui",
