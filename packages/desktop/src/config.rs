@@ -17,16 +17,30 @@ type CustomEventHandler = Box<
         ),
 >;
 
-/// The behaviour of the application when the last window is closed.
+/// The closing behaviour of the application when the last window is closed, you can overwrite this behaviour for specific window with WindowCloseBehaviour.
 #[derive(Copy, Clone, Eq, PartialEq)]
 #[non_exhaustive]
-pub enum WindowCloseBehaviour {
-    /// Default behaviour, closing the last window exits the app
+pub enum DefaultWindowCloseBehaviour {
+    /// Default behaviour, closing the last window will exit the app, others will close,
     LastWindowExitsApp,
-    /// Closing the last window will not actually close it, just hide it
+    /// Closing the last window will hide it, others will close
     LastWindowHides,
-    /// Closing the last window will close it but the app will keep running so that new windows can be opened
-    CloseWindow,
+    /// Every window will hide
+    WindowsHides,
+    /// Every window will close
+    WindowsCloses,
+}
+
+/// The closing behaviour of specific application window.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum WindowCloseBehaviour {
+    /// Closing the window will exit the app
+    WindowExitsApp,
+    /// Window will hide
+    WindowHides,
+    /// Window will close
+    WindowCloses,
 }
 
 /// The state of the menu builder. We need to keep track of if the state is default
@@ -61,7 +75,8 @@ pub struct Config {
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
-    pub(crate) last_window_close_behavior: WindowCloseBehaviour,
+    pub(crate) default_window_close_behaviour: DefaultWindowCloseBehaviour,
+    pub(crate) window_close_behaviour: Option<WindowCloseBehaviour>,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
 }
 
@@ -106,7 +121,8 @@ impl Config {
             custom_index: None,
             root_name: "main".to_string(),
             background_color: None,
-            last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
+            default_window_close_behaviour: DefaultWindowCloseBehaviour::LastWindowExitsApp,
+            window_close_behaviour: None,
             custom_event_handler: None,
         }
     }
@@ -161,8 +177,17 @@ impl Config {
     }
 
     /// Sets the behaviour of the application when the last window is closed.
-    pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
-        self.last_window_close_behavior = behaviour;
+    pub fn with_default_window_close_behaviour(
+        mut self,
+        behaviour: DefaultWindowCloseBehaviour,
+    ) -> Self {
+        self.default_window_close_behaviour = behaviour;
+        self
+    }
+
+    /// Sets the behaviour of the application when the last window is closed.
+    pub fn with_window_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
+        self.window_close_behaviour = Some(behaviour);
         self
     }
 
