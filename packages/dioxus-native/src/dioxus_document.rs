@@ -33,11 +33,6 @@ pub struct DioxusDocument {
 
 // Implement DocumentLike and required traits for DioxusDocument
 
-pub struct DxNodeIds {
-    node_id: usize,
-    dioxus_id: Option<ElementId>,
-}
-
 impl AsRef<BaseDocument> for DioxusDocument {
     fn as_ref(&self) -> &BaseDocument {
         &self.inner
@@ -77,28 +72,8 @@ impl Document for DioxusDocument {
         self.inner.id()
     }
 
-    fn handle_event(&mut self, event: DomEvent) {
-        // Collect the nodes into a chain by traversing upwards
-        // This is important so the "capture" phase can be implemented
-        let mut next_node_id = Some(event.target);
-        let mut chain = Vec::with_capacity(16);
-
-        // if it's a capturing event, we want to fill in the chain with the parent nodes
-        // until we reach the root - that way we can call the listeners in the correct order
-        // otherwise, we just want to call the listeners on the target
-        //
-        // todo: this is harcoded for "click" events - eventually we actually need to handle proper propagation
-        // if event.name == "click" {
-        while let Some(node_id) = next_node_id {
-            let node = &self.inner.tree()[node_id];
-
-            if let Some(element) = node.element_data() {
-                let dioxus_id = DioxusDocument::dioxus_id(element);
-                chain.push(DxNodeIds { node_id, dioxus_id })
-            }
-
-            next_node_id = node.parent;
-        }
+    fn handle_event(&mut self, event: &mut DomEvent) {
+        let chain = self.inner.node_chain(event.target);
 
         set_event_converter(Box::new(NativeConverter {}));
 
@@ -108,68 +83,35 @@ impl Document for DioxusDocument {
         let mut stop_propagation = false;
 
         match &event.data {
-            DomEventData::MouseDown { .. } => {
+            DomEventData::MouseMove { .. }
+            | DomEventData::MouseDown { .. }
+            | DomEventData::MouseUp { .. } => {
                 let click_event_data = wrap_event_data(NativeClickData);
 
-                for &DxNodeIds { node_id, dioxus_id } in chain.iter() {
+                for node_id in chain.clone().into_iter() {
+                    let node = &self.inner.tree()[node_id];
+                    let dioxus_id = node.element_data().and_then(DioxusDocument::dioxus_id);
+
                     if let Some(id) = dioxus_id {
                         let click_event = Event::new(click_event_data.clone(), true);
                         self.vdom
                             .runtime()
-                            .handle_event("mousedown", click_event.clone(), id);
+                            .handle_event(event.name(), click_event.clone(), id);
                         prevent_default |= !click_event.default_action_enabled();
                         stop_propagation |= !click_event.propagates();
                     }
 
-                    if !prevent_default {
-                        let default_event = DomEvent {
-                            target: node_id,
-                            data: renderer_event.data.clone(),
-                        };
-                        self.inner.as_mut().handle_event(default_event);
-                    }
-
-                    if stop_propagation {
-                        break;
-                    }
-                }
-            }
-            DomEventData::MouseUp { .. } => {
-                let click_event_data = wrap_event_data(NativeClickData);
-
-                for &DxNodeIds {
-                    node_id, dioxus_id, ..
-                } in chain.iter()
-                {
-                    if let Some(id) = dioxus_id {
-                        let click_event = Event::new(click_event_data.clone(), true);
-                        self.vdom
-                            .runtime()
-                            .handle_event("mouseup", click_event.clone(), id);
-                        prevent_default |= !click_event.default_action_enabled();
-                        stop_propagation |= !click_event.propagates();
-                    }
-
-                    if !prevent_default {
-                        let default_event = DomEvent {
-                            target: node_id,
-                            data: renderer_event.data.clone(),
-                        };
-                        self.inner.as_mut().handle_event(default_event);
-                    }
-
-                    if stop_propagation {
+                    if !event.bubbles || stop_propagation {
                         break;
                     }
                 }
             }
             DomEventData::Click { .. } => {
-                // look for the data-dioxus-id attribute on the element
-                // todo: we might need to walk upwards to find the first element with a data-dioxus-id attribute
-
                 let click_event_data = wrap_event_data(NativeClickData);
 
-                for &DxNodeIds { node_id, dioxus_id } in chain.iter() {
+                for node_id in chain.clone().into_iter() {
+                    let node = &self.inner.tree()[node_id];
+                    let dioxus_id = node.element_data().and_then(DioxusDocument::dioxus_id);
                     let mut trigger_label = false;
 
                     if let Some(id) = dioxus_id {
@@ -182,11 +124,9 @@ impl Document for DioxusDocument {
                         stop_propagation |= !click_event.propagates();
 
                         if !prevent_default {
-                            let default_event = DomEvent {
-                                target: node_id,
-                                data: renderer_event.data.clone(),
-                            };
-                            self.inner.as_mut().handle_event(default_event);
+                            let mut default_event =
+                                DomEvent::new(node_id, renderer_event.data.clone());
+                            self.inner.as_mut().handle_event(&mut default_event);
                             prevent_default = true;
 
                             let element = self.inner.tree()[node_id].element_data().unwrap();
@@ -225,11 +165,8 @@ impl Document for DioxusDocument {
                                     .get_node(node_id)
                                     .unwrap()
                                     .synthetic_click_event(event.mods);
-                                let default_event = DomEvent {
-                                    target: node_id,
-                                    data: input_click_data,
-                                };
-                                self.inner.as_mut().handle_event(default_event);
+                                let mut default_event = DomEvent::new(node_id, input_click_data);
+                                self.inner.as_mut().handle_event(&mut default_event);
                                 prevent_default = true;
 
                                 // TODO: Generated click events should bubble separatedly
@@ -259,7 +196,7 @@ impl Document for DioxusDocument {
                         }
                     }
 
-                    if stop_propagation {
+                    if !event.bubbles || stop_propagation {
                         break;
                     }
                 }
@@ -267,7 +204,9 @@ impl Document for DioxusDocument {
             DomEventData::KeyPress(kevent) => {
                 let key_event_data = wrap_event_data(BlitzKeyboardData(kevent.clone()));
 
-                for &DxNodeIds { node_id, dioxus_id } in chain.iter() {
+                for node_id in chain.clone().into_iter() {
+                    let node = &self.inner.tree()[node_id];
+                    let dioxus_id = node.element_data().and_then(DioxusDocument::dioxus_id);
                     println!("{} {:?}", node_id, dioxus_id);
 
                     if let Some(id) = dioxus_id {
@@ -291,11 +230,9 @@ impl Document for DioxusDocument {
 
                                 if !prevent_default {
                                     // Handle default DOM event
-                                    let default_event = DomEvent {
-                                        target: node_id,
-                                        data: renderer_event.data.clone(),
-                                    };
-                                    self.inner.as_mut().handle_event(default_event);
+                                    let mut default_event =
+                                        DomEvent::new(node_id, renderer_event.data.clone());
+                                    self.inner.as_mut().handle_event(&mut default_event);
                                     prevent_default = true;
 
                                     // Handle input event
@@ -324,7 +261,7 @@ impl Document for DioxusDocument {
                         }
                     }
 
-                    if stop_propagation {
+                    if !event.bubbles || stop_propagation {
                         break;
                     }
                 }
@@ -334,7 +271,7 @@ impl Document for DioxusDocument {
             DomEventData::Hover => {}
         }
 
-        if !prevent_default {
+        if !event.cancelable || !prevent_default {
             self.inner.as_mut().handle_event(event);
         }
     }
@@ -349,11 +286,11 @@ impl DioxusDocument {
     /// Currently only cares about input checkboxes
     pub fn input_event_form_data(
         &self,
-        parent_chain: &[DxNodeIds],
+        parent_chain: &[usize],
         element_node_data: &ElementNodeData,
     ) -> NativeFormData {
-        let parent_form = parent_chain.iter().map(|ids| ids.node_id).find_map(|id| {
-            let node = self.inner.get_node(id)?;
+        let parent_form = parent_chain.iter().find_map(|id| {
+            let node = self.inner.get_node(*id)?;
             let element_data = node.element_data()?;
             if element_data.name.local == local_name!("form") {
                 Some(node)
