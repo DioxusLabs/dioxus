@@ -61,7 +61,7 @@ fn OnMounted() -> Element {
 
 #[component]
 fn DefaultServerFnCodec() -> Element {
-    let resource = use_server_future(get_server_data_empty_vec)?;
+    let resource = use_server_future(|| get_server_data_empty_vec(Vec::new()))?;
     let empty_vec = resource.unwrap().unwrap();
     assert!(empty_vec.is_empty());
 
@@ -91,8 +91,9 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 // Make sure the default codec work with empty data structures
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2628
 #[server]
-async fn get_server_data_empty_vec() -> Result<Vec<String>, ServerFnError> {
+async fn get_server_data_empty_vec(empty_vec: Vec<String>) -> Result<Vec<String>, ServerFnError> {
     assert_server_context_provided().await;
+    assert!(empty_vec.is_empty());
     Ok(Vec::new())
 }
 
