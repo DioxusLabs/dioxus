@@ -45,7 +45,7 @@ impl<'a> MutationWriter<'a> {
         self.doc
             .get_node(node_id)
             .unwrap()
-            .raw_dom_data
+            .data
             .is_element_with_tag_name(&local_name!("style"))
     }
 
@@ -281,7 +281,7 @@ impl WriteMutations for MutationWriter<'_> {
             data.hint |= RestyleHint::restyle_subtree();
         }
 
-        if let NodeData::Element(ref mut element) = node.raw_dom_data {
+        if let NodeData::Element(ref mut element) = node.data {
             if element.name.local == local_name!("input") && name == "checked" {
                 set_input_checked_state(element, value);
             }
@@ -343,7 +343,7 @@ impl WriteMutations for MutationWriter<'_> {
         let node_id = self.state.element_to_node_id(id);
         let node = self.doc.get_node_mut(node_id).unwrap();
 
-        let text = match node.raw_dom_data {
+        let text = match node.data {
             NodeData::Text(ref mut text) => text,
             // todo: otherwise this is basically element.textContent which is a bit different - need to parse as html
             _ => return,
