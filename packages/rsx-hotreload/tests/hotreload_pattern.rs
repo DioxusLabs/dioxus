@@ -468,6 +468,32 @@ fn invalid_cases() {
 }
 
 #[test]
+fn invalid_empty_rsx() {
+    let old_template = quote! {
+        div {
+            for item in vec![1, 2, 3, 4] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+        }
+    };
+
+    // empty out the whole rsx block
+    let new_template = quote! {};
+
+    let location = "file:line:col:0";
+
+    let old_template: CallBody = syn::parse2(old_template).unwrap();
+    let new_template: CallBody = syn::parse2(new_template).unwrap();
+
+    assert!(hotreload_callbody::<Mock>(&old_template, &new_template).is_none());
+}
+
+#[test]
 fn attributes_reload() {
     let old = quote! {
         div {
