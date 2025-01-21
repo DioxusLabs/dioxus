@@ -156,7 +156,7 @@ impl BuildArgs {
         if self.platform == Some(Platform::Android) && self.target_args.arch.is_none() {
             tracing::debug!("No android arch provided, attempting to auto detect.");
 
-            let arch = Arch::autodetect().await;
+            let arch = DioxusCrate::autodetect_android_arch().await;
 
             // Some extra logs
             let arch = match arch {

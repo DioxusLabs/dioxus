@@ -45,11 +45,11 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     let krate = args.load_krate().await?;
 
     // Note that starting the builder will queue up a build immediately
+    let mut screen = Output::start(&args).await?;
     let mut builder = Builder::start(&krate, args.build_args())?;
     let mut devserver = WebServer::start(&krate, &args)?;
     let mut watcher = Watcher::start(&krate, &args);
     let mut runner = AppRunner::start(&krate);
-    let mut screen = Output::start(&args)?;
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
@@ -58,7 +58,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 Serving your Dioxus app: {} 🚀
                 • Press `ctrl+c` to exit the server
                 • Press `r` to rebuild the app
-                • Press `o` to open the app
+                • Press `p` to toggle automatic rebuilds
                 • Press `v` to toggle verbose logging
                 • Press `/` for more commands and shortcuts
                 Learn more at https://dioxuslabs.com/learn/0.6/getting_started

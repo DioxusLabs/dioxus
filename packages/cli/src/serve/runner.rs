@@ -194,12 +194,15 @@ impl AppRunner {
 
     /// Open an existing app bundle, if it exists
     pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
+        let fullstack_address = devserver.proxied_server_address();
+
         if let Some((_, app)) = self
             .running
             .iter_mut()
             .find(|(platform, _)| **platform != Platform::Server)
         {
-            app.open(devserver.devserver_address(), None, true).await?;
+            app.open(devserver.devserver_address(), fullstack_address, true)
+                .await?;
         }
         Ok(())
     }
@@ -226,6 +229,11 @@ impl AppRunner {
             if ext == "rs" {
                 edited_rust_files.push(path);
                 continue;
+            }
+
+            // Special-case the Cargo.toml file - we want updates here to cause a full rebuild
+            if path.file_name().and_then(|v| v.to_str()) == Some("Cargo.toml") {
+                return None;
             }
 
             // Otherwise, it might be an asset and we should look for it in all the running apps

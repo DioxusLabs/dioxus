@@ -1,4 +1,4 @@
-use crate::{AppBundle, Platform, Result};
+use crate::{AppBundle, DioxusCrate, Platform, Result};
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use std::{
@@ -210,7 +210,7 @@ impl AppHandle {
             if let Some(bundled_name) = bundled_name.as_ref() {
                 let target = format!("/data/local/tmp/dx/{}", bundled_name.display());
                 tracing::debug!("Pushing asset to device: {target}");
-                let res = tokio::process::Command::new("adb")
+                let res = tokio::process::Command::new(DioxusCrate::android_adb())
                     .arg("push")
                     .arg(&changed_file)
                     .arg(target)
@@ -323,31 +323,6 @@ impl AppHandle {
     /// better support for codesigning and entitlements.
     #[allow(unused)]
     async fn open_ios_device(&self) -> Result<()> {
-        // APP_PATH="target/aarch64-apple-ios/debug/bundle/ios/DioxusApp.app"
-
-        // # get the device id by jq-ing the json of the device list
-        // xcrun devicectl list devices --json-output target/deviceid.json
-        // DEVICE_UUID=$(jq -r '.result.devices[0].identifier' target/deviceid.json)
-
-        // xcrun devicectl device install app --device "${DEVICE_UUID}" "${APP_PATH}" --json-output target/xcrun.json
-
-        // # get the installation url by jq-ing the json of the device install
-        // INSTALLATION_URL=$(jq -r '.result.installedApplications[0].installationURL' target/xcrun.json)
-
-        // # launch the app
-        // # todo: we can just background it immediately and then pick it up for loading its logs
-        // xcrun devicectl device process launch --device "${DEVICE_UUID}" "${INSTALLATION_URL}"
-
-        // # # launch the app and put it in background
-        // # xcrun devicectl device process launch --no-activate --verbose --device "${DEVICE_UUID}" "${INSTALLATION_URL}" --json-output "${XCRUN_DEVICE_PROCESS_LAUNCH_LOG_DIR}"
-
-        // # # Extract background PID of status app
-        // # STATUS_PID=$(jq -r '.result.process.processIdentifier' "${XCRUN_DEVICE_PROCESS_LAUNCH_LOG_DIR}")
-        // # "${GIT_ROOT}/scripts/wait-for-metro-port.sh"  2>&1
-
-        // # # now that metro is ready, resume the app from background
-        // # xcrun devicectl device process resume --device "${DEVICE_UUID}" --pid "${STATUS_PID}" > "${XCRUN_DEVICE_PROCESS_RESUME_LOG_DIR}" 2>&1
-
         use serde_json::Value;
         let app_path = self.app.build.root_dir();
 
@@ -403,6 +378,7 @@ impl AppHandle {
         }
 
         async fn get_installation_url(device_uuid: &str, app_path: &Path) -> Result<String> {
+            // xcrun devicectl device install app --device <uuid> --path <path> --json-output
             let output = Command::new("xcrun")
                 .args([
                     "devicectl",
@@ -489,6 +465,151 @@ impl AppHandle {
         unimplemented!("dioxus-cli doesn't support ios devices yet.")
     }
 
+    #[allow(unused)]
+    async fn codesign_ios(&self) -> Result<()> {
+        const CODESIGN_ERROR: &str = r#"This is likely because you haven't
+- Created a provisioning profile before
+- Accepted the Apple Developer Program License Agreement
+
+The agreement changes frequently and might need to be accepted again.
+To accept the agreement, go to https://developer.apple.com/account
+
+To create a provisioning profile, follow the instructions here:
+https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certificates"#;
+
+        let profiles_folder = dirs::home_dir()
+            .context("Your machine has no home-dir")?
+            .join("Library/MobileDevice/Provisioning Profiles");
+
+        if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
+            tracing::error!(
+                r#"No provisioning profiles found when trying to codesign the app.
+We checked the folder: {}
+
+{CODESIGN_ERROR}
+"#,
+                profiles_folder.display()
+            )
+        }
+
+        let identities = Command::new("security")
+            .args(["find-identity", "-v", "-p", "codesigning"])
+            .output()
+            .await
+            .context("Failed to run `security find-identity -v -p codesigning`")
+            .map(|e| {
+                String::from_utf8(e.stdout)
+                    .context("Failed to parse `security find-identity -v -p codesigning`")
+            })??;
+
+        // Parsing this:
+        // 51ADE4986E0033A5DB1C794E0D1473D74FD6F871 "Apple Development: jkelleyrtp@gmail.com (XYZYZY)"
+        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
+            .unwrap()
+            .captures(&identities)
+            .and_then(|caps| caps.get(1))
+            .map(|m| m.as_str())
+            .context(
+                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
+            )?;
+
+        // Acquire the provision file
+        let provision_file = profiles_folder
+            .read_dir()?
+            .flatten()
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|s| s.contains("mobileprovision"))
+                    .unwrap_or_default()
+            })
+            .context("Failed to find a provisioning profile. \n\n{CODESIGN_ERROR}")?;
+
+        // The .mobileprovision file has some random binary thrown into into, but it's still basically a plist
+        // Let's use the plist markers to find the start and end of the plist
+        fn cut_plist(bytes: &[u8], byte_match: &[u8]) -> Option<usize> {
+            bytes
+                .windows(byte_match.len())
+                .enumerate()
+                .rev()
+                .find(|(_, slice)| *slice == byte_match)
+                .map(|(i, _)| i + byte_match.len())
+        }
+        let bytes = std::fs::read(provision_file.path())?;
+        let cut1 = cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
+        let cut2 = cut_plist(&bytes, r#"</dict>"#.as_bytes())
+            .context("Failed to parse .mobileprovision file")?;
+        let sub_bytes = &bytes[(cut1 - 6)..cut2];
+        let mbfile: ProvisioningProfile =
+            plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")?;
+
+        #[derive(serde::Deserialize, Debug)]
+        struct ProvisioningProfile {
+            #[serde(rename = "TeamIdentifier")]
+            team_identifier: Vec<String>,
+            #[serde(rename = "ApplicationIdentifierPrefix")]
+            application_identifier_prefix: Vec<String>,
+            #[serde(rename = "Entitlements")]
+            entitlements: Entitlements,
+        }
+
+        #[derive(serde::Deserialize, Debug)]
+        struct Entitlements {
+            #[serde(rename = "application-identifier")]
+            application_identifier: String,
+            #[serde(rename = "keychain-access-groups")]
+            keychain_access_groups: Vec<String>,
+        }
+
+        let entielements_xml = format!(
+            r#"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>application-identifier</key>
+    <string>{APPLICATION_IDENTIFIER}</string>
+    <key>keychain-access-groups</key>
+    <array>
+        <string>{APP_ID_ACCESS_GROUP}.*</string>
+    </array>
+    <key>get-task-allow</key>
+    <true/>
+    <key>com.apple.developer.team-identifier</key>
+    <string>{TEAM_IDENTIFIER}</string>
+</dict></plist>
+        "#,
+            APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
+            APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
+            TEAM_IDENTIFIER = mbfile.team_identifier[0],
+        );
+
+        // write to a temp file
+        let temp_file = tempfile::NamedTempFile::new()?;
+        std::fs::write(temp_file.path(), entielements_xml)?;
+
+        // codesign the app
+        let output = Command::new("codesign")
+            .args([
+                "--force",
+                "--entitlements",
+                temp_file.path().to_str().unwrap(),
+                "--sign",
+                app_dev_name,
+            ])
+            .arg(self.app.build.root_dir())
+            .output()
+            .await
+            .context("Failed to codesign the app")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8(output.stderr).unwrap_or_default();
+            return Err(format!("Failed to codesign the app: {stderr}").into());
+        }
+
+        Ok(())
+    }
+
     async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) {
         let apk_path = self.app.apk_path();
         let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
@@ -497,7 +618,7 @@ impl AppHandle {
         tokio::task::spawn(async move {
             // Install
             // adb install -r app-debug.apk
-            if let Err(e) = Command::new("adb")
+            if let Err(e) = Command::new(DioxusCrate::android_adb())
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
@@ -513,7 +634,7 @@ impl AppHandle {
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 
-            if let Err(e) = Command::new("adb")
+            if let Err(e) = Command::new(DioxusCrate::android_adb())
                 .arg("shell")
                 .arg("am")
                 .arg("start")
