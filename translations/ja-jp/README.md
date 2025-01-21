@@ -5,9 +5,9 @@
       <!-- <a href="https://dioxuslabs.com">
           <img src="./notes/flat-splash.avif">
       </a> -->
-      <img src="./notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
-      <img src="./notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
-      <img src="./notes/image-splash.avif">
+      <img src="../../notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
+      <img src="../../notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
+      <img src="../../notes/image-splash.avif">
       <br>
     </p>
 </p>
@@ -104,7 +104,7 @@ fn app() -> Element {
 Dioxusは、Rustでネイティブモバイルアプリを構築する最速の方法です。単に`dx serve --platform android`を実行すると、数秒でエミュレーターまたはデバイスでアプリが実行されます。JNIおよびネイティブAPIに直接呼び出します。
 
 <div align="center">
-  <img src="./notes/android_and_ios2.avif" width="500">
+  <img src="../../notes/android_and_ios2.avif" width="500">
 </div>
 
 ## Web、デスクトップ、モバイル用のバンドル
@@ -112,7 +112,7 @@ Dioxusは、Rustでネイティブモバイルアプリを構築する最速の�
 単に`dx bundle`を実行すると、アプリがビルドされ、最大化された最適化でバンドルされます。Webでは、[`.avif`生成、`.wasm`圧縮、最小化](https://dioxuslabs.com/learn/0.6/guides/assets)などを活用します。[50kb未満](https://github.com/ealmloff/tiny-dioxus/)のWebアプリや5mb未満のデスクトップ/モバイルアプリを構築します。
 
 <div align="center">
-  <img src="./notes/bundle.gif">
+  <img src="../../notes/bundle.gif">
 </div>
 
 
@@ -121,7 +121,7 @@ Dioxusは、Rustでネイティブモバイルアプリを構築する最速の�
 私たちは、クリーンで読みやすく包括的なドキュメントを作成するために多大な努力を払いました。すべてのHTML要素とリスナーはMDNドキュメントで記録されており、私たちのドキュメントサイトはDioxus自体と継続的に統合されており、ドキュメントが常に最新であることを保証します。ガイド、リファレンス、レシピなどについては、[Dioxusウェブサイト](https://dioxuslabs.com/learn/0.6/)をご覧ください。面白い事実：私たちはDioxusウェブサイトを新しいDioxus機能のテストベッドとして使用しています - [チェックしてみてください！](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
-  <img src="./notes/docs.avif">
+  <img src="../../notes/docs.avif">
 </div>
 
 ## コミュニティ
@@ -129,7 +129,7 @@ Dioxusは、Rustでネイティブモバイルアプリを構築する最速の�
 Dioxusはコミュニティ主導のプロジェクトであり、非常に活発な[Discord](https://discord.gg/XgGxMSkvUM)および[GitHub](https://github.com/DioxusLabs/dioxus/issues)コミュニティを持っています。私たちは常に助けを求めており、質問に答え、あなたが始めるのを手伝うことを喜んでいます。[私たちのSDK](https://github.com/DioxusLabs/dioxus-std)はコミュニティによって運営されており、無料のアップグレードとサポートを受ける最高のDioxusクレートのための[GitHub組織](https://github.com/dioxus-community/)もあります。
 
 <div align="center">
-  <img src="./notes/dioxus-community.avif">
+  <img src="../../notes/dioxus-community.avif">
 </div>
 
 ## フルタイムのコアチーム
