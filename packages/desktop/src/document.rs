@@ -88,8 +88,7 @@ pub(crate) struct DesktopEvaluator {
 impl DesktopEvaluator {
     /// Creates a new evaluator for desktop-based targets.
     pub fn create(desktop_ctx: DesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        let ctx = desktop_ctx.clone();
-        let query = desktop_ctx.query.new_query(&js, ctx);
+        let query = desktop_ctx.query.new_query(&js, desktop_ctx.clone());
 
         // We create a generational box that is owned by the query slot so that when we drop the query slot, the generational box is also dropped.
         let owner = UnsyncStorage::owner();
