@@ -1003,10 +1003,7 @@ impl Output {
 
                 // Create the ansi -> raw string line with a width of either the viewport width or the max width
                 let line_length = line.styled_graphemes(Style::default()).count();
-                lines.push(
-                    AnsiStringLine::new(line_length.max(VIEWPORT_MAX_WIDTH.into()) as _)
-                        .render(&line),
-                );
+                lines.push(AnsiStringLine::new(line_length as _).render(&line));
             }
         }
 
