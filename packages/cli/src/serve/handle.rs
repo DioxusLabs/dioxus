@@ -492,7 +492,7 @@ We checked the folder: {}
             )
         }
 
-        let identites = Command::new("security")
+        let identities = Command::new("security")
             .args(["find-identity", "-v", "-p", "codesigning"])
             .output()
             .await
@@ -506,7 +506,7 @@ We checked the folder: {}
         // 51ADE4986E0033A5DB1C794E0D1473D74FD6F871 "Apple Development: jkelleyrtp@gmail.com (XYZYZY)"
         let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
             .unwrap()
-            .captures(&identites)
+            .captures(&identities)
             .and_then(|caps| caps.get(1))
             .map(|m| m.as_str())
             .context(
