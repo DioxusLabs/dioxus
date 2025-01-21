@@ -67,6 +67,7 @@ pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 #[deprecated(since = "0.6.0", note = "The CLI currently does not set this.")]
 #[doc(hidden)]
 pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
+pub const SESSION_CACHE_DIR: &str = "DIOXUS_SESSION_CACHE_DIR";
 
 /// Reads an environment variable at runtime in debug mode or at compile time in
 /// release mode. When bundling in release mode, we will not be running under the
@@ -99,15 +100,10 @@ macro_rules! read_env_config {
 /// For reference, the devserver typically lives on `127.0.0.1:8080` and serves the devserver websocket
 /// on `127.0.0.1:8080/_dioxus`.
 pub fn devserver_raw_addr() -> Option<SocketAddr> {
-    // On android, 10.0.2.2 is the default loopback
-    if cfg!(target_os = "android") {
-        return Some("10.0.2.2:8080".parse().unwrap());
-    }
-
     std::env::var(DEVSERVER_RAW_ADDR_ENV)
-        .map(|s| s.parse().ok())
+        .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
+        .parse()
         .ok()
-        .flatten()
 }
 
 /// Get the address of the devserver for use over a websocket
@@ -281,4 +277,16 @@ pub fn out_dir() -> Option<PathBuf> {
     {
         std::env::var(OUT_DIR).ok().map(PathBuf::from)
     }
+}
+
+/// Get the directory where this app can write to for this session that's guaranteed to be stable
+/// between reloads of the same app. This is useful for emitting state like window position and size
+/// so the app can restore it when it's next opened.
+///
+/// Note that this cache dir is really only useful for platforms that can access it. Web/Android
+/// don't have access to this directory, so it's not useful for them.
+///
+/// This is designed with desktop executables in mind.
+pub fn session_cache_dir() -> Option<PathBuf> {
+    std::env::var(SESSION_CACHE_DIR).ok().map(PathBuf::from)
 }

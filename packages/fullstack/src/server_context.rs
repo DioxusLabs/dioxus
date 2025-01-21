@@ -405,12 +405,8 @@ pub struct Axum;
 
 #[cfg(feature = "axum")]
 #[async_trait::async_trait]
-impl<
-        I: axum::extract::FromRequestParts<(), Rejection = R>,
-        R: axum::response::IntoResponse + std::error::Error,
-    > FromServerContext<Axum> for I
-{
-    type Rejection = R;
+impl<I: axum::extract::FromRequestParts<()>> FromServerContext<Axum> for I {
+    type Rejection = I::Rejection;
 
     #[allow(clippy::all)]
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {

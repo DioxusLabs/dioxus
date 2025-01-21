@@ -1,10 +1,3 @@
-//! Run with:
-//!
-//! ```sh
-//! dx build --features web
-//! cargo run --features server
-//! ```
-
 #![allow(non_snake_case, unused)]
 
 #[cfg(feature = "server")]
@@ -113,23 +106,23 @@ fn app() -> Element {
     }
 }
 
-#[server(GetUserName)]
+#[server]
 pub async fn get_user_name() -> Result<String, ServerFnError> {
-    let session: crate::auth::Session = extract().await?;
-    Ok(session.0.current_user.unwrap().username.to_string())
+    let auth = auth::get_session().await?;
+    Ok(auth.current_user.unwrap().username.to_string())
 }
 
-#[server(Login)]
+#[server]
 pub async fn login() -> Result<(), ServerFnError> {
-    let auth: crate::auth::Session = extract().await?;
+    let auth = auth::get_session().await?;
     auth.login_user(2);
     Ok(())
 }
 
-#[server(Permissions)]
+#[server]
 pub async fn get_permissions() -> Result<String, ServerFnError> {
     let method: axum::http::Method = extract().await?;
-    let auth: crate::auth::Session = extract().await?;
+    let auth = auth::get_session().await?;
     let current_user = auth.current_user.clone().unwrap_or_default();
 
     // lets check permissions only and not worry about if they are anon or not

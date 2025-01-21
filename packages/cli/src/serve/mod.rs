@@ -45,11 +45,11 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     let krate = args.load_krate().await?;
 
     // Note that starting the builder will queue up a build immediately
+    let mut screen = Output::start(&args).await?;
     let mut builder = Builder::start(&krate, args.build_args())?;
     let mut devserver = WebServer::start(&krate, &args)?;
     let mut watcher = Watcher::start(&krate, &args);
     let mut runner = AppRunner::start(&krate);
-    let mut screen = Output::start(&args)?;
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
@@ -58,7 +58,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 Serving your Dioxus app: {} 🚀
                 • Press `ctrl+c` to exit the server
                 • Press `r` to rebuild the app
-                • Press `o` to open the app
+                • Press `p` to toggle automatic rebuilds
                 • Press `v` to toggle verbose logging
                 • Press `/` for more commands and shortcuts
                 Learn more at https://dioxuslabs.com/learn/0.6/getting_started
@@ -93,10 +93,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 // and then send that update to all connected clients
                 if let Some(hr) = runner.attempt_hot_reload(files).await {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                    if hr.templates.is_empty()
-                        && hr.assets.is_empty()
-                        && hr.unknown_files.is_empty()
-                    {
+                    //
+                    // Also make sure the builder isn't busy since that might cause issues with hotreloads
+                    // https://github.com/DioxusLabs/dioxus/issues/3361
+                    if hr.is_empty() || !builder.can_receive_hotreloads() {
                         tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
                         continue;
                     }
@@ -106,11 +106,6 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     devserver.send_hotreload(hr).await;
                 } else if runner.should_full_rebuild {
                     tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
-
-                    // Kill any running executables on Windows
-                    if cfg!(windows) {
-                        runner.kill_all();
-                    }
 
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
                     builder.rebuild(args.build_arguments.clone());
@@ -199,8 +194,6 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                - To exit the server, press `ctrl+c`"#
                     );
                 }
-
-                runner.kill(platform);
             }
 
             ServeUpdate::StdoutReceived { platform, msg } => {
@@ -220,11 +213,6 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 // `Full rebuild:` to line up with
                 // `Hotreloading:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
-
-                // Kill any running executables on Windows
-                if cfg!(windows) {
-                    runner.kill_all();
-                }
 
                 builder.rebuild(args.build_arguments.clone());
                 runner.file_map.force_rebuild();
@@ -261,9 +249,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
         }
     };
 
+    _ = runner.cleanup().await;
     _ = devserver.shutdown().await;
-    _ = screen.shutdown();
     builder.abort_all();
+    _ = screen.shutdown();
 
     if let Err(err) = err {
         eprintln!("Exiting with error: {}", err);

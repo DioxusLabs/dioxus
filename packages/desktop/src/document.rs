@@ -24,10 +24,7 @@ impl DesktopDocument {
 
 impl Document for DesktopDocument {
     fn eval(&self, js: String) -> Eval {
-        Eval::new(DesktopEvaluator::create(
-            self.desktop_ctx.clone(),
-            js,
-        ))
+        Eval::new(DesktopEvaluator::create(self.desktop_ctx.clone(), js))
     }
 
     fn set_title(&self, title: String) {
@@ -84,7 +81,10 @@ pub(crate) struct DesktopEvaluator {
 
 impl DesktopEvaluator {
     /// Creates a new evaluator for desktop-based targets.
-    pub fn create(weak_desktop_ctx: WeakDesktopContext, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
+    pub fn create(
+        weak_desktop_ctx: WeakDesktopContext,
+        js: String,
+    ) -> GenerationalBox<Box<dyn Evaluator>> {
         let desktop_ctx = weak_desktop_ctx.upgrade().unwrap();
         let query = desktop_ctx.query.new_query(&js, weak_desktop_ctx);
 
