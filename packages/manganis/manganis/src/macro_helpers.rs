@@ -39,31 +39,7 @@ pub const fn generate_unique_path(
     }
     // Then add a dash
     let mut macro_output_path = input_path.push_str("-");
-
-    // Hash the contents along with the asset config to create a unique hash for the asset
-    // When this hash changes, the client needs to re-fetch the asset
-    let mut hasher = ConstHasher::new();
-    hasher = hasher.write(&content_hash.to_le_bytes());
-    hasher = hasher.hash_by_bytes(asset_config);
-    let hash = hasher.finish();
-
-    // Then add the hash in hex form
-    let hash_bytes = hash.to_le_bytes();
-    let mut i = 0;
-    while i < hash_bytes.len() {
-        let byte = hash_bytes[i];
-        let first = byte >> 4;
-        let second = byte & 0x0f;
-        const fn byte_to_char(byte: u8) -> char {
-            match char::from_digit(byte as u32, 16) {
-                Some(c) => c,
-                None => panic!("byte must be a valid digit"),
-            }
-        }
-        macro_output_path = macro_output_path.push(byte_to_char(first));
-        macro_output_path = macro_output_path.push(byte_to_char(second));
-        i += 1;
-    }
+    macro_output_path = macro_output_path.push_str(hash_asset(asset_config, content_hash).as_str());
 
     // Finally add the extension
     match asset_config.extension() {
@@ -90,6 +66,37 @@ pub const fn generate_unique_path(
     macro_output_path
 }
 
+pub const fn hash_asset(asset_config: &AssetOptions, content_hash: u64) -> ConstStr {
+    let mut string = ConstStr::new("");
+
+    // Hash the contents along with the asset config to create a unique hash for the asset
+    // When this hash changes, the client needs to re-fetch the asset
+    let mut hasher = ConstHasher::new();
+    hasher = hasher.write(&content_hash.to_le_bytes());
+    hasher = hasher.hash_by_bytes(asset_config);
+    let hash = hasher.finish();
+
+    // Then add the hash in hex form
+    let hash_bytes = hash.to_le_bytes();
+    let mut i = 0;
+    while i < hash_bytes.len() {
+        let byte = hash_bytes[i];
+        let first = byte >> 4;
+        let second = byte & 0x0f;
+        const fn byte_to_char(byte: u8) -> char {
+            match char::from_digit(byte as u32, 16) {
+                Some(c) => c,
+                None => panic!("byte must be a valid digit"),
+            }
+        }
+        string = string.push(byte_to_char(first));
+        string = string.push(byte_to_char(second));
+        i += 1;
+    }
+
+    string
+}
+
 const fn bytes_equal(left: &[u8], right: &[u8]) -> bool {
     if left.len() != right.len() {
         return false;
@@ -105,6 +112,8 @@ const fn bytes_equal(left: &[u8], right: &[u8]) -> bool {
 
     true
 }
+
+
 
 #[test]
 fn test_unique_path() {
