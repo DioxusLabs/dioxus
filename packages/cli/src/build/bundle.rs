@@ -778,7 +778,7 @@ impl AppBundle {
             self.build.build.target_args.arch()
         ));
 
-        std::fs::rename(&from, &to).context("Failed to rename aab")?;
+        std::fs::rename(from, &to).context("Failed to rename aab")?;
 
         Ok(to)
     }
