@@ -172,7 +172,7 @@ fn Preview(story: ReadOnlySignal<PreviewState>) -> Element {
         active_story: Some(id),
     } = story()
     else {
-        return rsx! {"Hover over a story to preview it here"};
+        return rsx! {"Click on a story to preview it here"};
     };
 
     let story = use_server_future(use_reactive!(|id| get_story(id)))?;
