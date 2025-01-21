@@ -593,20 +593,6 @@ fn hide_last_window(window: &Window) {
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later
 fn restore_file() -> std::path::PathBuf {
-    /// Get the name of the program or default to "dioxus" so we can hash it
-    fn get_prog_name_or_default() -> Option<String> {
-        Some(
-            std::env::current_exe()
-                .ok()?
-                .file_name()?
-                .to_str()?
-                .to_string(),
-        )
-    }
-
-    let name = get_prog_name_or_default().unwrap_or_else(|| "dioxus".to_string());
-    let hashed_id = name.chars().map(|c| c as usize).sum::<usize>();
-    let mut path = std::env::temp_dir();
-    path.push(format!("{}-window-state.json", hashed_id));
-    path
+    let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(std::env::temp_dir);
+    dir.join("window-state.json")
 }
