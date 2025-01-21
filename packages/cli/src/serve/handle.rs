@@ -38,6 +38,11 @@ pub(crate) struct AppHandle {
     pub(crate) server_stdout: Option<Lines<BufReader<ChildStdout>>>,
     pub(crate) server_stderr: Option<Lines<BufReader<ChildStderr>>>,
 
+    /// The executables but with some extra entropy in their name so we can run two instances of the
+    /// same app without causing collisions on the filesystem.
+    pub(crate) entropy_app_exe: Option<PathBuf>,
+    pub(crate) entropy_server_exe: Option<PathBuf>,
+
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
     pub(crate) runtime_asst_dir: Option<PathBuf>,
@@ -54,6 +59,8 @@ impl AppHandle {
             server_child: None,
             server_stdout: None,
             server_stderr: None,
+            entropy_app_exe: None,
+            entropy_server_exe: None,
         })
     }
 
@@ -87,7 +94,7 @@ impl AppHandle {
 
         // Launch the server if we were given an address to start it on, and the build includes a server. After we
         // start the server, consume its stdout/stderr.
-        if let (Some(addr), Some(server)) = (start_fullstack_on_address, self.app.server_exe()) {
+        if let (Some(addr), Some(server)) = (start_fullstack_on_address, self.server_exe()) {
             tracing::debug!("Proxying fullstack server from port {:?}", addr);
             envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
             envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
@@ -145,6 +152,62 @@ impl AppHandle {
         }
 
         Ok(())
+    }
+
+    /// Gracefully kill the process and all of its children
+    ///
+    /// Uses the `SIGTERM` signal on unix and `taskkill` on windows.
+    /// This complex logic is necessary for things like window state preservation to work properly.
+    ///
+    /// Also wipes away the entropy executables if they exist.
+    pub(crate) async fn cleanup(&mut self) {
+        use futures_util::FutureExt;
+
+        // Kill any running executables on Windows
+        let server_process = self.server_child.take();
+        let client_process = self.app_child.take();
+        let processes = [server_process, client_process]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        for mut process in processes {
+            let Some(pid) = process.id() else {
+                _ = process.kill().await;
+                continue;
+            };
+
+            // on unix, we can send a signal to the process to shut down
+            #[cfg(unix)]
+            {
+                _ = Command::new("kill")
+                    .args(["-s", "TERM", &pid.to_string()])
+                    .spawn();
+            }
+
+            // on windows, use the `taskkill` command
+            #[cfg(windows)]
+            {
+                _ = Command::new("taskkill")
+                    .args(["/F", "/PID", &pid.to_string()])
+                    .spawn();
+            }
+
+            // join the wait with a 100ms timeout
+            futures_util::select! {
+                _ = process.wait().fuse() => {}
+                _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
+            };
+        }
+
+        // Wipe out the entropy executables if they exist
+        if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
+            _ = std::fs::remove_file(entropy_app_exe);
+        }
+
+        if let Some(entropy_server_exe) = self.entropy_server_exe.take() {
+            _ = std::fs::remove_file(entropy_server_exe);
+        }
     }
 
     /// Hotreload an asset in the running app.
@@ -236,12 +299,15 @@ impl AppHandle {
     ///
     /// Server/liveview/desktop are all basically the same, though
     fn open_with_main_exe(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        let child = Command::new(self.app.main_exe())
+        // Create a new entropy app exe if we need to
+        let main_exe = self.app_exe();
+        let child = Command::new(main_exe)
             .envs(envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .spawn()?;
+
         Ok(child)
     }
 
@@ -649,5 +715,73 @@ We checked the folder: {}
                 tracing::error!("Failed to start app with `adb`: {e}");
             };
         });
+    }
+
+    fn make_entropy_path(exe: &PathBuf) -> PathBuf {
+        let id = uuid::Uuid::new_v4();
+        let name = id.to_string();
+        let some_entropy = name.split('-').next().unwrap();
+
+        // Make a copy of the server exe with a new name
+        let entropy_server_exe = exe.with_file_name(format!(
+            "{}-{}",
+            exe.file_name().unwrap().to_str().unwrap(),
+            some_entropy
+        ));
+
+        std::fs::copy(exe, &entropy_server_exe).unwrap();
+
+        entropy_server_exe
+    }
+
+    fn server_exe(&mut self) -> Option<PathBuf> {
+        let mut server = self.app.server_exe()?;
+
+        // Create a new entropy server exe if we need to
+        if cfg!(target_os = "windows") || cfg!(target_os = "linux") {
+            // If we already have an entropy server exe, return it - this is useful for re-opening the same app
+            if let Some(existing_server) = self.entropy_server_exe.clone() {
+                return Some(existing_server);
+            }
+
+            // Otherwise, create a new entropy server exe and save it for re-opning
+            let entropy_server_exe = Self::make_entropy_path(&server);
+            self.entropy_server_exe = Some(entropy_server_exe.clone());
+            server = entropy_server_exe;
+        }
+
+        Some(server)
+    }
+
+    fn app_exe(&mut self) -> PathBuf {
+        let mut main_exe = self.app.main_exe();
+
+        // The requirement here is based on the platform, not necessarily our current architecture.
+        let requires_entropy = match self.app.build.build.platform() {
+            // When running "bundled", we don't need entropy
+            Platform::Web => false,
+            Platform::MacOS => false,
+            Platform::Ios => false,
+            Platform::Android => false,
+
+            // But on platforms that aren't running as "bundled", we do.
+            Platform::Windows => true,
+            Platform::Linux => true,
+            Platform::Server => true,
+            Platform::Liveview => true,
+        };
+
+        if requires_entropy || std::env::var("DIOXUS_ENTROPY").is_ok() {
+            // If we already have an entropy app exe, return it - this is useful for re-opening the same app
+            if let Some(existing_app_exe) = self.entropy_app_exe.clone() {
+                return existing_app_exe;
+            }
+
+            let entropy_app_exe = Self::make_entropy_path(&main_exe);
+            self.entropy_app_exe = Some(entropy_app_exe.clone());
+            main_exe = entropy_app_exe;
+        }
+
+        main_exe
     }
 }

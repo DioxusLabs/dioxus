@@ -107,11 +107,6 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 } else if runner.should_full_rebuild {
                     tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
 
-                    // Kill any running executables on Windows
-                    if cfg!(windows) {
-                        runner.kill_all().await;
-                    }
-
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
                     builder.rebuild(args.build_arguments.clone());
 
@@ -221,11 +216,6 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 // `Hotreloading:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
 
-                // Kill any running executables on Windows
-                if cfg!(windows) {
-                    runner.kill_all().await;
-                }
-
                 builder.rebuild(args.build_arguments.clone());
                 runner.file_map.force_rebuild();
                 devserver.send_reload_start().await;
@@ -261,6 +251,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
         }
     };
 
+    _ = runner.shutdown().await;
     _ = devserver.shutdown().await;
     _ = screen.shutdown();
     builder.abort_all();

@@ -5,7 +5,7 @@ use crate::{
 use dioxus_core::internal::TemplateGlobalKey;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
-use futures_util::{future::OptionFuture, stream::FuturesUnordered, FutureExt};
+use futures_util::{future::OptionFuture, stream::FuturesUnordered};
 use ignore::gitignore::Gitignore;
 use std::{
     collections::{HashMap, HashSet},
@@ -138,51 +138,10 @@ impl AppRunner {
     }
 
     /// Gracefully kill the process and all of its children
-    ///
-    /// Uses the `SIGTERM` signal on unix and `taskkill` on windows.
-    /// This complex logic is necessary for things like window state preservation to work properly.
     pub(crate) async fn kill(&mut self, platform: Platform) {
-        use tokio::process::Command;
-
-        let Some(mut process) = self.running.remove(&platform) else {
-            return;
+        if let Some(mut process) = self.running.remove(&platform) {
+            process.cleanup().await;
         };
-
-        let server_process = process.server_child.take();
-        let client_process = process.app_child.take();
-        let processes = [server_process, client_process]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-
-        for mut process in processes {
-            let Some(pid) = process.id() else {
-                _ = process.kill().await;
-                continue;
-            };
-
-            // on unix, we can send a signal to the process to shut down
-            #[cfg(unix)]
-            {
-                _ = Command::new("kill")
-                    .args(["-s", "TERM", &pid.to_string()])
-                    .spawn();
-            }
-
-            // on windows, use the `taskkill` command
-            #[cfg(windows)]
-            {
-                _ = Command::new("taskkill")
-                    .args(["/F", "/PID", &pid.to_string()])
-                    .spawn();
-            }
-
-            // join the wait with a 100ms timeout
-            futures_util::select! {
-                _ = process.wait().fuse() => {}
-                _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
-            };
-        }
     }
 
     pub(crate) async fn kill_all(&mut self) {
@@ -387,5 +346,10 @@ impl AppRunner {
                 }
             }
         }
+    }
+
+    /// Shutdown all the running processes
+    pub(crate) async fn shutdown(&mut self) {
+        self.kill_all().await;
     }
 }
