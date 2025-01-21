@@ -253,12 +253,13 @@ impl App {
 
         self.is_visible_before_start = cfg.window.window.visible;
         cfg.window = cfg.window.with_visible(false);
+        let explicit_window_size = cfg.window.window.inner_size;
+        let explicit_window_position = cfg.window.window.position;
 
         let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
         // And then attempt to resume from state
-        #[cfg(debug_assertions)]
-        self.resume_from_state(&webview);
+        self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
 
         let id = webview.desktop_context.window.id();
         self.webviews.insert(id, webview);
@@ -483,9 +484,19 @@ impl App {
     }
 
     // Write this to the target dir so we can pick back up
-    #[cfg(debug_assertions)]
-    fn resume_from_state(&mut self, webview: &WebviewInstance) {
+    fn resume_from_state(
+        &mut self,
+        webview: &WebviewInstance,
+        explicit_inner_size: Option<tao::dpi::Size>,
+        explicit_window_position: Option<tao::dpi::Position>,
+    ) {
+        // We only want to do this on desktop
         if cfg!(target_os = "android") || cfg!(target_os = "ios") {
+            return;
+        }
+
+        // We only want to do this in debug mode
+        if !cfg!(debug_assertions) {
             return;
         }
 
@@ -494,8 +505,18 @@ impl App {
                 let window = &webview.desktop_context.window;
                 let position = (state.x, state.y);
                 let size = (state.width, state.height);
-                window.set_outer_position(tao::dpi::PhysicalPosition::new(position.0, position.1));
-                window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+
+                // Only set the outer position if it wasn't explicitly set
+                if explicit_window_position.is_none() {
+                    window.set_outer_position(tao::dpi::PhysicalPosition::new(
+                        position.0, position.1,
+                    ));
+                }
+
+                // Only set the inner size if it wasn't explicitly set
+                if explicit_inner_size.is_none() {
+                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+                }
             }
         }
     }
