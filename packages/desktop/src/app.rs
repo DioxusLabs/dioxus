@@ -592,7 +592,6 @@ fn hide_last_window(window: &Window) {
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later
-#[cfg(debug_assertions)]
 fn restore_file() -> std::path::PathBuf {
     /// Get the name of the program or default to "dioxus" so we can hash it
     fn get_prog_name_or_default() -> Option<String> {
