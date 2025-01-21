@@ -593,6 +593,6 @@ fn hide_last_window(window: &Window) {
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later
 fn restore_file() -> std::path::PathBuf {
-    let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(|| std::env::temp_dir());
+    let dir = dioxus_cli_config::session_cache_dir().unwrap_or_else(std::env::temp_dir);
     dir.join("window-state.json")
 }
