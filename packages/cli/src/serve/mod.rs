@@ -194,8 +194,6 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                - To exit the server, press `ctrl+c`"#
                     );
                 }
-
-                runner.kill(platform).await;
             }
 
             ServeUpdate::StdoutReceived { platform, msg } => {
@@ -251,10 +249,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
         }
     };
 
-    _ = runner.shutdown().await;
+    _ = runner.cleanup().await;
     _ = devserver.shutdown().await;
-    _ = screen.shutdown();
     builder.abort_all();
+    _ = screen.shutdown();
 
     if let Err(err) = err {
         eprintln!("Exiting with error: {}", err);

@@ -149,6 +149,16 @@ impl DioxusCrate {
         files
     }
 
+    /// Get the directory where this app can write to for this session that's guaranteed to be stable
+    /// for the same app. This is useful for emitting state like window position and size.
+    ///
+    /// The directory is specific for this app and might be
+    pub(crate) fn session_cache_dir(&self) -> PathBuf {
+        self.internal_out_dir()
+            .join(self.executable_name())
+            .join("session-cache")
+    }
+
     /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
     /// We don't support workspaces yet since that would cause a collision of bundles per project.
     pub(crate) fn crate_out_dir(&self) -> Option<PathBuf> {

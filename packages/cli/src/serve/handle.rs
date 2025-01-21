@@ -86,6 +86,15 @@ impl AppHandle {
             // unset the cargo dirs in the event we're running `dx` locally
             // since the child process will inherit the env vars, we don't want to confuse the downstream process
             ("CARGO_MANIFEST_DIR", "".to_string()),
+            (
+                dioxus_cli_config::SESSION_CACHE_DIR,
+                self.app
+                    .build
+                    .krate
+                    .session_cache_dir()
+                    .display()
+                    .to_string(),
+            ),
         ];
 
         if let Some(base_path) = &self.app.build.krate.config.web.app.base_path {
@@ -161,6 +170,23 @@ impl AppHandle {
     ///
     /// Also wipes away the entropy executables if they exist.
     pub(crate) async fn cleanup(&mut self) {
+        tracing::debug!("Cleaning up process");
+
+        // Soft-kill the process by sending a sigkill, allowing the process to clean up
+        self.soft_kill().await;
+
+        // Wipe out the entropy executables if they exist
+        if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
+            _ = std::fs::remove_file(entropy_app_exe);
+        }
+
+        if let Some(entropy_server_exe) = self.entropy_server_exe.take() {
+            _ = std::fs::remove_file(entropy_server_exe);
+        }
+    }
+
+    /// Kill the app and server exes
+    pub(crate) async fn soft_kill(&mut self) {
         use futures_util::FutureExt;
 
         // Kill any running executables on Windows
@@ -198,15 +224,6 @@ impl AppHandle {
                 _ = process.wait().fuse() => {}
                 _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
             };
-        }
-
-        // Wipe out the entropy executables if they exist
-        if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
-            _ = std::fs::remove_file(entropy_app_exe);
-        }
-
-        if let Some(entropy_server_exe) = self.entropy_server_exe.take() {
-            _ = std::fs::remove_file(entropy_server_exe);
         }
     }
 
