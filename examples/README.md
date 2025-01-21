@@ -99,17 +99,3 @@ cargo run --example hello_world
 [dog_app](./dog_app.rs) - Accesses dog API
 
 [todomvc](./todomvc.rs) - Todo task list example
-
-# TODO
-Missing Features
-- Fine-grained reactivity
-- Refs - imperative handles to elements
-- Function-driven children: Pass functions to make VNodes
-
-Missing examples
-- Shared state
-- Root-less element groups
-- Custom elements
-- Component Children: Pass children into child components
-- Render To string: Render a mounted virtualdom to a string
-- Testing and Debugging
