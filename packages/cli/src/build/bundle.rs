@@ -730,23 +730,7 @@ impl AppBundle {
         if let Platform::Android = self.build.build.platform() {
             self.build.status_running_gradle();
 
-            // make sure we can execute the gradlew script
-            #[cfg(unix)]
-            {
-                use std::os::unix::prelude::PermissionsExt;
-                std::fs::set_permissions(
-                    self.build.root_dir().join("gradlew"),
-                    std::fs::Permissions::from_mode(0o755),
-                )?;
-            }
-
-            let gradle_exec_name = match cfg!(windows) {
-                true => "gradlew.bat",
-                false => "gradlew",
-            };
-            let gradle_exec = self.build.root_dir().join(gradle_exec_name);
-
-            let output = Command::new(gradle_exec)
+            let output = Command::new(self.gradle_exe()?)
                 .arg("assembleDebug")
                 .current_dir(self.build.root_dir())
                 .stderr(std::process::Stdio::piped())
@@ -760,6 +744,62 @@ impl AppBundle {
         }
 
         Ok(())
+    }
+
+    /// Run bundleRelease and return the path to the `.aab` file
+    ///
+    /// https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and
+    pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
+        let output = Command::new(self.gradle_exe()?)
+            .arg("bundleRelease")
+            .current_dir(self.build.root_dir())
+            .output()
+            .await
+            .context("Failed to run gradle bundleRelease")?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("Failed to bundleRelease: {output:?}").into());
+        }
+
+        let app_release = self
+            .build
+            .root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("bundle")
+            .join("release");
+
+        // Rename it to Name-arch.aab
+        let from = app_release.join("app-release.aab");
+        let to = app_release.join(format!(
+            "{}-{}.aab",
+            self.build.krate.bundled_app_name(),
+            self.build.build.target_args.arch()
+        ));
+
+        std::fs::rename(&from, &to).context("Failed to rename aab")?;
+
+        Ok(to)
+    }
+
+    fn gradle_exe(&self) -> Result<PathBuf> {
+        // make sure we can execute the gradlew script
+        #[cfg(unix)]
+        {
+            use std::os::unix::prelude::PermissionsExt;
+            std::fs::set_permissions(
+                self.build.root_dir().join("gradlew"),
+                std::fs::Permissions::from_mode(0o755),
+            )?;
+        }
+
+        let gradle_exec_name = match cfg!(windows) {
+            true => "gradlew.bat",
+            false => "gradlew",
+        };
+
+        Ok(self.build.root_dir().join(gradle_exec_name))
     }
 
     pub(crate) fn apk_path(&self) -> PathBuf {

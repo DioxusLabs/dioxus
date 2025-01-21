@@ -76,11 +76,12 @@ impl Bundle {
             Platform::Server => bundles.push(bundle.build.root_dir()),
             Platform::Liveview => bundles.push(bundle.build.root_dir()),
 
-            // todo(jon): we can technically create apks (already do...) just need to expose it
             Platform::Android => {
-                return Err(Error::UnsupportedFeature(
-                    "Android bundles are not yet supported".into(),
-                ));
+                let aab = bundle
+                    .android_gradle_bundle()
+                    .await
+                    .context("Failed to run gradle bundleRelease")?;
+                bundles.push(aab);
             }
         };
 
