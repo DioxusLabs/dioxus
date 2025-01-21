@@ -598,6 +598,7 @@ fn hide_last_window(window: &Window) {
         // back to the app. `NSApplication::hide:` has the correct behaviour
         use objc::runtime::Object;
         use objc::{msg_send, sel, sel_impl};
+        #[allow(unexpected_cfgs)]
         objc::rc::autoreleasepool(|| unsafe {
             let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
             let nil = std::ptr::null_mut::<Object>();

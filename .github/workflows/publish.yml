@@ -76,7 +76,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.79.0"
+          toolchain: "1.84.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2

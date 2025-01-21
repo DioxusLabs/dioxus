@@ -656,6 +656,25 @@ impl BuildRequest {
         }
     }
 
+    /// Get the path to the wasm bindgen temporary output folder
+    pub fn wasm_bindgen_out_dir(&self) -> PathBuf {
+        self.root_dir().join("wasm-bindgen")
+    }
+
+    /// Get the path to the wasm bindgen javascript output file
+    pub fn wasm_bindgen_js_output_file(&self) -> PathBuf {
+        self.wasm_bindgen_out_dir()
+            .join(self.krate.executable_name())
+            .with_extension("js")
+    }
+
+    /// Get the path to the wasm bindgen wasm output file
+    pub fn wasm_bindgen_wasm_output_file(&self) -> PathBuf {
+        self.wasm_bindgen_out_dir()
+            .join(format!("{}_bg", self.krate.executable_name()))
+            .with_extension("wasm")
+    }
+
     /// returns the path to root build folder. This will be our working directory for the build.
     ///
     /// we only add an extension to the folders where it sorta matters that it's named with the extension.
@@ -716,6 +735,11 @@ impl BuildRequest {
             | Platform::Server
             | Platform::Liveview => self.root_dir().join("assets"),
         }
+    }
+
+    /// Get the path to the asset optimizer version file
+    pub fn asset_optimizer_version_file(&self) -> PathBuf {
+        self.platform_dir().join(".cli-version")
     }
 
     pub fn platform_exe_name(&self) -> String {

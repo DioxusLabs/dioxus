@@ -7,7 +7,7 @@ description = "CLI for building fullstack web, desktop, and mobile apps with a s
 repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT OR Apache-2.0"
 keywords = ["mobile", "gui", "cli", "dioxus", "wasm"]
-rust-version = "1.79.0"
+rust-version = "1.81.0"
 
 [dependencies]
 dioxus-autofmt = { workspace = true }
@@ -106,6 +106,7 @@ log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
 tempfile = "3.3"
+manganis = { workspace = true }
 manganis-core = { workspace = true }
 
 # Extracting data from an executable

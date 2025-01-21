@@ -17,3 +17,5 @@ mod asset;
 pub use asset::*;
 
 pub mod linker;
+
+pub mod hash;
