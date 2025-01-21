@@ -48,8 +48,21 @@ pub fn launch_cfg(
     }
 }
 
-static APP_OBJECTS: Mutex<Option<BoundLaunchObjects>> = Mutex::new(None);
-
+/// We need to store the root function and contexts in a static so that when the tao bindings call
+/// "start_app", that the original function arguments are still around.
+///
+/// If you look closely, you'll notice that we impl Send for this struct. This would normally be
+/// unsound. However, we know that the thread that created these objects ("main()" - see JNI_OnLoad)
+/// is finished once `start_app` is called. This is similar to how an Rc<T> is technically safe
+/// to move between threads if you can prove that no other thread is using the Rc<T> at the same time.
+/// Crates like https://crates.io/crates/sendable exist that build on this idea but with runtimk,
+/// validation that the current thread is the one that created the object.
+///
+/// Since `main()` completes, the only reader of this data will be `start_app`, so it's okay to
+/// impl this as Send/Sync.
+///
+/// Todo(jon): the visibility of functions in this module is too public. Make sure to hide them before
+/// releasing 0.7.
 struct BoundLaunchObjects {
     root: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
@@ -58,6 +71,8 @@ struct BoundLaunchObjects {
 
 unsafe impl Send for BoundLaunchObjects {}
 unsafe impl Sync for BoundLaunchObjects {}
+
+static APP_OBJECTS: Mutex<Option<BoundLaunchObjects>> = Mutex::new(None);
 
 #[doc(hidden)]
 pub fn root() {

@@ -155,12 +155,15 @@ impl Output {
     /// This lets us check if writing to tty is going to block forever and then recover, allowing
     /// interopability with programs like `bg`.
     fn enable_raw_mode() -> io::Result<()> {
-        use tokio::signal::unix::{signal, SignalKind};
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{signal, SignalKind};
 
-        // Ignore SIGTSTP, SIGTTIN, and SIGTTOU
-        _ = signal(SignalKind::from_raw(20))?; // SIGTSTP
-        _ = signal(SignalKind::from_raw(21))?; // SIGTTIN
-        _ = signal(SignalKind::from_raw(22))?; // SIGTTOU
+            // Ignore SIGTSTP, SIGTTIN, and SIGTTOU
+            _ = signal(SignalKind::from_raw(20))?; // SIGTSTP
+            _ = signal(SignalKind::from_raw(21))?; // SIGTTIN
+            _ = signal(SignalKind::from_raw(22))?; // SIGTTOU
+        }
 
         use std::io::IsTerminal;
 
