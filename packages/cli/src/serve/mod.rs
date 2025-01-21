@@ -93,10 +93,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 // and then send that update to all connected clients
                 if let Some(hr) = runner.attempt_hot_reload(files).await {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                    if hr.templates.is_empty()
-                        && hr.assets.is_empty()
-                        && hr.unknown_files.is_empty()
-                    {
+                    //
+                    // Also make sure the builder isn't busy since that might cause issues with hotreloads
+                    // https://github.com/DioxusLabs/dioxus/issues/3361
+                    if hr.is_empty() || !builder.can_receive_hotreloads() {
                         tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
                         continue;
                     }
