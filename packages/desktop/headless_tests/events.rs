@@ -48,12 +48,14 @@ fn app() -> Element {
             test_form_input {}
             test_form_submit {}
             test_select_multiple_options {}
+            test_unicode {}
         }
     }
 }
 
 fn test_mounted() -> Element {
     use_hook(|| utils::EXPECTED_EVENTS.with_mut(|x| *x += 1));
+    let mut onmounted_triggered = use_signal(|| false);
 
     rsx! {
         div {
@@ -65,6 +67,10 @@ fn test_mounted() -> Element {
                 assert_eq!(rect.width(), 100.0);
                 assert_eq!(rect.height(), 100.0);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
+                // Onmounted should only be called once
+                let mut onmounted_triggered_write = onmounted_triggered.write();
+                assert!(!*onmounted_triggered_write);
+                *onmounted_triggered_write = true;
             }
         }
     }
@@ -568,6 +574,32 @@ fn test_select_multiple_options() -> Element {
             option { id: "usa", value: "usa", "USA" }
             option { id: "canada", value: "canada", "Canada" }
             option { id: "mexico", value: "mexico", selected: true, "Mexico" }
+        }
+    }
+}
+
+fn test_unicode() -> Element {
+    // emulate an oninput event with a unicode character
+    utils::mock_event_with_extra(
+        "unicode",
+        r#"new InputEvent("input", {
+            inputType: 'insertText',
+            bubbles: true,
+            cancelable: true,
+        })"#,
+        r#"
+            element.value = "🦀";
+        "#,
+    );
+
+    rsx! {
+        input {
+            id: "unicode",
+            oninput: move |event| {
+                println!("{:?}", event.data);
+                assert_eq!(event.data.value(), "🦀");
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            }
         }
     }
 }

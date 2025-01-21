@@ -1,11 +1,8 @@
-use std::process::Stdio;
-
-use crate::{BuildRequest, Platform, Result, RustupShow};
-use anyhow::Context;
-use tokio::process::Command;
+use crate::{wasm_bindgen::WasmBindgen, BuildRequest, Error, Platform, Result, RustcDetails};
+use anyhow::{anyhow, Context};
 
 impl BuildRequest {
-    /// Install any tooling that might be required for this build.
+    /// Check for tooling that might be required for this build.
     ///
     /// This should generally be only called on the first build since it takes time to verify the tooling
     /// is in place, and we don't want to slow down subsequent builds.
@@ -17,7 +14,7 @@ impl BuildRequest {
             .initialize_profiles()
             .context("Failed to initialize profiles - dioxus can't build without them. You might need to initialize them yourself.")?;
 
-        let rustup = match RustupShow::from_cli().await {
+        let rustc = match RustcDetails::from_cli().await {
             Ok(out) => out,
             Err(err) => {
                 tracing::error!("Failed to verify tooling: {err}\ndx will proceed, but you might run into errors later.");
@@ -26,10 +23,10 @@ impl BuildRequest {
         };
 
         match self.build.platform() {
-            Platform::Web => self.verify_web_tooling(rustup).await?,
-            Platform::Ios => self.verify_ios_tooling(rustup).await?,
-            Platform::Android => self.verify_android_tooling(rustup).await?,
-            Platform::Linux => self.verify_linux_tooling(rustup).await?,
+            Platform::Web => self.verify_web_tooling(rustc).await?,
+            Platform::Ios => self.verify_ios_tooling(rustc).await?,
+            Platform::Android => self.verify_android_tooling(rustc).await?,
+            Platform::Linux => self.verify_linux_tooling(rustc).await?,
             Platform::MacOS => {}
             Platform::Windows => {}
             Platform::Server => {}
@@ -39,50 +36,33 @@ impl BuildRequest {
         Ok(())
     }
 
-    pub(crate) async fn verify_web_tooling(&self, rustup: RustupShow) -> Result<()> {
-        if !rustup.has_wasm32_unknown_unknown() {
+    pub(crate) async fn verify_web_tooling(&self, rustc: RustcDetails) -> Result<()> {
+        // Install target using rustup.
+        #[cfg(not(feature = "no-downloads"))]
+        if !rustc.has_wasm32_unknown_unknown() {
             tracing::info!(
                 "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
             );
-            let _ = Command::new("rustup")
+
+            let _ = tokio::process::Command::new("rustup")
                 .args(["target", "add", "wasm32-unknown-unknown"])
                 .output()
                 .await?;
         }
 
-        let our_wasm_bindgen_version = wasm_bindgen_shared::version();
-        match self.krate.wasm_bindgen_version() {
-            Some(version) if version == our_wasm_bindgen_version => {
-                tracing::debug!("wasm-bindgen version {version} is compatible with dioxus-cli ✅");
-            },
-            Some(version) => {
-                tracing::warn!(
-                    "wasm-bindgen version {version} is not compatible with the cli crate ({}). Attempting to upgrade the target wasm-bindgen crate manually...",
-                    our_wasm_bindgen_version
-                );
-
-                let output = Command::new("cargo")
-                    .args([
-                        "update",
-                        "-p",
-                        "wasm-bindgen",
-                        "--precise",
-                        &our_wasm_bindgen_version,
-                    ])
-                    .stderr(Stdio::piped())
-                    .stdout(Stdio::piped())
-                    .output()
-                    .await;
-
-                match output {
-                    Ok(output) if output.status.success() => tracing::info!("✅ wasm-bindgen updated successfully"),
-                    Ok(output) => tracing::error!("Failed to update wasm-bindgen: {:?}", output),
-                    Err(err) => tracing::error!("Failed to update wasm-bindgen: {err}"),
-                }
-
-            }
-            None => tracing::debug!("User is attempting a web build without wasm-bindgen detected. This is probably a bug in the dioxus-cli."),
+        // Ensure target is installed.
+        if !rustc.has_wasm32_unknown_unknown() {
+            return Err(Error::Other(anyhow!(
+                "Missing target wasm32-unknown-unknown."
+            )));
         }
+
+        // Wasm bindgen
+        let krate_bindgen_version = self.krate.wasm_bindgen_version().ok_or(anyhow!(
+            "failed to detect wasm-bindgen version, unable to proceed"
+        ))?;
+
+        WasmBindgen::verify_install(&krate_bindgen_version).await?;
 
         Ok(())
     }
@@ -94,7 +74,7 @@ impl BuildRequest {
     /// We don't auto-install these yet since we're not doing an architecture check. We assume most users
     /// are running on an Apple Silicon Mac, but it would be confusing if we installed these when we actually
     /// should be installing the x86 versions.
-    pub(crate) async fn verify_ios_tooling(&self, _rustup: RustupShow) -> Result<()> {
+    pub(crate) async fn verify_ios_tooling(&self, _rustc: RustcDetails) -> Result<()> {
         // open the simulator
         // _ = tokio::process::Command::new("open")
         //     .arg("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app")
@@ -135,7 +115,7 @@ impl BuildRequest {
     ///
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
-    pub(crate) async fn verify_android_tooling(&self, _rustup: RustupShow) -> Result<()> {
+    pub(crate) async fn verify_android_tooling(&self, _rustc: RustcDetails) -> Result<()> {
         let result = self
             .krate
             .android_ndk()
@@ -157,7 +137,7 @@ impl BuildRequest {
     ///
     /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
     ///     https://tauri.app/start/prerequisites/
-    pub(crate) async fn verify_linux_tooling(&self, _rustup: RustupShow) -> Result<()> {
+    pub(crate) async fn verify_linux_tooling(&self, _rustc: RustcDetails) -> Result<()> {
         Ok(())
     }
 }

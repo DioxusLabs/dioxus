@@ -46,7 +46,7 @@ impl RunArgs {
                     tracing::info!("[{platform}]: {msg}")
                 }
                 ServeUpdate::ProcessExited { platform, status } => {
-                    runner.kill(platform);
+                    runner.cleanup().await;
                     tracing::info!("[{platform}]: process exited with status: {status:?}");
                     break;
                 }

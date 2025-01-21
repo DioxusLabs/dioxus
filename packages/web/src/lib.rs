@@ -88,12 +88,32 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                     const decoded = atob(window.initial_dioxus_hydration_data);
                     return Uint8Array.from(decoded, (c) => c.charCodeAt(0))
                 }
+                export function get_initial_hydration_debug_types() {
+                    return window.initial_dioxus_hydration_debug_types;
+                }
+                export function get_initial_hydration_debug_locations() {
+                    return window.initial_dioxus_hydration_debug_locations;
+                }
             "#)]
             extern "C" {
                 fn get_initial_hydration_data() -> js_sys::Uint8Array;
+                fn get_initial_hydration_debug_types() -> Option<Vec<String>>;
+                fn get_initial_hydration_debug_locations() -> Option<Vec<String>>;
             }
             let hydration_data = get_initial_hydration_data().to_vec();
-            let server_data = HTMLDataCursor::from_serialized(&hydration_data);
+
+            // If we are running in debug mode, also get the debug types and locations
+            #[cfg(debug_assertions)]
+            let debug_types = get_initial_hydration_debug_types();
+            #[cfg(not(debug_assertions))]
+            let debug_types = None;
+            #[cfg(debug_assertions)]
+            let debug_locations = get_initial_hydration_debug_locations();
+            #[cfg(not(debug_assertions))]
+            let debug_locations = None;
+
+            let server_data =
+                HTMLDataCursor::from_serialized(&hydration_data, debug_types, debug_locations);
             // If the server serialized an error into the root suspense boundary, throw it into the root scope
             if let Some(error) = server_data.error() {
                 virtual_dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
@@ -105,6 +125,12 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
             let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
             hydration_receiver = Some(rx);
+
+            #[cfg(feature = "mounted")]
+            {
+                // Flush any mounted events that were queued up while hydrating
+                websys_dom.flush_queued_mounted_events();
+            }
         }
         #[cfg(not(feature = "hydrate"))]
         {

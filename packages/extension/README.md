@@ -24,6 +24,11 @@ Converts a selection of html to a valid Dioxus component with all SVGs factored 
 
 Formats the current file as RSX.
 
+## Building this extension from source
+- make sure wasm-bindgen is installed to current version (cargo binstall wasm-bindgen-cli)
+- run `npm install`
+- run `npm run vsix`
+
 # Working with Dioxus:
 
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:

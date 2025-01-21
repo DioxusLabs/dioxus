@@ -17,21 +17,40 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     // /users/dioxus/dev/app/
     // is the root of
     // /users/dioxus/dev/app/assets/blah.css
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .map(PathBuf::from)
-        .unwrap();
+    let manifest_dir = dunce::canonicalize(
+        std::env::var("CARGO_MANIFEST_DIR")
+            .map(PathBuf::from)
+            .unwrap(),
+    )
+    .unwrap();
 
     // 1. the input file should be a pathbuf
     let input = PathBuf::from(raw);
 
     // 2. absolute path to the asset
-    manifest_dir
-        .join(raw.trim_start_matches('/'))
-        .canonicalize()
-        .map_err(|err| AssetParseError::AssetDoesntExist {
-            err,
+    let Ok(path) = std::path::absolute(manifest_dir.join(raw.trim_start_matches('/'))) else {
+        return Err(AssetParseError::InvalidPath {
             path: input.clone(),
-        })
+        });
+    };
+
+    // 3. Ensure the path exists
+    let Ok(path) = dunce::canonicalize(path) else {
+        return Err(AssetParseError::AssetDoesntExist {
+            path: input.clone(),
+        });
+    };
+
+    // 4. Ensure the path doesn't escape the crate dir
+    //
+    // - Note: since we called canonicalize on both paths, we can safely compare the parent dirs.
+    //   On windows, we can only compare the prefix if both paths are canonicalized (not just absolute)
+    //   https://github.com/rust-lang/rust/issues/42869
+    if path == manifest_dir || !path.starts_with(manifest_dir) {
+        return Err(AssetParseError::InvalidPath { path });
+    }
+
+    Ok(path)
 }
 
 fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
@@ -40,11 +59,10 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
 
     // If this is a folder, hash the folder contents
     if file_path.is_dir() {
-        let files =
-            std::fs::read_dir(file_path).map_err(|err| AssetParseError::AssetDoesntExist {
-                err,
-                path: file_path.to_path_buf(),
-            })?;
+        let files = std::fs::read_dir(file_path).map_err(|err| AssetParseError::IoError {
+            err,
+            path: file_path.to_path_buf(),
+        })?;
         for file in files.flatten() {
             let path = file.path();
             hash_file_contents(&path)?;
@@ -53,11 +71,10 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
     }
 
     // Otherwise, open the file to get its contents
-    let mut file =
-        std::fs::File::open(file_path).map_err(|err| AssetParseError::AssetDoesntExist {
-            err,
-            path: file_path.to_path_buf(),
-        })?;
+    let mut file = std::fs::File::open(file_path).map_err(|err| AssetParseError::IoError {
+        err,
+        path: file_path.to_path_buf(),
+    })?;
 
     // We add a hash to the end of the file so it is invalidated when the bundled version of the file changes
     // The hash includes the file contents, the options, and the version of manganis. From the macro, we just
@@ -78,18 +95,27 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
 
 #[derive(Debug)]
 pub(crate) enum AssetParseError {
-    AssetDoesntExist {
-        err: std::io::Error,
-        path: std::path::PathBuf,
-    },
+    AssetDoesntExist { path: PathBuf },
+    IoError { err: std::io::Error, path: PathBuf },
+    InvalidPath { path: PathBuf },
     FailedToReadAsset(std::io::Error),
 }
 
 impl std::fmt::Display for AssetParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AssetParseError::AssetDoesntExist { err, path } => {
-                write!(f, "Asset at {} doesn't exist: {}", path.display(), err)
+            AssetParseError::AssetDoesntExist { path } => {
+                write!(f, "Asset at {} doesn't exist", path.display())
+            }
+            AssetParseError::IoError { path, err } => {
+                write!(f, "Failed to read file: {}; {}", path.display(), err)
+            }
+            AssetParseError::InvalidPath { path } => {
+                write!(
+                    f,
+                    "Asset path {} is invalid. Make sure the asset exists within this crate.",
+                    path.display()
+                )
             }
             AssetParseError::FailedToReadAsset(err) => write!(f, "Failed to read asset: {}", err),
         }

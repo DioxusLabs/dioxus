@@ -96,14 +96,15 @@ impl ServeArgs {
     }
 
     pub(crate) fn is_interactive_tty(&self) -> bool {
-        use crossterm::tty::IsTty;
-        std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
+        use std::io::IsTerminal;
+        std::io::stdout().is_terminal() && self.interactive.unwrap_or(true)
     }
 
     pub(crate) fn should_proxy_build(&self) -> bool {
         match self.build_arguments.platform() {
             Platform::Server => true,
-            _ => self.build_arguments.fullstack,
+            // During SSG, just serve the static files instead of running the server
+            _ => self.build_arguments.fullstack && !self.build_arguments.ssg,
         }
     }
 }

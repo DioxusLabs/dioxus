@@ -57,7 +57,7 @@ pub(super) fn desktop_handler(
     }
 
     // todo: we want to move the custom assets onto a different protocol or something
-    if let Some(name) = request.uri().path().split('/').next() {
+    if let Some(name) = request.uri().path().split('/').nth(1) {
         if asset_handlers.has_handler(name) {
             let _name = name.to_string();
             return asset_handlers.handle_request(&_name, request, responder);
@@ -288,7 +288,7 @@ pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
         }
     }
 
-    use std::{io::Read, ptr::NonNull};
+    use std::ptr::NonNull;
 
     let ctx = ndk_context::android_context();
     let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.unwrap();

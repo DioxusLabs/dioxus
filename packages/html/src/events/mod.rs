@@ -26,10 +26,16 @@ macro_rules! impl_event {
             )?
             #[inline]
             pub fn $name<__Marker>(mut _f: impl ::dioxus_core::prelude::SuperInto<::dioxus_core::prelude::EventHandler<::dioxus_core::Event<$data>>, __Marker>) -> ::dioxus_core::Attribute {
-                let event_handler = _f.super_into();
+                // super into will make a closure that is owned by the current owner (either the child component or the parent component).
+                // We can't change that behavior in a minor version because it would cause issues with Components that accept event handlers.
+                // Instead we run super into with an owner that is moved into the listener closure so it will be dropped when the closure is dropped.
+                let owner = <::generational_box::UnsyncStorage as ::generational_box::AnyStorage>::owner();
+                let event_handler = ::dioxus_core::prelude::with_owner(owner.clone(), || _f.super_into());
                 ::dioxus_core::Attribute::new(
                     impl_event!(@name $name $($js_name)?),
                     ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
+                        // Force the owner to be moved into the event handler
+                        _ = &owner;
                         event_handler.call(e.map(|e| e.into()));
                     }),
                     None,

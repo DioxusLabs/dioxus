@@ -1,13 +1,15 @@
-use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
+use crate::{Arch, CliSettings};
 use crate::{Platform, Result};
 use anyhow::Context;
 use itertools::Itertools;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
+use once_cell::sync::OnceCell;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::process::Command;
 use toml_edit::Item;
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
@@ -17,7 +19,7 @@ pub(crate) struct DioxusCrate {
     pub(crate) package: NodeId,
     pub(crate) config: DioxusConfig,
     pub(crate) target: Target,
-    pub(crate) settings: CliSettings,
+    pub(crate) settings: Arc<CliSettings>,
 }
 
 pub(crate) static PROFILE_WASM: &str = "wasm-dev";
@@ -45,20 +47,63 @@ impl DioxusCrate {
             TargetKind::Bin
         };
 
+        let main_package = &krates[package];
+
         let target_name = target
             .example
             .clone()
             .or(target.bin.clone())
+            .or_else(|| {
+                if let Some(default_run) = &main_package.default_run {
+                    return Some(default_run.to_string());
+                }
+
+                let bin_count = main_package
+                    .targets
+                    .iter()
+                    .filter(|x| x.kind.contains(&target_kind))
+                    .count();
+                if bin_count != 1 {
+                    return None;
+                }
+
+                main_package.targets.iter().find_map(|x| {
+                    if x.kind.contains(&target_kind) {
+                        Some(x.name.clone())
+                    } else {
+                        None
+                    }
+                })
+            })
             .unwrap_or(package_name);
 
-        let main_package = &krates[package];
         let target = main_package
             .targets
             .iter()
             .find(|target| {
                 target_name == target.name.as_str() && target.kind.contains(&target_kind)
             })
-            .with_context(|| format!("Failed to find target {target_name}"))?
+            .with_context(|| {
+                let target_of_kind = |kind|-> String {
+                    let filtered_packages = main_package
+                .targets
+                .iter()
+                .filter_map(|target| {
+                    target.kind.contains(kind).then_some(target.name.as_str())
+                }).collect::<Vec<_>>();
+                filtered_packages.join(", ")};
+                if let Some(example) = &target.example {
+                    let examples = target_of_kind(&TargetKind::Example);
+                    format!("Failed to find example {example}. \nAvailable examples are:\n{}", examples)
+                } else if let Some(bin) = &target.bin {
+                    let binaries = target_of_kind(&TargetKind::Bin);
+                    format!("Failed to find binary {bin}. \nAvailable binaries are:\n{}", binaries)
+                } else {
+                    format!("Failed to find target {target_name}. \nIt looks like you are trying to build dioxus in a library crate. \
+                    You either need to run dx from inside a binary crate or build a specific example with the `--example` flag. \
+                    Available examples are:\n{}", target_of_kind(&TargetKind::Example))
+                }
+            })?
             .clone();
 
         let settings = CliSettings::load();
@@ -72,17 +117,28 @@ impl DioxusCrate {
         })
     }
 
-    /// Compose an asset directory. Represents the typical "public" directory
-    /// with publicly available resources (configurable in the `Dioxus.toml`).
-    pub(crate) fn legacy_asset_dir(&self) -> PathBuf {
-        self.crate_dir().join(&self.config.application.asset_dir)
+    /// The asset dir we used to support before manganis became the default.
+    /// This generally was just a folder in your Dioxus.toml called "assets" or "public" where users
+    /// would store their assets.
+    ///
+    /// With manganis you now use `asset!()` and we pick it up automatically.
+    pub(crate) fn legacy_asset_dir(&self) -> Option<PathBuf> {
+        self.config
+            .application
+            .asset_dir
+            .clone()
+            .map(|dir| self.crate_dir().join(dir))
     }
 
     /// Get the list of files in the "legacy" asset directory
     pub(crate) fn legacy_asset_dir_files(&self) -> Vec<PathBuf> {
         let mut files = vec![];
 
-        let Ok(read_dir) = self.legacy_asset_dir().read_dir() else {
+        let Some(legacy_asset_dir) = self.legacy_asset_dir() else {
+            return files;
+        };
+
+        let Ok(read_dir) = legacy_asset_dir.read_dir() else {
             return files;
         };
 
@@ -93,10 +149,30 @@ impl DioxusCrate {
         files
     }
 
+    /// Get the directory where this app can write to for this session that's guaranteed to be stable
+    /// for the same app. This is useful for emitting state like window position and size.
+    ///
+    /// The directory is specific for this app and might be
+    pub(crate) fn session_cache_dir(&self) -> PathBuf {
+        self.internal_out_dir()
+            .join(self.executable_name())
+            .join("session-cache")
+    }
+
+    /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
+    /// We don't support workspaces yet since that would cause a collision of bundles per project.
+    pub(crate) fn crate_out_dir(&self) -> Option<PathBuf> {
+        self.config
+            .application
+            .out_dir
+            .as_ref()
+            .map(|out_dir| self.crate_dir().join(out_dir))
+    }
+
     /// Compose an out directory. Represents the typical "dist" directory that
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
-    fn out_dir(&self) -> PathBuf {
+    fn internal_out_dir(&self) -> PathBuf {
         let dir = self.workspace_dir().join("target").join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -110,7 +186,7 @@ impl DioxusCrate {
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
     pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
-        self.out_dir()
+        self.internal_out_dir()
             .join(self.executable_name())
             .join(if release { "release" } else { "debug" })
             .join(platform.build_folder_name())
@@ -121,7 +197,7 @@ impl DioxusCrate {
     /// target/dx/bundle/app/blah.exe
     /// target/dx/bundle/app/public/
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
-        self.out_dir()
+        self.internal_out_dir()
             .join(self.executable_name())
             .join("bundle")
             .join(platform.build_folder_name())
@@ -369,7 +445,7 @@ impl DioxusCrate {
         for path in self.default_ignore_list() {
             ignore_builder
                 .add_line(None, path)
-                .expect("failed to add path to file excluder");
+                .expect("failed to add path to file excluded");
         }
 
         ignore_builder.build().unwrap()
@@ -490,7 +566,7 @@ impl DioxusCrate {
         for path in self.default_ignore_list() {
             ignore_builder
                 .add_line(None, path)
-                .expect("failed to add path to file excluder");
+                .expect("failed to add path to file excluded");
         }
         ignore_builder.build().unwrap()
     }
@@ -552,19 +628,38 @@ impl DioxusCrate {
         krates
     }
 
+    /// Attempt to retrieve the path to ADB
+    pub(crate) fn android_adb() -> PathBuf {
+        static PATH: once_cell::sync::Lazy<PathBuf> = once_cell::sync::Lazy::new(|| {
+            let Some(sdk) = DioxusCrate::android_sdk() else {
+                return PathBuf::from("adb");
+            };
+
+            let tools = sdk.join("platform-tools");
+
+            if tools.join("adb").exists() {
+                return tools.join("adb");
+            }
+
+            if tools.join("adb.exe").exists() {
+                return tools.join("adb.exe");
+            }
+
+            PathBuf::from("adb")
+        });
+
+        PATH.clone()
+    }
+
+    pub(crate) fn android_sdk() -> Option<PathBuf> {
+        var_or_debug("ANDROID_SDK_ROOT")
+            .or_else(|| var_or_debug("ANDROID_SDK"))
+            .or_else(|| var_or_debug("ANDROID_HOME"))
+    }
+
     pub(crate) fn android_ndk(&self) -> Option<PathBuf> {
         // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         static PATH: once_cell::sync::Lazy<Option<PathBuf>> = once_cell::sync::Lazy::new(|| {
-            use std::env::var;
-            use tracing::debug;
-
-            fn var_or_debug(name: &str) -> Option<PathBuf> {
-                var(name)
-                    .inspect_err(|_| debug!("{name} not set"))
-                    .ok()
-                    .map(PathBuf::from)
-            }
-
             // attempt to autodetect the ndk path from env vars (usually set by the shell)
             let auto_detected_ndk =
                 var_or_debug("NDK_HOME").or_else(|| var_or_debug("ANDROID_NDK_HOME"));
@@ -589,6 +684,48 @@ impl DioxusCrate {
         });
 
         PATH.clone()
+    }
+
+    pub(crate) async fn autodetect_android_arch() -> Option<Arch> {
+        // Try auto detecting arch through adb.
+        static AUTO_ARCH: OnceCell<Option<Arch>> = OnceCell::new();
+
+        match AUTO_ARCH.get() {
+            Some(a) => *a,
+            None => {
+                // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
+                let output = Command::new("adb")
+                    .arg("shell")
+                    .arg("uname")
+                    .arg("-m")
+                    .output()
+                    .await;
+
+                let out = match output {
+                    Ok(o) => o,
+                    Err(e) => {
+                        tracing::debug!("ADB command failed: {:?}", e);
+                        return None;
+                    }
+                };
+
+                // Parse ADB output
+                let Ok(out) = String::from_utf8(out.stdout) else {
+                    tracing::debug!("ADB returned unexpected data.");
+                    return None;
+                };
+                let trimmed = out.trim().to_string();
+                tracing::trace!("ADB Returned: `{trimmed:?}`");
+
+                // Set the cell
+                let arch = Arch::try_from(trimmed).ok();
+                AUTO_ARCH
+                    .set(arch)
+                    .expect("the cell should have been checked empty by the match condition");
+
+                arch
+            }
+        }
     }
 
     pub(crate) fn mobile_org(&self) -> String {
@@ -686,8 +823,26 @@ fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId>
 
     let kid = closest_parent
         .map(|(id, _)| id)
-        .context("Failed to find current package")?;
+        .with_context(|| {
+            let bin_targets = krates.workspace_members().filter_map(|krate|match krate {
+                krates::Node::Krate { krate, .. } if krate.targets.iter().any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))=> {
+                    Some(format!("- {}", krate.name))
+                }
+                _ => None
+            }).collect::<Vec<_>>();
+            format!("Failed to find binary package to build.\nYou need to either run dx from inside a binary crate or specify a binary package to build with the `--package` flag. Try building again with one of the binary packages in the workspace:\n{}", bin_targets.join("\n"))
+        })?;
 
     let package = krates.nid_for_kid(kid).unwrap();
     Ok(package)
+}
+
+fn var_or_debug(name: &str) -> Option<PathBuf> {
+    use std::env::var;
+    use tracing::debug;
+
+    var(name)
+        .inspect_err(|_| debug!("{name} not set"))
+        .ok()
+        .map(PathBuf::from)
 }

@@ -16,7 +16,8 @@ pub struct MetaProps {
 }
 
 impl MetaProps {
-    pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
+    /// Get all the attributes for the meta tag
+    pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
         if let Some(property) = &self.property {
             attributes.push(("property", property.clone()));

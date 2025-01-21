@@ -163,6 +163,7 @@ impl BuildRequest {
         let mut stdout = stdout.lines();
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
+        let mut emitting_error = false;
 
         loop {
             use cargo_metadata::Message;
@@ -173,15 +174,27 @@ impl BuildRequest {
                 else => break,
             };
 
-            let mut deserializer = serde_json::Deserializer::from_str(line.trim());
-            deserializer.disable_recursion_limit();
-
-            let message =
-                Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));
+            let Some(Ok(message)) = Message::parse_stream(std::io::Cursor::new(line)).next() else {
+                continue;
+            };
 
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
-                Message::TextLine(line) => self.status_build_message(line),
+                Message::TextLine(line) => {
+                    // For whatever reason, if there's an error while building, we still receive the TextLine
+                    // instead of an "error" message. However, the following messages *also* tend to
+                    // be the error message, and don't start with "error:". So we'll check if we've already
+                    // emitted an error message and if so, we'll emit all following messages as errors too.
+                    if line.trim_start().starts_with("error:") {
+                        emitting_error = true;
+                    }
+
+                    if emitting_error {
+                        self.status_build_error(line);
+                    } else {
+                        self.status_build_message(line)
+                    }
+                }
                 Message::CompilerMessage(msg) => self.status_build_diagnostic(msg),
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
@@ -197,7 +210,7 @@ impl BuildRequest {
                 Message::BuildFinished(finished) => {
                     if !finished.success {
                         return Err(anyhow::anyhow!(
-                            "Cargo build failed, signaled by the compiler"
+                            "Cargo build failed, signaled by the compiler. Toggle tracing mode (press `t`) for more information."
                         )
                         .into());
                     }
@@ -207,7 +220,7 @@ impl BuildRequest {
         }
 
         if output_location.is_none() {
-            tracing::error!("Cargo build failed - no output location");
+            tracing::error!("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.");
         }
 
         let out_location = output_location.context("Build did not return an executable")?;

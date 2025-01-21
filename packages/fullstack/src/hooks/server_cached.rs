@@ -20,20 +20,23 @@ use serde::{de::DeserializeOwned, Serialize};
 ///    unimplemented!()
 /// }
 /// ```
+#[track_caller]
 pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
     server_fn: impl Fn() -> O,
 ) -> O {
-    use_hook(|| server_cached(server_fn))
+    let location = std::panic::Location::caller();
+    use_hook(|| server_cached(server_fn, location))
 }
 
 pub(crate) fn server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
     value: impl FnOnce() -> O,
+    #[allow(unused)] location: &'static std::panic::Location<'static>,
 ) -> O {
     #[cfg(feature = "server")]
     {
         let serialize = crate::html_storage::serialize_context();
         let data = value();
-        serialize.push(&data);
+        serialize.push(&data, location);
         data
     }
     #[cfg(all(not(feature = "server"), feature = "web"))]

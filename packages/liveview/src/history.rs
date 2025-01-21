@@ -342,6 +342,10 @@ impl History for LiveviewHistory {
         let mut updater_callback = self.updater_callback.write().unwrap();
         *updater_callback = callback;
     }
+
+    fn include_prevent_default(&self) -> bool {
+        true
+    }
 }
 
 mod routes {

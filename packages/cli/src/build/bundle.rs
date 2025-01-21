@@ -1,3 +1,6 @@
+use super::prerender::pre_render_static_routes;
+use super::templates::InfoPlistData;
+use crate::wasm_bindgen::WasmBindgen;
 use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
@@ -8,11 +11,9 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
-use wasm_bindgen_cli_support::Bindgen;
-
-use super::templates::InfoPlistData;
 
 /// The end result of a build.
 ///
@@ -284,6 +285,7 @@ impl AppBundle {
             .context("Failed to write assets")?;
         bundle.write_metadata().await?;
         bundle.optimize().await?;
+        bundle.pre_render_ssg_routes().await?;
         bundle
             .assemble()
             .await
@@ -395,7 +397,8 @@ impl AppBundle {
         ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
             Box::pin(async move {
                 // If this asset is in the manifest, we don't need to remove it
-                if bundled_output_paths.contains(path.canonicalize()?.as_path()) {
+                let canon_path = dunce::canonicalize(path)?;
+                if bundled_output_paths.contains(canon_path.as_path()) {
                     return Ok(());
                 }
                 // Otherwise, if it is a directory, we need to walk it and remove child files
@@ -415,6 +418,8 @@ impl AppBundle {
                 Ok(())
             })
         }
+
+        tracing::debug!("Removing old assets");
         remove_old_assets(&asset_dir, &bundled_output_paths).await?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
@@ -437,7 +442,8 @@ impl AppBundle {
         }
 
         let asset_count = assets_to_transfer.len();
-        let current_asset = AtomicUsize::new(0);
+        let started_processing = AtomicUsize::new(0);
+        let copied = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
@@ -446,20 +452,18 @@ impl AppBundle {
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
-                    tracing::trace!(
-                        "Starting asset copy {current}/{asset_count} from {from:?}",
-                        current = current_asset.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-                    );
+                    let processing = started_processing.fetch_add(1, Ordering::SeqCst);
+                    tracing::trace!("Starting asset copy {processing}/{asset_count} from {from:?}");
 
                     let res = process_file_to(options, from, to);
-
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
 
+                    let finished = copied.fetch_add(1, Ordering::SeqCst);
                     BuildRequest::status_copied_asset(
                         &progress,
-                        current_asset.fetch_add(0, std::sync::atomic::Ordering::SeqCst),
+                        finished,
                         asset_count,
                         from.to_path_buf(),
                     );
@@ -556,11 +560,6 @@ impl AppBundle {
                 })
                 .await
                 .unwrap()?;
-
-                // Run SSG and cache static routes
-                if self.build.build.ssg {
-                    self.run_ssg().await?;
-                }
             }
             Platform::MacOS => {}
             Platform::Windows => {}
@@ -610,22 +609,26 @@ impl AppBundle {
             && !self.build.build.release;
 
         let start = std::time::Instant::now();
-        tokio::task::spawn_blocking(move || {
-            Bindgen::new()
-                .input_path(&input_path)
-                .web(true)
-                .unwrap()
-                .debug(keep_debug)
-                .demangle(keep_debug)
-                .keep_debug(keep_debug)
-                .remove_name_section(!keep_debug)
-                .remove_producers_section(!keep_debug)
-                .out_name(&name)
-                .generate(&bindgen_outdir)
-        })
-        .await
-        .context("Wasm-bindgen crashed while optimizing the wasm binary")?
-        .context("Failed to generate wasm-bindgen bindings")?;
+
+        let bindgen_version = self
+            .build
+            .krate
+            .wasm_bindgen_version()
+            .expect("this should have been checked by tool verification");
+
+        WasmBindgen::new(&bindgen_version)
+            .input_path(&input_path)
+            .target("web")
+            .debug(keep_debug)
+            .demangle(keep_debug)
+            .keep_debug(keep_debug)
+            .remove_name_section(!keep_debug)
+            .remove_producers_section(!keep_debug)
+            .out_name(&name)
+            .out_dir(&bindgen_outdir)
+            .run()
+            .await
+            .context("Failed to generate wasm-bindgen bindings")?;
 
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 
@@ -679,70 +682,18 @@ impl AppBundle {
         Ok(())
     }
 
-    async fn run_ssg(&self) -> anyhow::Result<()> {
-        use futures_util::stream::FuturesUnordered;
-        use futures_util::StreamExt;
-        use tokio::process::Command;
-
-        const PORT: u16 = 9999;
-
-        tracing::info!("Running SSG");
-
-        // Run the server executable
-        let _child = Command::new(
-            self.server_exe()
+    async fn pre_render_ssg_routes(&self) -> Result<()> {
+        // Run SSG and cache static routes
+        if !self.build.build.ssg {
+            return Ok(());
+        }
+        self.build.status_prerendering_routes();
+        pre_render_static_routes(
+            &self
+                .server_exe()
                 .context("Failed to find server executable")?,
         )
-        .env(dioxus_cli_config::SERVER_PORT_ENV, PORT.to_string())
-        .env(dioxus_cli_config::SERVER_IP_ENV, "127.0.0.1")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
-
-        // Wait a second for the server to start
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        // Get the routes from the `/static_routes` endpoint
-        let mut routes = reqwest::Client::builder()
-            .build()?
-            .post(format!("http://127.0.0.1:{PORT}/api/static_routes"))
-            .send()
-            .await
-            .context("Failed to get static routes from server")?
-            .text()
-            .await
-            .map(|raw| serde_json::from_str::<Vec<String>>(&raw).unwrap())
-            .inspect(|text| tracing::debug!("Got static routes: {text:?}"))
-            .context("Failed to parse static routes from server")?
-            .into_iter()
-            .map(|line| async move {
-                tracing::info!("SSG: {line}");
-                reqwest::Client::builder()
-                    .build()?
-                    .get(format!("http://127.0.0.1:{PORT}{line}"))
-                    .header("Accept", "text/html")
-                    .send()
-                    .await
-            })
-            .collect::<FuturesUnordered<_>>();
-
-        while let Some(route) = routes.next().await {
-            match route {
-                Ok(route) => tracing::debug!("ssg success: {route:?}"),
-                Err(err) => tracing::error!("ssg error: {err:?}"),
-            }
-        }
-
-        // Wait a second for the cache to be written by the server
-        tracing::info!("Waiting a moment for isrg to propagate...");
-
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-
-        tracing::info!("SSG complete");
-
-        drop(_child);
-
+        .await?;
         Ok(())
     }
 
@@ -779,23 +730,7 @@ impl AppBundle {
         if let Platform::Android = self.build.build.platform() {
             self.build.status_running_gradle();
 
-            // make sure we can execute the gradlew script
-            #[cfg(unix)]
-            {
-                use std::os::unix::prelude::PermissionsExt;
-                std::fs::set_permissions(
-                    self.build.root_dir().join("gradlew"),
-                    std::fs::Permissions::from_mode(0o755),
-                )?;
-            }
-
-            let gradle_exec_name = match cfg!(windows) {
-                true => "gradlew.bat",
-                false => "gradlew",
-            };
-            let gradle_exec = self.build.root_dir().join(gradle_exec_name);
-
-            let output = Command::new(gradle_exec)
+            let output = Command::new(self.gradle_exe()?)
                 .arg("assembleDebug")
                 .current_dir(self.build.root_dir())
                 .stderr(std::process::Stdio::piped())
@@ -809,6 +744,62 @@ impl AppBundle {
         }
 
         Ok(())
+    }
+
+    /// Run bundleRelease and return the path to the `.aab` file
+    ///
+    /// https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and
+    pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
+        let output = Command::new(self.gradle_exe()?)
+            .arg("bundleRelease")
+            .current_dir(self.build.root_dir())
+            .output()
+            .await
+            .context("Failed to run gradle bundleRelease")?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("Failed to bundleRelease: {output:?}").into());
+        }
+
+        let app_release = self
+            .build
+            .root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("bundle")
+            .join("release");
+
+        // Rename it to Name-arch.aab
+        let from = app_release.join("app-release.aab");
+        let to = app_release.join(format!(
+            "{}-{}.aab",
+            self.build.krate.bundled_app_name(),
+            self.build.build.target_args.arch()
+        ));
+
+        std::fs::rename(from, &to).context("Failed to rename aab")?;
+
+        Ok(to)
+    }
+
+    fn gradle_exe(&self) -> Result<PathBuf> {
+        // make sure we can execute the gradlew script
+        #[cfg(unix)]
+        {
+            use std::os::unix::prelude::PermissionsExt;
+            std::fs::set_permissions(
+                self.build.root_dir().join("gradlew"),
+                std::fs::Permissions::from_mode(0o755),
+            )?;
+        }
+
+        let gradle_exec_name = match cfg!(windows) {
+            true => "gradlew.bat",
+            false => "gradlew",
+        };
+
+        Ok(self.build.root_dir().join(gradle_exec_name))
     }
 
     pub(crate) fn apk_path(&self) -> PathBuf {
