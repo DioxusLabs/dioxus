@@ -29,7 +29,7 @@ use tao::platform::ios::WindowExtIOS;
 ///
 /// This function will panic if it is called outside of the context of a Dioxus App.
 pub fn window() -> DesktopContext {
-    dioxus_core::prelude::consume_context()
+    dioxus_core::prelude::consume_context::<WeakDesktopContext>().upgrade().unwrap()
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.
@@ -111,7 +111,7 @@ impl DesktopService {
 
         let cx = window.dom.in_runtime(|| {
             ScopeId::ROOT
-                .consume_context::<Rc<DesktopService>>()
+                .consume_context::<WeakDesktopContext>()
                 .unwrap()
         });
 
@@ -122,7 +122,7 @@ impl DesktopService {
 
         self.shared.pending_webviews.borrow_mut().push(window);
 
-        Rc::downgrade(&cx)
+        cx
     }
 
     /// trigger the drag-window event
