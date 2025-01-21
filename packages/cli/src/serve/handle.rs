@@ -176,8 +176,6 @@ impl AppHandle {
     ///
     /// Also wipes away the entropy executables if they exist.
     pub(crate) async fn cleanup(&mut self) {
-        tracing::debug!("Cleaning up process");
-
         // Soft-kill the process by sending a sigkill, allowing the process to clean up
         self.soft_kill().await;
 

@@ -233,23 +233,25 @@ impl App {
         if let Some(webview) = self.webviews.get(&id) {
             use wry::Rect;
 
-            webview
-                .desktop_context
-                .webview
-                .set_bounds(Rect {
-                    position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
-                    size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
-                        size.width,
-                        size.height,
-                    )),
-                })
-                .unwrap();
+            _ = webview.desktop_context.webview.set_bounds(Rect {
+                position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
+                size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
+                    size.width,
+                    size.height,
+                )),
+            });
         }
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let virtual_dom = self.unmounted_dom.take().unwrap();
-        let mut cfg = self.cfg.take().unwrap();
+        let virtual_dom = self
+            .unmounted_dom
+            .take()
+            .expect("Virtualdom should be set before initialization");
+        let mut cfg = self
+            .cfg
+            .take()
+            .expect("Config should be set before initialization");
 
         self.is_visible_before_start = cfg.window.window.visible;
         cfg.window = cfg.window.with_visible(false);
@@ -268,9 +270,10 @@ impl App {
     pub fn handle_browser_open(&mut self, msg: IpcMessage) {
         if let Some(temp) = msg.params().as_object() {
             if temp.contains_key("href") {
-                let open = webbrowser::open(temp["href"].as_str().unwrap());
-                if let Err(e) = open {
-                    tracing::error!("Open Browser error: {:?}", e);
+                if let Some(href) = temp.get("href").and_then(|v| v.as_str()) {
+                    if let Err(e) = webbrowser::open(href) {
+                        tracing::error!("Open Browser error: {:?}", e);
+                    }
                 }
             }
         }
@@ -362,7 +365,9 @@ impl App {
 
         let data = Rc::new(PlatformEventData::new(as_any));
 
-        let view = self.webviews.get_mut(&window).unwrap();
+        let Some(view) = self.webviews.get_mut(&window) else {
+            return;
+        };
 
         let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
 
@@ -452,8 +457,14 @@ impl App {
         if let Some(webview) = self.webviews.values().next() {
             let window = &webview.desktop_context.window;
 
-            let monitor = window.current_monitor().unwrap();
-            let position = window.outer_position().unwrap();
+            let Some(monitor) = window.current_monitor() else {
+                return;
+            };
+
+            let Ok(position) = window.outer_position() else {
+                return;
+            };
+
             let size = window.outer_size();
 
             let x = position.x;
@@ -468,12 +479,16 @@ impl App {
                 _ => 0,
             };
 
+            let Some(monitor_name) = monitor.name() else {
+                return;
+            };
+
             let state = PreservedWindowState {
                 x,
                 y,
                 width: size.width.max(200),
                 height: size.height.saturating_sub(adjustment).max(200),
-                monitor: monitor.name().unwrap().to_string(),
+                monitor: monitor_name.to_string(),
             };
 
             // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
