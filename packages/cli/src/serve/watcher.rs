@@ -1,6 +1,6 @@
 use super::detect::is_wsl;
 use super::update::ServeUpdate;
-use crate::dioxus_crate::DioxusCrate;
+use crate::{cli::serve::ServeArgs, dioxus_crate::DioxusCrate};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use ignore::gitignore::Gitignore;
@@ -23,11 +23,11 @@ pub(crate) struct Watcher {
 }
 
 impl Watcher {
-    pub(crate) fn start(krate: &DioxusCrate) -> Self {
+    pub(crate) fn start(krate: &DioxusCrate, serve: &ServeArgs) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut watcher = Self {
-            watcher: create_notify_watcher(krate, tx.clone()),
+            watcher: create_notify_watcher(serve, tx.clone()),
             _tx: tx,
             krate: krate.clone(),
             rx,
@@ -140,7 +140,7 @@ fn handle_notify_error(err: notify::Error) {
 }
 
 fn create_notify_watcher(
-    krate: &DioxusCrate,
+    serve: &ServeArgs,
     tx: UnboundedSender<notify::Event>,
 ) -> Box<dyn NotifyWatcher> {
     // Build the event handler for notify.
@@ -174,7 +174,7 @@ fn create_notify_watcher(
         return Box::new(notify::recommended_watcher(handler).expect(NOTIFY_ERROR_MSG));
     }
 
-    let poll_interval = Duration::from_secs(krate.settings.get_wsl_file_poll_interval() as u64);
+    let poll_interval = Duration::from_secs(serve.wsl_file_poll_interval.unwrap_or(2) as u64);
 
     Box::new(
         notify::PollWatcher::new(handler, Config::default().with_poll_interval(poll_interval))

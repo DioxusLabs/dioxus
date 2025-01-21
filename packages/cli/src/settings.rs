@@ -21,50 +21,14 @@ pub(crate) struct CliSettings {
     /// Describes whether desktop apps in development will be pinned always-on-top.
     pub(crate) always_on_top: Option<bool>,
     /// Describes the interval in seconds that the CLI should poll for file changes on WSL.
+    #[serde(default = "default_wsl_file_poll_interval")]
     pub(crate) wsl_file_poll_interval: Option<u16>,
 }
 
 impl CliSettings {
-    pub(crate) fn should_hot_reload(&self) -> bool {
-        self.always_hot_reload.unwrap_or(true)
-    }
-
-    pub(crate) fn should_open_browser(&self) -> bool {
-        self.always_open_browser.unwrap_or(true)
-    }
-
-    pub(crate) fn get_always_on_top(&self) -> bool {
-        self.always_on_top.unwrap_or(true)
-    }
-
-    pub(crate) fn get_wsl_file_poll_interval(&self) -> u16 {
-        self.wsl_file_poll_interval.unwrap_or(2)
-    }
-
     /// Load the settings from the local, global, or default config in that order
-    pub(crate) fn load(settings_override: Option<Self>) -> Self {
-        let mut settings = Self::from_global().unwrap_or_default();
-
-        // Handle overriding settings from command args.
-        if let Some(settings_override) = settings_override {
-            if settings_override.always_hot_reload.is_some() {
-                settings.always_hot_reload = settings_override.always_hot_reload
-            }
-
-            if settings_override.always_open_browser.is_some() {
-                settings.always_open_browser = settings_override.always_open_browser;
-            }
-
-            if settings_override.always_on_top.is_some() {
-                settings.always_on_top = settings_override.always_on_top;
-            }
-
-            if settings_override.wsl_file_poll_interval.is_some() {
-                settings.wsl_file_poll_interval = settings_override.wsl_file_poll_interval;
-            }
-        }
-
-        settings
+    pub(crate) fn load() -> Self {
+        Self::from_global().unwrap_or_default()
     }
 
     /// Get the current settings structure from global.
@@ -92,18 +56,9 @@ impl CliSettings {
         data
     }
 
-    /// Modify the settings toml file
-    pub(crate) fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<()> {
-        let mut settings = Self::load(None);
-        with(&mut settings);
-        settings.save()?;
-
-        Ok(())
-    }
-
     /// Save the current structure to the global settings toml.
     /// This does not save to project-level settings.
-    fn save(self) -> Result<Self> {
+    pub(crate) fn save(self) -> Result<Self> {
         let path = Self::get_settings_path().ok_or_else(|| {
             error!(dx_src = ?TraceSrc::Dev, "failed to get settings path");
             anyhow::anyhow!("failed to get settings path")
@@ -139,7 +94,7 @@ impl CliSettings {
     }
 
     /// Get the path to the settings toml file.
-    fn get_settings_path() -> Option<PathBuf> {
+    pub(crate) fn get_settings_path() -> Option<PathBuf> {
         let Some(path) = dirs::data_local_dir() else {
             warn!("failed to get local data directory, some config keys may be missing");
             return None;
@@ -147,4 +102,17 @@ impl CliSettings {
 
         Some(path.join(GLOBAL_SETTINGS_FILE_NAME))
     }
+
+    /// Modify the settings toml file
+    pub(crate) fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<()> {
+        let mut settings = Self::load();
+        with(&mut settings);
+        settings.save()?;
+
+        Ok(())
+    }
+}
+
+fn default_wsl_file_poll_interval() -> Option<u16> {
+    Some(2)
 }

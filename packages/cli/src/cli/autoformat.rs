@@ -68,7 +68,7 @@ impl Autoformat {
                     ..Default::default()
                 };
                 let dx_crate =
-                    DioxusCrate::new(&target_args, None).context("failed to parse crate graph")?;
+                    DioxusCrate::new(&target_args).context("failed to parse crate graph")?;
 
                 Cow::Owned(dx_crate.crate_dir())
             } else {

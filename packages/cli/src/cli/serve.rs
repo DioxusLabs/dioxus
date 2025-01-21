@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AddressArguments, BuildArgs, CliSettings, DioxusCrate, Platform};
+use crate::{AddressArguments, BuildArgs, DioxusCrate, Platform};
 
 /// Serve the project
 #[derive(Clone, Debug, Default, Parser)]
@@ -10,16 +10,16 @@ pub(crate) struct ServeArgs {
     pub(crate) address: AddressArguments,
 
     /// Open the app in the default browser [default: true - unless cli settings are set]
-    #[arg(long, num_args=0..=1)]
-    open: Option<bool>,
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
+    pub(crate) open: Option<bool>,
 
     /// Enable full hot reloading for the app [default: true - unless cli settings are set]
     #[clap(long, group = "release-incompatible")]
-    hot_reload: Option<bool>,
+    pub(crate) hot_reload: Option<bool>,
 
     /// Configure always-on-top for desktop apps [default: true - unless cli settings are set]
-    #[clap(long)]
-    always_on_top: Option<bool>,
+    #[clap(long, default_missing_value = "true")]
+    pub(crate) always_on_top: Option<bool>,
 
     /// Set cross-origin-policy to same-origin [default: false]
     #[clap(name = "cross-origin-policy")]
@@ -31,8 +31,8 @@ pub(crate) struct ServeArgs {
     pub(crate) args: Vec<String>,
 
     /// Sets the interval in seconds that the CLI will poll for file changes on WSL.
-    #[clap(long)]
-    wsl_file_poll_interval: Option<u16>,
+    #[clap(long, default_missing_value = "2")]
+    pub(crate) wsl_file_poll_interval: Option<u16>,
 
     /// Run the server in interactive mode
     #[arg(long, default_missing_value="true", num_args=0..=1, short = 'i')]
@@ -55,21 +55,40 @@ impl ServeArgs {
     }
 
     pub(crate) async fn load_krate(&mut self) -> Result<DioxusCrate> {
-        let override_settings = CliSettings {
-            always_hot_reload: self.hot_reload,
-            always_open_browser: self.open,
-            always_on_top: self.always_on_top,
-            wsl_file_poll_interval: self.wsl_file_poll_interval,
-        };
-
-        let krate = DioxusCrate::new(&self.build_arguments.target_args, Some(override_settings))?;
+        let krate = DioxusCrate::new(&self.build_arguments.target_args)?;
         self.resolve(&krate).await?;
         Ok(krate)
     }
 
     pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
+        // Enable hot reload.
+        if self.hot_reload.is_none() {
+            self.hot_reload = Some(krate.settings.always_hot_reload.unwrap_or(true));
+        }
+
+        // Open browser.
+        if self.open.is_none() {
+            self.open = Some(krate.settings.always_open_browser.unwrap_or_default());
+        }
+
+        // Set WSL file poll interval.
+        if self.wsl_file_poll_interval.is_none() {
+            self.wsl_file_poll_interval = Some(krate.settings.wsl_file_poll_interval.unwrap_or(2));
+        }
+
+        // Set always-on-top for desktop.
+        if self.always_on_top.is_none() {
+            self.always_on_top = Some(krate.settings.always_on_top.unwrap_or(true))
+        }
+
+        // Resolve the build arguments
         self.build_arguments.resolve(krate).await?;
+
         Ok(())
+    }
+
+    pub(crate) fn should_hotreload(&self) -> bool {
+        self.hot_reload.unwrap_or(true)
     }
 
     pub(crate) fn build_args(&self) -> BuildArgs {

@@ -68,7 +68,7 @@ impl BuildArgs {
         tracing::info!("Building project...");
 
         let krate =
-            DioxusCrate::new(&self.target_args, None).context("Failed to load Dioxus workspace")?;
+            DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 
         self.resolve(&krate).await?;
 
