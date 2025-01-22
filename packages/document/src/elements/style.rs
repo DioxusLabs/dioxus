@@ -20,6 +20,7 @@ impl StyleProps {
     /// Get all the attributes for the style tag
     pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(href) = &self.href {
             attributes.push(("href", href.clone()));
         }

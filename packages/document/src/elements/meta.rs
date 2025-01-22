@@ -19,6 +19,7 @@ impl MetaProps {
     /// Get all the attributes for the meta tag
     pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(property) = &self.property {
             attributes.push(("property", property.clone()));
         }
