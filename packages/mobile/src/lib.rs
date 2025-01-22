@@ -88,7 +88,27 @@ pub fn root() {
         platform_config,
     } = app;
 
+    // Set the env vars that rust code might expect, passed off to us by the android app
+    if cfg!(target_os = "android") && cfg!(debug_assertions) {
+        load_env_file_from_session_cache();
+    }
+
     dioxus_desktop::launch::launch(root, contexts, platform_config);
+}
+
+/// Load the env file from the session cache if we're in debug mode and on android
+///
+/// This is a slightly hacky way of being able to use std::env::var code in android apps without
+/// going through their custom java-based system.
+fn load_env_file_from_session_cache() {
+    let env_file = dioxus_cli_config::android_session_cache_dir().join(".env");
+    if let Some(env_file) = std::fs::read_to_string(&env_file).ok() {
+        for line in env_file.lines() {
+            if let Some((key, value)) = line.trim().split_once('=') {
+                std::env::set_var(key, value);
+            }
+        }
+    }
 }
 
 /// Expose the `Java_dev_dioxus_main_WryActivity_create` function to the JNI layer.

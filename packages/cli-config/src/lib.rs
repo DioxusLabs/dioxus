@@ -100,10 +100,8 @@ macro_rules! read_env_config {
 /// For reference, the devserver typically lives on `127.0.0.1:8080` and serves the devserver websocket
 /// on `127.0.0.1:8080/_dioxus`.
 pub fn devserver_raw_addr() -> Option<SocketAddr> {
-    std::env::var(DEVSERVER_RAW_ADDR_ENV)
-        .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
-        .parse()
-        .ok()
+    let addr = std::env::var(DEVSERVER_RAW_ADDR_ENV).ok()?;
+    addr.parse().ok()
 }
 
 /// Get the address of the devserver for use over a websocket
@@ -288,5 +286,14 @@ pub fn out_dir() -> Option<PathBuf> {
 ///
 /// This is designed with desktop executables in mind.
 pub fn session_cache_dir() -> Option<PathBuf> {
+    if cfg!(target_os = "android") {
+        return Some(android_session_cache_dir());
+    }
+
     std::env::var(SESSION_CACHE_DIR).ok().map(PathBuf::from)
+}
+
+/// The session cache directory for android
+pub fn android_session_cache_dir() -> PathBuf {
+    PathBuf::from("/data/local/tmp/dx/")
 }
