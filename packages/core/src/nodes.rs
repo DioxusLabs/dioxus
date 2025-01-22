@@ -378,17 +378,39 @@ pub struct Template {
 
 impl std::hash::Hash for Template {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::ptr::hash(self.roots as *const _, state);
-        std::ptr::hash(self.node_paths as *const _, state);
-        std::ptr::hash(self.attr_paths as *const _, state);
+        // If debug assertions are enabled, rust is probably built with a lower
+        // optimization level which will not merge identical statics. If it is,
+        // then we hash by contents
+        if cfg!(debug_assertions) {
+            self.roots.hash(state);
+            self.node_paths.hash(state);
+            self.attr_paths.hash(state);
+        }
+        // Otherwise, we hash by pointers
+        else {
+            std::ptr::hash(self.roots as *const _, state);
+            std::ptr::hash(self.node_paths as *const _, state);
+            std::ptr::hash(self.attr_paths as *const _, state);
+        }
     }
 }
 
 impl PartialEq for Template {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.roots as *const _, other.roots as *const _)
-            && std::ptr::eq(self.node_paths as *const _, other.node_paths as *const _)
-            && std::ptr::eq(self.attr_paths as *const _, other.attr_paths as *const _)
+        // If debug assertions are enabled, rust is probably built with a lower
+        // optimization level which will not merge identical statics. If it is,
+        // then we compare by contents
+        if cfg!(debug_assertions) {
+            self.roots == other.roots
+                && self.node_paths == other.node_paths
+                && self.attr_paths == other.attr_paths
+        }
+        // Otherwise, we compare by pointers
+        else {
+            std::ptr::eq(self.roots as *const _, other.roots as *const _)
+                && std::ptr::eq(self.node_paths as *const _, other.node_paths as *const _)
+                && std::ptr::eq(self.attr_paths as *const _, other.attr_paths as *const _)
+        }
     }
 }
 
