@@ -438,6 +438,13 @@ mod test {
     const VERSION: &str = "0.2.99";
 
     /// Test the github installer.
+    #[cfg(any(
+        all(
+            any(target_os = "windows", target_os = "linux", target_os = "macos"),
+            target_arch = "x86_64"
+        ),
+        all(any(target_os = "linux", target_os = "macos"), target_arch = "aarch64"),
+    ))]
     #[tokio::test]
     async fn test_github_install() {
         let binary = WasmBindgen::new(VERSION);
