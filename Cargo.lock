@@ -4029,6 +4029,7 @@ dependencies = [
 name = "dioxus-mobile"
 version = "0.6.1"
 dependencies = [
+ "dioxus-cli-config",
  "dioxus-desktop",
  "dioxus-lib",
  "jni",
@@ -6291,9 +6292,9 @@ dependencies = [
 
 [[package]]
 name = "hstr"
-version = "0.2.12"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dae404c0c5d4e95d4858876ab02eecd6a196bb8caa42050dfa809938833fc412"
+checksum = "63d6824358c0fd9a68bb23999ed2ef76c84f79408a26ef7ae53d5f370c94ad36"
 dependencies = [
  "hashbrown 0.14.5",
  "new_debug_unreachable",

@@ -128,9 +128,31 @@ pub extern "C" fn JNI_OnLoad(
             panic!("Failed to find main symbol");
         }
 
+        // Set the env vars that rust code might expect, passed off to us by the android app
+        // Doing this before main emulates the behavior of a regular executable
+        if cfg!(target_os = "android") && cfg!(debug_assertions) {
+            load_env_file_from_session_cache();
+        }
+
         let main_fn: extern "C" fn() = std::mem::transmute(main_fn_ptr);
         main_fn();
     };
 
     jni::sys::JNI_VERSION_1_6
+}
+
+/// Load the env file from the session cache if we're in debug mode and on android
+///
+/// This is a slightly hacky way of being able to use std::env::var code in android apps without
+/// going through their custom java-based system.
+#[cfg(target_os = "android")]
+fn load_env_file_from_session_cache() {
+    let env_file = dioxus_cli_config::android_session_cache_dir().join(".env");
+    if let Some(env_file) = std::fs::read_to_string(&env_file).ok() {
+        for line in env_file.lines() {
+            if let Some((key, value)) = line.trim().split_once('=') {
+                std::env::set_var(key, value);
+            }
+        }
+    }
 }

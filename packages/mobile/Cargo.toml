@@ -12,6 +12,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 dioxus-desktop = { workspace = true }
 dioxus-lib = { workspace = true }
+dioxus-cli-config = { workspace = true }
 libc = "0.2.159"
 once_cell.workspace = true
 

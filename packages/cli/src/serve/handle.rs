@@ -292,8 +292,8 @@ impl AppHandle {
         // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
         if self.app.build.build.platform() == Platform::Android {
             if let Some(bundled_name) = bundled_name.as_ref() {
-                let target = format!("/data/local/tmp/dx/{}", bundled_name.display());
-                tracing::debug!("Pushing asset to device: {target}");
+                let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
+                tracing::debug!("Pushing asset to device: {target:?}");
                 let res = tokio::process::Command::new(DioxusCrate::android_adb())
                     .arg("push")
                     .arg(&changed_file)
@@ -699,6 +699,7 @@ We checked the folder: {}
 
     async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) {
         let apk_path = self.app.apk_path();
+        let session_cache = self.app.build.krate.session_cache_dir();
         let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
@@ -717,6 +718,27 @@ We checked the folder: {}
                 tracing::error!("Failed to install apk with `adb`: {e}");
             };
 
+            // Write the env vars to a .env file in our session cache
+            let env_file = session_cache.join(".env");
+            let contents: String = envs
+                .iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            _ = std::fs::write(&env_file, contents);
+
+            // Push the env file to the device
+            if let Err(e) = tokio::process::Command::new(DioxusCrate::android_adb())
+                .arg("push")
+                .arg(env_file)
+                .arg(dioxus_cli_config::android_session_cache_dir().join(".env"))
+                .output()
+                .await
+                .context("Failed to push asset to device")
+            {
+                tracing::error!("Failed to push .env file to device: {e}");
+            }
+
             // eventually, use the user's MainAcitivty, not our MainAcitivty
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
@@ -727,7 +749,6 @@ We checked the folder: {}
                 .arg("start")
                 .arg("-n")
                 .arg(activity_name)
-                .envs(envs)
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .output()

@@ -355,6 +355,9 @@ impl WebServer {
     pub fn displayed_address(&self) -> Option<SocketAddr> {
         let mut address = self.server_address()?;
 
+        // Set the port to the devserver port since that's usually what people expect
+        address.set_port(self.devserver_port);
+
         if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
             address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), address.port());
         }
