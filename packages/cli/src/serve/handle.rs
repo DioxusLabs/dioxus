@@ -720,7 +720,11 @@ We checked the folder: {}
 
             // Write the env vars to a .env file in our session cache
             let env_file = session_cache.join(".env");
-            let contents: String = envs.iter().map(|(k, v)| format!("{k}={v}\n")).collect();
+            let contents: String = envs
+                .iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect::<Vec<_>>()
+                .join("\n");
             _ = std::fs::write(&env_file, contents);
 
             // Push the env file to the device
