@@ -7,7 +7,7 @@ use std::{
 
 use url::{ParseError, Url};
 
-use crate::{components::child_router::consume_child_route_mapping, routable::Routable, try_router};
+use crate::{components::child_router::consume_child_route_mapping, routable::Routable, hooks::try_router};
 
 impl<R: Routable> From<R> for NavigationTarget {
     fn from(value: R) -> Self {
