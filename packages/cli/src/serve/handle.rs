@@ -86,8 +86,12 @@ impl AppHandle {
             ),
             ("RUST_BACKTRACE", "1".to_string()),
             (
-                dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
-                devserver_ip.to_string(),
+                dioxus_cli_config::DEVSERVER_IP_ENV,
+                devserver_ip.ip().to_string(),
+            ),
+            (
+                dioxus_cli_config::DEVSERVER_PORT_ENV,
+                devserver_ip.port().to_string(),
             ),
             // unset the cargo dirs in the event we're running `dx` locally
             // since the child process will inherit the env vars, we don't want to confuse the downstream process
