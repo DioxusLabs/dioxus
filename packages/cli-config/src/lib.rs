@@ -100,6 +100,12 @@ macro_rules! read_env_config {
 /// For reference, the devserver typically lives on `127.0.0.1:8080` and serves the devserver websocket
 /// on `127.0.0.1:8080/_dioxus`.
 pub fn devserver_raw_addr() -> Option<SocketAddr> {
+    // TODO: Find a way to set/pass the correct (host and) port.
+    // TODO: Add a warning in CLI/docs that for Android yo can't use other host yet.
+    if cfg!(target_os = "android") {
+        return Some("127.0.0.1:8080".parse().unwrap());
+    }
+
     let addr = std::env::var(DEVSERVER_RAW_ADDR_ENV).ok()?;
     addr.parse().ok()
 }
