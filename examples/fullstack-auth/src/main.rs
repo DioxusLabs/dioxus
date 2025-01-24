@@ -13,7 +13,7 @@ fn main() {
 
     #[cfg(feature = "web")]
     // Hydrate the application on the client
-    dioxus_web::launch::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
+    LaunchBuilder::web().launch(app);
 
     #[cfg(feature = "server")]
     {
