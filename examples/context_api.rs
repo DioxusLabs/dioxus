@@ -49,22 +49,21 @@ impl Theme {
 
 #[component]
 fn ThemeControls() -> Element {
-    let mut theme = try_use_context::<Signal<Theme>>()
-        .expect("Theme context not found. Wrap components in <App>");
-
+    let mut theme = use_theme_context();
+    let current_theme = *theme.read();
     rsx! {
         div {
             class: "controls",
             button {
                 class: "btn",
                 onclick: move |_| theme.set(Theme::Light),
-                disabled: *theme.read() == Theme::Light,
+                disabled: current_theme== Theme::Light,
                 "Switch to Light"
             }
             button {
                 class: "btn",
                 onclick: move |_| theme.set(Theme::Dark),
-                disabled: *theme.read() == Theme::Dark,
+                disabled: current_theme == Theme::Dark,
                 "Switch to Dark"
             }
         }
@@ -73,8 +72,7 @@ fn ThemeControls() -> Element {
 
 #[component]
 fn ThemeDisplay() -> Element {
-    let theme = try_use_context::<Signal<Theme>>()
-        .expect("Theme context not found. Wrap components in <App>");
+    let theme = use_theme_context();
 
     rsx! {
         div {
@@ -83,4 +81,9 @@ fn ThemeDisplay() -> Element {
             p { "Try switching themes using the buttons above!" }
         }
     }
+}
+
+fn use_theme_context() -> Signal<Theme> {
+    try_use_context::<Signal<Theme>>()
+        .expect("Theme context not found. Ensure <App> is the root component.")
 }
