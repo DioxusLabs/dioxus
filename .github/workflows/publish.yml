@@ -58,7 +58,7 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-22.04
           # - target: aarch64-unknown-linux-gnu
           #   os: ubuntu-latest
     steps:
