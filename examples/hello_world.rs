@@ -16,6 +16,7 @@ fn main() {
 }
 
 fn app() -> Element {
+    let _ = 123;
     rsx! {
         div { "Hello, world!" }
     }
