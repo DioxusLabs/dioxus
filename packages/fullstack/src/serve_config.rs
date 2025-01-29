@@ -8,7 +8,6 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-#[allow(unused)]
 pub(crate) type ContextProviders =
     Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
@@ -170,10 +169,7 @@ impl ServeConfigBuilder {
     ///     }
     /// }
     /// ```
-    pub fn context_providers(
-        mut self,
-        state: Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>,
-    ) -> Self {
+    pub fn context_providers(mut self, state: ContextProviders) -> Self {
         // This API should probably accept Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>> instead of Arc so we can
         // continue adding to the context list after calling this method. Changing the type is a breaking change so it cannot
         // be done until 0.7 is released.
