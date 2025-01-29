@@ -1,5 +1,6 @@
 use dioxus_core::LaunchConfig;
 use std::borrow::Cow;
+use std::fmt::Debug;
 use std::path::PathBuf;
 use tao::event_loop::{EventLoop, EventLoopWindowTarget};
 use tao::window::{Icon, WindowBuilder};
@@ -18,7 +19,7 @@ type CustomEventHandler = Box<
 >;
 
 /// The behaviour of the application when the last window is closed.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 #[non_exhaustive]
 pub enum WindowCloseBehaviour {
     /// Default behaviour, closing the last window exits the app

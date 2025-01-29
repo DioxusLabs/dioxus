@@ -6,6 +6,7 @@ use crate::{
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
+    WeakDesktopContext,
 };
 use dioxus_core::{ElementId, VirtualDom};
 use dioxus_html::PlatformEventData;
@@ -22,6 +23,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::{Window, WindowId},
 };
+use tokio::sync::oneshot::Sender;
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
@@ -47,6 +49,7 @@ pub(crate) struct App {
 /// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
 pub(crate) struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
+    pub(crate) pending_windows: RefCell<Vec<(VirtualDom, Config, Sender<WeakDesktopContext>)>>,
     pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
@@ -71,6 +74,7 @@ impl App {
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
+                pending_windows: Default::default(),
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
                 proxy: event_loop.create_proxy(),
@@ -176,7 +180,7 @@ impl App {
         }
     }
 
-    pub fn handle_new_window(&mut self) {
+    pub fn handle_new_windows(&mut self) {
         for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
             let id = handler.desktop_context.window.id();
             self.webviews.insert(id, handler);

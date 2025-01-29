@@ -15,7 +15,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let onclick = move |_| {
+    let onclick = move |_| async move {
         let dom = VirtualDom::new(popup);
         dioxus::desktop::window().new_window(dom, Default::default());
     };
