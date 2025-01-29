@@ -1,13 +1,15 @@
-use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
+use crate::{Arch, CliSettings};
 use crate::{Platform, Result};
 use anyhow::Context;
 use itertools::Itertools;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
+use once_cell::sync::OnceCell;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::process::Command;
 use toml_edit::Item;
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
@@ -145,6 +147,16 @@ impl DioxusCrate {
         }
 
         files
+    }
+
+    /// Get the directory where this app can write to for this session that's guaranteed to be stable
+    /// for the same app. This is useful for emitting state like window position and size.
+    ///
+    /// The directory is specific for this app and might be
+    pub(crate) fn session_cache_dir(&self) -> PathBuf {
+        self.internal_out_dir()
+            .join(self.executable_name())
+            .join("session-cache")
     }
 
     /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
@@ -616,19 +628,38 @@ impl DioxusCrate {
         krates
     }
 
+    /// Attempt to retrieve the path to ADB
+    pub(crate) fn android_adb() -> PathBuf {
+        static PATH: once_cell::sync::Lazy<PathBuf> = once_cell::sync::Lazy::new(|| {
+            let Some(sdk) = DioxusCrate::android_sdk() else {
+                return PathBuf::from("adb");
+            };
+
+            let tools = sdk.join("platform-tools");
+
+            if tools.join("adb").exists() {
+                return tools.join("adb");
+            }
+
+            if tools.join("adb.exe").exists() {
+                return tools.join("adb.exe");
+            }
+
+            PathBuf::from("adb")
+        });
+
+        PATH.clone()
+    }
+
+    pub(crate) fn android_sdk() -> Option<PathBuf> {
+        var_or_debug("ANDROID_SDK_ROOT")
+            .or_else(|| var_or_debug("ANDROID_SDK"))
+            .or_else(|| var_or_debug("ANDROID_HOME"))
+    }
+
     pub(crate) fn android_ndk(&self) -> Option<PathBuf> {
         // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         static PATH: once_cell::sync::Lazy<Option<PathBuf>> = once_cell::sync::Lazy::new(|| {
-            use std::env::var;
-            use tracing::debug;
-
-            fn var_or_debug(name: &str) -> Option<PathBuf> {
-                var(name)
-                    .inspect_err(|_| debug!("{name} not set"))
-                    .ok()
-                    .map(PathBuf::from)
-            }
-
             // attempt to autodetect the ndk path from env vars (usually set by the shell)
             let auto_detected_ndk =
                 var_or_debug("NDK_HOME").or_else(|| var_or_debug("ANDROID_NDK_HOME"));
@@ -653,6 +684,48 @@ impl DioxusCrate {
         });
 
         PATH.clone()
+    }
+
+    pub(crate) async fn autodetect_android_arch() -> Option<Arch> {
+        // Try auto detecting arch through adb.
+        static AUTO_ARCH: OnceCell<Option<Arch>> = OnceCell::new();
+
+        match AUTO_ARCH.get() {
+            Some(a) => *a,
+            None => {
+                // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
+                let output = Command::new("adb")
+                    .arg("shell")
+                    .arg("uname")
+                    .arg("-m")
+                    .output()
+                    .await;
+
+                let out = match output {
+                    Ok(o) => o,
+                    Err(e) => {
+                        tracing::debug!("ADB command failed: {:?}", e);
+                        return None;
+                    }
+                };
+
+                // Parse ADB output
+                let Ok(out) = String::from_utf8(out.stdout) else {
+                    tracing::debug!("ADB returned unexpected data.");
+                    return None;
+                };
+                let trimmed = out.trim().to_string();
+                tracing::trace!("ADB Returned: `{trimmed:?}`");
+
+                // Set the cell
+                let arch = Arch::try_from(trimmed).ok();
+                AUTO_ARCH
+                    .set(arch)
+                    .expect("the cell should have been checked empty by the match condition");
+
+                arch
+            }
+        }
     }
 
     pub(crate) fn mobile_org(&self) -> String {
@@ -762,4 +835,14 @@ fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId>
 
     let package = krates.nid_for_kid(kid).unwrap();
     Ok(package)
+}
+
+fn var_or_debug(name: &str) -> Option<PathBuf> {
+    use std::env::var;
+    use tracing::debug;
+
+    var(name)
+        .inspect_err(|_| debug!("{name} not set"))
+        .ok()
+        .map(PathBuf::from)
 }

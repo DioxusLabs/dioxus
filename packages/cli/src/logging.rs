@@ -135,6 +135,7 @@ impl TraceController {
         let (tui_tx, tui_rx) = unbounded();
         TUI_ACTIVE.store(true, Ordering::Relaxed);
         TUI_TX.set(tui_tx.clone()).unwrap();
+
         Self { tui_rx }
     }
 

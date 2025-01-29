@@ -25,6 +25,13 @@ fn app() -> Element {
         button {
             class: "eval-button",
             onclick: move |_| async move {
+                // Make sure normal return values work. Regression test for https://github.com/DioxusLabs/dioxus/issues/3655
+                let eval = document::eval(r#"return "hello world";"#);
+
+                let result = eval.await.unwrap();
+                assert_eq!(result, "hello world");
+
+                // Make sure dioxus.send/dioxus.recv works
                 let mut eval = document::eval(
                     r#"
                         window.document.title = 'Hello from Dioxus Eval!';

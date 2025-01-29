@@ -3,7 +3,6 @@ use super::update::ServeUpdate;
 use crate::{cli::serve::ServeArgs, dioxus_crate::DioxusCrate};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
-use ignore::gitignore::Gitignore;
 use notify::{
     event::{MetadataKind, ModifyKind},
     Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
@@ -16,7 +15,6 @@ use std::{path::PathBuf, time::Duration};
 /// directories.
 pub(crate) struct Watcher {
     rx: UnboundedReceiver<notify::Event>,
-    ignore: Gitignore,
     krate: DioxusCrate,
     _tx: UnboundedSender<notify::Event>,
     watcher: Box<dyn notify::Watcher>,
@@ -31,7 +29,6 @@ impl Watcher {
             _tx: tx,
             krate: krate.clone(),
             rx,
-            ignore: krate.workspace_gitignore(),
         };
 
         watcher.watch_filesystem();
@@ -50,7 +47,7 @@ impl Watcher {
         }
 
         // Filter the changes
-        let mut all_mods: Vec<PathBuf> = vec![];
+        let mut files: Vec<PathBuf> = vec![];
 
         // Decompose the events into a list of all the files that have changed
         for event in changes.drain(..) {
@@ -64,33 +61,18 @@ impl Watcher {
             }
 
             for path in event.paths {
-                all_mods.push(path.clone());
-            }
-        }
-
-        // Collect the files that have changed
-        let mut files = vec![];
-        for path in all_mods.iter() {
-            if path.extension().is_none() {
-                continue;
-            }
-
-            // Workaround for notify and vscode-like editor:
-            // when edit & save a file in vscode, there will be two notifications,
-            // the first one is a file with empty content.
-            // filter the empty file notification to avoid false rebuild during hot-reload
-            if let Ok(metadata) = std::fs::metadata(path) {
-                if metadata.len() == 0 {
-                    continue;
+                // Workaround for notify and vscode-like editor:
+                // when edit & save a file in vscode, there will be two notifications,
+                // the first one is a file with empty content.
+                // filter the empty file notification to avoid false rebuild during hot-reload
+                if let Ok(metadata) = std::fs::metadata(&path) {
+                    if metadata.len() == 0 {
+                        continue;
+                    }
                 }
-            }
 
-            // If the path is ignored, don't watch it
-            if self.ignore.matched(path, path.is_dir()).is_ignore() {
-                continue;
+                files.push(path);
             }
-
-            files.push(path.clone());
         }
 
         tracing::debug!("Files changed: {files:?}");

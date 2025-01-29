@@ -59,6 +59,21 @@ impl BundledAsset {
         Self::new(absolute_source_path, bundled_path, options)
     }
 
+    #[doc(hidden)]
+    /// This should only be called from the macro
+    /// Create a new asset from const paths
+    pub const fn new_from_const(
+        absolute_source_path: ConstStr,
+        bundled_path: ConstStr,
+        options: AssetOptions,
+    ) -> Self {
+        Self {
+            absolute_source_path,
+            bundled_path,
+            options,
+        }
+    }
+
     /// Get the bundled name of the asset. This identifier cannot be used to read the asset directly
     pub fn bundled_path(&self) -> &str {
         self.bundled_path.as_str()

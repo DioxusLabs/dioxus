@@ -5,7 +5,7 @@ use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
-use manganis_core::AssetOptions;
+use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashSet;
 use std::future::Future;
@@ -265,7 +265,7 @@ impl AppBundle {
         app: BuildArtifacts,
         server: Option<BuildArtifacts>,
     ) -> Result<Self> {
-        let bundle = Self { app, server, build };
+        let mut bundle = Self { app, server, build };
 
         tracing::debug!("Assembling app bundle");
 
@@ -301,7 +301,7 @@ impl AppBundle {
     /// For wasm, we'll want to run `wasm-bindgen` to make it a wasm binary along with some other optimizations
     /// Other platforms we might do some stripping or other optimizations
     /// Move the executable to the workdir
-    async fn write_main_executable(&self) -> Result<()> {
+    async fn write_main_executable(&mut self) -> Result<()> {
         match self.build.build.platform() {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
             // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
@@ -328,7 +328,7 @@ impl AppBundle {
             Platform::Web => {
                 // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
                 self.build.status_wasm_bindgen_start();
-                self.run_wasm_bindgen(&self.app.exe.with_extension("wasm"), &self.build.exe_dir())
+                self.run_wasm_bindgen(&self.app.exe.with_extension("wasm"))
                     .await?;
 
                 // Only run wasm-opt if the feature is enabled
@@ -339,7 +339,7 @@ impl AppBundle {
                 // Write the index.html file with the pre-configured contents we got from pre-rendering
                 std::fs::write(
                     self.build.root_dir().join("index.html"),
-                    self.build.prepare_html()?,
+                    self.prepare_html()?,
                 )?;
             }
 
@@ -383,29 +383,41 @@ impl AppBundle {
         // First, clear the asset dir of any files that don't exist in the new manifest
         _ = tokio::fs::create_dir_all(&asset_dir).await;
         // Create a set of all the paths that new files will be bundled to
-        let bundled_output_paths: HashSet<_> = self
+        let mut keep_bundled_output_paths: HashSet<_> = self
             .app
             .assets
             .assets
             .values()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
+        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
+        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
+        // all assets.
+        let version_file = self.build.asset_optimizer_version_file();
+        let clear_cache = std::fs::read_to_string(&version_file)
+            .ok()
+            .filter(|s| s == crate::VERSION.as_str())
+            .is_none();
+        if clear_cache {
+            keep_bundled_output_paths.clear();
+        }
+
         // one possible implementation of walking a directory only visiting files
         fn remove_old_assets<'a>(
             path: &'a Path,
-            bundled_output_paths: &'a HashSet<PathBuf>,
+            keep_bundled_output_paths: &'a HashSet<PathBuf>,
         ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
             Box::pin(async move {
                 // If this asset is in the manifest, we don't need to remove it
                 let canon_path = dunce::canonicalize(path)?;
-                if bundled_output_paths.contains(canon_path.as_path()) {
+                if keep_bundled_output_paths.contains(canon_path.as_path()) {
                     return Ok(());
                 }
                 // Otherwise, if it is a directory, we need to walk it and remove child files
                 if path.is_dir() {
                     for entry in std::fs::read_dir(path)?.flatten() {
                         let path = entry.path();
-                        remove_old_assets(&path, bundled_output_paths).await?;
+                        remove_old_assets(&path, keep_bundled_output_paths).await?;
                     }
                     if path.read_dir()?.next().is_none() {
                         // If the directory is empty, remove it
@@ -420,7 +432,7 @@ impl AppBundle {
         }
 
         tracing::debug!("Removing old assets");
-        remove_old_assets(&asset_dir, &bundled_output_paths).await?;
+        remove_old_assets(&asset_dir, &keep_bundled_output_paths).await?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
@@ -473,6 +485,15 @@ impl AppBundle {
         })
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
+
+        // Remove the wasm bindgen output directory if it exists
+        _ = std::fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
+
+        // Write the version file so we know what version of the optimizer we used
+        std::fs::write(
+            self.build.asset_optimizer_version_file(),
+            crate::VERSION.as_str(),
+        )?;
 
         Ok(())
     }
@@ -554,9 +575,9 @@ impl AppBundle {
                     .krate
                     .should_pre_compress_web_assets(self.build.build.release);
 
-                let bindgen_dir = self.build.exe_dir();
+                let asset_dir = self.build.asset_dir();
                 tokio::task::spawn_blocking(move || {
-                    crate::fastfs::pre_compress_folder(&bindgen_dir, pre_compress)
+                    crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
                 })
                 .await
                 .unwrap()?;
@@ -592,15 +613,14 @@ impl AppBundle {
         None
     }
 
-    pub(crate) async fn run_wasm_bindgen(
-        &self,
-        input_path: &Path,
-        bindgen_outdir: &Path,
-    ) -> anyhow::Result<()> {
+    pub(crate) async fn run_wasm_bindgen(&mut self, input_path: &Path) -> anyhow::Result<()> {
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
 
         let input_path = input_path.to_path_buf();
-        let bindgen_outdir = bindgen_outdir.to_path_buf();
+        // Make sure the bindgen output directory exists
+        let bindgen_outdir = self.build.wasm_bindgen_out_dir();
+        std::fs::create_dir_all(&bindgen_outdir)?;
+
         let name = self.build.krate.executable_name().to_string();
         let keep_debug =
             // if we're in debug mode, or we're generating debug symbols, keep debug info
@@ -629,6 +649,29 @@ impl AppBundle {
             .run()
             .await
             .context("Failed to generate wasm-bindgen bindings")?;
+
+        // After running wasm-bindgen, add the js and wasm asset to the manifest
+        let js_output_path = self.build.wasm_bindgen_js_output_file();
+        let wasm_output_path = self.build.wasm_bindgen_wasm_output_file();
+        let new_assets = [
+            (
+                js_output_path,
+                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+            ),
+            (wasm_output_path, AssetOptions::Unknown),
+        ];
+        for (asset_path, options) in new_assets {
+            let hash = manganis_core::hash::AssetHash::hash_file_contents(&asset_path)?;
+            let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(
+                "Failed to convert wasm bindgen output path to string"
+            ))?;
+            let bundled_asset = manganis::macro_helpers::create_bundled_asset(
+                output_path_str,
+                hash.bytes(),
+                options,
+            );
+            self.app.assets.assets.insert(asset_path, bundled_asset);
+        }
 
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 
@@ -730,23 +773,7 @@ impl AppBundle {
         if let Platform::Android = self.build.build.platform() {
             self.build.status_running_gradle();
 
-            // make sure we can execute the gradlew script
-            #[cfg(unix)]
-            {
-                use std::os::unix::prelude::PermissionsExt;
-                std::fs::set_permissions(
-                    self.build.root_dir().join("gradlew"),
-                    std::fs::Permissions::from_mode(0o755),
-                )?;
-            }
-
-            let gradle_exec_name = match cfg!(windows) {
-                true => "gradlew.bat",
-                false => "gradlew",
-            };
-            let gradle_exec = self.build.root_dir().join(gradle_exec_name);
-
-            let output = Command::new(gradle_exec)
+            let output = Command::new(self.gradle_exe()?)
                 .arg("assembleDebug")
                 .current_dir(self.build.root_dir())
                 .stderr(std::process::Stdio::piped())
@@ -760,6 +787,62 @@ impl AppBundle {
         }
 
         Ok(())
+    }
+
+    /// Run bundleRelease and return the path to the `.aab` file
+    ///
+    /// https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and
+    pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
+        let output = Command::new(self.gradle_exe()?)
+            .arg("bundleRelease")
+            .current_dir(self.build.root_dir())
+            .output()
+            .await
+            .context("Failed to run gradle bundleRelease")?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("Failed to bundleRelease: {output:?}").into());
+        }
+
+        let app_release = self
+            .build
+            .root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("bundle")
+            .join("release");
+
+        // Rename it to Name-arch.aab
+        let from = app_release.join("app-release.aab");
+        let to = app_release.join(format!(
+            "{}-{}.aab",
+            self.build.krate.bundled_app_name(),
+            self.build.build.target_args.arch()
+        ));
+
+        std::fs::rename(from, &to).context("Failed to rename aab")?;
+
+        Ok(to)
+    }
+
+    fn gradle_exe(&self) -> Result<PathBuf> {
+        // make sure we can execute the gradlew script
+        #[cfg(unix)]
+        {
+            use std::os::unix::prelude::PermissionsExt;
+            std::fs::set_permissions(
+                self.build.root_dir().join("gradlew"),
+                std::fs::Permissions::from_mode(0o755),
+            )?;
+        }
+
+        let gradle_exec_name = match cfg!(windows) {
+            true => "gradlew.bat",
+            false => "gradlew",
+        };
+
+        Ok(self.build.root_dir().join(gradle_exec_name))
     }
 
     pub(crate) fn apk_path(&self) -> PathBuf {

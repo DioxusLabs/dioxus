@@ -110,7 +110,7 @@ impl Display for Commands {
     }
 }
 
-static VERSION: Lazy<String> = Lazy::new(|| {
+pub(crate) static VERSION: Lazy<String> = Lazy::new(|| {
     format!(
         "{} ({})",
         crate::dx_build_info::PKG_VERSION,

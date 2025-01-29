@@ -327,7 +327,7 @@ impl WasmBindgen {
     }
 
     async fn verify_local_install(&self) -> anyhow::Result<()> {
-        tracing::info!(
+        tracing::trace!(
             "Verifying wasm-bindgen-cli@{} is installed in the path",
             self.version
         );
@@ -355,7 +355,7 @@ impl WasmBindgen {
     }
 
     async fn verify_managed_install(&self) -> anyhow::Result<()> {
-        tracing::info!(
+        tracing::trace!(
             "Verifying wasm-bindgen-cli@{} is installed in the tool directory",
             self.version
         );
