@@ -54,6 +54,7 @@ features = [
     "CustomEvent",
     "DataTransfer",
     "Document",
+    "DomRectReadOnly",
     "DragEvent",
     "FocusEvent",
     "History",

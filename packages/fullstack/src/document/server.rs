@@ -59,12 +59,13 @@ impl ServerDocument {
 
     /// Write the head element into the serialized context for hydration
     /// We write true if the head element was written to the DOM during server side rendering
+    #[track_caller]
     pub(crate) fn serialize_for_hydration(&self) {
         // We only serialize the head elements if the web document feature is enabled
         #[cfg(feature = "document")]
         {
             let serialize = crate::html_storage::serialize_context();
-            serialize.push(&!self.0.borrow().streaming);
+            serialize.push(&!self.0.borrow().streaming, std::panic::Location::caller());
         }
     }
 }
@@ -76,13 +77,10 @@ impl Document for ServerDocument {
 
     fn set_title(&self, title: String) {
         self.warn_if_streaming();
-        self.serialize_for_hydration();
         self.0.borrow_mut().title = Some(title);
     }
 
     fn create_meta(&self, props: MetaProps) {
-        self.warn_if_streaming();
-        self.serialize_for_hydration();
         self.0.borrow_mut().meta.push(rsx! {
             meta {
                 name: props.name,
@@ -96,8 +94,6 @@ impl Document for ServerDocument {
     }
 
     fn create_script(&self, props: ScriptProps) {
-        self.warn_if_streaming();
-        self.serialize_for_hydration();
         let children = props.script_contents().ok();
         self.0.borrow_mut().script.push(rsx! {
             script {
@@ -117,42 +113,19 @@ impl Document for ServerDocument {
     }
 
     fn create_style(&self, props: StyleProps) {
-        self.warn_if_streaming();
-        self.serialize_for_hydration();
-        match (&props.href, props.style_contents()) {
-            // The style has inline contents, render it as a style tag
-            (_, Ok(contents)) => self.0.borrow_mut().script.push(rsx! {
-                style {
-                    media: props.media,
-                    nonce: props.nonce,
-                    title: props.title,
-                    ..props.additional_attributes,
-                    {contents}
-                }
-            }),
-            // The style has a href, render it as a link tag
-            (Some(_), _) => {
-                self.0.borrow_mut().script.push(rsx! {
-                    link {
-                        rel: "stylesheet",
-                        href: props.href,
-                        media: props.media,
-                        nonce: props.nonce,
-                        title: props.title,
-                        ..props.additional_attributes,
-                    }
-                });
+        let contents = props.style_contents().ok();
+        self.0.borrow_mut().script.push(rsx! {
+            style {
+                media: props.media,
+                nonce: props.nonce,
+                title: props.title,
+                ..props.additional_attributes,
+                {contents}
             }
-            // The style has neither contents nor src, log an error
-            (None, Err(err)) => {
-                err.log("Style");
-            }
-        }
+        })
     }
 
     fn create_link(&self, props: LinkProps) {
-        self.warn_if_streaming();
-        self.serialize_for_hydration();
         self.0.borrow_mut().link.push(rsx! {
             link {
                 rel: props.rel,
@@ -171,5 +144,11 @@ impl Document for ServerDocument {
                 blocking: props.blocking,
             }
         })
+    }
+
+    fn create_head_component(&self) -> bool {
+        self.warn_if_streaming();
+        self.serialize_for_hydration();
+        true
     }
 }

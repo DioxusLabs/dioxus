@@ -1,4 +1,3 @@
-use crate::document::DesktopDocument;
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
@@ -12,6 +11,8 @@ use crate::{
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
+use crate::{document::DesktopDocument, WeakDesktopContext};
+use base64::prelude::BASE64_STANDARD;
 use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
@@ -27,7 +28,7 @@ use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 pub(crate) struct WebviewEdits {
     runtime: Rc<Runtime>,
     pub wry_queue: WryQueue,
-    desktop_context: Rc<OnceCell<DesktopContext>>,
+    desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
 impl WebviewEdits {
@@ -39,7 +40,7 @@ impl WebviewEdits {
         }
     }
 
-    fn set_desktop_context(&self, context: DesktopContext) {
+    fn set_desktop_context(&self, context: WeakDesktopContext) {
         _ = self.desktop_context.set(context);
     }
 
@@ -48,7 +49,9 @@ impl WebviewEdits {
         request: wry::http::Request<Vec<u8>>,
         responder: wry::RequestAsyncResponder,
     ) {
-        let body = self.try_handle_event(request).unwrap_or_default();
+        let body = self
+            .try_handle_event(request)
+            .expect("Writing bodies to succeed");
         responder.respond(wry::http::Response::new(body))
     }
 
@@ -56,13 +59,27 @@ impl WebviewEdits {
         &self,
         request: wry::http::Request<Vec<u8>>,
     ) -> Result<Vec<u8>, serde_json::Error> {
-        let data_from_header = request
+        use serde::de::Error;
+
+        // todo(jon):
+        //
+        // I'm a small bit worried about the size of the header being too big on some platforms.
+        // It's unlikely we'll hit the 256k limit (from 2010 browsers...) but it's important to think about
+        // https://stackoverflow.com/questions/3326210/can-http-headers-be-too-big-for-browsers
+        //
+        // Also important to remember here that we don't pass a body from the JavaScript side of things
+        let data = request
             .headers()
             .get("dioxus-data")
-            .map(|f| f.as_bytes())
-            .expect("dioxus-data header is not a string");
+            .ok_or_else(|| Error::custom("dioxus-data header not set"))?;
 
-        let response = match serde_json::from_slice(data_from_header) {
+        let as_utf = std::str::from_utf8(data.as_bytes())
+            .map_err(|_| Error::custom("dioxus-data header is not a valid (utf-8) string"))?;
+
+        let data_from_header = base64::Engine::decode(&BASE64_STANDARD, as_utf)
+            .map_err(|_| Error::custom("dioxus-data header is not a base64 string"))?;
+
+        let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
                 let _lock = crate::android_sync_lock::android_runtime_lock();
@@ -79,15 +96,9 @@ impl WebviewEdits {
             }
         };
 
-        let body = match serde_json::to_vec(&response) {
-            Ok(body) => body,
-            Err(err) => {
-                tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
-                return Err(err);
-            }
-        };
-
-        Ok(body)
+        serde_json::to_vec(&response).inspect_err(|err| {
+            tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
+        })
     }
 
     pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
@@ -103,6 +114,8 @@ impl WebviewEdits {
             );
             return Default::default();
         };
+
+        let desktop_context = desktop_context.upgrade().unwrap();
 
         let query = desktop_context.query.clone();
         let recent_file = desktop_context.file_hover.clone();
@@ -202,6 +215,7 @@ impl WebviewInstance {
 
             unsafe {
                 let window: id = window.ns_window() as id;
+                #[allow(unexpected_cfgs)]
                 let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
             }
         }
@@ -401,7 +415,7 @@ impl WebviewInstance {
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
-        edits.set_desktop_context(desktop_context.clone());
+        edits.set_desktop_context(Rc::downgrade(&desktop_context));
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
         let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
         dom.in_runtime(|| {
@@ -434,6 +448,8 @@ impl WebviewInstance {
             }
 
             {
+                // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                let _lock = crate::android_sync_lock::android_runtime_lock();
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
 

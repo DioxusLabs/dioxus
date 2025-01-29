@@ -10,7 +10,7 @@ description = "CLI optimizations for dioxus-cli"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-anyhow = "1"
+anyhow = { workspace = true }
 manganis-core = { workspace = true }
 object = {version="0.36.0", features=["wasm"]}
 serde = { workspace = true, features = ["derive"] }
@@ -32,64 +32,37 @@ png = "0.17.9"
 image = { version = "0.25", features = ["avif"] }
 
 # CSS Minification
-lightningcss = "1.0.0-alpha.60"
+lightningcss = { version = "1.0.0-alpha.60", features = ["browserslist", "into_owned"] }
 
 # SCSS Processing
 grass = "0.13.4"
 codemap = "0.1.3"
 
 # Js minification - swc has introduces minor versions with breaking changes in the past so we pin all of their crates
-swc = "=0.283.0"
-swc_allocator = { version = "=0.1.8", default-features = false }
-swc_atoms = { version = "=0.6.7", default-features = false }
-swc_cached = { version = "=0.3.20", default-features = false }
-swc_common = { version = "=0.37.5", default-features = false }
-swc_compiler_base = { version = "=0.19.0", default-features = false }
-swc_config = { version = "=0.1.15", default-features = false }
-swc_config_macro = { version = "=0.1.4", default-features = false }
-swc_ecma_ast = { version = "=0.118.2", default-features = false }
-swc_ecma_codegen = { version = "=0.155.1", default-features = false }
-swc_ecma_codegen_macros = { version = "=0.7.7", default-features = false }
-swc_ecma_compat_bugfixes = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_common = { version = "=0.11.0", default-features = false }
-swc_ecma_compat_es2015 = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_es2016 = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_es2017 = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_es2018 = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_es2019 = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_es2020 = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_es2021 = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_es2022 = { version = "=0.12.0", default-features = false }
-swc_ecma_compat_es3 = { version = "=0.12.0", default-features = false }
-swc_ecma_ext_transforms = { version = "=0.120.0", default-features = false }
-swc_ecma_lints = { version = "=0.100.0", default-features = false }
-swc_ecma_loader = { version = "=0.49.1", default-features = false }
-swc_ecma_minifier = { version = "=0.204.0", default-features = false }
-swc_ecma_parser = { version = "=0.149.1", default-features = false }
-swc_ecma_preset_env = { version = "=0.217.0", default-features = false, features = [
-    "serde",
-] }
-swc_ecma_transforms = { version = "=0.239.0", default-features = false }
-swc_ecma_transforms_base = { version = "=0.145.0", default-features = false }
-swc_ecma_transforms_classes = { version = "=0.134.0", default-features = false }
-swc_ecma_transforms_compat = { version = "=0.171.0", default-features = false }
-swc_ecma_transforms_macros = { version = "=0.5.5", default-features = false }
-swc_ecma_transforms_module = { version = "=0.190.0", default-features = false }
-swc_ecma_transforms_optimization = { version = "=0.208.0", default-features = false }
-swc_ecma_transforms_proposal = { version = "=0.178.0", default-features = false }
-swc_ecma_transforms_react = { version = "=0.191.0", default-features = false }
-swc_ecma_transforms_typescript = { version = "=0.198.1", default-features = false }
-swc_ecma_usage_analyzer = { version = "=0.30.3", default-features = false }
-swc_ecma_utils = { version = "=0.134.2", default-features = false }
-swc_ecma_visit = { version = "=0.104.8", default-features = false }
-swc_eq_ignore_macros = { version = "=0.1.4", default-features = false }
-swc_error_reporters = { version = "=0.21.0", default-features = false }
-swc_fast_graph = { version = "=0.25.0", default-features = false }
-swc_macros_common = { version = "=0.3.13", default-features = false }
-swc_node_comments = { version = "=0.24.0", default-features = false }
-swc_timer = { version = "=0.25.0", default-features = false }
-swc_trace_macro = { version = "=0.1.3", default-features = false }
-swc_transform_common = { version = "=0.1.1", default-features = false }
-swc_typescript = { version = "=0.5.0", default-features = false }
-swc_visit = { version = "=0.6.2", default-features = false }
+swc_allocator = { version = "=2.0.0", default-features = false }
+swc_atoms = { version = "=3.0.2", default-features = false }
+swc_bundler = { version = "=7.0.0", default-features = false }
+swc_cached = { version = "=1.0.0", default-features = false }
+swc_common = { version = "=5.0.0", features = ["tty-emitter"], default-features = false }
+swc_config = { version = "=1.0.0", default-features = false }
+swc_config_macro = { version = "=1.0.0", default-features = false }
+swc_ecma_ast = { version = "=5.0.1", default-features = false }
+swc_ecma_codegen = { version = "=5.0.1", default-features = false }
+swc_ecma_codegen_macros = { version = "=1.0.0", default-features = false }
+swc_ecma_loader = { version = "=5.0.0", features = ["cache", "node"], default-features = false }
+swc_ecma_minifier = { version = "=7.0.1", default-features = false }
+swc_ecma_parser = { version = "=6.0.2", default-features = false }
+swc_ecma_transforms_base = { version = "=7.0.0", default-features = false }
+swc_ecma_transforms_macros = { version = "=1.0.0", default-features = false }
+swc_ecma_transforms_optimization = { version = "=7.0.1", default-features = false }
+swc_ecma_usage_analyzer = { version = "=7.0.0", default-features = false }
+swc_ecma_utils = { version = "=7.0.0", default-features = false }
+swc_ecma_visit = { version = "=5.0.0", default-features = false }
+swc_eq_ignore_macros = { version = "=1.0.0", default-features = false }
+swc_fast_graph = { version = "=6.0.0", default-features = false }
+swc_graph_analyzer = { version = "=5.0.0", default-features = false }
+swc_macros_common = { version = "=1.0.0", default-features = false }
+swc_parallel = { version = "=1.0.1", default-features = false }
+swc_timer = { version = "=1.0.0", default-features = false }
+swc_visit = { version = "=2.0.0", default-features = false }
 browserslist-rs = { version = "=0.16.0" }

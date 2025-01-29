@@ -87,7 +87,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
     pub fn mobile() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| dioxus_mobile::launch::launch(root, contexts, cfg),
+            launch_fn: |root, contexts, cfg| dioxus_mobile::launch_cfg(root, contexts, cfg),
             contexts: Vec::new(),
             configs: Vec::new(),
         }

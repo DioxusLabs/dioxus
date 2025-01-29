@@ -7,7 +7,7 @@ description = "CLI for building fullstack web, desktop, and mobile apps with a s
 repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT OR Apache-2.0"
 keywords = ["mobile", "gui", "cli", "dioxus", "wasm"]
-rust-version = "1.79.0"
+rust-version = "1.81.0"
 
 [dependencies]
 dioxus-autofmt = { workspace = true }
@@ -39,7 +39,7 @@ cargo_metadata = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"
 chrono = "0.4.19"
-anyhow = "1"
+anyhow = { workspace = true }
 hyper = { workspace = true }
 hyper-util = "0.1.3"
 hyper-rustls = { workspace = true }
@@ -61,17 +61,20 @@ syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mu
 
 headers = "0.4.0"
 walkdir = "2"
+dunce = { workspace = true }
 
 # tools download
 dirs = { workspace = true }
 reqwest = { workspace = true, features = [
     "rustls-tls",
-    "stream",
     "trust-dns",
-    "blocking",
+    "json"
 ] }
 tower = { workspace = true }
 once_cell = "1.19.0"
+
+# path lookup
+which = { version = "7.0.1" }
 
 # plugin packages
 open = "5.0.1"
@@ -103,6 +106,7 @@ log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
 tempfile = "3.3"
+manganis = { workspace = true }
 manganis-core = { workspace = true }
 
 # Extracting data from an executable
@@ -119,6 +123,9 @@ tauri-bundler = { workspace = true }
 include_dir = "0.7.4"
 flate2 = "1.0.35"
 tar = "0.4.43"
+local-ip-address = "0.6.3"
+dircpy = "0.3.19"
+plist = "1.7.0"
 
 [build-dependencies]
 built = { version = "=0.7.4", features = ["git2"] }
@@ -128,6 +135,7 @@ default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
 bundle = []
+no-downloads = []
 
 # when releasing dioxus, we want to enable wasm-opt
 # and then also maybe developing it too.

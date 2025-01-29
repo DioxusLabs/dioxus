@@ -48,13 +48,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.84.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
       # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
       - name: install_cargo_msrv
-        run: cargo install cargo-msrv --all-features
+        run: cargo install cargo-msrv --all-features --version 0.16.3 --locked
       - name: version_of_cargo_msrv
         run: cargo msrv --version
       - name: run_cargo_msrv
@@ -77,7 +77,7 @@ jobs:
           swap-storage: false
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -100,7 +100,7 @@ jobs:
           swap-storage: false
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -115,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
@@ -156,7 +156,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.84.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -170,7 +170,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -193,7 +193,7 @@ jobs:
       - name: Build all flake outputs
         run: om ci
       - name: Ensure devShell has all build deps
-        run: nix develop -c cargo build -p dioxus-cli
+        run: nix develop -c cargo build -p dioxus-cli --features no-downloads
 
   playwright:
     if: github.event.pull_request.draft == false
@@ -247,7 +247,7 @@ jobs:
           - {
               target: aarch64-apple-darwin,
               os: macos-latest,
-              toolchain: "1.79.0",
+              toolchain: "1.84.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -255,7 +255,7 @@ jobs:
           - {
               target: x86_64-apple-darwin,
               os: macos-13,
-              toolchain: "1.79.0",
+              toolchain: "1.84.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -263,7 +263,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
-              toolchain: "1.79.0",
+              toolchain: "1.84.0",
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
@@ -271,7 +271,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: ubuntu-latest,
-              toolchain: "1.79.0",
+              toolchain: "1.84.0",
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
@@ -327,7 +327,7 @@ jobs:
         run: |
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
 
-      - uses: dtolnay/rust-toolchain@1.79.0
+      - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -360,7 +360,7 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@1.79.0
+  #     - uses: dtolnay/rust-toolchain@1.84.0
   #     - uses: Swatinem/rust-cache@v2
   #       with:
   #         cache-all-crates: "true"

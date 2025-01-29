@@ -5,17 +5,16 @@ use crate::{
 use dioxus_core::internal::TemplateGlobalKey;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
-use futures_util::{future::OptionFuture, stream::FuturesUnordered};
+use futures_util::future::OptionFuture;
 use ignore::gitignore::Gitignore;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     path::PathBuf,
 };
-use tokio_stream::StreamExt;
 
 pub(crate) struct AppRunner {
-    pub(crate) running: HashMap<Platform, AppHandle>,
+    pub(crate) running: Option<AppHandle>,
     pub(crate) krate: DioxusCrate,
     pub(crate) file_map: HotreloadFilemap,
     pub(crate) ignore: Gitignore,
@@ -44,52 +43,53 @@ impl AppRunner {
             runner.fill_filemap(krate);
         }
 
+        // Ensure the session cache dir exists and is empty
+        runner.flush_session_cache();
+
         runner
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         // If there are no running apps, we can just return pending to avoid deadlocking
-        if self.running.is_empty() {
+        let Some(handle) = self.running.as_mut() else {
             return futures_util::future::pending().await;
-        }
+        };
 
-        self.running
-            .iter_mut()
-            .map(|(platform, handle)| async {
-                use ServeUpdate::*;
-                let platform = *platform;
-                tokio::select! {
-                    Some(Ok(Some(msg))) = OptionFuture::from(handle.app_stdout.as_mut().map(|f| f.next_line())) => {
-                        StdoutReceived { platform, msg }
+        use ServeUpdate::*;
+        let platform = handle.app.build.build.platform();
+        tokio::select! {
+            Some(Ok(Some(msg))) = OptionFuture::from(handle.app_stdout.as_mut().map(|f| f.next_line())) => {
+                StdoutReceived { platform, msg }
+            },
+            Some(Ok(Some(msg))) = OptionFuture::from(handle.app_stderr.as_mut().map(|f| f.next_line())) => {
+                StderrReceived { platform, msg }
+            },
+            Some(status) = OptionFuture::from(handle.app_child.as_mut().map(|f| f.wait())) => {
+                match status {
+                    Ok(status) => {
+                        handle.app_child = None;
+                        ProcessExited { status, platform }
                     },
-                    Some(Ok(Some(msg))) = OptionFuture::from(handle.app_stderr.as_mut().map(|f| f.next_line())) => {
-                        StderrReceived { platform, msg }
-                    },
-                    Some(status) = OptionFuture::from(handle.app_child.as_mut().map(|f| f.wait())) => {
-                        match status {
-                            Ok(status) => ProcessExited { status, platform },
-                            Err(_err) => todo!("handle error in process joining?"),
-                        }
-                    }
-                    Some(Ok(Some(msg))) = OptionFuture::from(handle.server_stdout.as_mut().map(|f| f.next_line())) => {
-                        StdoutReceived { platform: Platform::Server, msg }
-                    },
-                    Some(Ok(Some(msg))) = OptionFuture::from(handle.server_stderr.as_mut().map(|f| f.next_line())) => {
-                        StderrReceived { platform: Platform::Server, msg }
-                    },
-                    Some(status) = OptionFuture::from(handle.server_child.as_mut().map(|f| f.wait())) => {
-                        match status {
-                            Ok(status) => ProcessExited { status, platform: Platform::Server },
-                            Err(_err) => todo!("handle error in process joining?"),
-                        }
-                    }
-                    else => futures_util::future::pending().await
+                    Err(_err) => todo!("handle error in process joining?"),
                 }
-            })
-            .collect::<FuturesUnordered<_>>()
-            .next()
-            .await
-            .expect("Stream to pending if not empty")
+            }
+            Some(Ok(Some(msg))) = OptionFuture::from(handle.server_stdout.as_mut().map(|f| f.next_line())) => {
+                StdoutReceived { platform: Platform::Server, msg }
+            },
+            Some(Ok(Some(msg))) = OptionFuture::from(handle.server_stderr.as_mut().map(|f| f.next_line())) => {
+                StderrReceived { platform: Platform::Server, msg }
+            },
+            Some(status) = OptionFuture::from(handle.server_child.as_mut().map(|f| f.wait())) => {
+                match status {
+                    Ok(status) => {
+                        handle.server_child = None;
+                        ProcessExited { status, platform }
+                    },
+                    Err(_err) => todo!("handle error in process joining?"),
+                }
+            }
+            else => futures_util::future::pending().await
+        }
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -100,16 +100,9 @@ impl AppRunner {
         fullstack_address: Option<SocketAddr>,
         should_open_web: bool,
     ) -> Result<&AppHandle> {
-        let platform = app.build.build.platform();
-
         // Drop the old handle
-        // todo(jon): we should instead be sending the kill signal rather than dropping the process
-        // This would allow a more graceful shutdown and fix bugs like desktop not retaining its size
-        self.kill(platform);
-
-        // wait a tiny sec for the processes to die so we don't have fullstack servers on top of each other
-        // todo(jon): we should allow rebinding to the same port in fullstack itself
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        // This is a more forceful kill than soft_kill since the app entropy will be wiped
+        self.cleanup().await;
 
         // Add some cute logging
         if self.builds_opened == 0 {
@@ -132,29 +125,30 @@ impl AppRunner {
             .await?;
 
         self.builds_opened += 1;
-        self.running.insert(platform, handle);
+        self.running = Some(handle);
 
-        Ok(self.running.get(&platform).unwrap())
-    }
-
-    pub(crate) fn kill(&mut self, platform: Platform) {
-        self.running.remove(&platform);
-    }
-
-    pub(crate) fn kill_all(&mut self) {
-        self.running.clear();
+        Ok(self.running.as_ref().unwrap())
     }
 
     /// Open an existing app bundle, if it exists
     pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
-        if let Some((_, app)) = self
-            .running
-            .iter_mut()
-            .find(|(platform, _)| **platform != Platform::Server)
-        {
-            app.open(devserver.devserver_address(), None, true).await?;
+        let fullstack_address = devserver.proxied_server_address();
+
+        if let Some(runner) = self.running.as_mut() {
+            runner.soft_kill().await;
+            runner
+                .open(devserver.devserver_address(), fullstack_address, true)
+                .await?;
         }
+
         Ok(())
+    }
+
+    /// Shutdown all the running processes
+    pub(crate) async fn cleanup(&mut self) {
+        if let Some(mut process) = self.running.take() {
+            process.cleanup().await;
+        }
     }
 
     pub(crate) async fn attempt_hot_reload(
@@ -181,8 +175,13 @@ impl AppRunner {
                 continue;
             }
 
+            // Special-case the Cargo.toml file - we want updates here to cause a full rebuild
+            if path.file_name().and_then(|v| v.to_str()) == Some("Cargo.toml") {
+                return None;
+            }
+
             // Otherwise, it might be an asset and we should look for it in all the running apps
-            for runner in self.running.values() {
+            if let Some(runner) = self.running.as_mut() {
                 if let Some(bundled_name) = runner.hotreload_bundled_asset(&path).await {
                     // todo(jon): don't hardcode this here
                     let asset_relative = PathBuf::from("/assets/").join(bundled_name);
@@ -274,27 +273,29 @@ impl AppRunner {
     }
 
     pub(crate) async fn client_connected(&mut self) {
-        for (platform, runner) in self.running.iter_mut() {
-            // Assign the runtime asset dir to the runner
-            if *platform == Platform::Ios {
-                // xcrun simctl get_app_container booted com.dioxuslabs
-                let res = tokio::process::Command::new("xcrun")
-                    .arg("simctl")
-                    .arg("get_app_container")
-                    .arg("booted")
-                    .arg(runner.app.build.krate.bundle_identifier())
-                    .output()
-                    .await;
+        let Some(handle) = self.running.as_mut() else {
+            return;
+        };
 
-                if let Ok(res) = res {
-                    tracing::trace!("Using runtime asset dir: {:?}", res);
+        // Assign the runtime asset dir to the runner
+        if handle.app.build.build.platform() == Platform::Ios {
+            // xcrun simctl get_app_container booted com.dioxuslabs
+            let res = tokio::process::Command::new("xcrun")
+                .arg("simctl")
+                .arg("get_app_container")
+                .arg("booted")
+                .arg(handle.app.build.krate.bundle_identifier())
+                .output()
+                .await;
 
-                    if let Ok(out) = String::from_utf8(res.stdout) {
-                        let out = out.trim();
+            if let Ok(res) = res {
+                tracing::trace!("Using runtime asset dir: {:?}", res);
 
-                        tracing::trace!("Setting Runtime asset dir: {out:?}");
-                        runner.runtime_asst_dir = Some(PathBuf::from(out));
-                    }
+                if let Ok(out) = String::from_utf8(res.stdout) {
+                    let out = out.trim();
+
+                    tracing::trace!("Setting Runtime asset dir: {out:?}");
+                    handle.runtime_asst_dir = Some(PathBuf::from(out));
                 }
             }
         }
@@ -332,5 +333,11 @@ impl AppRunner {
                 }
             }
         }
+    }
+
+    fn flush_session_cache(&self) {
+        let cache_dir = self.krate.session_cache_dir();
+        _ = std::fs::remove_dir_all(&cache_dir);
+        _ = std::fs::create_dir_all(&cache_dir);
     }
 }

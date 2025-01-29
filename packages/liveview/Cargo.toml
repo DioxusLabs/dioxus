@@ -36,7 +36,6 @@ generational-box = { workspace = true }
 axum = { workspace = true, optional = true, features = ["ws"] }
 
 [dev-dependencies]
-pretty_env_logger = { version = "0.5.0" }
 tokio = { workspace = true, features = ["full"] }
 axum = { workspace = true, features = ["ws"] }
 tower = { workspace = true }

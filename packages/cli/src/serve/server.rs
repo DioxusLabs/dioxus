@@ -31,10 +31,9 @@ use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
     fs, io,
-    net::{IpAddr, SocketAddr, TcpListener},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
     path::Path,
-    sync::Arc,
-    sync::RwLock,
+    sync::{Arc, RwLock},
 };
 use tower_http::{
     cors::Any,
@@ -49,7 +48,8 @@ use tower_http::{
 /// which carries all the message types. This would make it easier for us to add more message types
 /// and better tooling on the pages that we serve.
 pub(crate) struct WebServer {
-    devserver_ip: IpAddr,
+    devserver_exposed_ip: IpAddr,
+    devserver_bind_ip: IpAddr,
     devserver_port: u16,
     proxied_port: Option<u16>,
     hot_reload_sockets: Vec<WebSocket>,
@@ -71,18 +71,43 @@ impl WebServer {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
-        let devserver_ip = args.address.addr;
-        let devserver_port = args.address.port;
-        let devserver_address = SocketAddr::new(devserver_ip, devserver_port);
+        const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+
+        // Use 0.0.0.0 as the default address if none is specified - this will let us expose the
+        // devserver to the network (for other devices like phones/embedded)
+        let devserver_bind_ip = args.address.addr.unwrap_or(SELF_IP);
+
+        // If the user specified a port, use that, otherwise use any available port, preferring 8080
+        let devserver_port = args
+            .address
+            .port
+            .unwrap_or_else(|| get_available_port(devserver_bind_ip, Some(8080)).unwrap_or(8080));
 
         // All servers will end up behind us (the devserver) but on a different port
         // This is so we can serve a loading screen as well as devtools without anything particularly fancy
         let proxied_port = args
             .should_proxy_build()
-            .then(|| get_available_port(devserver_ip))
+            .then(|| get_available_port(devserver_bind_ip, None))
             .flatten();
 
-        let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_ip, port));
+        // Create the listener that we'll pass into the devserver, but save its IP here so
+        // we can display it to the user in the tui
+        let devserver_bind_address = SocketAddr::new(devserver_bind_ip, devserver_port);
+        let listener = std::net::TcpListener::bind(devserver_bind_address).with_context(|| {
+            anyhow::anyhow!(
+                "Failed to bind server to: {devserver_bind_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
+            )
+        })?;
+
+        // If the IP is 0.0.0.0, we need to get the actual IP of the machine
+        // This will let ios/android/network clients connect to the devserver
+        let devserver_exposed_ip = if devserver_bind_ip == SELF_IP {
+            local_ip_address::local_ip().unwrap_or(devserver_bind_ip)
+        } else {
+            devserver_bind_ip
+        };
+
+        let proxied_address = proxied_port.map(|port| SocketAddr::new(devserver_exposed_ip, port));
 
         // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
@@ -95,14 +120,6 @@ impl WebServer {
             build_status.clone(),
         )?;
 
-        // Create the listener that we'll pass into the devserver, but save its IP here so
-        // we can display it to the user in the tui
-        let listener = std::net::TcpListener::bind(devserver_address).with_context(|| {
-            anyhow::anyhow!(
-                "Failed to bind server to: {devserver_address}, is there another devserver running?\nTo run multiple devservers, use the --port flag to specify a different port"
-            )
-        })?;
-
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
             krate.config.web.https.clone(),
@@ -113,7 +130,8 @@ impl WebServer {
         Ok(Self {
             build_status,
             proxied_port,
-            devserver_ip,
+            devserver_bind_ip,
+            devserver_exposed_ip,
             devserver_port,
             hot_reload_sockets: Default::default(),
             build_status_sockets: Default::default(),
@@ -315,13 +333,13 @@ impl WebServer {
 
     /// Get the address the devserver should run on
     pub fn devserver_address(&self) -> SocketAddr {
-        SocketAddr::new(self.devserver_ip, self.devserver_port)
+        SocketAddr::new(self.devserver_exposed_ip, self.devserver_port)
     }
 
     // Get the address the server should run on if we're serving the user's server
     pub fn proxied_server_address(&self) -> Option<SocketAddr> {
         self.proxied_port
-            .map(|port| SocketAddr::new(self.devserver_ip, port))
+            .map(|port| SocketAddr::new(self.devserver_exposed_ip, port))
     }
 
     pub fn server_address(&self) -> Option<SocketAddr> {
@@ -329,6 +347,22 @@ impl WebServer {
             Platform::Web | Platform::Server => Some(self.devserver_address()),
             _ => self.proxied_server_address(),
         }
+    }
+
+    /// Get the address the server is running - showing 127.0.0.1 if the devserver is bound to 0.0.0.0
+    /// This is designed this way to not confuse users who expect the devserver to be bound to localhost
+    /// ... which it is, but they don't know that 0.0.0.0 also serves localhost.
+    pub fn displayed_address(&self) -> Option<SocketAddr> {
+        let mut address = self.server_address()?;
+
+        // Set the port to the devserver port since that's usually what people expect
+        address.set_port(self.devserver_port);
+
+        if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+            address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), address.port());
+        }
+
+        Some(address)
     }
 }
 
@@ -382,19 +416,20 @@ fn build_devserver_router(
     if args.should_proxy_build() {
         // For fullstack, liveview, and server, forward all requests to the inner server
         let address = fullstack_address.unwrap();
+        tracing::debug!("Proxying requests to fullstack server at {address}");
         router = router.nest_service("/",super::proxy::proxy_to(
-                format!("http://{address}").parse().unwrap(),
-                true,
-                |error| {
-                    Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Body::from(format!(
-                            "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {:#?}",
-                            error
-                        )))
-                        .unwrap()
-                },
-            ));
+            format!("http://{address}").parse().unwrap(),
+            true,
+            |error| {
+                Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::from(format!(
+                        "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {:#?}",
+                        error
+                    )))
+                    .unwrap()
+            },
+        ));
     } else {
         // Otherwise, just serve the dir ourselves
         // Route file service to output the .wasm and assets if this is a web build
@@ -616,7 +651,15 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
 ///
 /// Todo: we might want to do this on every new build in case the OS tries to bind things to this port
 /// and we don't already have something bound to it. There's no great way of "reserving" a port.
-fn get_available_port(address: IpAddr) -> Option<u16> {
+fn get_available_port(address: IpAddr, prefer: Option<u16>) -> Option<u16> {
+    // First, try to bind to the preferred port
+    if let Some(port) = prefer {
+        if let Ok(_listener) = TcpListener::bind((address, port)) {
+            return Some(port);
+        }
+    }
+
+    // Otherwise, try to bind to any port and return the first one we can
     TcpListener::bind((address, 0))
         .map(|listener| listener.local_addr().unwrap().port())
         .ok()

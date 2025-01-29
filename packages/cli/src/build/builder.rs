@@ -315,4 +315,9 @@ impl Builder {
             _ => false,
         }
     }
+
+    /// Check if the queued build is blocking hotreloads
+    pub(crate) fn can_receive_hotreloads(&self) -> bool {
+        matches!(&self.stage, BuildStage::Success)
+    }
 }
