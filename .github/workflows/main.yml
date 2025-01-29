@@ -49,9 +49,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.84.0
-      - uses: Swatinem/rust-cache@v2
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-all-crates: "true"
+      - uses: jkelleyrtp/rust-cache@jk/speedy-cache
         with:
           cache-all-crates: "true"
+          incremental: "true"
       # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
       - name: install_cargo_msrv
         run: cargo install cargo-msrv --all-features --version 0.16.3 --locked
@@ -80,9 +84,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-all-crates: "true"
+      - uses: jkelleyrtp/rust-cache@jk/speedy-cache
         with:
           cache-all-crates: "true"
+          incremental: "true"
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile
 
@@ -103,9 +111,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-all-crates: "true"
+      - uses: jkelleyrtp/rust-cache@jk/speedy-cache
         with:
           cache-all-crates: "true"
+          incremental: "true"
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile --profile release-unoptimized
 
@@ -118,9 +130,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt
-      - uses: Swatinem/rust-cache@v2
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-all-crates: "true"
+      - uses: jkelleyrtp/rust-cache@jk/speedy-cache
         with:
           cache-all-crates: "true"
+          incremental: "true"
       - run: cargo fmt --all -- --check
 
   docs:
@@ -135,9 +151,13 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: ${{ env.rust_nightly }}
-      - uses: Swatinem/rust-cache@v2
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-all-crates: "true"
+      - uses: jkelleyrtp/rust-cache@jk/speedy-cache
         with:
           cache-all-crates: "true"
+          incremental: "true"
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
@@ -157,9 +177,13 @@ jobs:
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
       - uses: dtolnay/rust-toolchain@1.84.0
-      - uses: Swatinem/rust-cache@v2
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-all-crates: "true"
+      - uses: jkelleyrtp/rust-cache@jk/speedy-cache
         with:
           cache-all-crates: "true"
+          incremental: "true"
       - run: cargo check --workspace --all-features --all-targets
 
   clippy:
@@ -173,9 +197,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-all-crates: "true"
+      - uses: jkelleyrtp/rust-cache@jk/speedy-cache
         with:
           cache-all-crates: "true"
+          incremental: "true"
       - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
 
   nix:
@@ -216,9 +244,13 @@ jobs:
         with:
           toolchain: stable
           targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      # - uses: Swatinem/rust-cache@v2
+      #   with:
+      #     cache-all-crates: "true"
+      - uses: jkelleyrtp/rust-cache@jk/speedy-cache
         with:
           cache-all-crates: "true"
+          incremental: "true"
       - name: Prebuild CLI
         run: |
           cargo build --package dioxus-cli --release
@@ -364,7 +396,6 @@ jobs:
   #     - uses: Swatinem/rust-cache@v2
   #       with:
   #         cache-all-crates: "true"
-  #         cache-on-failure: "true"
   #     - name: Check semver
   #       uses: obi1kenobi/cargo-semver-checks-action@v2
   #       with:
