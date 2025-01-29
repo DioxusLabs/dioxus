@@ -98,7 +98,7 @@ impl DesktopService {
 
     /// Create a new window using the props and window builder
     ///
-    /// Returns a `MaybeDesktopService` to use the new window's `DeskopService` once initialized.
+    /// Returns a `MaybeDesktopService` to use the new window's `DesktopService` once initialized.
     ///
     /// You can use this to control other windows from the current window.
     ///
@@ -295,7 +295,7 @@ fn is_main_thread() -> bool {
     result != NO
 }
 
-/// A handle to a [`WeakDesktopContext`] that hasn't been initalized yet.
+/// A handle to a [`WeakDesktopContext`] that hasn't been initialized yet.
 pub struct MaybeDesktopContext {
     rx: Receiver<WeakDesktopContext>,
 }
@@ -305,7 +305,7 @@ impl MaybeDesktopContext {
         Self { rx }
     }
 
-    /// Get the [`WeakDesktopContext`], waiting if not initalized yet.
+    /// Get the [`WeakDesktopContext`], waiting if not initialized yet.
     pub async fn get(self) -> WeakDesktopContext {
         self.rx.await.unwrap()
     }
