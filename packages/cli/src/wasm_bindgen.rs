@@ -447,15 +447,15 @@ mod test {
         verify_installation(&binary).await;
     }
 
-    // /// Test the cargo installer.
-    // #[tokio::test]
-    // async fn test_cargo_install() {
-    //     let binary = WasmBindgen::new(VERSION);
-    //     reset_test().await;
-    //     binary.install_cargo().await.unwrap();
-    //     test_verify_install().await;
-    //     verify_installation(&binary).await;
-    // }
+    /// Test the cargo installer.
+    #[tokio::test]
+    async fn test_cargo_install() {
+        let binary = WasmBindgen::new(VERSION);
+        reset_test().await;
+        binary.install_cargo().await.unwrap();
+        test_verify_install().await;
+        verify_installation(&binary).await;
+    }
 
     // CI doesn't have binstall.
     // Test the binstall installer
