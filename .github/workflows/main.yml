@@ -45,7 +45,7 @@ jobs:
   check-msrv:
     if: github.event.pull_request.draft == false
     name: Check MSRV
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.84.0
@@ -66,9 +66,19 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Test Suite
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # - name: Free Disk Space (Ubuntu)
+      #   uses: jlumbroso/free-disk-space@v1.3.1
+      #   with: # speed things up a bit
+      #     large-packages: false
+      #     docker-images: false
+      #     swap-storage: false
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
@@ -81,9 +91,19 @@ jobs:
   release-test:
     if: github.event.pull_request.draft == false
     name: Test Suite with Optimizations
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # - name: Free Disk Space (Ubuntu)
+      #   uses: jlumbroso/free-disk-space@v1.3.1
+      #   with: # speed things up a bit
+      #     large-packages: false
+      #     docker-images: false
+      #     swap-storage: false
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
@@ -96,7 +116,7 @@ jobs:
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.84.0
@@ -110,9 +130,13 @@ jobs:
   docs:
     if: github.event.pull_request.draft == false
     name: Docs
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - name: Install Rust ${{ env.rust_nightly }}
         uses: dtolnay/rust-toolchain@nightly
         with:
@@ -133,9 +157,13 @@ jobs:
   check:
     if: github.event.pull_request.draft == false
     name: Check
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.84.0
       - uses: jkelleyrtp/rust-cache@jk/extra-logging
         with:
@@ -145,9 +173,13 @@ jobs:
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
@@ -180,6 +212,12 @@ jobs:
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
+      # - name: Free Disk Space (Ubuntu)
+      #   uses: jlumbroso/free-disk-space@v1.3.1
+      #   with: # speed things up a bit
+      #     large-packages: false
+      #     docker-images: false
+      #     swap-storage: false
       - uses: actions/setup-node@v4
         with:
           node-version: 16
@@ -233,14 +271,6 @@ jobs:
               args: "--all --tests",
             }
           - {
-              target: x86_64-unknown-linux-gnu,
-              os: ubuntu-latest,
-              toolchain: "1.84.0",
-              cross: false,
-              command: "build",
-              args: "--all --tests",
-            }
-          - {
               target: aarch64-apple-ios,
               os: macos-latest,
               toolchain: "1.84.0",
@@ -266,10 +296,6 @@ jobs:
           large-packages: false
           docker-images: false
           swap-storage: false
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-          version: 1.0
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
