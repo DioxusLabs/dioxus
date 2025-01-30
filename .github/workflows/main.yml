@@ -69,14 +69,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
@@ -92,14 +88,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
@@ -129,8 +121,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - name: Install Rust ${{ env.rust_nightly }}
         uses: dtolnay/rust-toolchain@nightly
         with:
@@ -154,8 +148,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.84.0
       - uses: Swatinem/rust-cache@v2
         with:
@@ -168,8 +164,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
@@ -202,12 +200,6 @@ jobs:
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
       - uses: actions/setup-node@v4
         with:
           node-version: 16
@@ -280,12 +272,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Free Disk Space (Ubuntu)
-        if: ${{ matrix.platform.os == 'ubuntu-latest' }}
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
