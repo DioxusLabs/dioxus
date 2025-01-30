@@ -8,6 +8,10 @@ const path = require("path");
  */
 // require('dotenv').config();
 
+const runDxCmd = process.env.CI
+  ? "cargo run --package dioxus-cli --release -- "
+  : "target/release/dx";
+
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -21,6 +25,7 @@ module.exports = defineConfig({
   retries: process.env.CI ? 2 : 0,
   /* Opt out of parallel tests on CI. */
   // workers: process.env.CI ? 1 : undefined,
+  workers: 8,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: "html",
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
@@ -87,7 +92,8 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "web"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 9999',
+        runDxCmd +
+        'serve --force-sequential --platform web --addr "127.0.0.1" --port 9999',
       port: 9999,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -96,7 +102,8 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 3333',
+        runDxCmd +
+        'serve --force-sequential --platform web --addr "127.0.0.1" --port 3333',
       port: 3333,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -105,7 +112,8 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack-mounted"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 7777',
+        runDxCmd +
+        'serve --force-sequential --platform web --addr "127.0.0.1" --port 7777',
       port: 7777,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -114,7 +122,8 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "suspense-carousel"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 4040',
+        runDxCmd +
+        'serve --force-sequential --platform web --addr "127.0.0.1" --port 4040',
       port: 4040,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -123,7 +132,8 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "nested-suspense"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 5050',
+        runDxCmd +
+        'serve --force-sequential --platform web --addr "127.0.0.1" --port 5050',
       port: 5050,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -132,7 +142,8 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "nested-suspense"),
       command:
-        'cargo run --package dioxus-cli --release -- serve --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
+        runDxCmd +
+        'serve --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
       port: 6060,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -141,8 +152,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "cli-optimization"),
       // Remove the cache folder for the cli-optimization build to force a full cache reset
-      command:
-        'cargo run --package dioxus-cli --release -- serve --addr "127.0.0.1" --port 8989',
+      command: runDxCmd + 'serve --addr "127.0.0.1" --port 8989',
       port: 8989,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
