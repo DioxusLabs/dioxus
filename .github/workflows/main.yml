@@ -233,7 +233,7 @@ jobs:
               args: "--all --tests",
             }
           - {
-              target: aarch64-unknown-linux-gnu,
+              target: x86_64-unknown-linux-gnu,
               os: ubuntu-latest,
               toolchain: "1.84.0",
               cross: false,
