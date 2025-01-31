@@ -1944,8 +1944,9 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.0.0"
-source = "git+https://github.com/dioxuslabs/blitz?rev=694964900f3f6b8a269d5df487aafe1c042d1f46#694964900f3f6b8a269d5df487aafe1c042d1f46"
+source = "git+https://github.com/dioxuslabs/blitz?rev=c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c#c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c"
 dependencies = [
+ "accesskit",
  "app_units",
  "atomic_refcell",
  "blitz-traits",
@@ -1976,7 +1977,7 @@ dependencies = [
 [[package]]
 name = "blitz-net"
 version = "0.1.0"
-source = "git+https://github.com/dioxuslabs/blitz?rev=694964900f3f6b8a269d5df487aafe1c042d1f46#694964900f3f6b8a269d5df487aafe1c042d1f46"
+source = "git+https://github.com/dioxuslabs/blitz?rev=c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c#c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c"
 dependencies = [
  "blitz-traits",
  "data-url 0.3.1",
@@ -1988,7 +1989,7 @@ dependencies = [
 [[package]]
 name = "blitz-renderer-vello"
 version = "0.1.0"
-source = "git+https://github.com/dioxuslabs/blitz?rev=694964900f3f6b8a269d5df487aafe1c042d1f46#694964900f3f6b8a269d5df487aafe1c042d1f46"
+source = "git+https://github.com/dioxuslabs/blitz?rev=c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c#c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -2009,7 +2010,7 @@ dependencies = [
 [[package]]
 name = "blitz-shell"
 version = "0.0.0"
-source = "git+https://github.com/dioxuslabs/blitz?rev=694964900f3f6b8a269d5df487aafe1c042d1f46#694964900f3f6b8a269d5df487aafe1c042d1f46"
+source = "git+https://github.com/dioxuslabs/blitz?rev=c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c#c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -2026,7 +2027,7 @@ dependencies = [
 [[package]]
 name = "blitz-traits"
 version = "0.1.0"
-source = "git+https://github.com/dioxuslabs/blitz?rev=694964900f3f6b8a269d5df487aafe1c042d1f46#694964900f3f6b8a269d5df487aafe1c042d1f46"
+source = "git+https://github.com/dioxuslabs/blitz?rev=c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c#c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c"
 dependencies = [
  "bitflags 2.8.0",
  "bytes",
@@ -13214,7 +13215,7 @@ dependencies = [
 [[package]]
 name = "stylo_taffy"
 version = "0.1.0"
-source = "git+https://github.com/dioxuslabs/blitz?rev=694964900f3f6b8a269d5df487aafe1c042d1f46#694964900f3f6b8a269d5df487aafe1c042d1f46"
+source = "git+https://github.com/dioxuslabs/blitz?rev=c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c#c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c"
 dependencies = [
  "style",
  "taffy",

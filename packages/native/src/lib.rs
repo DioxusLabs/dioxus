@@ -22,18 +22,19 @@ pub use event::DioxusNativeEvent;
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
+use std::any::Any;
 
 type NodeId = usize;
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
 pub fn launch(root: fn() -> Element) {
-    launch_cfg(root, vec![], Config::default())
+    launch_cfg(root, vec![], vec![])
 }
 
 pub fn launch_cfg(
     root: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
-    cfg: Config,
+    cfg: Vec<Box<dyn Any>>,
 ) {
     launch_cfg_with_props(root, (), contexts, cfg)
 }
@@ -43,8 +44,12 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     root: impl ComponentFunction<P, M>,
     props: P,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
-    _cfg: Config,
+    _cfg: Vec<Box<dyn Any>>,
 ) {
+    let _cfg = _cfg
+        .into_iter()
+        .find_map(|cfg| cfg.downcast::<Config>().ok())
+        .unwrap_or_default();
     let event_loop = create_default_event_loop::<BlitzShellEvent>();
 
     #[cfg(feature = "net")]

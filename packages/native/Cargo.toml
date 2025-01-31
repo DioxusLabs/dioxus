@@ -14,18 +14,18 @@ keywords = ["dom", "ui", "gui", "react"]
 default = ["accessibility", "hot-reload", "menu", "tracing", "net", "svg"]
 svg = ["blitz-dom/svg", "blitz-renderer-vello/svg"]
 net = ["dep:tokio", "dep:blitz-net"]
-accessibility = ["blitz-shell/accessibility"]
+accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 menu = ["blitz-shell/menu"]
 tracing = ["dep:tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
 hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
 
 [dependencies]
-# Blitz dependencies
-blitz-renderer-vello = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46", default-features = false }
-blitz-dom = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46", default-features = false }
-blitz-net = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46", optional = true }
-blitz-traits = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46" }
-blitz-shell = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46", default-features = false }
+# Blitz dependenciesa
+blitz-renderer-vello = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", default-features = false }
+blitz-dom = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", default-features = false }
+blitz-net = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", optional = true }
+blitz-traits = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c" }
+blitz-shell = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", default-features = false }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
