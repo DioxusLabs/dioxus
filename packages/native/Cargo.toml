@@ -1,8 +1,14 @@
 [package]
 name = "dioxus-native"
-version = "0.0.0"
-license.workspace = true
+version = { workspace = true }
+authors = ["Jonathan Kelley", "Nico Burns"]
 edition = "2021"
+description = "Native renderer for Dioxus based on blitz"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
+keywords = ["dom", "ui", "gui", "react"]
+
 
 [features]
 default = ["accessibility", "hot-reload", "menu", "tracing", "net", "svg"]
@@ -15,11 +21,11 @@ hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
 
 [dependencies]
 # Blitz dependencies
-blitz-renderer-vello = { path = "../blitz-renderer-vello", default-features = false }
-blitz-dom = { path = "../blitz-dom", default-features = false }
-blitz-net = { path = "../blitz-net", optional = true }
-blitz-traits = { path = "../blitz-traits" }
-blitz-shell = { path = "../blitz-shell", default-features = false }
+blitz-renderer-vello = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46", default-features = false }
+blitz-dom = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46", default-features = false }
+blitz-net = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46", optional = true }
+blitz-traits = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46" }
+blitz-shell = { git = "https://github.com/dioxuslabs/blitz", rev="694964900f3f6b8a269d5df487aafe1c042d1f46", default-features = false }
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
