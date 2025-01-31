@@ -23,7 +23,7 @@ use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
 use winit::window::Window;
-use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
+use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
@@ -174,7 +174,12 @@ pub(crate) struct WebviewInstance {
 }
 
 impl WebviewInstance {
-    pub(crate) fn new(mut cfg: Config, window: Window, dom: VirtualDom, shared: Rc<SharedContext>) -> Self {
+    pub(crate) fn new(
+        mut cfg: Config,
+        window: Window,
+        dom: VirtualDom,
+        shared: Rc<SharedContext>,
+    ) -> Self {
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
         let asset_handlers = AssetHandlerRegistry::new();
@@ -190,7 +195,7 @@ impl WebviewInstance {
                 asset_handlers,
                 edits
             ];
-            move |request, responder: RequestAsyncResponder| {
+            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -258,39 +263,7 @@ impl WebviewInstance {
             }
         };
 
-        #[cfg(any(
-            target_os = "windows",
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "android"
-        ))]
-        let mut webview = if cfg.as_child_window {
-            WebViewBuilder::new_as_child(&window)
-        } else {
-            WebViewBuilder::new(&window)
-        };
-
-        #[cfg(not(any(
-            target_os = "windows",
-            target_os = "macos",
-            target_os = "ios",
-            target_os = "android"
-        )))]
-        let mut webview = {
-            use tao::platform::unix::WindowExtUnix;
-            use wry::WebViewBuilderExtUnix;
-            let vbox = window.default_vbox().unwrap();
-            WebViewBuilder::new_gtk(vbox)
-        };
-
-        // Disable the webview default shortcuts to disable the reload shortcut
-        #[cfg(target_os = "windows")]
-        {
-            use wry::WebViewBuilderExtWindows;
-            webview = webview.with_browser_accelerator_keys(false);
-        }
-
-        webview = webview
+        let mut webview = WebViewBuilder::with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
                 size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(
@@ -314,8 +287,14 @@ impl WebviewInstance {
                 }
             }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_web_context(&mut web_context)
             .with_drag_drop_handler(file_drop_handler);
+
+        // Disable the webview default shortcuts to disable the reload shortcut
+        #[cfg(target_os = "windows")]
+        {
+            use wry::WebViewBuilderExtWindows;
+            webview = webview.with_browser_accelerator_keys(false);
+        }
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
@@ -349,7 +328,31 @@ impl WebviewInstance {
             webview = webview.with_devtools(true);
         }
 
-        let webview = webview.build().unwrap();
+        // Build the webview
+        #[cfg(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        ))]
+        let webview = match cfg.as_child_window {
+            true => webview.build_as_child(&window),
+            false => webview.build(&window),
+        }
+        .unwrap();
+
+        #[cfg(not(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        )))]
+        let mut webview = {
+            use tao::platform::unix::WindowExtUnix;
+            use wry::WebViewBuilderExtUnix;
+            let vbox = window.default_vbox().unwrap();
+            webview.build_gtk(vbox).unwrap()
+        };
 
         let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
             let menu_option = cfg.menu.into();

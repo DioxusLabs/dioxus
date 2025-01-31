@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Icon, Window, WindowAttributes, WindowLevel};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
-use wry::RequestAsyncResponder;
+use wry::{RequestAsyncResponder, WebViewId};
 
 use crate::ipc::UserWindowEvent;
 use crate::menubar::{default_menu_bar, DioxusMenu};
@@ -64,12 +64,12 @@ impl LaunchConfig for Config {}
 
 pub(crate) type WryProtocol = (
     String,
-    Box<dyn Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
+    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
 );
 
 pub(crate) type AsyncWryProtocol = (
     String,
-    Box<dyn Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
+    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
 );
 
 impl Config {
@@ -146,9 +146,7 @@ impl Config {
         // We need to do a swap because the window builder only takes itself as muy self
         self.window_attributes = attributes;
         // If the decorations are off for the window, remove the menu as well
-        if !self.window_attributes.decorations
-            && matches!(self.menu, MenuBuilderState::Unset)
-        {
+        if !self.window_attributes.decorations && matches!(self.menu, MenuBuilderState::Unset) {
             self.menu = MenuBuilderState::Set(None);
         }
         self
@@ -178,7 +176,7 @@ impl Config {
     /// Set a custom protocol
     pub fn with_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
-        F: Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
+        F: Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
     {
         self.protocols.push((name.to_string(), Box::new(handler)));
         self
@@ -212,7 +210,7 @@ impl Config {
     /// See [`wry`](wry::WebViewBuilder::with_asynchronous_custom_protocol) for more details on implementation
     pub fn with_asynchronous_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
-        F: Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
+        F: Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
     {
         self.asynchronous_protocols
             .push((name.to_string(), Box::new(handler)));
