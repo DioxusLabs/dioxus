@@ -124,3 +124,34 @@ test("web-sys closure", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(scrollDiv).toHaveText("the keydown event was triggered");
 });
+
+test("document elements", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the meta element is mounted
+  const meta = page.locator("meta#meta-head[name='testing']");
+  await meta.waitFor({ state: "attached" });
+  await expect(meta).toHaveAttribute("data", "dioxus-meta-element");
+
+  const link = page.locator("link#link-head[rel='stylesheet']");
+  await link.waitFor({ state: "attached" });
+  await expect(link).toHaveAttribute(
+    "href",
+    "https://fonts.googleapis.com/css?family=Roboto+Mono"
+  );
+
+  const stylesheet = page.locator("link#stylesheet-head[rel='stylesheet']");
+  await stylesheet.waitFor({ state: "attached" });
+  await expect(stylesheet).toHaveAttribute(
+    "href",
+    "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic"
+  );
+
+  const script = page.locator("script#script-head");
+  await script.waitFor({ state: "attached" });
+  await expect(script).toHaveAttribute("async", "true");
+
+  const style = page.locator("style#style-head");
+  await style.waitFor({ state: "attached" });
+  const main = page.locator("#main");
+  await expect(main).toHaveCSS("font-family", "Roboto");
+});

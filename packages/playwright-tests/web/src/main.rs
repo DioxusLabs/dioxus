@@ -62,6 +62,7 @@ fn app() -> Element {
         PreventDefault {}
         OnMounted {}
         WebSysClosure {}
+        DocumentElements {}
     }
 }
 
@@ -135,6 +136,22 @@ fn WebSysClosure() -> Element {
                 "the keydown event was triggered"
             }
         }
+    }
+}
+
+/// This component tests the document::* elements
+#[component]
+fn DocumentElements() -> Element {
+    rsx! {
+        document::Meta { id: "meta-head", name: "testing", data: "dioxus-meta-element" }
+        document::Link {
+            id: "link-head",
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css?family=Roboto+Mono"
+        }
+        document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
+        document::Script { id: "script-head", async: true, "console.log('hello world');" }
+        document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
     }
 }
 
