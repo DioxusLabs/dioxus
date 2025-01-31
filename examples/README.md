@@ -52,6 +52,8 @@ cargo run --example hello_world
 
 ### State Management
 
+[context_api](./context_api.rs) - Cross-component state sharing via Context API
+
 ### Async
 
 [login_form](./login_form.rs) - Login endpoint example
