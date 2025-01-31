@@ -122,7 +122,10 @@ impl HotReloadResult {
         new: &TemplateBody,
         name: String,
     ) -> Option<Self> {
-        let full_rebuild_state = LastBuildState::new(full_rebuild_state, name);
+        // Normalize both the full rebuild state and the new state for rendering
+        let full_rebuild_state = full_rebuild_state.normalized();
+        let new = new.normalized();
+        let full_rebuild_state = LastBuildState::new(&full_rebuild_state, name);
         let mut s = Self {
             full_rebuild_state,
             templates: Default::default(),
@@ -131,7 +134,7 @@ impl HotReloadResult {
             literal_component_properties: Default::default(),
         };
 
-        s.hotreload_body::<Ctx>(new)?;
+        s.hotreload_body::<Ctx>(&new)?;
 
         Some(s)
     }
@@ -621,7 +624,20 @@ impl HotReloadResult {
             // If it isn't a literal, try to find an exact match for the attribute value from the last build
             _ => {
                 let value_index = self.full_rebuild_state.dynamic_attributes.position(|a| {
-                    !matches!(a.name, AttributeName::Spread(_)) && a.value == attribute.value
+                    // Spread attributes are not hot reloaded
+                    if matches!(a.name, AttributeName::Spread(_)) {
+                        return false;
+                    }
+                    if a.value != attribute.value {
+                        return false;
+                    }
+                    // The type of event handlers is influenced by the event name, so te cannot hot reload between different event
+                    // names
+                    if matches!(a.value, AttributeValue::EventTokens(_)) && a.name != attribute.name
+                    {
+                        return false;
+                    }
+                    true
                 })?;
                 HotReloadAttributeValue::Dynamic(value_index)
             }

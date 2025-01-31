@@ -1,12 +1,15 @@
-use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
+use crate::{Arch, CliSettings};
 use crate::{Platform, Result};
 use anyhow::Context;
+use itertools::Itertools;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
+use once_cell::sync::OnceCell;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::{io::Write, path::Path};
+use tokio::process::Command;
 use toml_edit::Item;
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
@@ -16,23 +19,24 @@ pub(crate) struct DioxusCrate {
     pub(crate) package: NodeId,
     pub(crate) config: DioxusConfig,
     pub(crate) target: Target,
-    pub(crate) settings: CliSettings,
+    pub(crate) settings: Arc<CliSettings>,
 }
 
-pub(crate) static PROFILE_WASM: &str = "dioxus-wasm";
-pub(crate) static PROFILE_ANDROID: &str = "dioxus-android";
-pub(crate) static PROFILE_SERVER: &str = "dioxus-server";
+pub(crate) static PROFILE_WASM: &str = "wasm-dev";
+pub(crate) static PROFILE_ANDROID: &str = "android-dev";
+pub(crate) static PROFILE_SERVER: &str = "server-dev";
 
 impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
-        let mut cmd = Cmd::new();
-        cmd.features(target.features.clone());
-
-        let krates = krates::Builder::new()
+        tracing::debug!("Loading crate");
+        let cmd = Cmd::new();
+        let builder = krates::Builder::new();
+        let krates = builder
             .build(cmd, |_| {})
             .context("Failed to run cargo metadata")?;
 
         let package = find_main_package(&krates, target.package.clone())?;
+        tracing::debug!("Found package {package:?}");
 
         let dioxus_config = DioxusConfig::load(&krates, package)?.unwrap_or_default();
 
@@ -43,20 +47,63 @@ impl DioxusCrate {
             TargetKind::Bin
         };
 
+        let main_package = &krates[package];
+
         let target_name = target
             .example
             .clone()
             .or(target.bin.clone())
+            .or_else(|| {
+                if let Some(default_run) = &main_package.default_run {
+                    return Some(default_run.to_string());
+                }
+
+                let bin_count = main_package
+                    .targets
+                    .iter()
+                    .filter(|x| x.kind.contains(&target_kind))
+                    .count();
+                if bin_count != 1 {
+                    return None;
+                }
+
+                main_package.targets.iter().find_map(|x| {
+                    if x.kind.contains(&target_kind) {
+                        Some(x.name.clone())
+                    } else {
+                        None
+                    }
+                })
+            })
             .unwrap_or(package_name);
 
-        let main_package = &krates[package];
         let target = main_package
             .targets
             .iter()
             .find(|target| {
                 target_name == target.name.as_str() && target.kind.contains(&target_kind)
             })
-            .with_context(|| format!("Failed to find target {target_name}"))?
+            .with_context(|| {
+                let target_of_kind = |kind|-> String {
+                    let filtered_packages = main_package
+                .targets
+                .iter()
+                .filter_map(|target| {
+                    target.kind.contains(kind).then_some(target.name.as_str())
+                }).collect::<Vec<_>>();
+                filtered_packages.join(", ")};
+                if let Some(example) = &target.example {
+                    let examples = target_of_kind(&TargetKind::Example);
+                    format!("Failed to find example {example}. \nAvailable examples are:\n{}", examples)
+                } else if let Some(bin) = &target.bin {
+                    let binaries = target_of_kind(&TargetKind::Bin);
+                    format!("Failed to find binary {bin}. \nAvailable binaries are:\n{}", binaries)
+                } else {
+                    format!("Failed to find target {target_name}. \nIt looks like you are trying to build dioxus in a library crate. \
+                    You either need to run dx from inside a binary crate or build a specific example with the `--example` flag. \
+                    Available examples are:\n{}", target_of_kind(&TargetKind::Example))
+                }
+            })?
             .clone();
 
         let settings = CliSettings::load();
@@ -70,17 +117,28 @@ impl DioxusCrate {
         })
     }
 
-    /// Compose an asset directory. Represents the typical "public" directory
-    /// with publicly available resources (configurable in the `Dioxus.toml`).
-    pub(crate) fn legacy_asset_dir(&self) -> PathBuf {
-        self.crate_dir().join(&self.config.application.asset_dir)
+    /// The asset dir we used to support before manganis became the default.
+    /// This generally was just a folder in your Dioxus.toml called "assets" or "public" where users
+    /// would store their assets.
+    ///
+    /// With manganis you now use `asset!()` and we pick it up automatically.
+    pub(crate) fn legacy_asset_dir(&self) -> Option<PathBuf> {
+        self.config
+            .application
+            .asset_dir
+            .clone()
+            .map(|dir| self.crate_dir().join(dir))
     }
 
     /// Get the list of files in the "legacy" asset directory
     pub(crate) fn legacy_asset_dir_files(&self) -> Vec<PathBuf> {
         let mut files = vec![];
 
-        let Ok(read_dir) = self.legacy_asset_dir().read_dir() else {
+        let Some(legacy_asset_dir) = self.legacy_asset_dir() else {
+            return files;
+        };
+
+        let Ok(read_dir) = legacy_asset_dir.read_dir() else {
             return files;
         };
 
@@ -91,10 +149,30 @@ impl DioxusCrate {
         files
     }
 
+    /// Get the directory where this app can write to for this session that's guaranteed to be stable
+    /// for the same app. This is useful for emitting state like window position and size.
+    ///
+    /// The directory is specific for this app and might be
+    pub(crate) fn session_cache_dir(&self) -> PathBuf {
+        self.internal_out_dir()
+            .join(self.executable_name())
+            .join("session-cache")
+    }
+
+    /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
+    /// We don't support workspaces yet since that would cause a collision of bundles per project.
+    pub(crate) fn crate_out_dir(&self) -> Option<PathBuf> {
+        self.config
+            .application
+            .out_dir
+            .as_ref()
+            .map(|out_dir| self.crate_dir().join(out_dir))
+    }
+
     /// Compose an out directory. Represents the typical "dist" directory that
     /// is "distributed" after building an application (configurable in the
     /// `Dioxus.toml`).
-    fn out_dir(&self) -> PathBuf {
+    fn internal_out_dir(&self) -> PathBuf {
         let dir = self.workspace_dir().join("target").join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -108,7 +186,7 @@ impl DioxusCrate {
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
     pub(crate) fn build_dir(&self, platform: Platform, release: bool) -> PathBuf {
-        self.out_dir()
+        self.internal_out_dir()
             .join(self.executable_name())
             .join(if release { "release" } else { "debug" })
             .join(platform.build_folder_name())
@@ -119,7 +197,7 @@ impl DioxusCrate {
     /// target/dx/bundle/app/blah.exe
     /// target/dx/bundle/app/public/
     pub(crate) fn bundle_dir(&self, platform: Platform) -> PathBuf {
-        self.out_dir()
+        self.internal_out_dir()
             .join(self.executable_name())
             .join("bundle")
             .join(platform.build_folder_name())
@@ -173,6 +251,7 @@ impl DioxusCrate {
             .get_enabled_features(krate.kid)?
             .iter()
             .flat_map(|feature| {
+                tracing::trace!("Autodetecting platform from feature {feature}");
                 Platform::autodetect_from_cargo_feature(feature).map(|f| (f, feature.to_string()))
             })
             .collect::<Vec<_>>();
@@ -230,8 +309,6 @@ impl DioxusCrate {
             return possible_platforms.first().cloned();
         }
 
-        tracing::warn!("Could not autodetect platform. Platform must be explicitly specified. Pass `--platform <platform>` or set a default platform using a cargo feature.");
-
         None
     }
 
@@ -246,13 +323,13 @@ impl DioxusCrate {
     }
 
     /// Get the features required to build for the given platform
-    pub(crate) fn feature_for_platform(&self, platform: Platform) -> Option<String> {
+    pub(crate) fn feature_for_platform(&self, platform: Platform) -> String {
         let package = self.package();
 
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = platform.feature_name();
 
-        package.features.iter().find_map(|(key, features)| {
+        let res = package.features.iter().find_map(|(key, features)| {
             // if the feature is just the name of the platform, we use that
             if key == dioxus_feature {
                 return Some(key.clone());
@@ -271,7 +348,16 @@ impl DioxusCrate {
                     }
                 }
             }
+
             None
+        });
+
+        res.unwrap_or_else(|| {
+            let fallback = format!("dioxus/{}", platform.feature_name()) ;
+            tracing::debug!(
+                "Could not find explicit feature for platform {platform}, passing `fallback` instead"
+            );
+            fallback
         })
     }
 
@@ -281,18 +367,19 @@ impl DioxusCrate {
         self.config.web.pre_compress && release
     }
 
-    // The `opt-level=2` increases build times, but can noticeably decrease time
+    // The `opt-level=1` increases build times, but can noticeably decrease time
     // between saving changes and being able to interact with an app (for wasm/web). The "overall"
     // time difference (between having and not having the optimization) can be
     // almost imperceptible (~1 s) but also can be very noticeable (~6 s) — depends
     // on setup (hardware, OS, browser, idle load).
     //
-    // Find or create the client and server profiles in the .cargo/config.toml file
+    // Find or create the client and server profiles in the top-level Cargo.toml file
+    // todo(jon): we should/could make these optional by placing some defaults somewhere
     pub(crate) fn initialize_profiles(&self) -> crate::Result<()> {
-        let config_path = self.workspace_dir().join(".cargo/config.toml");
+        let config_path = self.workspace_dir().join("Cargo.toml");
         let mut config = match std::fs::read_to_string(&config_path) {
             Ok(config) => config.parse::<toml_edit::DocumentMut>().map_err(|e| {
-                crate::Error::Other(anyhow::anyhow!("Failed to parse .cargo/config.toml: {}", e))
+                crate::Error::Other(anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))
             })?,
             Err(_) => Default::default(),
         };
@@ -305,32 +392,25 @@ impl DioxusCrate {
             if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_WASM) {
                 let mut client = toml_edit::Table::new();
                 client.insert("inherits", Item::Value("dev".into()));
-                client.insert("opt-level", Item::Value(2.into()));
+                client.insert("opt-level", Item::Value(1.into()));
                 entry.insert(Item::Table(client));
             }
 
             if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_SERVER) {
                 let mut server = toml_edit::Table::new();
                 server.insert("inherits", Item::Value("dev".into()));
-                server.insert("opt-level", Item::Value(2.into()));
                 entry.insert(Item::Table(server));
             }
 
             if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_ANDROID) {
                 let mut android = toml_edit::Table::new();
                 android.insert("inherits", Item::Value("dev".into()));
-                android.insert("opt-level", Item::Value(2.into()));
                 entry.insert(Item::Table(android));
             }
         }
 
-        // Write the config back to the file
-        if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let file = std::fs::File::create(config_path)?;
-        let mut buf_writer = std::io::BufWriter::new(file);
-        write!(buf_writer, "{}", config)?;
+        std::fs::write(config_path, config.to_string())
+            .context("Failed to write profiles to Cargo.toml")?;
 
         Ok(())
     }
@@ -365,7 +445,7 @@ impl DioxusCrate {
         for path in self.default_ignore_list() {
             ignore_builder
                 .add_line(None, path)
-                .expect("failed to add path to file excluder");
+                .expect("failed to add path to file excluded");
         }
 
         ignore_builder.build().unwrap()
@@ -486,7 +566,7 @@ impl DioxusCrate {
         for path in self.default_ignore_list() {
             ignore_builder
                 .add_line(None, path)
-                .expect("failed to add path to file excluder");
+                .expect("failed to add path to file excluded");
         }
         ignore_builder.build().unwrap()
     }
@@ -547,6 +627,135 @@ impl DioxusCrate {
 
         krates
     }
+
+    /// Attempt to retrieve the path to ADB
+    pub(crate) fn android_adb() -> PathBuf {
+        static PATH: once_cell::sync::Lazy<PathBuf> = once_cell::sync::Lazy::new(|| {
+            let Some(sdk) = DioxusCrate::android_sdk() else {
+                return PathBuf::from("adb");
+            };
+
+            let tools = sdk.join("platform-tools");
+
+            if tools.join("adb").exists() {
+                return tools.join("adb");
+            }
+
+            if tools.join("adb.exe").exists() {
+                return tools.join("adb.exe");
+            }
+
+            PathBuf::from("adb")
+        });
+
+        PATH.clone()
+    }
+
+    pub(crate) fn android_sdk() -> Option<PathBuf> {
+        var_or_debug("ANDROID_SDK_ROOT")
+            .or_else(|| var_or_debug("ANDROID_SDK"))
+            .or_else(|| var_or_debug("ANDROID_HOME"))
+    }
+
+    pub(crate) fn android_ndk(&self) -> Option<PathBuf> {
+        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
+        static PATH: once_cell::sync::Lazy<Option<PathBuf>> = once_cell::sync::Lazy::new(|| {
+            // attempt to autodetect the ndk path from env vars (usually set by the shell)
+            let auto_detected_ndk =
+                var_or_debug("NDK_HOME").or_else(|| var_or_debug("ANDROID_NDK_HOME"));
+
+            if let Some(home) = auto_detected_ndk {
+                return Some(home);
+            }
+
+            let sdk = var_or_debug("ANDROID_SDK_ROOT")
+                .or_else(|| var_or_debug("ANDROID_SDK"))
+                .or_else(|| var_or_debug("ANDROID_HOME"))?;
+
+            let ndk = sdk.join("ndk");
+
+            ndk.read_dir()
+                .ok()?
+                .flatten()
+                .map(|dir| (dir.file_name(), dir.path()))
+                .sorted()
+                .last()
+                .map(|(_, path)| path.to_path_buf())
+        });
+
+        PATH.clone()
+    }
+
+    pub(crate) async fn autodetect_android_arch() -> Option<Arch> {
+        // Try auto detecting arch through adb.
+        static AUTO_ARCH: OnceCell<Option<Arch>> = OnceCell::new();
+
+        match AUTO_ARCH.get() {
+            Some(a) => *a,
+            None => {
+                // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
+                let output = Command::new("adb")
+                    .arg("shell")
+                    .arg("uname")
+                    .arg("-m")
+                    .output()
+                    .await;
+
+                let out = match output {
+                    Ok(o) => o,
+                    Err(e) => {
+                        tracing::debug!("ADB command failed: {:?}", e);
+                        return None;
+                    }
+                };
+
+                // Parse ADB output
+                let Ok(out) = String::from_utf8(out.stdout) else {
+                    tracing::debug!("ADB returned unexpected data.");
+                    return None;
+                };
+                let trimmed = out.trim().to_string();
+                tracing::trace!("ADB Returned: `{trimmed:?}`");
+
+                // Set the cell
+                let arch = Arch::try_from(trimmed).ok();
+                AUTO_ARCH
+                    .set(arch)
+                    .expect("the cell should have been checked empty by the match condition");
+
+                arch
+            }
+        }
+    }
+
+    pub(crate) fn mobile_org(&self) -> String {
+        let identifier = self.bundle_identifier();
+        let mut split = identifier.splitn(3, '.');
+        let sub = split
+            .next()
+            .expect("Identifier to have at least 3 periods like `com.example.app`");
+        let tld = split
+            .next()
+            .expect("Identifier to have at least 3 periods like `com.example.app`");
+        format!("{}.{}", sub, tld)
+    }
+
+    pub(crate) fn bundled_app_name(&self) -> String {
+        use convert_case::{Case, Casing};
+        self.executable_name().to_case(Case::Pascal)
+    }
+
+    pub(crate) fn full_mobile_app_name(&self) -> String {
+        format!("{}.{}", self.mobile_org(), self.bundled_app_name())
+    }
+
+    pub(crate) fn bundle_identifier(&self) -> String {
+        if let Some(identifier) = self.config.bundle.identifier.clone() {
+            return identifier.clone();
+        }
+
+        format!("com.example.{}", self.bundled_app_name())
+    }
 }
 
 impl std::fmt::Debug for DioxusCrate {
@@ -561,60 +770,79 @@ impl std::fmt::Debug for DioxusCrate {
 
 // Find the main package in the workspace
 fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId> {
-    let kid = match package {
-        Some(package) => {
-            let mut workspace_members = krates.workspace_members();
-            let found = workspace_members.find_map(|node| {
-                if let krates::Node::Krate { id, krate, .. } = node {
-                    if krate.name == package {
-                        return Some(id);
-                    }
-                }
-                None
-            });
-
-            if found.is_none() {
-                eprintln!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
-                eprintln!("Packages in the workspace:");
-                for package in krates.workspace_members() {
-                    if let krates::Node::Krate { krate, .. } = package {
-                        eprintln!("{}", krate.name());
-                    }
+    if let Some(package) = package {
+        let mut workspace_members = krates.workspace_members();
+        let found = workspace_members.find_map(|node| {
+            if let krates::Node::Krate { id, krate, .. } = node {
+                if krate.name == package {
+                    return Some(id);
                 }
             }
+            None
+        });
 
-            found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?
+        if found.is_none() {
+            tracing::error!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
+            tracing::error!("Packages in the workspace:");
+            for package in krates.workspace_members() {
+                if let krates::Node::Krate { krate, .. } = package {
+                    tracing::error!("{}", krate.name());
+                }
+            }
         }
-        None => {
-            // Otherwise find the package that is the closest parent of the current directory
-            let current_dir = std::env::current_dir()?;
-            let current_dir = current_dir.as_path();
-            // Go through each member and find the path that is a parent of the current directory
-            let mut closest_parent = None;
-            for member in krates.workspace_members() {
-                if let krates::Node::Krate { id, krate, .. } = member {
-                    let member_path = krate.manifest_path.parent().unwrap();
-                    if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
-                        let len = path.components().count();
-                        match closest_parent {
-                            Some((_, closest_parent_len)) => {
-                                if len < closest_parent_len {
-                                    closest_parent = Some((id, len));
-                                }
-                            }
-                            None => {
-                                closest_parent = Some((id, len));
-                            }
+
+        let kid = found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?;
+
+        return Ok(krates.nid_for_kid(kid).unwrap());
+    };
+
+    // Otherwise find the package that is the closest parent of the current directory
+    let current_dir = std::env::current_dir()?;
+    let current_dir = current_dir.as_path();
+
+    // Go through each member and find the path that is a parent of the current directory
+    let mut closest_parent = None;
+    for member in krates.workspace_members() {
+        if let krates::Node::Krate { id, krate, .. } = member {
+            let member_path = krate.manifest_path.parent().unwrap();
+            if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
+                let len = path.components().count();
+                match closest_parent {
+                    Some((_, closest_parent_len)) => {
+                        if len < closest_parent_len {
+                            closest_parent = Some((id, len));
                         }
                     }
+                    None => {
+                        closest_parent = Some((id, len));
+                    }
                 }
             }
-            closest_parent
-                .map(|(id, _)| id)
-                .context("Failed to find current package")?
         }
-    };
+    }
+
+    let kid = closest_parent
+        .map(|(id, _)| id)
+        .with_context(|| {
+            let bin_targets = krates.workspace_members().filter_map(|krate|match krate {
+                krates::Node::Krate { krate, .. } if krate.targets.iter().any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))=> {
+                    Some(format!("- {}", krate.name))
+                }
+                _ => None
+            }).collect::<Vec<_>>();
+            format!("Failed to find binary package to build.\nYou need to either run dx from inside a binary crate or specify a binary package to build with the `--package` flag. Try building again with one of the binary packages in the workspace:\n{}", bin_targets.join("\n"))
+        })?;
 
     let package = krates.nid_for_kid(kid).unwrap();
     Ok(package)
+}
+
+fn var_or_debug(name: &str) -> Option<PathBuf> {
+    use std::env::var;
+    use tracing::debug;
+
+    var(name)
+        .inspect_err(|_| debug!("{name} not set"))
+        .ok()
+        .map(PathBuf::from)
 }

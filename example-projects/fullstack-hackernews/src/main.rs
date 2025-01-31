@@ -11,13 +11,11 @@ use std::{
 use svg_attributes::to;
 
 fn main() {
-    #[cfg(feature = "web")]
-    tracing_wasm::set_as_global_default();
-
-    #[cfg(feature = "server")]
-    tracing_subscriber::fmt::init();
-
-    dioxus::launch(|| rsx! { Router::<Route> {} });
+    LaunchBuilder::new()
+        .with_cfg(server_only! {
+            dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+        })
+        .launch(|| rsx! { Router::<Route> {} });
 }
 
 #[derive(Clone, Routable)]
@@ -36,7 +34,7 @@ pub fn App() -> Element {
 #[component]
 fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
     rsx! {
-        document::Link { rel: "stylesheet", href: asset!("./assets/hackernews.css") }
+        document::Link { rel: "stylesheet", href: asset!("/assets/hackernews.css") }
         div { display: "flex", flex_direction: "row", width: "100%",
             div {
                 width: "50%",
@@ -174,7 +172,7 @@ fn Preview(story: ReadOnlySignal<PreviewState>) -> Element {
         active_story: Some(id),
     } = story()
     else {
-        return rsx! {"Hover over a story to preview it here"};
+        return rsx! {"Click on a story to preview it here"};
     };
 
     let story = use_server_future(use_reactive!(|id| get_story(id)))?;

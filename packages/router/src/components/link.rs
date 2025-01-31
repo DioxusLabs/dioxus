@@ -163,6 +163,8 @@ pub fn Link(props: LinkProps) -> Element {
         NavigationTarget::Internal(url) => url.clone(),
         NavigationTarget::External(route) => route.clone(),
     };
+    // Add the history's prefix to the href for use in the rsx
+    let full_href = router.prefix().unwrap_or_default() + &href;
 
     let mut class_ = String::new();
     if let Some(c) = class {
@@ -198,13 +200,13 @@ pub fn Link(props: LinkProps) -> Element {
         if !event.modifiers().is_empty() {
             return;
         }
-        // only handle left clicks
+        // Only handle left clicks
         if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
             return;
         }
 
         // todo(jon): this is extra hacky for no reason - we should fix prevent default on Links
-        if do_default && is_external && cfg!(target_arch = "wasm32") {
+        if do_default && is_external {
             return;
         }
 
@@ -232,7 +234,7 @@ pub fn Link(props: LinkProps) -> Element {
         // If the event is a click with the left mouse button and no modifiers, prevent the default action
         // and navigate to the href with client side routing
         router.include_prevent_default().then_some(
-            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"   
+            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"
         )
     };
 
@@ -240,7 +242,7 @@ pub fn Link(props: LinkProps) -> Element {
         a {
             onclick: action,
             "onclick": liveview_prevent_default,
-            href,
+            href: full_href,
             onmounted: onmounted,
             class,
             rel,

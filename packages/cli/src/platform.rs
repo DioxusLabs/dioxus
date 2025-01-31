@@ -173,11 +173,13 @@ impl Platform {
                 {
                     Some(Platform::Linux)
                 }
+                // Possibly need a something for freebsd? Maybe default to Linux?
+                #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+                {
+                    None
+                }
             }
-            "mobile" => {
-                tracing::warn!("Could not autodetect mobile platform. Mobile platforms must be explicitly specified. Pass `--platform ios` or `--platform android` instead.");
-                None
-            }
+            "mobile" => None,
             "liveview" => Some(Platform::Liveview),
             "server" => Some(Platform::Server),
             _ => None,

@@ -5,7 +5,7 @@ use crate::{
     Runtime,
 };
 use futures_channel::mpsc::UnboundedReceiver;
-use generational_box::{GenerationalBox, SyncStorage};
+use generational_box::{BorrowMutError, GenerationalBox, SyncStorage};
 use std::{
     cell::RefCell,
     collections::HashSet,
@@ -243,11 +243,19 @@ impl ReactiveContext {
 
     /// Subscribe to this context. The reactive context will automatically remove itself from the subscriptions when it is reset.
     pub fn subscribe(&self, subscriptions: Arc<Mutex<HashSet<ReactiveContext>>>) {
-        subscriptions.lock().unwrap().insert(*self);
-        self.inner
-            .write()
-            .subscribers
-            .insert(PointerHash(subscriptions));
+        match self.inner.try_write() {
+            Ok(mut inner) => {
+                subscriptions.lock().unwrap().insert(*self);
+                inner.subscribers.insert(PointerHash(subscriptions));
+            }
+            // If the context was dropped, we don't need to subscribe to it anymore
+            Err(BorrowMutError::Dropped(_)) => {}
+            Err(expect) => {
+                panic!(
+                    "Expected to be able to write to reactive context to subscribe, but it failed with: {expect:?}"
+                );
+            }
+        }
     }
 
     /// Get the scope that inner CopyValue is associated with
@@ -302,4 +310,18 @@ struct Inner {
     #[cfg(debug_assertions)]
     // The scope that this reactive context is associated with
     scope: Option<ScopeId>,
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let Some(self_) = self.self_.take() else {
+            return;
+        };
+
+        for subscriber in std::mem::take(&mut self.subscribers) {
+            if let Ok(mut subscriber) = subscriber.0.lock() {
+                subscriber.remove(&self_);
+            }
+        }
+    }
 }

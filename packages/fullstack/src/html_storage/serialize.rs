@@ -1,45 +1,29 @@
-use dioxus_lib::prelude::dioxus_core::DynamicNode;
-use dioxus_lib::prelude::{
-    has_context, try_consume_context, ErrorContext, ScopeId, SuspenseBoundaryProps,
-    SuspenseContext, VNode, VirtualDom,
-};
-use serde::Serialize;
-
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use dioxus_lib::prelude::dioxus_core::DynamicNode;
+use dioxus_lib::prelude::{has_context, ErrorContext, ScopeId, SuspenseContext, VNode, VirtualDom};
 
 use super::SerializeContext;
-
-#[allow(unused)]
-pub(crate) fn serde_to_writable<T: Serialize>(
-    value: &T,
-    write_to: &mut impl std::fmt::Write,
-) -> Result<(), ciborium::ser::Error<std::fmt::Error>> {
-    let mut serialized = Vec::new();
-    ciborium::into_writer(value, &mut serialized).unwrap();
-    write_to.write_str(STANDARD.encode(serialized).as_str())?;
-    Ok(())
-}
 
 impl super::HTMLData {
     /// Walks through the suspense boundary in a depth first order and extracts the data from the context API.
     /// We use depth first order instead of relying on the order the hooks are called in because during suspense on the server, the order that futures are run in may be non deterministic.
     pub(crate) fn extract_from_suspense_boundary(vdom: &VirtualDom, scope: ScopeId) -> Self {
         let mut data = Self::default();
-        // If there is an error boundary on the suspense boundary, grab the error from the context API
-        // and throw it on the client so that it bubbles up to the nearest error boundary
-        let mut error = vdom.in_runtime(|| {
-            scope
-                .consume_context::<ErrorContext>()
-                .and_then(|error_context| error_context.errors().first().cloned())
-        });
-        data.push(&error);
+        data.serialize_errors(vdom, scope);
         data.take_from_scope(vdom, scope);
         data
     }
 
-    fn take_from_virtual_dom(&mut self, vdom: &VirtualDom) {
-        self.take_from_scope(vdom, ScopeId::ROOT)
+    /// Get the errors from the suspense boundary
+    fn serialize_errors(&mut self, vdom: &VirtualDom, scope: ScopeId) {
+        // If there is an error boundary on the suspense boundary, grab the error from the context API
+        // and throw it on the client so that it bubbles up to the nearest error boundary
+        let error = vdom.in_runtime(|| {
+            scope
+                .consume_context::<ErrorContext>()
+                .and_then(|error_context| error_context.errors().first().cloned())
+        });
+        self.push(&error, std::panic::Location::caller());
     }
 
     fn take_from_scope(&mut self, vdom: &VirtualDom, scope: ScopeId) {
@@ -48,9 +32,7 @@ impl super::HTMLData {
                 // Grab any serializable server context from this scope
                 let context: Option<SerializeContext> = has_context();
                 if let Some(context) = context {
-                    let borrow = context.data.borrow();
-                    let mut data = borrow.data.iter().cloned();
-                    self.data.extend(data)
+                    self.extend(&context.data.borrow());
                 }
             });
         });
@@ -91,9 +73,44 @@ impl super::HTMLData {
 
     #[cfg(feature = "server")]
     /// Encode data as base64. This is intended to be used in the server to send data to the client.
-    pub(crate) fn serialized(&self) -> String {
+    pub(crate) fn serialized(&self) -> SerializedHydrationData {
         let mut serialized = Vec::new();
         ciborium::into_writer(&self.data, &mut serialized).unwrap();
-        base64::engine::general_purpose::STANDARD.encode(serialized)
+
+        let data = base64::engine::general_purpose::STANDARD.encode(serialized);
+
+        let format_js_list_of_strings = |list: &[Option<String>]| {
+            let body = list
+                .iter()
+                .map(|s| match s {
+                    Some(s) => format!(r#""{s}""#),
+                    None => r#""unknown""#.to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("[{}]", body)
+        };
+
+        SerializedHydrationData {
+            data,
+            #[cfg(debug_assertions)]
+            debug_types: format_js_list_of_strings(&self.debug_types),
+            #[cfg(debug_assertions)]
+            debug_locations: format_js_list_of_strings(&self.debug_locations),
+        }
     }
+}
+
+#[cfg(feature = "server")]
+/// Data that was serialized on the server for hydration on the client. This includes
+/// extra information about the types and sources of the serialized data in debug mode
+pub(crate) struct SerializedHydrationData {
+    /// The base64 encoded serialized data
+    pub data: String,
+    /// A list of the types of each serialized data
+    #[cfg(debug_assertions)]
+    pub debug_types: String,
+    /// A list of the locations of each serialized data
+    #[cfg(debug_assertions)]
+    pub debug_locations: String,
 }

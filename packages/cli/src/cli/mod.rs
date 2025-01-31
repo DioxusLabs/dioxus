@@ -5,19 +5,20 @@ pub(crate) mod check;
 pub(crate) mod clean;
 pub(crate) mod config;
 pub(crate) mod create;
-pub(crate) mod doctor;
 pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
 pub(crate) mod translate;
+pub(crate) mod verbosity;
 
 pub(crate) use build::*;
 pub(crate) use serve::*;
 pub(crate) use target::*;
+pub(crate) use verbosity::*;
 
-use crate::{error::Result, Error};
+use crate::{error::Result, Error, StructuredOutput};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
@@ -35,40 +36,42 @@ use std::{
 #[derive(Parser)]
 #[clap(name = "dioxus", version = VERSION.as_str())]
 pub(crate) struct Cli {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub(crate) action: Commands,
 
-    /// Enable verbose logging.
-    #[clap(short)]
-    pub(crate) v: bool,
-
-    /// Specify a binary target.
-    #[clap(global = true, long)]
-    pub(crate) bin: Option<String>,
+    #[command(flatten)]
+    pub(crate) verbosity: Verbosity,
 }
 
-#[derive(Parser)]
+#[derive(Subcommand)]
 pub(crate) enum Commands {
     /// Build the Dioxus project and all of its assets.
+    #[clap(name = "build")]
     Build(build::BuildArgs),
 
     /// Translate a source file into Dioxus code.
+    #[clap(name = "translate")]
     Translate(translate::Translate),
 
     /// Build, watch & serve the Dioxus project and all of its assets.
+    #[clap(name = "serve")]
     Serve(serve::ServeArgs),
 
     /// Create a new project for Dioxus.
+    #[clap(name = "new")]
     New(create::Create),
 
-    /// Init a new project for Dioxus in an existing directory.
+    /// Init a new project for Dioxus in the current directory (by default).
     /// Will attempt to keep your project in a good state.
+    #[clap(name = "init")]
     Init(init::Init),
 
     /// Clean output artifacts.
+    #[clap(name = "clean")]
     Clean(clean::Clean),
 
     /// Bundle the Dioxus app into a shippable object.
+    #[clap(name = "bundle")]
     Bundle(bundle::Bundle),
 
     /// Automatically format RSX.
@@ -83,12 +86,9 @@ pub(crate) enum Commands {
     #[clap(name = "run")]
     Run(run::RunArgs),
 
-    /// Ensure all the tooling is installed and configured correctly
-    #[clap(name = "doctor")]
-    Doctor(doctor::Doctor),
-
     /// Dioxus config file controls.
     #[clap(subcommand)]
+    #[clap(name = "config")]
     Config(config::Config),
 }
 
@@ -106,7 +106,6 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Run(_) => write!(f, "run"),
-            Commands::Doctor(_) => write!(f, "doctor"),
         }
     }
 }

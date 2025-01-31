@@ -3,10 +3,10 @@ name = "dioxus-lib"
 version = { workspace = true }
 authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
 edition = "2021"
-description = "Portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust"
+description = "Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.5/"
+homepage = "https://dioxuslabs.com/learn/0.6/"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.79.0"
 
@@ -20,16 +20,18 @@ dioxus-config-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
+warnings = { workspace = true, optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
 
 [features]
-default = ["macro", "html", "signals", "hooks"]
+default = ["macro", "html", "signals", "hooks", "warnings"]
 signals = ["dep:dioxus-signals"]
 macro = ["dep:dioxus-core-macro", "dep:dioxus-rsx", "dep:dioxus-config-macro"]
 html = ["dep:dioxus-html", "dep:dioxus-document", "dep:dioxus-history"]
 hooks = ["dep:dioxus-hooks"]
+warnings = ["dep:warnings"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

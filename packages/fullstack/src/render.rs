@@ -1,19 +1,22 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::document::ServerDocument;
+use crate::html_storage::serialize::SerializedHydrationData;
 use crate::streaming::{Mount, StreamingRenderer};
+use dioxus_cli_config::base_path;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-use dioxus_isrg::{CachedRender, RenderFreshness};
+use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_lib::document::Document;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
+use std::fmt::Write;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
 use tokio::task::JoinHandle;
 
-use crate::prelude::*;
+use crate::{prelude::*, StreamingMode};
 use dioxus_lib::prelude::*;
 
 /// A suspense boundary that is pending with a placeholder in the client
@@ -164,18 +167,28 @@ impl SsrRendererPool {
             .unwrap_or_else(pre_renderer);
 
         let myself = self.clone();
+        let streaming_mode = cfg.streaming_mode;
 
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
             let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
             virtual_dom.provide_root_context(document.clone());
-            virtual_dom.provide_root_context(Rc::new(
-                dioxus_history::MemoryHistory::with_initial_path(&route),
-            ) as Rc<dyn dioxus_history::History>);
+            // If there is a base path, trim the base path from the route and add the base path formatting to the
+            // history provider
+            let history;
+            if let Some(base_path) = base_path() {
+                let base_path = base_path.trim_matches('/');
+                let base_path = format!("/{base_path}");
+                let route = route.strip_prefix(&base_path).unwrap_or(&route);
+                history =
+                    dioxus_history::MemoryHistory::with_initial_path(route).with_prefix(base_path);
+            } else {
+                history = dioxus_history::MemoryHistory::with_initial_path(&route);
+            }
+            virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
             // poll the future, which may call server_context()
-            tracing::info!("Rebuilding vdom");
             with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             let mut pre_body = String::new();
@@ -192,65 +205,10 @@ impl SsrRendererPool {
             {
                 let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                 let stream = stream.clone();
-                // We use a stack to keep track of what suspense boundaries we are nested in to add children to the correct boundary
-                // The stack starts with the root scope because the root is a suspense boundary
-                let pending_suspense_boundaries_stack = RwLock::new(vec![]);
-                renderer.set_render_components(move |renderer, to, vdom, scope| {
-                    let is_suspense_boundary =
-                        SuspenseContext::downcast_suspense_boundary_from_scope(
-                            &vdom.runtime(),
-                            scope,
-                        )
-                        .filter(|s| s.has_suspended_tasks())
-                        .is_some();
-                    if is_suspense_boundary {
-                        let mount = stream.render_placeholder(
-                            |to| {
-                                {
-                                    pending_suspense_boundaries_stack
-                                        .write()
-                                        .unwrap()
-                                        .push(scope);
-                                }
-                                let out = renderer.render_scope(to, vdom, scope);
-                                {
-                                    pending_suspense_boundaries_stack.write().unwrap().pop();
-                                }
-                                out
-                            },
-                            &mut *to,
-                        )?;
-                        // Add the suspense boundary to the list of pending suspense boundaries
-                        // We will replace the mount with the resolved contents later once the suspense boundary is resolved
-                        let mut scope_to_mount_mapping_write =
-                            scope_to_mount_mapping.write().unwrap();
-                        scope_to_mount_mapping_write.insert(
-                            scope,
-                            PendingSuspenseBoundary {
-                                mount,
-                                children: vec![],
-                            },
-                        );
-                        // Add the scope to the list of children of the parent suspense boundary
-                        let pending_suspense_boundaries_stack =
-                            pending_suspense_boundaries_stack.read().unwrap();
-                        // If there is a parent suspense boundary, add the scope to the list of children
-                        // This suspense boundary will start capturing errors when the parent is resolved
-                        if let Some(parent) = pending_suspense_boundaries_stack.last() {
-                            let parent = scope_to_mount_mapping_write.get_mut(parent).unwrap();
-                            parent.children.push(scope);
-                        }
-                        // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
-                        else {
-                            vdom.in_runtime(|| {
-                                start_capturing_errors(scope);
-                            });
-                        }
-                    } else {
-                        renderer.render_scope(to, vdom, scope)?
-                    }
-                    Ok(())
-                });
+                renderer.set_render_components(streaming_render_component_callback(
+                    stream,
+                    scope_to_mount_mapping,
+                ));
             }
 
             macro_rules! throw_error {
@@ -258,6 +216,13 @@ impl SsrRendererPool {
                     stream.close_with_error($e);
                     return;
                 };
+            }
+
+            // If streaming is disabled, wait for the virtual dom to finish all suspense work
+            // before rendering anything
+            if streaming_mode == StreamingMode::Disabled {
+                ProvideServerContext::new(virtual_dom.wait_for_suspense(), server_context.clone())
+                    .await
             }
 
             // Render the initial frame with loading placeholders
@@ -370,6 +335,74 @@ impl SsrRendererPool {
     }
 }
 
+/// Create the streaming render component callback. It will keep track of what scopes are mounted to what pending
+/// suspense boundaries in the DOM.
+///
+/// This mapping is used to replace the DOM mount with the resolved contents once the suspense boundary is finished.
+fn streaming_render_component_callback(
+    stream: Arc<StreamingRenderer<IncrementalRendererError>>,
+    scope_to_mount_mapping: Arc<RwLock<HashMap<ScopeId, PendingSuspenseBoundary>>>,
+) -> impl Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result
+       + Send
+       + Sync
+       + 'static {
+    // We use a stack to keep track of what suspense boundaries we are nested in to add children to the correct boundary
+    // The stack starts with the root scope because the root is a suspense boundary
+    let pending_suspense_boundaries_stack = RwLock::new(vec![]);
+    move |renderer, to, vdom, scope| {
+        let is_suspense_boundary =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope)
+                .filter(|s| s.has_suspended_tasks())
+                .is_some();
+        if is_suspense_boundary {
+            let mount = stream.render_placeholder(
+                |to| {
+                    {
+                        pending_suspense_boundaries_stack
+                            .write()
+                            .unwrap()
+                            .push(scope);
+                    }
+                    let out = renderer.render_scope(to, vdom, scope);
+                    {
+                        pending_suspense_boundaries_stack.write().unwrap().pop();
+                    }
+                    out
+                },
+                &mut *to,
+            )?;
+            // Add the suspense boundary to the list of pending suspense boundaries
+            // We will replace the mount with the resolved contents later once the suspense boundary is resolved
+            let mut scope_to_mount_mapping_write = scope_to_mount_mapping.write().unwrap();
+            scope_to_mount_mapping_write.insert(
+                scope,
+                PendingSuspenseBoundary {
+                    mount,
+                    children: vec![],
+                },
+            );
+            // Add the scope to the list of children of the parent suspense boundary
+            let pending_suspense_boundaries_stack =
+                pending_suspense_boundaries_stack.read().unwrap();
+            // If there is a parent suspense boundary, add the scope to the list of children
+            // This suspense boundary will start capturing errors when the parent is resolved
+            if let Some(parent) = pending_suspense_boundaries_stack.last() {
+                let parent = scope_to_mount_mapping_write.get_mut(parent).unwrap();
+                parent.children.push(scope);
+            }
+            // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
+            else {
+                vdom.in_runtime(|| {
+                    start_capturing_errors(scope);
+                });
+            }
+        } else {
+            renderer.render_scope(to, vdom, scope)?
+        }
+        Ok(())
+    }
+}
+
 /// Start capturing errors at a suspense boundary. If the parent suspense boundary is frozen, we need to capture the errors in the suspense boundary
 /// and send them to the client to continue bubbling up
 fn start_capturing_errors(suspense_scope: ScopeId) {
@@ -377,7 +410,7 @@ fn start_capturing_errors(suspense_scope: ScopeId) {
     suspense_scope.in_runtime(provide_error_boundary);
 }
 
-fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> String {
+fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
     // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
     // Extract any data we serialized for hydration (from server futures)
     let html_data =
@@ -499,10 +532,27 @@ impl FullstackHTMLTemplate {
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
         // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
         let resolved_data = serialize_server_data(virtual_dom, ScopeId::ROOT);
+        // We always send down the data required to hydrate components on the client
+        let raw_data = resolved_data.data;
         write!(
             to,
-            r#"<script>window.initial_dioxus_hydration_data="{resolved_data}";</script>"#,
+            r#"<script>window.initial_dioxus_hydration_data="{raw_data}";"#,
         )?;
+        #[cfg(debug_assertions)]
+        {
+            // In debug mode, we also send down the type names and locations of the serialized data
+            let debug_types = &resolved_data.debug_types;
+            let debug_locations = &resolved_data.debug_locations;
+            write!(
+                to,
+                r#"window.initial_dioxus_hydration_debug_types={debug_types};"#,
+            )?;
+            write!(
+                to,
+                r#"window.initial_dioxus_hydration_debug_locations={debug_locations};"#,
+            )?;
+        }
+        write!(to, r#"</script>"#,)?;
         to.write_str(&index.post_main)?;
 
         Ok(())

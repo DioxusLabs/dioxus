@@ -15,12 +15,14 @@ proc-macro = true
 # be careful with dependencies you add here - these need to get compiled for the proc macro and therefore
 # prevent the main code from compiling!
 [dependencies]
-proc-macro2 = { version = "1.0" }
-quote = "1.0"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
-serde_json = "1.0"
-serde = { workspace = true, features = ["derive"] }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true, features = ["full", "extra-traits"] }
 manganis-core = { workspace = true }
+dunce = { workspace = true }
 
 [features]
 default = []
+
+[dev-dependencies]
+manganis.workspace = true

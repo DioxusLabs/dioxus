@@ -1,10 +1,3 @@
-//! Run with:
-//!
-//! ```sh
-//! dx build --features web
-//! cargo run --features server
-//! ```
-
 #![allow(non_snake_case, unused)]
 
 #[cfg(feature = "server")]
@@ -15,9 +8,12 @@ use dioxus_fullstack::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
+    // Set the logger ahead of time since we don't use `dioxus::launch` on the server
+    dioxus::logger::initialize_default();
+
     #[cfg(feature = "web")]
     // Hydrate the application on the client
-    dioxus_web::launch::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
+    LaunchBuilder::web().launch(app);
 
     #[cfg(feature = "server")]
     {
@@ -27,7 +23,6 @@ fn main() {
         use axum_session::SessionStore;
         use axum_session_auth::AuthConfig;
         use axum_session_auth::SessionSqlitePool;
-        simple_logger::SimpleLogger::new().init().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
@@ -61,8 +56,8 @@ fn main() {
                     )
                     .layer(axum_session::SessionLayer::new(session_store));
 
-                // run it
-                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+                // serve the app using the address passed by the CLI
+                let addr = dioxus::cli_config::fullstack_address_or_localhost();
                 let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
                 axum::serve(listener, app.into_make_service())
@@ -111,23 +106,23 @@ fn app() -> Element {
     }
 }
 
-#[server(GetUserName)]
+#[server]
 pub async fn get_user_name() -> Result<String, ServerFnError> {
-    let session: crate::auth::Session = extract().await?;
-    Ok(session.0.current_user.unwrap().username.to_string())
+    let auth = auth::get_session().await?;
+    Ok(auth.current_user.unwrap().username.to_string())
 }
 
-#[server(Login)]
+#[server]
 pub async fn login() -> Result<(), ServerFnError> {
-    let auth: crate::auth::Session = extract().await?;
+    let auth = auth::get_session().await?;
     auth.login_user(2);
     Ok(())
 }
 
-#[server(Permissions)]
+#[server]
 pub async fn get_permissions() -> Result<String, ServerFnError> {
     let method: axum::http::Method = extract().await?;
-    let auth: crate::auth::Session = extract().await?;
+    let auth = auth::get_session().await?;
     let current_user = auth.current_user.clone().unwrap_or_default();
 
     // lets check permissions only and not worry about if they are anon or not

@@ -8,17 +8,13 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
-serde = "1.0.159"
-simple_logger = "4.2.0"
-tracing-wasm = "0.2.1"
-tracing.workspace = true
-tracing-subscriber = "0.3.17"
-futures = "0.3.30"
+serde = { workspace = true }
+futures = { workspace = true }
 tokio = { workspace = true, optional = true }
 futures-util.workspace = true
-once_cell = "1.19.0"
+once_cell = { workspace = true }
 
 [features]
 default = []
-server = ["dioxus/axum", "dep:tokio"]
+server = ["dioxus/server", "dep:tokio"]
 web = ["dioxus/web"]

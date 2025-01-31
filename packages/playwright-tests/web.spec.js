@@ -107,3 +107,51 @@ test("prevent default", async ({ page }) => {
   // Check that the <a> element changed.
   await expect(a).toHaveText("Psych!");
 });
+
+test("onmounted", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+
+  // Expect the onmounted event to be called exactly once.
+  const mountedDiv = page.locator("div.onmounted-div");
+  await expect(mountedDiv).toHaveText("onmounted was called 1 times");
+});
+
+test("web-sys closure", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the div is mounted
+  const scrollDiv = page.locator("div#web-sys-closure-div");
+  await scrollDiv.waitFor({ state: "attached" });
+  await page.keyboard.press("Enter");
+  await expect(scrollDiv).toHaveText("the keydown event was triggered");
+});
+
+test("document elements", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the meta element is mounted
+  const meta = page.locator("meta#meta-head[name='testing']");
+  await meta.waitFor({ state: "attached" });
+  await expect(meta).toHaveAttribute("data", "dioxus-meta-element");
+
+  const link = page.locator("link#link-head[rel='stylesheet']");
+  await link.waitFor({ state: "attached" });
+  await expect(link).toHaveAttribute(
+    "href",
+    "https://fonts.googleapis.com/css?family=Roboto+Mono"
+  );
+
+  const stylesheet = page.locator("link#stylesheet-head[rel='stylesheet']");
+  await stylesheet.waitFor({ state: "attached" });
+  await expect(stylesheet).toHaveAttribute(
+    "href",
+    "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic"
+  );
+
+  const script = page.locator("script#script-head");
+  await script.waitFor({ state: "attached" });
+  await expect(script).toHaveAttribute("async", "true");
+
+  const style = page.locator("style#style-head");
+  await style.waitFor({ state: "attached" });
+  const main = page.locator("#main");
+  await expect(main).toHaveCSS("font-family", "Roboto");
+});

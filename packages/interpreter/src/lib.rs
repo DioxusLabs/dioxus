@@ -47,6 +47,13 @@ pub mod minimal_bindings {
         pub fn register_rehydrate_chunk_for_streaming(
             closure: &wasm_bindgen::closure::Closure<dyn FnMut(Vec<u32>, js_sys::Uint8Array)>,
         );
+
+        /// Register a callback that that will be called to hydrate a node at the given id with data from the server
+        pub fn register_rehydrate_chunk_for_streaming_debug(
+            closure: &wasm_bindgen::closure::Closure<
+                dyn FnMut(Vec<u32>, js_sys::Uint8Array, Option<Vec<String>>, Option<Vec<String>>),
+            >,
+        );
     }
 
     #[wasm_bindgen(module = "/src/js/patch_console.js")]

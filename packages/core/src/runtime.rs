@@ -1,6 +1,7 @@
 use crate::arena::ElementRef;
 use crate::innerlude::{DirtyTasks, Effect};
 use crate::nodes::VNodeMount;
+use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
@@ -73,7 +74,7 @@ impl Runtime {
 
         Rc::new(Self {
             sender,
-            rendering: Cell::new(true),
+            rendering: Cell::new(false),
             scope_states: Default::default(),
             scope_stack: Default::default(),
             suspense_stack: Default::default(),
@@ -107,6 +108,14 @@ impl Runtime {
         }
     }
 
+    /// Run a closure with the rendering flag set to true
+    pub(crate) fn while_rendering<T>(&self, f: impl FnOnce() -> T) -> T {
+        self.rendering.set(true);
+        let result = f();
+        self.rendering.set(false);
+        result
+    }
+
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id;
@@ -128,6 +137,11 @@ impl Runtime {
                     for id in scope.spawned_tasks.take() {
                         self.remove_task(id);
                     }
+
+                    // Drop all queued effects
+                    self.pending_effects
+                        .borrow_mut()
+                        .remove(&ScopeOrder::new(scope.height, scope.id));
 
                     // Drop all hooks in reverse order in case a hook depends on another hook.
                     for hook in scope.hooks.take().drain(..).rev() {
@@ -374,9 +388,7 @@ impl Runtime {
             );
             for listener in listeners.into_iter().rev() {
                 if let AttributeValue::Listener(listener) = listener {
-                    self.rendering.set(false);
                     listener.call(uievent.clone());
-                    self.rendering.set(true);
                     let metadata = uievent.metadata.borrow();
 
                     if !metadata.propagates {
@@ -414,9 +426,7 @@ impl Runtime {
                 // Only call the listener if this is the exact target element.
                 if attr.name.get(2..) == Some(name) && target_path == this_path {
                     if let AttributeValue::Listener(listener) = &attr.value {
-                        self.rendering.set(false);
                         listener.call(uievent.clone());
-                        self.rendering.set(true);
                         break;
                     }
                 }

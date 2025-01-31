@@ -221,8 +221,14 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
-    /// Point to another signal
-    pub fn point_to(&mut self, other: Self) -> BorrowResult {
+    /// Point to another signal. This will subscribe the other signal to all subscribers of this signal.
+    pub fn point_to(&self, other: Self) -> BorrowResult {
+        #[allow(clippy::mutable_key_type)]
+        let this_subscribers = self.inner.value.read().subscribers.lock().unwrap().clone();
+        let other_read = other.inner.value.read();
+        for subscriber in this_subscribers.iter() {
+            subscriber.subscribe(other_read.subscribers.clone());
+        }
         self.inner.point_to(other.inner)
     }
 
@@ -505,10 +511,115 @@ impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
     }
 }
 
-/// A mutable reference to a signal's value.
+/// A mutable reference to a signal's value. This reference acts similarly to [`std::cell::RefMut`], but it has extra debug information
+/// and integrates with the reactive system to automatically update dependents.
 ///
-/// T is the current type of the write
-/// S is the storage type of the signal
+/// [`Write`] implements [`DerefMut`] which means you can call methods on the inner value just like you would on a mutable reference
+/// to the inner value. If you need to get the inner reference directly, you can call [`Write::deref_mut`].
+///
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// fn app() -> Element {
+///     let mut value = use_signal(|| String::from("hello"));
+///     
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let mut mutable_reference = value.write();
+///
+///                 // You call methods like `push_str` on the reference just like you would with the inner String
+///                 mutable_reference.push_str("world");
+///             },
+///             "Click to add world to the string"
+///         }
+///         div { "{value}" }
+///     }
+/// }
+/// ```
+///
+/// ## Matching on Write
+///
+/// You need to get the inner mutable reference with [`Write::deref_mut`] before you match the inner value. If you try to match
+/// without calling [`Write::deref_mut`], you will get an error like this:
+///
+/// ```compile_fail
+/// # use dioxus::prelude::*;
+/// #[derive(Debug)]
+/// enum Colors {
+///     Red(u32),
+///     Green
+/// }
+/// fn app() -> Element {
+///     let mut value = use_signal(|| Colors::Red(0));
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let mut mutable_reference = value.write();
+///
+///                 match mutable_reference {
+///                     // Since we are matching on the `Write` type instead of &mut Colors, we can't match on the enum directly
+///                     Colors::Red(brightness) => *brightness += 1,
+///                     Colors::Green => {}
+///                 }
+///             },
+///             "Click to add brightness to the red color"
+///         }
+///         div { "{value:?}" }
+///     }
+/// }
+/// ```
+///
+/// ```text
+/// error[E0308]: mismatched types
+///   --> src/main.rs:18:21
+///    |
+/// 16 |                 match mutable_reference {
+///    |                       ----------------- this expression has type `dioxus::prelude::Write<'_, Colors>`
+/// 17 |                     // Since we are matching on the `Write` t...
+/// 18 |                     Colors::Red(brightness) => *brightness += 1,
+///    |                     ^^^^^^^^^^^^^^^^^^^^^^^ expected `Write<'_, Colors>`, found `Colors`
+///    |
+///    = note: expected struct `dioxus::prelude::Write<'_, Colors, >`
+///                found enum `Colors`
+/// ```
+///
+/// Instead, you need to call deref mut on the reference to get the inner value **before** you match on it:
+///
+/// ```rust
+/// use std::ops::DerefMut;
+/// # use dioxus::prelude::*;
+/// #[derive(Debug)]
+/// enum Colors {
+///     Red(u32),
+///     Green
+/// }
+/// fn app() -> Element {
+///     let mut value = use_signal(|| Colors::Red(0));
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let mut mutable_reference = value.write();
+///
+///                 // DerefMut converts the `Write` into a `&mut Colors`
+///                 match mutable_reference.deref_mut() {
+///                     // Now we can match on the inner value
+///                     Colors::Red(brightness) => *brightness += 1,
+///                     Colors::Green => {}
+///                 }
+///             },
+///             "Click to add brightness to the red color"
+///         }
+///         div { "{value:?}" }
+///     }
+/// }
+/// ```
+///
+/// ## Generics
+/// - T is the current type of the write
+/// - S is the storage type of the signal. This type determines if the signal is local to the current thread, or it can be shared across threads.
 pub struct Write<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
     write: S::Mut<'a, T>,
     drop_signal: Box<dyn Any>,

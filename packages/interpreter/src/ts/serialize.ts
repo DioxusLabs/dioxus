@@ -62,6 +62,8 @@ export function serializeEvent(
     const detail = event.detail;
     if (detail instanceof ResizeObserverEntry) {
       extend(serializeResizeEventDetail(detail));
+    } else if (detail instanceof IntersectionObserverEntry) {
+      extend(serializeIntersectionEventDetail(detail));
     }
   }
 
@@ -129,19 +131,34 @@ export function serializeResizeEventDetail(
     border_box_size:
       detail.borderBoxSize !== undefined
         ? toSerializableResizeObserverSize(
-            detail.borderBoxSize[0],
-            is_inline_width
-          )
+          detail.borderBoxSize[0],
+          is_inline_width
+        )
         : detail.contentRect,
     content_box_size:
       detail.contentBoxSize !== undefined
         ? toSerializableResizeObserverSize(
-            detail.contentBoxSize[0],
-            is_inline_width
-          )
+          detail.contentBoxSize[0],
+          is_inline_width
+        )
         : detail.contentRect,
     content_rect: detail.contentRect,
   };
+}
+
+export function serializeIntersectionEventDetail(
+  detail: IntersectionObserverEntry): SerializedEvent {
+  return {
+    bounding_client_rect: detail.boundingClientRect,
+    intersection_ratio: detail.intersectionRatio,
+    intersection_rect: detail.intersectionRect,
+    is_intersecting: detail.isIntersecting,
+    root_bounds: detail.rootBounds,
+
+    // math.floor removes the floating point extra such that we serialize into integer
+    // this *might* become an issue longer term
+    time_ms: Math.floor(Date.now() + detail.time),
+  }
 }
 
 function serializeInputEvent(

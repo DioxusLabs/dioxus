@@ -73,7 +73,6 @@ impl WebEventExt for dioxus_html::MouseData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::MouseEvent> {
-        self.downcast::<Synthetic<web_sys::MouseEvent>>()
-            .map(|e| e.event.clone())
+        self.downcast::<web_sys::MouseEvent>().cloned()
     }
 }

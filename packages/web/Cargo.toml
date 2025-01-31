@@ -3,16 +3,16 @@ name = "dioxus-web"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
-description = "Web renderer for Dioxus using websys"
+description = "Web-sys renderer for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
-keywords = ["dom", "ui", "gui", "react", "wasm"]
+homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
+keywords = ["dom", "ui", "gui", "web", "wasm"]
 
 [dependencies]
 dioxus-core = { workspace = true }
 dioxus-core-types = { workspace = true }
-dioxus-cli-config = { workspace = true }
+dioxus-cli-config = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
@@ -24,12 +24,11 @@ dioxus-interpreter-js = { workspace = true, features = [
 ] }
 generational-box = { workspace = true }
 
-js-sys = "0.3.56"
+js-sys = "0.3.70"
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4.29"
 tracing = { workspace = true }
 rustc-hash = { workspace = true }
-console_error_panic_hook = { version = "0.1.7", optional = true }
 futures-util = { workspace = true, features = [
     "std",
     "async-await",
@@ -44,7 +43,7 @@ ciborium = { workspace = true, optional = true }
 async-trait = { version = "0.1.58", optional = true }
 
 [dependencies.web-sys]
-version = "0.3.56"
+version = "0.3.70"
 features = [
     "AnimationEvent",
     "ClipboardEvent",
@@ -55,6 +54,7 @@ features = [
     "CustomEvent",
     "DataTransfer",
     "Document",
+    "DomRectReadOnly",
     "DragEvent",
     "FocusEvent",
     "History",
@@ -63,6 +63,7 @@ features = [
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",
+    "IntersectionObserverEntry",
     "InputEvent",
     "KeyboardEvent",
     "MouseEvent",
@@ -84,8 +85,7 @@ features = [
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["panic_hook", "mounted", "file_engine", "devtools", "document"]
-panic_hook = ["dep:console_error_panic_hook"]
+default = ["mounted", "file_engine", "devtools", "document"]
 hydrate = ["web-sys/Comment", "ciborium", "dep:serde"]
 mounted = [
     "web-sys/Element",

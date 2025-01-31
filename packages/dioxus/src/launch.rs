@@ -1,4 +1,3 @@
-//! Launch helper macros for fullstack apps
 #![allow(clippy::new_without_default)]
 #![allow(unused)]
 use dioxus_config_macro::*;
@@ -16,6 +15,7 @@ pub struct LaunchBuilder {
 }
 
 pub type LaunchFn = fn(fn() -> Element, Vec<ContextFn>, Vec<Box<dyn Any>>);
+
 /// A context function is a Send and Sync closure that returns a boxed trait object
 pub type ContextFn = Box<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>;
 
@@ -32,10 +32,9 @@ impl LaunchBuilder {
             feature = "mobile",
             feature = "web",
             feature = "fullstack",
-            feature = "static-generation"
         ))),
         deprecated(
-            note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, `fullstack`, or `static-generation` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
+            note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, or `fullstack` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
         )
     )]
     pub fn new() -> LaunchBuilder {
@@ -82,28 +81,12 @@ impl LaunchBuilder {
         }
     }
 
-    /// Launch your static site generation application.
-    #[cfg(all(feature = "static-generation", feature = "server"))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(feature = "static-generation", feature = "server")))
-    )]
-    pub fn static_generation() -> LaunchBuilder {
-        LaunchBuilder {
-            launch_fn: |root, contexts, cfg| {
-                dioxus_static_site_generation::launch::launch(root, contexts, cfg)
-            },
-            contexts: Vec::new(),
-            configs: Vec::new(),
-        }
-    }
-
     /// Launch your fullstack application.
     #[cfg(feature = "mobile")]
     #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
     pub fn mobile() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| dioxus_mobile::launch::launch(root, contexts, cfg),
+            launch_fn: |root, contexts, cfg| dioxus_mobile::launch_cfg(root, contexts, cfg),
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -147,6 +130,27 @@ impl LaunchBuilder {
 
 impl LaunchBuilder {
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// use std::any::Any;
+    ///
+    /// #[derive(Default)]
+    /// struct MyState {
+    ///     value: i32,
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! {
+    ///         div { "Hello, world!" }
+    ///     }
+    /// }
+    ///
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context_provider(|| Box::new(MyState { value: 42 }))
+    ///     .launch(app);
+    /// ```
     pub fn with_context_provider(
         mut self,
         state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
@@ -156,6 +160,27 @@ impl LaunchBuilder {
     }
 
     /// Inject state into the root component's context.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// use std::any::Any;
+    ///
+    /// #[derive(Clone)]
+    /// struct MyState {
+    ///     value: i32,
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! {
+    ///         div { "Hello, world!" }
+    ///     }
+    /// }
+    ///
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context(MyState { value: 42 })
+    ///     .launch(app);
+    /// ```
     pub fn with_context(mut self, state: impl Any + Clone + Send + Sync + 'static) -> Self {
         self.contexts
             .push(Box::new(move || Box::new(state.clone())));
@@ -165,12 +190,31 @@ impl LaunchBuilder {
 
 impl LaunchBuilder {
     /// Provide a platform-specific config to the builder.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// use dioxus_desktop::Config;
+    ///
+    /// fn app() -> Element {
+    ///     rsx! {
+    ///         div { "Hello, world!" }
+    ///     }
+    /// }
+    ///
+    /// dioxus::LaunchBuilder::desktop()
+    ///     .with_cfg(Config::new().with_window(|w| w.with_title("My App")))
+    ///     .launch(app);
+    /// ```
     pub fn with_cfg(mut self, config: impl LaunchConfig) -> Self {
         self.configs.push(Box::new(config));
         self
     }
 
     fn launch_inner(self, app: fn() -> Element) {
+        #[cfg(feature = "logger")]
+        dioxus_logger::initialize_default();
+
         #[cfg(all(feature = "fullstack", any(feature = "desktop", feature = "mobile")))]
         {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
@@ -188,18 +232,9 @@ impl LaunchBuilder {
         (self.launch_fn)(app, self.contexts, cfg);
     }
 
-    // Static generation is the only platform that may exit. We can't use the `!` type here
-    #[cfg(any(feature = "static-generation", feature = "web"))]
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
         self.launch_inner(app);
-    }
-
-    #[cfg(not(any(feature = "static-generation", feature = "web")))]
-    /// Launch your application.
-    pub fn launch(self, app: fn() -> Element) -> ! {
-        self.launch_inner(app);
-        unreachable!("Launching an application will never exit")
     }
 }
 
@@ -209,7 +244,6 @@ impl LaunchBuilder {
 /// - `fullstack`
 /// - `desktop`
 /// - `mobile`
-/// - `static-generation`
 /// - `web`
 /// - `liveview`
 mod current_platform {
@@ -227,20 +261,12 @@ mod current_platform {
         not(feature = "desktop"),
         not(all(feature = "fullstack", feature = "server"))
     ))]
-    pub use dioxus_mobile::launch::*;
-
-    #[cfg(all(
-        all(feature = "static-generation", feature = "server"),
-        not(all(feature = "fullstack", feature = "server")),
-        not(feature = "desktop"),
-        not(feature = "mobile")
-    ))]
-    pub use dioxus_static_site_generation::launch::*;
+    pub use dioxus_mobile::launch_bindings::*;
 
     #[cfg(all(
         feature = "web",
         not(all(feature = "fullstack", feature = "server")),
-        not(all(feature = "static-generation", feature = "server")),
+        not(all(feature = "server")),
         not(feature = "desktop"),
         not(feature = "mobile"),
     ))]
@@ -255,7 +281,7 @@ mod current_platform {
     #[cfg(all(
         feature = "liveview",
         not(all(feature = "fullstack", feature = "server")),
-        not(all(feature = "static-generation", feature = "server")),
+        not(all(feature = "server")),
         not(feature = "desktop"),
         not(feature = "mobile"),
         not(feature = "web"),
@@ -265,7 +291,7 @@ mod current_platform {
     #[cfg(not(any(
         feature = "liveview",
         all(feature = "fullstack", feature = "server"),
-        all(feature = "static-generation", feature = "server"),
+        all(feature = "server"),
         feature = "desktop",
         feature = "mobile",
         feature = "web",
@@ -274,7 +300,7 @@ mod current_platform {
         root: fn() -> dioxus_core::Element,
         contexts: Vec<super::ContextFn>,
         platform_config: Vec<Box<dyn std::any::Any>>,
-    ) -> ! {
+    ) {
         #[cfg(feature = "third-party-renderer")]
         panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
 
@@ -282,22 +308,10 @@ mod current_platform {
     }
 }
 
-// ! is unstable, so we can't name the type with an alias. Instead we need to generate different variants of items with macros
-macro_rules! impl_launch {
-    ($($return_type:tt),*) => {
-        /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
-        pub fn launch(app: fn() -> Element) -> $($return_type)* {
-            #[allow(deprecated)]
-            LaunchBuilder::new().launch(app)
-        }
-    };
+pub fn launch(app: fn() -> Element) {
+    #[allow(deprecated)]
+    LaunchBuilder::new().launch(app)
 }
-
-// Static generation is the only platform that may exit. We can't use the `!` type here
-#[cfg(any(feature = "static-generation", feature = "web"))]
-impl_launch!(());
-#[cfg(not(any(feature = "static-generation", feature = "web")))]
-impl_launch!(!);
 
 #[cfg(feature = "web")]
 fn web_launch(
@@ -306,7 +320,7 @@ fn web_launch(
     platform_config: Vec<Box<dyn std::any::Any>>,
 ) {
     // If the server feature is enabled, launch the client with hydration enabled
-    #[cfg(any(feature = "static-generation", feature = "fullstack"))]
+    #[cfg(feature = "fullstack")]
     {
         let platform_config = platform_config
             .into_iter()
@@ -314,17 +328,29 @@ fn web_launch(
             .unwrap_or_default()
             .hydrate(true);
 
+        // If there is a base path set, call server functions from that base path
+        if let Some(base_path) = dioxus_cli_config::web_base_path() {
+            let base_path = base_path.trim_matches('/');
+            crate::prelude::server_fn::client::set_server_url(
+                format!(
+                    "{}/{}",
+                    crate::prelude::server_fn::client::get_server_url(),
+                    base_path
+                )
+                .leak(),
+            );
+        }
+
         let factory = move || {
             let mut vdom = dioxus_core::VirtualDom::new(root);
             for context in contexts {
                 vdom.insert_any_root_context(context());
             }
+
             #[cfg(feature = "document")]
             {
                 #[cfg(feature = "fullstack")]
                 use dioxus_fullstack::document;
-                #[cfg(all(feature = "static-generation", not(feature = "fullstack")))]
-                use dioxus_static_site_generation::document;
                 let document = std::rc::Rc::new(document::web::FullstackWebDocument)
                     as std::rc::Rc<dyn crate::prelude::document::Document>;
                 vdom.provide_root_context(document);
@@ -334,6 +360,7 @@ fn web_launch(
 
         dioxus_web::launch::launch_virtual_dom(factory(), platform_config)
     }
-    #[cfg(not(any(feature = "static-generation", feature = "fullstack")))]
+
+    #[cfg(not(any(feature = "fullstack")))]
     dioxus_web::launch::launch(root, contexts, platform_config);
 }

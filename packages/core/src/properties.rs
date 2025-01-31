@@ -105,7 +105,7 @@ impl EmptyBuilder {
     pub fn build(self) {}
 }
 
-/// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
+/// This utility function launches the builder method so that the rsx! macro can use the typed-builder pattern
 /// to initialize a component's props.
 pub fn fc_to_builder<P, M>(_: impl ComponentFunction<P, M>) -> <P as Properties>::Builder
 where

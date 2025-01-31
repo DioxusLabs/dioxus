@@ -13,5 +13,14 @@ keywords = ["dom", "ui", "gui", "assets"]
 # be careful with dependencies you add here - these need to get compiled for the proc macro and therefore
 # prevent the main code from compiling!
 [dependencies]
-serde_json = "1.0"
 serde = { workspace = true, features = ["derive"] }
+const-serialize = { workspace = true, features = ["serde"] }
+dioxus-core-types = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true, optional = true }
+
+[dev-dependencies]
+manganis = { workspace = true }
+dioxus = { workspace = true }
+
+[features]
+dioxus = ["dep:dioxus-core-types", "dep:dioxus-cli-config"]

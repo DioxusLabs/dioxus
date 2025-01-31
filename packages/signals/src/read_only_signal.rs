@@ -11,6 +11,9 @@ pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage>
     inner: Signal<T, S>,
 }
 
+/// A signal that can only be read from.
+pub type ReadSignal<T, S> = ReadOnlySignal<T, S>;
+
 impl<T: 'static, S: Storage<SignalData<T>>> From<Signal<T, S>> for ReadOnlySignal<T, S> {
     fn from(inner: Signal<T, S>) -> Self {
         Self { inner }
@@ -43,7 +46,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     }
 
     /// Point to another signal
-    pub fn point_to(&mut self, other: Self) -> BorrowResult {
+    pub fn point_to(&self, other: Self) -> BorrowResult {
         self.inner.point_to(other.inner)
     }
 
@@ -52,7 +55,12 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
         use crate::write::Writable;
-        _ = self.inner.try_write();
+        use warnings::Warning;
+        // We diff props while rendering, but we only write to the signal if it has
+        // changed so it is safe to ignore the warning
+        crate::warnings::signal_write_in_component_body::allow(|| {
+            _ = self.inner.try_write();
+        });
     }
 }
 

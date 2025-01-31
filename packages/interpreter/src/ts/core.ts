@@ -20,6 +20,7 @@ export class BaseInterpreter {
   root: HTMLElement;
   handler: EventListener;
   resizeObserver: ResizeObserver;
+  intersectionObserver: IntersectionObserver;
 
   nodes: Node[];
   stack: Node[];
@@ -42,6 +43,9 @@ export class BaseInterpreter {
     this.templates = {};
 
     this.handler = handler;
+
+    // make sure to set the root element's ID so it still registers events
+    root.setAttribute("data-dioxus-id", "0");
   }
 
   handleResizeEvent(entry: ResizeObserverEntry) {
@@ -55,7 +59,7 @@ export class BaseInterpreter {
     target.dispatchEvent(event);
   }
 
-  createObserver(element: HTMLElement) {
+  createResizeObserver(element: HTMLElement) {
     // Lazily create the resize observer
     if (!this.resizeObserver) {
       this.resizeObserver = new ResizeObserver((entries) => {
@@ -67,13 +71,48 @@ export class BaseInterpreter {
     this.resizeObserver.observe(element);
   }
 
-  removeObserver(element: HTMLElement) {
+  removeResizeObserver(element: HTMLElement) {
     if (this.resizeObserver) {
       this.resizeObserver.unobserve(element);
     }
   }
 
+  handleIntersectionEvent(entry: IntersectionObserverEntry) {
+    const target = entry.target;
+
+    let event = new CustomEvent<IntersectionObserverEntry>("visible", {
+      bubbles: false,
+      detail: entry,
+    });
+
+    target.dispatchEvent(event);
+  }
+
+  createIntersectionObserver(element: HTMLElement) {
+    /// Lazily create the intersection observer
+    if (!this.intersectionObserver) {
+      this.intersectionObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          this.handleIntersectionEvent(entry);
+        }
+      });
+    }
+    this.intersectionObserver.observe(element);
+  }
+
+  removeIntersectionObserver(element: HTMLElement) {
+    if (this.intersectionObserver) {
+      this.intersectionObserver.unobserve(element);
+    }
+  }
+
   createListener(event_name: string, element: HTMLElement, bubbles: boolean) {
+    if (event_name == "resize") {
+      this.createResizeObserver(element);
+    } else if (event_name == "visible") {
+      this.createIntersectionObserver(element);
+    }
+
     if (bubbles) {
       if (this.global[event_name] === undefined) {
         this.global[event_name] = { active: 1, callback: this.handler };
@@ -88,14 +127,14 @@ export class BaseInterpreter {
       }
       element.addEventListener(event_name, this.handler);
     }
-
-    if (event_name == "resize") {
-      this.createObserver(element);
-    }
   }
 
   removeListener(element: HTMLElement, event_name: string, bubbles: boolean) {
-    if (bubbles) {
+    if (event_name == "resize") {
+      this.removeResizeObserver(element);
+    } else if (event_name == "visible") {
+      this.removeIntersectionObserver(element);
+    } else if (bubbles) {
       this.removeBubblingListener(event_name);
     } else {
       this.removeNonBubblingListener(element, event_name);
@@ -202,6 +241,18 @@ export class BaseInterpreter {
         NodeFilter.SHOW_COMMENT
       );
 
+      let nextSibling = under.nextSibling;
+      // Continue to the next node. Returns false if we should stop traversing because we've reached the end of the children
+      // of the root
+      let continueToNextNode = () => {
+        // stop traversing if there are no more nodes
+        if (!treeWalker.nextNode()) {
+          return false;
+        }
+        // stop traversing if we have reached the next sibling of the root node
+        return treeWalker.currentNode !== nextSibling;
+      };
+
       while (treeWalker.currentNode) {
         const currentNode = treeWalker.currentNode as ChildNode;
         if (currentNode.nodeType === Node.COMMENT_NODE) {
@@ -212,7 +263,7 @@ export class BaseInterpreter {
 
           if (placeholderSplit.length > 1) {
             this.nodes[ids[parseInt(placeholderSplit[1])]] = currentNode;
-            if (!treeWalker.nextNode()) {
+            if (!continueToNextNode()) {
               break;
             }
             continue;
@@ -245,7 +296,9 @@ export class BaseInterpreter {
             }
             treeWalker.currentNode = commentAfterText;
             this.nodes[ids[parseInt(textNodeSplit[1])]] = textNode;
-            let exit = !treeWalker.nextNode();
+            // Stop traversing if we started on a comment node (which has no children)
+            // or the next sibling stops the walk
+            let exit = currentNode === under || !continueToNextNode();
             // remove the comment node after the text node
             commentAfterText.remove();
             if (exit) {
@@ -254,7 +307,7 @@ export class BaseInterpreter {
             continue;
           }
         }
-        if (!treeWalker.nextNode()) {
+        if (!continueToNextNode()) {
           break;
         }
       }

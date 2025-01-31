@@ -1,0 +1,17 @@
+[package]
+name = "dioxus-dx-wire-format"
+edition = "2021"
+version.workspace = true
+publish = true
+authors = ["Jonathan Kelley"]
+description = "Wire format for the Dioxus CLI"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com/learn/0.6/"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
+rust-version = "1.79.0"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+cargo_metadata = { workspace = true }

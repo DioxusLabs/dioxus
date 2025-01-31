@@ -1,42 +1,55 @@
-<div>
-  <h1>🌗🚀 Dioxus</h1>
-  <p>
-    <strong>A concurrent, functional, virtual DOM for Rust</strong>
-  </p>
+<div align="center">
+    <img
+        src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c"
+        alt="Build web, desktop, and mobile apps with a single codebase."
+        width="100%"
+        class="darkmode-image"
+    >
+    <div>
+        <a href=https://dioxuslabs.com/learn/0.6/getting_started>Getting Started</a> | <a href="https://dioxuslabs.com/learn/0.6">Book (0.6)</a> | <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples">Examples</a>
+    </div>
 </div>
 
-# Resources
+---
+Dioxus is a framework for building cross-platform apps in Rust. With one codebase, you can build web, desktop, and mobile apps with fullstack server functions. Dioxus is designed to be easy to learn for developers familiar with web technologies like HTML, CSS, and JavaScript.
 
-This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/dddae6a9-c13b-4a88-84e8-dc98c1286d2a" alt="App with dioxus" height="600px">
+</div>
 
-- [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
-- [Book (0.5)](https://dioxuslabs.com/learn/0.5)
-- [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
+## At a glance
 
-# Overview and Goals
+Dioxus is crossplatform app framework that empowers developer to build beautiful, fast, type-safe apps with Rust. By default, Dioxus apps are declared with HTML and CSS. Dioxus includes a number of useful features:
 
-Dioxus makes it easy to quickly build complex user interfaces with Rust. Any Dioxus app can run in the web browser,
-as a desktop app, as a mobile app, or anywhere else provided you build the right renderer.
+- Hotreloading of RSX markup and assets
+- Interactive CLI with logging, project templates, linting, and more
+- Integrated bundler for deploying to the web, macOS, Linux, and Windows
+- Support for modern web features like SSR, Hydration, and HTML streaming
+- Direct access to system APIs through JNI (Android), CoreFoundation (Apple), and web-sys (web)
+- Type-safe application routing and server functions
 
-Dioxus is heavily inspired by React, supporting many of the same concepts:
+## Quick start
 
-- Hooks for state
-- VirtualDom & diffing
-- Concurrency, fibers, and asynchronous rendering
-- JSX-like templating syntax
+To get started with Dioxus, you'll want to grab the dioxus-cli tool: `dx`. We distribute `dx` with `cargo-binstall` - if you already have binstall skip this step.
+```shell
+# skip if you already have cargo-binstall
+cargo install cargo-binstall
 
-If you know React, then you know Dioxus.
+# install the precompiled `dx` tool
+cargo binstall dioxus-cli
 
-Dioxus is _substantially_ more performant than many of the other Rust UI libraries (Yew/Percy) and is _significantly_ more performant
-than React—roughly competitive with InfernoJS.
+# create a new app, following the template
+dx new my-app && cd my-app
 
-Remember: Dioxus is a library for declaring interactive user interfaces—it is not a dedicated renderer. Most 1st party renderers for Dioxus currently only support web technologies.
+# and then serve!
+dx serve --platform desktop
+```
 
-## Brief Overview
+## Your first app
 
-All Dioxus apps are built by composing functions that start with a capital letter and return an `Element`.
+All Dioxus apps are built by composing functions return an `Element`.
 
-To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
+To launch an app, we use the `launch` method. In the launch function, we pass the app's root `Component`.
 
 ```rust, no_run
 use dioxus::prelude::*;
@@ -107,10 +120,9 @@ fn App() -> Element {
 
 ## Components
 
-We can compose these function components to build a complex app. Each new
-component we design must take some Properties. For components with no explicit properties, we can omit the type altogether.
+We can compose these function components to build a complex app. Each new component takes some Properties. For components with no explicit properties, we can omit the type altogether.
 
-In Dioxus, all properties are memorized by default with Clone and PartialEq. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
+In Dioxus, all properties are memoized by default with `Clone` and `PartialEq`. For props you can't clone, simply wrap the fields in a [`ReadOnlySignal`](dioxus_signals::ReadOnlySignal) and Dioxus will handle converting types for you.
 
 ```rust, no_run
 # use dioxus::prelude::*;
@@ -142,16 +154,14 @@ fn Header(title: String, color: String) -> Element {
 }
 ```
 
-> You can read more about props in the [reference](https://dioxuslabs.com/learn/0.5/reference/component_props).
+> You can read more about props in the [reference](https://dioxuslabs.com/learn/0.6/reference/component_props).
 
 ## Hooks
 
-While components are reusable forms of UI elements, hooks are reusable forms
-of logic. Hooks provide a way of retrieving state from Dioxus' internal `Scope` and using
+While components are reusable forms of UI elements, hooks are reusable forms of logic. Hooks provide a way of retrieving state from Dioxus' internal `Scope` and using
 it to render UI elements.
 
-By convention, all hooks are functions that should start with `use_`. We can
-use hooks to define the state and modify it from within listeners.
+By convention, all hooks are functions that should start with `use_`. We can use hooks to define the state and modify it from within listeners.
 
 ```rust, no_run
 # use dioxus::prelude::*;
@@ -164,17 +174,14 @@ fn App() -> Element {
 }
 ```
 
-Hooks are sensitive to how they are used. To use hooks, you must abide by the
-["rules of hooks"](https://dioxuslabs.com/learn/0.5/reference/hooks#rules-of-hooks):
+Hooks are sensitive to how they are used. To use hooks, you must abide by the ["rules of hooks"](https://dioxuslabs.com/learn/0.6/reference/hooks#rules-of-hooks):
 
 - Hooks can only be called in the body of a component or another hook. Not inside of another expression like a loop, conditional or function call.
 - Hooks should start with "use\_"
 
-In a sense, hooks let us add a field of state to our component without declaring
-an explicit state struct. However, this means we need to "load" the struct in the right
-order. If that order is wrong, then the hook will pick the wrong state and panic.
+Hooks let us add a field of state to our component without declaring an explicit state struct. However, this means we need to "load" the struct in the right order. If that order is wrong, then the hook will pick the wrong state and panic.
 
-Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with [custom hooks](https://dioxuslabs.com/learn/0.5/cookbook/state/custom_hooks).
+Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with custom hooks.
 
 ## Putting it all together
 
@@ -201,18 +208,18 @@ fn App() -> Element {
 
 ## Conclusion
 
-This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.5/guide) and [reference](https://dioxuslabs.com/learn/0.5/reference) on the official
+This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.6/guide) and [guides](https://dioxuslabs.com/learn/0.6/guides) on the official
 website for more details.
 
 Beyond this overview, Dioxus supports:
 
-- [Server-side rendering](https://dioxuslabs.com/learn/0.5/reference/fullstack)
+- Server-side rendering
 - Concurrent rendering (with async support)
 - Web/Desktop/Mobile support
 - Pre-rendering and hydration
 - Fragments, and Suspense
 - Inline-styles
-- [Custom event handlers](https://dioxuslabs.com/learn/0.5/reference/event_handlers#handler-props)
+- Custom event handlers
 - Custom elements
 - Basic fine-grained reactivity (IE SolidJS/Svelte)
 - and more!

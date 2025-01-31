@@ -1,15 +1,12 @@
-//! Manganis is a Rust library for bundling assets into a final binary.
-
+#![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-#[cfg(feature = "macro")]
-pub use manganis_macro::*;
+mod hash;
+#[doc(hidden)]
+pub mod macro_helpers;
+pub use manganis_macro::asset;
 
-mod folder;
-pub use folder::*;
-
-mod images;
-pub use images::*;
-
-mod builder;
-pub use builder::*;
+pub use manganis_core::{
+    Asset, AssetOptions, BundledAsset, CssAssetOptions, FolderAssetOptions, ImageAssetOptions,
+    ImageFormat, ImageSize, JsAssetOptions,
+};

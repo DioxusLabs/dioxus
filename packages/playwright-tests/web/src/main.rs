@@ -1,6 +1,7 @@
 // This test is used by playwright configured in the root of the repo
 
 use dioxus::prelude::*;
+use wasm_bindgen::prelude::*;
 
 fn app() -> Element {
     let mut num = use_signal(|| 0);
@@ -24,6 +25,13 @@ fn app() -> Element {
         button {
             class: "eval-button",
             onclick: move |_| async move {
+                // Make sure normal return values work. Regression test for https://github.com/DioxusLabs/dioxus/issues/3655
+                let eval = document::eval(r#"return "hello world";"#);
+
+                let result = eval.await.unwrap();
+                assert_eq!(result, "hello world");
+
+                // Make sure dioxus.send/dioxus.recv works
                 let mut eval = document::eval(
                     r#"
                         window.document.title = 'Hello from Dioxus Eval!';
@@ -52,6 +60,9 @@ fn app() -> Element {
         }
         div { class: "eval-result", "{eval_result}" }
         PreventDefault {}
+        OnMounted {}
+        WebSysClosure {}
+        DocumentElements {}
     }
 }
 
@@ -68,6 +79,79 @@ fn PreventDefault() -> Element {
             },
             "{text}"
         }
+    }
+}
+
+#[component]
+fn OnMounted() -> Element {
+    let mut mounted_triggered_count = use_signal(|| 0);
+    rsx! {
+        div {
+            class: "onmounted-div",
+            onmounted: move |_| {
+                mounted_triggered_count += 1;
+            },
+            "onmounted was called {mounted_triggered_count} times"
+        }
+    }
+}
+
+// This component tests attaching an event listener to the document with a web-sys closure
+// and effect
+#[component]
+fn WebSysClosure() -> Element {
+    static TRIGGERED: GlobalSignal<bool> = GlobalSignal::new(|| false);
+    use_effect(|| {
+        let window = web_sys::window().expect("window not available");
+
+        // Assert the component contents have been mounted
+        window
+            .document()
+            .unwrap()
+            .get_element_by_id("web-sys-closure-div")
+            .expect("Effects should only be run after all contents have bene mounted to the dom");
+
+        // Make sure passing the runtime into the closure works
+        let callback = Callback::new(|_| {
+            assert!(!dioxus::dioxus_core::vdom_is_rendering());
+            *TRIGGERED.write() = true;
+        });
+        let closure: Closure<dyn Fn()> = Closure::new({
+            move || {
+                callback(());
+            }
+        });
+
+        window
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+            .expect("Failed to add keydown event listener");
+
+        closure.forget();
+    });
+
+    rsx! {
+        div {
+            id: "web-sys-closure-div",
+            if TRIGGERED() {
+                "the keydown event was triggered"
+            }
+        }
+    }
+}
+
+/// This component tests the document::* elements
+#[component]
+fn DocumentElements() -> Element {
+    rsx! {
+        document::Meta { id: "meta-head", name: "testing", data: "dioxus-meta-element" }
+        document::Link {
+            id: "link-head",
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css?family=Roboto+Mono"
+        }
+        document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
+        document::Script { id: "script-head", async: true, "console.log('hello world');" }
+        document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
     }
 }
 

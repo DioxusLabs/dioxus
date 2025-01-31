@@ -1,11 +1,9 @@
 use super::*;
 use crate::{AddressArguments, BuildArgs, DioxusCrate, Platform};
-use anyhow::Context;
 
 /// Serve the project
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
-#[clap(name = "serve")]
 pub(crate) struct ServeArgs {
     /// The arguments for the address the server will run on
     #[clap(flatten)]
@@ -47,10 +45,22 @@ pub(crate) struct ServeArgs {
 
 impl ServeArgs {
     /// Start the tui, builder, etc by resolving the arguments and then running the actual top-level serve function
-    pub(crate) async fn serve(mut self) -> Result<()> {
-        let krate = DioxusCrate::new(&self.build_arguments.target_args)
-            .context("Failed to load Dioxus workspace")?;
+    ///
+    /// Make sure not to do any intermediate logging since our tracing infra has now enabled much
+    /// higher log levels
+    pub(crate) async fn serve(self) -> Result<StructuredOutput> {
+        crate::serve::serve_all(self).await?;
 
+        Ok(StructuredOutput::Success)
+    }
+
+    pub(crate) async fn load_krate(&mut self) -> Result<DioxusCrate> {
+        let krate = DioxusCrate::new(&self.build_arguments.target_args)?;
+        self.resolve(&krate).await?;
+        Ok(krate)
+    }
+
+    pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
         // Enable hot reload.
         if self.hot_reload.is_none() {
             self.hot_reload = Some(krate.settings.always_hot_reload.unwrap_or(true));
@@ -72,9 +82,9 @@ impl ServeArgs {
         }
 
         // Resolve the build arguments
-        self.build_arguments.resolve(&krate)?;
+        self.build_arguments.resolve(krate).await?;
 
-        crate::serve::serve_all(self, krate).await
+        Ok(())
     }
 
     pub(crate) fn should_hotreload(&self) -> bool {
@@ -86,14 +96,15 @@ impl ServeArgs {
     }
 
     pub(crate) fn is_interactive_tty(&self) -> bool {
-        use crossterm::tty::IsTty;
-        std::io::stdout().is_tty() && self.interactive.unwrap_or(true)
+        use std::io::IsTerminal;
+        std::io::stdout().is_terminal() && self.interactive.unwrap_or(true)
     }
 
     pub(crate) fn should_proxy_build(&self) -> bool {
         match self.build_arguments.platform() {
             Platform::Server => true,
-            _ => self.build_arguments.fullstack,
+            // During SSG, just serve the static files instead of running the server
+            _ => self.build_arguments.fullstack && !self.build_arguments.ssg,
         }
     }
 }

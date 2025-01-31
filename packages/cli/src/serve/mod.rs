@@ -1,7 +1,4 @@
-use crate::{
-    BuildUpdate, Builder, DioxusCrate, Error, Platform, Result, ServeArgs, TraceController,
-    TraceSrc,
-};
+use crate::{BuildUpdate, Builder, Error, Platform, Result, ServeArgs, TraceController, TraceSrc};
 
 mod ansi_buffer;
 mod detect;
@@ -40,28 +37,32 @@ pub(crate) use watcher::*;
 /// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()> {
+pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
+    // Redirect all logging the cli logger
     let mut tracer = TraceController::redirect();
 
+    // Load the krate and resolve the server args against it - this might log so do it after we turn on the tracer first
+    let krate = args.load_krate().await?;
+
     // Note that starting the builder will queue up a build immediately
+    let mut screen = Output::start(&args).await?;
     let mut builder = Builder::start(&krate, args.build_args())?;
     let mut devserver = WebServer::start(&krate, &args)?;
     let mut watcher = Watcher::start(&krate, &args);
     let mut runner = AppRunner::start(&krate);
-    let mut screen = Output::start(&args)?;
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
     tracing::info!(
-        r#"Serving your Dioxus app: {} 🚀
-
-               - Press `ctrl+c` to exit the server
-               - Press `r` to rebuild the app
-               - Press `o` to open the app
-               - Press `t` to toggle cargo output
-               - Press `/` for more commands and shortcuts
-
-               Learn more at https://dioxuslabs.com/learn/0.6/getting_started"#,
+        r#"-----------------------------------------------------------------
+                Serving your Dioxus app: {} 🚀
+                • Press `ctrl+c` to exit the server
+                • Press `r` to rebuild the app
+                • Press `p` to toggle automatic rebuilds
+                • Press `v` to toggle verbose logging
+                • Press `/` for more commands and shortcuts
+                Learn more at https://dioxuslabs.com/learn/0.6/getting_started
+               ----------------------------------------------------------------"#,
         krate.executable_name()
     );
 
@@ -90,12 +91,12 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = runner.attempt_hot_reload(files) {
+                if let Some(hr) = runner.attempt_hot_reload(files).await {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                    if hr.templates.is_empty()
-                        && hr.assets.is_empty()
-                        && hr.unknown_files.is_empty()
-                    {
+                    //
+                    // Also make sure the builder isn't busy since that might cause issues with hotreloads
+                    // https://github.com/DioxusLabs/dioxus/issues/3361
+                    if hr.is_empty() || !builder.can_receive_hotreloads() {
                         tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
                         continue;
                     }
@@ -114,6 +115,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                     runner.file_map.force_rebuild();
 
                     // Tell the server to show a loading page for any new requests
+                    devserver.send_reload_start().await;
                     devserver.start_build().await;
                 } else {
                     tracing::warn!(
@@ -146,7 +148,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 screen.new_build_update(&update);
 
                 // And then update the websocketed clients with the new build status in case they want it
-                devserver.new_build_update(&update).await;
+                devserver.new_build_update(&update, &builder).await;
 
                 // And then open the app if it's ready
                 // todo: there might be more things to do here that require coordination with other pieces of the CLI
@@ -157,7 +159,7 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                         screen.push_cargo_log(message);
                     }
                     BuildUpdate::BuildFailed { err } => {
-                        tracing::error!("Build failed: {}", err);
+                        tracing::error!("Build failed: {:?}", err);
                     }
                     BuildUpdate::BuildReady { bundle } => {
                         let handle = runner
@@ -192,8 +194,6 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                - To exit the server, press `ctrl+c`"#
                     );
                 }
-
-                runner.kill(platform);
             }
 
             ServeUpdate::StdoutReceived { platform, msg } => {
@@ -213,13 +213,17 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
                 // `Full rebuild:` to line up with
                 // `Hotreloading:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
+
                 builder.rebuild(args.build_arguments.clone());
                 runner.file_map.force_rebuild();
+                devserver.send_reload_start().await;
                 devserver.start_build().await
             }
 
             ServeUpdate::OpenApp => {
-                runner.open_existing(&devserver).await;
+                if let Err(err) = runner.open_existing(&devserver).await {
+                    tracing::error!("Failed to open app: {err}")
+                }
             }
 
             ServeUpdate::Redraw => {
@@ -245,10 +249,10 @@ pub(crate) async fn serve_all(args: ServeArgs, krate: DioxusCrate) -> Result<()>
         }
     };
 
+    _ = runner.cleanup().await;
     _ = devserver.shutdown().await;
-    _ = screen.shutdown();
     builder.abort_all();
-    tracer.shutdown();
+    _ = screen.shutdown();
 
     if let Err(err) = err {
         eprintln!("Exiting with error: {}", err);

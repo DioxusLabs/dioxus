@@ -57,7 +57,7 @@ pub(super) fn desktop_handler(
     }
 
     // todo: we want to move the custom assets onto a different protocol or something
-    if let Some(name) = request.uri().path().split('/').next() {
+    if let Some(name) = request.uri().path().split('/').nth(1) {
         if asset_handlers.has_handler(name) {
             let _name = name.to_string();
             return asset_handlers.handle_request(&_name, request, responder);
@@ -84,6 +84,17 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
             .as_ref(),
     );
 
+    // Attempt to serve from the asset dir on android using its loader
+    #[cfg(target_os = "android")]
+    {
+        if let Some(asset) = to_java_load_asset(request.uri().path()) {
+            return Ok(Response::builder()
+                .header("Content-Type", get_mime_by_ext(&uri_path))
+                .header("Access-Control-Allow-Origin", "*")
+                .body(asset)?);
+        }
+    }
+
     // If the asset doesn't exist, or starts with `/assets/`, then we'll try to serve out of the bundle
     // This lets us handle both absolute and relative paths without being too "special"
     // It just means that our macos bundle is a little "special" because we need to place an `assets`
@@ -94,8 +105,6 @@ fn serve_asset(request: Request<Vec<u8>>) -> Result<Response<Vec<u8>>> {
         let bundle_root = get_asset_root();
         let relative_path = uri_path.strip_prefix("/").unwrap();
         uri_path = bundle_root.join(relative_path);
-        println!("bundle root: {bundle_root:?}");
-        println!("uri path: {uri_path:?}");
     }
 
     // If the asset exists, then we can serve it!
@@ -261,5 +270,53 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
         // using octet stream according to this:
         None => "application/octet-stream",
+    }
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
+    let normalized = filepath
+        .trim_start_matches("/assets/")
+        .trim_start_matches('/');
+
+    // in debug mode, the asset might be under `/data/local/tmp/dx/` - attempt to read it from there if it exists
+    #[cfg(debug_assertions)]
+    {
+        let path = dioxus_cli_config::android_session_cache_dir().join(normalized);
+        if path.exists() {
+            return std::fs::read(path).ok();
+        }
+    }
+
+    use std::ptr::NonNull;
+
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.unwrap();
+    let mut env = vm.attach_current_thread().unwrap();
+
+    // Query the Asset Manager
+    let asset_manager_ptr = env
+        .call_method(
+            unsafe { jni::objects::JObject::from_raw(ctx.context().cast()) },
+            "getAssets",
+            "()Landroid/content/res/AssetManager;",
+            &[],
+        )
+        .expect("Failed to get asset manager")
+        .l()
+        .expect("Failed to get asset manager as object");
+
+    unsafe {
+        let asset_manager =
+            ndk_sys::AAssetManager_fromJava(env.get_native_interface(), *asset_manager_ptr);
+
+        let asset_manager = ndk::asset::AssetManager::from_ptr(
+            NonNull::new(asset_manager).expect("Invalid asset manager"),
+        );
+
+        let cstr = std::ffi::CString::new(normalized).unwrap();
+
+        let mut asset = asset_manager.open(&cstr)?;
+        Some(asset.buffer().unwrap().to_vec())
     }
 }

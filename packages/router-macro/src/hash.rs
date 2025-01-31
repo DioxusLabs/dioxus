@@ -25,7 +25,12 @@ impl HashFragment {
     pub fn write(&self) -> TokenStream2 {
         let ident = &self.ident;
         quote! {
-            write!(f, "#{}", #ident)?;
+            {
+                let __hash = #ident.to_string();
+                if !__hash.is_empty() {
+                    write!(f, "#{}", __hash)?;
+                }
+            }
         }
     }
 

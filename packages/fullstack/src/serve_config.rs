@@ -7,6 +7,8 @@ use std::path::PathBuf;
 
 use dioxus_lib::prelude::dioxus_core::LaunchConfig;
 
+use crate::server::ContextProviders;
+
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
@@ -14,6 +16,8 @@ pub struct ServeConfigBuilder {
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) context_providers: ContextProviders,
+    pub(crate) streaming_mode: StreamingMode,
 }
 
 impl LaunchConfig for ServeConfigBuilder {}
@@ -26,6 +30,8 @@ impl ServeConfigBuilder {
             index_html: None,
             index_path: None,
             incremental: None,
+            context_providers: Default::default(),
+            streaming_mode: StreamingMode::default(),
         }
     }
 
@@ -36,16 +42,10 @@ impl ServeConfigBuilder {
     /// # fn app() -> Element { todo!() }
     /// use dioxus::prelude::*;
     ///
-    /// let mut cfg = dioxus::fullstack::Config::new();
-    ///
-    /// // Only set the server config if the server feature is enabled
-    /// server_only! {
-    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default().incremental(IncrementalRendererConfig::default()));
-    /// }
-    ///
     /// // Finally, launch the app with the config
     /// LaunchBuilder::new()
-    ///     .with_cfg(cfg)
+    ///     // Only set the server config if the server feature is enabled
+    ///     .with_cfg(server_only!(ServeConfigBuilder::default().incremental(IncrementalRendererConfig::default())))
     ///     .launch(app);
     /// ```
     pub fn incremental(mut self, cfg: dioxus_isrg::IncrementalRendererConfig) -> Self {
@@ -88,30 +88,92 @@ impl ServeConfigBuilder {
     /// # fn app() -> Element { todo!() }
     /// use dioxus::prelude::*;
     ///
-    /// let mut cfg = dioxus::fullstack::Config::new();
-    ///
-    /// // Only set the server config if the server feature is enabled
-    /// server_only! {
-    ///     cfg = cfg.with_server_cfg(ServeConfigBuilder::default().root_id("app"));
-    /// }
-    ///
-    /// // You also need to set the root id in your web config
-    /// web! {
-    ///     cfg = cfg.with_web_config(dioxus::web::Config::default().rootname("app"));
-    /// }
-    ///
-    /// // And desktop config
-    /// desktop! {
-    ///     cfg = cfg.with_desktop_config(dioxus::desktop::Config::default().with_root_name("app"));
-    /// }
-    ///
     /// // Finally, launch the app with the config
     /// LaunchBuilder::new()
-    ///     .with_cfg(cfg)
+    ///     // Only set the server config if the server feature is enabled
+    ///     .with_cfg(server_only! {
+    ///         ServeConfigBuilder::default().root_id("app")
+    ///     })
+    ///     // You also need to set the root id in your web config
+    ///     .with_cfg(web! {
+    ///         dioxus::web::Config::default().rootname("app")
+    ///     })
+    ///     // And desktop config
+    ///     .with_cfg(desktop! {
+    ///         dioxus::desktop::Config::default().with_root_name("app")
+    ///     })
     ///     .launch(app);
     /// ```
     pub fn root_id(mut self, root_id: &'static str) -> Self {
         self.root_id = Some(root_id);
+        self
+    }
+
+    /// Provide context to the root and server functions. You can use this context
+    /// while rendering with [`consume_context`](dioxus_lib::prelude::consume_context) or in server functions with [`FromContext`](crate::prelude::FromContext).
+    ///
+    /// Context will be forwarded from the LaunchBuilder if it is provided.
+    ///
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    ///
+    /// dioxus::LaunchBuilder::new()
+    ///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
+    ///     .with_context(server_only! {
+    ///         1234567890u32
+    ///     })
+    ///     .launch(app);
+    ///
+    /// #[server]
+    /// async fn read_context() -> Result<u32, ServerFnError> {
+    ///     // You can extract values from the server context with the `extract` function
+    ///     let FromContext(value) = extract().await?;
+    ///     Ok(value)
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     let future = use_resource(read_context);
+    ///     rsx! {
+    ///         h1 { "{future:?}" }
+    ///     }
+    /// }
+    /// ```
+    pub fn context_providers(mut self, state: ContextProviders) -> Self {
+        self.context_providers = state;
+        self
+    }
+
+    /// Set the streaming mode for the server. By default, streaming is disabled.
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn app() -> Element { todo!() }
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context(server_only! {
+    ///         dioxus::fullstack::ServeConfig::builder().streaming_mode(dioxus::fullstack::StreamingMode::OutOfOrder)
+    ///     })
+    ///     .launch(app);
+    /// ```
+    pub fn streaming_mode(mut self, mode: StreamingMode) -> Self {
+        self.streaming_mode = mode;
+        self
+    }
+
+    /// Enable out of order streaming. This will cause server futures to be resolved out of order and streamed to the client as they resolve.
+    ///
+    /// It is equivalent to calling `streaming_mode(StreamingMode::OutOfOrder)`
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn app() -> Element { todo!() }
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context(server_only! {
+    ///         dioxus::fullstack::ServeConfig::builder().enable_out_of_order_streaming()
+    ///     })
+    ///     .launch(app);
+    /// ```
+    pub fn enable_out_of_order_streaming(mut self) -> Self {
+        self.streaming_mode = StreamingMode::OutOfOrder;
         self
     }
 
@@ -137,6 +199,8 @@ impl ServeConfigBuilder {
         Ok(ServeConfig {
             index,
             incremental: self.incremental,
+            context_providers: self.context_providers,
+            streaming_mode: self.streaming_mode,
         })
     }
 }
@@ -235,12 +299,25 @@ pub(crate) struct IndexHtml {
     pub(crate) after_closing_body_tag: String,
 }
 
+/// The streaming mode to use while rendering the page
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum StreamingMode {
+    /// Streaming is disabled; all server futures should be resolved before hydrating the page on the client
+    #[default]
+    Disabled,
+    /// Out of order streaming is enabled; server futures are resolved out of order and streamed to the client
+    /// as they resolve
+    OutOfOrder,
+}
+
 /// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 /// See [`ServeConfigBuilder`] to create a ServeConfig
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    pub(crate) context_providers: ContextProviders,
+    pub(crate) streaming_mode: StreamingMode,
 }
 
 impl LaunchConfig for ServeConfig {}

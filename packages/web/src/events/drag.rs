@@ -74,25 +74,31 @@ impl HasDragData for Synthetic<DragEvent> {
 }
 
 impl HasFileData for Synthetic<DragEvent> {
-    #[cfg(feature = "file_engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
-        use wasm_bindgen::JsCast;
-
-        let files = self
-            .event
-            .dyn_ref::<web_sys::DragEvent>()
-            .and_then(|drag_event| {
-                drag_event.data_transfer().and_then(|dt| {
-                    dt.files().and_then(|files| {
-                        #[allow(clippy::arc_with_non_send_sync)]
-                        crate::file_engine::WebFileEngine::new(files).map(|f| {
-                            std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+        #[cfg(feature = "file_engine")]
+        {
+            use wasm_bindgen::JsCast;
+            let files = self
+                .event
+                .dyn_ref::<web_sys::DragEvent>()
+                .and_then(|drag_event| {
+                    drag_event.data_transfer().and_then(|dt| {
+                        dt.files().and_then(|files| {
+                            #[allow(clippy::arc_with_non_send_sync)]
+                            crate::file_engine::WebFileEngine::new(files).map(|f| {
+                                std::sync::Arc::new(f)
+                                    as std::sync::Arc<dyn dioxus_html::FileEngine>
+                            })
                         })
                     })
-                })
-            });
+                });
 
-        files
+            files
+        }
+        #[cfg(not(feature = "file_engine"))]
+        {
+            None
+        }
     }
 }
 
@@ -101,7 +107,6 @@ impl WebEventExt for dioxus_html::DragData {
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<web_sys::DragEvent> {
-        self.downcast::<Synthetic<DragEvent>>()
-            .map(|data| data.event.clone())
+        self.downcast::<DragEvent>().cloned()
     }
 }
