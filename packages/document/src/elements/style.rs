@@ -94,13 +94,14 @@ pub fn Style(props: StyleProps) -> Element {
             // The style has a src, render it as a link tag
             (Some(_), _) => {
                 attributes.push(("type", "text/css".into()));
+                attributes.push(("rel", "stylesheet".into()));
                 document.create_link(LinkProps {
                     media: props.media,
                     title: props.title,
                     r#type: Some("text/css".to_string()),
                     additional_attributes: props.additional_attributes,
                     href: props.href,
-                    rel: None,
+                    rel: Some("stylesheet".to_string()),
                     disabled: None,
                     r#as: None,
                     sizes: None,
