@@ -46,11 +46,7 @@ impl WindowEventHandlers {
         self.handlers.borrow_mut().try_remove(id.0);
     }
 
-    pub fn apply_event(
-        &self,
-        event: &Event<UserWindowEvent>,
-        target: &ActiveEventLoop,
-    ) {
+    pub fn apply_event(&self, event: &Event<UserWindowEvent>, target: &ActiveEventLoop) {
         for (_, handler) in self.handlers.borrow_mut().iter_mut() {
             // if this event does not apply to the window this listener cares about, return.
             if let Event::WindowEvent { window_id, .. } = event {

@@ -8,12 +8,14 @@
 use std::env::current_dir;
 use std::path::PathBuf;
 
-use dioxus::desktop::{Config, WindowBuilder};
+use dioxus::desktop::{Config, Window};
 use dioxus::prelude::*;
 
 fn main() {
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_window_attributes(WindowBuilder::new().with_resizable(true)))
+        .with_cfg(
+            Config::new().with_window_attributes(Window::default_attributes().with_resizable(true)),
+        )
         .launch(app)
 }
 

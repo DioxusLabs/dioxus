@@ -55,12 +55,14 @@ fn app() -> Element {
         } = event
         {
             let ctx = graphics_resources.value();
-            ctx.as_ref().map(|x| x.with_resources(|srcs| {
-                let mut cfg = srcs.config.clone();
-                cfg.width = new_size.width;
-                cfg.height = new_size.height;
-                srcs.surface.configure(&srcs.device, &cfg);
-            }));
+            ctx.as_ref().map(|x| {
+                x.with_resources(|srcs| {
+                    let mut cfg = srcs.config.clone();
+                    cfg.width = new_size.width;
+                    cfg.height = new_size.height;
+                    srcs.surface.configure(&srcs.device, &cfg);
+                })
+            });
             window().window.request_redraw();
         }
     });

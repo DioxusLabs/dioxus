@@ -9,12 +9,12 @@ use crate::{
 };
 use dioxus_core::{prelude::Callback, VirtualDom};
 use std::rc::{Rc, Weak};
+use tokio::sync::oneshot::{self, Receiver};
 use winit::{
     event::Event,
     event_loop::ActiveEventLoop,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
-use tokio::sync::oneshot::{self, Receiver};
 use wry::{RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
