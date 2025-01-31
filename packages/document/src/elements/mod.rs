@@ -7,6 +7,8 @@ use dioxus_core_macro::*;
 
 mod link;
 pub use link::*;
+mod stylesheet;
+pub use stylesheet::*;
 mod meta;
 pub use meta::*;
 mod script;
