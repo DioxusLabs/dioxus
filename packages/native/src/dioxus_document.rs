@@ -180,7 +180,7 @@ impl Document for DioxusDocument {
                                 self.inner.as_mut().handle_event(&mut default_event);
                                 prevent_default = true;
 
-                                // TODO: Generated click events should bubble separatedly
+                                // TODO: Generated click events should bubble separately
                                 // prevent_default |= !click_event.default_action_enabled();
 
                                 //TODO Check for other inputs which trigger input event on click here, eg radio
