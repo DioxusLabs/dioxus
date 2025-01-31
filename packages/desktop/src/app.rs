@@ -2,13 +2,14 @@ use crate::{
     config::{Config, CustomEventHandler, WindowCloseBehaviour},
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
-    ipc::{IpcMessage, UserWindowEvent},
+    ipc::{IpcMessage, IpcMethod, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
-    WeakDesktopContext,
+    DesktopService, WeakDesktopContext,
 };
-use dioxus_core::{ElementId, VirtualDom};
+use dioxus_core::{ElementId, ScopeId, VirtualDom};
+use dioxus_document::eval;
 use dioxus_html::PlatformEventData;
 use std::{
     any::Any,
@@ -20,9 +21,9 @@ use std::{
 use tokio::sync::oneshot::Sender;
 use winit::{
     dpi::PhysicalSize,
-    event::Event,
+    event::{Event, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy},
-    window::{Window, WindowId},
+    window::{Window, WindowAttributes, WindowId},
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
@@ -51,7 +52,6 @@ pub(crate) struct App {
 pub(crate) struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
     pub(crate) pending_windows: RefCell<Vec<(VirtualDom, Config, Sender<WeakDesktopContext>)>>,
-    pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
 }
@@ -81,7 +81,6 @@ impl App {
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
                 pending_windows: Default::default(),
-                pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
                 proxy,
             }),
@@ -113,12 +112,91 @@ impl App {
         app
     }
 
-    pub fn handle_event(&mut self, event_loop: &ActiveEventLoop, event: &Event<UserWindowEvent>) {
+    pub fn handle_event(&mut self, event_loop: &ActiveEventLoop, event: Event<UserWindowEvent>) {
         self.control_flow = AppControlFlow::Wait;
-        self.shared.event_handlers.apply_event(event, event_loop);
+        self.shared.event_handlers.apply_event(&event, event_loop);
 
         if let Some(ref mut f) = self.custom_event_handler {
             f(&event, event_loop)
+        }
+
+        match event {
+            Event::LoopExiting => self.handle_loop_exiting(),
+            Event::WindowEvent { window_id, event } => match event {
+                WindowEvent::CloseRequested => self.handle_close_requested(window_id),
+                WindowEvent::Destroyed { .. } => self.window_destroyed(window_id),
+                WindowEvent::Resized(new_size) => self.resize_window(window_id, &new_size),
+                _ => {}
+            },
+            Event::UserEvent(event) => match event {
+                UserWindowEvent::Poll(id) => self.poll_vdom(id),
+                UserWindowEvent::NewWindow => self.handle_new_windows(event_loop),
+                UserWindowEvent::CloseWindow(id) => self.handle_close_msg(id),
+                UserWindowEvent::Shutdown => self.control_flow = AppControlFlow::Exit,
+
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::GlobalHotKeyEvent(evnt) => self.handle_global_hotkey(evnt),
+
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::MudaMenuEvent(evnt) => self.handle_menu_event(evnt),
+
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::TrayMenuEvent(evnt) => self.handle_tray_menu_event(evnt),
+
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::TrayIconEvent(evnt) => self.handle_tray_icon_event(evnt),
+
+                #[cfg(all(feature = "devtools", debug_assertions))]
+                UserWindowEvent::HotReloadEvent(msg) => self.handle_hot_reload_msg(msg),
+
+                // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
+                UserWindowEvent::WindowsDragDrop(id) => {
+                    if let Some(webview) = self.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                eval("window.interpreter.handleWindowsDragDrop();");
+                            });
+                        });
+                    }
+                }
+                UserWindowEvent::WindowsDragLeave(id) => {
+                    if let Some(webview) = self.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                eval("window.interpreter.handleWindowsDragLeave();");
+                            });
+                        });
+                    }
+                }
+                UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
+                    if let Some(webview) = self.webviews.get(&id) {
+                        webview.dom.in_runtime(|| {
+                            ScopeId::ROOT.in_runtime(|| {
+                                let e = eval(
+                                    r#"
+                                    const xPos = await dioxus.recv();
+                                    const yPos = await dioxus.recv();
+                                    window.interpreter.handleWindowsDragOver(xPos, yPos)
+                                    "#,
+                                );
+
+                                _ = e.send(x_pos);
+                                _ = e.send(y_pos);
+                            });
+                        });
+                    }
+                }
+
+                UserWindowEvent::Ipc { id, msg } => match msg.method() {
+                    IpcMethod::Initialize => self.handle_initialize_msg(id),
+                    IpcMethod::FileDialog => self.handle_file_dialog_msg(msg, id),
+                    IpcMethod::UserEvent => {}
+                    IpcMethod::Query => self.handle_query_msg(msg, id),
+                    IpcMethod::BrowserOpen => self.handle_browser_open(msg),
+                    IpcMethod::Other(_) => {}
+                },
+            },
+            _ => {}
         }
 
         let winit_control_flow = match self.control_flow {
@@ -203,12 +281,77 @@ impl App {
         }
     }
 
-    pub fn handle_new_windows(&mut self) {
-        for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
-            let id = handler.desktop_context.window.id();
-            self.webviews.insert(id, handler);
+    pub fn handle_new_windows(&mut self, event_loop: &ActiveEventLoop) {
+        let mut pending_windows = self.shared.pending_windows.borrow_mut();
+
+        for (dom, cfg, sender) in pending_windows.drain(..) {
+            // Create window
+            let window_attributes = cfg.window_attributes.clone();
+            let window = Self::create_window(window_attributes, event_loop);
+
+            // Create webview
+            let webview = WebviewInstance::new(cfg, window, dom, self.shared.clone());
+
+            // Send the desktop context to the MaybeDesktopService
+            let cx = webview.dom.in_runtime(|| {
+                ScopeId::ROOT
+                    .consume_context::<Rc<DesktopService>>()
+                    .unwrap()
+            });
+            let _ = sender.send(Rc::downgrade(&cx));
+
+            // Send first poll event
+            let id = webview.desktop_context.window.id();
+            self.webviews.insert(id, webview);
             _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
         }
+    }
+
+    fn create_window(
+        mut attributes: WindowAttributes,
+        event_loop: &ActiveEventLoop,
+    ) -> Window {
+        // Make the windows bigger on desktop
+        //
+        // on mobile, we want them to be `None` so winit makes them the size of the screen. Otherwise we
+        // get a window that is not the size of the screen and weird black bars.
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            if attributes.inner_size.is_none() {
+                attributes = attributes.with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
+            }
+        }
+
+        // We assume that if the icon is None in cfg, then the user just didnt set it
+        if attributes.window_icon.is_none() {
+            attributes = attributes.with_window_icon(Some(
+                winit::window::Icon::from_rgba(
+                    include_bytes!("./assets/default_icon.bin").to_vec(),
+                    460,
+                    460,
+                )
+                .expect("image parse failed"),
+            ));
+        }
+
+        let window = event_loop.create_window(attributes).unwrap();
+
+        // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
+        #[cfg(target_os = "macos")]
+        {
+            use cocoa::appkit::NSWindowCollectionBehavior;
+            use cocoa::base::id;
+            use objc::{msg_send, sel, sel_impl};
+            use tao::platform::macos::WindowExtMacOS;
+
+            unsafe {
+                let window: id = window.ns_window() as id;
+                #[allow(unexpected_cfgs)]
+                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
+            }
+        }
+
+        window
     }
 
     pub fn handle_close_requested(&mut self, id: WindowId) {
@@ -253,7 +396,7 @@ impl App {
         }
     }
 
-    pub fn resize_window(&self, id: WindowId, size: PhysicalSize<u32>) {
+    pub fn resize_window(&self, id: WindowId, size: &PhysicalSize<u32>) {
         // TODO: the app layer should avoid directly manipulating the webview webview instance internals.
         // Window creation and modification is the responsibility of the webview instance so it makes sense to
         // encapsulate that there.
@@ -270,7 +413,7 @@ impl App {
         }
     }
 
-    pub fn handle_start_cause_init(&mut self) {
+    pub fn handle_app_resume(&mut self, event_loop: &ActiveEventLoop) {
         let virtual_dom = self
             .unmounted_dom
             .take()
@@ -285,7 +428,8 @@ impl App {
         let explicit_window_size = cfg.window_attributes.inner_size;
         let explicit_window_position = cfg.window_attributes.position;
 
-        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
+        let window = Self::create_window(cfg.window_attributes.clone(), event_loop);
+        let webview = WebviewInstance::new(cfg, window, virtual_dom, self.shared.clone());
 
         // And then attempt to resume from state
         self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
@@ -469,12 +613,12 @@ impl App {
         }));
     }
 
-    /// Do our best to preserve state about the window when the event loop is destroyed
+    /// Do our best to preserve state about the window when the event loop is exiting
     ///
     /// This will attempt to save the window position, size, and monitor into the environment before
     /// closing. This way, when the app is restarted, it can attempt to restore the window to the same
     /// position and size it was in before, making a better DX.
-    pub(crate) fn handle_loop_destroyed(&self) {
+    pub(crate) fn handle_loop_exiting(&self) {
         #[cfg(debug_assertions)]
         self.persist_window_state();
     }
@@ -557,7 +701,7 @@ impl App {
 
                 // Only set the inner size if it wasn't explicitly set
                 if explicit_inner_size.is_none() {
-                    window.request_inner_size(winit::dpi::PhysicalSize::new(size.0, size.1));
+                    let _ = window.request_inner_size(winit::dpi::PhysicalSize::new(size.0, size.1));
                 }
             }
         }

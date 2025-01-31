@@ -6,14 +6,13 @@
 //! To use this feature set `with_as_child_window()` on your desktop config which will then let you
 
 use dioxus::desktop::{
-    tao::{event::Event as WryEvent, window::WindowBuilder},
-    use_wry_event_handler, window, Config, DesktopContext,
+    use_wry_event_handler, window, winit::event::Event as WryEvent, Config, DesktopContext, Window,
 };
 use dioxus::prelude::*;
 
 fn main() {
     let config = Config::new()
-        .with_window_attributes(WindowBuilder::new().with_transparent(true))
+        .with_window_attributes(Window::default_attributes().with_transparent(true))
         .with_as_child_window();
 
     dioxus::LaunchBuilder::desktop()
@@ -37,9 +36,13 @@ fn app() -> Element {
     });
 
     use_wry_event_handler(move |event, _| {
-        use dioxus::desktop::tao::event::WindowEvent;
+        use dioxus::desktop::winit::event::WindowEvent;
 
-        if let WryEvent::RedrawRequested(_id) = event {
+        if let WryEvent::WindowEvent {
+            event: WindowEvent::RedrawRequested,
+            ..
+        } = event
+        {
             let resources = graphics_resources.read();
             if let Some(resources) = resources.as_ref() {
                 resources.with_resources(|resources| resources.render());
@@ -52,12 +55,12 @@ fn app() -> Element {
         } = event
         {
             let ctx = graphics_resources.value();
-            ctx.as_ref().unwrap().with_resources(|srcs| {
+            ctx.as_ref().map(|x| x.with_resources(|srcs| {
                 let mut cfg = srcs.config.clone();
                 cfg.width = new_size.width;
                 cfg.height = new_size.height;
                 srcs.surface.configure(&srcs.device, &cfg);
-            });
+            }));
             window().window.request_redraw();
         }
     });

@@ -18,132 +18,15 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
     event_loop.set_control_flow(ControlFlow::Wait);
 
     let proxy = event_loop.create_proxy();
-
     let mut app = App::new(proxy, desktop_config, virtual_dom);
-    event_loop.run_app(&mut app);
+    event_loop.run_app(&mut app).unwrap();
 
     std::process::exit(0);
-
-    // event_loop.run(move |window_event, event_loop, control_flow| {
-    //     // Set the control flow and check if any events need to be handled in the app itself
-    //     app.tick(&window_event);
-
-    //     if let Some(ref mut f) = custom_event_handler {
-    //         f(&window_event, event_loop)
-    //     }
-
-    //     match window_event {
-    //         Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(),
-    //         Event::LoopDestroyed => app.handle_loop_destroyed(),
-    //         Event::WindowEvent {
-    //             event, window_id, ..
-    //         } => match event {
-    //             WindowEvent::CloseRequested => app.handle_close_requested(window_id),
-    //             WindowEvent::Destroyed { .. } => app.window_destroyed(window_id),
-    //             WindowEvent::Resized(new_size) => app.resize_window(window_id, new_size),
-    //             _ => {}
-    //         },
-
-    //         Event::UserEvent(event) => match event {
-    //             UserWindowEvent::Poll(id) => app.poll_vdom(id),
-    //             UserWindowEvent::NewWindow => {
-    //                 // Create new windows/webviews
-    //                 {
-    //                     let mut pending_windows = app.shared.pending_windows.borrow_mut();
-    //                     let mut pending_webviews = app.shared.pending_webviews.borrow_mut();
-
-    //                     for (dom, cfg, sender) in pending_windows.drain(..) {
-    //                         let window = WebviewInstance::new(cfg, dom, app.shared.clone());
-
-    //                         // Send the desktop context to the MaybeDesktopService
-    //                         let cx = window.dom.in_runtime(|| {
-    //                             ScopeId::ROOT
-    //                                 .consume_context::<Rc<DesktopService>>()
-    //                                 .unwrap()
-    //                         });
-    //                         let _ = sender.send(Rc::downgrade(&cx));
-
-    //                         pending_webviews.push(window);
-    //                     }
-    //                 }
-
-    //                 app.handle_new_windows();
-    //             }
-    //             UserWindowEvent::CloseWindow(id) => app.handle_close_msg(id),
-    //             UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
-
-    //             #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    //             UserWindowEvent::GlobalHotKeyEvent(evnt) => app.handle_global_hotkey(evnt),
-
-    //             #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    //             UserWindowEvent::MudaMenuEvent(evnt) => app.handle_menu_event(evnt),
-
-    //             #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    //             UserWindowEvent::TrayMenuEvent(evnt) => app.handle_tray_menu_event(evnt),
-
-    //             #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    //             UserWindowEvent::TrayIconEvent(evnt) => app.handle_tray_icon_event(evnt),
-
-    //             #[cfg(all(feature = "devtools", debug_assertions))]
-    //             UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
-
-    //             // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
-    //             UserWindowEvent::WindowsDragDrop(id) => {
-    //                 if let Some(webview) = app.webviews.get(&id) {
-    //                     webview.dom.in_runtime(|| {
-    //                         ScopeId::ROOT.in_runtime(|| {
-    //                             eval("window.interpreter.handleWindowsDragDrop();");
-    //                         });
-    //                     });
-    //                 }
-    //             }
-    //             UserWindowEvent::WindowsDragLeave(id) => {
-    //                 if let Some(webview) = app.webviews.get(&id) {
-    //                     webview.dom.in_runtime(|| {
-    //                         ScopeId::ROOT.in_runtime(|| {
-    //                             eval("window.interpreter.handleWindowsDragLeave();");
-    //                         });
-    //                     });
-    //                 }
-    //             }
-    //             UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
-    //                 if let Some(webview) = app.webviews.get(&id) {
-    //                     webview.dom.in_runtime(|| {
-    //                         ScopeId::ROOT.in_runtime(|| {
-    //                             let e = eval(
-    //                                 r#"
-    //                                 const xPos = await dioxus.recv();
-    //                                 const yPos = await dioxus.recv();
-    //                                 window.interpreter.handleWindowsDragOver(xPos, yPos)
-    //                                 "#,
-    //                             );
-
-    //                             _ = e.send(x_pos);
-    //                             _ = e.send(y_pos);
-    //                         });
-    //                     });
-    //                 }
-    //             }
-
-    //             UserWindowEvent::Ipc { id, msg } => match msg.method() {
-    //                 IpcMethod::Initialize => app.handle_initialize_msg(id),
-    //                 IpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),
-    //                 IpcMethod::UserEvent => {}
-    //                 IpcMethod::Query => app.handle_query_msg(msg, id),
-    //                 IpcMethod::BrowserOpen => app.handle_browser_open(msg),
-    //                 IpcMethod::Other(_) => {}
-    //             },
-    //         },
-    //         _ => {}
-    //     }
-
-    //     *control_flow = app.control_flow;
-    // })
 }
 
 impl ApplicationHandler<UserWindowEvent> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        todo!()
+        self.handle_app_resume(event_loop);
     }
 
     fn window_event(
@@ -152,11 +35,11 @@ impl ApplicationHandler<UserWindowEvent> for App {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        self.handle_event(event_loop, &Event::WindowEvent { window_id, event });
+        self.handle_event(event_loop, Event::WindowEvent { window_id, event });
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserWindowEvent) {
-        self.handle_event(event_loop, &Event::UserEvent(event));
+        self.handle_event(event_loop, Event::UserEvent(event));
     }
 }
 

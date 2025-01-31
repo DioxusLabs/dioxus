@@ -22,6 +22,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
+use winit::window::Window;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
@@ -173,53 +174,7 @@ pub(crate) struct WebviewInstance {
 }
 
 impl WebviewInstance {
-    pub(crate) fn new(
-        mut cfg: Config,
-        dom: VirtualDom,
-        shared: Rc<SharedContext>,
-    ) -> WebviewInstance {
-        let mut window_attributes = cfg.window_attributes.clone();
-
-        // tao makes small windows for some reason, make them bigger on desktop
-        //
-        // on mobile, we want them to be `None` so tao makes them the size of the screen. Otherwise we
-        // get a window that is not the size of the screen and weird black bars.
-        #[cfg(not(any(target_os = "ios", target_os = "android")))]
-        {
-            if cfg.window_attributes.inner_size.is_none() {
-                window_attributes = window_attributes.with_inner_size(winit::dpi::LogicalSize::new(800.0, 600.0));
-            }
-        }
-
-        // We assume that if the icon is None in cfg, then the user just didnt set it
-        if cfg.window_attributes.window_icon.is_none() {
-            window_attributes = window_attributes.with_window_icon(Some(
-                winit::window::Icon::from_rgba(
-                    include_bytes!("./assets/default_icon.bin").to_vec(),
-                    460,
-                    460,
-                )
-                .expect("image parse failed"),
-            ));
-        }
-
-        let window = Window:: window_attributes.build(&shared.target).unwrap();
-
-        // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
-        #[cfg(target_os = "macos")]
-        {
-            use cocoa::appkit::NSWindowCollectionBehavior;
-            use cocoa::base::id;
-            use objc::{msg_send, sel, sel_impl};
-            use tao::platform::macos::WindowExtMacOS;
-
-            unsafe {
-                let window: id = window.ns_window() as id;
-                #[allow(unexpected_cfgs)]
-                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
-            }
-        }
-
+    pub(crate) fn new(mut cfg: Config, window: Window, dom: VirtualDom, shared: Rc<SharedContext>) -> Self {
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
         let asset_handlers = AssetHandlerRegistry::new();
