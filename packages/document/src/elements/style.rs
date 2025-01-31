@@ -41,7 +41,7 @@ impl StyleProps {
     }
 }
 
-/// Render a [`style`](crate::elements::style) tag into the head of the page.
+/// Render a [`style`](crate::elements::style) or [`link`](crate::elements::link) tag into the head of the page.
 ///
 /// If present, the children of the style component must be a single static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the style will not be added.
 ///
@@ -58,6 +58,10 @@ impl StyleProps {
 ///                     background-color: red;
 ///                 }}
 ///             "#
+///         }
+///         // You could also use a style with a href to load a stylesheet asset
+///         document::Style {
+///             href: asset!("/assets/style.css")
 ///         }
 ///     }
 /// }
@@ -90,13 +94,14 @@ pub fn Style(props: StyleProps) -> Element {
             // The style has a src, render it as a link tag
             (Some(_), _) => {
                 attributes.push(("type", "text/css".into()));
+                attributes.push(("rel", "stylesheet".into()));
                 document.create_link(LinkProps {
                     media: props.media,
                     title: props.title,
                     r#type: Some("text/css".to_string()),
                     additional_attributes: props.additional_attributes,
                     href: props.href,
-                    rel: None,
+                    rel: Some("stylesheet".to_string()),
                     disabled: None,
                     r#as: None,
                     sizes: None,
