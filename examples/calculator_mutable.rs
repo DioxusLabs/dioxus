@@ -6,8 +6,8 @@
 //! Generally, you'll want to split your state into several signals if you have a large application, but for small
 //! applications, or focused components, this is a great way to manage state.
 
-use dioxus::desktop::tao::dpi::LogicalSize;
-use dioxus::desktop::{Config, WindowBuilder};
+use dioxus::desktop::winit::dpi::LogicalSize;
+use dioxus::desktop::{Config, Window};
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::html::MouseEvent;
 use dioxus::prelude::*;
@@ -16,7 +16,7 @@ fn main() {
     dioxus::LaunchBuilder::desktop()
         .with_cfg(
             Config::new().with_window_attributes(
-                WindowBuilder::new()
+                Window::default_attributes()
                     .with_title("Calculator Demo")
                     .with_resizable(false)
                     .with_inner_size(LogicalSize::new(320.0, 530.0)),

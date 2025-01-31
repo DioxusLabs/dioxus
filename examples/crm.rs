@@ -14,9 +14,9 @@ use dioxus::prelude::*;
 fn main() {
     dioxus::LaunchBuilder::new()
         .with_cfg(desktop!({
-            use dioxus::desktop::{LogicalSize, WindowBuilder};
+            use dioxus::desktop::{LogicalSize, Window};
             dioxus::desktop::Config::default()
-                .with_window_attributes(WindowBuilder::new().with_inner_size(LogicalSize::new(800, 600)))
+                .with_window_attributes(Window::default_attributes().with_inner_size(LogicalSize::new(800, 600)))
         }))
         .launch(|| {
             rsx! {

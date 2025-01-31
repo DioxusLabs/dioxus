@@ -17,9 +17,9 @@ const STYLE: Asset = asset!("/examples/assets/calculator.css");
 fn main() {
     dioxus::LaunchBuilder::desktop()
         .with_cfg(desktop!({
-            use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
+            use dioxus::desktop::{Config, LogicalSize, Window};
             Config::new().with_window_attributes(
-                WindowBuilder::default()
+                Window::default_attributes()
                     .with_title("Calculator")
                     .with_inner_size(LogicalSize::new(300.0, 525.0)),
             )

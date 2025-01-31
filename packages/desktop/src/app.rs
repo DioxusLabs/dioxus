@@ -307,10 +307,7 @@ impl App {
         }
     }
 
-    fn create_window(
-        mut attributes: WindowAttributes,
-        event_loop: &ActiveEventLoop,
-    ) -> Window {
+    fn create_window(mut attributes: WindowAttributes, event_loop: &ActiveEventLoop) -> Window {
         // Make the windows bigger on desktop
         //
         // on mobile, we want them to be `None` so winit makes them the size of the screen. Otherwise we
@@ -701,7 +698,8 @@ impl App {
 
                 // Only set the inner size if it wasn't explicitly set
                 if explicit_inner_size.is_none() {
-                    let _ = window.request_inner_size(winit::dpi::PhysicalSize::new(size.0, size.1));
+                    let _ =
+                        window.request_inner_size(winit::dpi::PhysicalSize::new(size.0, size.1));
                 }
             }
         }

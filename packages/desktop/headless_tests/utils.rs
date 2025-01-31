@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use dioxus_core::Element;
 
 pub fn check_app_exits(app: fn() -> Element) {
-    use dioxus_desktop::tao::window::WindowBuilder;
+    use dioxus_desktop::Window;
     use dioxus_desktop::Config;
     // This is a deadman's switch to ensure that the app exits
     let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
@@ -18,7 +18,7 @@ pub fn check_app_exits(app: fn() -> Element) {
     });
 
     dioxus::LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_window_attributes(WindowBuilder::new().with_visible(false)))
+        .with_cfg(Config::new().with_window_attributes(Window::default_attributes().with_visible(false)))
         .launch(app);
 
     // Stop deadman's switch

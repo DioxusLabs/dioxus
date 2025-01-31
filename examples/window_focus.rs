@@ -5,8 +5,8 @@
 //!
 //! This lets you do things like backgrounding tasks, pausing animations, or changing the UI when the window is focused or not.
 
-use dioxus::desktop::tao::event::Event as WryEvent;
-use dioxus::desktop::tao::event::WindowEvent;
+use dioxus::desktop::winit::event::Event as WryEvent;
+use dioxus::desktop::winit::event::WindowEvent;
 use dioxus::desktop::use_wry_event_handler;
 use dioxus::desktop::{Config, WindowCloseBehaviour};
 use dioxus::prelude::*;
