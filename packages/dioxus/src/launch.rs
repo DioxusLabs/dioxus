@@ -162,14 +162,8 @@ impl LaunchBuilder {
         {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
             if get_server_url().is_empty() {
-                let ip = if cfg!(target_os = "android") {
-                    "10.0.2.2"
-                } else {
-                    "127.0.0.1"
-                };
-
                 let serverurl = format!(
-                    "http://{ip}:{}",
+                    "http://127.0.0.1:{}",
                     std::env::var("PORT").unwrap_or_else(|_| "8080".to_string())
                 )
                 .leak();
