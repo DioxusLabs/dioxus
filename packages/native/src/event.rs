@@ -13,7 +13,7 @@ pub enum DioxusNativeEvent {
 
     /// Create a new head element from the Link and Title elements
     ///
-    /// todo(jon): these should probabkly be syncronous somehow
+    /// todo(jon): these should probabkly be synchronous somehow
     CreateHeadElement {
         window: WindowId,
         name: String,

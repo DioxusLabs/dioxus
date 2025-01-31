@@ -490,10 +490,10 @@ impl DioxusDocument {
         let mut stylesheet = None;
         let mut title = None;
         if name == "link" {
-            let is_stylsheet = attributes
+            let is_stylesheet = attributes
                 .iter()
                 .any(|(name, value)| name == "rel" && value == "stylesheet");
-            if is_stylsheet {
+            if is_stylesheet {
                 stylesheet = attributes
                     .iter()
                     .find(|(name, _value)| name == "href")
@@ -516,7 +516,7 @@ impl DioxusDocument {
             })
             .collect();
 
-        let new_elememt = self
+        let new_element = self
             .inner
             .create_node(NodeData::Element(ElementNodeData::new(
                 qual_name(name, None),
@@ -526,7 +526,7 @@ impl DioxusDocument {
         if let Some(contents) = contents {
             let text_node = self.inner.create_text_node(contents);
             self.inner
-                .get_node_mut(new_elememt)
+                .get_node_mut(new_element)
                 .unwrap()
                 .children
                 .push(text_node);
@@ -536,10 +536,10 @@ impl DioxusDocument {
             .get_node_mut(self.head_element_id)
             .unwrap()
             .children
-            .push(new_elememt);
+            .push(new_element);
 
         if let Some(url) = stylesheet {
-            crate::assets::fetch_linked_stylesheet(&self.inner, new_elememt, url);
+            crate::assets::fetch_linked_stylesheet(&self.inner, new_element, url);
         }
 
         if let Some(_title) = title {
