@@ -43,11 +43,11 @@ impl NetProvider for DioxusNativeNetProvider {
         if request.url.scheme() == "dioxus" {
             match dioxus_asset_resolver::serve_asset_from_raw_path(request.url.path()) {
                 Ok(res) => {
-                    println!("fetching asset  from file system success {request:#?}");
+                    tracing::trace!("fetching asset  from file system success {request:#?}");
                     handler.bytes(doc_id, res.into_body().into(), self.callback.clone())
                 }
                 Err(_) => {
-                    println!("fetching asset  from file system error {request:#?}");
+                    tracing::warn!("fetching asset  from file system error {request:#?}");
                 }
             }
         } else {
