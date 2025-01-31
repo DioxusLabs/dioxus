@@ -224,7 +224,7 @@ impl LaunchBuilder {
             platform,
             contexts,
             configs,
-        };
+        } = self;
 
         // Make sure to turn on the logger if the user specified the logger feaature
         #[cfg(feature = "logger")]
@@ -265,22 +265,22 @@ impl LaunchBuilder {
         // If native is specified, we override the webview launcher
         #[cfg(feature = "native")]
         if matches!(platform, KnownPlatform::Native) {
-            dioxus_native::launch_cfg(app, contexts, configs);
+            return dioxus_native::launch_cfg(app, contexts, configs);
         }
 
         #[cfg(feature = "mobile")]
         if matches!(platform, KnownPlatform::Mobile) {
-            dioxus_mobile::launch_bindings::launch(app, contexts, configs);
+            return dioxus_mobile::launch_bindings::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "desktop")]
         if matches!(platform, KnownPlatform::Desktop) {
-            dioxus_desktop::launch::launch(app, contexts, configs);
+            return dioxus_desktop::launch::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "server")]
         if matches!(platform, KnownPlatform::Server) {
-            dioxus_fullstack::server::launch::launch(app, contexts, configs);
+            return dioxus_fullstack::server::launch::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "web")]
@@ -308,20 +308,27 @@ impl LaunchBuilder {
                     vdom.provide_root_context(document);
                 }
 
-                dioxus_web::launch::launch_virtual_dom(vdom, configs);
+                return dioxus_web::launch::launch_virtual_dom(vdom, configs);
             }
 
             #[cfg(not(any(feature = "fullstack")))]
-            dioxus_web::launch::launch(app, contexts, configs);
+            return dioxus_web::launch::launch(app, contexts, configs);
         }
 
         #[cfg(feature = "liveview")]
         if matches!(platform, KnownPlatform::Liveview) {
-            dioxus_liveview::launch::launch(app, contexts, configs);
+            return dioxus_liveview::launch::launch(app, contexts, configs);
         }
 
-        #[cfg(feature = "third-party-renderer")]
-        panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
+        // If the platform is not one of the above, then we assume it's a custom platform
+        if let KnownPlatform::Other(launch_fn) = platform {
+            return launch_fn(app, contexts, configs);
+        }
+
+        // If we're here, then we have no platform feature enabled and third-party-renderer isa enabled
+        if cfg!(feature = "third-party-renderer") {
+            panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
+        }
 
         panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.")
     }
