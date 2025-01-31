@@ -91,10 +91,8 @@ impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
         for window_id in new_windows.difference(&old_windows) {
             let window = self.inner.windows.get(window_id).unwrap();
             window.doc.vdom.in_runtime(|| {
-                let shared: Rc<dyn dioxus_document::Document> = Rc::new(DioxusNativeDocument {
-                    proxy: self.proxy.clone(),
-                    window: window_id.clone(),
-                });
+                let shared: Rc<dyn dioxus_document::Document> =
+                    Rc::new(DioxusNativeDocument::new(self.proxy.clone(), *window_id));
                 ScopeId::ROOT.provide_context(shared);
             });
         }

@@ -1,5 +1,5 @@
 use blitz_shell::BlitzShellEvent;
-use dioxus_document::Document;
+use dioxus_document::{Document, NoOpDocument};
 use winit::{event_loop::EventLoopProxy, window::WindowId};
 
 use crate::DioxusNativeEvent;
@@ -9,9 +9,15 @@ pub struct DioxusNativeDocument {
     pub(crate) window: WindowId,
 }
 
+impl DioxusNativeDocument {
+    pub(crate) fn new(proxy: EventLoopProxy<BlitzShellEvent>, window: WindowId) -> Self {
+        Self { proxy, window }
+    }
+}
+
 impl Document for DioxusNativeDocument {
     fn eval(&self, _js: String) -> dioxus_document::Eval {
-        todo!()
+        NoOpDocument.eval(_js)
     }
 
     fn create_head_element(
