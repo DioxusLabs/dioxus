@@ -60,7 +60,7 @@ impl DioxusNativeApplication {
                 contents,
                 window,
             } => {
-                if let Some(window) = self.inner.windows.get_mut(&window) {
+                if let Some(window) = self.inner.windows.get_mut(window) {
                     window.doc.create_head_element(name, attributes, contents);
                     window.poll();
                 }

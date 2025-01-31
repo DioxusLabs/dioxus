@@ -166,13 +166,13 @@ impl MutationWriter<'_> {
                 // }
 
                 if let Some(src_attr) = node.attr(local_name!("src")) {
-                    crate::assets::fetch_image(&self.doc, id, src_attr.to_string());
+                    crate::assets::fetch_image(self.doc, id, src_attr.to_string());
                 }
 
                 let rel_attr = node.attr(local_name!("rel"));
                 let href_attr = node.attr(local_name!("href"));
                 if let (Some("stylesheet"), Some(href)) = (rel_attr, href_attr) {
-                    crate::assets::fetch_linked_stylesheet(&self.doc, id, href.to_string());
+                    crate::assets::fetch_linked_stylesheet(self.doc, id, href.to_string());
                 }
 
                 for &child_id in &child_ids {
@@ -239,6 +239,7 @@ impl WriteMutations for MutationWriter<'_> {
         self.state.stack.push(node_id);
     }
 
+    #[allow(clippy::map_entry)]
     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
         if !self.state.templates.contains_key(&template) {
             let template_root_ids: Vec<NodeId> = template
@@ -420,11 +421,11 @@ impl WriteMutations for MutationWriter<'_> {
         }
 
         if let Some(queued_image) = queued_image {
-            crate::assets::fetch_image(&self.doc, node_id, queued_image);
+            crate::assets::fetch_image(self.doc, node_id, queued_image);
         }
 
         if let Some(queued_stylesheet) = queued_stylesheet {
-            crate::assets::fetch_linked_stylesheet(&self.doc, node_id, queued_stylesheet);
+            crate::assets::fetch_linked_stylesheet(self.doc, node_id, queued_stylesheet);
         }
     }
 

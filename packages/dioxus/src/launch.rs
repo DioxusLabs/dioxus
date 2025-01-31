@@ -41,10 +41,13 @@ use crate::prelude::*;
 ///
 /// # Example
 /// ```rust, no_run
-/// use dioxus::prelude::*;
+/// # use dioxus::prelude::*;
 ///
-/// fn main() {
-///     dioxus::launch(app);
+/// dioxus::launch(app);
+/// fn app() -> Element {
+///     rsx! {
+///         div { "Hello, world!" }
+///     }
 /// }
 /// ```
 pub fn launch(app: fn() -> Element) {
@@ -219,6 +222,8 @@ impl LaunchBuilder {
     }
 
     /// Launch your application.
+    ///
+    #[allow(clippy::diverging_sub_expression)]
     pub fn launch(self, app: fn() -> Element) {
         let Self {
             platform,
@@ -231,7 +236,7 @@ impl LaunchBuilder {
         dioxus_logger::initialize_default();
 
         // Set any flags if we're running under fullstack
-        #[cfg(all(feature = "fullstack"))]
+        #[cfg(feature = "fullstack")]
         {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
 

@@ -31,7 +31,7 @@ impl Document for DioxusNativeDocument {
             DioxusNativeEvent::CreateHeadElement {
                 name: name.to_string(),
                 attributes: attributes
-                    .into_iter()
+                    .iter()
                     .map(|(name, value)| (name.to_string(), value.clone()))
                     .collect(),
                 contents,

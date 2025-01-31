@@ -63,7 +63,7 @@ pub(super) fn desktop_handler(
         }
     }
 
-    match dioxus_asset_resolver::serve_asset_from_raw_path(&request.uri().path()) {
+    match dioxus_asset_resolver::serve_asset_from_raw_path(request.uri().path()) {
         Ok(res) => responder.respond(res),
         Err(_e) => responder.respond(
             Response::builder()

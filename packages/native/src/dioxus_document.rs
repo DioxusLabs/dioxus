@@ -505,8 +505,7 @@ impl DioxusDocument {
             title = attributes
                 .iter()
                 .find(|(name, _value)| name == "text")
-                .map(|(_name, _value)| contents.clone())
-                .flatten();
+                .and_then(|(_name, _value)| contents.clone());
         }
 
         let attributes = attributes
@@ -525,7 +524,7 @@ impl DioxusDocument {
             )));
 
         if let Some(contents) = contents {
-            let text_node = self.inner.create_text_node(&contents);
+            let text_node = self.inner.create_text_node(contents);
             self.inner
                 .get_node_mut(new_elememt)
                 .unwrap()
