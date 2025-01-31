@@ -3899,6 +3899,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-asset-resolver"
+version = "0.6.2"
+dependencies = [
+ "dioxus-cli-config",
+ "http 1.2.0",
+ "infer",
+ "jni",
+ "ndk",
+ "ndk-context",
+ "ndk-sys 0.6.0+11769913",
+ "thiserror 1.0.69",
+ "urlencoding",
+]
+
+[[package]]
 name = "dioxus-autofmt"
 version = "0.6.2"
 dependencies = [
@@ -4156,6 +4171,7 @@ dependencies = [
  "cocoa 0.25.0",
  "core-foundation 0.9.4",
  "dioxus",
+ "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-devtools",
@@ -4173,7 +4189,7 @@ dependencies = [
  "generational-box",
  "global-hotkey",
  "http-range",
- "infer 0.11.0",
+ "infer",
  "jni",
  "lazy-js-bundle",
  "muda 0.11.5",
@@ -4510,6 +4526,7 @@ dependencies = [
  "blitz-renderer-vello",
  "blitz-shell",
  "blitz-traits",
+ "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-devtools",
@@ -7582,15 +7599,6 @@ name = "indoc"
 version = "2.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
-
-[[package]]
-name = "infer"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a6c16b11a665b26aeeb9b1d7f954cdeb034be38dd00adab4f2ae921a8fee804"
-dependencies = [
- "cfb",
-]
 
 [[package]]
 name = "infer"
@@ -14042,7 +14050,7 @@ dependencies = [
  "dunce",
  "glob",
  "html5ever",
- "infer 0.16.0",
+ "infer",
  "json-patch",
  "kuchikiki",
  "log",

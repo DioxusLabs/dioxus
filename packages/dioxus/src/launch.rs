@@ -308,7 +308,7 @@ impl LaunchBuilder {
                     vdom.provide_root_context(document);
                 }
 
-                return dioxus_web::launch::launch_virtual_dom(vdom, configs);
+                return dioxus_web::launch::launch_virtual_dom(vdom, platform_config);
             }
 
             #[cfg(not(any(feature = "fullstack")))]

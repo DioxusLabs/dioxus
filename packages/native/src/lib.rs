@@ -9,6 +9,7 @@
 //!  - `menu`: Enables the [`muda`] menubar.
 //!  - `tracing`: Enables tracing support.
 
+mod assets;
 mod dioxus_application;
 mod dioxus_document;
 mod event;
@@ -16,6 +17,7 @@ mod event_handler;
 mod keyboard_event;
 mod mutation_writer;
 
+use assets::DioxusNativeNetProvider;
 pub use dioxus_application::DioxusNativeApplication;
 pub use dioxus_document::DioxusDocument;
 pub use event::DioxusNativeEvent;
@@ -27,21 +29,21 @@ use std::any::Any;
 type NodeId = usize;
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
-pub fn launch(root: fn() -> Element) {
-    launch_cfg(root, vec![], vec![])
+pub fn launch(app: fn() -> Element) {
+    launch_cfg(app, vec![], vec![])
 }
 
 pub fn launch_cfg(
-    root: fn() -> Element,
+    app: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     cfg: Vec<Box<dyn Any>>,
 ) {
-    launch_cfg_with_props(root, (), contexts, cfg)
+    launch_cfg_with_props(app, (), contexts, cfg)
 }
 
 // todo: props shouldn't have the clone bound - should try and match dioxus-desktop behavior
 pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
-    root: impl ComponentFunction<P, M>,
+    app: impl ComponentFunction<P, M>,
     props: P,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     _cfg: Vec<Box<dyn Any>>,
@@ -52,31 +54,26 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         .unwrap_or_default();
     let event_loop = create_default_event_loop::<BlitzShellEvent>();
 
+    // Turn on the runtime and enter it
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let _guard = rt.enter();
+
     #[cfg(feature = "net")]
     let net_provider = {
-        use blitz_net::Provider;
-        use blitz_shell::BlitzShellNetCallback;
-
-        // Turn on the runtime and enter it
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let _guard = rt.enter();
-
         let proxy = event_loop.create_proxy();
-        let net_callback = BlitzShellNetCallback::shared(proxy);
-        let net_provider = Provider::shared(net_callback);
-
+        let net_provider = DioxusNativeNetProvider::shared(proxy);
         Some(net_provider)
     };
 
-    #[cfg(not(feature = "net"))]
-    let net_provider = None;
+    // #[cfg(not(feature = "net"))]
+    // let net_provider = None;
 
     // Spin up the virtualdom
     // We're going to need to hit it with a special waker
-    let mut vdom = VirtualDom::new_with_props(root, props);
+    let mut vdom = VirtualDom::new_with_props(app, props);
 
     // Add contexts
     for context in contexts {

@@ -20,6 +20,7 @@ dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
 dioxus-cli-config = { workspace = true }
+dioxus-asset-resolver = { workspace = true }
 generational-box = { workspace = true }
 # hotreload only works on desktop platforms.... mobile is still wip
 dioxus-devtools = { workspace = true, optional = true }
@@ -44,7 +45,7 @@ tokio = { workspace = true, features = [
     "io-util",
 ], optional = true }
 webbrowser = "0.8.0"
-infer = "0.11.0"
+infer = "0.16.0"
 dunce = { workspace = true }
 slab = { workspace = true }
 rustc-hash = { workspace = true }

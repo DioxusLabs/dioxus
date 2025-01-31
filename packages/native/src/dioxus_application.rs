@@ -42,9 +42,9 @@ impl DioxusNativeApplication {
                     }
                 }
                 dioxus_devtools::DevserverMsg::Shutdown => event_loop.exit(),
-                dioxus_devtools::DevserverMsg::FullReloadStart => todo!(),
-                dioxus_devtools::DevserverMsg::FullReloadFailed => todo!(),
-                dioxus_devtools::DevserverMsg::FullReloadCommand => todo!(),
+                dioxus_devtools::DevserverMsg::FullReloadStart => {}
+                dioxus_devtools::DevserverMsg::FullReloadFailed => {}
+                dioxus_devtools::DevserverMsg::FullReloadCommand => {}
             },
 
             // Suppress unused variable warning

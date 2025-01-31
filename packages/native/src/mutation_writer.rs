@@ -1,8 +1,11 @@
 use crate::{dioxus_document::qual_name, NodeId};
 use blitz_dom::{
     local_name, namespace_url,
+    net::{CssHandler, ImageHandler},
     node::{Attribute, NodeSpecificData},
-    ns, BaseDocument, ElementNodeData, NodeData, QualName, RestyleHint,
+    ns,
+    util::ImageType,
+    BaseDocument, ElementNodeData, NodeData, QualName, RestyleHint,
 };
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
@@ -75,14 +78,11 @@ impl Drop for MutationWriter<'_> {
 
 impl DioxusState {
     /// Initialize the DioxusState in the RealDom
-    pub fn create(doc: &mut BaseDocument) -> Self {
-        let root = doc.root_element();
-        let root_id = root.id;
-
+    pub fn create(doc: &mut BaseDocument, mount_node: NodeId) -> Self {
         Self {
             templates: FxHashMap::default(),
-            stack: vec![root_id],
-            node_id_mapping: vec![Some(root_id)],
+            stack: vec![mount_node],
+            node_id_mapping: vec![Some(mount_node)],
         }
     }
 
@@ -95,11 +95,6 @@ impl DioxusState {
     pub fn try_element_to_node_id(&self, element_id: ElementId) -> Option<NodeId> {
         self.node_id_mapping.get(element_id.0).copied().flatten()
     }
-
-    // /// Create a mutation writer for the RealDom
-    // pub fn create_mutation_writer<'a>(&'a mut self, doc: &'a mut Document) -> MutationWriter<'a> {
-    //     MutationWriter { doc, state: self }
-    // }
 }
 
 impl MutationWriter<'_> {
@@ -127,6 +122,95 @@ impl MutationWriter<'_> {
             current = self.doc.get_node(new_id).unwrap();
         }
         current.id
+    }
+
+    fn fetch_linked_stylesheet(&self, node_id: NodeId, queued_url: String) {
+        let url = self.doc.resolve_url(&queued_url);
+        self.doc.net_provider.fetch(
+            self.doc.id(),
+            blitz_traits::net::Request::get(url.clone()),
+            Box::new(CssHandler {
+                node: node_id,
+                source_url: url,
+                guard: self.doc.guard.clone(),
+                provider: self.doc.net_provider.clone(),
+            }),
+        );
+    }
+
+    fn fetch_image(&self, node_id: usize, queued_image: String) {
+        let src = self.doc.resolve_url(&queued_image);
+        self.doc.net_provider.fetch(
+            self.doc.id(),
+            blitz_traits::net::Request::get(src),
+            Box::new(ImageHandler::new(node_id, ImageType::Image)),
+        );
+    }
+
+    fn create_template_node(&mut self, node: &TemplateNode) -> NodeId {
+        match node {
+            TemplateNode::Element {
+                tag,
+                namespace,
+                attrs,
+                children,
+            } => {
+                let name = qual_name(tag, *namespace);
+                let attrs = attrs
+                    .iter()
+                    .filter_map(|attr| match attr {
+                        TemplateAttribute::Static {
+                            name,
+                            value,
+                            namespace,
+                        } => Some(Attribute {
+                            name: qual_name(name, *namespace),
+                            value: value.to_string(),
+                        }),
+                        TemplateAttribute::Dynamic { .. } => None,
+                    })
+                    .collect();
+
+                let mut data = ElementNodeData::new(name, attrs);
+                data.flush_style_attribute(self.doc.guard());
+
+                let child_ids: Vec<NodeId> = children
+                    .iter()
+                    .map(|child| self.create_template_node(child))
+                    .collect();
+
+                let id = self.doc.create_node(NodeData::Element(data));
+                let node = self.doc.get_node(id).unwrap();
+
+                // Initialise style data
+                *node.stylo_element_data.borrow_mut() = Some(Default::default());
+
+                // If the node has an "id" attribute, store it in the ID map.
+                // FIXME: implement
+                // if let Some(id_attr) = node.attr(local_name!("id")) {
+                //     self.doc.nodes_to_id.insert(id_attr.to_string(), id);
+                // }
+
+                if let Some(src_attr) = node.attr(local_name!("src")) {
+                    self.fetch_image(id, src_attr.to_string());
+                }
+
+                let rel_attr = node.attr(local_name!("rel"));
+                let href_attr = node.attr(local_name!("href"));
+                if let (Some("stylesheet"), Some(href)) = (rel_attr, href_attr) {
+                    self.fetch_linked_stylesheet(id, href.to_string());
+                }
+
+                for &child_id in &child_ids {
+                    self.doc.get_node_mut(child_id).unwrap().parent = Some(id);
+                }
+                self.doc.get_node_mut(id).unwrap().children = child_ids;
+
+                id
+            }
+            TemplateNode::Text { text } => self.doc.create_text_node(text),
+            TemplateNode::Dynamic { .. } => self.doc.create_node(NodeData::Comment),
+        }
     }
 }
 
@@ -182,15 +266,17 @@ impl WriteMutations for MutationWriter<'_> {
     }
 
     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
-        let template_entry = self.state.templates.entry(template).or_insert_with(|| {
+        if !self.state.templates.contains_key(&template) {
             let template_root_ids: Vec<NodeId> = template
                 .roots
                 .iter()
-                .map(|root| create_template_node(self.doc, root))
+                .map(|root| self.create_template_node(root))
                 .collect();
 
-            template_root_ids
-        });
+            self.state.templates.insert(template, template_root_ids);
+        }
+
+        let template_entry = &self.state.templates[&template];
 
         let template_node_id = template_entry[index];
         let clone_id = self.doc.deep_clone_node(template_node_id);
@@ -274,65 +360,97 @@ impl WriteMutations for MutationWriter<'_> {
 
         self.doc.snapshot_node(node_id);
 
-        let node = &mut self.doc.nodes[node_id];
+        let mut queued_image = None;
+        let mut queued_stylesheet = None;
 
-        let stylo_element_data = &mut *node.stylo_element_data.borrow_mut();
-        if let Some(data) = stylo_element_data {
-            data.hint |= RestyleHint::restyle_subtree();
+        {
+            let node = &mut self.doc.nodes[node_id];
+
+            let stylo_element_data = &mut *node.stylo_element_data.borrow_mut();
+            if let Some(data) = stylo_element_data {
+                data.hint |= RestyleHint::restyle_subtree();
+            }
+
+            if let NodeData::Element(ref mut element) = node.data {
+                if element.name.local == local_name!("input") && name == "checked" {
+                    set_input_checked_state(element, value);
+                }
+                // FIXME: support other non-text attributes
+                else if let AttributeValue::Text(val) = value {
+                    if name == "value" {
+                        // Update text input value
+                        if let Some(input_data) = element.text_input_data_mut() {
+                            input_data.set_text(
+                                &mut self.doc.font_ctx,
+                                &mut self.doc.layout_ctx,
+                                val,
+                            );
+                        }
+                    }
+
+                    // FIXME check namespace
+                    let existing_attr = element
+                        .attrs
+                        .iter_mut()
+                        .find(|attr| attr.name.local == *name);
+
+                    if let Some(existing_attr) = existing_attr {
+                        existing_attr.value.clear();
+                        existing_attr.value.push_str(val);
+                    } else {
+                        // we have overloaded the style namespace to accumulate style attributes without a `style` block
+                        if ns == Some("style") {
+                            // todo: need to accumulate style attributes into a single style
+                            //
+                            // element.
+                        } else {
+                            element.attrs.push(Attribute {
+                                name: qual_name(name, ns),
+                                value: val.to_string(),
+                            });
+                        }
+                    }
+
+                    if name == "style" {
+                        element.flush_style_attribute(&self.doc.guard);
+                    }
+
+                    if name == "src" && !val.is_empty() {
+                        queued_image = Some(val.to_string());
+                    }
+
+                    if element.name.local == local_name!("link")
+                        && name == "href"
+                        && !val.is_empty()
+                    {
+                        queued_stylesheet = Some(val.to_string());
+                    }
+                }
+
+                if let AttributeValue::None = value {
+                    // Update text input value
+                    if name == "value" {
+                        if let Some(input_data) = element.text_input_data_mut() {
+                            input_data.set_text(
+                                &mut self.doc.font_ctx,
+                                &mut self.doc.layout_ctx,
+                                "",
+                            );
+                        }
+                    }
+
+                    // FIXME: check namespace
+                    element.attrs.retain(|attr| attr.name.local != *name);
+                }
+            }
         }
 
-        if let NodeData::Element(ref mut element) = node.data {
-            if element.name.local == local_name!("input") && name == "checked" {
-                set_input_checked_state(element, value);
-            }
-            // FIXME: support other non-text attributes
-            else if let AttributeValue::Text(val) = value {
-                if name == "value" {
-                    // Update text input value
-                    if let Some(input_data) = element.text_input_data_mut() {
-                        input_data.set_text(&mut self.doc.font_ctx, &mut self.doc.layout_ctx, val);
-                    }
-                }
+        if let Some(queued_image) = queued_image {
+            self.fetch_image(node_id, queued_image);
+        }
 
-                // FIXME check namespace
-                let existing_attr = element
-                    .attrs
-                    .iter_mut()
-                    .find(|attr| attr.name.local == *name);
-
-                if let Some(existing_attr) = existing_attr {
-                    existing_attr.value.clear();
-                    existing_attr.value.push_str(val);
-                } else {
-                    // we have overloaded the style namespace to accumulate style attributes without a `style` block
-                    if ns == Some("style") {
-                        // todo: need to accumulate style attributes into a single style
-                        //
-                        // element.
-                    } else {
-                        element.attrs.push(Attribute {
-                            name: qual_name(name, ns),
-                            value: val.to_string(),
-                        });
-                    }
-                }
-
-                if name == "style" {
-                    element.flush_style_attribute(&self.doc.guard);
-                }
-            }
-
-            if let AttributeValue::None = value {
-                // Update text input value
-                if name == "value" {
-                    if let Some(input_data) = element.text_input_data_mut() {
-                        input_data.set_text(&mut self.doc.font_ctx, &mut self.doc.layout_ctx, "");
-                    }
-                }
-
-                // FIXME: check namespace
-                element.attrs.retain(|attr| attr.name.local != *name);
-            }
+        if let Some(queued_stylesheet) = queued_stylesheet {
+            self.fetch_linked_stylesheet(node_id, queued_stylesheet);
         }
     }
 
@@ -437,60 +555,5 @@ fn set_input_checked_state(element: &mut ElementNodeData, value: &AttributeValue
             value: checked.to_string(),
         }),
         _ => {}
-    }
-}
-
-fn create_template_node(doc: &mut BaseDocument, node: &TemplateNode) -> NodeId {
-    match node {
-        TemplateNode::Element {
-            tag,
-            namespace,
-            attrs,
-            children,
-        } => {
-            let name = qual_name(tag, *namespace);
-            let attrs = attrs
-                .iter()
-                .filter_map(|attr| match attr {
-                    TemplateAttribute::Static {
-                        name,
-                        value,
-                        namespace,
-                    } => Some(Attribute {
-                        name: qual_name(name, *namespace),
-                        value: value.to_string(),
-                    }),
-                    TemplateAttribute::Dynamic { .. } => None,
-                })
-                .collect();
-
-            let mut data = ElementNodeData::new(name, attrs);
-            data.flush_style_attribute(doc.guard());
-
-            let id = doc.create_node(NodeData::Element(data));
-            let node = doc.get_node(id).unwrap();
-
-            // Initialise style data
-            *node.stylo_element_data.borrow_mut() = Some(Default::default());
-
-            // If the node has an "id" attribute, store it in the ID map.
-            // FIXME: implement
-            // if let Some(id_attr) = node.attr(local_name!("id")) {
-            //     doc.nodes_to_id.insert(id_attr.to_string(), id);
-            // }
-
-            let child_ids: Vec<NodeId> = children
-                .iter()
-                .map(|child| create_template_node(doc, child))
-                .collect();
-            for &child_id in &child_ids {
-                doc.get_node_mut(child_id).unwrap().parent = Some(id);
-            }
-            doc.get_node_mut(id).unwrap().children = child_ids;
-
-            id
-        }
-        TemplateNode::Text { text } => doc.create_text_node(text),
-        TemplateNode::Dynamic { .. } => doc.create_node(NodeData::Comment),
     }
 }

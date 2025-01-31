@@ -381,15 +381,40 @@ impl DioxusDocument {
         let root_node = doc.get_node_mut(root_node_id).unwrap();
         root_node.children.push(html_element_id);
 
+        // Create the body element
+        let body_element_id = doc.create_node(NodeData::Element(ElementNodeData::new(
+            qual_name("body", None),
+            Vec::new(),
+        )));
+        let html_element = doc.get_node_mut(html_element_id).unwrap();
+        html_element.children.push(body_element_id);
+        let body_element = doc.get_node_mut(body_element_id).unwrap();
+        body_element.parent = Some(html_element_id);
+
+        // Create another virtual element to hold the root <div id="main"></div> under the html element
+        let main_element_id = doc.create_node(NodeData::Element(ElementNodeData::new(
+            qual_name("div", Some("id")),
+            vec![blitz_dom::node::Attribute {
+                name: qual_name("id", None),
+                value: "main".to_string(),
+            }],
+        )));
+        let body_element = doc.get_node_mut(body_element_id).unwrap();
+        body_element.children.push(main_element_id);
+        let main_element = doc.get_node_mut(main_element_id).unwrap();
+        main_element.parent = Some(body_element_id);
+
         // Include default and user-specified stylesheets
         doc.add_user_agent_stylesheet(DEFAULT_CSS);
 
-        let state = DioxusState::create(&mut doc);
+        let state = DioxusState::create(&mut doc, main_element_id);
         let mut doc = Self {
             vdom,
             vdom_state: state,
             inner: doc,
         };
+
+        doc.inner.set_base_url("dioxus://index.html");
 
         doc.initial_build();
 
@@ -400,6 +425,7 @@ impl DioxusDocument {
 
     pub fn initial_build(&mut self) {
         let mut writer = MutationWriter::new(&mut self.inner, &mut self.vdom_state);
+
         self.vdom.rebuild(&mut writer);
         // dbg!(self.vdom.rebuild_to_vec());
         // std::process::exit(0);

@@ -66,6 +66,7 @@ members = [
     "packages/dx-wire-format",
     "packages/logger",
     "packages/native",
+    "packages/asset-resolver",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -144,6 +145,7 @@ dioxus_server_macro = { path = "packages/server-macro", version = "0.6.2", defau
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.2" }
 dioxus-logger = { path = "packages/logger", version = "0.6.2" }
 dioxus-native = { path = "packages/native", version = "0.6.2" }
+dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.6.2" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.2" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.2" }
 generational-box = { path = "packages/generational-box", version = "0.6.2" }
