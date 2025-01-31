@@ -271,7 +271,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Free Disk Space (Ubuntu)
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
