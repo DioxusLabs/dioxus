@@ -45,16 +45,16 @@ mod desktop_platforms {
 
         #[cfg(target_os = "linux")]
         {
-            use tao::platform::unix::WindowExtUnix;
-            menu.init_for_gtk_window(window.gtk_window(), window.default_vbox())
-                .unwrap();
+            // use tao::platform::unix::WindowExtUnix;
+            // menu.init_for_gtk_window(window.gtk_window(), window.default_vbox())
+            //     .unwrap();
         }
 
-        #[cfg(target_os = "macos")]
-        {
-            use tao::platform::macos::WindowExtMacOS;
-            menu.init_for_nsapp();
-        }
+        // #[cfg(target_os = "macos")]
+        // {
+        //     use tao::platform::macos::WindowExtMacOS;
+        //     menu.init_for_nsapp();
+        // }
     }
 
     pub fn default_menu_bar() -> Menu {

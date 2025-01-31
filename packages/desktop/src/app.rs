@@ -336,16 +336,16 @@ impl App {
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
         {
-            use cocoa::appkit::NSWindowCollectionBehavior;
-            use cocoa::base::id;
-            use objc::{msg_send, sel, sel_impl};
-            use tao::platform::macos::WindowExtMacOS;
+            // use cocoa::appkit::NSWindowCollectionBehavior;
+            // use cocoa::base::id;
+            // use objc::{msg_send, sel, sel_impl};
+            // use tao::platform::macos::WindowExtMacOS;
 
-            unsafe {
-                let window: id = window.ns_window() as id;
-                #[allow(unexpected_cfgs)]
-                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
-            }
+            // unsafe {
+            //     let window: id = window.ns_window() as id;
+            //     #[allow(unexpected_cfgs)]
+            //     let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
+            // }
         }
 
         window
