@@ -47,7 +47,7 @@ fn app() -> Element {
 }
 
 fn make_config() -> dioxus::desktop::Config {
-    dioxus::desktop::Config::default().with_window(make_window())
+    dioxus::desktop::Config::default().with_window_attributes(make_window())
 }
 
 fn make_window() -> WindowBuilder {

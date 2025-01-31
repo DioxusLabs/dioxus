@@ -13,7 +13,7 @@ use dioxus::prelude::*;
 
 fn main() {
     let config = Config::new()
-        .with_window(WindowBuilder::new().with_transparent(true))
+        .with_window_attributes(WindowBuilder::new().with_transparent(true))
         .with_as_child_window();
 
     dioxus::LaunchBuilder::desktop()

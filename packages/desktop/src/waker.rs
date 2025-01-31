@@ -1,7 +1,7 @@
 use crate::ipc::UserWindowEvent;
 use futures_util::task::ArcWake;
 use std::sync::Arc;
-use tao::{event_loop::EventLoopProxy, window::WindowId};
+use winit::{event_loop::EventLoopProxy, window::WindowId};
 
 /// Create a waker that will send a poll event to the event loop.
 ///

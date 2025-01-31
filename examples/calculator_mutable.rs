@@ -15,7 +15,7 @@ use dioxus::prelude::*;
 fn main() {
     dioxus::LaunchBuilder::desktop()
         .with_cfg(
-            Config::new().with_window(
+            Config::new().with_window_attributes(
                 WindowBuilder::new()
                     .with_title("Calculator Demo")
                     .with_resizable(false)

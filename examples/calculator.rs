@@ -18,7 +18,7 @@ fn main() {
     dioxus::LaunchBuilder::desktop()
         .with_cfg(desktop!({
             use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
-            Config::new().with_window(
+            Config::new().with_window_attributes(
                 WindowBuilder::default()
                     .with_title("Calculator")
                     .with_inner_size(LogicalSize::new(300.0, 525.0)),

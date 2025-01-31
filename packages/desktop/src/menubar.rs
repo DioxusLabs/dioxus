@@ -1,4 +1,4 @@
-use tao::window::Window;
+use winit::window::Window;
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub type DioxusMenu = muda::Menu;
@@ -31,13 +31,16 @@ pub fn default_menu_bar() -> DioxusMenu {
 mod desktop_platforms {
     use super::*;
     use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+    use winit::raw_window_handle_05::{HasRawWindowHandle, RawWindowHandle};
 
     #[allow(unused)]
     pub fn init_menu_bar(menu: &Menu, window: &Window) {
         #[cfg(target_os = "windows")]
         {
-            use tao::platform::windows::WindowExtWindows;
-            menu.init_for_hwnd(window.hwnd());
+            let RawWindowHandle::Win32(handle) = window.raw_window_handle() else {
+                return;
+            };
+            menu.init_for_hwnd(handle.hwnd as isize);
         }
 
         #[cfg(target_os = "linux")]
