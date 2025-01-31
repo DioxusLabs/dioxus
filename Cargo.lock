@@ -3860,6 +3860,7 @@ dependencies = [
  "dioxus-liveview",
  "dioxus-logger",
  "dioxus-mobile",
+ "dioxus-native",
  "dioxus-router",
  "dioxus-signals",
  "dioxus-ssr",

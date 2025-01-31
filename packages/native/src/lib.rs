@@ -27,17 +27,22 @@ type NodeId = usize;
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
 pub fn launch(root: fn() -> Element) {
-    launch_cfg(root, Config::default())
+    launch_cfg(root, vec![], Config::default())
 }
 
-pub fn launch_cfg(root: fn() -> Element, cfg: Config) {
-    launch_cfg_with_props(root, (), cfg)
+pub fn launch_cfg(
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    cfg: Config,
+) {
+    launch_cfg_with_props(root, (), contexts, cfg)
 }
 
 // todo: props shouldn't have the clone bound - should try and match dioxus-desktop behavior
 pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     root: impl ComponentFunction<P, M>,
     props: P,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     _cfg: Config,
 ) {
     let event_loop = create_default_event_loop::<BlitzShellEvent>();
@@ -66,7 +71,14 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
 
     // Spin up the virtualdom
     // We're going to need to hit it with a special waker
-    let vdom = VirtualDom::new_with_props(root, props);
+    let mut vdom = VirtualDom::new_with_props(root, props);
+
+    // Add contexts
+    for context in contexts {
+        vdom.insert_any_root_context(context());
+    }
+
+    // Create document + window from the baked virtualdom
     let doc = DioxusDocument::new(vdom, net_provider);
     let window = WindowConfig::new(doc);
 
