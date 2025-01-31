@@ -33,6 +33,8 @@ dioxus-html = { workspace = true }
 dioxus-asset-resolver = { workspace = true }
 dioxus-cli-config = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
+dioxus-history = { workspace = true }
+dioxus-document = { workspace = true }
 
 # Windowing & Input
 winit = { workspace = true }

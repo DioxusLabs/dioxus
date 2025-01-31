@@ -3,8 +3,10 @@
 use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
 
 use blitz_dom::{
-    local_name, namespace_url, net::Resource, node::NodeSpecificData, ns, Atom, BaseDocument,
-    ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
+    local_name, namespace_url,
+    net::Resource,
+    node::{Attribute, NodeSpecificData},
+    ns, Atom, BaseDocument, ElementNodeData, Node, NodeData, QualName, DEFAULT_CSS,
 };
 
 use blitz_traits::{net::NetProvider, ColorScheme, Document, DomEvent, DomEventData, Viewport};
@@ -27,8 +29,17 @@ pub(crate) fn qual_name(local_name: &str, namespace: Option<&str>) -> QualName {
 
 pub struct DioxusDocument {
     pub(crate) vdom: VirtualDom,
-    vdom_state: DioxusState,
-    inner: BaseDocument,
+    pub(crate) vdom_state: DioxusState,
+    pub(crate) inner: BaseDocument,
+
+    #[allow(unused)]
+    pub(crate) html_element_id: NodeId,
+    #[allow(unused)]
+    pub(crate) head_element_id: NodeId,
+    #[allow(unused)]
+    pub(crate) body_element_id: NodeId,
+    #[allow(unused)]
+    pub(crate) main_element_id: NodeId,
 }
 
 // Implement DocumentLike and required traits for DioxusDocument
@@ -404,6 +415,16 @@ impl DioxusDocument {
         let main_element = doc.get_node_mut(main_element_id).unwrap();
         main_element.parent = Some(body_element_id);
 
+        // Create the head element
+        let head_element_id = doc.create_node(NodeData::Element(ElementNodeData::new(
+            qual_name("head", None),
+            Vec::new(),
+        )));
+        let head_element = doc.get_node_mut(head_element_id).unwrap();
+        head_element.parent = Some(html_element_id);
+        let html_element = doc.get_node_mut(html_element_id).unwrap();
+        html_element.children.push(head_element_id);
+
         // Include default and user-specified stylesheets
         doc.add_user_agent_stylesheet(DEFAULT_CSS);
 
@@ -412,6 +433,10 @@ impl DioxusDocument {
             vdom,
             vdom_state: state,
             inner: doc,
+            html_element_id,
+            head_element_id,
+            body_element_id,
+            main_element_id,
         };
 
         doc.inner.set_base_url("dioxus://index.html");
@@ -454,6 +479,73 @@ impl DioxusDocument {
                 .parse::<usize>()
                 .ok()?,
         ))
+    }
+
+    pub fn create_head_element(
+        &mut self,
+        name: &str,
+        attributes: &[(String, String)],
+        contents: &Option<String>,
+    ) {
+        let mut stylesheet = None;
+        let mut title = None;
+        if name == "link" {
+            let is_stylsheet = attributes
+                .iter()
+                .any(|(name, value)| name == "rel" && value == "stylesheet");
+            if is_stylsheet {
+                stylesheet = attributes
+                    .iter()
+                    .find(|(name, _value)| name == "href")
+                    .map(|(_name, value)| value.clone());
+            }
+        }
+
+        if name == "title" {
+            title = attributes
+                .iter()
+                .find(|(name, _value)| name == "text")
+                .map(|(_name, _value)| contents.clone())
+                .flatten();
+        }
+
+        let attributes = attributes
+            .iter()
+            .map(|(name, value)| Attribute {
+                name: qual_name(name, None),
+                value: value.clone(),
+            })
+            .collect();
+
+        let new_elememt = self
+            .inner
+            .create_node(NodeData::Element(ElementNodeData::new(
+                qual_name(name, None),
+                attributes,
+            )));
+
+        if let Some(contents) = contents {
+            let text_node = self.inner.create_text_node(&contents);
+            self.inner
+                .get_node_mut(new_elememt)
+                .unwrap()
+                .children
+                .push(text_node);
+        }
+
+        self.inner
+            .get_node_mut(self.head_element_id)
+            .unwrap()
+            .children
+            .push(new_elememt);
+
+        if let Some(url) = stylesheet {
+            crate::assets::fetch_linked_stylesheet(&self.inner, new_elememt, url);
+        }
+
+        if let Some(_title) = title {
+            println!("todo: set title");
+        }
     }
 
     // pub fn apply_mutations(&mut self) {

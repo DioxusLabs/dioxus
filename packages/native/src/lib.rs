@@ -10,6 +10,7 @@
 //!  - `tracing`: Enables tracing support.
 
 mod assets;
+mod contexts;
 mod dioxus_application;
 mod dioxus_document;
 mod event;
@@ -20,11 +21,12 @@ mod mutation_writer;
 use assets::DioxusNativeNetProvider;
 pub use dioxus_application::DioxusNativeApplication;
 pub use dioxus_document::DioxusDocument;
+use dioxus_history::{History, MemoryHistory};
 pub use event::DioxusNativeEvent;
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
-use dioxus_core::{ComponentFunction, Element, VirtualDom};
-use std::any::Any;
+use dioxus_core::{ComponentFunction, Element, ScopeId, VirtualDom};
+use std::{any::Any, rc::Rc};
 
 type NodeId = usize;
 
@@ -68,8 +70,8 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         Some(net_provider)
     };
 
-    // #[cfg(not(feature = "net"))]
-    // let net_provider = None;
+    #[cfg(not(feature = "net"))]
+    let net_provider = None;
 
     // Spin up the virtualdom
     // We're going to need to hit it with a special waker
@@ -79,6 +81,10 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     for context in contexts {
         vdom.insert_any_root_context(context());
     }
+
+    // Add history
+    let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
+    vdom.in_runtime(|| ScopeId::ROOT.provide_context(history_provider));
 
     // Create document + window from the baked virtualdom
     let doc = DioxusDocument::new(vdom, net_provider);

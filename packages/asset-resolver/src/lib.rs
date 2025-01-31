@@ -1,4 +1,4 @@
-use http::{status::StatusCode, Request, Response};
+use http::{status::StatusCode, Response};
 use std::path::{Path, PathBuf};
 
 #[non_exhaustive]

@@ -4530,6 +4530,8 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-devtools",
+ "dioxus-document",
+ "dioxus-history",
  "dioxus-html",
  "futures-util",
  "keyboard-types",

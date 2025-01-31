@@ -1,20 +1,27 @@
 use blitz_renderer_vello::BlitzVelloRenderer;
 use blitz_shell::BlitzApplication;
+use dioxus_core::ScopeId;
+use std::{collections::HashSet, rc::Rc};
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::WindowId;
 
-use crate::{BlitzShellEvent, DioxusDocument, DioxusNativeEvent, WindowConfig};
+use crate::{
+    contexts::DioxusNativeDocument, BlitzShellEvent, DioxusDocument, DioxusNativeEvent,
+    WindowConfig,
+};
 
 pub struct DioxusNativeApplication {
     inner: BlitzApplication<DioxusDocument, BlitzVelloRenderer>,
+    proxy: EventLoopProxy<BlitzShellEvent>,
 }
 
 impl DioxusNativeApplication {
     pub fn new(proxy: EventLoopProxy<BlitzShellEvent>) -> Self {
         Self {
             inner: BlitzApplication::new(proxy.clone()),
+            proxy,
         }
     }
 
@@ -47,6 +54,18 @@ impl DioxusNativeApplication {
                 dioxus_devtools::DevserverMsg::FullReloadCommand => {}
             },
 
+            DioxusNativeEvent::CreateHeadElement {
+                name,
+                attributes,
+                contents,
+                window,
+            } => {
+                if let Some(window) = self.inner.windows.get_mut(&window) {
+                    window.doc.create_head_element(name, attributes, contents);
+                    window.poll();
+                }
+            }
+
             // Suppress unused variable warning
             #[cfg(not(all(
                 feature = "hot-reload",
@@ -64,7 +83,21 @@ impl DioxusNativeApplication {
 
 impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let old_windows = self.inner.windows.keys().copied().collect::<HashSet<_>>();
         self.inner.resumed(event_loop);
+        let new_windows = self.inner.windows.keys().cloned().collect::<HashSet<_>>();
+
+        // todo(jon): we should actually mess with the pending windows instead of passing along the contexts
+        for window_id in new_windows.difference(&old_windows) {
+            let window = self.inner.windows.get(window_id).unwrap();
+            window.doc.vdom.in_runtime(|| {
+                let shared: Rc<dyn dioxus_document::Document> = Rc::new(DioxusNativeDocument {
+                    proxy: self.proxy.clone(),
+                    window: window_id.clone(),
+                });
+                ScopeId::ROOT.provide_context(shared);
+            });
+        }
     }
 
     fn suspended(&mut self, event_loop: &ActiveEventLoop) {

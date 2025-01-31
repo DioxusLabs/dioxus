@@ -1,11 +1,8 @@
 use crate::{dioxus_document::qual_name, NodeId};
 use blitz_dom::{
     local_name, namespace_url,
-    net::{CssHandler, ImageHandler},
     node::{Attribute, NodeSpecificData},
-    ns,
-    util::ImageType,
-    BaseDocument, ElementNodeData, NodeData, QualName, RestyleHint,
+    ns, BaseDocument, ElementNodeData, NodeData, QualName, RestyleHint,
 };
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
@@ -78,7 +75,7 @@ impl Drop for MutationWriter<'_> {
 
 impl DioxusState {
     /// Initialize the DioxusState in the RealDom
-    pub fn create(doc: &mut BaseDocument, mount_node: NodeId) -> Self {
+    pub fn create(_doc: &mut BaseDocument, mount_node: NodeId) -> Self {
         Self {
             templates: FxHashMap::default(),
             stack: vec![mount_node],
@@ -122,29 +119,6 @@ impl MutationWriter<'_> {
             current = self.doc.get_node(new_id).unwrap();
         }
         current.id
-    }
-
-    fn fetch_linked_stylesheet(&self, node_id: NodeId, queued_url: String) {
-        let url = self.doc.resolve_url(&queued_url);
-        self.doc.net_provider.fetch(
-            self.doc.id(),
-            blitz_traits::net::Request::get(url.clone()),
-            Box::new(CssHandler {
-                node: node_id,
-                source_url: url,
-                guard: self.doc.guard.clone(),
-                provider: self.doc.net_provider.clone(),
-            }),
-        );
-    }
-
-    fn fetch_image(&self, node_id: usize, queued_image: String) {
-        let src = self.doc.resolve_url(&queued_image);
-        self.doc.net_provider.fetch(
-            self.doc.id(),
-            blitz_traits::net::Request::get(src),
-            Box::new(ImageHandler::new(node_id, ImageType::Image)),
-        );
     }
 
     fn create_template_node(&mut self, node: &TemplateNode) -> NodeId {
@@ -192,13 +166,13 @@ impl MutationWriter<'_> {
                 // }
 
                 if let Some(src_attr) = node.attr(local_name!("src")) {
-                    self.fetch_image(id, src_attr.to_string());
+                    crate::assets::fetch_image(&self.doc, id, src_attr.to_string());
                 }
 
                 let rel_attr = node.attr(local_name!("rel"));
                 let href_attr = node.attr(local_name!("href"));
                 if let (Some("stylesheet"), Some(href)) = (rel_attr, href_attr) {
-                    self.fetch_linked_stylesheet(id, href.to_string());
+                    crate::assets::fetch_linked_stylesheet(&self.doc, id, href.to_string());
                 }
 
                 for &child_id in &child_ids {
@@ -446,11 +420,11 @@ impl WriteMutations for MutationWriter<'_> {
         }
 
         if let Some(queued_image) = queued_image {
-            self.fetch_image(node_id, queued_image);
+            crate::assets::fetch_image(&self.doc, node_id, queued_image);
         }
 
         if let Some(queued_stylesheet) = queued_stylesheet {
-            self.fetch_linked_stylesheet(node_id, queued_stylesheet);
+            crate::assets::fetch_linked_stylesheet(&self.doc, node_id, queued_stylesheet);
         }
     }
 
