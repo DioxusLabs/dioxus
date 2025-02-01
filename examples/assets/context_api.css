@@ -1,0 +1,43 @@
+.main-container {
+  font-family: system-ui, sans-serif;
+  max-width: 600px;
+  margin: 2rem auto;
+  padding: 2rem;
+}
+
+.light-theme {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid #e0e0e0;
+}
+
+.dark-theme {
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 1px solid #333;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.display {
+  padding: 2rem;
+  border-radius: 8px;
+  margin-top: 2rem;
+}

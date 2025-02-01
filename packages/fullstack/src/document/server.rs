@@ -88,7 +88,7 @@ impl Document for ServerDocument {
                 http_equiv: props.http_equiv,
                 content: props.content,
                 property: props.property,
-                ..props.additional_attributes
+                ..props.additional_attributes,
             }
         });
     }
@@ -142,6 +142,7 @@ impl Document for ServerDocument {
                 integrity: props.integrity,
                 r#type: props.r#type,
                 blocking: props.blocking,
+                ..props.additional_attributes,
             }
         })
     }

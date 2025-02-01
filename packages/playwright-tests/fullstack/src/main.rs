@@ -41,6 +41,7 @@ fn app() -> Element {
             Errors {}
         }
         OnMounted {}
+        DocumentElements {}
     }
 }
 
@@ -115,5 +116,21 @@ pub fn ThrowsError() -> Element {
         .map_err(|err| RenderError::Aborted(CapturedError::from_display(err)))?;
     rsx! {
         "success"
+    }
+}
+
+/// This component tests the document::* elements pre-rendered on the server
+#[component]
+fn DocumentElements() -> Element {
+    rsx! {
+        document::Meta { id: "meta-head", name: "testing", data: "dioxus-meta-element" }
+        document::Link {
+            id: "link-head",
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css?family=Roboto+Mono"
+        }
+        document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
+        document::Script { id: "script-head", async: true, "console.log('hello world');" }
+        document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
     }
 }

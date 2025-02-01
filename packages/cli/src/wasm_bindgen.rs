@@ -440,6 +440,9 @@ mod test {
     /// Test the github installer.
     #[tokio::test]
     async fn test_github_install() {
+        if std::env::var("TEST_INSTALLS").is_err() {
+            return;
+        }
         let binary = WasmBindgen::new(VERSION);
         reset_test().await;
         binary.install_github().await.unwrap();
@@ -450,6 +453,9 @@ mod test {
     /// Test the cargo installer.
     #[tokio::test]
     async fn test_cargo_install() {
+        if std::env::var("TEST_INSTALLS").is_err() {
+            return;
+        }
         let binary = WasmBindgen::new(VERSION);
         reset_test().await;
         binary.install_cargo().await.unwrap();
@@ -459,14 +465,17 @@ mod test {
 
     // CI doesn't have binstall.
     // Test the binstall installer
-    // #[tokio::test]
-    // async fn test_binstall_install() {
-    //     let binary = WasmBindgen::new(VERSION);
-    //     reset_test().await;
-    //     binary.install_binstall().await.unwrap();
-    //     test_verify_install().await;
-    //     verify_installation(&binary).await;
-    // }
+    #[tokio::test]
+    async fn test_binstall_install() {
+        if std::env::var("TEST_INSTALLS").is_err() {
+            return;
+        }
+        let binary = WasmBindgen::new(VERSION);
+        reset_test().await;
+        binary.install_binstall().await.unwrap();
+        test_verify_install().await;
+        verify_installation(&binary).await;
+    }
 
     /// Helper to test `verify_install` after an installation.
     async fn test_verify_install() {
