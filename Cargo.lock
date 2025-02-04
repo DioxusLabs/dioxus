@@ -3591,6 +3591,7 @@ dependencies = [
  "image",
  "imagequant",
  "lightningcss",
+ "manganis",
  "manganis-core",
  "mozjpeg",
  "object 0.36.5",

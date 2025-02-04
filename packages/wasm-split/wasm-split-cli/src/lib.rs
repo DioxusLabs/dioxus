@@ -14,6 +14,8 @@ use wasmparser::{
     Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry, SymbolInfo,
 };
 
+pub const MAKE_LOAD_JS: &'static str = include_str!("./__wasm_split.js");
+
 /// A parsed wasm module with additional metadata and functionality for splitting and patching.
 ///
 /// This struct assumes that relocations will be present in incoming wasm binary.
@@ -822,7 +824,7 @@ impl<'a> Splitter<'a> {
         chunks: &[SplitModule],
     ) -> Result<String> {
         use std::fmt::Write;
-        let mut glue = include_str!("./__wasm_split.js").to_string();
+        let mut glue = MAKE_LOAD_JS.to_string();
 
         for (idx, chunk) in chunks.iter().enumerate() {
             tracing::debug!("emitting chunk: {:?}", chunk.module_name);
