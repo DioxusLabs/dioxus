@@ -1,0 +1,16 @@
+[package]
+name = "wasm-split-macro"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+base16 = "0.2.1"
+digest = "0.10.7"
+quote = "1.0.36"
+sha2 = "0.10.8"
+syn = "2.0.59"
+wasm-bindgen = "0.2.92"
+proc-macro2 = "1.0.46"
+
+[lib]
+proc-macro = true

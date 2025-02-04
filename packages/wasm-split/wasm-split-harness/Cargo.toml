@@ -1,0 +1,21 @@
+[package]
+name = "wasm-split-harness"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, default-features = false, features = ["minimal", "logger", "web"] }
+anyhow = "1.0.82"
+async-compression = { version = "0.4.8", features = ["futures-io", "gzip", "brotli"] }
+futures = "0.3.30"
+gloo-console = "0.3.0"
+gloo-net = { version = "0.3.1", default-features = false, features = ["http"] }
+js-sys = "0.3.69"
+wasm-bindgen = "0.2.92"
+wasm-bindgen-futures = "0.4.42"
+wasm-streams = "0.4.0"
+web-sys = { version = "0.3.76", features = ["Document", "Window", "HtmlElement", "Text", "DomRectReadOnly", "console"] }
+wasm-split = { workspace = true }
+once_cell = "1.20.2"
+
