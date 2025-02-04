@@ -22,9 +22,28 @@ pub(crate) struct DioxusCrate {
     pub(crate) settings: Arc<CliSettings>,
 }
 
-pub(crate) static PROFILE_WASM: &str = "wasm-dev";
-pub(crate) static PROFILE_ANDROID: &str = "android-dev";
-pub(crate) static PROFILE_SERVER: &str = "server-dev";
+const PROFILE_MATRIX: [(Platform, [&'static str; 2]); 8] = [
+    (Platform::Web, ["wasm-dev", "wasm-release"]),
+    (Platform::Server, ["server-dev", "server-release"]),
+    (Platform::Ios, ["ios-dev", "ios-release"]),
+    (Platform::Android, ["android-dev", "android-release"]),
+    (Platform::Windows, ["windows-dev", "windows-release"]),
+    (Platform::MacOS, ["macos-dev", "macos-release"]),
+    (Platform::Linux, ["linux-dev", "linux-release"]),
+    (Platform::Liveview, ["liveview-dev", "liveview-release"]),
+];
+
+pub(crate) fn get_profile_for_platform(platform: Platform, release: bool) -> &'static str {
+    PROFILE_MATRIX
+        .iter()
+        .find_map(|(p, profiles)| {
+            if *p == platform {
+                return Some(profiles[release as usize]);
+            }
+            None
+        })
+        .unwrap_or_else(|| panic!("No profile for platform {platform:?}. This is a bug in the dioxus-cli. Please open an issue at https://github.com/DioxusLabs/dioxus/issues/new/choose"))
+}
 
 impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
@@ -389,23 +408,21 @@ impl DioxusCrate {
             .entry("profile")
             .or_insert(Item::Table(Default::default()))
         {
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_WASM) {
-                let mut client = toml_edit::Table::new();
-                client.insert("inherits", Item::Value("dev".into()));
-                client.insert("opt-level", Item::Value(1.into()));
-                entry.insert(Item::Table(client));
-            }
+            for (platform, [debug_profile, release_profile]) in PROFILE_MATRIX.iter() {
+                if let toml_edit::Entry::Vacant(entry) = table.entry(debug_profile) {
+                    let mut client = toml_edit::Table::new();
+                    client.insert("inherits", Item::Value("dev".into()));
+                    if platform == &Platform::Web {
+                        client.insert("opt-level", Item::Value(1.into()));
+                    }
+                    entry.insert(Item::Table(client));
+                }
 
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_SERVER) {
-                let mut server = toml_edit::Table::new();
-                server.insert("inherits", Item::Value("dev".into()));
-                entry.insert(Item::Table(server));
-            }
-
-            if let toml_edit::Entry::Vacant(entry) = table.entry(PROFILE_ANDROID) {
-                let mut android = toml_edit::Table::new();
-                android.insert("inherits", Item::Value("dev".into()));
-                entry.insert(Item::Table(android));
+                if let toml_edit::Entry::Vacant(entry) = table.entry(release_profile) {
+                    let mut client = toml_edit::Table::new();
+                    client.insert("inherits", Item::Value("release".into()));
+                    entry.insert(Item::Table(client));
+                }
             }
         }
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
+use crate::{get_profile_for_platform, Builder, DioxusCrate, Platform};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -21,8 +21,8 @@ pub(crate) struct BuildArgs {
     pub(crate) profile: Option<String>,
 
     /// Build with custom profile for the fullstack server
-    #[clap(long, default_value_t = PROFILE_SERVER.to_string())]
-    pub(crate) server_profile: String,
+    #[clap(long)]
+    pub(crate) server_profile: Option<String>,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long, value_enum)]
@@ -135,21 +135,15 @@ impl BuildArgs {
             return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
         }
 
-        // Set the profile of the build if it's not already set
-        // We do this for android/wasm since they require
-        if self.profile.is_none() && !self.release {
-            match self.platform {
-                Some(Platform::Android) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_ANDROID.to_string());
-                }
-                Some(Platform::Web) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_WASM.to_string());
-                }
-                Some(Platform::Server) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_SERVER.to_string());
-                }
-                _ => {}
-            }
+        // Set the profile of the build if it's not already set. Every platform gets a different profile so they builds don't
+        // conflict. This both lets the builds happen in parallel and makes sure they don't overwrite each other's output
+        if self.profile.is_none() {
+            self.profile =
+                Some(get_profile_for_platform(self.platform.unwrap(), self.release).to_string());
+        }
+        if self.server_profile.is_none() {
+            self.server_profile =
+                Some(get_profile_for_platform(Platform::Server, self.release).to_string());
         }
 
         // Determine arch if android

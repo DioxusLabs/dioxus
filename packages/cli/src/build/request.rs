@@ -1,7 +1,7 @@
 use super::{progress::ProgressTx, BuildArtifacts};
 use crate::dioxus_crate::DioxusCrate;
+use crate::{get_profile_for_platform, AppBundle, Platform, Result, TraceSrc};
 use crate::{link::LinkAction, BuildArgs};
-use crate::{AppBundle, Platform, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::AssetManifest;
@@ -266,26 +266,17 @@ impl BuildRequest {
         // Set the target, profile and features that vary between the app and server builds
         if self.build.platform() == Platform::Server {
             cargo_args.push("--profile".to_string());
-            match self.build.release {
-                true => cargo_args.push("release".to_string()),
-                false => cargo_args.push(self.build.server_profile.to_string()),
-            };
+            let profile = self.build.server_profile.as_deref().unwrap_or_else(|| {
+                get_profile_for_platform(self.build.platform(), self.build.release)
+            });
+            cargo_args.push(profile.to_string());
         } else {
-            // Add required profile flags. --release overrides any custom profiles.
-            let custom_profile = &self.build.profile.as_ref();
-            if custom_profile.is_some() || self.build.release {
-                cargo_args.push("--profile".to_string());
-                match self.build.release {
-                    true => cargo_args.push("release".to_string()),
-                    false => {
-                        cargo_args.push(
-                            custom_profile
-                                .expect("custom_profile should have been checked by is_some")
-                                .to_string(),
-                        );
-                    }
-                };
-            }
+            // Add required profile flags. If a profile wasn't set manually, use the default one
+            cargo_args.push("--profile".to_string());
+            let profile = self.build.profile.as_deref().unwrap_or_else(|| {
+                get_profile_for_platform(self.build.platform(), self.build.release)
+            });
+            cargo_args.push(profile.to_string());
 
             // todo: use the right arch based on the current arch
             let custom_target = match self.build.platform() {
