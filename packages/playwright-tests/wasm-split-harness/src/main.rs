@@ -1,9 +1,6 @@
-#![allow(non_snake_case)]
-
-use std::pin::Pin;
-
 use dioxus::prelude::*;
 use futures::AsyncReadExt;
+use std::pin::Pin;
 use wasm_bindgen::prelude::*;
 
 fn main() {
@@ -25,18 +22,8 @@ fn app() -> Element {
             },
             "Add body element"
         }
-        button {
-            onclick: move |_| async move {
-                gzip_it().await;
-            },
-            "GZIP it"
-        }
-        button {
-            onclick: move |_| async move {
-                brotli_it().await;
-            },
-            "Brotli It"
-        }
+        button { onclick: move |_| gzip_it(), "GZIP it" }
+        button { onclick: move |_| brotli_it(), "Brotli It" }
         div { id: "output-box" }
     }
 }

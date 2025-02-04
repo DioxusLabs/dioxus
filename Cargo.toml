@@ -65,14 +65,6 @@ members = [
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
     "packages/logger",
-
-    # Playwright tests
-    "packages/playwright-tests/liveview",
-    "packages/playwright-tests/web",
-    "packages/playwright-tests/fullstack",
-    "packages/playwright-tests/suspense-carousel",
-    "packages/playwright-tests/nested-suspense",
-
     # manganis
     "packages/manganis/manganis",
     "packages/manganis/manganis-core",
@@ -82,7 +74,6 @@ members = [
     "packages/wasm-split/wasm-split",
     "packages/wasm-split/wasm-split-macro",
     "packages/wasm-split/wasm-split-cli",
-    "packages/wasm-split/wasm-split-harness",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -107,6 +98,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
+    "packages/playwright-tests/wasm-split-harness",
 ]
 
 [workspace.package]
@@ -159,7 +151,7 @@ manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.2" 
 wasm-split = { path = "packages/wasm-split/wasm-split", version = "0.1.0" }
 wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.1.0" }
 wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.1.0" }
-wasm-split-harness = { path = "packages/wasm-split/wasm-split-harness", version = "0.1.0" }
+wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.1.0" }
 
 warnings = { version = "0.2.1" }
 
@@ -259,14 +251,16 @@ debug = 0
 
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
-[profile.release]
-incremental = true
-debug = 0
+# [profile.release]
+# incremental = true
+# debug = 0
 
-[profile.release-max-opt]
-inherits = "release"
+# incremental = true
+[profile.release]
 lto = true
 codegen-units = 1
+opt-level = 'z'
+strip = "debuginfo"
 
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
 [profile.release-unoptimized]
@@ -274,9 +268,11 @@ inherits = "dev"
 debug-assertions = false
 incremental = true
 
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.wasm-dev]
 inherits = "dev"
-opt-level = 1
 
 [profile.server-dev]
 inherits = "dev"

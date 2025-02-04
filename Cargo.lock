@@ -3445,6 +3445,7 @@ dependencies = [
  "tokio",
  "tracing",
  "warnings",
+ "wasm-split",
 ]
 
 [[package]]
@@ -3567,6 +3568,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "wasm-opt",
+ "wasm-split-cli",
  "which 7.0.1",
 ]
 

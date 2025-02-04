@@ -340,6 +340,11 @@ impl BuildRequest {
 
         cargo_args.push(self.krate.executable_name().to_string());
 
+        if self.build.platform() == Platform::Web {
+            cargo_args.push("--".to_string());
+            cargo_args.push("-Clink-args=--emit-relocs".to_string());
+        }
+
         tracing::debug!(dx_src = ?TraceSrc::Build, "cargo args: {:?}", cargo_args);
 
         cargo_args
@@ -658,7 +663,7 @@ impl BuildRequest {
 
     /// Get the path to the wasm bindgen temporary output folder
     pub fn wasm_bindgen_out_dir(&self) -> PathBuf {
-        self.root_dir().join("wasm-bindgen")
+        self.root_dir().join("wasm")
     }
 
     /// Get the path to the wasm bindgen javascript output file

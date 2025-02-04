@@ -18,6 +18,7 @@ pub(crate) struct WasmBindgen {
     demangle: bool,
     remove_name_section: bool,
     remove_producers_section: bool,
+    keep_lld_exports: bool,
 }
 
 impl WasmBindgen {
@@ -33,6 +34,7 @@ impl WasmBindgen {
             demangle: true,
             remove_name_section: false,
             remove_producers_section: false,
+            keep_lld_exports: false,
         }
     }
 
@@ -90,6 +92,13 @@ impl WasmBindgen {
         }
     }
 
+    pub fn keep_lld_sections(self, keep_lld_sections: bool) -> Self {
+        Self {
+            keep_lld_exports: keep_lld_sections,
+            ..self
+        }
+    }
+
     /// Run the bindgen command with the current settings
     pub async fn run(&self) -> Result<()> {
         let binary = self.get_binary_path().await?;
@@ -101,9 +110,9 @@ impl WasmBindgen {
         args.push(&self.target);
 
         // Options
-        if self.debug {
-            args.push("--debug");
-        }
+        // if self.debug {
+        //     args.push("--debug");
+        // }
 
         if !self.demangle {
             args.push("--no-demangle");
@@ -119,6 +128,10 @@ impl WasmBindgen {
 
         if self.remove_producers_section {
             args.push("--remove-producers-section");
+        }
+
+        if self.keep_lld_exports {
+            args.push("--keep-lld-exports");
         }
 
         // Out name
@@ -143,6 +156,8 @@ impl WasmBindgen {
             .to_str()
             .expect("input_path should be valid utf8");
         args.push(input_path);
+
+        tracing::debug!("wasm-bindgen args: {:#?}", args);
 
         // Run bindgen
         Command::new(binary)

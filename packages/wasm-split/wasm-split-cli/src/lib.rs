@@ -828,7 +828,7 @@ impl<'a> Splitter<'a> {
             tracing::debug!("emitting chunk: {:?}", chunk.module_name);
             writeln!(
                 glue,
-                "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/harness/split/chunk_{idx}_{module}.wasm\", [], fusedImports);",
+                "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/chunk_{idx}_{module}.wasm\", [], fusedImports);",
                 module = chunk.module_name
             ).expect("failed to write to string");
         }
@@ -843,7 +843,7 @@ impl<'a> Splitter<'a> {
                 .join(", ");
             writeln!(
                 glue,
-                "export const __wasm_split_load_{module} = makeLoad(\"/harness/split/module_{idx}_{cname}.wasm\", [{deps}], fusedImports);",
+                "export const __wasm_split_load_{module} = makeLoad(\"/assets/module_{idx}_{cname}.wasm\", [{deps}], fusedImports);",
                 module = module.module_name,
                 idx = idx,
                 cname = module.component_name.as_ref().unwrap(),
@@ -1197,7 +1197,7 @@ impl<'a> ModuleWithRelocations<'a> {
                 self.module
                     .funcs
                     .by_name(name.expect("local func symbol without name?"))
-                    .unwrap(),
+                    .unwrap_or_else(|| panic!("local func symbol without name: {name:?}")),
             )),
             _ => None,
         }

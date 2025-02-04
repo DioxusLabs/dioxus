@@ -364,7 +364,8 @@ impl DioxusCrate {
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     pub(crate) fn should_pre_compress_web_assets(&self, release: bool) -> bool {
-        self.config.web.pre_compress && release
+        false
+        // self.config.web.pre_compress
     }
 
     // The `opt-level=1` increases build times, but can noticeably decrease time

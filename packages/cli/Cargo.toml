@@ -23,6 +23,7 @@ dioxus-cli-config = { workspace = true }
 dioxus-cli-opt = { workspace = true }
 dioxus-fullstack = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
+wasm-split-cli = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }

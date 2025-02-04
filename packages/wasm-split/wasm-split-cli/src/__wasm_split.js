@@ -1,13 +1,13 @@
-import { initSync } from "./main.js";
+// import { initSync } from "./main.js";
 
-function makeLoad(url, deps, fusedImports) {
+export function makeLoad(url, deps, fusedImports) {
   let alreadyLoaded = false;
   return async (callbackIndex, callbackData) => {
     await Promise.all(deps.map((dep) => dep()));
     if (alreadyLoaded) return;
     try {
       const response = await fetch(url);
-      const mainExports = initSync(undefined, undefined);
+      const mainExports = window.initSync(undefined, undefined);
 
       let imports = {
         env: {

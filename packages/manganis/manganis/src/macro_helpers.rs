@@ -39,7 +39,7 @@ pub const fn generate_unique_path(
 }
 
 /// Format the input path with a hash to create an unique output path for the macro in the form `{input_path}-{hash}.{extension}`
-const fn generate_unique_path_with_byte_hash(
+pub const fn generate_unique_path_with_byte_hash(
     input_path: &str,
     content_hash: &[u8],
     asset_config: &AssetOptions,

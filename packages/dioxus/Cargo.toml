@@ -29,6 +29,7 @@ dioxus-ssr = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
+wasm-split = { workspace = true, optional = true }
 
 serde = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
@@ -51,6 +52,7 @@ document = ["dioxus-web?/document", "dep:dioxus-document", "dep:dioxus-history"]
 logger = ["dep:dioxus-logger"]
 cli-config = ["dep:dioxus-cli-config"]
 warnings = ["dep:warnings"]
+wasm-split = ["dep:wasm-split"]
 
 launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]

@@ -7,7 +7,7 @@ use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -331,10 +331,18 @@ impl AppBundle {
                 self.run_wasm_bindgen(&self.app.exe.with_extension("wasm"))
                     .await?;
 
-                // Only run wasm-opt if the feature is enabled
-                // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
-                // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
-                self.run_wasm_opt(&self.build.exe_dir())?;
+                if self.build.build.experimental_bundle_split {
+                    self.run_bundle_split().await?;
+                }
+
+                // self.hash_wasm_bindgen_assets()?;
+
+                //  else {
+                //     // Only run wasm-opt if the feature is enabled
+                //     // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
+                //     // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
+                // self.run_wasm_opt(&self.build.exe_dir())?;
+                // }
 
                 // Write the index.html file with the pre-configured contents we got from pre-rendering
                 std::fs::write(
@@ -486,8 +494,8 @@ impl AppBundle {
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
 
-        // Remove the wasm bindgen output directory if it exists
-        _ = std::fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
+        // // Remove the wasm bindgen output directory if it exists
+        // _ = std::fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
 
         // Write the version file so we know what version of the optimizer we used
         std::fs::write(
@@ -636,21 +644,31 @@ impl AppBundle {
             .wasm_bindgen_version()
             .expect("this should have been checked by tool verification");
 
+        let keep_debug = true;
+        let demangle = false;
+        let keep_lld_sections = true;
+
         WasmBindgen::new(&bindgen_version)
             .input_path(&input_path)
             .target("web")
             .debug(keep_debug)
-            .demangle(keep_debug)
+            .demangle(demangle)
             .keep_debug(keep_debug)
-            .remove_name_section(!keep_debug)
-            .remove_producers_section(!keep_debug)
+            // .remove_name_section(!keep_debug)
+            // .remove_producers_section(!keep_debug)
+            .keep_lld_sections(keep_lld_sections)
             .out_name(&name)
             .out_dir(&bindgen_outdir)
             .run()
             .await
             .context("Failed to generate wasm-bindgen bindings")?;
 
-        // After running wasm-bindgen, add the js and wasm asset to the manifest
+        tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
+
+        Ok(())
+    }
+
+    fn hash_wasm_bindgen_assets(&mut self) -> Result<(), anyhow::Error> {
         let js_output_path = self.build.wasm_bindgen_js_output_file();
         let wasm_output_path = self.build.wasm_bindgen_wasm_output_file();
         let new_assets = [
@@ -660,6 +678,7 @@ impl AppBundle {
             ),
             (wasm_output_path, AssetOptions::Unknown),
         ];
+
         for (asset_path, options) in new_assets {
             let hash = manganis_core::hash::AssetHash::hash_file_contents(&asset_path)?;
             let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(
@@ -672,8 +691,6 @@ impl AppBundle {
             );
             self.app.assets.assets.insert(asset_path, bundled_asset);
         }
-
-        tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 
         Ok(())
     }
@@ -720,6 +737,76 @@ impl AppBundle {
                 new_size,
                 (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
             );
+        }
+
+        Ok(())
+    }
+
+    async fn run_bundle_split(&mut self) -> Result<()> {
+        let bindgen_dir = self.build.wasm_bindgen_out_dir();
+        let prebindgen = self.app.exe.clone();
+        let post_bindgen = self.build.wasm_bindgen_wasm_output_file();
+        let original = std::fs::read(&prebindgen)?;
+        let bindgened = std::fs::read(&post_bindgen)?;
+
+        tracing::info!(
+            "Running wasm-split. Old: {:?}, New: {:?}",
+            prebindgen,
+            post_bindgen
+        );
+        // tokio::task::spawn_blocking(move || {
+        let splitter = wasm_split_cli::Splitter::new(&original, &bindgened)
+            .context("Failed to parse wasm for splitter")?;
+        let mut modules = splitter.emit()?;
+
+        tracing::debug!(
+            "wasm-split emitted {} modules with {} chunks",
+            modules.modules.len(),
+            modules.chunks.len()
+        );
+
+        let mut new_assets = vec![];
+
+        // Overwrite the original wasm with the split wasm
+        std::fs::write(&post_bindgen, modules.main.bytes)?;
+        new_assets.push((post_bindgen, AssetOptions::Unknown));
+
+        // Write the modules
+        // todo(jon): pass these through manganis? need to add a hash
+        for (idx, module) in modules.modules.iter().enumerate() {
+            let path = format!(
+                "module_{}_{}.wasm",
+                idx,
+                module.component_name.as_ref().unwrap()
+            );
+            tracing::debug!("Writing split module {}", path);
+            std::fs::write(bindgen_dir.join(&path), &module.bytes)?;
+            new_assets.push((bindgen_dir.join(path), AssetOptions::Unknown));
+        }
+
+        // Write the chunks
+        for (idx, chunk) in modules.chunks.iter().enumerate() {
+            let path = format!("chunk_{}_{}.wasm", idx, chunk.module_name);
+            tracing::debug!("Writing split chunk {}", path);
+            std::fs::write(bindgen_dir.join(&path), &chunk.bytes)?;
+            new_assets.push((bindgen_dir.join(path), AssetOptions::Unknown));
+        }
+
+        // Write the wasm chunks
+        let mut renamed_chunks = HashMap::new();
+        for (asset_path, options) in new_assets {
+            let hash = manganis_core::hash::AssetHash::hash_file_contents(&asset_path)
+                .context("Failed to hash file")?;
+            let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(
+                "Failed to convert wasm bindgen output path to string"
+            ))?;
+            let bundled_asset = manganis::macro_helpers::create_bundled_asset(
+                output_path_str,
+                hash.bytes(),
+                options,
+            );
+            renamed_chunks.insert(asset_path.clone(), bundled_asset.bundled_path().to_string());
+            self.app.assets.assets.insert(asset_path, bundled_asset);
         }
 
         Ok(())

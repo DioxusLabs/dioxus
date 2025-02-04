@@ -148,5 +148,14 @@ module.exports = defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
+    {
+      cwd: path.join(process.cwd(), "wasm-split-harness"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --bin wasm-split-harness --force-sequential --platform web --addr "127.0.0.1" --port 9999 --experimental-bundle-split',
+      port: 9999,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
   ],
 });
