@@ -47,6 +47,7 @@ impl ToTokens for ComponentBody {
                 let props_struct = self.props_struct();
                 quote! {
                     #[doc = #doc]
+                    #[allow(missing_docs)]
                     #props_struct
                 }
             }
