@@ -22,7 +22,7 @@ pub(crate) struct DioxusCrate {
     pub(crate) settings: Arc<CliSettings>,
 }
 
-const PROFILE_MATRIX: [(Platform, [&'static str; 2]); 8] = [
+const PROFILE_MATRIX: [(Platform, [&str; 2]); 8] = [
     (Platform::Web, ["wasm-dev", "wasm-release"]),
     (Platform::Server, ["server-dev", "server-release"]),
     (Platform::Ios, ["ios-dev", "ios-release"]),
