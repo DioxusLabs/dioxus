@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tao::window::WindowId;
+use winit::window::WindowId;
 
 #[non_exhaustive]
 #[derive(Debug, Clone)]

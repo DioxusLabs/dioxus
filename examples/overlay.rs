@@ -5,9 +5,9 @@
 //!
 //! We also add a global shortcut to toggle the overlay on and off, so you could build a raycast-type app with this.
 
-use dioxus::desktop::{
-    tao::dpi::PhysicalPosition, use_global_shortcut, LogicalSize, WindowBuilder,
-};
+use dioxus::desktop::{use_global_shortcut, winit::dpi::PhysicalPosition, LogicalSize, Window};
+use dioxus::mobile::winit::window::WindowLevel;
+use dioxus::mobile::WindowAttributes;
 use dioxus::prelude::*;
 
 fn main() {
@@ -47,15 +47,15 @@ fn app() -> Element {
 }
 
 fn make_config() -> dioxus::desktop::Config {
-    dioxus::desktop::Config::default().with_window(make_window())
+    dioxus::desktop::Config::default().with_window_attributes(make_window())
 }
 
-fn make_window() -> WindowBuilder {
-    WindowBuilder::new()
+fn make_window() -> WindowAttributes {
+    Window::default_attributes()
         .with_transparent(true)
         .with_decorations(false)
         .with_resizable(false)
-        .with_always_on_top(true)
+        .with_window_level(WindowLevel::AlwaysOnTop)
         .with_position(PhysicalPosition::new(0, 0))
         .with_max_inner_size(LogicalSize::new(100000, 50))
 }

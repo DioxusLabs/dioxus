@@ -5,17 +5,14 @@ use crate::{
     ipc::UserWindowEvent,
     query::QueryEngine,
     shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
-    webview::WebviewInstance,
     AssetRequest, Config, WryEventHandler,
 };
-use dioxus_core::{
-    prelude::{Callback, ScopeId},
-    VirtualDom,
-};
+use dioxus_core::{prelude::Callback, VirtualDom};
 use std::rc::{Rc, Weak};
-use tao::{
+use tokio::sync::oneshot::{self, Receiver};
+use winit::{
     event::Event,
-    event_loop::EventLoopWindowTarget,
+    event_loop::ActiveEventLoop,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
 use wry::{RequestAsyncResponder, WebView};
@@ -101,28 +98,25 @@ impl DesktopService {
 
     /// Create a new window using the props and window builder
     ///
-    /// Returns the webview handle for the new window.
+    /// Returns a `MaybeDesktopService` to use the new window's `DesktopService` once initialized.
     ///
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> WeakDesktopContext {
-        let window = WebviewInstance::new(cfg, dom, self.shared.clone());
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> MaybeDesktopContext {
+        let (tx, rx) = oneshot::channel();
 
-        let cx = window.dom.in_runtime(|| {
-            ScopeId::ROOT
-                .consume_context::<Rc<DesktopService>>()
-                .unwrap()
-        });
+        self.shared
+            .pending_windows
+            .borrow_mut()
+            .push((dom, cfg, tx));
 
         self.shared
             .proxy
             .send_event(UserWindowEvent::NewWindow)
             .unwrap();
 
-        self.shared.pending_webviews.borrow_mut().push(window);
-
-        Rc::downgrade(&cx)
+        MaybeDesktopContext::new(rx)
     }
 
     /// trigger the drag-window event
@@ -198,7 +192,7 @@ impl DesktopService {
     /// The id this function returns can be used to remove the event handler with [`DesktopContext::remove_wry_event_handler`]
     pub fn create_wry_event_handler(
         &self,
-        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+        handler: impl FnMut(&Event<UserWindowEvent>, &ActiveEventLoop) + 'static,
     ) -> WryEventHandler {
         self.shared.event_handlers.add(self.window.id(), handler)
     }
@@ -299,4 +293,31 @@ fn is_main_thread() -> bool {
     let cls = Class::get("NSThread").unwrap();
     let result: BOOL = unsafe { msg_send![cls, isMainThread] };
     result != NO
+}
+
+/// A handle to a [`WeakDesktopContext`] that hasn't been initialized yet.
+pub struct MaybeDesktopContext {
+    rx: Receiver<WeakDesktopContext>,
+}
+
+impl MaybeDesktopContext {
+    fn new(rx: Receiver<WeakDesktopContext>) -> Self {
+        Self { rx }
+    }
+
+    /// Get the [`WeakDesktopContext`], waiting if not initialized yet.
+    pub async fn get(self) -> WeakDesktopContext {
+        self.rx.await.unwrap()
+    }
+
+    /// Attempt to get a [`WeakDesktopContext`].
+    pub fn try_get(&mut self) -> Option<WeakDesktopContext> {
+        match self.rx.try_recv() {
+            Ok(t) => Some(t),
+            e => {
+                println!("ERR: {e:?}");
+                None
+            }
+        }
+    }
 }
