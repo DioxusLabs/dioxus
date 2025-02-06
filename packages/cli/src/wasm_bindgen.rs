@@ -22,7 +22,7 @@ pub(crate) struct WasmBindgen {
 }
 
 impl WasmBindgen {
-    pub fn new(version: &str) -> Self {
+    pub(crate) fn new(version: &str) -> Self {
         Self {
             version: version.to_string(),
             input_path: PathBuf::new(),
@@ -38,61 +38,61 @@ impl WasmBindgen {
         }
     }
 
-    pub fn input_path(self, input_path: &Path) -> Self {
+    pub(crate) fn input_path(self, input_path: &Path) -> Self {
         Self {
             input_path: input_path.to_path_buf(),
             ..self
         }
     }
 
-    pub fn out_dir(self, out_dir: &Path) -> Self {
+    pub(crate) fn out_dir(self, out_dir: &Path) -> Self {
         Self {
             out_dir: out_dir.to_path_buf(),
             ..self
         }
     }
 
-    pub fn out_name(self, out_name: &str) -> Self {
+    pub(crate) fn out_name(self, out_name: &str) -> Self {
         Self {
             out_name: out_name.to_string(),
             ..self
         }
     }
 
-    pub fn target(self, target: &str) -> Self {
+    pub(crate) fn target(self, target: &str) -> Self {
         Self {
             target: target.to_string(),
             ..self
         }
     }
 
-    pub fn debug(self, debug: bool) -> Self {
+    pub(crate) fn debug(self, debug: bool) -> Self {
         Self { debug, ..self }
     }
 
-    pub fn keep_debug(self, keep_debug: bool) -> Self {
+    pub(crate) fn keep_debug(self, keep_debug: bool) -> Self {
         Self { keep_debug, ..self }
     }
 
-    pub fn demangle(self, demangle: bool) -> Self {
+    pub(crate) fn demangle(self, demangle: bool) -> Self {
         Self { demangle, ..self }
     }
 
-    pub fn remove_name_section(self, remove_name_section: bool) -> Self {
+    pub(crate) fn remove_name_section(self, remove_name_section: bool) -> Self {
         Self {
             remove_name_section,
             ..self
         }
     }
 
-    pub fn remove_producers_section(self, remove_producers_section: bool) -> Self {
+    pub(crate) fn remove_producers_section(self, remove_producers_section: bool) -> Self {
         Self {
             remove_producers_section,
             ..self
         }
     }
 
-    pub fn keep_lld_sections(self, keep_lld_sections: bool) -> Self {
+    pub(crate) fn keep_lld_sections(self, keep_lld_sections: bool) -> Self {
         Self {
             keep_lld_exports: keep_lld_sections,
             ..self
@@ -100,7 +100,7 @@ impl WasmBindgen {
     }
 
     /// Run the bindgen command with the current settings
-    pub async fn run(&self) -> Result<()> {
+    pub(crate) async fn run(&self) -> Result<()> {
         let binary = self.get_binary_path().await?;
 
         let mut args = Vec::new();
@@ -110,9 +110,9 @@ impl WasmBindgen {
         args.push(&self.target);
 
         // Options
-        // if self.debug {
-        //     args.push("--debug");
-        // }
+        if self.debug {
+            args.push("--debug");
+        }
 
         if !self.demangle {
             args.push("--no-demangle");
@@ -174,7 +174,7 @@ impl WasmBindgen {
     ///
     /// For local installations, this will check that the installed version matches the specified version.
     /// For managed installations, this will check that the version managed by `dx` is the specified version.
-    pub async fn verify_install(version: &str) -> anyhow::Result<()> {
+    pub(crate) async fn verify_install(version: &str) -> anyhow::Result<()> {
         let settings = Self::new(version);
         if CliSettings::prefer_no_downloads() {
             settings.verify_local_install().await

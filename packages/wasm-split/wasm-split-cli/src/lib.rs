@@ -1,5 +1,8 @@
 use anyhow::{Context, Result};
 use itertools::Itertools;
+use rayon::prelude::{
+    IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
+};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     hash::Hash,
@@ -102,7 +105,7 @@ impl<'a> Splitter<'a> {
         // This is less efficient but easier to reason about
         let modules = self
             .split_points
-            .iter()
+            .par_iter()
             .enumerate()
             .map(|s| Splitter::new(self.original, &self.bindgened)?.emit_split_module(s.0))
             .collect::<Result<Vec<_>>>()?;
@@ -1043,14 +1046,14 @@ impl<'a> Splitter<'a> {
         }
 
         // Now go fill in the reachabilith graph for each of the split points
-        for split in self.split_points.iter_mut() {
+        self.split_points.par_iter_mut().for_each(|split| {
             let roots = Some(Node::Function(split.export_func))
                 .into_iter()
                 .collect();
 
             split.reachable_graph =
                 ReachabilityGraph::new(&self.call_graph, &roots, &Default::default());
-        }
+        });
 
         // And then the reachability graph for main
         self.main_graph =

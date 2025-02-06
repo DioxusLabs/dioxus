@@ -23,6 +23,12 @@ impl BuildRequest {
         });
     }
 
+    pub(crate) fn status_splitting_bundle(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::SplittingBundle,
+        });
+    }
+
     pub(crate) fn status_start_bundle(&self) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Bundling {},

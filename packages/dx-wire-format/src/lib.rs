@@ -56,6 +56,7 @@ pub enum BuildStage {
         krate: String,
     },
     RunningBindgen,
+    SplittingBundle,
     OptimizingWasm,
     PrerenderingRoutes,
     CopyingAssets {

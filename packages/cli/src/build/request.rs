@@ -340,6 +340,8 @@ impl BuildRequest {
 
         cargo_args.push(self.krate.executable_name().to_string());
 
+        // the bundle splitter needs relocation data
+        // we'll trim these out if we don't need them during the bundling process
         if self.build.platform() == Platform::Web {
             cargo_args.push("--".to_string());
             cargo_args.push("-Clink-args=--emit-relocs".to_string());

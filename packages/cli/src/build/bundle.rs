@@ -1,6 +1,5 @@
 use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
-use crate::wasm_bindgen::WasmBindgen;
 use crate::{BuildRequest, Platform};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
@@ -326,29 +325,7 @@ impl AppBundle {
             //                        logo.png
             // ```
             Platform::Web => {
-                // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
-                self.build.status_wasm_bindgen_start();
-                self.run_wasm_bindgen(&self.app.exe.with_extension("wasm"))
-                    .await?;
-
-                if self.build.build.experimental_bundle_split {
-                    self.run_bundle_split().await?;
-                }
-
-                // self.hash_wasm_bindgen_assets()?;
-
-                //  else {
-                //     // Only run wasm-opt if the feature is enabled
-                //     // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
-                //     // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
-                // self.run_wasm_opt(&self.build.exe_dir())?;
-                // }
-
-                // Write the index.html file with the pre-configured contents we got from pre-rendering
-                std::fs::write(
-                    self.build.root_dir().join("index.html"),
-                    self.prepare_html()?,
-                )?;
+                self.bundle_web().await?;
             }
 
             // this will require some extra oomf to get the multi architecture builds...
@@ -627,76 +604,178 @@ impl AppBundle {
         None
     }
 
-    pub(crate) async fn run_wasm_bindgen(&mut self, input_path: &Path) -> anyhow::Result<()> {
-        tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
+    /// Bundle the web app
+    /// - Run wasm-bindgen
+    /// - Bundle split
+    /// - Run wasm-opt
+    /// - Register the .wasm and .js files with the asset system
+    async fn bundle_web(&mut self) -> Result<()> {
+        use crate::{
+            wasm_bindgen::WasmBindgen,
+            wasm_opt::{self, WasmOptOptions},
+        };
+        use std::fmt::Write;
 
-        let input_path = input_path.to_path_buf();
-        // Make sure the bindgen output directory exists
+        // Locate the output of the build files and the bindgen output
+        // We'll fill these in a second if they don't already exist
         let bindgen_outdir = self.build.wasm_bindgen_out_dir();
-        std::fs::create_dir_all(&bindgen_outdir)?;
-
-        let name = self.build.krate.executable_name().to_string();
-        let keep_debug =
-            // if we're in debug mode, or we're generating debug symbols, keep debug info
-            (self.build.krate.config.web.wasm_opt.debug || self.build.build.debug_symbols)
-            // but only if we're not in release mode
-            && !self.build.build.release;
-
-        let start = std::time::Instant::now();
-
+        let prebindgen = self.app.exe.clone();
+        let post_bindgen_wasm = self.build.wasm_bindgen_wasm_output_file();
+        let should_bundle_split = self.build.build.experimental_bundle_split;
+        let rustc_exe = self.app.exe.with_extension("wasm");
         let bindgen_version = self
             .build
             .krate
             .wasm_bindgen_version()
             .expect("this should have been checked by tool verification");
 
-        let keep_debug = true;
-        let demangle = false;
-        let keep_lld_sections = true;
+        // Prepare any work dirs
+        std::fs::create_dir_all(&bindgen_outdir)?;
 
+        // Prepare our configuration
+        //
+        // we turn off debug symbols in dev mode but leave them on in release mode (weird!) since
+        // wasm-opt and wasm-split need them to do better optimizations.
+        //
+        // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
+        // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
+        let keep_debug = self.build.krate.config.web.wasm_opt.debug
+            || self.build.build.debug_symbols
+            || self.build.build.experimental_bundle_split
+            || (self.build.build.release && cfg!(feature = "optimizations"));
+        let wasm_opt_options = WasmOptOptions {
+            debug_symbols: self.build.krate.config.web.wasm_opt.debug
+                || self.build.build.debug_symbols,
+        };
+        let demangle = false;
+
+        // Run wasm-bindgen. Some of the options are not "optimal" but will be fixed up by wasm-opt
+        //
+        // There's performance implications here. Running with --debug is slower than without
+        // We're keeping around lld sections and names but wasm-opt will fix them
+        // todo(jon): investigate a good balance of wiping debug symbols during dev (or doing a double build?)
+        tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
+        let start = std::time::Instant::now();
         WasmBindgen::new(&bindgen_version)
-            .input_path(&input_path)
+            .input_path(&rustc_exe)
             .target("web")
             .debug(keep_debug)
             .demangle(demangle)
             .keep_debug(keep_debug)
-            // .remove_name_section(!keep_debug)
-            // .remove_producers_section(!keep_debug)
-            .keep_lld_sections(keep_lld_sections)
-            .out_name(&name)
+            .keep_lld_sections(true)
+            .out_name(self.build.krate.executable_name())
             .out_dir(&bindgen_outdir)
             .run()
             .await
             .context("Failed to generate wasm-bindgen bindings")?;
-
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 
-        Ok(())
-    }
+        // Run bundle splitting if the user has requested it
+        // It's pretty expensive but because of rayon should be running separate threads, hopefully
+        // not blocking this thread. Dunno if that's true
+        if should_bundle_split {
+            // Load the contents of these binaries since we need both of them
+            // We're going to use the default makeLoad glue from wasm-split
+            let original = std::fs::read(&prebindgen)?;
+            let bindgened = std::fs::read(&post_bindgen_wasm)?;
+            let mut glue = wasm_split_cli::MAKE_LOAD_JS.to_string();
 
-    fn hash_wasm_bindgen_assets(&mut self) -> Result<(), anyhow::Error> {
-        let js_output_path = self.build.wasm_bindgen_js_output_file();
-        let wasm_output_path = self.build.wasm_bindgen_wasm_output_file();
-        let new_assets = [
-            (
-                js_output_path,
-                AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
-            ),
-            (wasm_output_path, AssetOptions::Unknown),
-        ];
+            // Run the emitter
+            let splitter = wasm_split_cli::Splitter::new(&original, &bindgened);
+            let modules = splitter
+                .context("Failed to parse wasm for splitter")?
+                .emit()
+                .context("Failed to emit wasm split modules")?;
 
-        for (asset_path, options) in new_assets {
-            let hash = manganis_core::hash::AssetHash::hash_file_contents(&asset_path)?;
-            let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(
-                "Failed to convert wasm bindgen output path to string"
-            ))?;
-            let bundled_asset = manganis::macro_helpers::create_bundled_asset(
-                output_path_str,
-                hash.bytes(),
-                options,
-            );
-            self.app.assets.assets.insert(asset_path, bundled_asset);
+            // Write the chunks that contain shared imports
+            // These will be in the format of chunk_0_modulename.wasm - this is hardcoded in wasm-split
+            // todo(jon): don't harcode them...
+            for (idx, chunk) in modules.chunks.iter().enumerate() {
+                let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
+                wasm_opt::write_wasm(&chunk.bytes, &path, wasm_opt_options).await?;
+                writeln!(
+                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
+                    url = self
+                        .app
+                        .assets
+                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+                )?;
+            }
+
+            // Write the modules that contain the entrypoints
+            for (idx, module) in modules.modules.iter().enumerate() {
+                let path = bindgen_outdir.join(format!(
+                    "module_{}_{}.wasm",
+                    idx,
+                    module
+                        .component_name
+                        .as_ref()
+                        .context("generated bindgen module has no name?")?
+                ));
+                wasm_opt::write_wasm(&module.bytes, &path, wasm_opt_options).await?;
+                writeln!(
+                    glue,
+                    "export const __wasm_split_load_{module} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    module = module.module_name,
+
+                    // Again, register this wasm with the asset system
+                    url = self
+                        .app
+                        .assets
+                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+
+                    // This time, make sure to write the dependencies of this chunk
+                    // The names here are again, hardcoded in wasm-split - fix this eventually.
+                    deps = module
+                        .relies_on_chunks
+                        .iter()
+                        .map(|idx| format!("__wasm_split_load_chunk_{idx}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )?;
+            }
+
+            // Write the js binding
+            // It's not registered as an asset since it will get included in the main.js file
+            let js_output_path = bindgen_outdir.join("__wasm_split.js");
+            std::fs::write(&js_output_path, &glue)?;
+
+            // Make sure to write some entropy to the main.js file so it gets a new hash
+            // If we don't do this, the main.js file will be cached and never pick up the chunk names
+            let uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, glue.as_bytes());
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(self.build.wasm_bindgen_js_output_file())
+                .context("Failed to open main.js file")?
+                .write_all(format!("/*{uuid}*/").as_bytes())?;
+
+            // Write the main wasm_bindgen file and register it with the asset system
+            // This will overwrite the file in place
+            // We will wasm-opt it in just a second...
+            std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
         }
+
+        // Make sure to optimize the main wasm file if requested or if bundle splitting
+        if should_bundle_split || (self.build.build.release && cfg!(feature = "optimizations")) {
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
+        }
+
+        // Make sure to register the main wasm file with the asset system
+        self.app
+            .assets
+            .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+
+        // Register the main.js with the asset system so it bundles in the snippets and optimizes
+        self.app.assets.register_asset(
+            &self.build.wasm_bindgen_js_output_file(),
+            AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+        )?;
+
+        // Write the index.html file with the pre-configured contents we got from pre-rendering
+        std::fs::write(
+            self.build.root_dir().join("index.html"),
+            self.prepare_html()?,
+        )?;
 
         Ok(())
     }
@@ -744,111 +823,6 @@ impl AppBundle {
                 (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
             );
         }
-
-        Ok(())
-    }
-
-    async fn run_bundle_split(&mut self) -> Result<()> {
-        use std::fmt::Write;
-
-        let bindgen_dir = self.build.wasm_bindgen_out_dir();
-        let prebindgen = self.app.exe.clone();
-        let post_bindgen_wasm = self.build.wasm_bindgen_wasm_output_file();
-        let original = std::fs::read(&prebindgen)?;
-        let bindgened = std::fs::read(&post_bindgen_wasm)?;
-
-        tracing::info!(
-            "Running wasm-split. Old: {:?}, New: {:?}",
-            prebindgen,
-            post_bindgen_wasm
-        );
-        // tokio::task::spawn_blocking(move || {
-        let splitter = wasm_split_cli::Splitter::new(&original, &bindgened)
-            .context("Failed to parse wasm for splitter")?;
-        let modules = splitter.emit()?;
-
-        tracing::debug!(
-            "wasm-split emitted {} modules with {} chunks",
-            modules.modules.len(),
-            modules.chunks.len()
-        );
-
-        let mut glue = wasm_split_cli::MAKE_LOAD_JS.to_string();
-
-        // Write the chunks
-        for (idx, chunk) in modules.chunks.iter().enumerate() {
-            let path = format!("chunk_{}_{}.wasm", idx, chunk.module_name);
-            std::fs::write(bindgen_dir.join(&path), &chunk.bytes)?;
-            let bundled = self
-                .app
-                .assets
-                .register_asset(&bindgen_dir.join(&path), AssetOptions::Unknown)?;
-
-            // Create the glue for the chunk using the hash of the chunk
-            writeln!(
-                glue,
-                "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
-                url = bundled.bundled_path(),
-            ).expect("failed to write to string");
-
-            tracing::debug!("Writing split chunk {}", path);
-        }
-
-        // Write the modules
-        // todo(jon): pass these through manganis? need to add a hash
-        for (idx, module) in modules.modules.iter().enumerate() {
-            let path = format!(
-                "module_{}_{}.wasm",
-                idx,
-                module.component_name.as_ref().unwrap()
-            );
-            std::fs::write(bindgen_dir.join(&path), &module.bytes)?;
-
-            let bundled = self
-                .app
-                .assets
-                .register_asset(&bindgen_dir.join(&path), AssetOptions::Unknown)?;
-
-            let deps = module
-                .relies_on_chunks
-                .iter()
-                .map(|idx| format!("__wasm_split_load_chunk_{idx}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            writeln!(
-                glue,
-                "export const __wasm_split_load_{module} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
-                module = module.module_name,
-                url = bundled.bundled_path(),
-                deps = deps
-            )
-            .expect("failed to write to string");
-        }
-
-        // Write the js binding
-        let js_output_path = bindgen_dir.join("__wasm_split.js");
-        std::fs::write(&js_output_path, &glue)?;
-
-        // Write the main wasm_bindgen file and register it with the asset system
-        std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
-        self.app
-            .assets
-            .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
-
-        // Make sure to write some entropy to the main.js file so it gets a new hash
-        let uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, glue.as_bytes());
-        std::fs::OpenOptions::new()
-            .append(true)
-            .open(self.build.wasm_bindgen_js_output_file())
-            .context("Failed to open main.js file")?
-            .write_all(format!("/*{uuid}*/").as_bytes())?;
-
-        // Write the loader
-        self.app.assets.register_asset(
-            &self.build.wasm_bindgen_js_output_file(),
-            AssetOptions::Js(JsAssetOptions::new().with_minify(true)),
-        )?;
 
         Ok(())
     }
