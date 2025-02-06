@@ -19,9 +19,9 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let split_loader_ident = format_ident!("__wasm_split_loader");
     let impl_import_ident =
-        format_ident!("__wasm_split_00{module_ident}00_import_{unique_identifier}_{name}");
+        format_ident!("__wasm_split_00___{module_ident}___00_import_{unique_identifier}_{name}");
     let impl_export_ident =
-        format_ident!("__wasm_split_00{module_ident}00_export_{unique_identifier}_{name}");
+        format_ident!("__wasm_split_00___{module_ident}___00_export_{unique_identifier}_{name}");
 
     let import_sig = Signature {
         ident: impl_import_ident.clone(),
@@ -86,13 +86,13 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
             }
 
             thread_local! {
-                static #split_loader_ident: ::wasm_split::LazySplitLoader = unsafe {
-                    ::wasm_split::LazySplitLoader::new(#load_module_ident)
+                static #split_loader_ident: dioxus::wasm_split::LazySplitLoader = unsafe {
+                    dioxus::wasm_split::LazySplitLoader::new(#load_module_ident)
                 };
             }
 
             // Initiate the download by calling the load_module_ident function which will kick-off the loader
-            if ::wasm_split::ensure_loaded(&#split_loader_ident).await {
+            if dioxus::wasm_split::ensure_loaded(&#split_loader_ident).await {
                 unsafe { #impl_import_ident( #(#args),* ) }
             }
         }
@@ -143,9 +143,9 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
     let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
     let split_loader_ident = format_ident!("__wasm_split_loader_{module_ident}");
     let impl_import_ident =
-        format_ident!("__wasm_split_00{module_ident}00_import_{unique_identifier}_{name}");
+        format_ident!("__wasm_split_00___{module_ident}___00_import_{unique_identifier}_{name}");
     let impl_export_ident =
-        format_ident!("__wasm_split_00{module_ident}00_export_{unique_identifier}_{name}");
+        format_ident!("__wasm_split_00___{module_ident}___00_export_{unique_identifier}_{name}");
 
     quote! {
         {
@@ -172,12 +172,12 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
             }
 
             thread_local! {
-                static #split_loader_ident: ::wasm_split::LazySplitLoader = unsafe {
-                    ::wasm_split::LazySplitLoader::new(#load_module_ident)
+                static #split_loader_ident: dioxus::wasm_split::LazySplitLoader = unsafe {
+                    dioxus::wasm_split::LazySplitLoader::new(#load_module_ident)
                 };
             };
 
-            ::wasm_split::LazyLoader {
+            dioxus::wasm_split::LazyLoader {
                 key: &#split_loader_ident,
                 imported: #impl_import_ident,
             }

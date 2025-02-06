@@ -180,7 +180,12 @@ impl Route {
         }
     }
 
-    pub fn routable_match(&self, layouts: &[Layout], nests: &[Nest]) -> TokenStream2 {
+    pub fn routable_match(
+        &self,
+        layouts: &[Layout],
+        nests: &[Nest],
+        router_name: &Ident,
+    ) -> TokenStream2 {
         let name = &self.route_name;
 
         let mut tokens = TokenStream2::new();
@@ -240,34 +245,58 @@ impl Route {
                 let dynamic_segments_from_route__ = self.dynamic_segments();
                 let module_name = format_ident!("module{}", name).to_string();
                 let comp_name = format_ident!("route{}", name);
+                let route = router_name.clone();
                 quote! {
                     #[allow(unused)]
                     (#last_index, Self::#name { #(#dynamic_segments,)* }) => {
                         dioxus::router::maybe_wasm_split! {
                             if wasm_split {
                                 {
-                                    #[no_mangle]
-                                    fn #comp_name(args: Route) -> Element {
+                                    fn #comp_name(args: #route) -> Element {
                                         match args {
-                                            Route::#name { #(#dynamic_segments_from_route_,)* } => {
-                                                #name(#(#dynamic_segments_from_route__,)*)
+                                            #route::#name { #(#dynamic_segments_from_route_,)* } => {
+                                                rsx! {
+                                                    #component {
+                                                        #(#dynamic_segments_from_route__: #dynamic_segments_from_route__,)*
+                                                    }
+                                                }
                                             }
                                             _ => unreachable!()
                                         }
                                     }
 
-                                    static MODULE: ::dioxus::wasm_split::LazyLoader<Route, Element> =
-                                        ::dioxus::wasm_split::lazy_loader!(extern #module_name fn #comp_name(props: Route) -> Element);
+                                    static MODULE: ::dioxus::wasm_split::LazyLoader<#route, Element> =
+                                        ::dioxus::wasm_split::lazy_loader!(extern #module_name fn #comp_name(props: #route) -> Element);
 
                                     #[component]
-                                    fn LoaderInner(args: Route) -> Element {
+                                    fn LoaderInner(args: NoPartialEq<#route>) -> Element {
                                         use_resource(|| async move { MODULE.load().await }).suspend()?;
-                                        MODULE.call(args).unwrap()
+                                        MODULE.call(args.0).unwrap()
+                                    }
+
+                                    struct NoPartialEq<T>(T);
+
+                                    impl<T: Clone> Clone for NoPartialEq<T> {
+                                        fn clone(&self) -> Self {
+                                            Self(self.0.clone())
+                                        }
+                                    }
+
+                                    impl<T: std::fmt::Display> std::fmt::Display for NoPartialEq<T> {
+                                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                                            self.0.fmt(f)
+                                        }
+                                    }
+
+                                    impl<T> PartialEq for NoPartialEq<T> {
+                                        fn eq(&self, _other: &Self) -> bool {
+                                            true
+                                        }
                                     }
 
                                     rsx! {
                                         LoaderInner {
-                                            args: Route::#name { #(#dynamic_segments_receiver,)* }
+                                            args: NoPartialEq(#route::#name { #(#dynamic_segments_receiver,)* } )
                                         }
                                     }
                                 }

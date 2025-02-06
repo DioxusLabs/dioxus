@@ -7,11 +7,12 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     hash::Hash,
     ops::Range,
+    sync::{Arc, RwLock},
 };
 use walrus::{
     ir, ConstExpr, DataKind, ElementItems, ElementKind, ExportId, ExportItem, FunctionBuilder,
-    FunctionId, FunctionKind, GlobalKind, ImportId, ImportKind, ImportedFunction, Module, RefType,
-    TableId, TypeId,
+    FunctionId, FunctionKind, GlobalKind, IdsToIndices, ImportId, ImportKind, ImportedFunction,
+    Module, ModuleConfig, RefType, TableId, TypeId,
 };
 use wasmparser::{
     Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry, SymbolInfo,
@@ -24,6 +25,12 @@ pub const MAKE_LOAD_JS: &'static str = include_str!("./__wasm_split.js");
 /// This struct assumes that relocations will be present in incoming wasm binary.
 /// Upon construction, all the required metadata will be constructed.
 pub struct Splitter<'a> {
+    /// The original module we use as a reference
+    source_module: Module,
+    ids_to_fns: Vec<FunctionId>,
+    fns_to_ids: HashMap<FunctionId, usize>,
+
+    /// The module we're currently splitting
     module: Module,
     original: &'a [u8],
     bindgened: &'a [u8],
@@ -32,19 +39,20 @@ pub struct Splitter<'a> {
     data_symbols: BTreeMap<usize, DataSymbol>,
     main_graph: ReachabilityGraph,
     call_graph: HashMap<Node, HashSet<Node>>,
+    parent_graph: HashMap<Node, HashSet<Node>>,
     injected_symbols: HashSet<Node>,
 }
 
 /// The results of splitting the wasm module with some additional metadata for later use.
-pub struct OutputModules<'a> {
+pub struct OutputModules {
     /// The main chunk
-    pub main: SplitModule<'a>,
+    pub main: SplitModule,
 
     /// The modules of the wasm module that were split.
-    pub modules: Vec<SplitModule<'a>>,
+    pub modules: Vec<SplitModule>,
 
     /// The chunks that might be imported by the main modules
-    pub chunks: Vec<SplitModule<'a>>,
+    pub chunks: Vec<SplitModule>,
 
     /// The javascript that will be used to link the chunks together. Required by the wasm-bindgen
     pub js_module: String,
@@ -53,11 +61,10 @@ pub struct OutputModules<'a> {
 /// A wasm module that was split from the main module.
 ///
 /// All IDs here correspond to *this* module - not the parent main module
-pub struct SplitModule<'a> {
+pub struct SplitModule {
     pub module_name: String,
     pub component_name: Option<String>,
     pub bytes: Vec<u8>,
-    pub module: Splitter<'a>,
     pub relies_on_chunks: HashSet<usize>,
 }
 
@@ -70,20 +77,25 @@ impl<'a> Splitter<'a> {
     /// It's important to compile the wasm with --emit-relocs such that the relocations are available
     /// to construct the callgraph.
     pub fn new(original: &'a [u8], bindgened: &'a [u8]) -> Result<Self> {
-        let module = Module::from_buffer(&bindgened)?;
+        let (module, ids, fns_to_ids) = parse_module_with_ids(bindgened)?;
+
         let split_points = accumulate_split_points(&module);
         let raw_data = parse_bytes_to_data_segment(&bindgened)?;
 
         let mut module = Self {
-            module,
+            source_module: module,
             original,
             bindgened,
             split_points,
             data_symbols: raw_data.data_symbols,
+            ids_to_fns: ids,
+            module: Module::default(),
             main_graph: Default::default(),
             chunks: Default::default(),
             call_graph: Default::default(),
+            parent_graph: Default::default(),
             injected_symbols: Default::default(),
+            fns_to_ids,
         };
 
         module.build_call_graph()?;
@@ -100,20 +112,16 @@ impl<'a> Splitter<'a> {
     /// that will only be removed by the memory-packing step of wasm-opt.
     ///
     /// This returns the list of chunks, an import map, and some javascript to link everything together.
-    pub fn emit(self) -> Result<OutputModules<'a>> {
-        // Create the split modules by copying the main module
-        // This is less efficient but easier to reason about
-        let modules = self
-            .split_points
-            .iter()
-            .enumerate()
-            .map(|s| Splitter::new(self.original, &self.bindgened)?.emit_split_module(s.0))
-            .collect::<Result<Vec<_>>>()?;
+    pub fn emit(mut self) -> Result<OutputModules> {
+        let mut modules = vec![];
+        for idx in 0..self.split_points.len() {
+            modules.push(self.emit_split_module(idx)?);
+        }
 
-        // Add in the chunks as well after the modules
-        let chunks = (0..self.chunks.len())
-            .map(|chunk| Splitter::new(self.original, &self.bindgened)?.emit_split_chunk(chunk))
-            .collect::<Result<Vec<_>>>()?;
+        let mut chunks = vec![];
+        for idx in 0..self.chunks.len() {
+            chunks.push(self.emit_split_chunk(idx)?);
+        }
 
         // Generate the JS module
         let js_module = self.emit_javascript_glue(&modules, &chunks)?;
@@ -141,7 +149,10 @@ impl<'a> Splitter<'a> {
     ///
     /// Emitting the main module is conceptually pretty simple. Emitting the split modules is more
     /// complex.
-    fn emit_main_module(mut self) -> Result<SplitModule<'a>> {
+    fn emit_main_module(mut self) -> Result<SplitModule> {
+        // Use the original module that contains all the right ids
+        self.module = std::mem::take(&mut self.source_module);
+
         // Perform some analysis of the module before we start messing with it
         let shared_funcs = self.main_shared_symbols();
         let unused_symbols = self.unused_main_symbols();
@@ -172,13 +183,12 @@ impl<'a> Splitter<'a> {
             module_name: "main".to_string(),
             component_name: None,
             bytes: self.module.emit_wasm(),
-            module: self,
             relies_on_chunks: Default::default(),
         })
     }
 
     /// Write the contents of the split modules to the output
-    fn emit_split_module(mut self, split_idx: usize) -> Result<SplitModule<'a>> {
+    fn emit_split_module(&mut self, split_idx: usize) -> Result<SplitModule> {
         let split = self.split_points[split_idx].clone();
 
         // These are the symbols that will only exist in this module and not in the main module.
@@ -220,6 +230,14 @@ impl<'a> Splitter<'a> {
             }
         }
 
+        // Remap the graph to our module's IDs
+        let (module, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
+        self.module = module;
+        let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
+        let symbols_to_delete = self.remap_ids(symbols_to_delete, &ids_to_fns);
+        let symbols_to_import = self.remap_ids(symbols_to_import, &ids_to_fns);
+        let split_export_func = ids_to_fns[self.fns_to_ids[&split.export_func]];
+
         // Do some basic cleanup of the module to make it smaller
         // This removes exports, imports, and the start function
         self.prune_split_module();
@@ -237,10 +255,10 @@ impl<'a> Splitter<'a> {
         self.convert_shared_to_imports(&symbols_to_import);
 
         // Convert our split module's functions to real functions that call the indirect function
-        self.add_split_imports(split.index, split.export_func, split.export_name);
+        self.add_split_imports(split.index, split_export_func, split.export_name);
 
         // Delete all the functions that are not reachable from the main module
-        self.delete_main_funcs_from_split(&symbols_to_delete);
+        self.delete_main_funcs_from_split(&symbols_to_delete, Some(&ids_to_fns));
 
         // Remove the reloc and linking custom sections
         self.remove_custom_sections();
@@ -250,7 +268,6 @@ impl<'a> Splitter<'a> {
 
         Ok(SplitModule {
             bytes: self.module.emit_wasm(),
-            module: self,
             module_name: split.module_name.clone(),
             component_name: Some(split.component_name.clone()),
             relies_on_chunks,
@@ -258,8 +275,10 @@ impl<'a> Splitter<'a> {
     }
 
     /// Write a split chunk - this is a chunk with no special functions, just exports + initializers
-    fn emit_split_chunk(mut self, idx: usize) -> Result<SplitModule<'a>> {
+    fn emit_split_chunk(&mut self, idx: usize) -> Result<SplitModule> {
         let unique_symbols = self.chunks[idx].clone();
+        let (module, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
+        self.module = module;
 
         tracing::info!("emitting chunk {}", idx);
 
@@ -287,6 +306,11 @@ impl<'a> Splitter<'a> {
             }
         }
 
+        let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
+        let symbols_to_export = self.remap_ids(symbols_to_export, &ids_to_fns);
+        let symbols_to_import = self.remap_ids(symbols_to_import, &ids_to_fns);
+        let symbols_to_delete = self.remap_ids(symbols_to_delete, &ids_to_fns);
+
         self.prune_split_module();
 
         // Convert tables, memories, etc to imports rather than being locally defined
@@ -305,7 +329,7 @@ impl<'a> Splitter<'a> {
         self.re_export_functions(&symbols_to_export);
 
         //
-        self.delete_main_funcs_from_split(&symbols_to_delete);
+        self.delete_main_funcs_from_split(&symbols_to_delete, Some(&ids_to_fns));
 
         // We have to make sure our table matches that of the other tables even though we don't call them.
         let ifunc_table_id = self.load_funcref_table();
@@ -321,7 +345,6 @@ impl<'a> Splitter<'a> {
 
         Ok(SplitModule {
             bytes: self.module.emit_wasm(),
-            module: self,
             module_name: "split".to_string(),
             component_name: None,
             relies_on_chunks: Default::default(),
@@ -372,6 +395,7 @@ impl<'a> Splitter<'a> {
 
         // Push the split import functions into the list - after we've pushed in the shared imports
         for idx in 0..self.split_points.len() {
+            // this is okay since we're in the main module
             let import_func = self.split_points[idx].import_func;
             let import_id = self.split_points[idx].import_id;
             let ty_id = self.module.funcs.get(import_func).ty();
@@ -444,6 +468,7 @@ impl<'a> Splitter<'a> {
     fn prune_main_symbols(&mut self, unused_symbols: &HashSet<Node>) {
         // Wipe the split point exports
         for split in self.split_points.iter() {
+            // it's okay that we're not re-mapping IDs since this is just used by the main module
             self.module.exports.delete(split.export_id);
         }
 
@@ -602,10 +627,22 @@ impl<'a> Splitter<'a> {
             ));
     }
 
-    fn delete_main_funcs_from_split(&mut self, symbols_to_delete: &HashSet<Node>) {
+    fn delete_main_funcs_from_split(
+        &mut self,
+        symbols_to_delete: &HashSet<Node>,
+        ids_to_fns: Option<&[FunctionId]>,
+    ) {
+        let injected_symbols =
+            ids_to_fns.map(|ids| self.remap_ids(self.injected_symbols.clone(), &ids));
+
         for func in symbols_to_delete {
-            if let Node::Function(id) = *func {
-                if !self.injected_symbols.contains(&func) {
+            if let Node::Function(mut id) = *func {
+                let contains_func = injected_symbols
+                    .as_ref()
+                    .map(|s| s.contains(func))
+                    .unwrap_or_else(|| self.injected_symbols.contains(&func));
+
+                if !contains_func {
                     let func = self.module.funcs.get(id);
                     if !func
                         .name
@@ -730,47 +767,6 @@ impl<'a> Splitter<'a> {
         }
     }
 
-    fn main_roots(&self) -> HashSet<Node> {
-        // Accumulate all the split entrypoints
-        // This will include wasm_bindgen functions too
-        let exported_splits = self
-            .split_points
-            .iter()
-            .map(|f| f.export_func)
-            .collect::<HashSet<_>>();
-
-        let imported_splits = self
-            .split_points
-            .iter()
-            .map(|f| f.import_func)
-            .collect::<HashSet<_>>();
-
-        // And only return the functions that are reachable from the main module's start function
-        let mut roots = self
-            .module
-            .exports
-            .iter()
-            .filter_map(|e| match e.item {
-                ExportItem::Function(id) if !exported_splits.contains(&id) => {
-                    Some(Node::Function(id))
-                }
-                _ => None,
-            })
-            .chain(self.module.start.map(|f| Node::Function(f)))
-            .collect::<HashSet<Node>>();
-
-        // Also add "imports" to the roots
-        for import in self.module.imports.iter() {
-            if let ImportKind::Function(id) = import.kind {
-                if !imported_splits.contains(&id) {
-                    roots.insert(Node::Function(id));
-                }
-            }
-        }
-
-        roots
-    }
-
     /// Load the funcref table from the main module. This *should* exist for all modules created by
     /// Rustc or Wasm-Bindgen, but we create it if it doesn't exist.
     fn load_funcref_table(&mut self) -> TableId {
@@ -829,42 +825,38 @@ impl<'a> Splitter<'a> {
         FunctionKind::Local(builder.local_func(args))
     }
 
-    fn emit_javascript_glue(
-        &self,
-        modules: &[SplitModule],
-        chunks: &[SplitModule],
-    ) -> Result<String> {
-        use std::fmt::Write;
-        let mut glue = MAKE_LOAD_JS.to_string();
+    /// Expand the ifunc table to accomodate the new ifuncs
+    ///
+    /// returns the old maximum
+    fn expand_ifunc_table_max(&mut self, table: TableId, num_ifuncs: usize) -> Option<usize> {
+        let ifunc_table_ = self.module.tables.get_mut(table);
 
-        for (idx, chunk) in chunks.iter().enumerate() {
-            tracing::debug!("emitting chunk: {:?}", chunk.module_name);
-            writeln!(
-                glue,
-                "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/chunk_{idx}_{module}.wasm\", [], fusedImports);",
-                module = chunk.module_name
-            ).expect("failed to write to string");
+        if let Some(max) = ifunc_table_.maximum {
+            ifunc_table_.maximum = Some(max + num_ifuncs as u64);
+            ifunc_table_.initial += num_ifuncs as u64;
+            return Some(max as usize);
         }
 
-        // Now write the modules
-        for (idx, module) in modules.iter().enumerate() {
-            let deps = module
-                .relies_on_chunks
-                .iter()
-                .map(|idx| format!("__wasm_split_load_chunk_{idx}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            writeln!(
-                glue,
-                "export const __wasm_split_load_{module} = makeLoad(\"/assets/module_{idx}_{cname}.wasm\", [{deps}], fusedImports);",
-                module = module.module_name,
-                idx = idx,
-                cname = module.component_name.as_ref().unwrap(),
-                deps = deps
-            )
-            .expect("failed to write to string");
+        None
+    }
+
+    fn remove_custom_sections(&mut self) {
+        let sections_to_delete = self
+            .module
+            .customs
+            .iter()
+            .filter_map(|(id, section)| {
+                if section.name().contains("linking") || section.name().contains("reloc") {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        for id in sections_to_delete {
+            self.module.customs.delete(id);
         }
-        Ok(glue)
     }
 
     /// Use the Louvain algorithm (okay not actually, is just greedy right now)
@@ -885,37 +877,42 @@ impl<'a> Splitter<'a> {
         // Remove all the chunks that are only used by one module
         funcs_used_by_chunks.retain(|_, v| v.len() > 1);
 
-        const MAX_CHUNK_SIZE: usize = 1000;
+        const MAX_CHUNK_SIZE: usize = 100000;
         let mut remaining_functions: BTreeSet<Node> =
             funcs_used_by_chunks.keys().cloned().collect();
+
         while !remaining_functions.is_empty() {
-            let current_func = remaining_functions.pop_last().unwrap().clone();
+            let current_func = remaining_functions.pop_last().unwrap();
             let mut current_chunk = HashSet::new();
             current_chunk.insert(current_func.clone());
             remaining_functions.remove(&current_func);
 
-            // Find related functions for the current chunk
-            let candidates: Vec<_> = remaining_functions.iter().cloned().sorted().collect();
-            for func in candidates {
-                // Check if this function is related to any function in the current chunk
-                let is_related = current_chunk.iter().any(|chunk_func| {
-                    let c1 = self
-                        .call_graph
-                        .get(chunk_func)
-                        .map(|f| f.contains(&func))
-                        .unwrap_or(false);
-                    let c2 = self
-                        .call_graph
-                        .get(&func)
-                        .map(|f| f.contains(chunk_func))
-                        .unwrap_or(false);
-                    c1 || c2
-                });
+            let mut removes = vec![];
 
-                if is_related && current_chunk.len() < MAX_CHUNK_SIZE {
-                    current_chunk.insert(func.clone());
-                    remaining_functions.remove(&func);
+            for func in remaining_functions.iter().copied() {
+                if current_chunk.len() >= MAX_CHUNK_SIZE {
+                    break;
                 }
+
+                let is_child = self
+                    .call_graph
+                    .get(&current_func)
+                    .map(|children| children.contains(&func))
+                    .unwrap_or_default();
+                let is_parent = self
+                    .parent_graph
+                    .get(&current_func)
+                    .map(|parents| parents.contains(&func))
+                    .unwrap_or_default();
+
+                if is_child || is_parent {
+                    removes.push(func);
+                }
+            }
+
+            for remove in removes {
+                current_chunk.insert(remove);
+                remaining_functions.remove(&remove);
             }
 
             self.chunks.push(current_chunk);
@@ -1010,7 +1007,7 @@ impl<'a> Splitter<'a> {
         let _unknown = String::from("_____unknown");
 
         let new_funcs: HashMap<&String, FunctionId> = self
-            .module
+            .source_module
             .funcs
             .iter()
             .map(|f| (f.name.as_ref().unwrap_or_else(|| &_unknown), f.id()))
@@ -1053,6 +1050,13 @@ impl<'a> Splitter<'a> {
             }
         }
 
+        // Build the parent graph
+        for (func, children) in &self.call_graph {
+            for child in children {
+                self.parent_graph.entry(*child).or_default().insert(*func);
+            }
+        }
+
         // Now go fill in the reachabilith graph for each of the split points
         self.split_points.iter_mut().for_each(|split| {
             let roots = Some(Node::Function(split.export_func))
@@ -1070,39 +1074,132 @@ impl<'a> Splitter<'a> {
         Ok(())
     }
 
-    /// Expand the ifunc table to accomodate the new ifuncs
-    ///
-    /// returns the old maximum
-    fn expand_ifunc_table_max(&mut self, table: TableId, num_ifuncs: usize) -> Option<usize> {
-        let ifunc_table_ = self.module.tables.get_mut(table);
-
-        if let Some(max) = ifunc_table_.maximum {
-            ifunc_table_.maximum = Some(max + num_ifuncs as u64);
-            ifunc_table_.initial += num_ifuncs as u64;
-            return Some(max as usize);
-        }
-
-        None
-    }
-
-    fn remove_custom_sections(&mut self) {
-        let sections_to_delete = self
-            .module
-            .customs
+    fn main_roots(&self) -> HashSet<Node> {
+        // Accumulate all the split entrypoints
+        // This will include wasm_bindgen functions too
+        let exported_splits = self
+            .split_points
             .iter()
-            .filter_map(|(id, section)| {
-                if section.name().contains("linking") || section.name().contains("reloc") {
-                    Some(id)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
+            .map(|f| f.export_func)
+            .collect::<HashSet<_>>();
 
-        for id in sections_to_delete {
-            self.module.customs.delete(id);
+        let imported_splits = self
+            .split_points
+            .iter()
+            .map(|f| f.import_func)
+            .collect::<HashSet<_>>();
+
+        // And only return the functions that are reachable from the main module's start function
+        let mut roots = self
+            .source_module
+            .exports
+            .iter()
+            .filter_map(|e| match e.item {
+                ExportItem::Function(id) if !exported_splits.contains(&id) => {
+                    Some(Node::Function(id))
+                }
+                _ => None,
+            })
+            .chain(self.source_module.start.map(|f| Node::Function(f)))
+            .collect::<HashSet<Node>>();
+
+        // Also add "imports" to the roots
+        for import in self.source_module.imports.iter() {
+            if let ImportKind::Function(id) = import.kind {
+                if !imported_splits.contains(&id) {
+                    roots.insert(Node::Function(id));
+                }
+            }
         }
+
+        roots
     }
+
+    fn emit_javascript_glue(
+        &self,
+        modules: &[SplitModule],
+        chunks: &[SplitModule],
+    ) -> Result<String> {
+        use std::fmt::Write;
+        let mut glue = MAKE_LOAD_JS.to_string();
+
+        for (idx, chunk) in chunks.iter().enumerate() {
+            tracing::debug!("emitting chunk: {:?}", chunk.module_name);
+            writeln!(
+                glue,
+                "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/chunk_{idx}_{module}.wasm\", [], fusedImports);",
+                module = chunk.module_name
+            ).expect("failed to write to string");
+        }
+
+        // Now write the modules
+        for (idx, module) in modules.iter().enumerate() {
+            let deps = module
+                .relies_on_chunks
+                .iter()
+                .map(|idx| format!("__wasm_split_load_chunk_{idx}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(
+                glue,
+                "export const __wasm_split_load_{module} = makeLoad(\"/assets/module_{idx}_{cname}.wasm\", [{deps}], fusedImports);",
+                module = module.module_name,
+                idx = idx,
+                cname = module.component_name.as_ref().unwrap(),
+                deps = deps
+            )
+            .expect("failed to write to string");
+        }
+        Ok(glue)
+    }
+
+    /// Convert this set of nodes to reference the new module
+    fn remap_ids(&self, set: HashSet<Node>, ids_to_fns: &[FunctionId]) -> HashSet<Node> {
+        let mut out = HashSet::with_capacity(set.len());
+
+        for node in set {
+            match node {
+                // Remap the function IDs
+                Node::Function(id) => out.insert(Node::Function(ids_to_fns[self.fns_to_ids[&id]])),
+                // data symbols don't need remapping
+                Node::DataSymbol(id) => out.insert(Node::DataSymbol(id)),
+            };
+        }
+
+        out
+    }
+}
+
+/// Parse a module and return the mapping of index to FunctionID.
+/// We'll use this mapping to remap ModuleIDs
+fn parse_module_with_ids(
+    bindgened: &[u8],
+) -> Result<(Module, Vec<FunctionId>, HashMap<FunctionId, usize>)> {
+    let ids = Arc::new(RwLock::new(Vec::new()));
+    let ids_ = ids.clone();
+    let module = Module::from_buffer_with_config(
+        &bindgened,
+        &ModuleConfig::new().on_parse(move |_m, our_ids| {
+            let mut ids = ids_.write().unwrap();
+            let mut idx = 0;
+            while let Ok(entry) = our_ids.get_func(idx) {
+                ids.push(entry);
+                idx += 1;
+            }
+
+            Ok(())
+        }),
+    )?;
+    let mut ids_ = ids.write().unwrap();
+    let mut ids = vec![];
+    std::mem::swap(&mut ids, &mut *ids_);
+
+    let mut fns_to_ids = HashMap::new();
+    for (idx, id) in ids.iter().enumerate() {
+        fns_to_ids.insert(*id, idx);
+    }
+
+    Ok((module, ids, fns_to_ids))
 }
 
 struct ModuleWithRelocations<'a> {
@@ -1282,12 +1379,13 @@ fn accumulate_split_points(module: &Module) -> Vec<SplitPoint> {
             };
 
             // Parse the import name to get the module name, the hash, and the function name
-            let remain = import.name.trim_start_matches("__wasm_split_00");
-            let (module_name, rest) = remain.split_once("00").unwrap();
+            let remain = import.name.trim_start_matches("__wasm_split_00___");
+            let (module_name, rest) = remain.split_once("___00").unwrap();
             let (hash, fn_name) = rest.trim_start_matches("_import_").split_once("_").unwrap();
 
             // Look for the export with the same name
-            let export_name = format!("__wasm_split_00{module_name}00_export_{hash}_{fn_name}");
+            let export_name =
+                format!("__wasm_split_00___{module_name}___00_export_{hash}_{fn_name}");
             let export_func = module
                 .exports
                 .get_func(&export_name)

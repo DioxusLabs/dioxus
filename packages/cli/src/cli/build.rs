@@ -53,7 +53,7 @@ pub(crate) struct BuildArgs {
 
     /// Experimental: Bundle split the wasm binary into multiple chunks based on `#[wasm_split]` annotations [default: false]
     #[clap(long, default_value_t = false)]
-    pub(crate) experimental_bundle_split: bool,
+    pub(crate) experimental_wasm_split: bool,
 
     /// Generate debug symbols for the wasm binary [default: true]
     ///
@@ -182,6 +182,13 @@ impl BuildArgs {
             };
 
             self.target_args.arch = Some(arch);
+        }
+
+        // If the user wants bundle splitting, we're going to pass in `dioxus/wasm-split` feature
+        if self.experimental_wasm_split {
+            self.target_args
+                .features
+                .push("dioxus/wasm-split".to_string());
         }
 
         Ok(())

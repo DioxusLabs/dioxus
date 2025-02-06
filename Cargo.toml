@@ -256,6 +256,14 @@ tray-icon = "0.19"
 # debug = 0
 
 # incremental = true
+
+# crank up the opt level for wasm-split-cli in dev mode
+
+[profile.cli-release-dev]
+inherits = "release"
+opt-level = 3
+incremental = true
+
 [profile.release]
 lto = true
 codegen-units = 1

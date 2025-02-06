@@ -15,7 +15,7 @@ fn main() {
 #[derive(Routable, Clone, PartialEq, Debug)]
 enum Route {
     #[layout(Nav)]
-    #[route("/home")]
+    #[route("/")]
     Home,
 
     #[route("/about")]
@@ -29,9 +29,7 @@ fn Nav() -> Element {
             Link { to: Route::Home {}, "Home" }
             Link { to: Route::About {}, "About" }
         }
-        div {
-            Outlet::<Route> {}
-        }
+        div { Outlet::<Route> {} }
     }
 }
 
