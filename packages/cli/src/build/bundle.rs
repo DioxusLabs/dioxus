@@ -7,11 +7,11 @@ use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::collections::HashSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::Ordering;
+use std::{collections::HashSet, io::Write};
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 
@@ -421,6 +421,7 @@ impl AppBundle {
                 if keep_bundled_output_paths.contains(canon_path.as_path()) {
                     return Ok(());
                 }
+
                 // Otherwise, if it is a directory, we need to walk it and remove child files
                 if path.is_dir() {
                     for entry in std::fs::read_dir(path)?.flatten() {
@@ -435,11 +436,16 @@ impl AppBundle {
                     // If it is a file, remove it
                     tokio::fs::remove_file(path).await?;
                 }
+
                 Ok(())
             })
         }
 
         tracing::debug!("Removing old assets");
+        tracing::debug!(
+            "Keeping bundled output paths: {:?}",
+            keep_bundled_output_paths
+        );
         remove_old_assets(&asset_dir, &keep_bundled_output_paths).await?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
@@ -747,14 +753,14 @@ impl AppBundle {
 
         let bindgen_dir = self.build.wasm_bindgen_out_dir();
         let prebindgen = self.app.exe.clone();
-        let post_bindgen = self.build.wasm_bindgen_wasm_output_file();
+        let post_bindgen_wasm = self.build.wasm_bindgen_wasm_output_file();
         let original = std::fs::read(&prebindgen)?;
-        let bindgened = std::fs::read(&post_bindgen)?;
+        let bindgened = std::fs::read(&post_bindgen_wasm)?;
 
         tracing::info!(
             "Running wasm-split. Old: {:?}, New: {:?}",
             prebindgen,
-            post_bindgen
+            post_bindgen_wasm
         );
         // tokio::task::spawn_blocking(move || {
         let splitter = wasm_split_cli::Splitter::new(&original, &bindgened)
@@ -822,18 +828,26 @@ impl AppBundle {
 
         // Write the js binding
         let js_output_path = bindgen_dir.join("__wasm_split.js");
-        std::fs::write(&js_output_path, glue)?;
+        std::fs::write(&js_output_path, &glue)?;
 
-        // Write the main wasm_bindgen import file
-        std::fs::write(&post_bindgen, modules.main.bytes)?;
+        // Write the main wasm_bindgen file and register it with the asset system
+        std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
         self.app
             .assets
-            .register_asset(&post_bindgen, AssetOptions::Unknown)?;
+            .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+
+        // Make sure to write some entropy to the main.js file so it gets a new hash
+        let uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, glue.as_bytes());
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(self.build.wasm_bindgen_js_output_file())
+            .context("Failed to open main.js file")?
+            .write_all(format!("/*{uuid}*/").as_bytes())?;
 
         // Write the loader
         self.app.assets.register_asset(
             &self.build.wasm_bindgen_js_output_file(),
-            AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+            AssetOptions::Js(JsAssetOptions::new().with_minify(true)),
         )?;
 
         Ok(())

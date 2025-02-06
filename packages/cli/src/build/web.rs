@@ -140,20 +140,20 @@ impl AppBundle {
         // If not, insert the script
         *html = html.replace(
             "</body",
-            r#"<script>
-            // We can't use a module script here because we need to start the script immediately when streaming
-            import("/{base_path}/{js_path}").then(
-                ({ default: init, initSync }) => {
-                    window.initSync = initSync;
-                    init("/{base_path}/{wasm_path}").then((wasm) => {
-                        if (wasm.__wbindgen_start == undefined) {
-                        wasm.main();
-                        }
-                    });
-                }
-            );
-            </script>
-            {DX_TOAST_UTILITIES}
+r#" <script>
+  // We can't use a module script here because we need to start the script immediately when streaming
+  import("/{base_path}/{js_path}").then(
+    ({ default: init, initSync }) => {
+      window.initSync = initSync;
+      init("/{base_path}/{wasm_path}").then((wasm) => {
+        if (wasm.__wbindgen_start == undefined) {
+        wasm.main();
+        }
+      });
+    }
+  );
+  </script>
+  {DX_TOAST_UTILITIES}
             </body"#,
         );
 
