@@ -257,7 +257,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let routable_impl = route_enum.routable_impl();
 
     (quote! {
-        const _: () = {
+        // const _: () = {
             #error_type
 
             #display_impl
@@ -265,7 +265,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
             #routable_impl
 
             #parse_impl
-        };
+        // };
     })
     .into()
 }
@@ -474,20 +474,6 @@ impl RouteEnum {
             layouts,
             site_map,
         };
-
-        // If we're on the web, only the URL history is preserved between navigation. We need to warn the user that the segment is not present in the URL.
-        if cfg!(feature = "web") {
-            for variant in &data.variants {
-                for field in &variant.fields {
-                    if !myself.field_present_in_url(field.ident.as_ref().unwrap()) {
-                        return Err(syn::Error::new_spanned(
-                            field.ident.as_ref().unwrap(),
-                            format!("The `{}` field must be present in the url for the web history. You can include the field in the url by using the `#[route(\"/:{}\")]` attribute on the enum variant.", field.ident.as_ref().unwrap(), field.ident.as_ref().unwrap()),
-                        ));
-                    }
-                }
-            }
-        }
 
         Ok(myself)
     }

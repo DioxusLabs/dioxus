@@ -1,6 +1,6 @@
 use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
-use crate::{BuildRequest, Platform};
+use crate::{BuildRequest, Platform, WasmOptConfig};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -610,10 +610,7 @@ impl AppBundle {
     /// - Run wasm-opt
     /// - Register the .wasm and .js files with the asset system
     async fn bundle_web(&mut self) -> Result<()> {
-        use crate::{
-            wasm_bindgen::WasmBindgen,
-            wasm_opt::{self, WasmOptOptions},
-        };
+        use crate::{wasm_bindgen::WasmBindgen, wasm_opt};
         use std::fmt::Write;
 
         // Locate the output of the build files and the bindgen output
@@ -642,12 +639,12 @@ impl AppBundle {
         let keep_debug = self.build.krate.config.web.wasm_opt.debug
             || self.build.build.debug_symbols
             || self.build.build.experimental_bundle_split
-            || (self.build.build.release && cfg!(feature = "optimizations"));
-        let wasm_opt_options = WasmOptOptions {
-            debug_symbols: self.build.krate.config.web.wasm_opt.debug
-                || self.build.build.debug_symbols,
-        };
+            || (self.build.build.release && crate::wasm_opt::wasm_opt_available());
         let demangle = false;
+        let wasm_opt_options = WasmOptConfig {
+            memory_packing: self.build.build.experimental_bundle_split,
+            ..self.build.krate.config.web.wasm_opt.clone()
+        };
 
         // Run wasm-bindgen. Some of the options are not "optimal" but will be fixed up by wasm-opt
         //
@@ -756,7 +753,7 @@ impl AppBundle {
         }
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
-        if should_bundle_split || (self.build.build.release && cfg!(feature = "optimizations")) {
+        if should_bundle_split || self.build.build.release {
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
         }
 
@@ -787,42 +784,42 @@ impl AppBundle {
         };
         self.build.status_optimizing_wasm();
 
-        #[cfg(feature = "optimizations")]
-        {
-            use crate::config::WasmOptLevel;
+        // #[cfg(feature = "optimizations")]
+        // {
+        //     use crate::config::WasmOptLevel;
 
-            tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
+        //     tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
 
-            let mut options = match self.build.krate.config.web.wasm_opt.level {
-                WasmOptLevel::Z => {
-                    wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
-                }
-                WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
-                WasmOptLevel::Zero => wasm_opt::OptimizationOptions::new_opt_level_0(),
-                WasmOptLevel::One => wasm_opt::OptimizationOptions::new_opt_level_1(),
-                WasmOptLevel::Two => wasm_opt::OptimizationOptions::new_opt_level_2(),
-                WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
-                WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
-            };
-            let wasm_file =
-                bindgen_outdir.join(format!("{}_bg.wasm", self.build.krate.executable_name()));
-            let old_size = wasm_file.metadata()?.len();
-            options
-                // WASM bindgen relies on reference types
-                .enable_feature(wasm_opt::Feature::ReferenceTypes)
-                .debug_info(self.build.krate.config.web.wasm_opt.debug)
-                .run(&wasm_file, &wasm_file)
-                .map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
+        //     let mut options = match self.build.krate.config.web.wasm_opt.level {
+        //         WasmOptLevel::Z => {
+        //             wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
+        //         }
+        //         WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
+        //         WasmOptLevel::Zero => wasm_opt::OptimizationOptions::new_opt_level_0(),
+        //         WasmOptLevel::One => wasm_opt::OptimizationOptions::new_opt_level_1(),
+        //         WasmOptLevel::Two => wasm_opt::OptimizationOptions::new_opt_level_2(),
+        //         WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
+        //         WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
+        //     };
+        //     let wasm_file =
+        //         bindgen_outdir.join(format!("{}_bg.wasm", self.build.krate.executable_name()));
+        //     let old_size = wasm_file.metadata()?.len();
+        //     options
+        //         // WASM bindgen relies on reference types
+        //         .enable_feature(wasm_opt::Feature::ReferenceTypes)
+        //         .debug_info(self.build.krate.config.web.wasm_opt.debug)
+        //         .run(&wasm_file, &wasm_file)
+        //         .map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
 
-            let new_size = wasm_file.metadata()?.len();
-            tracing::debug!(
-                dx_src = ?TraceSrc::Build,
-                "wasm-opt reduced WASM size from {} to {} ({:2}%)",
-                old_size,
-                new_size,
-                (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
-            );
-        }
+        //     let new_size = wasm_file.metadata()?.len();
+        //     tracing::debug!(
+        //         dx_src = ?TraceSrc::Build,
+        //         "wasm-opt reduced WASM size from {} to {} ({:2}%)",
+        //         old_size,
+        //         new_size,
+        //         (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
+        //     );
+        // }
 
         Ok(())
     }

@@ -105,7 +105,7 @@ impl<'a> Splitter<'a> {
         // This is less efficient but easier to reason about
         let modules = self
             .split_points
-            .par_iter()
+            .iter()
             .enumerate()
             .map(|s| Splitter::new(self.original, &self.bindgened)?.emit_split_module(s.0))
             .collect::<Result<Vec<_>>>()?;
@@ -162,7 +162,10 @@ impl<'a> Splitter<'a> {
         // 5. Re-export shared functions
         self.re_export_functions(&shared_funcs);
 
-        // 6. Run the garbage collector to remove unused functions
+        // 6. Remove the reloc and linking custom sections
+        self.remove_custom_sections();
+
+        // 7. Run the garbage collector to remove unused functions
         walrus::passes::gc::run(&mut self.module);
 
         Ok(SplitModule {
@@ -239,6 +242,9 @@ impl<'a> Splitter<'a> {
         // Delete all the functions that are not reachable from the main module
         self.delete_main_funcs_from_split(&symbols_to_delete);
 
+        // Remove the reloc and linking custom sections
+        self.remove_custom_sections();
+
         // Run the gc to remove unused functions - also validates the module to ensure we can emit it properly
         walrus::passes::gc::run(&mut self.module);
 
@@ -307,8 +313,10 @@ impl<'a> Splitter<'a> {
             .expand_ifunc_table_max(ifunc_table_id, self.split_points.len())
             .unwrap();
 
+        // Remove the reloc and linking custom sections
+        self.remove_custom_sections();
+
         // Run the gc to remove unused functions - also validates the module to ensure we can emit it properly
-        tracing::debug!("running gc");
         walrus::passes::gc::run(&mut self.module);
 
         Ok(SplitModule {
@@ -1046,7 +1054,7 @@ impl<'a> Splitter<'a> {
         }
 
         // Now go fill in the reachabilith graph for each of the split points
-        self.split_points.par_iter_mut().for_each(|split| {
+        self.split_points.iter_mut().for_each(|split| {
             let roots = Some(Node::Function(split.export_func))
                 .into_iter()
                 .collect();
@@ -1075,6 +1083,25 @@ impl<'a> Splitter<'a> {
         }
 
         None
+    }
+
+    fn remove_custom_sections(&mut self) {
+        let sections_to_delete = self
+            .module
+            .customs
+            .iter()
+            .filter_map(|(id, section)| {
+                if section.name().contains("linking") || section.name().contains("reloc") {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        for id in sections_to_delete {
+            self.module.customs.delete(id);
+        }
     }
 }
 

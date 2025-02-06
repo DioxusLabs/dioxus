@@ -42,7 +42,7 @@ impl Default for WebConfig {
 }
 
 /// The wasm-opt configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub(crate) struct WasmOptConfig {
     /// The wasm-opt level to use for release builds [default: s]
     /// Options:
@@ -58,13 +58,18 @@ pub(crate) struct WasmOptConfig {
     /// Keep debug symbols in the wasm file
     #[serde(default = "false_bool")]
     pub(crate) debug: bool,
+
+    /// Enable memory packing
+    #[serde(default = "false_bool")]
+    pub(crate) memory_packing: bool,
 }
 
-/// The wasm-opt level to use for release web builds [default: 4]
+/// The wasm-opt level to use for release web builds [default: Z]
 #[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
 pub(crate) enum WasmOptLevel {
     /// Optimize aggressively for size
     #[serde(rename = "z")]
+    #[default]
     Z,
     /// Optimize for size
     #[serde(rename = "s")]
@@ -83,7 +88,6 @@ pub(crate) enum WasmOptLevel {
     Three,
     /// Optimize aggressively for speed
     #[serde(rename = "4")]
-    #[default]
     Four,
 }
 

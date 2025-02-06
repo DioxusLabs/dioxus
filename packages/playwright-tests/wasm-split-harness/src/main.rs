@@ -5,6 +5,50 @@ use wasm_bindgen::prelude::*;
 
 fn main() {
     dioxus::launch(app);
+    dioxus::launch(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    });
+}
+
+#[derive(Routable, Clone, PartialEq, Debug)]
+enum Route {
+    #[layout(Nav)]
+    #[route("/home")]
+    Home,
+
+    #[route("/about")]
+    About,
+}
+
+#[component]
+fn Nav() -> Element {
+    rsx! {
+        nav {
+            Link { to: Route::Home {}, "Home" }
+            Link { to: Route::About {}, "About" }
+        }
+        div {
+            Outlet::<Route> {}
+        }
+    }
+}
+
+#[component]
+fn Home() -> Element {
+    rsx! {
+        h1 { "Home" }
+        p { "This is the home page" }
+    }
+}
+
+#[component]
+fn About() -> Element {
+    rsx! {
+        h1 { "About" }
+        p { "This is the about page" }
+    }
 }
 
 fn app() -> Element {

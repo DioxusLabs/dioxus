@@ -130,6 +130,11 @@ impl CliSettings {
 
         CliSettings::load().no_downloads.unwrap_or_default()
     }
+
+    /// Check if we should prefer to use the local tool instead of the one bundled
+    pub(crate) fn prefer_local_tool(&self) -> bool {
+        std::env::var("LOCAL_TOOLS").is_ok()
+    }
 }
 
 fn default_wsl_file_poll_interval() -> Option<u16> {

@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = [] }
+dioxus = { workspace = true, features = ["router", "wasm-split"] }
 # dioxus = { workspace = true, features = ["web"] }
 anyhow = "1.0.82"
 async-compression = { version = "0.4.8", features = ["futures-io", "gzip", "brotli"] }

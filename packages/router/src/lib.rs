@@ -90,3 +90,33 @@ mod utils {
 pub mod exports {
     pub use urlencoding;
 }
+
+///
+#[cfg(all(feature = "wasm-split", target_arch = "wasm32"))]
+#[macro_export]
+macro_rules! maybe_wasm_split {
+    (
+            if wasm_split {
+                $left:tt
+            } else {
+                $right:tt
+            }
+        ) => {
+        $left
+    };
+}
+
+///
+#[cfg(any(not(feature = "wasm-split"), not(target_arch = "wasm32")))]
+#[macro_export]
+macro_rules! maybe_wasm_split {
+    (
+            if wasm_split {
+                $left:tt
+            } else {
+                $right:tt
+            }
+        ) => {
+        $right
+    };
+}

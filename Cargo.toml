@@ -303,6 +303,7 @@ base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5", optional = true }
 wgpu = { version = "0.19", optional = true }
 ouroboros = { version = "*", optional = true }
+wasm-split = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }

@@ -5,14 +5,15 @@ use std::{
     pin::Pin,
     rc::Rc,
     task::{Context, Poll, Waker},
+    thread::LocalKey,
 };
 
-pub use wasm_split_macro::wasm_split;
+pub use wasm_split_macro::{lazy_loader, wasm_split};
 
 pub type LoadCallbackFn = unsafe extern "C" fn(*const c_void, bool) -> ();
 pub type LoadFn = unsafe extern "C" fn(LoadCallbackFn, *const c_void) -> ();
 
-type Lazy = async_once_cell::Lazy<Option<()>, SplitLoaderFuture>;
+type Lazy = async_once_cell::Lazy<bool, SplitLoaderFuture>;
 
 pub struct LazySplitLoader {
     lazy: Pin<Rc<Lazy>>,
@@ -24,9 +25,16 @@ impl LazySplitLoader {
             lazy: Rc::pin(Lazy::new(SplitLoaderFuture::new(SplitLoader::new(load)))),
         }
     }
+
+    pub fn is_loaded(&self) -> bool {
+        match self.lazy.as_ref().try_get() {
+            Some(res) => *res,
+            None => false,
+        }
+    }
 }
 
-pub async fn ensure_loaded(loader: &'static std::thread::LocalKey<LazySplitLoader>) -> Option<()> {
+pub async fn ensure_loaded(loader: &'static std::thread::LocalKey<LazySplitLoader>) -> bool {
     *loader.with(|inner| inner.lazy.clone()).as_ref().await
 }
 
@@ -39,7 +47,7 @@ pub struct SplitLoader {
 enum SplitLoaderState {
     Deferred(LoadFn),
     Pending,
-    Completed(Option<()>),
+    Completed(bool),
 }
 
 impl SplitLoader {
@@ -53,16 +61,10 @@ impl SplitLoader {
 
     /// Mark the split loader as complete with the given success value
     pub fn complete(&self, success: bool) {
-        web_sys::console::log_1(&"complete fired".into());
-        self.state.set(SplitLoaderState::Completed(if success {
-            Some(())
-        } else {
-            None
-        }));
+        web_sys::console::log_1(&format!("complete fired - {success} key:").into());
+        self.state.set(SplitLoaderState::Completed(success));
         match self.waker.take() {
-            Some(waker) => {
-                waker.wake();
-            }
+            Some(waker) => waker.wake(),
             _ => {}
         }
     }
@@ -79,17 +81,13 @@ impl SplitLoaderFuture {
 }
 
 impl Future for SplitLoaderFuture {
-    type Output = Option<()>;
+    type Output = bool;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<()>> {
-        web_sys::console::log_1(&"polling".into());
-        web_sys::console::log_1(&format!("{:?}", self.loader.state.get()).into());
-
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<bool> {
         match self.loader.state.get() {
             SplitLoaderState::Deferred(load) => {
                 self.loader.state.set(SplitLoaderState::Pending);
                 self.loader.waker.set(Some(cx.waker().clone()));
-                web_sys::console::log_1(&"calling load".into());
                 unsafe {
                     load(
                         load_callback,
@@ -99,19 +97,29 @@ impl Future for SplitLoaderFuture {
                 Poll::Pending
             }
             SplitLoaderState::Pending => {
-                web_sys::console::log_1(&"calling pending".into());
                 self.loader.waker.set(Some(cx.waker().clone()));
                 Poll::Pending
             }
-            SplitLoaderState::Completed(value) => {
-                web_sys::console::log_1(&"calling complete".into());
-
-                Poll::Ready(value)
-            }
+            SplitLoaderState::Completed(value) => Poll::Ready(value),
         }
     }
 }
 
 unsafe extern "C" fn load_callback(loader: *const c_void, success: bool) {
     unsafe { Rc::from_raw(loader as *const SplitLoader) }.complete(success);
+}
+
+pub struct LazyLoader<Args, Ret> {
+    pub imported: unsafe extern "C" fn(arg: Args) -> Ret,
+    pub key: &'static LocalKey<LazySplitLoader>,
+}
+
+impl<Args, Ret> LazyLoader<Args, Ret> {
+    pub async fn load(&self) -> bool {
+        *self.key.with(|inner| inner.lazy.clone()).as_ref().await
+    }
+
+    pub fn call(&self, args: Args) -> Option<Ret> {
+        Some(unsafe { (self.imported)(args) })
+    }
 }

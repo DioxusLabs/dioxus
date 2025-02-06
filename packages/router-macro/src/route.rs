@@ -19,37 +19,6 @@ use crate::segment::create_error_type;
 use crate::segment::parse_route_segments;
 use crate::segment::RouteSegment;
 
-struct RouteArgs {
-    route: LitStr,
-    comp_name: Option<Path>,
-}
-
-impl Parse for RouteArgs {
-    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let route = input.parse::<LitStr>()?;
-
-        Ok(RouteArgs {
-            route,
-            comp_name: {
-                let _ = input.parse::<syn::Token![,]>();
-                input.parse().ok()
-            },
-        })
-    }
-}
-
-struct ChildArgs {
-    route: LitStr,
-}
-
-impl Parse for ChildArgs {
-    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let route = input.parse::<LitStr>()?;
-
-        Ok(ChildArgs { route })
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct Route {
     pub route_name: Ident,
@@ -262,15 +231,54 @@ impl Route {
                     }
                 }
             }
+
             RouteType::Leaf { component } => {
                 let dynamic_segments = self.dynamic_segments();
+                let dynamic_segments_receiver = self.dynamic_segments();
                 let dynamic_segments_from_route = self.dynamic_segments();
+                let dynamic_segments_from_route_ = self.dynamic_segments();
+                let dynamic_segments_from_route__ = self.dynamic_segments();
+                let module_name = format_ident!("module{}", name).to_string();
+                let comp_name = format_ident!("route{}", name);
                 quote! {
                     #[allow(unused)]
                     (#last_index, Self::#name { #(#dynamic_segments,)* }) => {
-                        rsx! {
-                            #component {
-                                #(#dynamic_segments_from_route: #dynamic_segments_from_route,)*
+                        dioxus::router::maybe_wasm_split! {
+                            if wasm_split {
+                                {
+                                    #[no_mangle]
+                                    fn #comp_name(args: Route) -> Element {
+                                        match args {
+                                            Route::#name { #(#dynamic_segments_from_route_,)* } => {
+                                                #name(#(#dynamic_segments_from_route__,)*)
+                                            }
+                                            _ => unreachable!()
+                                        }
+                                    }
+
+                                    static MODULE: ::dioxus::wasm_split::LazyLoader<Route, Element> =
+                                        ::dioxus::wasm_split::lazy_loader!(extern #module_name fn #comp_name(props: Route) -> Element);
+
+                                    #[component]
+                                    fn LoaderInner(args: Route) -> Element {
+                                        use_resource(|| async move { MODULE.load().await }).suspend()?;
+                                        MODULE.call(args).unwrap()
+                                    }
+
+                                    rsx! {
+                                        LoaderInner {
+                                            args: Route::#name { #(#dynamic_segments_receiver,)* }
+                                        }
+                                    }
+                                }
+                            } else {
+                                {
+                                    rsx! {
+                                        #component {
+                                            #(#dynamic_segments_from_route: #dynamic_segments_from_route,)*
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -376,4 +384,35 @@ impl Route {
 pub(crate) enum RouteType {
     Child(Field),
     Leaf { component: Path },
+}
+
+struct RouteArgs {
+    route: LitStr,
+    comp_name: Option<Path>,
+}
+
+impl Parse for RouteArgs {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let route = input.parse::<LitStr>()?;
+
+        Ok(RouteArgs {
+            route,
+            comp_name: {
+                let _ = input.parse::<syn::Token![,]>();
+                input.parse().ok()
+            },
+        })
+    }
+}
+
+struct ChildArgs {
+    route: LitStr,
+}
+
+impl Parse for ChildArgs {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let route = input.parse::<LitStr>()?;
+
+        Ok(ChildArgs { route })
+    }
 }

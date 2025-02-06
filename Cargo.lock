@@ -3532,6 +3532,7 @@ dependencies = [
  "log",
  "manganis",
  "manganis-core",
+ "memoize",
  "notify",
  "object 0.36.5",
  "once_cell",
@@ -3826,6 +3827,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "wasm-split",
  "web-time",
  "wgpu",
 ]
@@ -7818,6 +7820,15 @@ dependencies = [
 
 [[package]]
 name = "lru"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
+dependencies = [
+ "hashbrown 0.12.3",
+]
+
+[[package]]
+name = "lru"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "718e8fae447df0c7e1ba7f5189829e63fd536945c8988d61444c19039f16b670"
@@ -7986,6 +7997,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "memoize"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8d1d5792299bab3f8b5d88d1b7a7cb50ad7ef039a8c4d45a6b84880a6526276"
+dependencies = [
+ "lazy_static",
+ "lru 0.7.8",
+ "memoize-inner",
+]
+
+[[package]]
+name = "memoize-inner"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dd8f89255d8ff313afabed9a3c83ef0993cc056679dfd001f5111a026f876f7"
+dependencies = [
+ "lazy_static",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]

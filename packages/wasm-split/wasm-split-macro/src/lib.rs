@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 
 use digest::Digest;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Ident, ItemFn, Signature};
+use syn::{parse_macro_input, FnArg, Ident, ItemFn, Pat, Path, Signature};
 
 #[proc_macro_attribute]
 pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -63,10 +63,11 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
 
     quote! {
         #wrapper_sig {
-            thread_local! {
-                static #split_loader_ident: ::wasm_split::LazySplitLoader = unsafe {
-                    ::wasm_split::LazySplitLoader::new(#load_module_ident)
-                };
+            #(#attrs)*
+            #[allow(improper_ctypes_definitions)]
+            #[no_mangle]
+            pub extern "C" #export_sig {
+                #(#stmts)*
             }
 
             #[link(wasm_import_module = "./__wasm_split.js")]
@@ -84,28 +85,102 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
                 #import_sig;
             }
 
-            #(#attrs)*
-            #[allow(improper_ctypes_definitions)]
-            #[no_mangle]
-            pub extern "C" #export_sig {
-                #(#stmts)*
+            thread_local! {
+                static #split_loader_ident: ::wasm_split::LazySplitLoader = unsafe {
+                    ::wasm_split::LazySplitLoader::new(#load_module_ident)
+                };
             }
 
             // Initiate the download by calling the load_module_ident function which will kick-off the loader
-            let load = ::wasm_split::ensure_loaded(&#split_loader_ident).await;
+            if ::wasm_split::ensure_loaded(&#split_loader_ident).await {
+                unsafe { #impl_import_ident( #(#args),* ) }
+            }
+        }
+    }
+    .into()
+}
 
-            web_sys::console::log_1(&"loader called; ".into());
+/// Create a lazy loader for a given function. Meant to be used in statics. Designed for libraries to
+/// integrate with.
+///
+/// ```rust, no_run
+/// fn SomeFunction(args: Args) -> Ret {}
+///
+/// static LOADER: wasm_split::LazyLoader<Args, Ret> = lazy_loader!(SomeFunction);
+///
+/// LOADER.load().await.call(args)
+/// ```
+#[proc_macro]
+pub fn lazy_loader(input: TokenStream) -> TokenStream {
+    // We can only accept idents/paths that will be the source function
+    let sig = parse_macro_input!(input as Signature);
+    let name = sig.ident.clone();
+    let params = sig.inputs.clone();
+    let outputs = sig.output.clone();
+    let arg = params.first().cloned().unwrap();
+    let FnArg::Typed(arg) = arg else {
+        panic!("Lazy Loader must define a single argument")
+    };
+    let Pat::Ident(arg_name) = &*arg.pat else {
+        panic!("Lazy Loader must define a single argument")
+    };
+    let arg_ty = arg.ty.clone();
 
+    let name = &sig.ident;
+    let unique_identifier = base16::encode_lower(
+        &sha2::Sha256::digest(format!("{name} {span:?}", span = name.span()))[..16],
+    );
 
-            // // Now actually call the imported function
-            if load.is_some() {
-                web_sys::console::log_1(&"loader has data; ".into());
-                let res = unsafe { #impl_import_ident( #(#args),* ) };
+    let module_ident = sig
+        .abi
+        .as_ref()
+        .and_then(|abi| abi.name.as_ref().map(|f| f.value()))
+        .unwrap_or_else(|| {
+            panic!("needs abi");
+            format!("module{unique_identifier}")
+        });
+
+    let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
+    let split_loader_ident = format_ident!("__wasm_split_loader_{module_ident}");
+    let impl_import_ident =
+        format_ident!("__wasm_split_00{module_ident}00_import_{unique_identifier}_{name}");
+    let impl_export_ident =
+        format_ident!("__wasm_split_00{module_ident}00_export_{unique_identifier}_{name}");
+
+    quote! {
+        {
+            #[link(wasm_import_module = "./__wasm_split.js")]
+            extern "C" {
+                // The function we'll use to initiate the download of the module
+                // The callback passed here
+                #[no_mangle]
+                fn #load_module_ident(
+                    callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
+                    data: *const ::std::ffi::c_void,
+                ) -> ();
+
+                #[allow(improper_ctypes)]
+                #[no_mangle]
+                fn #impl_import_ident(arg: #arg_ty) #outputs;
             }
 
 
-            web_sys::console::log_1(&"loader returned; ".into());
+            #[allow(improper_ctypes_definitions)]
+            #[no_mangle]
+            pub extern "C" fn #impl_export_ident(arg: #arg_ty) #outputs {
+                #name(arg)
+            }
 
+            thread_local! {
+                static #split_loader_ident: ::wasm_split::LazySplitLoader = unsafe {
+                    ::wasm_split::LazySplitLoader::new(#load_module_ident)
+                };
+            };
+
+            ::wasm_split::LazyLoader {
+                key: &#split_loader_ident,
+                imported: #impl_import_ident,
+            }
         }
     }
     .into()
