@@ -28,7 +28,9 @@ pub async fn optimize(input_path: &Path, output_path: &Path, cfg: WasmOptConfig)
         return Ok(());
     }
 
-    run_locally(input_path, output_path, cfg).await
+    run_locally(input_path, output_path, cfg).await?;
+
+    Ok(())
 }
 
 async fn run_locally(input_path: &Path, output_path: &Path, cfg: WasmOptConfig) -> Result<()> {
@@ -44,7 +46,7 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: WasmOptConfig) 
     }
 
     if !cfg.debug {
-        args.push("--strip-debug");
+        // args.push("--strip-debug");
     }
 
     let level = match cfg.level {

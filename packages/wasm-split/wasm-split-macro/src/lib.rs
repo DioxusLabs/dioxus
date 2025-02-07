@@ -16,6 +16,8 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
     );
 
     let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
+    // let load_module_ident =
+    //     format_ident!("__wasm_split_load_{module_ident}_{unique_identifier}_{name}");
 
     let split_loader_ident = format_ident!("__wasm_split_loader");
     let impl_import_ident =
@@ -140,7 +142,11 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
             format!("module{unique_identifier}")
         });
 
+    // let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
     let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
+    // let load_module_ident =
+    //     format_ident!("__wasm_split_load_{module_ident}_{unique_identifier}_{name}");
+
     let split_loader_ident = format_ident!("__wasm_split_loader_{module_ident}");
     let impl_import_ident =
         format_ident!("__wasm_split_00___{module_ident}___00_import_{unique_identifier}_{name}");

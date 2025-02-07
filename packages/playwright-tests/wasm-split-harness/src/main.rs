@@ -5,11 +5,11 @@ use wasm_bindgen::prelude::*;
 
 fn main() {
     dioxus::launch(app);
-    dioxus::launch(|| {
-        rsx! {
-            Router::<Route> {}
-        }
-    });
+    // dioxus::launch(|| {
+    //     rsx! {
+    //         Router::<Route> {}
+    //     }
+    // });
 }
 
 #[derive(Routable, Clone, PartialEq, Debug)]

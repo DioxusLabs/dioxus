@@ -701,19 +701,22 @@ impl AppBundle {
 
             // Write the modules that contain the entrypoints
             for (idx, module) in modules.modules.iter().enumerate() {
-                let path = bindgen_outdir.join(format!(
-                    "module_{}_{}.wasm",
-                    idx,
-                    module
-                        .component_name
-                        .as_ref()
-                        .context("generated bindgen module has no name?")?
-                ));
+                let comp_name = module
+                    .component_name
+                    .as_ref()
+                    .context("generated bindgen module has no name?")?;
+
+                let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
                 wasm_opt::write_wasm(&module.bytes, &path, wasm_opt_options).await?;
+
+                // __wasm_split_load_{module_ident}_{unique_identifier}_{name}
                 writeln!(
                     glue,
                     "export const __wasm_split_load_{module} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    // "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
                     module = module.module_name,
+
+                    // hash_id = module.hash_id.as_ref().unwrap(),
 
                     // Again, register this wasm with the asset system
                     url = self
