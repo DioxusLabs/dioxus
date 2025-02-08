@@ -93,12 +93,12 @@ impl<'a> Splitter<'a> {
             split_points,
             data_symbols: raw_data.data_symbols,
             ids_to_fns: ids,
+            fns_to_ids,
             main_graph: Default::default(),
             chunks: Default::default(),
             call_graph: Default::default(),
             parent_graph: Default::default(),
             extra_symbols: Default::default(),
-            fns_to_ids,
             extra_graph: Default::default(),
             output: Module::default(),
         };
@@ -393,7 +393,10 @@ impl<'a> Splitter<'a> {
         for symbol in symbols_to_import {
             if let Node::Function(id) = *symbol {
                 let func = self.output.funcs.get_mut(id);
-                let name = func.name.clone().unwrap();
+                let name = func
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| format!("unknown - {}", id.index()));
                 let ty = func.ty();
                 let import =
                     self.output
@@ -494,8 +497,15 @@ impl<'a> Splitter<'a> {
         // We could just try walking the code looking for directly called functions, but that's a bit more complex.
         for func_id in shared_funcs.iter().copied() {
             if let Node::Function(func_id) = func_id {
-                let name = self.output.funcs.get(func_id).name.as_ref().unwrap();
                 if self.output.exports.get_exported_func(func_id).is_none() {
+                    let name = self
+                        .output
+                        .funcs
+                        .get(func_id)
+                        .name
+                        .as_ref()
+                        .cloned()
+                        .unwrap_or_else(|| format!("unknown - {}", func_id.index()));
                     self.output.exports.add(&name, func_id);
                 }
             }
@@ -702,10 +712,10 @@ impl<'a> Splitter<'a> {
                     // };
 
                     // n.contains("__externref_table_")
-                    if !func_name.contains("__externref_table_") {
-                        // self.module.funcs.delete(id);
-                        deleted_functions.insert(*node);
-                    }
+                    // if !func_name.contains("__externref_table_") {
+                    self.output.funcs.delete(id);
+                    deleted_functions.insert(*node);
+                    // }
                 }
             }
         }
@@ -737,7 +747,7 @@ impl<'a> Splitter<'a> {
         for export_id in all_exports {
             let export = self.output.exports.get(export_id);
             match export.item {
-                ExportItem::Function(id) => todo!(),
+                ExportItem::Function(id) => {}
                 ExportItem::Table(id) => {}
                 ExportItem::Memory(id) => {}
                 ExportItem::Global(id) => {}
@@ -1033,25 +1043,40 @@ impl<'a> Splitter<'a> {
 
     fn unused_main_symbols(&self) -> HashSet<Node> {
         let mut unique = HashSet::new();
-
         // Collect *every* symbol
-        let all = self.reachable_from_all();
+        // let all = self.reachable_from_all();
 
-        // get the reachable symbols from every split combined with main
-        let mut reachable_from_every = self.main_graph.reachable.clone();
+        // all.difference(&self.main_graph.reachable)
+        //     .cloned()
+        //     .collect()
+
+        // // get the reachable symbols from every split combined with main
+        // let mut reachable_from_every = self.main_graph.reachable.clone();
         for split in self.split_points.iter() {
-            let split_reachable = &split.reachable_graph;
-            reachable_from_every.extend(split_reachable.reachable.iter().cloned());
+            // reachable_from_every.extend(split_reachable.reachable.iter().cloned());
             unique.extend(
-                split_reachable
+                (&split.reachable_graph)
                     .reachable
                     .difference(&self.main_graph.reachable),
             );
         }
 
+        for import in self.source_module.imports.iter() {
+            if let ImportKind::Function(func) = import.kind {
+                unique.remove(&Node::Function(func));
+            }
+        }
+
+        for export in self.source_module.exports.iter() {
+            if let ExportItem::Function(func) = export.item {
+                unique.remove(&Node::Function(func));
+            }
+        }
+
         // These are symbols we can't delete in the main module
-        let to_save: HashSet<Node> = all.difference(&reachable_from_every).cloned().collect();
-        unique.difference(&to_save).cloned().collect()
+        // let to_save: HashSet<Node> = all.difference(&reachable_from_every).cloned().collect();
+        // unique.difference(&to_save).cloned().collect()
+        unique
     }
 
     fn reachable_from_all(&self) -> HashSet<Node> {
@@ -1110,16 +1135,8 @@ impl<'a> Splitter<'a> {
             if let Some(node) = entry {
                 self.call_graph.insert(node, children);
             } else {
-                for extra in children.iter() {
-                    if let Node::Function(id) = *extra {
-                        let func = self.source_module.funcs.get(id);
-                        let name = func
-                            .name
-                            .as_ref()
-                            .cloned()
-                            .unwrap_or_else(|| format!("unknown - {}", id.index()));
-                        tracing::error!("extra symbol: {} ", name);
-                    }
+                for child in children.iter() {
+                    let _p = self.call_graph.entry(*child).or_default();
                 }
 
                 self.extra_symbols.extend(children.into_iter())
@@ -1135,9 +1152,27 @@ impl<'a> Splitter<'a> {
 
         // Now go fill in the reachability graph for each of the split points
         self.split_points.iter_mut().for_each(|split| {
-            let roots = Some(Node::Function(split.export_func))
+            let mut roots: HashSet<_> = Some(Node::Function(split.export_func))
                 .into_iter()
                 .collect();
+
+            for export in self.source_module.exports.iter() {
+                if let ExportItem::Function(id) = export.item {
+                    if export.name.contains("__wasm_split") || export.name.contains("main") {
+                        continue;
+                    }
+                    roots.insert(Node::Function(id));
+                }
+            }
+
+            for import in self.source_module.imports.iter() {
+                if let ImportKind::Function(id) = import.kind {
+                    if import.name.contains("__wasm_split") || import.name.contains("main") {
+                        continue;
+                    }
+                    roots.insert(Node::Function(id));
+                }
+            }
 
             split.reachable_graph =
                 ReachabilityGraph::new(&self.call_graph, &roots, &Default::default());
@@ -1147,19 +1182,19 @@ impl<'a> Splitter<'a> {
         self.main_graph =
             ReachabilityGraph::new(&self.call_graph, &self.main_roots(), &Default::default());
 
-        // If there's no dep counted for by the split reachable graphs, insert it into the main reachable graph
-        self.main_graph
-            .reachable
-            .extend(self.extra_symbols.iter().cloned());
+        // // If there's no dep counted for by the split reachable graphs, insert it into the main reachable graph
+        // self.main_graph
+        //     .reachable
+        //     .extend(self.extra_symbols.iter().cloned());
 
         // let mut reachable_from_extra = self.extra_symbols.clone();
 
-        let reachable_from_extra =
-            ReachabilityGraph::new(&self.call_graph, &self.extra_symbols, &Default::default());
+        // let reachable_from_extra =
+        //     ReachabilityGraph::new(&self.call_graph, &self.extra_symbols, &Default::default());
 
-        for export in self.source_module.exports.iter() {
-            tracing::error!("export: {:?}", export);
-        }
+        // for export in self.source_module.exports.iter() {
+        //     tracing::error!("export: {:?}", export);
+        // }
 
         // // tracing::error!(
         // //     "reachable from extra: {:#?}",
@@ -1184,7 +1219,8 @@ impl<'a> Splitter<'a> {
         //         .extend(self.extra_symbols.iter().cloned());
         // }
 
-        // _ZN5alloc7raw_vec20RawVecInner$LT$A$GT$17try_reserve_exact17hbb1ba48adad83534E
+        // let name =
+        //     "_ZN5alloc7raw_vec20RawVecInner;$LT$A$GT$17try_reserve_exact17hbb1ba48adad83534E";
         // let name = "__externref_table_alloc";
         // for export in self.source_module.exports.iter() {
         //     if export.name == name {
@@ -1207,7 +1243,7 @@ impl<'a> Splitter<'a> {
         // let func = self.source_module.funcs.by_name(name).unwrap();
         // let node = Node::Function(func);
         // tracing::error!("extra func: {:?}", func);
-        // // let mut parents = self.parent_graph.get(&node).unwrap().clone();
+        // let mut parents = self.parent_graph.get(&node).unwrap().clone();
         // loop {
         //     let Some(parent) = parents.iter().cloned().next() else {
         //         break;
@@ -1268,14 +1304,25 @@ impl<'a> Splitter<'a> {
         // Also add "imports" to the roots
         for import in self.source_module.imports.iter() {
             if let ImportKind::Function(id) = import.kind {
-                if !imported_splits.contains(&id) {
-                    roots.insert(Node::Function(id));
-                }
+                // if !imported_splits.contains(&id) {
+                roots.insert(Node::Function(id));
+                // }
             }
         }
 
-        // Add extra symbols to the roots
-        roots.extend(self.extra_symbols.iter().cloned());
+        for export in self.source_module.exports.iter() {
+            if export.name.contains("__wasm_split_00") {
+                continue;
+            }
+
+            if let ExportItem::Function(id) = export.item {
+                roots.insert(Node::Function(id));
+            }
+        }
+
+        for extra in self.extra_symbols.iter() {
+            roots.insert(*extra);
+        }
 
         roots
     }
@@ -1663,3 +1710,35 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
         data_symbols,
     })
 }
+
+// name: "__data_end", item: Global(Id { idx: 1 }) }
+// name: "__heap_base", item: Global(Id { idx: 2 }) }
+// name: "__wbindgen_malloc", item: Function(Id { idx: 7188 }) }
+// name: "__wbindgen_realloc", item: Function(Id { idx: 8506 }) }
+// name: "__wbindgen_export_2", item: Table(Id { idx: 1 }) }
+// name: "__wbindgen_exn_store", item: Function(Id { idx: 11195 }) }
+// name: "__externref_table_alloc", item: Function(Id { idx: 2266 }) }
+// name: "__wbindgen_free", item: Function(Id { idx: 11194 }) }
+// name: "__externref_drop_slice", item: Function(Id { idx: 8742 }) }
+// name: "__wbindgen_export_7", item: Table(Id { idx: 0 }) }
+// name: "closure660_externref_shim", item: Function(Id { idx: 11202 }) }
+// name: "_ZN132__LT_dyn_u20_core__ops__function__FnMut_LT__LP__RP__GT__u2b_Output_u20__u3d__u20_R_u20_as_u20_wasm_bindgen__closure__WasmClosure_GT_8describe6invoke17h0a0f8b813b3dbe51E", item: Function(Id { idx: 9592 }) }
+// name: "_ZN133__LT_dyn_u20_core__ops__function__Fn_LT__LP_A_C__RP__GT__u2b_Output_u20__u3d__u20_R_u20_as_u20_wasm_bindgen__closure__WasmClosure_GT_8describe6invoke17h98fe2c2f4a90478bE_multivalue_shim", item: Function(Id { idx: 8897 }) }
+// name: "_ZN136__LT_dyn_u20_core__ops__function__FnMut_LT__LP_A_C__RP__GT__u2b_Output_u20__u3d__u20_R_u20_as_u20_wasm_bindgen__closure__WasmClosure_GT_8describe6invoke17h536c21008fca9f75E", item: Function(Id { idx: 5692 }) }
+// name: "closure677_externref_shim", item: Function(Id { idx: 8896 }) }
+// name: "__wbindgen_start", item: Function(Id { idx: 13629 }) }
+
+//  root: "main"
+//  root: "__wbg_jsowner_free"
+//  root: "__wbindgen_malloc"
+//  root: "__wbindgen_realloc"
+//  root: "__wbindgen_exn_store"
+//  root: "__externref_table_alloc"
+//  root: "__wbindgen_free"
+//  root: "__externref_drop_slice"
+//  root: "closure660_externref_shim"
+//  root: "_ZN132__LT_dyn_u20_core__ops__function__FnMut_LT__LP__RP__GT__u2b_Output_u20__u3d__u20_R_u20_as_u20_wasm_bindgen__closure__WasmClosure_GT_8describe6invoke17h0a0f8b813b3dbe51E"
+//  root: "_ZN133__LT_dyn_u20_core__ops__function__Fn_LT__LP_A_C__RP__GT__u2b_Output_u20__u3d__u20_R_u20_as_u20_wasm_bindgen__closure__WasmClosure_GT_8describe6invoke17h98fe2c2f4a90478bE_multivalue_shim"
+//  root: "_ZN136__LT_dyn_u20_core__ops__function__FnMut_LT__LP_A_C__RP__GT__u2b_Output_u20__u3d__u20_R_u20_as_u20_wasm_bindgen__closure__WasmClosure_GT_8describe6invoke17h536c21008fca9f75E"
+//  root: "closure677_externref_shim"
+//  root: "__wbindgen_start"

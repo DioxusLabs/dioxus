@@ -5,8 +5,6 @@
 //! helper methods like AddAssign, SubAssign, toggle, etc, to make it easy to update the value without running
 //! into lock issues.
 
-use std::future::Future;
-
 use dioxus::prelude::*;
 
 fn main() {
@@ -22,25 +20,3 @@ fn app() -> Element {
         button { onclick: move |_| count -= 1, "Down low!" }
     }
 }
-
-// fn LazyLoad() -> Element {
-//     use wasm_split::*;
-
-//     fn MyModule(props: ()) -> Element {
-//         rsx! {}
-//     }
-
-//     dioxus::router::maybe_wasm_split! {
-//         if wasm_split {
-//             ()
-//         } else {
-//             ()
-//         }
-//     };
-
-//     static MODULE: LazyLoader<(), Element> =
-//         lazy_loader!(extern "one" fn MyModule(props: ()) -> Element);
-
-//     use_resource(|| async move {}).suspend()?;
-//     MODULE.call(()).unwrap()
-// }
