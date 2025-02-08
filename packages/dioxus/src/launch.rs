@@ -220,8 +220,10 @@ impl LaunchBuilder {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
             if get_server_url().is_empty() {
                 let serverurl = format!(
-                    "http://127.0.0.1:{}",
-                    std::env::var("PORT").unwrap_or_else(|_| "8080".to_string())
+                    "http://{}:{}",
+                    std::env::var("DIOXUS_DEVSERVER_IP")
+                        .unwrap_or_else(|_| "127.0.0.1".to_string()),
+                    std::env::var("DIOXUS_DEVSERVER_PORT").unwrap_or_else(|_| "8080".to_string())
                 )
                 .leak();
                 set_server_url(serverurl);
