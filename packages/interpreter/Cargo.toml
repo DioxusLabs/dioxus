@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-interpreter-js"
-version = { workspace = true }
+version = "0.6.2"
 edition = "2021"
 authors = ["Jonathan Kelley"]
 description = "JS Interpreter for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus"
-version = { workspace = true }
+version = "0.6.2"
 authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
 edition = "2021"
 description = "Build fullstack web, desktop, and mobile apps with a single codebase."

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-check"
-version = { workspace = true }
+version = "0.6.2"
 edition = "2021"
 authors = ["Dioxus Labs"]
 description = "Checks Dioxus RSX files for issues"

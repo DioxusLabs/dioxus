@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-html"
-version = { workspace = true }
+version = "0.6.2"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"

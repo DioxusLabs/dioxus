@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-hooks"
-version = { workspace = true }
+version = "0.6.2"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Basic useful hooks for Dioxus."

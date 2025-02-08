@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-history"
 edition = "2021"
-version = { workspace = true }
+version = "0.6.2"
 authors = ["Jonathan Kelley"]
 description = "History provider for dioxus"
 license = "MIT OR Apache-2.0"

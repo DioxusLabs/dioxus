@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-rsx"
-version = { workspace = true }
+version = "0.6.2"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 edition = "2021"
 license = "MIT OR Apache-2.0"

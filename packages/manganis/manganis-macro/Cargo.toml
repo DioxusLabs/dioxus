@@ -1,6 +1,6 @@
 [package]
 name = "manganis-macro"
-version.workspace = true
+version = "0.6.2"
 edition = "2021"
 authors = ["Evan Almloff"]
 description = "Ergonomic, automatic, cross crate asset collection and optimization"

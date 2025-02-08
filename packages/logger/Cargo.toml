@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-logger"
-version = { workspace = true }
+version = "0.6.2"
 edition = "2021"
 description = "A logging utility to provide a standard interface whether you're targeting web desktop, fullstack, and more."
 authors = ["DogeDark", "Jonathan Kelley"]

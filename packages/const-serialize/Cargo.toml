@@ -1,6 +1,6 @@
 [package]
 name = "const-serialize"
-version = { workspace = true }
+version = "0.6.2"
 authors = ["Evan Almloff"]
 edition = "2021"
 description = "A serialization framework that works in const contexts"

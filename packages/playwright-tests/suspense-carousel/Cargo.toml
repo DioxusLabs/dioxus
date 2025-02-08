@@ -1,7 +1,7 @@
 [package]
 name = "suspense-carousel"
 edition = "2021"
-version.workspace = true
+version = "0.6.2"
 publish = false
 
 [dependencies]
