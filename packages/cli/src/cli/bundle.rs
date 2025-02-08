@@ -153,7 +153,7 @@ impl Bundle {
 
         let binaries = vec![
             // We use the name of the exe but it has to be in the same directory
-            BundleBinary::new(name.display().to_string(), true)
+            BundleBinary::new(krate.executable_name().to_string(), true)
                 .set_src_path(Some(bundle.app.exe.display().to_string())),
         ];
 
