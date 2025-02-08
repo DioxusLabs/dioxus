@@ -10,6 +10,8 @@ pub(crate) enum ServeUpdate {
     NewConnection,
     WsMessage(WsMessage),
 
+    OpenDebugger,
+
     /// A build update from the build engine
     BuildUpdate(BuildUpdate),
 

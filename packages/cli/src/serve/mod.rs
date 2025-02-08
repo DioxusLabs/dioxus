@@ -242,6 +242,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 )
             }
 
+            ServeUpdate::OpenDebugger => {
+                runner.open_debugger().await;
+            }
+
             ServeUpdate::Exit { error } => match error {
                 Some(err) => break Err(anyhow::anyhow!("{}", err).into()),
                 None => break Ok(()),

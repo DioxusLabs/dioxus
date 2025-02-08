@@ -60,6 +60,7 @@ impl RunArgs {
                 ServeUpdate::Redraw => {}
                 ServeUpdate::OpenApp => {}
                 ServeUpdate::ToggleShouldRebuild => {}
+                ServeUpdate::OpenDebugger => {}
             }
         }
 

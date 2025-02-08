@@ -340,4 +340,30 @@ impl AppRunner {
         _ = std::fs::remove_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(&cache_dir);
     }
+
+    // todo: add a way to open the server's debugger too
+    pub(crate) async fn open_debugger(&self) {
+        let Some(handle) = self.running.as_ref() else {
+            return;
+        };
+
+        let Some(app) = handle.app_child.as_ref() else {
+            return;
+        };
+
+        let Some(id) = app.id() else {
+            return;
+        };
+
+        let url = format!(
+            "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
+            id
+        );
+
+        tokio::process::Command::new("code")
+            .arg("--open-url")
+            .arg(url)
+            .spawn()
+            .unwrap();
+    }
 }
