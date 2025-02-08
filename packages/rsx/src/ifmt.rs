@@ -86,6 +86,11 @@ impl IfmtInput {
     }
 
     fn is_simple_expr(&self) -> bool {
+        // If there are segments but the source span has zero length, it's not a simple expression.
+        if !self.segments.is_empty() && self.source.span().byte_range().len() == 0 {
+            return false;
+        }
+
         self.segments.iter().all(|seg| match seg {
             Segment::Literal(_) => true,
             Segment::Formatted(FormattedSegment { segment, .. }) => {
