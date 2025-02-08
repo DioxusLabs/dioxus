@@ -86,8 +86,8 @@ impl IfmtInput {
     }
 
     fn is_simple_expr(&self) -> bool {
-        // If there are segments but the source span has zero length, it's not a simple expression.
-        if !self.segments.is_empty() && self.source.span().byte_range().len() == 0 {
+        // If there are segments but the source is empty, it's not a simple expression.
+        if !self.segments.is_empty() && self.source.span().byte_range().is_empty() {
             return false;
         }
 
