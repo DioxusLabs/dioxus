@@ -1,5 +1,5 @@
 use crate::{AppBundle, BuildArgs, Builder, DioxusCrate, Platform};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
@@ -158,6 +158,14 @@ impl Bundle {
         ];
 
         let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
+
+        // Check if required fields are provided instead of failing silently.
+        if bundle_settings.identifier.is_none() {
+            return Err(anyhow!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n").into());
+        }
+        if bundle_settings.publisher.is_none() {
+            return Err(anyhow!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n").into());
+        }
 
         if cfg!(windows) {
             let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
