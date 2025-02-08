@@ -639,15 +639,27 @@ mod tests {
 
         let attr = &parsed.merged_attributes[0].value;
 
-        assert_eq!(
-            attr.to_token_stream().pretty_unparse().as_str(),
-            "::std::format!(\n    \
-                \"foo {0:} {1:} {2:}\",\n    \
-                bar,\n    \
-                { if true { \"baz\".to_string() } else { ::std::string::String::new() } },\n    \
-                { if false { ::std::format!(\"{qux}\").to_string() } else { \"quux\".to_string() } },\n\
-            )"
-        );
+        if cfg!(debug_assertions) {
+            assert_eq!(
+                attr.to_token_stream().pretty_unparse().as_str(),
+                "::std::format!(\n    \
+                    \"foo {0:} {1:} {2:}\",\n    \
+                    bar,\n    \
+                    { if true { \"baz\".to_string() } else { ::std::string::String::new() } },\n    \
+                    { if false { ::std::format!(\"{qux}\").to_string() } else { \"quux\".to_string() } },\n\
+                )"
+            );
+        } else {
+            assert_eq!(
+                attr.to_token_stream().pretty_unparse().as_str(),
+                "::std::format!(\n    \
+                    \"foo {0:} {1:} {2:}\",\n    \
+                    bar,\n    \
+                    { if true { \"baz\".to_string() } else { ::std::string::String::new() } },\n    \
+                    { if false { (qux).to_string().to_string() } else { \"quux\".to_string() } },\n\
+                )"
+            );
+        }
 
         if let AttributeValue::AttrLiteral(_) = attr {
         } else {
