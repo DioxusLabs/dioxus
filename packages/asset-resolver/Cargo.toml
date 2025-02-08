@@ -1,0 +1,17 @@
+[package]
+name = "dioxus-asset-resolver"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+http = "1.2"
+urlencoding = "2.1.2"
+infer = "0.16.0"
+thiserror = { workspace = true }
+dioxus-cli-config = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+ndk = { version = "0.9.0" }
+ndk-sys = { version = "0.6.0" }
+ndk-context = { version = "0.1.1" }
