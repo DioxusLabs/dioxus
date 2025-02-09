@@ -94,9 +94,12 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
             }
 
             // Initiate the download by calling the load_module_ident function which will kick-off the loader
-            if dioxus::wasm_split::ensure_loaded(&#split_loader_ident).await {
-                unsafe { #impl_import_ident( #(#args),* ) }
+            let res = dioxus::wasm_split::ensure_loaded(&#split_loader_ident).await;
+            if !res {
+                panic!("Failed to load wasm-split module");
             }
+
+            unsafe { #impl_import_ident( #(#args),* ) }
         }
     }
     .into()
@@ -139,7 +142,6 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
         .and_then(|abi| abi.name.as_ref().map(|f| f.value()))
         .unwrap_or_else(|| {
             panic!("needs abi");
-            format!("module{unique_identifier}")
         });
 
     // let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
@@ -186,6 +188,7 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
             dioxus::wasm_split::LazyLoader {
                 key: &#split_loader_ident,
                 imported: #impl_import_ident,
+                loaded: std::sync::atomic::AtomicBool::new(false),
             }
         }
     }

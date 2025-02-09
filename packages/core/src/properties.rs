@@ -140,7 +140,7 @@ pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: 
 #[doc(hidden)]
 #[allow(clippy::no_effect)]
 pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(component: C) {
-    component_called_as_function(component);
+    // component_called_as_function(component);
 }
 
 /// Any component that implements the `ComponentFn` trait can be used as a component.

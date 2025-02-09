@@ -248,14 +248,14 @@ impl<'a> Splitter<'a> {
             .cloned()
             .collect();
 
-        for s in symbols_to_import.iter() {
-            symbols_to_delete.remove(s);
-        }
+        // for s in symbols_to_import.iter() {
+        //     symbols_to_delete.remove(s);
+        // }
 
-        for extra in self.extra_graph.reachable.iter() {
-            // symbols_to_import.insert(extra.clone());
-            symbols_to_delete.remove(extra);
-        }
+        // for extra in self.extra_graph.reachable.iter() {
+        //     // symbols_to_import.insert(extra.clone());
+        //     symbols_to_delete.remove(extra);
+        // }
 
         // let children_of_extra_symbols = self
         //     .extra_symbols
@@ -309,19 +309,19 @@ impl<'a> Splitter<'a> {
         self.add_split_imports(split.index, split_export_func, split.export_name);
 
         // Delete all the functions that are not reachable from the main module
-        // self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
-        let deleted = self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
-        let used_funcs = deleted
-            .iter()
-            .flat_map(|id| match id {
-                Node::Function(id) => Some(*id),
-                Node::DataSymbol(_) => None,
-            })
-            .collect::<HashSet<_>>();
+        self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
+        // let deleted = self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
+        // let used_funcs = deleted
+        //     .iter()
+        //     .flat_map(|id| match id {
+        //         Node::Function(id) => Some(*id),
+        //         Node::DataSymbol(_) => None,
+        //     })
+        //     .collect::<HashSet<_>>();
 
-        let used = Used::new(&self.output, &used_funcs);
+        // let used = Used::new(&self.output, &used_funcs);
 
-        // Remove the reloc and linking custom sections
+        // // Remove the reloc and linking custom sections
         self.remove_custom_sections();
 
         // Run the gc to remove unused functions - also validates the module to ensure we can emit it properly
@@ -729,31 +729,31 @@ impl<'a> Splitter<'a> {
 
         for node in symbols_to_delete {
             if let Node::Function(id) = *node {
-                if !injected_symbols.contains(node) {
-                    let func = self.output.funcs.get(id);
-                    let func_name = func.name.as_ref();
-                    let func_name = func_name.unwrap_or(&_r);
+                // if !injected_symbols.contains(node) {
+                let func = self.output.funcs.get(id);
+                let func_name = func.name.as_ref();
+                let func_name = func_name.unwrap_or(&_r);
 
-                    // if func_name == "_ZN5alloc7raw_vec20RawVecInner$LT$A$GT$17try_reserve_exact17hbb1ba48adad83534E" {
-                    //     tracing::error!("deleting {:?}", func);
-                    // }
+                // if func_name == "_ZN5alloc7raw_vec20RawVecInner$LT$A$GT$17try_reserve_exact17hbb1ba48adad83534E" {
+                //     tracing::error!("deleting {:?}", func);
+                // }
 
-                    // // we shouldn't delete unnamed functions?
-                    // let Some(func_name) = func_name else {
-                    //     tracing::error!("Could not find name for function {:?}", func);
-                    //     continue;
-                    // };
+                // // we shouldn't delete unnamed functions?
+                // let Some(func_name) = func_name else {
+                //     tracing::error!("Could not find name for function {:?}", func);
+                //     continue;
+                // };
 
-                    // let FunctionKind::Local(func) = &func.kind else {
-                    //     continue;
-                    // };
+                // let FunctionKind::Local(func) = &func.kind else {
+                //     continue;
+                // };
 
-                    // n.contains("__externref_table_")
-                    // if !func_name.contains("__externref_table_") {
-                    self.output.funcs.delete(id);
-                    deleted_functions.insert(*node);
-                    // }
-                }
+                // n.contains("__externref_table_")
+                // if !func_name.contains("__externref_table_") {
+                self.output.funcs.delete(id);
+                deleted_functions.insert(*node);
+                // }
+                // }
             }
         }
 
@@ -1389,14 +1389,15 @@ impl<'a> Splitter<'a> {
         // Also add "imports" to the roots
         for import in self.source_module.imports.iter() {
             if let ImportKind::Function(id) = import.kind {
-                if !imported_splits.contains(&id) {
-                    roots.insert(Node::Function(id));
-                }
+                // if !imported_splits.contains(&id) {
+                roots.insert(Node::Function(id));
+                // }
             }
         }
 
         for export in self.source_module.exports.iter() {
             if export.name.contains("__wasm_split_00") {
+                tracing::debug!("Skipping split export: {:?}", export.name);
                 continue;
             }
 

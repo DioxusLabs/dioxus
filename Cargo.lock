@@ -14249,13 +14249,13 @@ dependencies = [
  "async-compression",
  "dioxus",
  "futures",
+ "getrandom 0.2.15",
  "gloo-console",
  "gloo-net 0.3.1",
  "js-sys",
  "once_cell",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasm-split",
  "wasm-streams",
  "web-sys",
 ]
@@ -14271,6 +14271,25 @@ dependencies = [
  "sha2",
  "syn 2.0.90",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "wasm-split-playwright-test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-compression",
+ "dioxus",
+ "futures",
+ "gloo-console",
+ "gloo-net 0.3.1",
+ "js-sys",
+ "once_cell",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-split",
+ "wasm-streams",
+ "web-sys",
 ]
 
 [[package]]

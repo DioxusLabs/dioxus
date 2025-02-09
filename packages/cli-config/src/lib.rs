@@ -222,10 +222,10 @@ pub fn base_path() -> Option<String> {
     // This may trigger when compiling to the server if you depend on another crate that pulls in
     // the web feature. It might be better for the renderers to provide the current platform
     // as a global context
-    #[cfg(all(feature = "web", target_arch = "wasm32"))]
-    {
-        return web_base_path();
-    }
+    // #[cfg(all(feature = "web", target_arch = "wasm32"))]
+    // {
+    //     return web_base_path();
+    // }
 
     None
     // read_env_config!("DIOXUS_ASSET_ROOT")

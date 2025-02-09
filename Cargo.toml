@@ -74,6 +74,7 @@ members = [
     "packages/wasm-split/wasm-split",
     "packages/wasm-split/wasm-split-macro",
     "packages/wasm-split/wasm-split-cli",
+    "packages/wasm-split/wasm-split-harness",
 
     # Full project examples
     "example-projects/fullstack-hackernews",

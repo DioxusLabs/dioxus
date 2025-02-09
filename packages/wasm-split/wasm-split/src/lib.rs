@@ -4,6 +4,7 @@ use std::{
     future::Future,
     pin::Pin,
     rc::Rc,
+    sync::atomic::AtomicBool,
     task::{Context, Poll, Waker},
     thread::LocalKey,
 };
@@ -112,14 +113,22 @@ unsafe extern "C" fn load_callback(loader: *const c_void, success: bool) {
 pub struct LazyLoader<Args, Ret> {
     pub imported: unsafe extern "C" fn(arg: Args) -> Ret,
     pub key: &'static LocalKey<LazySplitLoader>,
+    pub loaded: AtomicBool,
 }
 
 impl<Args, Ret> LazyLoader<Args, Ret> {
-    pub async fn load(&self) -> bool {
-        *self.key.with(|inner| inner.lazy.clone()).as_ref().await
+    pub async fn load(&'static self) -> bool {
+        let res = *self.key.with(|inner| inner.lazy.clone()).as_ref().await;
+        self.loaded
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        res
     }
 
-    pub fn call(&self, args: Args) -> Option<Ret> {
+    pub fn call(&'static self, args: Args) -> Option<Ret> {
+        if !self.loaded.load(std::sync::atomic::Ordering::Relaxed) {
+            return None;
+        }
+
         Some(unsafe { (self.imported)(args) })
     }
 }
