@@ -1,4 +1,5 @@
-import { initSync } from "./main.js";
+// when running the harness we need to make sure to uncommon this out...
+// import { initSync } from "./main.js";
 
 export function makeLoad(url, deps, fusedImports) {
   let alreadyLoaded = false;
@@ -7,7 +8,7 @@ export function makeLoad(url, deps, fusedImports) {
     if (alreadyLoaded) return;
     try {
       const response = await fetch(url);
-      const mainExports = initSync(undefined, undefined);
+      const mainExports = window.initSync(undefined, undefined);
 
       let imports = {
         env: {

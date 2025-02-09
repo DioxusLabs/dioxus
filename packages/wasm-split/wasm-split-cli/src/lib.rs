@@ -951,16 +951,17 @@ impl<'a> Splitter<'a> {
         None
     }
 
+    // only keep the target-features section so wasm-opt can use it to optimize the output
     fn remove_custom_sections(&mut self) {
         let sections_to_delete = self
             .output
             .customs
             .iter()
             .filter_map(|(id, section)| {
-                if section.name().contains("linking") || section.name().contains("reloc") {
-                    Some(id)
-                } else {
+                if section.name() == "target_features" {
                     None
+                } else {
+                    Some(id)
                 }
             })
             .collect::<Vec<_>>();

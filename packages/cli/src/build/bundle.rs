@@ -759,7 +759,7 @@ impl AppBundle {
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.build.build.release {
-            // wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
         }
 
         // Make sure to register the main wasm file with the asset system
