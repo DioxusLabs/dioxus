@@ -70,7 +70,10 @@ impl AppRunner {
                         handle.app_child = None;
                         ProcessExited { status, platform }
                     },
-                    Err(_err) => todo!("handle error in process joining?"),
+                    Err(_err) => {
+                        futures_util::future::pending().await
+                        // ProcessExited { status, platform }
+                    },
                 }
             }
             Some(Ok(Some(msg))) = OptionFuture::from(handle.server_stdout.as_mut().map(|f| f.next_line())) => {
@@ -359,6 +362,8 @@ impl AppRunner {
             "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{}}}",
             id
         );
+
+        tracing::info!("Opening debugger: {url}");
 
         tokio::process::Command::new("code")
             .arg("--open-url")
