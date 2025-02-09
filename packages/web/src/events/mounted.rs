@@ -89,8 +89,8 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
         behavior: dioxus_html::ScrollBehavior,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = dioxus_html::MountedResult<()>>>> {
         let options = web_sys::ScrollToOptions::new();
-        options.set_top(coordinates.y as f64);
-        options.set_left(coordinates.x as f64);
+        options.set_top(coordinates.y);
+        options.set_left(coordinates.x);
         match behavior {
             dioxus_html::ScrollBehavior::Instant => {
                 options.set_behavior(web_sys::ScrollBehavior::Instant);
