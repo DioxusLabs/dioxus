@@ -86,6 +86,33 @@ impl<'a> Splitter<'a> {
         let split_points = accumulate_split_points(&module);
         let raw_data = parse_bytes_to_data_segment(&bindgened)?;
 
+        let _module = Module::from_buffer(&original)?;
+
+        let mut d1 = module.data.iter();
+        let mut d2 = module.data.iter();
+        loop {
+            let (Some(d1), Some(d2)) = (d1.next(), d2.next()) else {
+                break;
+            };
+            tracing::debug!("d1 {:?} {:?}", d1.kind, d1.name);
+            tracing::debug!("d2 {:?} {:?}", d1.kind, d1.name);
+            if d1.value != d2.value {
+                tracing::error!("data segments have different values");
+                break;
+            }
+        }
+        drop(d1);
+        drop(d2);
+        // for _ in 0..3 {
+
+        // }
+
+        // tracing::debug!(
+        //     "There are {} data segments in the original module",
+        //     _module.data.iter().count()
+        // );
+        // assert_eq!(module.data.iter().count(), _module.data.iter().count());
+
         let mut module = Self {
             source_module: module,
             original,
@@ -178,8 +205,8 @@ impl<'a> Splitter<'a> {
         // 6. Remove the reloc and linking custom sections
         self.remove_custom_sections();
 
-        let used = Used::new(&self.output, &deleted);
-        assert!(!used.funcs.is_empty());
+        // let used = Used::new(&self.output, &deleted);
+        // assert!(!used.funcs.is_empty());
 
         // 7. Run the garbage collector to remove unused functions
         walrus::passes::gc::run(&mut self.output);
@@ -532,11 +559,21 @@ impl<'a> Splitter<'a> {
 
                 // Otherwise, zero out the data segment, which should lead to elimination by wasm-opt
                 Node::DataSymbol(id) => {
+                    // let symbols = self.data_symbols.get(&id).unwrap();
+                    // tracing::info!("deleting data symbol: {:?}", symbols.name);
+
                     let symbol = self.data_symbols.get(&id).unwrap();
-                    let data_id = self.output.data.iter().next().unwrap().id();
-                    let data = self.output.data.get_mut(data_id);
-                    for i in symbol.segment_offset..symbol.segment_offset + symbol.symbol_size {
-                        data.value[i] = 0;
+                    tracing::info!("Deleting symbol {:?}", symbol);
+
+                    // VERY IMPORTANT
+                    // apparently wasm-bindgen makes data segments that aren't the main one
+                    // we definitely need to check if the
+                    if symbol.which_data_segment == 0 {
+                        let data_id = self.output.data.iter().next().unwrap().id();
+                        let data = self.output.data.get_mut(data_id);
+                        for i in symbol.segment_offset..symbol.segment_offset + symbol.symbol_size {
+                            data.value[i] = 0;
+                        }
                     }
                 }
             }
@@ -1042,40 +1079,81 @@ impl<'a> Splitter<'a> {
     }
 
     fn unused_main_symbols(&self) -> HashSet<Node> {
-        let mut unique = HashSet::new();
+        let mut unique = HashSet::new(); // self.main_graph.reachable.clone();
+
+        for split in self.split_points.iter() {
+            let roots = Some(Node::Function(split.export_func))
+                .into_iter()
+                .collect::<HashSet<Node>>();
+
+            let graph = ReachabilityGraph::new(&self.call_graph, &roots, &Default::default());
+
+            let mut unique_symbols = graph
+                .reachable
+                .difference(&self.main_graph.reachable)
+                .cloned()
+                .collect::<HashSet<_>>();
+
+            unique.extend(unique_symbols);
+        }
+
+        let mut fix_expots = vec![];
+        for _u in unique.iter() {
+            if self.extra_symbols.contains(_u) {
+                tracing::error!("found extra symbol: {:?}", _u);
+            }
+
+            if self.main_graph.reachable.contains(_u) {
+                tracing::error!("found main symbol: {:?}", _u);
+            }
+
+            if let Node::Function(_u) = _u {
+                if self.source_module.exports.get_exported_func(*_u).is_some() {
+                    tracing::error!("found exported symbol: {:?}", _u);
+                    fix_expots.push(*_u);
+                }
+            }
+        }
+
+        for _u in fix_expots.iter() {
+            tracing::warn!("fixing export: {:?}", _u);
+            unique.remove(&Node::Function(*_u));
+        }
+
+        // let mut funcs_split_away = HashSet::new();
         // Collect *every* symbol
         // let all = self.reachable_from_all();
 
-        // all.difference(&self.main_graph.reachable)
+        // all.difference()
         //     .cloned()
         //     .collect()
 
-        // // get the reachable symbols from every split combined with main
-        // let mut reachable_from_every = self.main_graph.reachable.clone();
-        for split in self.split_points.iter() {
-            // reachable_from_every.extend(split_reachable.reachable.iter().cloned());
-            unique.extend(
-                (&split.reachable_graph)
-                    .reachable
-                    .difference(&self.main_graph.reachable),
-            );
-        }
+        // // // get the reachable symbols from every split combined with main
+        // // let mut reachable_from_every = self.main_graph.reachable.clone();
+        // for split in self.split_points.iter() {
+        //     // reachable_from_every.extend(split_reachable.reachable.iter().cloned());
+        //     unique.extend(
+        //         (&split.reachable_graph)
+        //             .reachable
+        //             .difference(&self.main_graph.reachable),
+        //     );
+        // }
 
-        for import in self.source_module.imports.iter() {
-            if let ImportKind::Function(func) = import.kind {
-                unique.remove(&Node::Function(func));
-            }
-        }
+        // for import in self.source_module.imports.iter() {
+        //     if let ImportKind::Function(func) = import.kind {
+        //         unique.remove(&Node::Function(func));
+        //     }
+        // }
 
-        for export in self.source_module.exports.iter() {
-            if let ExportItem::Function(func) = export.item {
-                unique.remove(&Node::Function(func));
-            }
-        }
+        // for export in self.source_module.exports.iter() {
+        //     if let ExportItem::Function(func) = export.item {
+        //         unique.remove(&Node::Function(func));
+        //     }
+        // }
 
-        // These are symbols we can't delete in the main module
-        // let to_save: HashSet<Node> = all.difference(&reachable_from_every).cloned().collect();
-        // unique.difference(&to_save).cloned().collect()
+        // // These are symbols we can't delete in the main module
+        // // let to_save: HashSet<Node> = all.difference(&reachable_from_every).cloned().collect();
+        // // unique.difference(&to_save).cloned().collect()
         unique
     }
 
@@ -1093,13 +1171,20 @@ impl<'a> Splitter<'a> {
     fn build_call_graph(&mut self) -> Result<()> {
         let original = ModuleWithRelocations::new(&self.original)?;
 
-        let _unknown = String::from("_____unknown");
-
-        let new_funcs: HashMap<&String, FunctionId> = self
+        let new_funcs: HashMap<String, FunctionId> = self
             .source_module
             .funcs
             .iter()
-            .map(|f| (f.name.as_ref().unwrap_or_else(|| &_unknown), f.id()))
+            .enumerate()
+            .map(|(idx, f)| {
+                (
+                    f.name
+                        .as_ref()
+                        .cloned()
+                        .unwrap_or_else(|| format!("__unknown_{idx}")),
+                    f.id(),
+                )
+            })
             .collect();
         let new_data: HashMap<&String, &DataSymbol> = self
             .data_symbols
@@ -1304,9 +1389,9 @@ impl<'a> Splitter<'a> {
         // Also add "imports" to the roots
         for import in self.source_module.imports.iter() {
             if let ImportKind::Function(id) = import.kind {
-                // if !imported_splits.contains(&id) {
-                roots.insert(Node::Function(id));
-                // }
+                if !imported_splits.contains(&id) {
+                    roots.insert(Node::Function(id));
+                }
             }
         }
 
@@ -1426,6 +1511,8 @@ impl<'a> ModuleWithRelocations<'a> {
                     let dep = Node::Function(func_id);
                     self.call_graph.entry(dep).or_default().insert(target);
                     self.relocation_map.entry(dep).or_default().push(*entry);
+                } else {
+                    // tracing::error!("No target of relocation {:?}", entry);
                 }
             }
         }
@@ -1461,6 +1548,8 @@ impl<'a> ModuleWithRelocations<'a> {
                     let dep = Node::DataSymbol(symbol.index);
                     self.call_graph.entry(dep).or_default().insert(target);
                     self.relocation_map.entry(dep).or_default().push(*entry);
+                } else {
+                    // tracing::error!("No target of data relocation {:?}", entry);
                 }
             }
         }
@@ -1500,8 +1589,17 @@ impl<'a> ModuleWithRelocations<'a> {
                 self.module
                     .funcs
                     .by_name(name.expect("local func symbol without name?"))
-                    .unwrap_or_else(|| panic!("local func symbol without name: {name:?}")),
+                    .unwrap(), // .unwrap_or_else(|| panic!("local func symbol without name: {name:?}")),
             )),
+            SymbolInfo::Global { flags, index, name } => {
+                // tracing::error!("Global symbol: {:?} {:?} {:?}", flags, index, name);
+                None
+            }
+            SymbolInfo::Event { flags, index, name } => {
+                // tracing::error!("Event symbol: {:?} {:?} {:?}", flags, index, name);
+                None
+            }
+
             _ => None,
         }
     }
@@ -1632,12 +1730,14 @@ struct RawDataSection<'a> {
     data_symbols: BTreeMap<usize, DataSymbol>,
 }
 
+#[derive(Debug)]
 struct DataSymbol {
     index: usize,
     range: Range<usize>,
     name: String,
     segment_offset: usize,
     symbol_size: usize,
+    which_data_segment: usize,
 }
 
 /// Manually parse the data section from a wasm module
@@ -1700,6 +1800,7 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
                 name: name.to_string(),
                 segment_offset: symbol.offset as usize,
                 symbol_size: symbol.size as usize,
+                which_data_segment: symbol.index as usize,
             },
         );
     }
