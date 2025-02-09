@@ -238,13 +238,17 @@ impl Route {
             }
 
             RouteType::Leaf { component } => {
+                use sha2::Digest;
                 let dynamic_segments = self.dynamic_segments();
                 let dynamic_segments_receiver = self.dynamic_segments();
                 let dynamic_segments_from_route = self.dynamic_segments();
                 let dynamic_segments_from_route_ = self.dynamic_segments();
                 let dynamic_segments_from_route__ = self.dynamic_segments();
-                let module_name = format_ident!("module{}", name).to_string();
-                let comp_name = format_ident!("route{}", name);
+                    let unique_identifier = base16::encode_lower(
+                    &sha2::Sha256::digest(format!("{name} {span:?}", span = name.span()))[..16],
+                );
+                let module_name = format_ident!("module{}{unique_identifier}", name).to_string();
+                let comp_name = format_ident!("route{}{unique_identifier}", name);
                 let route = router_name.clone();
                 quote! {
                     #[allow(unused)]

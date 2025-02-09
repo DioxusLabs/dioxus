@@ -14,7 +14,7 @@ pub fn wasm_opt_available() -> bool {
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: WasmOptConfig) -> Result<()> {
     tokio::fs::write(output_path, bytes).await?;
-    optimize(output_path, output_path, cfg).await?;
+    // optimize(output_path, output_path, cfg).await?;
     Ok(())
 }
 

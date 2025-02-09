@@ -1742,3 +1742,31 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
 //  root: "_ZN136__LT_dyn_u20_core__ops__function__FnMut_LT__LP_A_C__RP__GT__u2b_Output_u20__u3d__u20_R_u20_as_u20_wasm_bindgen__closure__WasmClosure_GT_8describe6invoke17h536c21008fca9f75E"
 //  root: "closure677_externref_shim"
 //  root: "__wbindgen_start"
+
+#[test]
+fn test_split() {
+    let original = include_bytes!("../data/dioxus_docs_site.wasm");
+    let bindgen = include_bytes!("../data/bindgen/main_bg.wasm");
+
+    // let mut original = Module::from_buffer(original).unwrap();
+    // let mut bindgen = Module::from_buffer(bindgen).unwrap();
+
+    // // for export in module.exports.iter() {
+    // //     println!("{:?}", export);
+    // // }
+    // let mut exports_to_delete = vec![];
+    // for export in bindgen.exports.iter() {
+    //     if export.name.contains("__wasm_split_00") {
+    //         exports_to_delete.push(export.id());
+    //     } else {
+    //         println!("{:?}", export);
+    //     }
+    // }
+
+    // for export in exports_to_delete {
+    //     bindgen.exports.delete(export);
+    // }
+
+    let mut splitter = Splitter::new(original, bindgen).unwrap();
+    splitter.emit().unwrap();
+}

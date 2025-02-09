@@ -15,9 +15,9 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
         &sha2::Sha256::digest(format!("{name} {span:?}", span = name.span()))[..16],
     );
 
-    let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
-    // let load_module_ident =
-    //     format_ident!("__wasm_split_load_{module_ident}_{unique_identifier}_{name}");
+    // let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
+    let load_module_ident =
+        format_ident!("__wasm_split_load_{module_ident}_{unique_identifier}_{name}");
 
     let split_loader_ident = format_ident!("__wasm_split_loader");
     let impl_import_ident =
@@ -143,9 +143,9 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
         });
 
     // let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
-    let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
-    // let load_module_ident =
-    //     format_ident!("__wasm_split_load_{module_ident}_{unique_identifier}_{name}");
+    // let load_module_ident = format_ident!("__wasm_split_load_{module_ident}");
+    let load_module_ident =
+        format_ident!("__wasm_split_load_{module_ident}_{unique_identifier}_{name}");
 
     let split_loader_ident = format_ident!("__wasm_split_loader_{module_ident}");
     let impl_import_ident =

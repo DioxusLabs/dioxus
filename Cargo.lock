@@ -4128,9 +4128,12 @@ dependencies = [
 name = "dioxus-router-macro"
 version = "0.6.2"
 dependencies = [
+ "base16",
+ "digest",
  "dioxus",
  "proc-macro2",
  "quote",
+ "sha2",
  "slab",
  "syn 2.0.90",
 ]

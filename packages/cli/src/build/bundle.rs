@@ -709,11 +709,13 @@ impl AppBundle {
                 let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
                 wasm_opt::write_wasm(&module.bytes, &path, wasm_opt_options).await?;
 
+                let hash_id = module.hash_id.as_ref().unwrap();
+
                 // __wasm_split_load_{module_ident}_{unique_identifier}_{name}
                 writeln!(
                     glue,
-                    "export const __wasm_split_load_{module} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
-                    // "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    // "export const __wasm_split_load_{module} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
                     module = module.module_name,
 
                     // hash_id = module.hash_id.as_ref().unwrap(),
@@ -757,7 +759,7 @@ impl AppBundle {
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.build.build.release {
-            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
+            // wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
         }
 
         // Make sure to register the main wasm file with the asset system
