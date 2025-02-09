@@ -1,13 +1,15 @@
-# RUSTFLAGS="-Zlocation-detail=none -Zfmt-debug=none" cargo +nightly build \
-#   -Z build-std=std,panic_abort \
-#   -Z build-std-features="optimize_for_size" \
-#   -Z build-std-features=panic_immediate_abort \
-#   --target wasm32-unknown-unknown --release  --no-default-features
+RUSTFLAGS="-Zlocation-detail=none -Zfmt-debug=none" cargo +nightly rustc \
+  -Z build-std=std,panic_abort \
+  -Z build-std-features="optimize_for_size" \
+  -Z build-std-features=panic_immediate_abort \
+  --target wasm32-unknown-unknown \
+  --release  --no-default-features \
+  -- -Clink-args=--emit-relocs
 
 TARGET_DIR=../../../target
 
 # build the harness
-cargo rustc --package wasm-split-harness --target wasm32-unknown-unknown --release -- -Clink-args=--emit-relocs
+# cargo rustc --package wasm-split-harness --target wasm32-unknown-unknown --release -- -Clink-args=--emit-relocs
 
 # Build the wasm-split-cli. We are going to call it directly since it's so noisy to build it multiple times
 cargo build --package wasm-split-cli --bin wasm-split-cli

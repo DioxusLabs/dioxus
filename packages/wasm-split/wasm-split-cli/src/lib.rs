@@ -161,7 +161,6 @@ impl<'a> Splitter<'a> {
         Ok(OutputModules {
             modules,
             chunks,
-            // js_module,
             main,
         })
     }
@@ -248,21 +247,6 @@ impl<'a> Splitter<'a> {
             .cloned()
             .collect();
 
-        // for s in symbols_to_import.iter() {
-        //     symbols_to_delete.remove(s);
-        // }
-
-        // for extra in self.extra_graph.reachable.iter() {
-        //     // symbols_to_import.insert(extra.clone());
-        //     symbols_to_delete.remove(extra);
-        // }
-
-        // let children_of_extra_symbols = self
-        //     .extra_symbols
-        //     .iter()
-        //     .map(|s| self.call_graph.get(s).iter().copied())
-        //     .collect::<HashSet<_>>();
-
         // // Convert split chunk functions to imports
         let mut relies_on_chunks = HashSet::new();
         // tracing::info!("There are {} chunks", self.chunks.len());
@@ -310,18 +294,8 @@ impl<'a> Splitter<'a> {
 
         // Delete all the functions that are not reachable from the main module
         self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
-        // let deleted = self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
-        // let used_funcs = deleted
-        //     .iter()
-        //     .flat_map(|id| match id {
-        //         Node::Function(id) => Some(*id),
-        //         Node::DataSymbol(_) => None,
-        //     })
-        //     .collect::<HashSet<_>>();
 
-        // let used = Used::new(&self.output, &used_funcs);
-
-        // // Remove the reloc and linking custom sections
+        // Remove the reloc and linking custom sections
         self.remove_custom_sections();
 
         // Run the gc to remove unused functions - also validates the module to ensure we can emit it properly
@@ -392,7 +366,7 @@ impl<'a> Splitter<'a> {
         self.re_export_functions(&symbols_to_export);
 
         // Make sure we haven't deleted anything important....
-        let deleted = self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
+        self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
 
         // We have to make sure our table matches that of the other tables even though we don't call them.
         let ifunc_table_id = self.load_funcref_table();
@@ -722,7 +696,7 @@ impl<'a> Splitter<'a> {
         &mut self,
         symbols_to_delete: &HashSet<Node>,
         ids_to_fns: &[FunctionId],
-    ) -> HashSet<Node> {
+    ) {
         let injected_symbols = self.remap_ids(self.extra_symbols.clone(), &ids_to_fns);
         let mut deleted_functions = HashSet::new();
         let _r = "__________".to_string();
@@ -757,7 +731,16 @@ impl<'a> Splitter<'a> {
             }
         }
 
-        deleted_functions
+        // let deleted = self.delete_main_funcs_from_split(&symbols_to_delete, &ids_to_fns);
+        // let used_funcs = deleted
+        //     .iter()
+        //     .flat_map(|id| match id {
+        //         Node::Function(id) => Some(*id),
+        //         Node::DataSymbol(_) => None,
+        //     })
+        //     .collect::<HashSet<_>>();
+
+        // let used = Used::new(&self.output, &used_funcs);
     }
 
     fn prune_split_module(&mut self) {
@@ -1121,40 +1104,6 @@ impl<'a> Splitter<'a> {
             unique.remove(&Node::Function(*_u));
         }
 
-        // let mut funcs_split_away = HashSet::new();
-        // Collect *every* symbol
-        // let all = self.reachable_from_all();
-
-        // all.difference()
-        //     .cloned()
-        //     .collect()
-
-        // // // get the reachable symbols from every split combined with main
-        // // let mut reachable_from_every = self.main_graph.reachable.clone();
-        // for split in self.split_points.iter() {
-        //     // reachable_from_every.extend(split_reachable.reachable.iter().cloned());
-        //     unique.extend(
-        //         (&split.reachable_graph)
-        //             .reachable
-        //             .difference(&self.main_graph.reachable),
-        //     );
-        // }
-
-        // for import in self.source_module.imports.iter() {
-        //     if let ImportKind::Function(func) = import.kind {
-        //         unique.remove(&Node::Function(func));
-        //     }
-        // }
-
-        // for export in self.source_module.exports.iter() {
-        //     if let ExportItem::Function(func) = export.item {
-        //         unique.remove(&Node::Function(func));
-        //     }
-        // }
-
-        // // These are symbols we can't delete in the main module
-        // // let to_save: HashSet<Node> = all.difference(&reachable_from_every).cloned().collect();
-        // // unique.difference(&to_save).cloned().collect()
         unique
     }
 
