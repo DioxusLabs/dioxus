@@ -63,6 +63,7 @@ pub struct Config {
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behavior: WindowCloseBehaviour,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
+    pub(crate) disable_file_drop_handler: bool,
 }
 
 impl LaunchConfig for Config {}
@@ -108,6 +109,7 @@ impl Config {
             background_color: None,
             last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
             custom_event_handler: None,
+            disable_file_drop_handler: false,
         }
     }
 
@@ -128,6 +130,13 @@ impl Config {
     /// Set whether or not the right-click context menu should be disabled.
     pub fn with_disable_context_menu(mut self, disable: bool) -> Self {
         self.disable_context_menu = disable;
+        self
+    }
+
+    /// Set whether or not the file drop handler should be disabled.
+    /// On Windows the drop handler must be disabled for HTML drag and drop APIs to work.
+    pub fn with_disable_drag_drop_handler(mut self, disable: bool) -> Self {
+        self.disable_file_drop_handler = disable;
         self
     }
 
