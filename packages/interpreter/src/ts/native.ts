@@ -113,11 +113,13 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  scroll(id: NodeId, x: number, y: number, behavior: ScrollBehavior) {
+  scroll(id: NodeId, x: number, y: number, behavior: ScrollBehavior): boolean {
     const node = this.nodes[id];
     if (node instanceof HTMLElement) {
       node.scroll({ top: y, left: x, behavior });
+      return true;
     }
+    return false;
   }
 
   getScrollHeight(id: NodeId): number | undefined {
