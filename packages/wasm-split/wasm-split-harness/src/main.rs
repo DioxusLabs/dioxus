@@ -1,7 +1,11 @@
+//! This file is a fuzz-test for the wasm-split engine to ensure that it works as expected.
+//! The docsite is a better target for this, but we try to boil down the complexity into this small
+//! test file.
+
 #![allow(non_snake_case)]
 
 use dioxus::wasm_split;
-use std::{pin::Pin, thread::LocalKey};
+use std::{future::Future, pin::Pin, thread::LocalKey};
 
 use dioxus::prelude::*;
 use futures::AsyncReadExt;
@@ -22,6 +26,7 @@ enum Route {
     #[layout(Nav)]
     #[route("/")]
     Home,
+
     #[route("/child")]
     ChildSplit,
 }
@@ -40,6 +45,7 @@ pub(crate) static GLOBAL_COUNTER: GlobalSignal<usize> = Signal::global(|| 0);
 
 fn Home(args: ()) -> Element {
     let mut count = use_signal(|| 1);
+    let mut res = use_signal(|| "hello".to_string());
 
     rsx! {
         h1 { "Hello bundle split 456" }
@@ -65,7 +71,28 @@ fn Home(args: ()) -> Element {
             },
             "Brotli It"
         }
+        button {
+            onclick: move |_| async move {
+                let res_ = make_request().await.await.unwrap();
+                res.set(res_);
+            },
+            "Make Request!"
+        }
+        // button {
+        //     onclick: move |_| async move {
+        //         let client = reqwest::Client::new();
+        //         let response = client
+        //             .get("https://dog.ceo/api/breeds/image/random")
+        //             .send()
+        //             .await?;
+        //         let body = response.text().await?;
+        //         *res.write() = body;
+        //         Ok(())
+        //     },
+        //     "local request"
+        // }
         h3 { "Global Counter: {GLOBAL_COUNTER}" }
+        div { "Response: {res}" }
         div { id: "output-box" }
     }
 }
@@ -125,7 +152,33 @@ async fn gzip_it() {
             web_sys::console::log_1(&"error reading gzip".into());
         }
         *GLOBAL_COUNTER.write() += 4;
+
+        let res: Result<String, anyhow::Error> = Box::pin(async move {
+            let client = reqwest::Client::new();
+            let response = client
+                .get("https://dog.ceo/api/breeds/image/random")
+                .send()
+                .await?;
+            let body = response.text().await?;
+            Ok(body)
+        })
+        .await;
+
+        assert!(res.is_ok());
     });
+}
+
+#[wasm_split::wasm_split(eleven)]
+async fn make_request() -> Pin<Box<dyn Future<Output = Result<String, anyhow::Error>>>> {
+    Box::pin(async move {
+        let client = reqwest::Client::new();
+        let response = client
+            .get("https://dog.ceo/api/breeds/image/random")
+            .send()
+            .await?;
+        let body = response.text().await?;
+        Ok(body)
+    })
 }
 
 fn ChildSplit() -> Element {

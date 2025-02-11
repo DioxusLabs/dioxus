@@ -7,7 +7,7 @@ export function makeLoad(url, deps, fusedImports, initIt) {
     if (alreadyLoaded) return;
     try {
       const response = await fetch(url);
-      const initSync = initIt || window.initSync;
+      const initSync = initIt || window.__wasm_split_main_initSync;
       const mainExports = initSync(undefined, undefined);
 
       let imports = {
@@ -23,11 +23,14 @@ export function makeLoad(url, deps, fusedImports, initIt) {
       };
 
       for (let mainExport in mainExports) {
+        // console.log("setting", mainExport);
         imports["__wasm_split"][mainExport] = mainExports[mainExport];
       }
 
       for (let name in fusedImports) {
-        imports["__wasm_split"][name] = fusedImports[name];
+        if (fusedImports[name] !== undefined) {
+          imports["__wasm_split"][name] = fusedImports[name];
+        }
       }
 
       let new_exports = await WebAssembly.instantiateStreaming(
@@ -38,7 +41,10 @@ export function makeLoad(url, deps, fusedImports, initIt) {
       alreadyLoaded = true;
 
       for (let name in new_exports.instance.exports) {
-        fusedImports[name] = new_exports.instance.exports[name];
+        console.log("fusing import", name);
+        if (fusedImports[name] === undefined) {
+          fusedImports[name] = new_exports.instance.exports[name];
+        }
       }
 
       if (callbackIndex !== undefined) {
@@ -48,7 +54,13 @@ export function makeLoad(url, deps, fusedImports, initIt) {
         );
       }
     } catch (e) {
-      console.error("Failed to load wasm-split module", e);
+      console.error(
+        "Failed to load wasm-split module",
+        e,
+        url,
+        deps,
+        fusedImports
+      );
       return;
     }
   };

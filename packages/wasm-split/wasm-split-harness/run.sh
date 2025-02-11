@@ -49,12 +49,12 @@ do
     wasm-opt -Oz data/harness/chunks/$path -o data/harness/split/$path --enable-reference-types --memory-packing --debuginfo
 
     # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "names"
-    $WASMSTRIP data/harness/split/$path -R "linking"
-    $WASMSTRIP data/harness/split/$path -R "producers"
-    $WASMSTRIP data/harness/split/$path -R "target_features"
-    $WASMSTRIP data/harness/split/$path -R "reloc.CODE"
-    $WASMSTRIP data/harness/split/$path -R "reloc.DATA"
-    $WASMSTRIP data/harness/split/$path -R "__wasm_bindgen_unstable"
+    # $WASMSTRIP data/harness/split/$path -R "linking"
+    # $WASMSTRIP data/harness/split/$path -R "producers"
+    # $WASMSTRIP data/harness/split/$path -R "target_features"
+    # $WASMSTRIP data/harness/split/$path -R "reloc.CODE"
+    # $WASMSTRIP data/harness/split/$path -R "reloc.DATA"
+    # $WASMSTRIP data/harness/split/$path -R "__wasm_bindgen_unstable"
 done
 
 

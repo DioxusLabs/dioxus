@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use id_arena::Id;
-use walrus::ir::*;
+use walrus::{ir::*, ExportId};
 use walrus::{ConstExpr, Data, DataId, DataKind, Element, ExportItem, Function};
 use walrus::{ElementId, ElementItems, ElementKind, Module, RefType, Type, TypeId};
 use walrus::{FunctionId, FunctionKind, Global, GlobalId};
@@ -24,12 +24,12 @@ pub struct Roots {
 #[derive(Debug)]
 enum Location {
     Start,
-    Export,
-    Table,
-    Memory,
-    Global,
+    Export { export: ExportId },
+    Table { table: TableId },
+    Memory { memory: MemoryId },
+    Global { global: GlobalId },
     Data,
-    Element,
+    Element { element: ElementId },
     Code { func: FunctionId },
 }
 
@@ -124,7 +124,12 @@ impl Used {
         // All exports are roots
         for export in module.exports.iter() {
             match export.item {
-                ExportItem::Function(f) => stack.push_func(f, Location::Export),
+                ExportItem::Function(f) => stack.push_func(
+                    f,
+                    Location::Export {
+                        export: export.id(),
+                    },
+                ),
                 ExportItem::Table(t) => stack.push_table(t),
                 ExportItem::Memory(m) => stack.push_memory(m),
                 ExportItem::Global(g) => stack.push_global(g),
@@ -230,7 +235,7 @@ impl Used {
                         stack.push_global(*global);
                     }
                     GlobalKind::Local(ConstExpr::RefFunc(func)) => {
-                        stack.push_func(*func, Location::Global);
+                        stack.push_func(*func, Location::Global { global: t });
                     }
                     GlobalKind::Local(ConstExpr::Value(_))
                     | GlobalKind::Local(ConstExpr::RefNull(_)) => {}
@@ -257,7 +262,7 @@ impl Used {
                 let e = module.elements.get(e);
                 if let ElementItems::Functions(function_ids) = &e.items {
                     function_ids.iter().for_each(|f| {
-                        stack.push_func(*f, Location::Element);
+                        stack.push_func(*f, Location::Element { element: e.id() });
                     });
                 }
                 if let ElementItems::Expressions(RefType::Funcref, items) = &e.items {
@@ -267,7 +272,7 @@ impl Used {
                                 stack.push_global(*g);
                             }
                             ConstExpr::RefFunc(f) => {
-                                stack.push_func(*f, Location::Element);
+                                stack.push_func(*f, Location::Element { element: e.id() });
                             }
                             _ => {}
                         }

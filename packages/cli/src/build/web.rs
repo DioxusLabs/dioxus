@@ -144,10 +144,10 @@ r#" <script>
   // We can't use a module script here because we need to start the script immediately when streaming
   import("/{base_path}/{js_path}").then(
     ({ default: init, initSync }) => {
-      window.initSync = initSync;
+      window.__wasm_split_main_initSync = initSync;
       init("/{base_path}/{wasm_path}").then((wasm) => {
         if (wasm.__wbindgen_start == undefined) {
-        wasm.main();
+            wasm.main();
         }
       });
     }

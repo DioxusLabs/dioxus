@@ -65,9 +65,25 @@ fn split(args: SplitArgs) {
     )
     .expect("failed to write js module");
 
-    for (idx, module) in chunks.modules.iter_mut().enumerate() {
+    for (idx, chunk) in chunks.chunks.iter().enumerate() {
         tracing::info!(
             "Writing chunk {} to {}",
+            idx,
+            args.out_dir
+                .join(format!("chunk_{}_{}.wasm", idx, chunk.module_name))
+                .display()
+        );
+        std::fs::write(
+            args.out_dir
+                .join(format!("chunk_{}_{}.wasm", idx, chunk.module_name)),
+            &chunk.bytes,
+        )
+        .expect("failed to write chunk");
+    }
+
+    for (idx, module) in chunks.modules.iter_mut().enumerate() {
+        tracing::info!(
+            "Writing module {} to {}",
             idx,
             args.out_dir
                 .join(format!(
@@ -84,15 +100,6 @@ fn split(args: SplitArgs) {
                 module.component_name.as_ref().unwrap()
             )),
             &module.bytes,
-        )
-        .expect("failed to write chunk");
-    }
-
-    for (idx, chunk) in chunks.chunks.iter().enumerate() {
-        std::fs::write(
-            args.out_dir
-                .join(format!("chunk_{}_{}.wasm", idx, chunk.module_name)),
-            &chunk.bytes,
         )
         .expect("failed to write chunk");
     }

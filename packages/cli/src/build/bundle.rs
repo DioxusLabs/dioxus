@@ -707,7 +707,7 @@ impl AppBundle {
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
                 wasm_opt::write_wasm(&chunk.bytes, &path, wasm_opt_options).await?;
                 writeln!(
-                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports, window.initSync);",
+                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = self
                         .app
                         .assets
@@ -730,7 +730,7 @@ impl AppBundle {
 
                 writeln!(
                     glue,
-                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports, window.initSync);",
+                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
                     module = module.module_name,
 
 
