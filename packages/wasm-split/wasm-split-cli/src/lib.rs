@@ -25,12 +25,20 @@ pub const MAKE_LOAD_JS: &'static str = include_str!("./__wasm_split.js");
 pub struct Splitter<'a> {
     /// The original module we use as a reference
     source_module: Module,
-    ids_to_fns: Vec<FunctionId>,
-    fns_to_ids: HashMap<FunctionId, usize>,
 
-    /// The module we're currently splitting
+    // The byte sources of the pre and post wasm-bindgen .wasm files
+    // We need the original around since wasm-bindgen ruins the relocation locations.
     original: &'a [u8],
     bindgened: &'a [u8],
+
+    // Mapping of indices of source functions
+    // This lets us use a much faster approach to emitting split modules simply by maintaing a mapping
+    // between the original Module and the new Module. Ideally we could just index the new module
+    // with old FunctionIds but the underlying IndexMap actually checks that a key belongs to a particular
+    // arena.
+    fns_to_ids: HashMap<FunctionId, usize>,
+    _ids_to_fns: Vec<FunctionId>,
+
     split_points: Vec<SplitPoint>,
     chunks: Vec<HashSet<Node>>,
     data_symbols: BTreeMap<usize, DataSymbol>,
@@ -83,7 +91,7 @@ impl<'a> Splitter<'a> {
             bindgened,
             split_points,
             data_symbols: raw_data.data_symbols,
-            ids_to_fns: ids,
+            _ids_to_fns: ids,
             fns_to_ids,
             main_graph: Default::default(),
             chunks: Default::default(),
@@ -227,9 +235,9 @@ impl<'a> Splitter<'a> {
 
         // Remap the graph to our module's IDs
         let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
-        let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
-        let symbols_to_delete = self.remap_ids(symbols_to_delete, &ids_to_fns);
-        let symbols_to_import = self.remap_ids(symbols_to_import, &ids_to_fns);
+        let unique_symbols = self.remap_ids(&unique_symbols, &ids_to_fns);
+        let symbols_to_delete = self.remap_ids(&symbols_to_delete, &ids_to_fns);
+        let symbols_to_import = self.remap_ids(&symbols_to_import, &ids_to_fns);
         let split_export_func = ids_to_fns[self.fns_to_ids[&split.export_func]];
 
         // Do some basic cleanup of the module to make it smaller
@@ -273,7 +281,7 @@ impl<'a> Splitter<'a> {
     fn emit_split_chunk(&self, idx: usize) -> Result<SplitModule> {
         tracing::info!("emitting chunk {}", idx);
 
-        let unique_symbols = self.chunks[idx].clone();
+        let unique_symbols = &self.chunks[idx];
 
         // The functions we'll need to import
         let symbols_to_import: HashSet<_> = unique_symbols
@@ -298,14 +306,12 @@ impl<'a> Splitter<'a> {
             }
         }
 
-        tracing::info!("Remapping");
-
         // Make sure to remap any ids from the main module to this module
         let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
         let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
-        let symbols_to_export = self.remap_ids(symbols_to_export, &ids_to_fns);
-        let symbols_to_import = self.remap_ids(symbols_to_import, &ids_to_fns);
-        let symbols_to_delete = self.remap_ids(symbols_to_delete, &ids_to_fns);
+        let symbols_to_export = self.remap_ids(&symbols_to_export, &ids_to_fns);
+        let symbols_to_import = self.remap_ids(&symbols_to_import, &ids_to_fns);
+        let symbols_to_delete = self.remap_ids(&symbols_to_delete, &ids_to_fns);
 
         self.prune_split_module(&mut out);
 
@@ -324,14 +330,11 @@ impl<'a> Splitter<'a> {
         // Re-export the re-exports
         self.re_export_functions(&mut out, &symbols_to_export);
 
+        // We have to make sure our table matches that of the other tables even though we don't call them.
+        self.expand_funcref_table_for_split(&mut out);
+
         // Make sure we haven't deleted anything important....
         self.delete_main_funcs_from_split(&mut out, &symbols_to_delete);
-
-        // We have to make sure our table matches that of the other tables even though we don't call them.
-        let ifunc_table_id = self.load_funcref_table(&mut out);
-        let _segment_start = self
-            .expand_ifunc_table_max(&mut out, ifunc_table_id, self.split_points.len())
-            .expect("failed to expand ifunc table");
 
         // Remove the reloc and linking custom sections
         self.remove_custom_sections(&mut out);
@@ -348,57 +351,11 @@ impl<'a> Splitter<'a> {
         })
     }
 
-    /// Emit a split-off chunk from the main module
-    ///
-    /// This is generic over chunks and modules since they're in essence the same thing, but with
-    /// different sets of re-exports
-    fn emit_split(
-        &self,
-        out: &mut Module,
-        unique_symbols: HashSet<Node>,
-        symbols_to_import: HashSet<Node>,
-        symbols_to_delete: HashSet<Node>,
-        symbols_to_export: HashSet<Node>,
-    ) -> Result<SplitModule> {
-        // Make sure to remap any ids from the main module to this module
-        let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
-        let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
-        let symbols_to_export = self.remap_ids(symbols_to_export, &ids_to_fns);
-        let symbols_to_import = self.remap_ids(symbols_to_import, &ids_to_fns);
-        let symbols_to_delete = self.remap_ids(symbols_to_delete, &ids_to_fns);
-
-        self.prune_split_module(&mut out);
-
-        // Convert tables, memories, etc to imports rather than being locally defined
-        self.convert_locals_to_imports(&mut out);
-
-        // Clear away the data segments
-        self.clear_data_segments(&mut out, &unique_symbols);
-
-        // Clear out the element segments and then add in the initializers for the shared imports
-        self.create_ifunc_initialzers(&mut out, &unique_symbols);
-
-        // Take the symbols that are shared between the split modules and convert them to imports
-        self.convert_shared_to_imports(&mut out, &symbols_to_import);
-
-        self.re_export_functions(&mut out, &symbols_to_export);
-
-        // Make sure we haven't deleted anything important....
-        self.delete_main_funcs_from_split(&mut out, &symbols_to_delete);
-
-        // // We have to make sure our table matches that of the other tables even though we don't call them.
-        // let ifunc_table_id = self.load_funcref_table(&mut out);
-        // let _segment_start = self
-        //     .expand_ifunc_table_max(&mut out, ifunc_table_id, self.split_points.len())
-        //     .expect("failed to expand ifunc table");
-
-        // Remove the reloc and linking custom sections
-        self.remove_custom_sections(&mut out);
-
-        // Run the gc to remove unused functions - also validates the module to ensure we can emit it properly
-        walrus::passes::gc::run(&mut out);
-
-        todo!()
+    fn expand_funcref_table_for_split(&self, out: &mut Module) {
+        let ifunc_table_id = self.load_funcref_table(out);
+        let _segment_start = self
+            .expand_ifunc_table_max(out, ifunc_table_id, self.split_points.len())
+            .expect("failed to expand ifunc table");
     }
 
     /// Convert any shared functions into imports
@@ -1212,7 +1169,7 @@ impl<'a> Splitter<'a> {
     }
 
     /// Convert this set of nodes to reference the new module
-    fn remap_ids(&self, set: HashSet<Node>, ids_to_fns: &[FunctionId]) -> HashSet<Node> {
+    fn remap_ids(&self, set: &HashSet<Node>, ids_to_fns: &[FunctionId]) -> HashSet<Node> {
         let mut out = HashSet::with_capacity(set.len());
 
         for node in set {
@@ -1220,7 +1177,7 @@ impl<'a> Splitter<'a> {
                 // Remap the function IDs
                 Node::Function(id) => out.insert(Node::Function(ids_to_fns[self.fns_to_ids[&id]])),
                 // data symbols don't need remapping
-                Node::DataSymbol(id) => out.insert(Node::DataSymbol(id)),
+                Node::DataSymbol(id) => out.insert(Node::DataSymbol(*id)),
             };
         }
 
