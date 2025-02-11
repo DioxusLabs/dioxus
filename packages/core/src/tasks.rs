@@ -163,6 +163,16 @@ impl Runtime {
         task: impl Future<Output = ()> + 'static,
         ty: TaskType,
     ) -> Task {
+        self.spawn_task_of_type_inner(scope, Box::pin(task), ty)
+    }
+
+    // a non-momorphic version of spawn_task_of_type
+    fn spawn_task_of_type_inner(
+        &self,
+        scope: ScopeId,
+        pinned_task: Pin<Box<dyn Future<Output = ()>>>,
+        ty: TaskType,
+    ) -> Task {
         // Insert the task, temporarily holding a borrow on the tasks map
         let (task, task_id) = {
             let mut tasks = self.tasks.borrow_mut();
@@ -176,7 +186,7 @@ impl Runtime {
                     scope,
                     active: Cell::new(true),
                     parent: self.current_task(),
-                    task: RefCell::new(Box::pin(task)),
+                    task: RefCell::new(pinned_task),
                     waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
                         id: task_id.id,
                         tx: self.sender.clone(),
@@ -202,7 +212,6 @@ impl Runtime {
 
         task_id
     }
-
     /// Queue an effect to run after the next render
     pub(crate) fn queue_effect(&self, id: ScopeId, f: impl FnOnce() + 'static) {
         let effect = Box::new(f) as Box<dyn FnOnce() + 'static>;

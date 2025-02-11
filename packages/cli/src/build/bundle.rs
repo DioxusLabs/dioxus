@@ -5,7 +5,7 @@ use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::{AssetOptions, JsAssetOptions};
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -699,17 +699,12 @@ impl AppBundle {
                 .emit()
                 .context("Failed to emit wasm split modules")?;
 
-            // For better parallelism, create a queue
-            let mut futures = futures_util::stream::futures_unordered::FuturesUnordered::new();
-
             // Write the chunks that contain shared imports
             // These will be in the format of chunk_0_modulename.wasm - this is hardcoded in wasm-split
             // todo(jon): don't harcode them...
             tracing::debug!("Writing split chunks to disk");
             for (idx, chunk) in modules.chunks.iter().enumerate() {
-                futures.push(async move { () });
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
-
                 wasm_opt::write_wasm(&chunk.bytes, &path, wasm_opt_options).await?;
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports, window.initSync);",
@@ -778,7 +773,7 @@ impl AppBundle {
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.build.build.release {
-            // wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
         }
 
         // Make sure to register the main wasm file with the asset system

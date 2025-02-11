@@ -16,8 +16,6 @@ use wasmparser::{
     Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry, SymbolInfo,
 };
 
-mod used;
-
 pub const MAKE_LOAD_JS: &'static str = include_str!("./__wasm_split.js");
 
 /// A parsed wasm module with additional metadata and functionality for splitting and patching.
@@ -735,10 +733,6 @@ impl<'a> Splitter<'a> {
             for unique in unique_symbols {
                 if let Node::DataSymbol(id) = unique {
                     let symbol = self.data_symbols.get(&id).expect("missing data symbol");
-                    if symbol.which_data_segment != 0 {
-                        continue;
-                    }
-
                     let range = symbol.segment_offset..symbol.segment_offset + symbol.symbol_size;
                     let offset = ConstExpr::Value(ir::Value::I32(
                         data_offset + symbol.segment_offset as i32,
@@ -1018,17 +1012,8 @@ impl<'a> Splitter<'a> {
 
         let mut fix_expots = vec![];
         for _u in unique.iter() {
-            if self.extra_symbols.contains(_u) {
-                tracing::error!("found extra symbol: {:?}", _u);
-            }
-
-            if self.main_graph.contains(_u) {
-                tracing::error!("found main symbol: {:?}", _u);
-            }
-
             if let Node::Function(_u) = _u {
                 if self.source_module.exports.get_exported_func(*_u).is_some() {
-                    tracing::error!("found exported symbol: {:?}", _u);
                     fix_expots.push(*_u);
                 }
             }

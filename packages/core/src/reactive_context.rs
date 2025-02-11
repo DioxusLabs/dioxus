@@ -1,5 +1,5 @@
 use crate::{
-    prelude::{current_scope_id, ScopeId},
+    prelude::{current_scope_id_fast, ScopeId},
     scope_context::Scope,
     tasks::SchedulerMsg,
     Runtime,
@@ -67,11 +67,7 @@ impl ReactiveContext {
             }
             let _ = tx.unbounded_send(());
         };
-        let _self = Self::new_with_callback(
-            callback,
-            current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-            origin,
-        );
+        let _self = Self::new_with_callback(callback, current_scope_id_fast(), origin);
         (_self, rx)
     }
 

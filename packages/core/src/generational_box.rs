@@ -9,7 +9,7 @@ use std::{
 
 use generational_box::{AnyStorage, Owner, SyncStorage, UnsyncStorage};
 
-use crate::{innerlude::current_scope_id, Runtime, ScopeId};
+use crate::{innerlude::current_scope_id_fast, Runtime, ScopeId};
 
 /// Run a closure with the given owner.
 ///
@@ -85,7 +85,7 @@ pub fn current_owner<S: AnyStorage>() -> Owner<S> {
     }
 
     // Otherwise get the owner from the current scope
-    current_scope_id().expect("in a virtual dom").owner()
+    current_scope_id_fast().owner()
 }
 
 impl ScopeId {

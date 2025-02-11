@@ -450,6 +450,14 @@ impl Scope {
             hooks.push(Box::new(initializer()));
         }
 
+        self.use_hook_inner::<State>(hooks, cur_hook)
+    }
+
+    fn use_hook_inner<State: Clone + 'static>(
+        &self,
+        hooks: std::cell::RefMut<Vec<Box<dyn std::any::Any>>>,
+        cur_hook: usize,
+    ) -> State {
         hooks
             .get(cur_hook)
             .and_then(|inn| {

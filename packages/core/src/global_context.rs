@@ -11,6 +11,12 @@ pub fn current_scope_id() -> Result<ScopeId, RuntimeError> {
         .ok_or(RuntimeError::new())
 }
 
+/// todo: this should be renamed to try_current_scope_id
+#[doc(hidden)]
+pub fn current_scope_id_fast() -> ScopeId {
+    Runtime::current().unwrap().current_scope_id().unwrap()
+}
+
 #[doc(hidden)]
 /// Check if the virtual dom is currently inside of the body of a component
 pub fn vdom_is_rendering() -> bool {
