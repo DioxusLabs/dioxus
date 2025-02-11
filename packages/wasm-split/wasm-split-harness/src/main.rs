@@ -22,15 +22,15 @@ enum Route {
     #[layout(Nav)]
     #[route("/")]
     Home,
-    // #[route("/child")]
-    // ChildSplit,
+    #[route("/child")]
+    ChildSplit,
 }
 
 fn Nav() -> Element {
     rsx! {
         div {
             Link { to: Route::Home, "Home" }
-            // Link { to: Route::ChildSplit, "Child" }
+            Link { to: Route::ChildSplit, "Child" }
             Outlet::<Route> {}
         }
     }
@@ -59,15 +59,14 @@ fn Home(args: ()) -> Element {
             },
             "GZIP it"
         }
-        // button {
-        //     onclick: move |_| async move {
-        //         brotli_it(&[0u8; 10]).await;
-        //     },
-        //     "Brotli It"
-        // }
+        button {
+            onclick: move |_| async move {
+                brotli_it(&[0u8; 10]).await;
+            },
+            "Brotli It"
+        }
         h3 { "Global Counter: {GLOBAL_COUNTER}" }
         div { id: "output-box" }
-        ChildSplit {}
     }
 }
 
@@ -156,7 +155,6 @@ fn ChildSplit() -> Element {
                             d: "M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z",
                             fill_rule: "evenodd",
                         }
-                    
                     }
                     button {
                         onclick: move |_| {

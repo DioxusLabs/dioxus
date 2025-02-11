@@ -1,4 +1,5 @@
 # GENERATE_NAME_SECTION=true
+export RUST_BACKTRACE=1
 
 # -Zlocation-detail=none - we could compile with location detail off but if breaks our signals...
 cargo +nightly rustc \
@@ -11,6 +12,7 @@ cargo +nightly rustc \
   -- -Clink-args=--emit-relocs
 
 TARGET_DIR=../../../target
+WASMSTRIP=~/Downloads/wabt-1.0.36/bin/wasm-strip
 
 # build the harness
 # cargo rustc --package wasm-split-harness --target wasm32-unknown-unknown --profile wasm-split-release -- -Clink-args=--emit-relocs
@@ -47,12 +49,12 @@ do
     wasm-opt -Oz data/harness/chunks/$path -o data/harness/split/$path --enable-reference-types --memory-packing --debuginfo
 
     # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "names"
-    ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "linking"
-    ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "producers"
-    ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "target_features"
-    ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "reloc.CODE"
-    ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "reloc.DATA"
-    ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "__wasm_bindgen_unstable"
+    $WASMSTRIP data/harness/split/$path -R "linking"
+    $WASMSTRIP data/harness/split/$path -R "producers"
+    $WASMSTRIP data/harness/split/$path -R "target_features"
+    $WASMSTRIP data/harness/split/$path -R "reloc.CODE"
+    $WASMSTRIP data/harness/split/$path -R "reloc.DATA"
+    $WASMSTRIP data/harness/split/$path -R "__wasm_bindgen_unstable"
 done
 
 
@@ -66,11 +68,11 @@ wasm-opt -Oz data/harness/split_not/main_bg.wasm -o data/harness/split_not/main_
 
 # Run wasm-strip to strip out the debug symbols
 # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "names"
-~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "linking"
-~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "producers"
-~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "target_features"
-~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "reloc.CODE"
-~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "reloc.DATA"
+$WASMSTRIP data/harness/split_not/main_bg_opt.wasm -R "linking"
+$WASMSTRIP data/harness/split_not/main_bg_opt.wasm -R "producers"
+$WASMSTRIP data/harness/split_not/main_bg_opt.wasm -R "target_features"
+$WASMSTRIP data/harness/split_not/main_bg_opt.wasm -R "reloc.CODE"
+$WASMSTRIP data/harness/split_not/main_bg_opt.wasm -R "reloc.DATA"
 
 # echo "===========================================================================\n"
 # ls -l data/harness/split_not/main_bg_opt.wasm | awk '{ printf("%07d -> ", $5);print $9}'
@@ -86,9 +88,9 @@ python3 -m http.server 8080 --directory data
 # # wasm-opt -Oz data/harness/chunks/main.wasm -o data/harness/chunks/main.wasm --enable-reference-types --memory-packing
 
 # # # Run wasm-strip to strip out the debug symbols
-# # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/chunks/main_opt.wasm -R "linking"
-# # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/chunks/main_opt.wasm -R "names"
-# # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/chunks/main_opt.wasm -R "producers"
-# # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/chunks/main_opt.wasm -R "target_features"
-# # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/chunks/main_opt.wasm -R "reloc.CODE"
-# # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/chunks/main_opt.wasm -R "reloc.DATA"
+# # $WASMSTRIP data/harness/chunks/main_opt.wasm -R "linking"
+# # $WASMSTRIP data/harness/chunks/main_opt.wasm -R "names"
+# # $WASMSTRIP data/harness/chunks/main_opt.wasm -R "producers"
+# # $WASMSTRIP data/harness/chunks/main_opt.wasm -R "target_features"
+# # $WASMSTRIP data/harness/chunks/main_opt.wasm -R "reloc.CODE"
+# # $WASMSTRIP data/harness/chunks/main_opt.wasm -R "reloc.DATA"
