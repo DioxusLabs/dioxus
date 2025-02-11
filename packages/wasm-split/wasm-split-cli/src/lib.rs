@@ -263,7 +263,7 @@ impl<'a> Splitter<'a> {
         self.add_split_imports(&mut out, split.index, split_export_func, split.export_name);
 
         // Delete all the functions that are not reachable from the main module
-        self.delete_main_funcs_from_split(&mut out, &symbols_to_delete, &ids_to_fns);
+        self.delete_main_funcs_from_split(&mut out, &symbols_to_delete);
 
         // Remove the reloc and linking custom sections
         self.remove_custom_sections(&mut out);
@@ -288,7 +288,7 @@ impl<'a> Splitter<'a> {
 
         // Delete everything except the symbols that are reachable from this module
         let symbols_to_delete: HashSet<_> = unique_symbols
-            .difference(&self.reachable_from_all())
+            .difference(&self.main_graph)
             .cloned()
             .collect();
 
@@ -334,7 +334,7 @@ impl<'a> Splitter<'a> {
         self.re_export_functions(&mut out, &symbols_to_export);
 
         // Make sure we haven't deleted anything important....
-        self.delete_main_funcs_from_split(&mut out, &symbols_to_delete, &ids_to_fns);
+        self.delete_main_funcs_from_split(&mut out, &symbols_to_delete);
 
         // We have to make sure our table matches that of the other tables even though we don't call them.
         let ifunc_table_id = self.load_funcref_table(&mut out);
@@ -633,46 +633,7 @@ impl<'a> Splitter<'a> {
             ));
     }
 
-    fn delete_main_funcs_from_split(
-        &self,
-        out: &mut Module,
-        symbols_to_delete: &HashSet<Node>,
-        ids_to_fns: &[FunctionId],
-    ) {
-        // let injected_symbols = self.remap_ids(self.extra_symbols.clone(), &ids_to_fns);
-        // let mut deleted_functions = HashSet::new();
-        // let _r = "__________".to_string();
-
-        // for node in symbols_to_delete {
-        //     if let Node::Function(id) = *node {
-        //         if !injected_symbols.contains(node) {
-        //             let func = out.funcs.get(id);
-        //             let func_name = func.name.as_ref();
-        //             let func_name = func_name.unwrap_or(&_r);
-
-        //             // if func_name == "_ZN5alloc7raw_vec20RawVecInner$LT$A$GT$17try_reserve_exact17hbb1ba48adad83534E" {
-        //             //     tracing::error!("deleting {:?}", func);
-        //             // }
-
-        //             // // we shouldn't delete unnamed functions?
-        //             // let Some(func_name) = func_name else {
-        //             //     tracing::error!("Could not find name for function {:?}", func);
-        //             //     continue;
-        //             // };
-
-        //             // let FunctionKind::Local(func) = &func.kind else {
-        //             //     continue;
-        //             // };
-
-        //             // n.contains("__externref_table_")
-        //             if !func_name.contains("__externref_table_") {
-        //                 out.funcs.delete(id);
-        //                 deleted_functions.insert(*node);
-        //             }
-        //         }
-        //     }
-        // }
-
+    fn delete_main_funcs_from_split(&self, out: &mut Module, symbols_to_delete: &HashSet<Node>) {
         for node in symbols_to_delete {
             if let Node::Function(id) = *node {
                 out.funcs.delete(id);
@@ -1081,15 +1042,6 @@ impl<'a> Splitter<'a> {
         unique
     }
 
-    fn reachable_from_all(&self) -> HashSet<Node> {
-        let mut reachable = HashSet::new();
-        for (key, f) in self.call_graph.iter() {
-            reachable.insert(*key);
-            reachable.extend(f.into_iter());
-        }
-        reachable
-    }
-
     /// Accumulate the relocations from the original module, create a relocation map, and then convert
     /// that to our *new* module's symbols.
     fn build_call_graph(&mut self) -> Result<()> {
@@ -1168,7 +1120,6 @@ impl<'a> Splitter<'a> {
                     if export.name.contains("__wasm_split") || export.name == "main" {
                         continue;
                     }
-                    tracing::debug!("Keeping split export: {:?}", export.name);
                     roots.insert(Node::Function(id));
                 }
             }
@@ -1178,7 +1129,6 @@ impl<'a> Splitter<'a> {
                     if import.name.contains("__wasm_split") || import.name.contains("main") {
                         continue;
                     }
-                    tracing::debug!("Keeping split import: {:?}", import.name);
                     roots.insert(Node::Function(id));
                 }
             }
@@ -1201,12 +1151,6 @@ impl<'a> Splitter<'a> {
             .map(|f| f.export_func)
             .collect::<HashSet<_>>();
 
-        let imported_splits = self
-            .split_points
-            .iter()
-            .map(|f| f.import_func)
-            .collect::<HashSet<_>>();
-
         // And only return the functions that are reachable from the main module's start function
         let mut roots = self
             .source_module
@@ -1224,9 +1168,7 @@ impl<'a> Splitter<'a> {
         // Also add "imports" to the roots
         for import in self.source_module.imports.iter() {
             if let ImportKind::Function(id) = import.kind {
-                // if !imported_splits.contains(&id) {
                 roots.insert(Node::Function(id));
-                // }
             }
         }
 
