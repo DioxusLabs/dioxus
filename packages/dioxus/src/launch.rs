@@ -1,4 +1,3 @@
-//! Launch helper macros for fullstack apps
 #![allow(clippy::new_without_default)]
 #![allow(unused)]
 use dioxus_config_macro::*;
@@ -87,7 +86,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
     pub fn mobile() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| dioxus_mobile::launch::launch(root, contexts, cfg),
+            launch_fn: |root, contexts, cfg| dioxus_mobile::launch_cfg(root, contexts, cfg),
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -131,6 +130,27 @@ impl LaunchBuilder {
 
 impl LaunchBuilder {
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// use std::any::Any;
+    ///
+    /// #[derive(Default)]
+    /// struct MyState {
+    ///     value: i32,
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! {
+    ///         div { "Hello, world!" }
+    ///     }
+    /// }
+    ///
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context_provider(|| Box::new(MyState { value: 42 }))
+    ///     .launch(app);
+    /// ```
     pub fn with_context_provider(
         mut self,
         state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
@@ -140,6 +160,27 @@ impl LaunchBuilder {
     }
 
     /// Inject state into the root component's context.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// use std::any::Any;
+    ///
+    /// #[derive(Clone)]
+    /// struct MyState {
+    ///     value: i32,
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! {
+    ///         div { "Hello, world!" }
+    ///     }
+    /// }
+    ///
+    /// dioxus::LaunchBuilder::new()
+    ///     .with_context(MyState { value: 42 })
+    ///     .launch(app);
+    /// ```
     pub fn with_context(mut self, state: impl Any + Clone + Send + Sync + 'static) -> Self {
         self.contexts
             .push(Box::new(move || Box::new(state.clone())));
@@ -149,6 +190,22 @@ impl LaunchBuilder {
 
 impl LaunchBuilder {
     /// Provide a platform-specific config to the builder.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus::prelude::*;
+    /// use dioxus_desktop::Config;
+    ///
+    /// fn app() -> Element {
+    ///     rsx! {
+    ///         div { "Hello, world!" }
+    ///     }
+    /// }
+    ///
+    /// dioxus::LaunchBuilder::desktop()
+    ///     .with_cfg(Config::new().with_window(|w| w.with_title("My App")))
+    ///     .launch(app);
+    /// ```
     pub fn with_cfg(mut self, config: impl LaunchConfig) -> Self {
         self.configs.push(Box::new(config));
         self
@@ -162,15 +219,11 @@ impl LaunchBuilder {
         {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
             if get_server_url().is_empty() {
-                let ip = if cfg!(target_os = "android") {
-                    "10.0.2.2"
-                } else {
-                    "127.0.0.1"
-                };
-
                 let serverurl = format!(
-                    "http://{ip}:{}",
-                    std::env::var("PORT").unwrap_or_else(|_| "8080".to_string())
+                    "http://{}:{}",
+                    std::env::var("DIOXUS_DEVSERVER_IP")
+                        .unwrap_or_else(|_| "127.0.0.1".to_string()),
+                    std::env::var("DIOXUS_DEVSERVER_PORT").unwrap_or_else(|_| "8080".to_string())
                 )
                 .leak();
                 set_server_url(serverurl);

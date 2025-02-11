@@ -1,17 +1,19 @@
 use dioxus_cli_config::format_base_path_meta_element;
+use manganis::AssetOptions;
 
 use crate::error::Result;
-use crate::BuildRequest;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
+
+use super::AppBundle;
 
 const DEFAULT_HTML: &str = include_str!("../../assets/web/index.html");
 const TOAST_HTML: &str = include_str!("../../assets/web/toast.html");
 
-impl BuildRequest {
+impl AppBundle {
     pub(crate) fn prepare_html(&self) -> Result<String> {
         let mut html = {
-            let crate_root: &Path = &self.krate.crate_dir();
+            let crate_root: &Path = &self.build.krate.crate_dir();
             let custom_html_file = crate_root.join("index.html");
             std::fs::read_to_string(custom_html_file).unwrap_or_else(|_| String::from(DEFAULT_HTML))
         };
@@ -25,7 +27,7 @@ impl BuildRequest {
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html);
 
-        let title = self.krate.config.web.app.title.clone();
+        let title = self.build.krate.config.web.app.title.clone();
 
         replace_or_insert_before("{app_title}", "</title", &title, &mut html);
 
@@ -33,13 +35,13 @@ impl BuildRequest {
     }
 
     fn is_dev_build(&self) -> bool {
-        !self.build.release
+        !self.build.build.release
     }
 
     // Inject any resources from the config into the html
     fn inject_resources(&self, html: &mut String) -> Result<()> {
         // Collect all resources into a list of styles and scripts
-        let resources = &self.krate.config.web.resource;
+        let resources = &self.build.krate.config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
         let mut script_list = resources.script.clone().unwrap_or_default();
 
@@ -70,7 +72,7 @@ impl BuildRequest {
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.krate.config.web.app.base_path {
+            if let Some(base_path) = &self.build.krate.config.web.app.base_path {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -83,9 +85,45 @@ impl BuildRequest {
         }
 
         // Inject any resources from manganis into the head
-        // if let Some(assets) = assets {
-        //     head_resources.push_str(&assets.head());
-        // }
+        for asset in self.app.assets.assets.values() {
+            let asset_path = asset.bundled_path();
+            match asset.options() {
+                AssetOptions::Css(css_options) => {
+                    if css_options.preloaded() {
+                        head_resources.push_str(&format!(
+                            "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
+                        ))
+                    }
+                }
+                AssetOptions::Image(image_options) => {
+                    if image_options.preloaded() {
+                        head_resources.push_str(&format!(
+                            "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
+                        ))
+                    }
+                }
+                AssetOptions::Js(js_options) => {
+                    if js_options.preloaded() {
+                        head_resources.push_str(&format!(
+                            "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
+                        ))
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
+        let wasm_source_path = self.build.wasm_bindgen_wasm_output_file();
+        let wasm_path = self
+            .app
+            .assets
+            .assets
+            .get(&wasm_source_path)
+            .expect("WASM asset should exist in web bundles")
+            .bundled_path();
+        head_resources.push_str(&format!(
+            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/assets/{wasm_path}\" crossorigin>"
+        ));
 
         replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
@@ -95,7 +133,7 @@ impl BuildRequest {
     /// Inject loading scripts if they are not already present
     fn inject_loading_scripts(&self, html: &mut String) {
         // If it looks like we are already loading wasm or the current build opted out of injecting loading scripts, don't inject anything
-        if !self.build.inject_loading_scripts || html.contains("__wbindgen_start") {
+        if !self.build.build.inject_loading_scripts || html.contains("__wbindgen_start") {
             return;
         }
 
@@ -104,9 +142,9 @@ impl BuildRequest {
             "</body",
             r#"<script>
             // We can't use a module script here because we need to start the script immediately when streaming
-            import("/{base_path}/wasm/{app_name}.js").then(
+            import("/{base_path}/{js_path}").then(
                 ({ default: init }) => {
-                init("/{base_path}/wasm/{app_name}_bg.wasm").then((wasm) => {
+                init("/{base_path}/{wasm_path}").then((wasm) => {
                     if (wasm.__wbindgen_start == undefined) {
                     wasm.main();
                     }
@@ -123,22 +161,41 @@ impl BuildRequest {
             true => html.replace("{DX_TOAST_UTILITIES}", TOAST_HTML),
             false => html.replace("{DX_TOAST_UTILITIES}", ""),
         };
-
-        // And try to insert preload links for the wasm and js files
-        *html = html.replace(
-            "</head",
-            r#"<link rel="preload" href="/{base_path}/wasm/{app_name}_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
-            <link rel="preload" href="/{base_path}/wasm/{app_name}.js" as="script">
-            </head"#
-        );
     }
 
     /// Replace any special placeholders in the HTML with resolved values
     fn replace_template_placeholders(&self, html: &mut String) {
-        let base_path = self.krate.config.web.app.base_path();
+        let base_path = self.build.krate.config.web.app.base_path();
         *html = html.replace("{base_path}", base_path);
 
-        let app_name = &self.krate.executable_name();
+        let app_name = &self.build.krate.executable_name();
+        let wasm_source_path = self.build.wasm_bindgen_wasm_output_file();
+        let wasm_path = self
+            .app
+            .assets
+            .assets
+            .get(&wasm_source_path)
+            .expect("WASM asset should exist in web bundles")
+            .bundled_path();
+        let wasm_path = format!("assets/{wasm_path}");
+        let js_source_path = self.build.wasm_bindgen_js_output_file();
+        let js_path = self
+            .app
+            .assets
+            .assets
+            .get(&js_source_path)
+            .expect("JS asset should exist in web bundles")
+            .bundled_path();
+        let js_path = format!("assets/{js_path}");
+
+        // If the html contains the old `{app_name}` placeholder, replace {app_name}_bg.wasm and {app_name}.js
+        // with the new paths
+        *html = html.replace("wasm/{app_name}_bg.wasm", &wasm_path);
+        *html = html.replace("wasm/{app_name}.js", &js_path);
+        // Otherwise replace the new placeholders
+        *html = html.replace("{wasm_path}", &wasm_path);
+        *html = html.replace("{js_path}", &js_path);
+        // Replace the app_name if we find it anywhere standalone
         *html = html.replace("{app_name}", app_name);
     }
 
@@ -154,9 +211,15 @@ impl BuildRequest {
                     // If the path is absolute, make it relative to the current directory before we join it
                     // The path is actually a web path which is relative to the root of the website
                     let path = path.strip_prefix("/").unwrap_or(path);
-                    let asset_dir_path = self.krate.legacy_asset_dir().join(path);
-                    if let Ok(absolute_path) = asset_dir_path.canonicalize() {
-                        let absolute_crate_root = self.krate.crate_dir().canonicalize().unwrap();
+                    let asset_dir_path = self
+                        .build
+                        .krate
+                        .legacy_asset_dir()
+                        .map(|dir| dir.join(path).canonicalize());
+
+                    if let Some(Ok(absolute_path)) = asset_dir_path {
+                        let absolute_crate_root =
+                            self.build.krate.crate_dir().canonicalize().unwrap();
                         PathBuf::from("./")
                             .join(absolute_path.strip_prefix(absolute_crate_root).unwrap())
                     } else {
@@ -179,7 +242,7 @@ impl BuildRequest {
             ResourceType::Script => "web.resource.script",
         };
 
-        tracing::debug!(
+        tracing::warn!(
             "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
         );
     }

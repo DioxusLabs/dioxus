@@ -431,3 +431,31 @@ fn with_child_route() {
         "<h1>App</h1><a href=\"/test\">Parent Link</a><a href=\"/child/this-is-a-child-route\">Child Link 1</a><a href=\"/child/this-is-a-child-route\">Child Link 2</a>"
     );
 }
+
+#[test]
+fn with_hash_segment() {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/#:data")]
+        Root { data: String },
+    }
+
+    #[component]
+    fn Root(data: String) -> Element {
+        rsx! {
+            Link {
+                to: Route::Root { data: "test".to_string() },
+                "Link"
+            }
+            Link {
+                to: Route::Root { data: "".to_string() },
+                "Empty"
+            }
+        }
+    }
+
+    assert_eq!(
+        prepare_at::<Route>("/#test"),
+        "<h1>App</h1><a href=\"/#test\" aria-current=\"page\">Link</a><a href=\"/\">Empty</a>"
+    );
+}
