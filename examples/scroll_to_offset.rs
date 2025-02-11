@@ -24,9 +24,7 @@ fn ScrollToCoordinates() -> Element {
     let mut element = use_signal(|| None);
 
     rsx! {
-        div {
-            border: "1px solid black",
-            position: "relative",
+        div { border: "1px solid black", position: "relative",
 
             div {
                 height: "300px",
@@ -48,12 +46,9 @@ fn ScrollToCoordinates() -> Element {
                         if let Some(ul) = element.cloned() {
                             let data = event.data();
                             if let Ok(value) = data.parsed::<f64>() {
-                                _ = ul
-                                    .scroll(
-                                        PixelsVector2D::new(0.0, 20.0 * value),
-                                        ScrollBehavior::Smooth,
-                                    )
-                                    .await;
+                                ul.scroll(PixelsVector2D::new(0.0, 20.0 * value), ScrollBehavior::Smooth)
+                                    .await
+                                    .unwrap();
                             }
                         }
                     },
