@@ -59,7 +59,7 @@ pub(crate) struct BuildArgs {
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
     /// wasm binary
-    #[clap(long, default_value_t = true)]
+    #[clap(long, default_value_t = false)]
     pub(crate) debug_symbols: bool,
 
     /// Information about the target to build

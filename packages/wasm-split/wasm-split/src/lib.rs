@@ -62,11 +62,9 @@ impl SplitLoader {
 
     /// Mark the split loader as complete with the given success value
     pub fn complete(&self, success: bool) {
-        web_sys::console::log_1(&format!("complete fired - {success} key:").into());
         self.state.set(SplitLoaderState::Completed(success));
-        match self.waker.take() {
-            Some(waker) => waker.wake(),
-            _ => {}
+        if let Some(waker) = self.waker.take() {
+            waker.wake()
         }
     }
 }

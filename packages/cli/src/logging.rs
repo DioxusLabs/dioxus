@@ -68,7 +68,9 @@ impl TraceController {
         let filter = if env::var(LOG_ENV).is_ok() {
             EnvFilter::from_env(LOG_ENV)
         } else if matches!(args.action, Commands::Serve(_)) {
-            EnvFilter::new("error,dx=trace,dioxus-cli=trace,manganis-cli-support=trace")
+            EnvFilter::new(
+                "error,dx=trace,dioxus-cli=trace,manganis-cli-support=trace,wasm-split-cli=trace",
+            )
         } else {
             EnvFilter::new(format!(
                 "error,dx={our_level},dioxus-cli={our_level},manganis-cli-support={our_level}",

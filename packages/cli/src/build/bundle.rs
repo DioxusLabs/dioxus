@@ -5,7 +5,7 @@ use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::{AssetOptions, JsAssetOptions};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -432,7 +432,16 @@ impl AppBundle {
         for (asset, bundled) in &self.app.assets.assets {
             let from = asset.clone();
             let to = asset_dir.join(bundled.bundled_path());
-            tracing::debug!("Copying asset {from:?} to {to:?}");
+
+            // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
+            let from_ = from
+                .strip_prefix(self.build.krate.workspace_dir())
+                .unwrap_or_else(|_| from.as_path());
+            let to_ = from
+                .strip_prefix(self.build.krate.workspace_dir())
+                .unwrap_or_else(|_| to.as_path());
+
+            tracing::debug!("Copying asset {from_:?} to {to_:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
         }
 
@@ -450,13 +459,17 @@ impl AppBundle {
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
+        let ws_dir = self.build.krate.workspace_dir();
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
                     let processing = started_processing.fetch_add(1, Ordering::SeqCst);
-                    tracing::trace!("Starting asset copy {processing}/{asset_count} from {from:?}");
+                    let from_ = from.strip_prefix(&ws_dir).unwrap_or(from);
+                    tracing::trace!(
+                        "Starting asset copy {processing}/{asset_count} from {from_:?}"
+                    );
 
                     let res = process_file_to(options, from, to);
                     if let Err(err) = res.as_ref() {
@@ -639,10 +652,12 @@ impl AppBundle {
         let keep_debug = self.build.krate.config.web.wasm_opt.debug
             || self.build.build.debug_symbols
             || self.build.build.experimental_wasm_split
+            || !self.build.build.release
             || (self.build.build.release && crate::wasm_opt::wasm_opt_available());
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.build.build.experimental_wasm_split,
+            debug: self.build.build.debug_symbols,
             ..self.build.krate.config.web.wasm_opt.clone()
         };
 
@@ -684,14 +699,20 @@ impl AppBundle {
                 .emit()
                 .context("Failed to emit wasm split modules")?;
 
+            // For better parallelism, create a queue
+            let mut futures = futures_util::stream::futures_unordered::FuturesUnordered::new();
+
             // Write the chunks that contain shared imports
             // These will be in the format of chunk_0_modulename.wasm - this is hardcoded in wasm-split
             // todo(jon): don't harcode them...
+            tracing::debug!("Writing split chunks to disk");
             for (idx, chunk) in modules.chunks.iter().enumerate() {
+                futures.push(async move { () });
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
+
                 wasm_opt::write_wasm(&chunk.bytes, &path, wasm_opt_options).await?;
                 writeln!(
-                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
+                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports, window.initSync);",
                     url = self
                         .app
                         .assets
@@ -700,6 +721,7 @@ impl AppBundle {
             }
 
             // Write the modules that contain the entrypoints
+            tracing::debug!("Writing split modules to disk");
             for (idx, module) in modules.modules.iter().enumerate() {
                 let comp_name = module
                     .component_name
@@ -711,14 +733,11 @@ impl AppBundle {
 
                 let hash_id = module.hash_id.as_ref().unwrap();
 
-                // __wasm_split_load_{module_ident}_{unique_identifier}_{name}
                 writeln!(
                     glue,
-                    // "export const __wasm_split_load_{module} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
-                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports, window.initSync);",
                     module = module.module_name,
 
-                    // hash_id = module.hash_id.as_ref().unwrap(),
 
                     // Again, register this wasm with the asset system
                     url = self
@@ -759,7 +778,7 @@ impl AppBundle {
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.build.build.release {
-            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
+            // wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
         }
 
         // Make sure to register the main wasm file with the asset system

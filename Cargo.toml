@@ -246,26 +246,26 @@ objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 tray-icon = "0.19"
 
-# disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
-[profile.dev]
-# debug = 0
-
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
-# [profile.release]
-# incremental = true
-# debug = 0
-
-# incremental = true
+[profile.release]
+incremental = true
 
 # crank up the opt level for wasm-split-cli in dev mode
+[profile.wasm-split-release]
+inherits = "release"
+opt-level = 'z'
+strip = "debuginfo"
+incremental = true
+lto = true
 
 [profile.cli-release-dev]
 inherits = "release"
 opt-level = 3
 incremental = true
 
-[profile.release]
+[profile.release-max-opt]
+inherits = "release"
 lto = true
 codegen-units = 1
 opt-level = 'z'

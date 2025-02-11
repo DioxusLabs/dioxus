@@ -10,79 +10,12 @@ use wasm_bindgen::prelude::*;
 use wasm_split::{lazy_loader, LazyLoader, LazySplitLoader};
 
 fn main() {
-    dioxus::launch(app);
+    dioxus::launch(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    });
 }
-
-fn app() -> Element {
-    // static LOADER: wasm_split::LazyLoader<(), Element> =
-    //     lazy_loader!(extern "eleven" fn Home(args: ()) -> Element);
-
-    // let res = use_resource(|| async move { LOADER.load().await }).suspend()?;
-
-    // LOADER.call(()).unwrap()
-
-    rsx! {
-        Router::<Route> {}
-    }
-}
-
-// #[derive(Clone)]
-// enum Route {
-//     Home,
-// }
-
-// impl std::fmt::Display for Route {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Route::Home => f.write_str("/"),
-//         }
-//     }
-// }
-
-// impl std::str::FromStr for Route {
-//     type Err = dioxus_router::routable::RouteParseError<String>;
-//     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
-//         Ok(Self::Home)
-//     }
-// }
-
-// fn Blog(args: ()) -> Element {
-//     rsx! {
-//         h1 { "Blog" }
-//     }
-// }
-
-// #[inline(never)]
-// #[no_mangle]
-// pub fn HomeInner() -> Element {
-//     static HOME_LOADER: wasm_split::LazyLoader<(), Element> =
-//         lazy_loader!(extern "eleven" fn Home(args: ()) -> Element);
-
-//     static BLOG_LOADER: wasm_split::LazyLoader<(), Element> =
-//         lazy_loader!(extern "twelve" fn Blog(args: ()) -> Element);
-
-//     use_resource(|| async move { HOME_LOADER.load().await }).suspend()?;
-//     use_resource(|| async move { BLOG_LOADER.load().await }).suspend()?;
-//     rsx! {
-//         {HOME_LOADER.call(()).unwrap()}
-//         {BLOG_LOADER.call(()).unwrap()}
-//         ChildSplit {}
-//     }
-// }
-
-// impl Routable for Route {
-//     #[doc = " The error that can occur when parsing a route."]
-//     const SITE_MAP: &'static [SiteMapSegment] = &[];
-
-//     #[doc = " Render the route at the given level"]
-//     fn render(&self, level: usize) -> Element {
-//         match self {
-//             Route::Home => rsx! {
-//                 HomeInner {}
-//             },
-//         }
-//     }
-// }
 
 #[derive(Routable, PartialEq, Eq, Debug, Clone)]
 enum Route {
@@ -108,11 +41,6 @@ pub(crate) static GLOBAL_COUNTER: GlobalSignal<usize> = Signal::global(|| 0);
 
 fn Home(args: ()) -> Element {
     let mut count = use_signal(|| 1);
-
-    // rsx! {
-    //     div { "Hello" }
-    //     p { "Count: {count}" }
-    // }
 
     rsx! {
         h1 { "Hello bundle split 456" }

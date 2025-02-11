@@ -1,13 +1,13 @@
 // when running the harness we need to make sure to uncommon this out...
-import { initSync } from "./main.js";
 
-export function makeLoad(url, deps, fusedImports) {
+export function makeLoad(url, deps, fusedImports, initIt) {
   let alreadyLoaded = false;
   return async (callbackIndex, callbackData) => {
     await Promise.all(deps.map((dep) => dep()));
     if (alreadyLoaded) return;
     try {
       const response = await fetch(url);
+      const initSync = initIt || window.initSync;
       const mainExports = initSync(undefined, undefined);
 
       let imports = {

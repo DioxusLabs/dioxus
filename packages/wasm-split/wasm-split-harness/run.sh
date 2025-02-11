@@ -3,7 +3,8 @@ RUSTFLAGS="-Zlocation-detail=none -Zfmt-debug=none" cargo +nightly rustc \
   -Z build-std-features="optimize_for_size" \
   -Z build-std-features=panic_immediate_abort \
   --target wasm32-unknown-unknown \
-  --release  --no-default-features \
+  --no-default-features \
+  --profile wasm-split-release \
   -- -Clink-args=--emit-relocs
 
 TARGET_DIR=../../../target
@@ -26,7 +27,7 @@ mkdir -p data/harness/split_not
 
 
 # copy the output wasm file to the harness dir
-cp $TARGET_DIR/wasm32-unknown-unknown/release/wasm-split-harness.wasm data/harness/input.wasm
+cp $TARGET_DIR/wasm32-unknown-unknown/wasm-split-release/wasm-split-harness.wasm data/harness/input.wasm
 
 # Run wasm-bindgen on this module, without splitting it
 wasm-bindgen data/harness/input.wasm --out-dir data/harness/split_not --target web --out-name main --no-demangle --no-typescript --keep-lld-exports --keep-debug
@@ -40,10 +41,10 @@ for path in $paths
 do
 
     path_without_ext=${path%.*}
-    wasm-opt -Oz data/harness/chunks/$path -o data/harness/split/$path --enable-reference-types --memory-packing
+    wasm-opt -Oz data/harness/chunks/$path -o data/harness/split/$path --enable-reference-types --memory-packing --debuginfo
 
+    # ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "names"
     ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "linking"
-    ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "names"
     ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "producers"
     ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "target_features"
     ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split/$path -R "reloc.CODE"
@@ -58,11 +59,11 @@ cp data/harness/split_not/main.js data/harness/split/main.js
 cp -r data/harness/split_not/snippets data/harness/split/snippets
 cp data/harness/chunks/__wasm_split.js data/harness/split/__wasm_split.js
 
-wasm-opt -Oz data/harness/split_not/main_bg.wasm -o data/harness/split_not/main_bg_opt.wasm --enable-reference-types --memory-packing
+wasm-opt -Oz data/harness/split_not/main_bg.wasm -o data/harness/split_not/main_bg_opt.wasm --enable-reference-types --memory-packing --debuginfo
 
 # Run wasm-strip to strip out the debug symbols
+# ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "names"
 ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "linking"
-~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "names"
 ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "producers"
 ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "target_features"
 ~/Downloads/wabt-1.0.36/bin/wasm-strip data/harness/split_not/main_bg_opt.wasm -R "reloc.CODE"

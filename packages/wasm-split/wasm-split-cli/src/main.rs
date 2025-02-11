@@ -100,13 +100,17 @@ fn split(args: SplitArgs) {
 
 fn emit_js(chunks: &[SplitModule], modules: &[SplitModule]) -> String {
     use std::fmt::Write;
-    let mut glue = include_str!("./__wasm_split.js").to_string();
+    let mut glue = format!(
+        r#"import {{ initSync }} from "./main.js";
+{}"#,
+        include_str!("./__wasm_split.js")
+    );
 
     for (idx, chunk) in chunks.iter().enumerate() {
         tracing::debug!("emitting chunk: {:?}", chunk.module_name);
         writeln!(
                 glue,
-                "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/harness/split/chunk_{idx}_{module}.wasm\", [], fusedImports);",
+                "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/harness/split/chunk_{idx}_{module}.wasm\", [], fusedImports, initSync);",
                 module = chunk.module_name
             ).expect("failed to write to string");
     }
@@ -121,26 +125,15 @@ fn emit_js(chunks: &[SplitModule], modules: &[SplitModule]) -> String {
             .join(", ");
         let hash_id = module.hash_id.as_ref().unwrap();
 
-        // "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
-
         writeln!(
                 glue,
-                "export const __wasm_split_load_{module}_{hash_id}_{cname} = makeLoad(\"/harness/split/module_{idx}_{cname}.wasm\", [{deps}], fusedImports);",
+                "export const __wasm_split_load_{module}_{hash_id}_{cname} = makeLoad(\"/harness/split/module_{idx}_{cname}.wasm\", [{deps}], fusedImports, initSync);",
                 module = module.module_name,
                 idx = idx,
                 cname = module.component_name.as_ref().unwrap(),
                 deps = deps
             )
             .expect("failed to write to string");
-        // writeln!(
-        //         glue,
-        //         "export const __wasm_split_load_{module} = __wasm_split_load_{module}_{hash_id}_{cname};",
-        //         module = module.module_name,
-        //         // idx = idx,
-        //         cname = module.component_name.as_ref().unwrap(),
-        //         // deps = deps
-        //     )
-        //     .expect("failed to write to string");
     }
 
     glue
