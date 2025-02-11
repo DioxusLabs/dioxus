@@ -99,7 +99,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
-    "packages/playwright-tests/wasm-split-harness",
+    "packages/playwright-tests/wasm-split-harness", "packages/wasm-split/wasm-used",
 ]
 
 [workspace.package]

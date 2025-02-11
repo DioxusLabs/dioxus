@@ -14306,6 +14306,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-used"
+version = "0.6.3"
+dependencies = [
+ "anyhow",
+ "clap",
+ "id-arena",
+ "itertools 0.13.0",
+ "rayon",
+ "rustc-demangle",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "walrus",
+ "wasm-encoder 0.206.0",
+ "wasmparser 0.206.0",
+]
+
+[[package]]
 name = "wasmparser"
 version = "0.206.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

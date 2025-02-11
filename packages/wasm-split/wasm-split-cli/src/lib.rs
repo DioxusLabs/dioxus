@@ -7,7 +7,6 @@ use std::{
     ops::Range,
     sync::{Arc, RwLock},
 };
-use used::Used;
 use walrus::{
     ir, ConstExpr, DataKind, ElementItems, ElementKind, ExportId, ExportItem, FunctionBuilder,
     FunctionId, FunctionKind, GlobalKind, ImportId, ImportKind, ImportedFunction, Module,
@@ -16,8 +15,6 @@ use walrus::{
 use wasmparser::{
     Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry, SymbolInfo,
 };
-
-mod used;
 
 pub const MAKE_LOAD_JS: &'static str = include_str!("./__wasm_split.js");
 
@@ -222,7 +219,7 @@ impl<'a> Splitter<'a> {
             }
         }
 
-        tracing::debug!(
+        tracing::trace!(
             "Emitting module {}: {:?}",
             split.module_name,
             relies_on_chunks
@@ -328,9 +325,7 @@ impl<'a> Splitter<'a> {
         self.re_export_functions(&mut out, &symbols_to_export);
 
         // Make sure we haven't deleted anything important....
-        tracing::info!("deleting main funcs from split");
         self.delete_main_funcs_from_split(&mut out, &symbols_to_delete);
-        tracing::info!("Main funcs deleted");
 
         // We have to make sure our table matches that of the other tables even though we don't call them.
         let ifunc_table_id = self.load_funcref_table(&mut out);
@@ -359,11 +354,11 @@ impl<'a> Splitter<'a> {
     /// different sets of re-exports
     fn emit_split(
         &self,
+        out: &mut Module,
         unique_symbols: HashSet<Node>,
         symbols_to_import: HashSet<Node>,
         symbols_to_delete: HashSet<Node>,
         symbols_to_export: HashSet<Node>,
-        out: &mut Module,
     ) -> Result<SplitModule> {
         // Make sure to remap any ids from the main module to this module
         let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
@@ -386,7 +381,6 @@ impl<'a> Splitter<'a> {
         // Take the symbols that are shared between the split modules and convert them to imports
         self.convert_shared_to_imports(&mut out, &symbols_to_import);
 
-        //
         self.re_export_functions(&mut out, &symbols_to_export);
 
         // Make sure we haven't deleted anything important....
