@@ -16,6 +16,29 @@ pub type LoadFn = unsafe extern "C" fn(LoadCallbackFn, *const c_void) -> ();
 
 type Lazy = async_once_cell::Lazy<bool, SplitLoaderFuture>;
 
+pub struct LazyLoader<Args, Ret> {
+    pub imported: unsafe extern "C" fn(arg: Args) -> Ret,
+    pub key: &'static LocalKey<LazySplitLoader>,
+    pub loaded: AtomicBool,
+}
+
+impl<Args, Ret> LazyLoader<Args, Ret> {
+    pub async fn load(&'static self) -> bool {
+        let res = *self.key.with(|inner| inner.lazy.clone()).as_ref().await;
+        self.loaded
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        res
+    }
+
+    pub fn call(&'static self, args: Args) -> Option<Ret> {
+        if !self.loaded.load(std::sync::atomic::Ordering::Relaxed) {
+            return None;
+        }
+
+        Some(unsafe { (self.imported)(args) })
+    }
+}
+
 pub struct LazySplitLoader {
     lazy: Pin<Rc<Lazy>>,
 }
@@ -106,27 +129,4 @@ impl Future for SplitLoaderFuture {
 
 unsafe extern "C" fn load_callback(loader: *const c_void, success: bool) {
     unsafe { Rc::from_raw(loader as *const SplitLoader) }.complete(success);
-}
-
-pub struct LazyLoader<Args, Ret> {
-    pub imported: unsafe extern "C" fn(arg: Args) -> Ret,
-    pub key: &'static LocalKey<LazySplitLoader>,
-    pub loaded: AtomicBool,
-}
-
-impl<Args, Ret> LazyLoader<Args, Ret> {
-    pub async fn load(&'static self) -> bool {
-        let res = *self.key.with(|inner| inner.lazy.clone()).as_ref().await;
-        self.loaded
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        res
-    }
-
-    pub fn call(&'static self, args: Args) -> Option<Ret> {
-        if !self.loaded.load(std::sync::atomic::Ordering::Relaxed) {
-            return None;
-        }
-
-        Some(unsafe { (self.imported)(args) })
-    }
 }
