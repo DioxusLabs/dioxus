@@ -1,5 +1,5 @@
 # GENERATE_NAME_SECTION=true
-export RUST_BACKTRACE=1
+# export RUST_BACKTRACE=1
 
 # -Zlocation-detail=none - we could compile with location detail off but if breaks our signals...
 cargo +nightly rustc \
