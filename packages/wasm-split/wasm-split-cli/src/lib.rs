@@ -1041,10 +1041,12 @@ impl<'a> Splitter<'a> {
             .iter()
             .flat_map(|split| split.reachable_graph.iter())
             .filter(|sym| {
+                // Make sure the symbol isn't in the main graph
                 if self.main_graph.contains(sym) {
                     return false;
                 }
 
+                // And ensure we aren't also exporting it
                 match sym {
                     Node::Function(u) => self.source_module.exports.get_exported_func(*u).is_none(),
                     _ => true,
