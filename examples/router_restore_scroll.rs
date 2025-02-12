@@ -40,14 +40,11 @@ fn Home() -> Element {
     let mut scroll = use_context::<Signal<Scroll>>();
 
     _ = use_resource(move || async move {
-        match (element.read().as_ref(), scroll.peek().clone()) {
-            (Some(element), Some(scroll)) => {
-                element
-                    .scroll(scroll, ScrollBehavior::Instant)
-                    .await
-                    .unwrap();
-            }
-            _ => {}
+        if let (Some(element), Some(scroll)) = (element.read().as_ref(), *scroll.peek()) {
+            element
+                .scroll(scroll, ScrollBehavior::Instant)
+                .await
+                .unwrap();
         }
     });
 
