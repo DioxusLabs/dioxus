@@ -121,22 +121,6 @@ async fn add_body_element() {
     });
 }
 
-#[wasm_split::wasm_split(three)]
-async fn brotli_it(data: &'static [u8]) {
-    let reader = Box::pin(futures::io::BufReader::new(data));
-    let reader: Pin<Box<dyn futures::io::AsyncBufRead>> = reader;
-
-    dioxus::prelude::spawn(async move {
-        let mut fut = Box::pin(async_compression::futures::bufread::BrotliDecoder::new(
-            reader,
-        ));
-        if fut.read_to_end(&mut Vec::new()).await.is_err() {
-            web_sys::console::log_1(&"error reading brotli".into());
-        }
-        *GLOBAL_COUNTER.write() += 3;
-    });
-}
-
 #[wasm_split::wasm_split(four)]
 async fn gzip_it() {
     static DATA: &[u8] = &[0u8; 10];
@@ -164,6 +148,22 @@ async fn gzip_it() {
         .await;
 
         assert!(res.is_ok());
+    });
+}
+
+#[wasm_split::wasm_split(three)]
+async fn brotli_it(data: &'static [u8]) {
+    let reader = Box::pin(futures::io::BufReader::new(data));
+    let reader: Pin<Box<dyn futures::io::AsyncBufRead>> = reader;
+
+    dioxus::prelude::spawn(async move {
+        let mut fut = Box::pin(async_compression::futures::bufread::BrotliDecoder::new(
+            reader,
+        ));
+        if fut.read_to_end(&mut Vec::new()).await.is_err() {
+            web_sys::console::log_1(&"error reading brotli".into());
+        }
+        *GLOBAL_COUNTER.write() += 3;
     });
 }
 
