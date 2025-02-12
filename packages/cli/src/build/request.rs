@@ -342,6 +342,7 @@ impl BuildRequest {
 
         // the bundle splitter needs relocation data
         // we'll trim these out if we don't need them during the bundling process
+        // todo(jon): for wasm binary patching we might want to leave these on all the time.
         if self.build.platform() == Platform::Web && self.build.experimental_wasm_split {
             cargo_args.push("--".to_string());
             cargo_args.push("-Clink-args=--emit-relocs".to_string());

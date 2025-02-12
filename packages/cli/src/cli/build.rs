@@ -59,7 +59,7 @@ pub(crate) struct BuildArgs {
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
     /// wasm binary
-    #[clap(long, default_value_t = false)]
+    #[clap(long, default_value_t = true)]
     pub(crate) debug_symbols: bool,
 
     /// Information about the target to build
@@ -182,13 +182,6 @@ impl BuildArgs {
             };
 
             self.target_args.arch = Some(arch);
-        }
-
-        // If the user wants bundle splitting, we're going to pass in `dioxus/wasm-split` feature
-        if self.experimental_wasm_split {
-            self.target_args
-                .features
-                .push("dioxus/wasm-split".to_string());
         }
 
         Ok(())

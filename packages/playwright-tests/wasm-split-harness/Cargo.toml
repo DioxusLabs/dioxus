@@ -1,26 +1,20 @@
 [package]
-name = "wasm-split-playwright-test"
+name = "wasm-split-harness"
 version = "0.1.0"
 edition = "2021"
 publish = false
+authors = ["Jonathan Kelley"]
 
 [dependencies]
-dioxus = { workspace = true, features = ["router", "wasm-split"] }
-# dioxus = { workspace = true, features = ["web"] }
-anyhow = "1.0.82"
-async-compression = { version = "0.4.8", features = ["futures-io", "gzip", "brotli"] }
-futures = "0.3.30"
-gloo-console = "0.3.0"
-gloo-net = { version = "0.3.1", default-features = false, features = ["http"] }
-js-sys = "0.3.69"
-wasm-bindgen = "0.2.92"
-wasm-bindgen-futures = "0.4.42"
-wasm-streams = "0.4.0"
-web-sys = { version = "0.3.76", features = ["Document", "Window", "HtmlElement", "Text", "DomRectReadOnly", "console"] }
-wasm-split = { workspace = true }
-once_cell = "1.20.2"
+dioxus = { workspace = true, features = ["web", "router", "wasm-split"] }
+anyhow = { workspace = true }
+async-compression = { workspace = true, features = ["futures-io", "gzip", "brotli"] }
+futures = { workspace = true }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = ["Document", "Window", "HtmlElement", "Text", "DomRectReadOnly", "console"] }
+once_cell = { workspace = true }
+getrandom = { workspace = true, features = ["js"] }
+reqwest = { workspace = true, features = ["json"] }
 
-
-[features]
-default = ["web"]
-web = ["dioxus/web"]

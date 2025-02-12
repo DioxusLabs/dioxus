@@ -74,7 +74,6 @@ members = [
     "packages/wasm-split/wasm-split",
     "packages/wasm-split/wasm-split-macro",
     "packages/wasm-split/wasm-split-cli",
-    "packages/wasm-split/wasm-split-harness",
     "packages/wasm-split/wasm-used",
 
     # Full project examples
@@ -100,7 +99,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
-    "packages/playwright-tests/wasm-split-harness", "packages/wasm-split/wasm-used",
+    "packages/playwright-tests/wasm-split-harness",
 ]
 
 [workspace.package]

@@ -174,7 +174,7 @@ impl WasmBindgen {
     ///
     /// For local installations, this will check that the installed version matches the specified version.
     /// For managed installations, this will check that the version managed by `dx` is the specified version.
-    pub(crate) async fn verify_install(version: &str) -> anyhow::Result<()> {
+    pub async fn verify_install(version: &str) -> anyhow::Result<()> {
         let settings = Self::new(version);
         if CliSettings::prefer_no_downloads() {
             settings.verify_local_install().await

@@ -5840,40 +5840,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "gloo-console"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a17868f56b4a24f677b17c8cb69958385102fa879418052d60b50bc1727e261"
-dependencies = [
- "gloo-utils 0.2.0",
- "js-sys",
- "serde",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
 name = "gloo-dialogs"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67062364ac72d27f08445a46cab428188e2e224ec9e37efdba48ae8c289002e6"
 dependencies = [
  "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "gloo-net"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a66b4e3c7d9ed8d315fd6b97c8b1f74a7c6ecbbc2320e65ae7ed38b7068cc620"
-dependencies = [
- "gloo-utils 0.1.7",
- "http 0.2.12",
- "js-sys",
- "thiserror 1.0.69",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -5886,7 +5858,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-sink",
- "gloo-utils 0.2.0",
+ "gloo-utils",
  "http 1.2.0",
  "js-sys",
  "pin-project",
@@ -5918,17 +5890,6 @@ dependencies = [
  "futures-core",
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "gloo-utils"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "037fcb07216cb3a30f7292bd0176b050b7b9a052ba830ef7d5d65f6dc64ba58e"
-dependencies = [
- "js-sys",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -11264,7 +11225,7 @@ dependencies = [
  "const_format",
  "dashmap",
  "futures",
- "gloo-net 0.6.0",
+ "gloo-net",
  "http 1.2.0",
  "http-body-util",
  "hyper 1.5.1",
@@ -14261,25 +14222,6 @@ dependencies = [
  "quote",
  "sha2",
  "syn 2.0.90",
-]
-
-[[package]]
-name = "wasm-split-playwright-test"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-compression",
- "dioxus",
- "futures",
- "gloo-console",
- "gloo-net 0.3.1",
- "js-sys",
- "once_cell",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-split",
- "wasm-streams",
- "web-sys",
 ]
 
 [[package]]
