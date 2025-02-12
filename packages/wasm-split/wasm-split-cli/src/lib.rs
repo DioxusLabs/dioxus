@@ -8,12 +8,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 use walrus::{
-    ir::{self, dfs_in_order, Visitor},
+    ir::{self},
     ConstExpr, DataKind, ElementItems, ElementKind, ExportId, ExportItem, FunctionBuilder,
-    FunctionId, FunctionKind, GlobalKind, ImportId, ImportKind, ImportedFunction, Module,
-    ModuleConfig, RefType, TableId, TypeId,
+    FunctionId, FunctionKind, GlobalKind, ImportId, ImportKind, Module, ModuleConfig, RefType,
+    TableId, TypeId,
 };
-use wasm_used::Used;
 use wasmparser::{
     Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry, SymbolInfo,
 };
@@ -124,7 +123,6 @@ impl<'a> Splitter<'a> {
             .map(|idx| self.emit_split_chunk(idx))
             .collect::<Result<Vec<SplitModule>>>()?;
 
-        // let modules = vec![];
         let modules = (0..self.split_points.len())
             .into_par_iter()
             .map(|idx| self.emit_split_module(idx))
@@ -308,26 +306,14 @@ impl<'a> Splitter<'a> {
             .cloned()
             .collect();
 
-        // // We're going to export only the symbols that show up in other modules
-        // let mut symbols_to_export = HashSet::new();
-        // for sym in unique_symbols.iter() {
-        //     for split in self.split_points.iter() {
-        //         if split.reachable_graph.contains(sym) {
-        //             if !self.main_graph.contains(sym) {
-        //                 symbols_to_export.insert(*sym);
-        //             }
-        //         }
-        //     }
-        // }
-
         for extra in self.extra_symbols.iter() {
-            // symbols_to_export.remove(extra);
             symbols_to_import.insert(*extra);
             symbols_to_delete.remove(extra);
         }
 
         // Make sure to remap any ids from the main module to this module
         let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
+
         // Remap the graph to our module's IDs
         let shared_funcs = self.main_shared_symbols();
         let shared_funcs = shared_funcs
@@ -336,7 +322,6 @@ impl<'a> Splitter<'a> {
             .collect::<Vec<_>>();
 
         let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
-        // let symbols_to_export = self.remap_ids(&symbols_to_export, &ids_to_fns);
         let symbols_to_import = self.remap_ids(&symbols_to_import, &ids_to_fns);
         let symbols_to_delete = self.remap_ids(&symbols_to_delete, &ids_to_fns);
 
@@ -348,11 +333,7 @@ impl<'a> Splitter<'a> {
         // Clear out the element segments and then add in the initializers for the shared imports
         self.create_ifunc_initialzers(&mut out, &unique_symbols);
 
-        // Take the symbols that are shared between the split modules and convert them to imports
-        // self.convert_shared_to_imports(&mut out, &shared_funcs, &symbols_to_import);
-
         // We have to make sure our table matches that of the other tables even though we don't call them.
-        // self.expand_funcref_table_for_split(&mut out);
         let ifunc_table_id = self.load_funcref_table(&mut out);
         let segment_start = self
             .expand_ifunc_table_max(
@@ -382,13 +363,6 @@ impl<'a> Splitter<'a> {
         })
     }
 
-    // fn expand_funcref_table_for_split(&self, out: &mut Module) {
-    //     let ifunc_table_id = self.load_funcref_table(out);
-    //     let _segment_start = self
-    //         .expand_ifunc_table_max(out, ifunc_table_id, self.split_points.len())
-    //         .expect("failed to expand ifunc table");
-    // }
-
     /// Convert functions coming in from outside the module to indirect calls to the ifunc table created in the main module
     fn convert_shared_to_imports(
         &self,
@@ -405,15 +379,8 @@ impl<'a> Splitter<'a> {
                 if symbols_to_import.contains(node) {
                     let ty_id = out.funcs.get(*ifunc).ty();
                     let stub = (idx + segment_start) as _;
-
-                    let name = out.funcs.get(*ifunc).name.clone().unwrap_or_default();
-
-                    // tracing::info!("Assumming {} will be at {}", name, stub);
-
                     out.funcs.get_mut(*ifunc).kind =
                         self.make_stub_funcs(out, ifunc_table_id, ty_id, stub);
-                } else {
-                    panic!()
                 }
 
                 idx += 1;
@@ -456,8 +423,6 @@ impl<'a> Splitter<'a> {
             let ty_id = out.funcs.get(import_func).ty();
             let stub_idx = segment_start + ifuncs.len();
 
-            // tracing::info!("inserting import {:?} at {}", import_func, stub_idx);
-
             // Replace the import function with a local function that calls the indirect function
             out.funcs.get_mut(import_func).kind =
                 self.make_stub_funcs(out, ifunc_table, ty_id, stub_idx as _);
@@ -475,9 +440,6 @@ impl<'a> Splitter<'a> {
         let mut _idx = 0;
         for (__idx, func) in shared_funcs.iter().enumerate() {
             if let Node::Function(id) = func {
-                let offset = self.split_points.len() + _idx + segment_start;
-                let name = out.funcs.get(*id).name.clone().unwrap_or_default();
-                // tracing::info!("inserting fn {} at {}", name, offset);
                 ifuncs.push(*id);
                 _idx += 1;
             }
@@ -533,19 +495,6 @@ impl<'a> Splitter<'a> {
             .collect()
     }
 
-    // fn re_export_functions(&self, out: &mut Module, funcs: &HashSet<Node>) {
-    //     // Make sure to re-export any shared functions.
-    //     // This is somewhat in-efficient because it's re-exporting symbols that don't need to be re-exported.
-    //     // We could just try walking the code looking for directly called functions, but that's a bit more complex.
-    //     for func_id in funcs.iter().copied() {
-    //         if let Node::Function(func_id) = func_id {
-    //             if let Some(name) = out.funcs.get(func_id).name.as_ref().cloned() {
-    //                 out.exports.add(&format!("{}", name), func_id);
-    //             }
-    //         }
-    //     }
-    // }
-
     fn prune_main_symbols(&self, out: &mut Module, unused_symbols: &HashSet<Node>) -> Result<()> {
         // Wipe the split point exports
         for split in self.split_points.iter() {
@@ -553,15 +502,12 @@ impl<'a> Splitter<'a> {
             out.exports.delete(split.export_id);
         }
 
-        let mut deleted = HashSet::new();
-
         // And then any actual symbols from the callgraph
         for symbol in unused_symbols.iter().cloned() {
             match symbol {
                 // Simply delete functions
                 Node::Function(id) => {
                     out.funcs.delete(id);
-                    deleted.insert(id);
                 }
 
                 // Otherwise, zero out the data segment, which should lead to elimination by wasm-opt
@@ -587,8 +533,6 @@ impl<'a> Splitter<'a> {
                 }
             }
         }
-
-        let used = Used::new(&out, &deleted);
 
         Ok(())
     }
@@ -721,20 +665,11 @@ impl<'a> Splitter<'a> {
     }
 
     fn delete_main_funcs_from_split(&self, out: &mut Module, symbols_to_delete: &HashSet<Node>) {
-        let mut deleted = HashSet::new();
         for node in symbols_to_delete {
             if let Node::Function(id) = *node {
                 if out.exports.get_exported_func(id).is_none() {
-                    deleted.insert(id);
+                    out.funcs.delete(id);
                 }
-            }
-        }
-
-        let used = wasm_used::Used::new(&out, &deleted);
-
-        for node in symbols_to_delete {
-            if let Node::Function(id) = *node {
-                out.funcs.delete(id);
             }
         }
     }
@@ -1003,28 +938,8 @@ impl<'a> Splitter<'a> {
             }
         }
 
-        // for extra in self.extra_symbols.iter() {
-        //     roots.insert(*extra);
-        // }
+        let reachable = reachable_graph(&self.call_graph, &roots);
 
-        let mut reachable = reachable_graph(&self.call_graph, &roots);
-        // reachable.retain(|k| !self.main_graph.contains(k));
-
-        // // Create the roots
-        // let mut roots = funcs_used_by_chunks.keys().cloned().collect::<HashSet<_>>();
-
-        // let exports = self
-        //     .source_module
-        //     .exports
-        //     .iter()
-        //     .flat_map(|e| match e.item {
-        //         ExportItem::Function(id) => Some(Node::Function(id)),
-        //         _ => None,
-        //     })
-        //     .collect::<HashSet<_>>();
-        // let export_call_graph = make_call_graph(&self.call_graph, &exports);
-
-        // 10k symbols can lead to almost any chunk size (mb)
         const MAX_CHUNK_SIZE: usize = 10000;
         let mut remaining_functions: BTreeSet<Node> = reachable.into_iter().collect();
 
@@ -1122,29 +1037,21 @@ impl<'a> Splitter<'a> {
     }
 
     fn unused_main_symbols(&self) -> HashSet<Node> {
-        let mut unique = HashSet::new();
-
-        for split in self.split_points.iter() {
-            unique.extend(split.reachable_graph.iter());
-        }
-
-        unique.retain(|sym| !self.main_graph.contains(sym));
-
-        let mut fix_expots = vec![];
-        for _u in unique.iter() {
-            if let Node::Function(_u) = _u {
-                if self.source_module.exports.get_exported_func(*_u).is_some() {
-                    fix_expots.push(*_u);
+        self.split_points
+            .iter()
+            .flat_map(|split| split.reachable_graph.iter())
+            .filter(|sym| {
+                if self.main_graph.contains(sym) {
+                    return false;
                 }
-            }
-        }
 
-        for _u in fix_expots.iter() {
-            tracing::warn!("fixing export: {:?}", _u);
-            unique.remove(&Node::Function(*_u));
-        }
-
-        unique
+                match sym {
+                    Node::Function(u) => self.source_module.exports.get_exported_func(*u).is_none(),
+                    _ => true,
+                }
+            })
+            .cloned()
+            .collect()
     }
 
     /// Accumulate the relocations from the original module, create a relocation map, and then convert
@@ -1157,24 +1064,16 @@ impl<'a> Splitter<'a> {
 
         let mut names = original.names_to_funcs.clone();
         for func in self.source_module.funcs.iter() {
-            let Some(name) = func.name.as_ref() else {
-                continue;
-            };
-
-            match names.remove(name) {
-                Some(original_id) => {
-                    f_to_f.insert(original_id, func.id());
-                }
-                None => {
-                    self.extra_symbols.insert(Node::Function(func.id()));
-                    // tracing::error!("func not found: {:?}", name)
+            if let Some(name) = func.name.as_ref() {
+                match names.remove(name) {
+                    Some(original_id) => {
+                        f_to_f.insert(original_id, func.id());
+                    }
+                    None => {
+                        self.extra_symbols.insert(Node::Function(func.id()));
+                    }
                 }
             }
-        }
-
-        // these are the ones that wasm-bindgen killed
-        for (name, id) in names {
-            // tracing::info!("func remaining: {:?}", name);
         }
 
         let find_old = |old: &Node| -> Option<Node> {
@@ -1189,23 +1088,11 @@ impl<'a> Splitter<'a> {
             for child in children {
                 if let Some(new) = find_old(child) {
                     new_children.insert(new);
-                } else {
-                    if let Node::Function(id) = child {
-                        let name = original.module.funcs.get(*id).name.as_ref();
-                        // tracing::error!("func not found: {:?}", name);
-                    }
-
-                    // tracing::error!("func not found: {:?}", child);
                 }
             }
 
             if let Some(new) = find_old(old) {
                 new_children.insert(new);
-            } else {
-                if let Node::Function(id) = old {
-                    let name = original.module.funcs.get(*id).name.as_ref();
-                    // tracing::error!("func not found: {:?}", name);
-                }
             }
         }
 
@@ -1285,11 +1172,9 @@ impl<'a> Splitter<'a> {
     /// Convert this set of nodes to reference the new module
     fn remap_ids(&self, set: &HashSet<Node>, ids_to_fns: &[FunctionId]) -> HashSet<Node> {
         let mut out = HashSet::with_capacity(set.len());
-
         for node in set {
             out.insert(self.remap_id(ids_to_fns, node));
         }
-
         out
     }
 
@@ -1300,22 +1185,6 @@ impl<'a> Splitter<'a> {
             // data symbols don't need remapping
             Node::DataSymbol(id) => Node::DataSymbol(*id),
         }
-    }
-
-    /// Convert this set of nodes to reference the new module
-    fn remap_ids_ordered(&self, set: &HashSet<Node>, ids_to_fns: &[FunctionId]) -> HashSet<Node> {
-        let mut out = HashSet::with_capacity(set.len());
-
-        for node in set {
-            match node {
-                // Remap the function IDs
-                Node::Function(id) => out.insert(Node::Function(ids_to_fns[self.fns_to_ids[&id]])),
-                // data symbols don't need remapping
-                Node::DataSymbol(id) => out.insert(Node::DataSymbol(*id)),
-            };
-        }
-
-        out
     }
 }
 
@@ -1369,8 +1238,7 @@ impl<'a> ModuleWithRelocations<'a> {
         let names_to_funcs = module
             .funcs
             .iter()
-            .enumerate()
-            .flat_map(|(idx, f)| Some((f.name.as_ref()?.clone(), f.id())))
+            .flat_map(|f| Some((f.name.as_ref()?.clone(), f.id())))
             .collect();
 
         let mut module = Self {
