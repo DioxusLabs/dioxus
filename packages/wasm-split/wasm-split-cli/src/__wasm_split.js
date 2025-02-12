@@ -9,6 +9,7 @@ export function makeLoad(url, deps, fusedImports, initIt) {
       const response = await fetch(url);
       const initSync = initIt || window.__wasm_split_main_initSync;
       const mainExports = initSync(undefined, undefined);
+      // console.log("main exports", mainExports);
 
       let imports = {
         env: {
@@ -28,6 +29,7 @@ export function makeLoad(url, deps, fusedImports, initIt) {
       }
 
       for (let name in fusedImports) {
+        // console.log("importing fused", name);
         if (fusedImports[name] !== undefined) {
           imports["__wasm_split"][name] = fusedImports[name];
         }
@@ -41,7 +43,7 @@ export function makeLoad(url, deps, fusedImports, initIt) {
       alreadyLoaded = true;
 
       for (let name in new_exports.instance.exports) {
-        console.log("fusing import", name);
+        // console.log("fusing import", name);
         if (fusedImports[name] === undefined) {
           fusedImports[name] = new_exports.instance.exports[name];
         }

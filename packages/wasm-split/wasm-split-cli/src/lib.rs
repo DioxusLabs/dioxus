@@ -223,29 +223,29 @@ impl<'a> Splitter<'a> {
 
         // Convert split chunk functions to imports
         let mut relies_on_chunks = HashSet::new();
-        // for (idx, chunk) in self.chunks.iter().enumerate() {
-        //     let nodes_to_extract = unique_symbols
-        //         .intersection(chunk)
-        //         .cloned()
-        //         .collect::<Vec<_>>();
-        //     for node in nodes_to_extract {
-        //         if !self.main_graph.contains(&node) {
-        //             // if let Node::Function(id) = node {
-        //             //     let func = self.source_module.funcs.get(id);
-        //             //     let name = func
-        //             //         .name
-        //             //         .as_ref()
-        //             //         .cloned()
-        //             //         .unwrap_or_else(|| format!("unknown - {}", id.index()));
-        //             //     tracing::debug!("Adding import for {name}");
-        //             // }
+        for (idx, chunk) in self.chunks.iter().enumerate() {
+            let nodes_to_extract = unique_symbols
+                .intersection(chunk)
+                .cloned()
+                .collect::<Vec<_>>();
+            for node in nodes_to_extract {
+                if !self.main_graph.contains(&node) {
+                    // if let Node::Function(id) = node {
+                    //     let func = self.source_module.funcs.get(id);
+                    //     let name = func
+                    //         .name
+                    //         .as_ref()
+                    //         .cloned()
+                    //         .unwrap_or_else(|| format!("unknown - {}", id.index()));
+                    //     tracing::debug!("Adding import for {name}");
+                    // }
 
-        //             unique_symbols.remove(&node);
-        //             symbols_to_import.insert(node);
-        //             relies_on_chunks.insert(idx);
-        //         }
-        //     }
-        // }
+                    unique_symbols.remove(&node);
+                    symbols_to_import.insert(node);
+                    relies_on_chunks.insert(idx);
+                }
+            }
+        }
 
         tracing::trace!(
             "Emitting module {}: {:?}",
@@ -373,13 +373,6 @@ impl<'a> Splitter<'a> {
         // Run the gc to remove unused functions - also validates the module to ensure we can emit it properly
         walrus::passes::gc::run(&mut out);
 
-        let export = out.exports.iter().find(|e| e.name.contains("N4core3ptr59drop_in_place$LT$reqwest..wasm..request..RequestBuilder$GT$17hee24ba5c88d966a")).unwrap();
-        tracing::error!("export: {:?}", export);
-        if let ExportItem::Function(id) = export.item {
-            let func = out.funcs.get(id);
-            tracing::error!("func: {:?}", func);
-        }
-
         Ok(SplitModule {
             bytes: out.emit_wasm(),
             module_name: "split".to_string(),
@@ -398,12 +391,13 @@ impl<'a> Splitter<'a> {
 
     /// Convert any shared functions into imports
     fn convert_shared_to_imports(&self, out: &mut Module, symbols_to_import: &HashSet<Node>) {
-        let mut already_imported = HashSet::new();
-        for imp in out.imports.iter_mut() {
-            if let ImportKind::Function(id) = imp.kind {
-                already_imported.insert(id);
-            }
-        }
+        // let mut already_imported = HashSet::new();
+
+        // for imp in out.imports.iter_mut() {
+        //     if let ImportKind::Function(id) = imp.kind {
+        //         already_imported.insert(id);
+        //     }
+        // }
 
         for symbol in symbols_to_import {
             if let Node::Function(id) = *symbol {
@@ -411,22 +405,22 @@ impl<'a> Splitter<'a> {
                 // let Some(name) = func.name.clone() else {
                 //     continue;
                 // };
-                let name = func
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| format!("unknown - {}", id.index()));
+                // .unwrap_or_else(|| format!("unknown - {}", id.index()));
 
-                if already_imported.contains(&id) {
-                    tracing::error!("Already imported: {:?}", name);
-                    continue;
+                // if already_imported.contains(&id) {
+                //     // tracing::error!("Already imported: {:?}", name);
+                //     continue;
+                // }
+
+                if let Some(name) = func.name.clone() {
+                    let name = format!("__exported_{name}");
+                    let ty = func.ty();
+                    let import = out
+                        .imports
+                        .add("__wasm_split", &name, ImportKind::Function(id));
+                    let func = out.funcs.get_mut(id);
+                    func.kind = FunctionKind::Import(ImportedFunction { import, ty });
                 }
-
-                let ty = func.ty();
-                let import = out
-                    .imports
-                    .add("__wasm_split", &name, ImportKind::Function(id));
-                let func = out.funcs.get_mut(id);
-                func.kind = FunctionKind::Import(ImportedFunction { import, ty });
             }
         }
     }
@@ -530,16 +524,8 @@ impl<'a> Splitter<'a> {
         // We could just try walking the code looking for directly called functions, but that's a bit more complex.
         for func_id in funcs.iter().copied() {
             if let Node::Function(func_id) = func_id {
-                if out.exports.get_exported_func(func_id).is_none() {
-                    let name = out
-                        .funcs
-                        .get(func_id)
-                        .name
-                        .as_ref()
-                        .cloned()
-                        .unwrap_or_else(|| format!("unknown - {}", func_id.index()));
-                    out.exports.add(&name, func_id);
-                    tracing::debug!("Adding export for {name}");
+                if let Some(name) = out.funcs.get(func_id).name.as_ref().cloned() {
+                    out.exports.add(&format!("__exported_{}", name), func_id);
                 }
             }
         }
@@ -1135,18 +1121,20 @@ impl<'a> Splitter<'a> {
         let mut shared_funcs = HashSet::new();
 
         for split in self.split_points.iter() {
-            shared_funcs.extend(split.reachable_graph.intersection(&self.main_graph));
+            shared_funcs.extend(split.reachable_graph.iter());
         }
 
-        // for injected in self.extra_symbols.iter() {
-        //     shared_funcs.insert(*injected);
-        // }
+        shared_funcs.retain(|sym| !self.main_graph.contains(sym));
 
-        // for import in self.source_module.imports.iter() {
-        //     if let ImportKind::Function(id) = import.kind {
-        //         shared_funcs.insert(Node::Function(id));
-        //     }
-        // }
+        for injected in self.extra_symbols.iter() {
+            shared_funcs.insert(*injected);
+        }
+
+        for import in self.source_module.imports.iter() {
+            if let ImportKind::Function(id) = import.kind {
+                shared_funcs.insert(Node::Function(id));
+            }
+        }
 
         shared_funcs
     }
@@ -1155,37 +1143,24 @@ impl<'a> Splitter<'a> {
         let mut unique = HashSet::new();
 
         for split in self.split_points.iter() {
-            // let unique_symbols = split
-            //     .reachable_graph
-            //     .difference(&self.main_graph)
-            //     .cloned()
-            //     .collect::<HashSet<_>>();
-
             unique.extend(split.reachable_graph.iter());
         }
 
         unique.retain(|sym| !self.main_graph.contains(sym));
 
-        // let mut fix_expots = vec![];
-        // for _u in unique.iter() {
-        //     if let Node::Function(_u) = _u {
-        //         if self.source_module.exports.get_exported_func(*_u).is_some() {
-        //             fix_expots.push(*_u);
-        //         }
-        //     }
-        // }
+        let mut fix_expots = vec![];
+        for _u in unique.iter() {
+            if let Node::Function(_u) = _u {
+                if self.source_module.exports.get_exported_func(*_u).is_some() {
+                    fix_expots.push(*_u);
+                }
+            }
+        }
 
-        // for _u in fix_expots.iter() {
-        //     tracing::warn!("fixing export: {:?}", _u);
-        //     unique.remove(&Node::Function(*_u));
-        // }
-
-        // for i in self.source_module.imports.iter() {
-        //     if let ImportKind::Function(id) = i.kind {
-        //         // unique.insert(Node::Function(id));
-        //         // unique.remove(&Node::Function(id));
-        //     }
-        // }
+        for _u in fix_expots.iter() {
+            tracing::warn!("fixing export: {:?}", _u);
+            unique.remove(&Node::Function(*_u));
+        }
 
         unique
     }
