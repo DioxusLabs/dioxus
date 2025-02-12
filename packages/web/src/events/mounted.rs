@@ -83,6 +83,27 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
         Box::pin(async { Ok(()) })
     }
 
+    fn scroll(
+        &self,
+        coordinates: dioxus_html::geometry::PixelsVector2D,
+        behavior: dioxus_html::ScrollBehavior,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = dioxus_html::MountedResult<()>>>> {
+        let options = web_sys::ScrollToOptions::new();
+        options.set_top(coordinates.y);
+        options.set_left(coordinates.x);
+        match behavior {
+            dioxus_html::ScrollBehavior::Instant => {
+                options.set_behavior(web_sys::ScrollBehavior::Instant);
+            }
+            dioxus_html::ScrollBehavior::Smooth => {
+                options.set_behavior(web_sys::ScrollBehavior::Smooth);
+            }
+        }
+        self.event.scroll_with_scroll_to_options(&options);
+
+        Box::pin(async { Ok(()) })
+    }
+
     fn set_focus(
         &self,
         focus: bool,
