@@ -15,12 +15,7 @@ wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 wasm-streams = "0.4.0"
 web-sys = { version = "0.3.76", features = ["Document", "Window", "HtmlElement", "Text", "DomRectReadOnly", "console"] }
-# wasm-split = { workspace = true }
 once_cell = "1.20.2"
 getrandom = { version = "0.2", features = ["js"] }
 reqwest = { version = "0.11.18", features = ["json"] }
-
-
-[profile.dev.package."*"]
-opt-level = 3
 

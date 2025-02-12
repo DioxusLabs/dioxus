@@ -186,8 +186,7 @@ pub fn fullstack_address_or_localhost() -> SocketAddr {
 ///
 /// This is used to set the title of the desktop window if the app itself doesn't set it.
 pub fn app_title() -> Option<String> {
-    None
-    // read_env_config!("DIOXUS_APP_TITLE")
+    read_env_config!("DIOXUS_APP_TITLE")
 }
 
 /// Check if the application should forced to "float" on top of other windows.
@@ -222,13 +221,12 @@ pub fn base_path() -> Option<String> {
     // This may trigger when compiling to the server if you depend on another crate that pulls in
     // the web feature. It might be better for the renderers to provide the current platform
     // as a global context
-    // #[cfg(all(feature = "web", target_arch = "wasm32"))]
-    // {
-    //     return web_base_path();
-    // }
+    #[cfg(all(feature = "web", target_arch = "wasm32"))]
+    {
+        return web_base_path();
+    }
 
-    None
-    // read_env_config!("DIOXUS_ASSET_ROOT")
+    read_env_config!("DIOXUS_ASSET_ROOT")
 }
 
 #[cfg(feature = "web")]
@@ -252,19 +250,19 @@ extern "C" {
 #[cfg(feature = "web")]
 pub fn web_base_path() -> Option<String> {
     // In debug mode, we get the base path from the meta element which can be hot reloaded and changed without recompiling
-    // #[cfg(debug_assertions)]
-    // {
-    thread_local! {
-        static BASE_PATH: std::cell::OnceCell<Option<String>> = const { std::cell::OnceCell::new() };
+    #[cfg(debug_assertions)]
+    {
+        thread_local! {
+            static BASE_PATH: std::cell::OnceCell<Option<String>> = const { std::cell::OnceCell::new() };
+        }
+        BASE_PATH.with(|f| f.get_or_init(|| get_meta_contents(ASSET_ROOT_ENV)).clone())
     }
-    BASE_PATH.with(|f| f.get_or_init(|| get_meta_contents(ASSET_ROOT_ENV)).clone())
-    // }
 
-    // // In release mode, we get the base path from the environment variable
-    // #[cfg(not(debug_assertions))]
-    // {
-    //     option_env!("DIOXUS_ASSET_ROOT").map(ToString::to_string)
-    // }
+    // In release mode, we get the base path from the environment variable
+    #[cfg(not(debug_assertions))]
+    {
+        option_env!("DIOXUS_ASSET_ROOT").map(ToString::to_string)
+    }
 }
 
 /// Format a meta element for the base path to be used in the output HTML

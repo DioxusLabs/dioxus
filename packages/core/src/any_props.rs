@@ -75,16 +75,27 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
     }
 
     fn render(&self) -> Element {
-        fn render_inner(res: Result<Element, Box<dyn Any + Send>>) -> Element {
+        fn render_inner(name: &str, res: Result<Element, Box<dyn Any + Send>>) -> Element {
             match res {
                 Ok(node) => node,
-                Err(err) => Element::Err(CapturedPanic { error: err }.into()),
+                Err(err) => {
+                    // on wasm this massively bloats binary sizes and we can't even capture the panic
+                    // so do nothing
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        tracing::error!("Panic while rendering component `{name}`: {err:?}");
+                    }
+                    Element::Err(CapturedPanic { error: err }.into())
+                }
             }
         }
 
-        render_inner(std::panic::catch_unwind(AssertUnwindSafe(move || {
-            self.render_fn.rebuild(self.props.clone())
-        })))
+        render_inner(
+            &self.name,
+            std::panic::catch_unwind(AssertUnwindSafe(move || {
+                self.render_fn.rebuild(self.props.clone())
+            })),
+        )
     }
 
     fn duplicate(&self) -> BoxedAnyProps {

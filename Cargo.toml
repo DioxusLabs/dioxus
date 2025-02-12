@@ -75,6 +75,7 @@ members = [
     "packages/wasm-split/wasm-split-macro",
     "packages/wasm-split/wasm-split-cli",
     "packages/wasm-split/wasm-split-harness",
+    "packages/wasm-split/wasm-used",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -246,12 +247,17 @@ objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 tray-icon = "0.19"
 
+# disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
+[profile.dev]
+debug = 0
+
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
 [profile.release]
 incremental = true
 
 # crank up the opt level for wasm-split-cli in dev mode
+# important here that lto is on and the debug symbols are presenta (since they're used by wasm-opt)a
 [profile.wasm-split-release]
 inherits = "release"
 opt-level = 'z'
@@ -259,17 +265,20 @@ strip = "debuginfo"
 incremental = true
 lto = true
 
+# a profile for running the CLI that's also incremental
 [profile.cli-release-dev]
 inherits = "release"
 opt-level = 3
 incremental = true
 
+# crank up walrus since it's quite slow in dev mode
+[profile.dev.package.walrus]
+opt-level = 3
+
 [profile.release-max-opt]
 inherits = "release"
 lto = true
 codegen-units = 1
-opt-level = 'z'
-strip = "debuginfo"
 
 # Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
 [profile.release-unoptimized]
@@ -277,11 +286,9 @@ inherits = "dev"
 debug-assertions = false
 incremental = true
 
-[profile.dev.package."*"]
-opt-level = 3
-
 [profile.wasm-dev]
 inherits = "dev"
+opt-level = 1
 
 [profile.server-dev]
 inherits = "dev"

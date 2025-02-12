@@ -19,6 +19,37 @@ use crate::segment::create_error_type;
 use crate::segment::parse_route_segments;
 use crate::segment::RouteSegment;
 
+struct RouteArgs {
+    route: LitStr,
+    comp_name: Option<Path>,
+}
+
+impl Parse for RouteArgs {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let route = input.parse::<LitStr>()?;
+
+        Ok(RouteArgs {
+            route,
+            comp_name: {
+                let _ = input.parse::<syn::Token![,]>();
+                input.parse().ok()
+            },
+        })
+    }
+}
+
+struct ChildArgs {
+    route: LitStr,
+}
+
+impl Parse for ChildArgs {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let route = input.parse::<LitStr>()?;
+
+        Ok(ChildArgs { route })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Route {
     pub route_name: Ident,
@@ -417,35 +448,4 @@ impl Route {
 pub(crate) enum RouteType {
     Child(Field),
     Leaf { component: Path },
-}
-
-struct RouteArgs {
-    route: LitStr,
-    comp_name: Option<Path>,
-}
-
-impl Parse for RouteArgs {
-    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let route = input.parse::<LitStr>()?;
-
-        Ok(RouteArgs {
-            route,
-            comp_name: {
-                let _ = input.parse::<syn::Token![,]>();
-                input.parse().ok()
-            },
-        })
-    }
-}
-
-struct ChildArgs {
-    route: LitStr,
-}
-
-impl Parse for ChildArgs {
-    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let route = input.parse::<LitStr>()?;
-
-        Ok(ChildArgs { route })
-    }
 }

@@ -7,3 +7,4 @@ This workspace is comprised of:
 - the wasm-split user-facing crate
 - the wasm-split-macro crate which is used to generate the wasm-split loader
 - the wasm-split-cli crate which is imported by the dioxus-cli and used when building the wasm modules
+- the wasm-used crate which provides a custom walrus `Used` struct that makes it easier to debug why a emit_wasm might be failing

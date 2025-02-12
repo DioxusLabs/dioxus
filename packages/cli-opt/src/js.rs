@@ -82,8 +82,6 @@ fn bundle_js_to_writer_inside_handler(
         let mut entries = HashMap::default();
         entries.insert("main".to_string(), FileName::Real(file));
 
-        tracing::debug!("Bundle entries: {:?}", entries);
-
         let mut bundles = bundler
             .bundle(entries)
             .context("failed to bundle javascript with swc")?;

@@ -25,6 +25,7 @@ pub struct AssetManifest {
 }
 
 impl AssetManifest {
+    /// Manually add an asset to the manifest
     pub fn register_asset(
         &mut self,
         asset_path: &Path,
@@ -32,11 +33,14 @@ impl AssetManifest {
     ) -> anyhow::Result<BundledAsset> {
         let hash = manganis_core::hash::AssetHash::hash_file_contents(&asset_path)
             .context("Failed to hash file")?;
+
         let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(
             "Failed to convert wasm bindgen output path to string"
         ))?;
+
         let bundled_asset =
             manganis::macro_helpers::create_bundled_asset(output_path_str, hash.bytes(), options);
+
         self.assets.insert(asset_path.into(), bundled_asset);
 
         Ok(bundled_asset)

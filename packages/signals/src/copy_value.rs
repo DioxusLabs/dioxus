@@ -75,7 +75,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     pub fn leak_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
         Self {
             value: GenerationalBox::leak(value, caller),
-            origin_scope: current_scope_id_fast(),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
         }
     }
 
@@ -92,7 +92,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
         Self {
             value: owner.insert_rc_with_caller(value, caller),
-            origin_scope: current_scope_id_fast(),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
         }
     }
 

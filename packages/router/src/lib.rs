@@ -91,7 +91,9 @@ pub mod exports {
     pub use urlencoding;
 }
 
-///
+/// A macro for deciding whether or not to split the wasm bundle.
+/// Used by the internal router-macro code.
+#[doc(hidden)]
 #[cfg(all(feature = "wasm-split", target_arch = "wasm32"))]
 #[macro_export]
 macro_rules! maybe_wasm_split {
@@ -106,7 +108,7 @@ macro_rules! maybe_wasm_split {
     };
 }
 
-///
+#[doc(hidden)]
 #[cfg(any(not(feature = "wasm-split"), not(target_arch = "wasm32")))]
 #[macro_export]
 macro_rules! maybe_wasm_split {

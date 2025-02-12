@@ -166,7 +166,7 @@ impl Runtime {
         self.spawn_task_of_type_inner(scope, Box::pin(task), ty)
     }
 
-    // a non-momorphic version of spawn_task_of_type
+    // a non-momorphic version of spawn_task_of_type, helps with binari sizes
     fn spawn_task_of_type_inner(
         &self,
         scope: ScopeId,
@@ -212,6 +212,7 @@ impl Runtime {
 
         task_id
     }
+
     /// Queue an effect to run after the next render
     pub(crate) fn queue_effect(&self, id: ScopeId, f: impl FnOnce() + 'static) {
         let effect = Box::new(f) as Box<dyn FnOnce() + 'static>;
