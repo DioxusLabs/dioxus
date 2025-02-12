@@ -12,13 +12,14 @@ pub fn wasm_opt_available() -> bool {
 }
 
 /// Write these wasm bytes with a particular set of optimizations
-pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: WasmOptConfig) -> Result<()> {
+pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
     tokio::fs::write(output_path, bytes).await?;
     optimize(output_path, output_path, cfg).await?;
     Ok(())
 }
 
-pub async fn optimize(input_path: &Path, output_path: &Path, cfg: WasmOptConfig) -> Result<()> {
+#[allow(unreachable_code)]
+pub async fn optimize(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
     #[cfg(feature = "optimizations")]
     return run_from_lib(input_path, output_path, cfg).await;
 
@@ -33,7 +34,7 @@ pub async fn optimize(input_path: &Path, output_path: &Path, cfg: WasmOptConfig)
     Ok(())
 }
 
-async fn run_locally(input_path: &Path, output_path: &Path, cfg: WasmOptConfig) -> Result<()> {
+async fn run_locally(input_path: &Path, output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
     let mut args = vec![
         // needed by wasm-bindgen
         "--enable-reference-types",
@@ -75,7 +76,11 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: WasmOptConfig) 
 
 /// Use the `wasm_opt` crate
 #[cfg(feature = "optimizations")]
-async fn run_from_lib(input_path: &Path, output_path: &Path, options: WasmOptConfig) -> Result<()> {
+async fn run_from_lib(
+    input_path: &Path,
+    output_path: &Path,
+    options: &WasmOptConfig,
+) -> Result<()> {
     let mut level = match options.level {
         WasmOptLevel::Z => wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively(),
         WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),

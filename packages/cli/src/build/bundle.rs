@@ -649,11 +649,13 @@ impl AppBundle {
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
+        let will_wasm_opt = (self.build.build.release || self.build.build.experimental_wasm_split)
+            && crate::wasm_opt::wasm_opt_available();
         let keep_debug = self.build.krate.config.web.wasm_opt.debug
             || self.build.build.debug_symbols
             || self.build.build.experimental_wasm_split
             || !self.build.build.release
-            || (self.build.build.release && crate::wasm_opt::wasm_opt_available());
+            || will_wasm_opt;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.build.build.experimental_wasm_split,
@@ -666,6 +668,7 @@ impl AppBundle {
         // There's performance implications here. Running with --debug is slower than without
         // We're keeping around lld sections and names but wasm-opt will fix them
         // todo(jon): investigate a good balance of wiping debug symbols during dev (or doing a double build?)
+        self.build.status_wasm_bindgen_start();
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
         let start = std::time::Instant::now();
         WasmBindgen::new(&bindgen_version)
@@ -677,6 +680,8 @@ impl AppBundle {
             .keep_lld_sections(true)
             .out_name(self.build.krate.executable_name())
             .out_dir(&bindgen_outdir)
+            .remove_name_section(!will_wasm_opt)
+            .remove_producers_section(!will_wasm_opt)
             .run()
             .await
             .context("Failed to generate wasm-bindgen bindings")?;
@@ -686,6 +691,8 @@ impl AppBundle {
         // It's pretty expensive but because of rayon should be running separate threads, hopefully
         // not blocking this thread. Dunno if that's true
         if should_bundle_split {
+            self.build.status_splitting_bundle();
+
             // Load the contents of these binaries since we need both of them
             // We're going to use the default makeLoad glue from wasm-split
             let original = std::fs::read(&prebindgen)?;
@@ -705,7 +712,7 @@ impl AppBundle {
             tracing::debug!("Writing split chunks to disk");
             for (idx, chunk) in modules.chunks.iter().enumerate() {
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
-                wasm_opt::write_wasm(&chunk.bytes, &path, wasm_opt_options).await?;
+                wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = self
@@ -724,7 +731,7 @@ impl AppBundle {
                     .context("generated bindgen module has no name?")?;
 
                 let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
-                wasm_opt::write_wasm(&module.bytes, &path, wasm_opt_options).await?;
+                wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options).await?;
 
                 let hash_id = module.hash_id.as_ref().unwrap();
 
@@ -773,7 +780,8 @@ impl AppBundle {
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.build.build.release {
-            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, wasm_opt_options).await?;
+            self.build.status_optimizing_wasm();
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
         // Make sure to register the main wasm file with the asset system

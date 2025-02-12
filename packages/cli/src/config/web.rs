@@ -42,7 +42,7 @@ impl Default for WebConfig {
 }
 
 /// The wasm-opt configuration
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct WasmOptConfig {
     /// The wasm-opt level to use for release builds [default: s]
     /// Options:
