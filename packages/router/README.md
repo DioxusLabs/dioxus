@@ -99,7 +99,7 @@ You need to enable the right features for the platform you're targeting since th
 
 ## Bundle Splitting
 
-The Dioxus Router supports bundle splitting along routes. To enable this, you need to manually turn on the `wasm-split` feature explicitly on the crate:
+The Dioxus Router supports automatic bundle splitting along route variants. To enable this, you need to manually turn on the `wasm-split` feature explicitly on the dioxus-router crate:
 
 ```toml
 [dependencies]
@@ -107,9 +107,9 @@ dioxus = { version = "*", feautres = ["router", "wasm-split"] }
 dioxus-router = { version = "*", feautres = ["wasm-split"] }
 ```
 
-Note that `wasm-split` must also be turned on in dioxus since the macro looks for the `wasm-split` crate in scope which the dioxus prelude exports.
+Note that `wasm-split` must also be turned on in dioxus since the macro uses the re-exported `wasm-split` from the dioxus prelude.
 
-Turning this on disconnects the call graph, meaning if you try to run your app with a normal `dx serve`, it won't work. When running with router splitting, you need to pass `--experimental-wasm-split`.
+Enabling splitting disconnects the call graph, meaning if you try to run your app with a normal `dx serve`, it won't work. When running with router splitting, you need to pass `--experimental-wasm-split`.
 
 ```sh
 dx serve --experimental-wasm-split
