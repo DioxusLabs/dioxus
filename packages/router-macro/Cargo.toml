@@ -19,10 +19,9 @@ syn = { workspace = true, features = ["extra-traits", "full"] }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
 slab = { workspace = true }
-base16 = "0.2.1"
-digest = "0.10.7"
-sha2 = "0.10.8"
-
+base16 = { workspace = true }
+digest = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }

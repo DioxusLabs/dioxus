@@ -230,6 +230,17 @@ cargo_metadata = "0.18.1"
 parking_lot = "0.12.1"
 tracing-wasm = "0.2.1"
 console_error_panic_hook = "0.1.7"
+base16 = "0.2.1"
+digest = "0.10.7"
+sha2 = "0.10.8"
+walrus = { version = "0.23.2", features = ["parallel"] }
+id-arena = "2.2.1"
+async-compression = { version = "0.4.8", features = ["futures-io", "gzip", "brotli"] }
+getrandom = { version = "0.2" }
+async-once-cell = { version = "0.5.3" }
+rayon = "1.2.0"
+wasmparser = "0.225.0"
+itertools = "0.14.0"
 
 # desktop
 wry = { version = "0.45.0", default-features = false }

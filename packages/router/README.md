@@ -109,6 +109,20 @@ dioxus-router = { version = "*", feautres = ["wasm-split"] }
 
 Note that `wasm-split` must also be turned on in dioxus since the macro looks for the `wasm-split` crate in scope which the dioxus prelude exports.
 
+Turning this on disconnects the call graph, meaning if you try to run your app with a normal `dx serve`, it won't work. When running with router splitting, you need to pass `--experimental-wasm-split`.
+
+```sh
+dx serve --experimental-wasm-split
+```
+
+In practice, we recommend passing `dioxus-router?/wasm-split` as a feature only when bundling:
+
+```sh
+dx bundle --features "dioxus-router?/wasm-split"  --experimental-wasm-split
+```
+
+Note that the router will call `.suspend()` so you should add a SuspenseBoundary above the Outlet to prevent suspending the entire page.
+
 ## Contributing
 
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).

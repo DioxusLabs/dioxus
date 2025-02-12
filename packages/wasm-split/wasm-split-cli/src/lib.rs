@@ -14,7 +14,8 @@ use walrus::{
     TableId, TypeId,
 };
 use wasmparser::{
-    Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry, SymbolInfo,
+    BinaryReader, Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry,
+    SymbolInfo,
 };
 
 pub const MAKE_LOAD_JS: &'static str = include_str!("./__wasm_split.js");
@@ -43,11 +44,9 @@ pub struct Splitter<'a> {
     split_points: Vec<SplitPoint>,
     chunks: Vec<HashSet<Node>>,
     data_symbols: BTreeMap<usize, DataSymbol>,
-    symbols: Vec<SymbolInfo<'a>>,
     main_graph: HashSet<Node>,
     call_graph: HashMap<Node, HashSet<Node>>,
     parent_graph: HashMap<Node, HashSet<Node>>,
-    // extra_symbols: HashSet<Node>,
 }
 
 /// The results of splitting the wasm module with some additional metadata for later use.
@@ -87,7 +86,7 @@ impl<'a> Splitter<'a> {
         let split_points = accumulate_split_points(&module);
 
         // Note that we can't trust the normal symbols - just the data symbols - and we can't use the data offset
-        // since that'snot reliable after bindgening
+        // since that's not reliable after bindgening
         let raw_data = parse_bytes_to_data_segment(&bindgened)?;
 
         let mut module = Self {
@@ -96,7 +95,6 @@ impl<'a> Splitter<'a> {
             bindgened,
             split_points,
             data_symbols: raw_data.data_symbols,
-            symbols: raw_data.symbols,
             _ids_to_fns: ids,
             fns_to_ids,
             main_graph: Default::default(),
@@ -1308,7 +1306,8 @@ impl<'a> ModuleWithRelocations<'a> {
             .context("Module does not contain the reloc section")?;
 
         let code_reloc_data = code_reloc.data(&Default::default());
-        let relocations = RelocSectionReader::new(&code_reloc_data, 0)
+        let reader = BinaryReader::new(&code_reloc_data, 0);
+        let relocations = RelocSectionReader::new(reader)
             .context("failed to parse reloc section")?
             .entries()
             .into_iter()
@@ -1482,7 +1481,8 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
                 segments = section.into_iter().collect::<Result<Vec<_>, _>>()?
             }
             Payload::CustomSection(section) if section.name() == "linking" => {
-                let reader = LinkingSectionReader::new(section.data(), 0)?;
+                let reader = BinaryReader::new(section.data(), 0);
+                let reader = LinkingSectionReader::new(reader)?;
                 for subsection in reader.subsections() {
                     if let Linking::SymbolTable(map) = subsection? {
                         symbols = map.into_iter().collect::<Result<Vec<_>, _>>()?;
@@ -1532,13 +1532,4 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
         symbols,
         data_symbols,
     })
-}
-
-#[test]
-fn debug_chunking() {
-    let orig = include_bytes!("../data/dioxus_docs_site.wasm");
-    let bind = include_bytes!("../data/bindgen/dioxus_docs_site_bg.wasm");
-
-    let splitter = Splitter::new(orig, bind).unwrap();
-    let out = splitter.emit().unwrap();
 }

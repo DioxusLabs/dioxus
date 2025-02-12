@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 
 use digest::Digest;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, FnArg, Ident, ItemFn, Pat, Path, Signature};
+use syn::{parse_macro_input, FnArg, Ident, ItemFn, Pat, Signature};
 
 #[proc_macro_attribute]
 pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {

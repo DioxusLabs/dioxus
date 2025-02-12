@@ -21,8 +21,9 @@ pub struct Roots {
     used: Used,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
-enum Location {
+pub enum Location {
     Start,
     Export { export: ExportId },
     Table { table: TableId },
@@ -309,7 +310,7 @@ struct UsedVisitor<'a> {
     stack: &'a mut Roots,
 }
 
-impl<'expr> Visitor<'expr> for UsedVisitor<'_> {
+impl Visitor<'_> for UsedVisitor<'_> {
     fn visit_function_id(&mut self, &func: &FunctionId) {
         self.stack.push_func(
             func,

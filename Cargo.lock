@@ -6239,6 +6239,7 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash",
+ "serde",
 ]
 
 [[package]]
@@ -6599,19 +6600,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-io-timeout",
-]
-
-[[package]]
-name = "hyper-tls"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
-dependencies = [
- "bytes",
- "hyper 0.14.31",
- "native-tls",
- "tokio",
- "tokio-native-tls",
 ]
 
 [[package]]
@@ -7199,6 +7187,15 @@ name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
@@ -10387,12 +10384,10 @@ dependencies = [
  "http-body 0.4.6",
  "hyper 0.14.31",
  "hyper-rustls 0.24.2",
- "hyper-tls 0.5.0",
  "ipnet",
  "js-sys",
  "log",
  "mime",
- "native-tls",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -10405,7 +10400,6 @@ dependencies = [
  "sync_wrapper 0.1.2",
  "system-configuration 0.5.1",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls 0.24.1",
  "tower-service",
  "url",
@@ -10434,7 +10428,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.5.1",
  "hyper-rustls 0.27.3",
- "hyper-tls 0.6.0",
+ "hyper-tls",
  "hyper-util",
  "ipnet",
  "js-sys",
@@ -14007,7 +14001,7 @@ dependencies = [
  "log",
  "rayon",
  "walrus-macro",
- "wasm-encoder 0.214.0",
+ "wasm-encoder",
  "wasmparser 0.214.0",
 ]
 
@@ -14169,16 +14163,6 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.206.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d759312e1137f199096d80a70be685899cd7d3d09c572836bb2e9b69b4dc3b1e"
-dependencies = [
- "leb128",
- "wasmparser 0.206.0",
-]
-
-[[package]]
-name = "wasm-encoder"
 version = "0.214.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff694f02a8d7a50b6922b197ae03883fbf18cdb2ae9fbee7b6148456f5f44041"
@@ -14231,11 +14215,7 @@ name = "wasm-split"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
- "once_cell",
- "tracing",
- "tracing-subscriber",
  "wasm-split-macro",
- "web-sys",
 ]
 
 [[package]]
@@ -14245,17 +14225,13 @@ dependencies = [
  "anyhow",
  "clap",
  "id-arena",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "rayon",
- "rustc-demangle",
- "serde",
- "serde_json",
  "tracing",
  "tracing-subscriber",
  "walrus",
- "wasm-encoder 0.206.0",
  "wasm-used",
- "wasmparser 0.206.0",
+ "wasmparser 0.225.0",
 ]
 
 [[package]]
@@ -14267,14 +14243,11 @@ dependencies = [
  "dioxus",
  "futures",
  "getrandom 0.2.15",
- "gloo-console",
- "gloo-net 0.3.1",
  "js-sys",
  "once_cell",
- "reqwest 0.11.27",
+ "reqwest 0.12.9",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasm-streams",
  "web-sys",
 ]
 
@@ -14288,7 +14261,6 @@ dependencies = [
  "quote",
  "sha2",
  "syn 2.0.90",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -14327,32 +14299,9 @@ dependencies = [
 name = "wasm-used"
 version = "0.6.3"
 dependencies = [
- "anyhow",
- "clap",
  "id-arena",
- "itertools 0.13.0",
- "rayon",
- "rustc-demangle",
- "serde",
- "serde_json",
  "tracing",
- "tracing-subscriber",
  "walrus",
- "wasm-encoder 0.206.0",
- "wasmparser 0.206.0",
-]
-
-[[package]]
-name = "wasmparser"
-version = "0.206.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39192edb55d55b41963db40fd49b0b542156f04447b5b512744a91d38567bdbc"
-dependencies = [
- "ahash 0.8.11",
- "bitflags 2.6.0",
- "hashbrown 0.14.5",
- "indexmap 2.7.0",
- "semver 1.0.23",
 ]
 
 [[package]]
@@ -14376,6 +14325,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b09e46c7fceceaa72b2dd1a8a137ea7fd8f93dfaa69806010a709918e496c5dc"
 dependencies = [
  "bitflags 2.6.0",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.225.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36e5456165f81e64cb9908a0fe9b9d852c2c74582aa3fe2be3c2da57f937d3ae"
+dependencies = [
+ "bitflags 2.6.0",
+ "hashbrown 0.15.2",
+ "indexmap 2.7.0",
+ "semver 1.0.23",
+ "serde",
 ]
 
 [[package]]
