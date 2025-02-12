@@ -80,7 +80,7 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
                 fn #load_module_ident (
                     callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
                     data: *const ::std::ffi::c_void
-                ) -> ();
+                );
 
                 #[allow(improper_ctypes)]
                 #[no_mangle]
@@ -165,7 +165,7 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
                 fn #load_module_ident(
                     callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
                     data: *const ::std::ffi::c_void,
-                ) -> ();
+                );
 
                 #[allow(improper_ctypes)]
                 #[no_mangle]

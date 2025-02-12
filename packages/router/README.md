@@ -97,6 +97,18 @@ fn BlogPost(blog_id: usize) -> Element {
 
 You need to enable the right features for the platform you're targeting since these are not determined automatically!
 
+## Bundle Splitting
+
+The Dioxus Router supports bundle splitting along routes. To enable this, you need to manually turn on the `wasm-split` feature explicitly on the crate:
+
+```toml
+[dependencies]
+dioxus = { version = "*", feautres = ["router", "wasm-split"] }
+dioxus-router = { version = "*", feautres = ["wasm-split"] }
+```
+
+Note that `wasm-split` must also be turned on in dioxus since the macro looks for the `wasm-split` crate in scope which the dioxus prelude exports.
+
 ## Contributing
 
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).

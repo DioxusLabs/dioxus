@@ -478,65 +478,6 @@ impl RouteEnum {
         Ok(myself)
     }
 
-    fn field_present_in_url(&self, field: &Ident) -> bool {
-        let mut from_route = false;
-
-        for nest in &self.nests {
-            if nest.dynamic_segments_names().any(|i| &i == field) {
-                from_route = true
-            }
-        }
-        for route in &self.endpoints {
-            match route {
-                RouteEndpoint::Route(route) => match &route.ty {
-                    RouteType::Child(child) => {
-                        if let Some(child) = child.ident.as_ref() {
-                            if child == "child" {
-                                from_route = true
-                            }
-                        }
-                    }
-                    RouteType::Leaf { .. } => {
-                        for segment in &route.segments {
-                            if segment.name().as_ref() == Some(field) {
-                                from_route = true
-                            }
-                        }
-                        if let Some(query) = &route.query {
-                            if query.contains_ident(field) {
-                                from_route = true
-                            }
-                        }
-                        if let Some(hash) = &route.hash {
-                            if hash.contains_ident(field) {
-                                from_route = true
-                            }
-                        }
-                    }
-                },
-                RouteEndpoint::Redirect(redirect) => {
-                    for segment in &redirect.segments {
-                        if segment.name().as_ref() == Some(field) {
-                            from_route = true
-                        }
-                    }
-                    if let Some(query) = &redirect.query {
-                        if query.contains_ident(field) {
-                            from_route = true
-                        }
-                    }
-                    if let Some(hash) = &redirect.hash {
-                        if hash.contains_ident(field) {
-                            from_route = true
-                        }
-                    }
-                }
-            }
-        }
-
-        from_route
-    }
-
     fn impl_display(&self) -> TokenStream2 {
         let mut display_match = Vec::new();
 

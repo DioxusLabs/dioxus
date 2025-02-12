@@ -1,4 +1,5 @@
 // Handle caching of github stars
+// This file is part of the fuzz test to prove we can handle linked js files
 
 // Two days
 const STAR_EXPIRE_TIME = 172800000;

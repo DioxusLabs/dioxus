@@ -4,14 +4,13 @@
 
 #![allow(non_snake_case)]
 
-use dioxus::wasm_split;
-use std::{future::Future, pin::Pin, thread::LocalKey};
-
 use dioxus::prelude::*;
+use dioxus::wasm_split;
 use futures::AsyncReadExt;
 use js_sys::Date;
+use std::{future::Future, pin::Pin};
 use wasm_bindgen::prelude::*;
-use wasm_split::{lazy_loader, LazyLoader, LazySplitLoader};
+use wasm_split::lazy_loader;
 
 fn main() {
     dioxus::launch(|| {
@@ -42,7 +41,7 @@ fn Nav() -> Element {
 
 pub(crate) static GLOBAL_COUNTER: GlobalSignal<usize> = Signal::global(|| 0);
 
-fn Home(args: ()) -> Element {
+fn Home() -> Element {
     let mut count = use_signal(|| 1);
     let mut res = use_signal(|| "hello".to_string());
 
@@ -186,13 +185,12 @@ fn ChildSplit() -> Element {
     static LOADER: wasm_split::LazyLoader<(), Element> =
         lazy_loader!(extern "five" fn InnerChild(props: ()) -> Element);
 
-    fn InnerChild(props: ()) -> Element {
+    fn InnerChild(_props: ()) -> Element {
         static LOADER2: wasm_split::LazyLoader<Signal<String>, Element> =
             lazy_loader!(extern "fortytwo" fn InnerChild3(props: Signal<String>) -> Element);
 
         fn InnerChild3(count: Signal<String>) -> Element {
-            // fn InnerChild3(count: Signal<String>) -> Element {
-            pub(crate) static IconCheckGh: Component<()> = |cx| {
+            pub(crate) static ICONCHECK: Component<()> = |_| {
                 rsx! {
                     svg {
                         class: "octicon octicon-check js-clipboard-check-icon d-inline-block d-none",
@@ -224,7 +222,7 @@ fn ChildSplit() -> Element {
                 h3 { "Global Counter: {GLOBAL_COUNTER}" }
                 h3 { "Date: {now.to_date_string()}" }
                 h3 { "count: {count}" }
-                IconCheckGh {}
+                ICONCHECK {}
             }
         }
 
@@ -236,7 +234,7 @@ fn ChildSplit() -> Element {
 
         let num = get_stars("stars".to_string()).unwrap_or(0);
 
-        let inner_child = use_resource(|| async move { LOADER2.load().await }).suspend()?;
+        use_resource(|| async move { LOADER2.load().await }).suspend()?;
         let mut count = use_signal(|| "hello".to_string());
 
         let fp = LOADER2.call(count).unwrap();
@@ -260,10 +258,6 @@ fn ChildSplit() -> Element {
                 "Add World"
             }
         }
-
-        // rsx! {
-        //     "hi"
-        // }
     }
 
     use_resource(|| async move { LOADER.load().await }).suspend()?;
