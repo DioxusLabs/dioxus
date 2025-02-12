@@ -106,7 +106,7 @@ impl<'a> Splitter<'a> {
         };
 
         module.build_call_graph()?;
-        // module.build_split_chunks();
+        module.build_split_chunks();
 
         Ok(module)
     }
@@ -296,22 +296,17 @@ impl<'a> Splitter<'a> {
         let unique_symbols = &self.chunks[idx];
 
         // The functions we'll need to import
-        let mut symbols_to_import: HashSet<_> = unique_symbols
+        let symbols_to_import: HashSet<_> = unique_symbols
             .intersection(&self.main_graph)
             .cloned()
             .collect();
 
         // Delete everything except the symbols that are reachable from this module
-        let mut symbols_to_delete: HashSet<_> = self
+        let symbols_to_delete: HashSet<_> = self
             .main_graph
             .difference(&unique_symbols)
             .cloned()
             .collect();
-
-        // for extra in self.extra_symbols.iter() {
-        //     symbols_to_import.insert(*extra);
-        //     symbols_to_delete.remove(extra);
-        // }
 
         // Make sure to remap any ids from the main module to this module
         let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
@@ -659,9 +654,7 @@ impl<'a> Splitter<'a> {
         for node in symbols_to_delete {
             if let Node::Function(id) = *node {
                 if out.exports.get_exported_func(id).is_none() {
-                    if out.imports.get_imported_func(id).is_none() {
-                        out.funcs.delete(id);
-                    }
+                    out.funcs.delete(id);
                 }
             }
         }
@@ -888,121 +881,23 @@ impl<'a> Splitter<'a> {
     ///
     /// Todo: we could chunk up the main module itself! Not going to now but it would enable parallel downloads of the main chunk
     fn build_split_chunks(&mut self) {
-        // Every symbol and the chunks that use it
-        // We're only going to try optimizing functions used across multiple chunks
+        // create a single chunk that contains all functions used by multiple modules
         let mut funcs_used_by_chunks: HashMap<Node, HashSet<usize>> = HashMap::new();
         for split in self.split_points.iter() {
             for item in split.reachable_graph.iter() {
                 if self.main_graph.contains(item) {
                     continue;
                 }
-
-                funcs_used_by_chunks
-                    .entry(item.clone())
-                    .or_default()
-                    .insert(split.index);
             }
         }
 
-        for import in self.source_module.imports.iter() {
-            tracing::debug!("import: {:?}", import.name);
-        }
-
-        for export in self.source_module.exports.iter() {
-            tracing::warn!("export: {:?}", export.name);
-        }
-
-        // for extra in self.extra_symbols.iter() {
-        //     if let Node::Function(id) = extra {
-        //         let name = self.source_module.funcs.get(*id).name.as_ref().unwrap();
-        //         tracing::info!("extra: {:?}", name);
-        //     }
-        // }
-
-        // Remove all the symbols that are only used by one module
+        // Only consider funcs that are used by multiple modules - otherwise they can just stay in their respective module
         funcs_used_by_chunks.retain(|_, v| v.len() > 1);
 
-        let roots = funcs_used_by_chunks.keys().cloned().collect::<HashSet<_>>();
+        // todo: break down this chunk if it exceeds a certain size (100kb?) by identifying different groups
 
-        // for export in self.exported_functions() {
-        //     roots.insert(Node::Function(export));
-        // }
-
-        // for import in self.source_module.imports.iter() {
-        //     if let ImportKind::Function(id) = import.kind {
-        //         roots.insert(Node::Function(id));
-        //     }
-        // }
-
-        let reachable = reachable_graph(&self.call_graph, &roots);
-
-        const MAX_CHUNK_SIZE: usize = 10000;
-        let mut remaining_functions: BTreeSet<Node> = reachable.into_iter().collect();
-
-        while !remaining_functions.is_empty() {
-            let current_func = remaining_functions.pop_last().unwrap();
-            let mut current_chunk = HashSet::new();
-            current_chunk.insert(current_func.clone());
-            remaining_functions.remove(&current_func);
-
-            let mut removes = vec![];
-
-            for func in remaining_functions.iter().copied() {
-                if current_chunk.len() >= MAX_CHUNK_SIZE {
-                    break;
-                }
-
-                let is_child = self
-                    .call_graph
-                    .get(&current_func)
-                    .map(|children| children.contains(&func))
-                    .unwrap_or_default();
-                let is_parent = self
-                    .parent_graph
-                    .get(&current_func)
-                    .map(|parents| parents.contains(&func))
-                    .unwrap_or_default();
-
-                if is_child || is_parent {
-                    removes.push(func);
-                }
-            }
-
-            for remove in removes {
-                current_chunk.insert(remove);
-                remaining_functions.remove(&remove);
-            }
-
-            self.chunks.push(current_chunk);
-        }
-
-        // Further optimize chunks if needed
-        // Merge small chunks if possible
-        // todo: make this a ratio of the total size of all chunks - we don't want too many chunks (maybe only like max 1:10?)
-        // we would need to measure the size of each chunk
-        let mut i = 0;
-        while i < self.chunks.len() {
-            let min_chunk_size = (MAX_CHUNK_SIZE / 2).max(40);
-            if self.chunks[i].len() < min_chunk_size / 2 {
-                let mut best_merge = None;
-                let mut min_size = usize::MAX;
-
-                for j in (i + 1)..self.chunks.len() {
-                    let merged_size = self.chunks[i].len() + self.chunks[j].len();
-                    if merged_size <= MAX_CHUNK_SIZE && merged_size < min_size {
-                        best_merge = Some(j);
-                        min_size = merged_size;
-                    }
-                }
-
-                if let Some(j) = best_merge {
-                    let chunk_j = self.chunks.remove(j);
-                    self.chunks[i].extend(chunk_j);
-                    continue;
-                }
-            }
-            i += 1;
-        }
+        self.chunks
+            .push(funcs_used_by_chunks.keys().cloned().collect());
     }
 
     /// Get the symbols that are shared between the main module and the split modules
@@ -1015,11 +910,6 @@ impl<'a> Splitter<'a> {
         for split in self.split_points.iter() {
             shared_funcs.extend(self.main_graph.intersection(&split.reachable_graph));
         }
-
-        // // The weird shared funcs need a spot too
-        // for injected in self.extra_symbols.iter() {
-        //     shared_funcs.insert(*injected);
-        // }
 
         // And then all our imports will be callabale via the ifunc table too
         for import in self.source_module.imports.iter() {
@@ -1200,24 +1090,9 @@ impl<'a> Splitter<'a> {
         }
 
         // Now go fill in the reachability graph for each of the split points
-        //
-        // If we don't use the imports/exports they will be pruned by the gc pass, so it's okay
-        // being a little too liberal here.
+        // We want to be as narrow as possible since we've reparented any new symbols to the main module
         self.split_points.iter_mut().for_each(|split| {
-            let mut roots: HashSet<_> = [Node::Function(split.export_func)].into();
-
-            // // Addin the extern shim functions
-            // for extra in self.extra_symbols.iter() {
-            //     roots.insert(*extra);
-            // }
-
-            // // Make sure the imports are counted too
-            // for import in self.source_module.imports.iter() {
-            //     if let ImportKind::Function(id) = import.kind {
-            //         roots.insert(Node::Function(id));
-            //     }
-            // }
-
+            let roots: HashSet<_> = [Node::Function(split.export_func)].into();
             split.reachable_graph = reachable_graph(&self.call_graph, &roots);
         });
 
@@ -1249,11 +1124,6 @@ impl<'a> Splitter<'a> {
             })
             .chain(self.source_module.start.map(|f| Node::Function(f)))
             .collect::<HashSet<Node>>();
-
-        // // Make sure the extern shim functions are counted too
-        // for extra in self.extra_symbols.iter() {
-        //     roots.insert(*extra);
-        // }
 
         // Also add "imports" to the roots
         for import in self.source_module.imports.iter() {
@@ -1665,100 +1535,10 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
 }
 
 #[test]
-fn analyze_callgraph() {
+fn debug_chunking() {
     let orig = include_bytes!("../data/dioxus_docs_site.wasm");
     let bind = include_bytes!("../data/bindgen/dioxus_docs_site_bg.wasm");
 
-    let a = ModuleWithRelocations::new(orig).unwrap();
-    let b = Module::from_buffer(bind).unwrap();
-
-    let old_names: HashMap<String, FunctionId> = a
-        .module
-        .funcs
-        .iter()
-        .flat_map(|f| Some((f.name.clone()?, f.id())))
-        .collect();
-
-    let new_names: HashMap<String, FunctionId> = b
-        .funcs
-        .iter()
-        .flat_map(|f| Some((f.name.clone()?, f.id())))
-        .collect();
-
-    let mut old_to_new = HashMap::new();
-    let mut new_call_graph: HashMap<Node, HashSet<Node>> = HashMap::new();
-
-    for (new_name, new_func) in new_names.iter() {
-        if let Some(old_func) = old_names.get(new_name) {
-            old_to_new.insert(*old_func, new_func);
-        } else {
-            new_call_graph.insert(Node::Function(*new_func), HashSet::new());
-        }
-    }
-
-    let get_old = |old: &Node| -> Option<Node> {
-        match old {
-            Node::Function(id) => old_to_new.get(&id).map(|new_id| Node::Function(**new_id)),
-            Node::DataSymbol(id) => Some(Node::DataSymbol(*id)),
-        }
-    };
-
-    // the symbols that we can't find in the original module touch functions that unfortunately
-    // we can't figure out where should exist in the call graph
-    //
-    // we're going to walk and find every child we possibly can and then add it to the call graph
-    // at the root
-    //
-    // wasm-bindgen will dissolve describe functions into the shim functions, but we don't have a
-    // sense of lining up old to new, so we just assume everything ends up in the main chunk.
-    let mut lost_children = HashSet::new();
-    let new_call_graph: HashMap<Node, HashSet<Node>> = a
-        .call_graph
-        .iter()
-        .flat_map(|(old, children)| {
-            // If the old function isn't in the new module, we need to move all its descendents into the main chunk
-            let Some(new) = get_old(old) else {
-                for child in children {
-                    fn descend(
-                        lost_children: &mut HashSet<Node>,
-                        old_graph: &HashMap<Node, HashSet<Node>>,
-                        node: Node,
-                    ) {
-                        if !lost_children.insert(node) {
-                            return;
-                        }
-
-                        if let Some(children) = old_graph.get(&node) {
-                            for child in children {
-                                descend(lost_children, old_graph, *child);
-                            }
-                        }
-                    }
-
-                    descend(&mut lost_children, &a.call_graph, *child);
-                }
-                return None;
-            };
-
-            let mut new_children = HashSet::new();
-            for child in children {
-                if let Some(new) = get_old(child) {
-                    new_children.insert(new);
-                }
-            }
-
-            Some((new, new_children))
-        })
-        .collect();
-
-    let mut recovered_children = HashSet::new();
-    for lost in lost_children {
-        if let Node::Function(id) = lost {
-            let func = a.module.funcs.get(id);
-            let name = func.name.as_ref().unwrap();
-            if let Some(entry) = new_names.get(name) {
-                recovered_children.insert(*entry);
-            }
-        }
-    }
+    let splitter = Splitter::new(orig, bind).unwrap();
+    let out = splitter.emit().unwrap();
 }

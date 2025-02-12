@@ -47,6 +47,7 @@ async fn run_locally(input_path: &Path, output_path: &Path, cfg: WasmOptConfig) 
 
     if !cfg.debug {
         args.push("--strip-debug");
+    } else {
         args.push("--debuginfo");
     }
 
