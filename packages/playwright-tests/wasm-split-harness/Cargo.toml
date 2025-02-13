@@ -7,6 +7,7 @@ authors = ["Jonathan Kelley"]
 
 [dependencies]
 dioxus = { workspace = true, features = ["web", "router", "wasm-split"] }
+dioxus-router = { workspace = true, features = ["wasm-split"] }
 anyhow = { workspace = true }
 async-compression = { workspace = true, features = ["futures-io", "gzip", "brotli"] }
 futures = { workspace = true }

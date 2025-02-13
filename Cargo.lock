@@ -14207,6 +14207,7 @@ dependencies = [
  "anyhow",
  "async-compression",
  "dioxus",
+ "dioxus-router",
  "futures",
  "getrandom 0.2.15",
  "js-sys",
