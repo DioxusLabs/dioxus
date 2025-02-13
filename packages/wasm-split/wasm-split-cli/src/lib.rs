@@ -1044,7 +1044,7 @@ impl<'a> Splitter<'a> {
         }
 
         // We're going to attach the recovered children to the main function
-        let main_fn = self.source_module.funcs.by_name("main").unwrap();
+        let main_fn = self.source_module.funcs.by_name("main").context("Failed to find main function - was this build with LTO, --emit-relocs, and debug symbols?")?;
         let main_fn_entry = new_call_graph.entry(Node::Function(main_fn)).or_default();
         main_fn_entry.extend(recovered_children);
 
