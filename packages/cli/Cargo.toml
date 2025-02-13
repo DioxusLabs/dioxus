@@ -133,7 +133,7 @@ memoize = "0.5.1"
 built = { version = "=0.7.4", features = ["git2"] }
 
 [features]
-default = ["optimizations"]
+default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
 bundle = []

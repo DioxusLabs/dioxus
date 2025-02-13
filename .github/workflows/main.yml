@@ -213,7 +213,7 @@ jobs:
           cache-all-crates: "true"
       - name: Prebuild CLI
         run: |
-          cargo build --package dioxus-cli --release
+          cargo build --package dioxus-cli --release --features optimizations
       - name: Playwright
         working-directory: ./packages/playwright-tests
         run: |
