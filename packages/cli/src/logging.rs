@@ -133,10 +133,13 @@ impl TraceController {
     }
 
     /// Get a handle to the trace controller.
-    pub fn redirect() -> Self {
+    pub fn redirect(interactive: bool) -> Self {
         let (tui_tx, tui_rx) = unbounded();
-        TUI_ACTIVE.store(true, Ordering::Relaxed);
-        TUI_TX.set(tui_tx.clone()).unwrap();
+
+        if interactive {
+            TUI_ACTIVE.store(true, Ordering::Relaxed);
+            TUI_TX.set(tui_tx.clone()).unwrap();
+        }
 
         Self { tui_rx }
     }
@@ -144,7 +147,11 @@ impl TraceController {
     /// Wait for the internal logger to send a message
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         use futures_util::StreamExt;
-        let log = self.tui_rx.next().await.expect("tracer should never die");
+
+        let Some(log) = self.tui_rx.next().await else {
+            return std::future::pending().await;
+        };
+
         ServeUpdate::TracingLog { log }
     }
 }

@@ -3,7 +3,7 @@ const { test, expect } = require("@playwright/test");
 
 test("wasm-split page is functional", async ({ page }) => {
   // Wait for the dev server to load
-  await page.goto("http://localhost:9876");
+  await page.goto("http://localhost:8001");
 
   // Make sure the local button works - no broken wasm
   const counter = page.locator("#counter-display");
