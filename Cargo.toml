@@ -65,6 +65,8 @@ members = [
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
     "packages/logger",
+    "packages/config-macros",
+
     # manganis
     "packages/manganis/manganis",
     "packages/manganis/manganis-core",
@@ -141,13 +143,17 @@ dioxus-fullstack = { path = "packages/fullstack", version = "0.6.2" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.2", default-features = false }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.2" }
 dioxus-logger = { path = "packages/logger", version = "0.6.2" }
+dioxus-config-macros = { path = "packages/config-macros", version = "0.6.3" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.2" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.2" }
 generational-box = { path = "packages/generational-box", version = "0.6.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
+
+
 manganis = { path = "packages/manganis/manganis", version = "0.6.2" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.2" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.2" }
+
 
 wasm-split = { path = "packages/wasm-split/wasm-split", version = "0.1.0" }
 wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.1.0" }

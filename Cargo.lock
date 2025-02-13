@@ -3420,6 +3420,7 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-config-macro",
+ "dioxus-config-macros",
  "dioxus-core",
  "dioxus-core-macro",
  "dioxus-desktop",
@@ -3646,6 +3647,10 @@ dependencies = [
  "proc-macro2",
  "quote",
 ]
+
+[[package]]
+name = "dioxus-config-macros"
+version = "0.6.3"
 
 [[package]]
 name = "dioxus-core"

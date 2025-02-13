@@ -8,7 +8,7 @@ use dioxus::prelude::*;
 use dioxus::wasm_split;
 use futures::AsyncReadExt;
 use js_sys::Date;
-use std::{future::Future, pin::Pin};
+use std::pin::Pin;
 use wasm_bindgen::prelude::*;
 use wasm_split::lazy_loader;
 
@@ -89,7 +89,7 @@ fn Home() -> Element {
         button {
             id: "make-request",
             onclick: move |_| async move {
-                let res_ = make_request().await.await.unwrap();
+                let res_ = make_request().await.unwrap();
                 res.set(res_);
             },
             "Make Request!"
@@ -187,16 +187,14 @@ async fn brotli_it(data: &'static [u8]) {
 }
 
 #[wasm_split::wasm_split(eleven)]
-async fn make_request() -> Pin<Box<dyn Future<Output = Result<String, anyhow::Error>>>> {
-    Box::pin(async move {
-        let client = reqwest::Client::new();
-        let response = client
-            .get("https://dog.ceo/api/breeds/image/random")
-            .send()
-            .await?;
-        let body = response.text().await?;
-        Ok(body)
-    })
+async fn make_request() -> Result<String, anyhow::Error> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://dog.ceo/api/breeds/image/random")
+        .send()
+        .await?;
+    let body = response.text().await?;
+    Ok(body)
 }
 
 fn ChildSplit() -> Element {
