@@ -19,7 +19,7 @@ pub(crate) struct WebConfig {
     pub(crate) https: WebHttpsConfig,
 
     /// Whether to enable pre-compression of assets and wasm during a web build in release mode
-    #[serde(default = "true_bool")]
+    #[serde(default = "false_bool")]
     pub(crate) pre_compress: bool,
 
     /// The wasm-opt configuration
@@ -30,7 +30,7 @@ pub(crate) struct WebConfig {
 impl Default for WebConfig {
     fn default() -> Self {
         Self {
-            pre_compress: true_bool(),
+            pre_compress: false_bool(),
             app: Default::default(),
             https: Default::default(),
             wasm_opt: Default::default(),

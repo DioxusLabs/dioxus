@@ -41,6 +41,7 @@ pub struct Splitter<'a> {
     fns_to_ids: HashMap<FunctionId, usize>,
     _ids_to_fns: Vec<FunctionId>,
 
+    shared_symbols: BTreeSet<Node>,
     split_points: Vec<SplitPoint>,
     chunks: Vec<HashSet<Node>>,
     data_symbols: BTreeMap<usize, DataSymbol>,
@@ -101,6 +102,7 @@ impl<'a> Splitter<'a> {
             chunks: Default::default(),
             call_graph: Default::default(),
             parent_graph: Default::default(),
+            shared_symbols: Default::default(),
         };
 
         module.build_call_graph()?;
@@ -118,6 +120,8 @@ impl<'a> Splitter<'a> {
     ///
     /// This returns the list of chunks, an import map, and some javascript to link everything together.
     pub fn emit(self) -> Result<OutputModules> {
+        tracing::info!("Emitting split modules.");
+
         let chunks = (0..self.chunks.len())
             .into_par_iter()
             .map(|idx| self.emit_split_chunk(idx))
@@ -151,10 +155,9 @@ impl<'a> Splitter<'a> {
     /// Emitting the main module is conceptually pretty simple. Emitting the split modules is more
     /// complex.
     fn emit_main_module(mut self) -> Result<SplitModule> {
-        tracing::debug!("Emitting main bundle split module");
+        tracing::info!("Emitting main bundle split module");
 
         // Perform some analysis of the module before we start messing with it
-        let shared_funcs = self.main_shared_symbols();
         let unused_symbols = self.unused_main_symbols();
 
         // Use the original module that contains all the right ids
@@ -168,7 +171,7 @@ impl<'a> Splitter<'a> {
         self.prune_main_symbols(&mut out, &unused_symbols)?;
 
         // 3. Change the functions called from split modules to be local functions that call the indirect function
-        self.create_ifunc_table(&mut out, &shared_funcs);
+        self.create_ifunc_table(&mut out);
 
         // 4. Re-export the memories, globals, and other stuff
         self.re_export_items(&mut out);
@@ -229,8 +232,10 @@ impl<'a> Splitter<'a> {
             }
         }
 
-        tracing::trace!(
-            "Emitting module {}: {:?}",
+        tracing::info!(
+            "Emitting module {}/{} {}: {:?}",
+            split_idx,
+            self.split_points.len(),
             split.module_name,
             relies_on_chunks
         );
@@ -238,9 +243,9 @@ impl<'a> Splitter<'a> {
         let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(self.bindgened)?;
 
         // Remap the graph to our module's IDs
-        let shared_funcs = self.main_shared_symbols();
-        let shared_funcs = shared_funcs
-            .into_iter()
+        let shared_funcs = self
+            .shared_symbols
+            .iter()
             .map(|f| self.remap_id(&ids_to_fns, &f))
             .collect::<Vec<_>>();
 
@@ -276,6 +281,7 @@ impl<'a> Splitter<'a> {
         self.remove_custom_sections(&mut out);
 
         // Run the gc to remove unused functions - also validates the module to ensure we can emit it properly
+        // todo(jon): prefer to delete the items as we go so we don't need to run a gc pass. it/it's quite slow
         walrus::passes::gc::run(&mut out);
 
         Ok(SplitModule {
@@ -289,7 +295,7 @@ impl<'a> Splitter<'a> {
 
     /// Write a split chunk - this is a chunk with no special functions, just exports + initializers
     fn emit_split_chunk(&self, idx: usize) -> Result<SplitModule> {
-        tracing::debug!("emitting chunk {}", idx);
+        tracing::info!("emitting chunk {}", idx);
 
         let unique_symbols = &self.chunks[idx];
 
@@ -310,9 +316,9 @@ impl<'a> Splitter<'a> {
         let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(self.bindgened)?;
 
         // Remap the graph to our module's IDs
-        let shared_funcs = self.main_shared_symbols();
-        let shared_funcs = shared_funcs
-            .into_iter()
+        let shared_funcs = self
+            .shared_symbols
+            .iter()
             .map(|f| self.remap_id(&ids_to_fns, &f))
             .collect::<Vec<_>>();
 
@@ -389,7 +395,7 @@ impl<'a> Splitter<'a> {
     /// This is because these imports are going to be delayed until the split module is loaded
     /// and loading in the main module these as imports won't be possible since the imports won't
     /// be resolved until the split module is loaded.
-    fn create_ifunc_table(&self, out: &mut Module, shared_funcs: &BTreeSet<Node>) {
+    fn create_ifunc_table(&self, out: &mut Module) {
         let ifunc_table = self.load_funcref_table(out);
         let dummy_func = self.make_dummy_func(out);
 
@@ -400,7 +406,7 @@ impl<'a> Splitter<'a> {
             .expand_ifunc_table_max(
                 out,
                 ifunc_table,
-                self.split_points.len() + shared_funcs.len(),
+                self.split_points.len() + self.shared_symbols.len(),
             )
             .expect("failed to expand ifunc table");
 
@@ -433,7 +439,7 @@ impl<'a> Splitter<'a> {
         // Add the stub functions to the ifunc table
         // The callers of these functions will call the stub instead of the import
         let mut _idx = 0;
-        for func in shared_funcs.iter() {
+        for func in self.shared_symbols.iter() {
             if let Node::Function(id) = func {
                 ifuncs.push(*id);
                 _idx += 1;
@@ -649,9 +655,9 @@ impl<'a> Splitter<'a> {
     fn delete_main_funcs_from_split(&self, out: &mut Module, symbols_to_delete: &HashSet<Node>) {
         for node in symbols_to_delete {
             if let Node::Function(id) = *node {
-                if out.exports.get_exported_func(id).is_none() {
-                    out.funcs.delete(id);
-                }
+                // if out.exports.get_exported_func(id).is_none() {
+                out.funcs.delete(id);
+                // }
             }
         }
     }
@@ -895,28 +901,6 @@ impl<'a> Splitter<'a> {
             .push(funcs_used_by_chunks.keys().cloned().collect());
     }
 
-    /// Get the symbols that are shared between the main module and the split modules
-    ///
-    /// This collects *all* the symbols even if they are not called from main (only transitively).
-    fn main_shared_symbols(&self) -> BTreeSet<Node> {
-        let mut shared_funcs = HashSet::new();
-
-        // Add all the symbols shared between the various modules
-        for split in self.split_points.iter() {
-            shared_funcs.extend(self.main_graph.intersection(&split.reachable_graph));
-        }
-
-        // And then all our imports will be callabale via the ifunc table too
-        for import in self.source_module.imports.iter() {
-            if let ImportKind::Function(id) = import.kind {
-                shared_funcs.insert(Node::Function(id));
-            }
-        }
-
-        // Make sure to make this *ordered*
-        shared_funcs.into_iter().collect()
-    }
-
     fn unused_main_symbols(&self) -> HashSet<Node> {
         self.split_points
             .iter()
@@ -1093,6 +1077,26 @@ impl<'a> Splitter<'a> {
 
         // And then the reachability graph for main
         self.main_graph = reachable_graph(&self.call_graph, &self.main_roots());
+
+        // And then the symbols shared between all
+        self.shared_symbols = {
+            let mut shared_funcs = HashSet::new();
+
+            // Add all the symbols shared between the various modules
+            for split in self.split_points.iter() {
+                shared_funcs.extend(self.main_graph.intersection(&split.reachable_graph));
+            }
+
+            // And then all our imports will be callabale via the ifunc table too
+            for import in self.source_module.imports.iter() {
+                if let ImportKind::Function(id) = import.kind {
+                    shared_funcs.insert(Node::Function(id));
+                }
+            }
+
+            // Make sure to make this *ordered*
+            shared_funcs.into_iter().collect()
+        };
 
         Ok(())
     }

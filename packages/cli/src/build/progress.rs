@@ -108,6 +108,12 @@ impl BuildRequest {
         });
     }
 
+    pub(crate) fn status_compressing_assets(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::CompressingAssets,
+        });
+    }
+
     pub(crate) fn is_server(&self) -> bool {
         self.build.platform() == Platform::Server
     }

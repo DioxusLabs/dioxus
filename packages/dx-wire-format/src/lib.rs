@@ -70,4 +70,5 @@ pub enum BuildStage {
     Failed,
     Aborted,
     Restarting,
+    CompressingAssets,
 }

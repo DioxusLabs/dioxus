@@ -419,8 +419,8 @@ impl AppBundle {
         }
 
         tracing::debug!("Removing old assets");
-        tracing::debug!(
-            "Keeping bundled output paths: {:?}",
+        tracing::trace!(
+            "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
         );
         remove_old_assets(&asset_dir, &keep_bundled_output_paths).await?;
@@ -579,6 +579,7 @@ impl AppBundle {
                     .krate
                     .should_pre_compress_web_assets(self.build.build.release);
 
+                self.build.status_compressing_assets();
                 let asset_dir = self.build.asset_dir();
                 tokio::task::spawn_blocking(move || {
                     crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
