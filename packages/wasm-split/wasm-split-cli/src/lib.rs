@@ -656,7 +656,7 @@ impl<'a> Splitter<'a> {
         }
     }
 
-    /// Remove uneeded stuff and then hoist
+    /// Remove un-needed stuff and then hoist
     fn prune_split_module(&self, out: &mut Module) {
         // Clear the module's start/main
         if let Some(start) = out.start.take() {
@@ -872,8 +872,9 @@ impl<'a> Splitter<'a> {
         }
     }
 
-    /// Use the Louvain algorithm (okay not actually, is just greedy right now)
-    /// to determine communties in the split modules so we can create  efficient chunks
+    /// Accumulate any shared funcs between multiple chunks into a single residual chunk.
+    /// This prevents duplicates from being downloaded.
+    /// Eventually we need to group the chunks into smarter "communities" - ie the Louvain algorithm
     ///
     /// Todo: we could chunk up the main module itself! Not going to now but it would enable parallel downloads of the main chunk
     fn build_split_chunks(&mut self) {
