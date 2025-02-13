@@ -246,7 +246,7 @@ impl<'a> Splitter<'a> {
         let shared_funcs = self
             .shared_symbols
             .iter()
-            .map(|f| self.remap_id(&ids_to_fns, &f))
+            .map(|f| self.remap_id(&ids_to_fns, f))
             .collect::<Vec<_>>();
 
         let unique_symbols = self.remap_ids(&unique_symbols, &ids_to_fns);
@@ -319,7 +319,7 @@ impl<'a> Splitter<'a> {
         let shared_funcs = self
             .shared_symbols
             .iter()
-            .map(|f| self.remap_id(&ids_to_fns, &f))
+            .map(|f| self.remap_id(&ids_to_fns, f))
             .collect::<Vec<_>>();
 
         let unique_symbols = self.remap_ids(unique_symbols, &ids_to_fns);
