@@ -42,6 +42,8 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
         ..desugard_async_sig.clone()
     };
 
+    let default_item = item_fn.clone();
+
     let mut wrapper_sig = item_fn.sig;
     wrapper_sig.asyncness = Some(Default::default());
 
@@ -63,11 +65,11 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 
-    let attrs = item_fn.attrs;
-
+    let attrs = &item_fn.attrs;
     let stmts = &item_fn.block.stmts;
 
     quote! {
+        #[cfg(target_arch = "wasm32")]
         #wrapper_sig {
             #(#attrs)*
             #[allow(improper_ctypes_definitions)]
@@ -102,6 +104,9 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
 
             unsafe { #impl_import_ident( #(#args),* ) }.await
         }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        #default_item
     }
     .into()
 }
@@ -146,35 +151,43 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
 
     quote! {
         {
-            #[link(wasm_import_module = "./__wasm_split.js")]
-            extern "C" {
-                // The function we'll use to initiate the download of the module
+            #[cfg(target_arch = "wasm32")]
+            {
+                #[link(wasm_import_module = "./__wasm_split.js")]
+                extern "C" {
+                    // The function we'll use to initiate the download of the module
+                    #[no_mangle]
+                    fn #load_module_ident(
+                        callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
+                        data: *const ::std::ffi::c_void,
+                    );
+
+                    #[allow(improper_ctypes)]
+                    #[no_mangle]
+                    fn #impl_import_ident(arg: #arg_ty) #outputs;
+                }
+
+
+                #[allow(improper_ctypes_definitions)]
                 #[no_mangle]
-                fn #load_module_ident(
-                    callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
-                    data: *const ::std::ffi::c_void,
-                );
+                pub extern "C" fn #impl_export_ident(arg: #arg_ty) #outputs {
+                    #name(arg)
+                }
 
-                #[allow(improper_ctypes)]
-                #[no_mangle]
-                fn #impl_import_ident(arg: #arg_ty) #outputs;
-            }
-
-
-            #[allow(improper_ctypes_definitions)]
-            #[no_mangle]
-            pub extern "C" fn #impl_export_ident(arg: #arg_ty) #outputs {
-                #name(arg)
-            }
-
-            thread_local! {
-                static #split_loader_ident: wasm_split::LazySplitLoader = unsafe {
-                    wasm_split::LazySplitLoader::new(#load_module_ident)
+                thread_local! {
+                    static #split_loader_ident: wasm_split::LazySplitLoader = unsafe {
+                        wasm_split::LazySplitLoader::new(#load_module_ident)
+                    };
                 };
-            };
 
-            unsafe {
-                wasm_split::LazyLoader::new(#impl_import_ident, &#split_loader_ident)
+                unsafe {
+                    wasm_split::LazyLoader::new(#impl_import_ident, &#split_loader_ident)
+                }
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                wasm_split::LazyLoader::preloaded(#name)
             }
         }
     }

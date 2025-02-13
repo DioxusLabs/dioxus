@@ -95,7 +95,7 @@ async fn run_from_lib(
         .enable_feature(wasm_opt::Feature::ReferenceTypes)
         .add_pass(wasm_opt::Pass::MemoryPacking)
         .debug_info(options.debug)
-        .run(&input_path, &output_path)
+        .run(input_path, output_path)
         .map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
 
     Ok(())

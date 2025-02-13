@@ -86,6 +86,21 @@ impl<Args, Ret> LazyLoader<Args, Ret> {
         Self { imported, key }
     }
 
+    /// Create a new lazy loader that is already resolved.
+    pub fn preloaded(f: fn(Args) -> Ret) -> Self {
+        let imported =
+            unsafe { std::mem::transmute::<fn(Args) -> Ret, unsafe extern "C" fn(Args) -> Ret>(f) };
+
+        thread_local! {
+            static LAZY: LazySplitLoader = LazySplitLoader::preloaded();
+        };
+
+        Self {
+            imported,
+            key: &LAZY,
+        }
+    }
+
     /// Load the lazy loader, returning an boolean indicating whether it loaded successfully
     pub async fn load(&'static self) -> bool {
         *self.key.with(|inner| inner.lazy.clone()).as_ref().await
@@ -123,6 +138,19 @@ impl LazySplitLoader {
                 SplitLoaderFuture {
                     loader: Rc::new(SplitLoader {
                         state: Cell::new(SplitLoaderState::Deferred(load)),
+                        waker: Cell::new(None),
+                    }),
+                }
+            })),
+        }
+    }
+
+    fn preloaded() -> Self {
+        Self {
+            lazy: Rc::pin(Lazy::new({
+                SplitLoaderFuture {
+                    loader: Rc::new(SplitLoader {
+                        state: Cell::new(SplitLoaderState::Completed(true)),
                         waker: Cell::new(None),
                     }),
                 }
