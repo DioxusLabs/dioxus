@@ -80,8 +80,10 @@ module.exports = defineConfig({
     {
       command:
         "cargo build --package dioxus-cli --features optimizations --release",
-      timeout: 50 * 60 * 1000,
       stdout: "pipe",
+      port: 1234,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
     },
     {
       command:
