@@ -87,7 +87,7 @@ impl<Args, Ret> LazyLoader<Args, Ret> {
     }
 
     /// Create a new lazy loader that is already resolved.
-    pub fn preloaded(f: fn(Args) -> Ret) -> Self {
+    pub const fn preloaded(f: fn(Args) -> Ret) -> Self {
         let imported =
             unsafe { std::mem::transmute::<fn(Args) -> Ret, unsafe extern "C" fn(Args) -> Ret>(f) };
 
