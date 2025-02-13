@@ -767,8 +767,6 @@ impl<'a> Splitter<'a> {
                                 contents[range].to_vec(),
                             );
                         }
-                    } else {
-                        tracing::warn!("Could not find data symbol: {id}");
                     }
                 }
             }

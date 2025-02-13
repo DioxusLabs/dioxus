@@ -572,8 +572,11 @@ impl Parse for ComponentMacroOptions {
 
         while !input.is_empty() {
             let ident = input.parse::<Ident>()?;
-            if ident.to_string().as_str() == "lazy" {
+            let ident_name = ident.to_string();
+            if ident_name == "lazy" {
                 lazy_load = true;
+            } else if ident_name == "no_case_check" {
+                // we used to have this?
             } else {
                 return Err(Error::new(
                     ident.span(),
