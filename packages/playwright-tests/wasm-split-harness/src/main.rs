@@ -32,8 +32,8 @@ enum Route {
 fn Nav() -> Element {
     rsx! {
         div {
-            Link { to: Route::Home, "Home" }
-            Link { to: Route::ChildSplit, "Child" }
+            Link { id: "link-home", to: Route::Home, "Home" }
+            Link { id: "link-child", to: Route::ChildSplit, "Child" }
             Outlet::<Route> {}
         }
     }
@@ -47,10 +47,25 @@ fn Home() -> Element {
 
     rsx! {
         h1 { "Hello bundle split 456" }
-        h3 { "Count: {count}" }
-        button { onclick: move |_| count += 1, "Click me" }
-        button { onclick: move |_| add_body_text(), "Add body text" }
+        h3 { id: "counter-display", "Count: {count}" }
+        h3 { id: "global-counter", "Global Counter: {GLOBAL_COUNTER}" }
         button {
+            id: "increment-counter",
+            onclick: move |_| count += 1,
+            "Click me"
+        }
+        button {
+            id: "increment-counter-global",
+            onclick: move |_| *GLOBAL_COUNTER.write() += 1,
+            "Click me"
+        }
+        button {
+            id: "add-body-text",
+            onclick: move |_| add_body_text(),
+            "Add body text"
+        }
+        button {
+            id: "add-body-element",
             onclick: move |_| async move {
                 add_body_element().await;
                 count += 1;
@@ -58,18 +73,21 @@ fn Home() -> Element {
             "Add body element"
         }
         button {
+            id: "gzip-it",
             onclick: move |_| async move {
                 gzip_it().await;
             },
             "GZIP it"
         }
         button {
+            id: "brotli-it",
             onclick: move |_| async move {
                 brotli_it(&[0u8; 10]).await;
             },
             "Brotli It"
         }
         button {
+            id: "make-request",
             onclick: move |_| async move {
                 let res_ = make_request().await.await.unwrap();
                 res.set(res_);
@@ -77,6 +95,7 @@ fn Home() -> Element {
             "Make Request!"
         }
         button {
+            id: "make-local-request",
             onclick: move |_| async move {
                 let client = reqwest::Client::new();
                 let response = client
@@ -89,7 +108,6 @@ fn Home() -> Element {
             },
             "local request"
         }
-        h3 { "Global Counter: {GLOBAL_COUNTER}" }
         div { "Response: {res}" }
         div { id: "output-box" }
     }
@@ -133,7 +151,7 @@ async fn gzip_it() {
         if fut.read_to_end(&mut Vec::new()).await.is_err() {
             web_sys::console::log_1(&"error reading gzip".into());
         }
-        *GLOBAL_COUNTER.write() += 4;
+        *GLOBAL_COUNTER.write() += 3;
 
         let res: Result<String, anyhow::Error> = Box::pin(async move {
             let client = reqwest::Client::new();
@@ -146,7 +164,9 @@ async fn gzip_it() {
         })
         .await;
 
-        assert!(res.is_ok());
+        if res.is_err() {
+            web_sys::console::log_1(&"error making request".into());
+        }
     });
 }
 
@@ -162,7 +182,7 @@ async fn brotli_it(data: &'static [u8]) {
         if fut.read_to_end(&mut Vec::new()).await.is_err() {
             web_sys::console::log_1(&"error reading brotli".into());
         }
-        *GLOBAL_COUNTER.write() += 3;
+        *GLOBAL_COUNTER.write() += 4;
     });
 }
 
@@ -250,8 +270,9 @@ fn ChildSplit() -> Element {
                 "Add Star"
             }
             {fp}
-            h3 { "count: {count}" }
+            h3 { id: "nested-child-count", "Count: {count}" }
             button {
+                id: "nested-child-add-world",
                 onclick: move |_| {
                     *count.write() += " world";
                 },

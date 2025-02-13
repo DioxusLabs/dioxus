@@ -79,4 +79,4 @@ ls -l data/harness/split | grep "\.wasm" | awk '{ printf("%07d -> ", $5);print $
 echo "\n==========================================================================="
 
 # hope you have python3 installed :)
-python3 -m http.server 9000 --directory data
+python3 -m http.server 9876 --directory data
