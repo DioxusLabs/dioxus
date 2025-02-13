@@ -10,7 +10,7 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
     let item_fn = parse_macro_input!(input as ItemFn);
 
     if item_fn.sig.asyncness.is_none() {
-        panic!("wasm_split functions must be async. Use a LazyLoader with syncronous functions instead.");
+        panic!("wasm_split functions must be async. Use a LazyLoader with synchronous functions instead.");
     }
 
     let LoaderNames {

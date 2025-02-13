@@ -708,7 +708,6 @@ impl AppBundle {
 
             // Write the chunks that contain shared imports
             // These will be in the format of chunk_0_modulename.wasm - this is hardcoded in wasm-split
-            // todo(jon): don't harcode them...
             tracing::debug!("Writing split chunks to disk");
             for (idx, chunk) in modules.chunks.iter().enumerate() {
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));

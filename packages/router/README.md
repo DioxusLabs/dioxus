@@ -103,8 +103,8 @@ The Dioxus Router supports automatic bundle splitting along route variants. To e
 
 ```toml
 [dependencies]
-dioxus = { version = "*", feautres = ["router", "wasm-split"] }
-dioxus-router = { version = "*", feautres = ["wasm-split"] }
+dioxus = { version = "*", features = ["router", "wasm-split"] }
+dioxus-router = { version = "*", features = ["wasm-split"] }
 ```
 
 Note that `wasm-split` must also be turned on in dioxus since the macro uses the re-exported `wasm-split` from the dioxus prelude.

@@ -34,7 +34,7 @@ pub struct Splitter<'a> {
     bindgened: &'a [u8],
 
     // Mapping of indices of source functions
-    // This lets us use a much faster approach to emitting split modules simply by maintaing a mapping
+    // This lets us use a much faster approach to emitting split modules simply by maintaining a mapping
     // between the original Module and the new Module. Ideally we could just index the new module
     // with old FunctionIds but the underlying IndexMap actually checks that a key belongs to a particular
     // arena.
@@ -289,7 +289,7 @@ impl<'a> Splitter<'a> {
 
     /// Write a split chunk - this is a chunk with no special functions, just exports + initializers
     fn emit_split_chunk(&self, idx: usize) -> Result<SplitModule> {
-        tracing::info!("emitting chunk {}", idx);
+        tracing::debug!("emitting chunk {}", idx);
 
         let unique_symbols = &self.chunks[idx];
 
@@ -395,7 +395,7 @@ impl<'a> Splitter<'a> {
 
         out.exports.add("__indirect_function_table", ifunc_table);
 
-        // Expand the ifunc table to accomodate the new ifuncs
+        // Expand the ifunc table to accommodate the new ifuncs
         let segment_start = self
             .expand_ifunc_table_max(
                 out,
@@ -505,7 +505,7 @@ impl<'a> Splitter<'a> {
                     //
                     // apparently wasm-bindgen makes data segments that aren't the main one
                     // even *touching* those will break the vtable / binding layer
-                    // We can only interact with the first data segment - the rest need to stay avaiable
+                    // We can only interact with the first data segment - the rest need to stay available
                     // for the `.js` to interact with.
                     if symbol.which_data_segment == 0 {
                         let data_id = out.data.iter().nth(symbol.which_data_segment).unwrap().id();
@@ -643,8 +643,6 @@ impl<'a> Splitter<'a> {
                 ElementItems::Functions(vec![split_export_func]),
             ));
 
-        tracing::info!("Segment start for ifucns: {segment_start}");
-
         self.convert_shared_to_imports(out, segment_start, ifuncs, symbols_to_import);
     }
 
@@ -770,7 +768,7 @@ impl<'a> Splitter<'a> {
                             );
                         }
                     } else {
-                        tracing::error!("Could not find data symbol: {id}");
+                        tracing::warn!("Could not find data symbol: {id}");
                     }
                 }
             }
@@ -835,7 +833,7 @@ impl<'a> Splitter<'a> {
         FunctionKind::Local(builder.local_func(args))
     }
 
-    /// Expand the ifunc table to accomodate the new ifuncs
+    /// Expand the ifunc table to accommodate the new ifuncs
     ///
     /// returns the old maximum
     fn expand_ifunc_table_max(
@@ -1028,7 +1026,7 @@ impl<'a> Splitter<'a> {
         let mut recovered_children = HashSet::new();
         for lost in lost_children {
             match lost {
-                // Functions need to be found - the desribe functions are usually completely dissolved
+                // Functions need to be found - the wasm decsribe functions are usually completely dissolved
                 Node::Function(id) => {
                     let func = original.module.funcs.get(id);
                     let name = func.name.as_ref().unwrap();
@@ -1049,7 +1047,7 @@ impl<'a> Splitter<'a> {
         let main_fn_entry = new_call_graph.entry(Node::Function(main_fn)).or_default();
         main_fn_entry.extend(recovered_children);
 
-        // Also attach any truly new symbols to the main function. Usually tehse are the shim functions
+        // Also attach any truly new symbols to the main function. Usually these are the shim functions
         for (name, new) in new_names.iter() {
             if !old_names.contains_key(name) {
                 main_fn_entry.insert(Node::Function(*new));

@@ -16,7 +16,7 @@ pub struct Roots {
     funcs: Vec<(FunctionId, Location)>,
     globals: Vec<GlobalId>,
     memories: Vec<MemoryId>,
-    datas: Vec<DataId>,
+    data: Vec<DataId>,
     elements: Vec<ElementId>,
     used: Used,
 }
@@ -79,7 +79,7 @@ impl Roots {
     fn push_data(&mut self, data: DataId) -> &mut Roots {
         if self.used.data.insert(data) {
             // log::trace!("data is used: {:?}", data);
-            self.datas.push(data);
+            self.data.push(data);
         }
         self
     }
@@ -178,7 +178,7 @@ impl Used {
             || !stack.tables.is_empty()
             || !stack.memories.is_empty()
             || !stack.globals.is_empty()
-            || !stack.datas.is_empty()
+            || !stack.data.is_empty()
             || !stack.elements.is_empty()
         {
             while let Some((f, _loc)) = stack.funcs.pop() {
@@ -249,7 +249,7 @@ impl Used {
                 }
             }
 
-            while let Some(d) = stack.datas.pop() {
+            while let Some(d) = stack.data.pop() {
                 let d = module.data.get(d);
                 if let DataKind::Active { memory, offset } = &d.kind {
                     stack.push_memory(*memory);
