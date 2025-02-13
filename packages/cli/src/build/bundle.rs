@@ -436,10 +436,10 @@ impl AppBundle {
             // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
             let from_ = from
                 .strip_prefix(self.build.krate.workspace_dir())
-                .unwrap_or_else(|_| from.as_path());
+                .unwrap_or(from.as_path());
             let to_ = from
                 .strip_prefix(self.build.krate.workspace_dir())
-                .unwrap_or_else(|_| to.as_path());
+                .unwrap_or(to.as_path());
 
             tracing::debug!("Copying asset {from_:?} to {to_:?}");
             assets_to_transfer.push((from, to, *bundled.options()));

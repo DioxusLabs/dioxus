@@ -209,7 +209,7 @@ fn LazyComponent(abc: i32) -> Element {
 }
 
 fn ChildSplit() -> Element {
-    pub(crate) static DATE: GlobalSignal<Date> = Signal::global(|| Date::new_0());
+    pub(crate) static DATE: GlobalSignal<Date> = Signal::global(Date::new_0);
 
     static LOADER: wasm_split::LazyLoader<(), Element> =
         lazy_loader!(extern "five" fn InnerChild(props: ()) -> Element);

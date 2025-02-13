@@ -31,7 +31,7 @@ impl AssetManifest {
         asset_path: &Path,
         options: manganis::AssetOptions,
     ) -> anyhow::Result<BundledAsset> {
-        let hash = manganis_core::hash::AssetHash::hash_file_contents(&asset_path)
+        let hash = manganis_core::hash::AssetHash::hash_file_contents(asset_path)
             .context("Failed to hash file")?;
 
         let output_path_str = asset_path.to_str().ok_or(anyhow::anyhow!(

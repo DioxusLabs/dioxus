@@ -18,7 +18,7 @@ use wasmparser::{
     SymbolInfo,
 };
 
-pub const MAKE_LOAD_JS: &'static str = include_str!("./__wasm_split.js");
+pub const MAKE_LOAD_JS: &str = include_str!("./__wasm_split.js");
 
 /// A parsed wasm module with additional metadata and functionality for splitting and patching.
 ///
@@ -87,7 +87,7 @@ impl<'a> Splitter<'a> {
 
         // Note that we can't trust the normal symbols - just the data symbols - and we can't use the data offset
         // since that's not reliable after bindgening
-        let raw_data = parse_bytes_to_data_segment(&bindgened)?;
+        let raw_data = parse_bytes_to_data_segment(bindgened)?;
 
         let mut module = Self {
             source_module: module,
@@ -235,7 +235,7 @@ impl<'a> Splitter<'a> {
             relies_on_chunks
         );
 
-        let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
+        let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(self.bindgened)?;
 
         // Remap the graph to our module's IDs
         let shared_funcs = self.main_shared_symbols();
@@ -302,12 +302,12 @@ impl<'a> Splitter<'a> {
         // Delete everything except the symbols that are reachable from this module
         let symbols_to_delete: HashSet<_> = self
             .main_graph
-            .difference(&unique_symbols)
+            .difference(unique_symbols)
             .cloned()
             .collect();
 
         // Make sure to remap any ids from the main module to this module
-        let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(&self.bindgened)?;
+        let (mut out, ids_to_fns, _fns_to_ids) = parse_module_with_ids(self.bindgened)?;
 
         // Remap the graph to our module's IDs
         let shared_funcs = self.main_shared_symbols();
@@ -433,7 +433,7 @@ impl<'a> Splitter<'a> {
         // Add the stub functions to the ifunc table
         // The callers of these functions will call the stub instead of the import
         let mut _idx = 0;
-        for (__idx, func) in shared_funcs.iter().enumerate() {
+        for func in shared_funcs.iter() {
             if let Node::Function(id) = func {
                 ifuncs.push(*id);
                 _idx += 1;
@@ -563,7 +563,7 @@ impl<'a> Splitter<'a> {
 
             match &segment.items {
                 ElementItems::Functions(vec) => {
-                    for (idx, id) in vec.into_iter().enumerate() {
+                    for (idx, id) in vec.iter().enumerate() {
                         if unique_symbols.contains(&Node::Function(*id)) {
                             initializers
                                 .insert(*offset + idx as i32, ElementItems::Functions(vec![*id]));
@@ -695,7 +695,7 @@ impl<'a> Splitter<'a> {
         for (idx, table) in out.tables.iter_mut().enumerate() {
             let name = table.name.clone().unwrap_or_else(|| {
                 if table.element_ty == RefType::Funcref {
-                    format!("__indirect_function_table")
+                    "__indirect_function_table".to_string()
                 } else {
                     format!("__imported_table_{}", idx)
                 }
@@ -757,7 +757,7 @@ impl<'a> Splitter<'a> {
             // And then assign chunks of the data to new data entries that will override the individual slots
             for unique in unique_symbols {
                 if let Node::DataSymbol(id) = unique {
-                    if let Some(symbol) = self.data_symbols.get(&id) {
+                    if let Some(symbol) = self.data_symbols.get(id) {
                         if symbol.which_data_segment == idx {
                             let range =
                                 symbol.segment_offset..symbol.segment_offset + symbol.symbol_size;
@@ -943,7 +943,7 @@ impl<'a> Splitter<'a> {
     /// Accumulate the relocations from the original module, create a relocation map, and then convert
     /// that to our *new* module's symbols.
     fn build_call_graph(&mut self) -> Result<()> {
-        let original = ModuleWithRelocations::new(&self.original)?;
+        let original = ModuleWithRelocations::new(self.original)?;
 
         let old_names: HashMap<String, FunctionId> = original
             .module
@@ -972,7 +972,7 @@ impl<'a> Splitter<'a> {
 
         let get_old = |old: &Node| -> Option<Node> {
             match old {
-                Node::Function(id) => old_to_new.get(&id).map(|new_id| Node::Function(**new_id)),
+                Node::Function(id) => old_to_new.get(id).map(|new_id| Node::Function(**new_id)),
                 Node::DataSymbol(id) => Some(Node::DataSymbol(*id)),
             }
         };
@@ -1076,7 +1076,7 @@ impl<'a> Splitter<'a> {
                     cur: func.id(),
                     call_graph: &mut self.call_graph,
                 };
-                dfs_in_order(&mut call_grapher, &local, local.entry_block());
+                dfs_in_order(&mut call_grapher, local, local.entry_block());
             }
         }
 
@@ -1120,7 +1120,7 @@ impl<'a> Splitter<'a> {
                 }
                 _ => None,
             })
-            .chain(self.source_module.start.map(|f| Node::Function(f)))
+            .chain(self.source_module.start.map(Node::Function))
             .collect::<HashSet<Node>>();
 
         // Also add "imports" to the roots
@@ -1145,7 +1145,7 @@ impl<'a> Splitter<'a> {
     fn remap_id(&self, ids_to_fns: &[id_arena::Id<walrus::Function>], node: &Node) -> Node {
         match node {
             // Remap the function IDs
-            Node::Function(id) => Node::Function(ids_to_fns[self.fns_to_ids[&id]]),
+            Node::Function(id) => Node::Function(ids_to_fns[self.fns_to_ids[id]]),
             // data symbols don't need remapping
             Node::DataSymbol(id) => Node::DataSymbol(*id),
         }
@@ -1160,8 +1160,8 @@ fn parse_module_with_ids(
     let ids = Arc::new(RwLock::new(Vec::new()));
     let ids_ = ids.clone();
     let module = Module::from_buffer_with_config(
-        &bindgened,
-        &ModuleConfig::new().on_parse(move |_m, our_ids| {
+        bindgened,
+        ModuleConfig::new().on_parse(move |_m, our_ids| {
             let mut ids = ids_.write().expect("No shared writers");
             let mut idx = 0;
             while let Ok(entry) = our_ids.get_func(idx) {
@@ -1198,7 +1198,7 @@ struct ModuleWithRelocations<'a> {
 impl<'a> ModuleWithRelocations<'a> {
     fn new(bytes: &'a [u8]) -> Result<Self> {
         let module = Module::from_buffer(bytes)?;
-        let raw_data = parse_bytes_to_data_segment(&bytes)?;
+        let raw_data = parse_bytes_to_data_segment(bytes)?;
         let names_to_funcs = module
             .funcs
             .iter()
@@ -1265,8 +1265,7 @@ impl<'a> ModuleWithRelocations<'a> {
 
         let symbols_sorted = self
             .data_symbols
-            .iter()
-            .map(|(_, sym)| sym)
+            .values()
             .sorted_by(|a, b| a.range.start.cmp(&b.range.start));
 
         for symbol in symbols_sorted {
@@ -1435,7 +1434,7 @@ fn reachable_graph(deps: &HashMap<Node, HashSet<Node>>, roots: &HashSet<Node>) -
             continue;
         };
         for child in children {
-            if reachable.contains(&child) {
+            if reachable.contains(child) {
                 continue;
             }
             parents.entry(*child).or_insert(node);
@@ -1518,7 +1517,7 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
         data_symbols.insert(
             index,
             DataSymbol {
-                index: index as usize,
+                index,
                 range,
                 segment_offset: symbol.offset as usize,
                 symbol_size: symbol.size as usize,

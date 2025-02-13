@@ -91,7 +91,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
         }
 
         render_inner(
-            &self.name,
+            self.name,
             std::panic::catch_unwind(AssertUnwindSafe(move || {
                 self.render_fn.rebuild(self.props.clone())
             })),

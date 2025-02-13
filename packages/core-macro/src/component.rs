@@ -115,12 +115,12 @@ impl ComponentBody {
         let body: TokenStream = if self.options.lazy {
             self.lazy_body(
                 &struct_ident,
-                &generics,
+                generics,
                 &impl_generics,
-                &fn_output,
-                &where_clause,
+                fn_output,
+                where_clause,
                 &inlined_props_argument,
-                &block,
+                block,
             )
         } else {
             quote! { #block }
