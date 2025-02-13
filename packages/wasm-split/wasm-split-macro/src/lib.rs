@@ -9,6 +9,10 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
     let module_ident = parse_macro_input!(args as Ident);
     let item_fn = parse_macro_input!(input as ItemFn);
 
+    if item_fn.sig.asyncness.is_none() {
+        panic!("wasm_split functions must be async. Use a LazyLoader with syncronous functions instead.");
+    }
+
     let LoaderNames {
         split_loader_ident,
         impl_import_ident,
@@ -86,13 +90,13 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
             }
 
             thread_local! {
-                static #split_loader_ident: dioxus::wasm_split::LazySplitLoader = unsafe {
-                    dioxus::wasm_split::LazySplitLoader::new(#load_module_ident)
+                static #split_loader_ident: wasm_split::LazySplitLoader = unsafe {
+                    wasm_split::LazySplitLoader::new(#load_module_ident)
                 };
             }
 
             // Initiate the download by calling the load_module_ident function which will kick-off the loader
-            if !dioxus::wasm_split::LazySplitLoader::ensure_loaded(&#split_loader_ident).await {
+            if !wasm_split::LazySplitLoader::ensure_loaded(&#split_loader_ident).await {
                 panic!("Failed to load wasm-split module");
             }
 
@@ -164,13 +168,13 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
             }
 
             thread_local! {
-                static #split_loader_ident: dioxus::wasm_split::LazySplitLoader = unsafe {
-                    dioxus::wasm_split::LazySplitLoader::new(#load_module_ident)
+                static #split_loader_ident: wasm_split::LazySplitLoader = unsafe {
+                    wasm_split::LazySplitLoader::new(#load_module_ident)
                 };
             };
 
             unsafe {
-                dioxus::wasm_split::LazyLoader::new(#impl_import_ident, &#split_loader_ident)
+                wasm_split::LazyLoader::new(#impl_import_ident, &#split_loader_ident)
             }
         }
     }

@@ -7,7 +7,6 @@
 #[cfg(all(feature = "wasm-split", target_arch = "wasm32"))]
 #[macro_export]
 macro_rules! maybe_wasm_split {
-    // emit the true variant
     (
         if wasm_split {
             $left:tt
@@ -15,7 +14,7 @@ macro_rules! maybe_wasm_split {
             $right:tt
         }
     ) => {
-        $lefta
+        $left
     };
 }
 
@@ -28,7 +27,6 @@ macro_rules! maybe_wasm_split {
 #[cfg(any(not(feature = "wasm-split"), not(target_arch = "wasm32")))]
 #[macro_export]
 macro_rules! maybe_wasm_split {
-    // emit the false variant
     (
         if wasm_split {
             $left:tt

@@ -5,7 +5,6 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use dioxus::wasm_split;
 use futures::AsyncReadExt;
 use js_sys::Date;
 use std::pin::Pin;
@@ -108,6 +107,9 @@ fn Home() -> Element {
             },
             "local request"
         }
+        LazyComponent {
+            abc: 0
+        }
         div { "Response: {res}" }
         div { id: "output-box" }
     }
@@ -195,6 +197,15 @@ async fn make_request() -> Result<String, anyhow::Error> {
         .await?;
     let body = response.text().await?;
     Ok(body)
+}
+
+#[component(lazy)]
+fn LazyComponent(abc: i32) -> Element {
+    rsx! {
+        div {
+            "This is a lazy component! {abc}"
+        }
+    }
 }
 
 fn ChildSplit() -> Element {
