@@ -694,6 +694,13 @@ impl AppBundle {
         if should_bundle_split {
             self.build.status_splitting_bundle();
 
+            if !will_wasm_opt {
+                return Err(anyhow::anyhow!(
+                    "Bundle splitting requires wasm-opt to be installed or the CLI to be built with `--features optimizations`. Please install wasm-opt and try again."
+                )
+                .into());
+            }
+
             // Load the contents of these binaries since we need both of them
             // We're going to use the default makeLoad glue from wasm-split
             let original = std::fs::read(&prebindgen)?;

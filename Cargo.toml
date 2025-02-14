@@ -277,6 +277,7 @@ incremental = true
 inherits = "release"
 opt-level = 'z'
 lto = true
+debug=true
 
 # a profile for running the CLI that's also incremental
 [profile.cli-release-dev]
