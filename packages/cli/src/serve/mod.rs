@@ -39,7 +39,7 @@ pub(crate) use watcher::*;
 ///   to a dynamic one on the fly.
 pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     // Redirect all logging the cli logger
-    let mut tracer = TraceController::redirect();
+    let mut tracer = TraceController::redirect(args.is_interactive_tty());
 
     // Load the krate and resolve the server args against it - this might log so do it after we turn on the tracer first
     let krate = args.load_krate().await?;

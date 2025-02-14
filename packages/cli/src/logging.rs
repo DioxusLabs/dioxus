@@ -68,10 +68,12 @@ impl TraceController {
         let filter = if env::var(LOG_ENV).is_ok() {
             EnvFilter::from_env(LOG_ENV)
         } else if matches!(args.action, Commands::Serve(_)) {
-            EnvFilter::new("error,dx=trace,dioxus-cli=trace,manganis-cli-support=trace")
+            EnvFilter::new(
+                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace",
+            )
         } else {
             EnvFilter::new(format!(
-                "error,dx={our_level},dioxus-cli={our_level},manganis-cli-support={our_level}",
+                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},,wasm_split_cli={our_level}",
                 our_level = if args.verbosity.verbose {
                     "debug"
                 } else {
@@ -131,10 +133,13 @@ impl TraceController {
     }
 
     /// Get a handle to the trace controller.
-    pub fn redirect() -> Self {
+    pub fn redirect(interactive: bool) -> Self {
         let (tui_tx, tui_rx) = unbounded();
-        TUI_ACTIVE.store(true, Ordering::Relaxed);
-        TUI_TX.set(tui_tx.clone()).unwrap();
+
+        if interactive {
+            TUI_ACTIVE.store(true, Ordering::Relaxed);
+            TUI_TX.set(tui_tx.clone()).unwrap();
+        }
 
         Self { tui_rx }
     }
@@ -142,7 +147,11 @@ impl TraceController {
     /// Wait for the internal logger to send a message
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         use futures_util::StreamExt;
-        let log = self.tui_rx.next().await.expect("tracer should never die");
+
+        let Some(log) = self.tui_rx.next().await else {
+            return std::future::pending().await;
+        };
+
         ServeUpdate::TracingLog { log }
     }
 }

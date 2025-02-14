@@ -23,6 +23,12 @@ impl BuildRequest {
         });
     }
 
+    pub(crate) fn status_splitting_bundle(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::SplittingBundle,
+        });
+    }
+
     pub(crate) fn status_start_bundle(&self) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Bundling {},
@@ -99,6 +105,12 @@ impl BuildRequest {
     pub(crate) fn status_installing_tooling(&self) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::InstallingTooling {},
+        });
+    }
+
+    pub(crate) fn status_compressing_assets(&self) {
+        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+            stage: BuildStage::CompressingAssets,
         });
     }
 

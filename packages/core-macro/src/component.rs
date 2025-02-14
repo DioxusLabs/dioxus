@@ -1,18 +1,29 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::*;
 
 pub struct ComponentBody {
     pub item_fn: ItemFn,
+    pub options: ComponentMacroOptions,
 }
 
 impl Parse for ComponentBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let item_fn: ItemFn = input.parse()?;
         validate_component_fn(&item_fn)?;
-        Ok(Self { item_fn })
+        Ok(Self {
+            item_fn,
+            options: ComponentMacroOptions::default(),
+        })
+    }
+}
+
+impl ComponentBody {
+    pub fn with_options(mut self, options: ComponentMacroOptions) -> Self {
+        self.options = options;
+        self
     }
 }
 
@@ -100,16 +111,98 @@ impl ComponentBody {
             quote! { #struct_ident { #(#struct_field_names),* }: #struct_ident #impl_generics }
         };
 
+        // Defer to the lazy_body if we're using lazy
+        let body: TokenStream = if self.options.lazy {
+            self.lazy_body(
+                &struct_ident,
+                generics,
+                &impl_generics,
+                fn_output,
+                where_clause,
+                &inlined_props_argument,
+                block,
+            )
+        } else {
+            quote! { #block }
+        };
+
+        // We need a props type to exist even if the inputs are empty with lazy components
+        let emit_props = if self.options.lazy {
+            if inputs.is_empty() {
+                quote! {props: ()}
+            } else {
+                quote!(props: #struct_ident #impl_generics)
+            }
+        } else {
+            inlined_props_argument
+        };
+
         // The extra nest is for the snake case warning to kick back in
         parse_quote! {
             #(#attrs)*
             #(#props_docs)*
             #[allow(non_snake_case)]
-            #vis fn #fn_ident #generics (#inlined_props_argument) #fn_output #where_clause {
+            #vis fn #fn_ident #generics (#emit_props) #fn_output #where_clause {
                 {
                     // In debug mode we can detect if the user is calling the component like a function
                     dioxus_core::internal::verify_component_called_as_component(#fn_ident #generics_turbofish);
-                    #block
+                    #body
+                }
+            }
+        }
+    }
+
+    /// Generate the body of the lazy component
+    ///
+    /// This extracts the body into a new component that is wrapped in a lazy loader
+    #[allow(clippy::too_many_arguments)]
+    fn lazy_body(
+        &self,
+        struct_ident: &Ident,
+        generics: &Generics,
+        impl_generics: &TypeGenerics,
+        fn_output: &ReturnType,
+        where_clause: &Option<WhereClause>,
+        inlined_props_argument: &TokenStream,
+        block: &Block,
+    ) -> TokenStream {
+        let fn_ident = &self.item_fn.sig.ident;
+        let inputs = &self.item_fn.sig.inputs;
+
+        let lazy_name = format_ident!("Lazy{fn_ident}");
+        let out_ty = match &self.item_fn.sig.output {
+            ReturnType::Default => quote! { () },
+            ReturnType::Type(_, ty) => quote! { #ty },
+        };
+        let props_ty = if inputs.is_empty() {
+            quote! { () }
+        } else {
+            quote! { #struct_ident #impl_generics }
+        };
+        let anon_props = if inputs.is_empty() {
+            quote! { props: () }
+        } else {
+            quote! { #inlined_props_argument}
+        };
+
+        quote! {
+            fn #lazy_name #generics (#anon_props) #fn_output #where_clause {
+                #block
+            }
+
+            dioxus::config_macros::maybe_wasm_split! {
+                if wasm_split {
+                    {
+                        static __MODULE: wasm_split::LazyLoader<#props_ty, #out_ty> =
+                            wasm_split::lazy_loader!(extern "lazy" fn #lazy_name(props: #props_ty,) -> #out_ty);
+
+                        use_resource(|| async move { __MODULE.load().await }).suspend()?;
+                        __MODULE.call(props).unwrap()
+                    }
+                } else {
+                    {
+                        #lazy_name(props)
+                    }
                 }
             }
         }
@@ -466,4 +559,36 @@ fn allow_camel_case_for_fn_ident(item_fn: &ItemFn) -> ItemFn {
     };
 
     clone
+}
+
+#[derive(Default)]
+pub struct ComponentMacroOptions {
+    pub lazy: bool,
+}
+
+impl Parse for ComponentMacroOptions {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut lazy_load = false;
+
+        while !input.is_empty() {
+            let ident = input.parse::<Ident>()?;
+            let ident_name = ident.to_string();
+            if ident_name == "lazy" {
+                lazy_load = true;
+            } else if ident_name == "no_case_check" {
+                // we used to have this?
+            } else {
+                return Err(Error::new(
+                    ident.span(),
+                    "Unknown option for component macro",
+                ));
+            }
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(Self { lazy: lazy_load })
+    }
 }

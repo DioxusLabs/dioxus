@@ -23,6 +23,7 @@ dioxus-cli-config = { workspace = true }
 dioxus-cli-opt = { workspace = true }
 dioxus-fullstack = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
+wasm-split-cli = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
@@ -126,6 +127,7 @@ tar = "0.4.43"
 local-ip-address = "0.6.3"
 dircpy = "0.3.19"
 plist = "1.7.0"
+memoize = "0.5.1"
 
 [build-dependencies]
 built = { version = "=0.7.4", features = ["git2"] }

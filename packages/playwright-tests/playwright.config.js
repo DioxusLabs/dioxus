@@ -142,8 +142,17 @@ module.exports = defineConfig({
       cwd: path.join(process.cwd(), "cli-optimization"),
       // Remove the cache folder for the cli-optimization build to force a full cache reset
       command:
-        'cargo run --package dioxus-cli --release -- serve --addr "127.0.0.1" --port 8989',
+        'cargo run --package dioxus-cli --release --features optimizations -- serve --addr "127.0.0.1" --port 8989',
       port: 8989,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
+      cwd: path.join(process.cwd(), "wasm-split-harness"),
+      command:
+        'cargo run --package dioxus-cli --release --features optimizations -- serve --bin wasm-split-harness --platform web --addr "127.0.0.1" --port 8001 --experimental-wasm-split --profile wasm-split-release',
+      port: 8001,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",

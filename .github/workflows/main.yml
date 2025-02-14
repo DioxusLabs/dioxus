@@ -211,9 +211,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-      - name: Prebuild CLI
-        run: |
-          cargo build --package dioxus-cli --release
+          cache-on-failure: "true"
       - name: Playwright
         working-directory: ./packages/playwright-tests
         run: |

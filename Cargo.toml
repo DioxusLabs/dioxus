@@ -65,18 +65,18 @@ members = [
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
     "packages/logger",
-
-    # Playwright tests
-    "packages/playwright-tests/liveview",
-    "packages/playwright-tests/web",
-    "packages/playwright-tests/fullstack",
-    "packages/playwright-tests/suspense-carousel",
-    "packages/playwright-tests/nested-suspense",
+    "packages/config-macros",
 
     # manganis
     "packages/manganis/manganis",
     "packages/manganis/manganis-core",
     "packages/manganis/manganis-macro",
+
+    # wasm-split
+    "packages/wasm-split/wasm-split",
+    "packages/wasm-split/wasm-split-macro",
+    "packages/wasm-split/wasm-split-cli",
+    "packages/wasm-split/wasm-used",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -101,6 +101,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
+    "packages/playwright-tests/wasm-split-harness",
 ]
 
 [workspace.package]
@@ -142,13 +143,21 @@ dioxus-fullstack = { path = "packages/fullstack", version = "0.6.2" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.2", default-features = false }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.2" }
 dioxus-logger = { path = "packages/logger", version = "0.6.2" }
+dioxus-config-macros = { path = "packages/config-macros", version = "0.6.3" }
 const-serialize = { path = "packages/const-serialize", version = "0.6.2" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.2" }
 generational-box = { path = "packages/generational-box", version = "0.6.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
+
+
 manganis = { path = "packages/manganis/manganis", version = "0.6.2" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.2" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.2" }
+
+wasm-split = { path = "packages/wasm-split/wasm-split", version = "0.1.0" }
+wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.1.0" }
+wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.1.0" }
+wasm-split-harness = { path = "packages/playwright-tests/wasm-split-harness", version = "0.1.0" }
 
 warnings = { version = "0.2.1" }
 
@@ -225,6 +234,17 @@ cargo_metadata = "0.18.1"
 parking_lot = "0.12.1"
 tracing-wasm = "0.2.1"
 console_error_panic_hook = "0.1.7"
+base16 = "0.2.1"
+digest = "0.10.7"
+sha2 = "0.10.8"
+walrus = { version = "0.23.2", features = ["parallel"] }
+id-arena = "2.2.1"
+async-compression = { version = "0.4.8", features = ["futures-io", "gzip", "brotli"] }
+getrandom = { version = "0.2" }
+async-once-cell = { version = "0.5.3" }
+rayon = "1.2.0"
+wasmparser = "0.225.0"
+itertools = "0.14.0"
 
 # desktop
 wry = { version = "0.45.0", default-features = false }
@@ -250,7 +270,24 @@ debug = 0
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
 [profile.release]
 incremental = true
-debug = 0
+
+# crank up the opt level for wasm-split-cli in dev mode
+# important here that lto is on and the debug symbols are presenta (since they're used by wasm-opt)a
+[profile.wasm-split-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+debug=true
+
+# a profile for running the CLI that's also incremental
+[profile.cli-release-dev]
+inherits = "release"
+opt-level = 3
+incremental = true
+
+# crank up walrus since it's quite slow in dev mode
+[profile.dev.package.walrus]
+opt-level = 3
 
 [profile.release-max-opt]
 inherits = "release"
@@ -296,6 +333,7 @@ base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5", optional = true }
 wgpu = { version = "0.19", optional = true }
 ouroboros = { version = "*", optional = true }
+wasm-split = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }

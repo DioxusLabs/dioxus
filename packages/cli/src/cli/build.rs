@@ -51,6 +51,10 @@ pub(crate) struct BuildArgs {
     #[clap(long, default_value_t = true)]
     pub(crate) inject_loading_scripts: bool,
 
+    /// Experimental: Bundle split the wasm binary into multiple chunks based on `#[wasm_split]` annotations [default: false]
+    #[clap(long, default_value_t = false)]
+    pub(crate) experimental_wasm_split: bool,
+
     /// Generate debug symbols for the wasm binary [default: true]
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
