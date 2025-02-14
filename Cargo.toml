@@ -154,7 +154,6 @@ manganis = { path = "packages/manganis/manganis", version = "0.6.2" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.2" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.2" }
 
-
 wasm-split = { path = "packages/wasm-split/wasm-split", version = "0.1.0" }
 wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.1.0" }
 wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.1.0" }
