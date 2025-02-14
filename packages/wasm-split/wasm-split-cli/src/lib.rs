@@ -1026,7 +1026,22 @@ impl<'a> Splitter<'a> {
         }
 
         // We're going to attach the recovered children to the main function
-        let main_fn = self.source_module.funcs.by_name("main").context("Failed to find main function - was this build with LTO, --emit-relocs, and debug symbols?")?;
+        let main_fn = self
+            .source_module
+            .funcs
+            .iter()
+            .find(|f| {
+                let Some(name) = f.name.as_ref() else {
+                    return false;
+                };
+
+                name.starts_with("main")
+                    || name.contains("lang_start")
+                    || name.contains("__wbindgen_start")
+            })
+            .map(|f| f.id())
+            .context("Failed to find main function - was this build with LTO, --emit-relocs, and debug symbols?")?;
+
         let main_fn_entry = new_call_graph.entry(Node::Function(main_fn)).or_default();
         main_fn_entry.extend(recovered_children);
 

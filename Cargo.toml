@@ -276,8 +276,6 @@ incremental = true
 [profile.wasm-split-release]
 inherits = "release"
 opt-level = 'z'
-debug = true
-incremental = true
 lto = true
 
 # a profile for running the CLI that's also incremental
