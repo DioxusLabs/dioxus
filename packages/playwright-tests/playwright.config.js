@@ -76,15 +76,6 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: [
-    // Prebuild the cli...
-    {
-      command:
-        "cargo build --package dioxus-cli --features optimizations --release",
-      stdout: "pipe",
-      port: 1234,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-    },
     {
       command:
         "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
@@ -96,7 +87,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "web"),
       command:
-        '../../../target/release/dx serve --force-sequential --platform web --addr "127.0.0.1" --port 9999',
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 9999',
       port: 9999,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -105,7 +96,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack"),
       command:
-        '../../../target/release/dx serve --force-sequential --platform web --addr "127.0.0.1" --port 3333',
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 3333',
       port: 3333,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -114,7 +105,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack-mounted"),
       command:
-        '../../../target/release/dx serve --force-sequential --platform web --addr "127.0.0.1" --port 7777',
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 7777',
       port: 7777,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -123,7 +114,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "suspense-carousel"),
       command:
-        '../../../target/release/dx serve --force-sequential --platform web --addr "127.0.0.1" --port 4040',
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 4040',
       port: 4040,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -132,7 +123,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "nested-suspense"),
       command:
-        '../../../target/release/dx serve --force-sequential --platform web --addr "127.0.0.1" --port 5050',
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 5050',
       port: 5050,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -141,7 +132,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "nested-suspense"),
       command:
-        '../../../target/release/dx serve --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
+        'cargo run --package dioxus-cli --release -- serve --bin nested-suspense-ssg --force-sequential --platform web --ssg --addr "127.0.0.1" --port 6060',
       port: 6060,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -150,7 +141,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "wasm-split-harness"),
       command:
-        '../../../target/release/dx serve --bin wasm-split-harness --platform web --addr "127.0.0.1" --port 8001 --experimental-wasm-split --profile wasm-split-release',
+        'cargo run --package dioxus-cli --release -- serve --bin wasm-split-harness --platform web --addr "127.0.0.1" --port 8001 --experimental-wasm-split --profile wasm-split-release',
       port: 8001,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -160,7 +151,7 @@ module.exports = defineConfig({
       cwd: path.join(process.cwd(), "cli-optimization"),
       // Remove the cache folder for the cli-optimization build to force a full cache reset
       command:
-        '../../../target/release/dxfeatures optimizations -- serve --addr "127.0.0.1" --port 8989',
+        'cargo run --package dioxus-cli --release --features optimizations -- serve --addr "127.0.0.1" --port 8989',
       port: 8989,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
