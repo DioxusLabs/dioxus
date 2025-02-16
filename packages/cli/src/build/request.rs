@@ -321,7 +321,7 @@ impl BuildRequest {
                         after.push(val.lib);
                     }
                     Err(e) => {
-                        tracing::error!("Error accured while compiling windows resource file. Your installed app may not have an icon and metadata.\n {}",e);
+                        tracing::error!("Error occurred while compiling windows resource file. Your installed app may not have an icon and metadata.\n {}",e);
                     }
                 }
             }

@@ -193,7 +193,7 @@ impl WebviewInstance {
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(not(target_os = "windows"))]
             let default = tao::window::Icon::from_rgba(
                 include_bytes!("./assets/default_icon.bin").to_vec(),
                 460,

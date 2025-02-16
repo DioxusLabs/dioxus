@@ -1,11 +1,13 @@
-//! Modified version of https://github.com/BenjaminRi/winresource
+#![cfg_attr(rustfmt, rustfmt_skip)]
+#![allow(clippy::all)]
+//! Modified version of https://github.com/BenjaminRi/winresource or https://github.com/tauri-apps/winres
 //!
 //! Rust Windows resource helper
 //!
 //! This crate implements a simple generator for Windows resource (.rc) files
 //! for use with either Microsoft `rc.exe` resource compiler or with GNU `windres.exe`
 //!
-//! The [`WindowsResorce::compile()`] method is intended to be used from a build script and
+//! The [`WindowsResource::compile()`] method is intended to be used from a build script and
 //! needs environment variables from cargo to be set. It not only compiles the resource
 //! but directs cargo to link the resource compiler's output.
 //!
@@ -30,7 +32,7 @@
 //!
 //! # Defaults
 //!
-//! We try to guess some sensible default values from Cargo's build time environement variables
+//! We try to guess some sensible default values from Cargo's build time environment variables
 //! This is described in [`WindowsResource::new()`]. Furthermore we have to know where to find the
 //! resource compiler for the MSVC Toolkit. This can be done by looking up a registry key but
 //! for MinGW this has to be done manually.
@@ -44,7 +46,7 @@
 //! using Rust GNU 64-bit you have to use MinGW64. For MSVC this is simpler as (recent) Windows
 //! SDK always installs both versions on a 64-bit system.
 //!
-//! [`WindowsResorce::compile()`]: struct.WindowsResource.html#method.compile
+//! [`WindowsResource::compile()`]: struct.WindowsResource.html#method.compile
 //! [`WindowsResource::new()`]: struct.WindowsResource.html#method.new
 #![allow(dead_code)]
 
@@ -152,7 +154,7 @@ struct Icon {
 }
 
 impl Icon {
-    fn from_pathbuf(path: &PathBuf, id: &str) -> Self {
+    fn from_pathbuf(path: &Path, id: &str) -> Self {
         Icon {
             path: path
                 .canonicalize()
@@ -246,7 +248,7 @@ impl WindowsResource {
     /// | `FILEFLAGS`          | `0x0`                        |
     ///
     pub fn new() -> Self {
-        let mut props: HashMap<String, String> = HashMap::new();
+        let props: HashMap<String, String> = HashMap::new();
         let mut ver: HashMap<VersionInfo, u64> = HashMap::new();
 
         ver.insert(VersionInfo::FILEVERSION, 0);
@@ -449,9 +451,9 @@ impl WindowsResource {
     /// which should only be set, when the `FILEFLAGS` property is set to
     /// `VS_FF_PRIVATEBUILD(0x08)` or `VS_FF_SPECIALBUILD(0x20)`
     ///
-    /// It is possible to use arbirtrary field names but Windows Explorer and other
+    /// It is possible to use arbitrary field names but Windows Explorer and other
     /// tools might not show them.
-    pub fn set<'a>(&mut self, name: &'a str, value: &'a str) -> &mut Self {
+    pub fn set(&mut self, name: &str, value: &str) -> &mut Self {
         self.properties.insert(name.to_string(), value.to_string());
         self
     }
@@ -460,18 +462,18 @@ impl WindowsResource {
     ///
     /// For the GNU toolkit this has to be the path where MinGW
     /// put `windres.exe` and `ar.exe`. This could be something like:
-    /// `"C:\Program Files\mingw-w64\x86_64-5.3.0-win32-seh-rt_v4-rev0\mingw64\bin"`
+    /// `C:\Program Files\mingw-w64\x86_64-5.3.0-win32-seh-rt_v4-rev0\mingw64\bin`
     ///
     /// For MSVC the Windows SDK has to be installed. It comes with the resource compiler
     /// `rc.exe`. This should be set to the root directory of the Windows SDK, e.g.,
-    /// `"C:\Program Files (x86)\Windows Kits\10"`
+    /// `C:\Program Files (x86)\Windows Kits\10`
     /// or, if multiple 10 versions are installed,
-    /// set it directly to the corret bin directory
-    /// `"C:\Program Files (x86)\Windows Kits\10\bin\10.0.14393.0\x64"`
+    /// set it directly to the correct bin directory
+    /// `C:\Program Files (x86)\Windows Kits\10\bin\10.0.14393.0\x64`
     ///
     /// If it is left unset, it will look up a path in the registry,
     /// i.e. `HKLM\SOFTWARE\Microsoft\Windows Kits\Installed Roots`
-    pub fn set_toolkit_path<'a>(&mut self, path: &'a str) -> &mut Self {
+    pub fn set_toolkit_path(&mut self, path: &str) -> &mut Self {
         self.toolkit_path = PathBuf::from(path);
         self
     }
@@ -534,7 +536,7 @@ impl WindowsResource {
     /// or relative to the projects root.
     ///
     /// Equivalent ```to set_icon_with_id(path, idi_application)```. [`IDI::APPLICATION`].as_str()
-    pub fn set_icon<'a>(&mut self, path: &'a str) -> &mut Self {
+    pub fn set_icon(&mut self, path: &str) -> &mut Self {
         self.set_icon_with_id(path, IDI::APPLICATION.as_str())
     }
 
@@ -576,7 +578,7 @@ impl WindowsResource {
     /// chosen as the application icon:
     /// <https://docs.microsoft.com/en-us/previous-versions/ms997538(v=msdn.10)?redirectedfrom=MSDN#choosing-an-icon>.
     ///
-    /// To keep things simple, we recommand you use only 16-bit unsigned integer
+    /// To keep things simple, we recommend you use only 16-bit unsigned integer
     /// name IDs, and add the application icon first with the lowest id:
     ///
     /// ```nocheck
@@ -586,7 +588,7 @@ impl WindowsResource {
     ///    // ...
     /// ```
     /// see [`IDI`]` for special icons ids
-    pub fn set_icon_with_id<'a>(&mut self, path: &'a str, name_id: &'a str) -> &mut Self {
+    pub fn set_icon_with_id(&mut self, path: &str, name_id: &str) -> &mut Self {
         self.icons.push(Icon {
             path: path.into(),
             name_id: name_id.into(),
@@ -615,26 +617,26 @@ impl WindowsResource {
     /// <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     ///     <security>
     ///         <requestedPrivileges>
-    ///             <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+    ///             <requestedExecutionLevel le vel="requireAdministrator" uiAccess="false" />
     ///         </requestedPrivileges>
     ///     </security>
     /// </trustInfo>
     /// </assembly>
     /// "#);
     /// ```
-    pub fn set_manifest<'a>(&mut self, manifest: &'a str) -> &mut Self {
+    pub fn set_manifest(&mut self, manifest: &str) -> &mut Self {
         self.manifest_file = None;
         self.manifest = Some(manifest.to_string());
         self
     }
 
     /// Some as [`set_manifest()`] but a filename can be provided and
-    /// file is included by the resource compieler itself.
+    /// file is included by the resource compiler itself.
     /// This method works the same way as [`set_icon()`]
     ///
     /// [`set_manifest()`]: #method.set_manifest
     /// [`set_icon()`]: #method.set_icon
-    pub fn set_manifest_file<'a>(&mut self, file: &'a str) -> &mut Self {
+    pub fn set_manifest_file(&mut self, file: &str) -> &mut Self {
         self.manifest_file = Some(file.to_string());
         self.manifest = None;
         self
@@ -730,9 +732,9 @@ impl WindowsResource {
     /// Set a path to an already existing resource file.
     ///
     /// We will neither modify this file nor parse its contents. This function
-    /// simply replaces the internaly generated resource file that is passed to
+    /// simply replaces the internally generated resource file that is passed to
     /// the compiler. You can use this function to write a resource file yourself.
-    pub fn set_resource_file<'a>(&mut self, path: &'a str) -> &mut Self {
+    pub fn set_resource_file(&mut self, path: &str) -> &mut Self {
         self.rc_file = Some(path.to_string());
         self
     }
@@ -767,7 +769,7 @@ impl WindowsResource {
     /// # }
     /// # Ok::<_, std::io::Error>(())
     /// ```
-    pub fn append_rc_content<'a>(&mut self, content: &'a str) -> &mut Self {
+    pub fn append_rc_content(&mut self, content: &str) -> &mut Self {
         if !(self.append_rc_content.ends_with('\n') || self.append_rc_content.is_empty()) {
             self.append_rc_content.push('\n');
         }
@@ -775,11 +777,11 @@ impl WindowsResource {
         self
     }
 
-    /// Override the output directoy.
+    /// Override the output directory.
     ///
     /// As a default, we use `%OUT_DIR%` set by cargo, but it may be necessary to override the
     /// the setting.
-    pub fn set_output_directory<'a>(&mut self, path: &'a str) -> &mut Self {
+    pub fn set_output_directory(&mut self, path: &str) -> &mut Self {
         self.output_directory = path.to_string();
         self
     }
@@ -823,7 +825,7 @@ impl WindowsResource {
         }
     }
 
-    fn compile_with_toolkit_gnu<'a>(&mut self, input: &'a str) -> io::Result<()> {
+    fn compile_with_toolkit_gnu(&mut self, input: &str) -> io::Result<()> {
         let output = PathBuf::from(&self.output_directory).join("resource.o");
         let input = PathBuf::from(input);
         let manifest = match &self.assets_path {
@@ -875,7 +877,7 @@ impl WindowsResource {
         Ok(())
     }
 
-    fn compile_with_toolkit_msvc<'a>(&mut self, input: &'a str) -> io::Result<()> {
+    fn compile_with_toolkit_msvc(&mut self, input: &str) -> io::Result<()> {
         let rc_exe = PathBuf::from(&self.toolkit_path).join("rc.exe");
         let rc_exe = if !rc_exe.exists() {
             if cfg!(target_arch = "x86_64") {
@@ -898,7 +900,7 @@ impl WindowsResource {
         let command = command.arg(format!("/I{}", manifest));
 
         if self.add_toolkit_include {
-            let root = win_sdk_inlcude_root(&rc_exe);
+            let root = win_sdk_include_root(&rc_exe);
             println!("Adding toolkit include: {}", root.display());
             command.arg(format!("/I{}", root.join("um").display()));
             command.arg(format!("/I{}", root.join("shared").display()));
@@ -1028,7 +1030,7 @@ pub(crate) fn escape_string(string: &str) -> String {
     escaped
 }
 
-fn win_sdk_inlcude_root(path: &Path) -> PathBuf {
+fn win_sdk_include_root(path: &Path) -> PathBuf {
     let mut tools_path = PathBuf::new();
     let mut iter = path.iter();
     while let Some(p) = iter.next() {
