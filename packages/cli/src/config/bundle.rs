@@ -16,6 +16,10 @@ pub(crate) struct BundleConfig {
     pub(crate) deb: Option<DebianSettings>,
     pub(crate) macos: Option<MacOsSettings>,
     pub(crate) windows: Option<WindowsSettings>,
+    pub(crate) version: Option<String>,
+    pub(crate) file_version: Option<String>,
+    pub(crate) original_file_name: Option<String>,
+    pub(crate) trademark: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
