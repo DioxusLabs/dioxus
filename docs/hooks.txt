@@ -1,0 +1,50 @@
+CORE
+====
+core  | use_hook              | Store a value between renders. The foundational hook for all other hooks.
+
+LIFECYCLE
+=========
+hooks | use_effect            | Run closure after the component has finished rendering.
+core  | use_drop              | Creates a callback that will be run before the component
+hooks | use_on_unmount        | DEPRECATED. Alias for use_drop.
+core  | use_hook_with_cleanup | Like `use_hook` and `use_drop` combined
+core  | use_before_render     | Safely handle "early returns"
+core  | use_after_render      | Safely handle "early returns" HOW DOES THIS DIFFER FROM `before_render`?
+
+LOCAL STATE
+===========
+hooks | use_signal            | Creates a new Signal (state with automatic dependency tracking)
+hooks | use_memo              | Creates a new Memo. Eefficiently compute derived data from signals.
+
+Advanced:
+hooks | use_signal_sync       | Creates a new Signal that is `Send + Sync`
+hooks | use_set_compare       | Creates a new SetCompare which efficiently tracks when a value changes to check if it is equal to a set of values.
+hooks | use_set_compare_equal | A hook that returns true if the value is equal to the value in the set compare.
+
+CALLBACK (closed over state)
+========
+hooks | use_callback          | Create a callback that’s always up to date. Whenever this hook is called the inner callback will be replaced with the new callback but the handle will remain.
+
+NON-LOCAL STATE
+===============
+hooks | use_context_provider  | Provide some context via the tree and return a reference to it
+hooks | use_context           | Consume some context in the tree, providing a sharable handle to the value
+hooks | try_use_context       | Consume some context in the tree, providing a sharable handle to the value
+hooks | use_root_context      | Try to get a value from the root of the virtual dom, if it doesn’t exist, create a new one with the closure provided.
+
+ASYNC
+=====
+hooks | use_resource          | Derive a value using an future / async closure (re-run each time derived values change).
+
+Advanced:
+hooks | use_future            | A hook that allows you to spawn a future the first time you render a component.
+hooks | use_coroutine         | Maintain a handle over a future that can be paused, resumed, and canceled.
+hooks | use_coroutine_handle  | Get a handle to a coroutine higher in the tree
+
+NOT SURE
+========
+hooks | use_reactive          | Takes non-reactive data, and a closure and subscribes to that non-reactive data as if it were reactive.
+hooks | use_hook_did_run      | A hook that uses before/after lifecycle hooks to determine if the hook was run
+
+
+
