@@ -174,11 +174,12 @@ impl Icon {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Linker {
     pub lib: String,
     pub path: String,
     pub files: Vec<String>,
+    pub default_icon: Option<String>,
 }
 
 #[derive(Debug)]
@@ -198,7 +199,7 @@ pub struct WindowsResource {
     append_rc_content: String,
     assets_path: Option<String>,
     link: bool,
-    pub linker: Option<Linker>,
+    pub linker: Linker,
 }
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../assets/icon.ico");
@@ -329,11 +330,12 @@ impl WindowsResource {
             append_rc_content: String::new(),
             assets_path: None,
             link: true,
-            linker: None,
+            linker: Linker::default(),
         }
     }
 
     pub(crate) fn from_dxconfig(build: &BuildRequest) -> io::Result<Linker> {
+
         let bundle = &build.krate.config.bundle;
         let package = build.krate.package();
 
@@ -421,14 +423,15 @@ impl WindowsResource {
 
         if !default {
             let icon = output_dir.join("icon.ico");
-
+            winres.linker.default_icon = Some(icon.to_string_lossy().to_string());
             let mut file = File::create(&icon)?;
             file.write_all(DEFAULT_ICON)?;
             winres.set_icon(icon.to_str().unwrap());
         }
 
         winres.compile()?;
-        Ok(winres.linker.unwrap())
+
+        Ok(winres.linker)
     }
 
     /// Set string properties of the version info struct.
@@ -860,14 +863,12 @@ impl WindowsResource {
             ));
         }
 
-        self.linker = Some(Linker {
-            lib: "static=resource".to_string(),
-            path: self.output_directory.clone(),
-            files: vec![
-                output.to_string_lossy().to_string(),
-                libname.to_string_lossy().to_string(),
-            ],
-        });
+        self.linker.lib = "static=resource".to_string();
+        self.linker.path = self.output_directory.clone();
+        self.linker.files = vec![
+            output.to_string_lossy().to_string(),
+            libname.to_string_lossy().to_string(),
+        ];
 
         if self.link {
             println!("cargo:rustc-link-search=native={}", self.output_directory);
@@ -926,11 +927,9 @@ impl WindowsResource {
             ));
         }
 
-        self.linker = Some(Linker {
-            lib: "dylib=resource".to_string(),
-            path: self.output_directory.clone(),
-            files: vec![output.to_string_lossy().to_string()],
-        });
+        self.linker.lib = "dylib=resource".to_string();
+        self.linker.path = self.output_directory.clone();
+        self.linker.files = vec![output.to_string_lossy().to_string()];
 
         if self.link {
             println!("cargo:rustc-link-search=native={}", self.output_directory);

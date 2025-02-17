@@ -113,13 +113,26 @@ impl BuildRequest {
         // Update the status to show that we're starting the build and how many crates we expect to build
         self.status_starting_build(crate_count);
 
+        let mut build_args = self.build_arguments();
+
+        // Windows resources needs to be build before the exe
+        if self.build.platform() == Platform::Windows {
+            let val = crate::winres::WindowsResource::from_dxconfig(self)
+                .expect("Error occurred while compiling windows resource file.");
+            build_args.push("--".to_string());
+            build_args.push("-L".to_string());
+            build_args.push(val.path);
+            build_args.push("-l".to_string());
+            build_args.push(val.lib);
+        }
+
         let mut cmd = Command::new("cargo");
 
         cmd.arg("rustc")
             .current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
-            .args(self.build_arguments())
+            .args(build_args)
             .envs(self.env_vars()?);
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
@@ -262,7 +275,6 @@ impl BuildRequest {
     /// Create a list of arguments for cargo builds
     pub(crate) fn build_arguments(&self) -> Vec<String> {
         let mut cargo_args = Vec::new();
-        let mut after = Vec::new();
 
         // Set the target, profile and features that vary between the app and server builds
         if self.build.platform() == Platform::Server {
@@ -309,22 +321,6 @@ impl BuildRequest {
                 cargo_args.push("--target".to_string());
                 cargo_args.push(target.to_string());
             }
-
-            // Windows resources needs to be build before the exe
-            if self.build.platform() == Platform::Windows {
-                match crate::winres::WindowsResource::from_dxconfig(self) {
-                    Ok(val) => {
-                        after.push("--".to_string());
-                        after.push("-L".to_string());
-                        after.push(val.path);
-                        after.push("-l".to_string());
-                        after.push(val.lib);
-                    }
-                    Err(e) => {
-                        tracing::error!("Error occurred while compiling windows resource file. Your installed app may not have an icon and metadata.\n {}",e);
-                    }
-                }
-            }
         }
 
         // We always run in verbose since the CLI itself is the one doing the presentation
@@ -367,7 +363,6 @@ impl BuildRequest {
 
         tracing::debug!(dx_src = ?TraceSrc::Build, "cargo args: {:?}", cargo_args);
 
-        cargo_args.extend(after);
         cargo_args
     }
 
