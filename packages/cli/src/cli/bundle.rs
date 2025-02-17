@@ -168,16 +168,37 @@ impl Bundle {
         }
 
         if cfg!(windows) {
-            let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
-            if windows_icon_override.is_none() {
-                let icon_path = bundle_settings
-                    .icon
-                    .as_ref()
-                    .and_then(|icons| icons.first());
+            let mut windows_icon = match bundle_settings.icon.as_ref() {
+                Some(icons) => icons.iter().find(|i| i.ends_with(".ico")).cloned(),
+                None => None,
+            };
 
-                if let Some(icon_path) = icon_path {
-                    bundle_settings.icon = Some(vec![icon_path.into()]);
-                };
+            if windows_icon.is_none() {
+                let default = bundle
+                    .main_exe()
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("winres")
+                    .join("icon.ico");
+                tracing::info!("Windows icon not set. Using default icon.");
+
+                let path = default.to_string_lossy().to_string();
+                windows_icon = Some(path.clone());
+
+                bundle_settings.icon.get_or_insert_with(Vec::new).push(path);
+            }
+
+            let has_windows_icon_override = match krate.config.bundle.windows.as_ref() {
+                Some(windows) => windows.icon_path.is_some(),
+                None => false,
+            };
+
+            if !has_windows_icon_override {
+                let icon = windows_icon.unwrap();
+                // for now it still needs to be set even though it's deprecated
+                bundle_settings.windows.icon_path = PathBuf::from(icon);
             }
         }
 
