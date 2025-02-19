@@ -122,6 +122,7 @@ impl WebServer {
         )?;
 
         // Optionally need to initialize the default crypto provider before we start the server
+        // https://github.com/rustls/rustls/issues/1938
         if krate.config.web.https.enabled.unwrap_or_default() {
             ring::default_provider()
                 .install_default()
