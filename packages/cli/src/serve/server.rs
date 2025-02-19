@@ -40,6 +40,7 @@ use tower_http::{
     services::fs::{ServeDir, ServeFileSystemResponseBody},
     ServiceBuilderExt,
 };
+use rustls::crypto::ring;
 
 /// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
 /// communication layer that we use to send status updates and hotreloads to the client.
@@ -119,6 +120,13 @@ impl WebServer {
             proxied_address,
             build_status.clone(),
         )?;
+
+        // Optionally need to initialize the default crypto provider before we start the server
+        if krate.config.web.https.enabled.unwrap_or_default() {
+            ring::default_provider()
+                .install_default()
+                .expect("Failed to install rustls crypto provider");
+        }
 
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(

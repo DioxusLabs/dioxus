@@ -662,10 +662,16 @@ impl Output {
         );
 
         self.render_feature_list(frame, app_features, state);
-
-        // todo(jon) should we write https ?
+        
+        // Render the server address
         let address = match state.server.displayed_address() {
-            Some(address) => format!("http://{}", address).blue(),
+            Some(address) => {
+                if state.krate.config.web.https.enabled.unwrap_or_default() {
+                    format!("https://{}", address).blue()
+                } else {
+                    format!("http://{}", address).blue()
+                }
+            }
             None => "no server address".dark_gray(),
         };
 
