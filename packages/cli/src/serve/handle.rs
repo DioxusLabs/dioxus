@@ -2,7 +2,7 @@ use crate::{AppBundle, DioxusCrate, Platform, Result};
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use std::{
-    net::SocketAddr,
+    net::{Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -139,7 +139,10 @@ impl AppHandle {
             Platform::Web => {
                 // Only the first build we open the web app, after that the user knows it's running
                 if open_browser {
-                    self.open_web(devserver_ip);
+                    self.open_web(SocketAddr::new(
+                        Ipv4Addr::LOCALHOST.into(),
+                        devserver_ip.port(),
+                    ));
                 }
 
                 None
