@@ -4,6 +4,8 @@ use tracing::{
 };
 
 pub use tracing;
+#[cfg(feature = "env-filter")]
+use tracing_subscriber::EnvFilter;
 
 /// Attempt to initialize the subscriber if it doesn't already exist, with default settings.
 ///
@@ -98,6 +100,8 @@ pub fn init(level: Level) -> Result<(), SetGlobalDefaultError> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let sub = tracing_subscriber::FmtSubscriber::builder().with_max_level(level);
+        #[cfg(feature = "env-filter")]
+        let sub = sub.with_env_filter(EnvFilter::from_default_env());
 
         if !dioxus_cli_config::is_cli_enabled() {
             return set_global_default(sub.finish());
