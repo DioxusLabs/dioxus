@@ -328,6 +328,9 @@ impl VNode {
                     to.remove_node(id);
                 }
                 dom.reclaim(id);
+            } else {
+                let id = dom.get_mounted_root_node(mount, idx);
+                dom.reclaim(id);
             }
         }
     }
