@@ -2,7 +2,7 @@ use dioxus_lib::prelude::*;
 
 use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
 
-pub(crate) struct OutletContext<R> {
+pub struct OutletContext<R> {
     pub current_level: usize,
     pub _marker: std::marker::PhantomData<R>,
 }
@@ -16,7 +16,7 @@ impl<R> Clone for OutletContext<R> {
     }
 }
 
-pub(crate) fn use_outlet_context<R: 'static>() -> OutletContext<R> {
+pub fn use_outlet_context<R: 'static>() -> OutletContext<R> {
     use_hook(|| {
         try_consume_context().unwrap_or(OutletContext::<R> {
             current_level: 1,
