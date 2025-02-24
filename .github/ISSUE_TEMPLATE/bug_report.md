@@ -1,6 +1,7 @@
 ---
 name: Bug report
 about: Create a report to help us improve Dioxus
+labels: bug
 ---
 
 **Problem**
@@ -24,14 +25,16 @@ Steps to reproduce the behavior:
 <!-- If applicable, add screenshots to help explain your problem. -->
 
 **Environment:**
- - Dioxus version:  <!-- e.g. v0.17, `master` -->
- - Rust version:    <!-- e.g. 1.43.0, `nightly` -->
- - OS info:         <!-- e.g. MacOS -->
- - App platform:    <!-- e.g. `web`, `desktop` -->
+
+- Dioxus version:  <!-- e.g., v0.17, main -->
+- Rust version:    <!-- e.g., 1.123.0, nightly -->
+- OS info:         <!-- e.g., macOS, NixOS 25.05 -->
+- App platform:    <!-- e.g., web, desktop -->
 
 **Questionnaire**
-<!-- If you feel up to the challenge, please uncomment one of the lines below: -->
 
-<!-- I'm interested in fixing this myself but don't know where to start -->
-<!-- I would like to fix and I have a solution -->
-<!-- I don't have time to fix this right now, but maybe later -->
+<!-- If you feel up to the challenge, please uncomment applicable lines below: -->
+
+<!-- I'm interested in fixing this myself but don't know where to start. -->
+<!-- I would like to fix and I have a solution. -->
+<!-- I don't have time to fix this right now, but maybe later. -->

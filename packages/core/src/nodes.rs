@@ -376,19 +376,46 @@ pub struct Template {
     pub attr_paths: StaticPathArray,
 }
 
+// Are identical static items merged in the current build. Rust doesn't have a cfg(merge_statics) attribute
+// so we have to check this manually
+fn static_items_merged() -> bool {
+    fn a() {}
+    fn b() {}
+
+    a as fn() == b as fn()
+}
+
 impl std::hash::Hash for Template {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::ptr::hash(self.roots as *const _, state);
-        std::ptr::hash(self.node_paths as *const _, state);
-        std::ptr::hash(self.attr_paths as *const _, state);
+        // If identical static items are merged, we can compare templates by pointer
+        if static_items_merged() {
+            std::ptr::hash(self.roots as *const _, state);
+            std::ptr::hash(self.node_paths as *const _, state);
+            std::ptr::hash(self.attr_paths as *const _, state);
+        }
+        // Otherwise, we hash by value
+        else {
+            self.roots.hash(state);
+            self.node_paths.hash(state);
+            self.attr_paths.hash(state);
+        }
     }
 }
 
 impl PartialEq for Template {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.roots as *const _, other.roots as *const _)
-            && std::ptr::eq(self.node_paths as *const _, other.node_paths as *const _)
-            && std::ptr::eq(self.attr_paths as *const _, other.attr_paths as *const _)
+        // If identical static items are merged, we can compare templates by pointer
+        if static_items_merged() {
+            std::ptr::eq(self.roots as *const _, other.roots as *const _)
+                && std::ptr::eq(self.node_paths as *const _, other.node_paths as *const _)
+                && std::ptr::eq(self.attr_paths as *const _, other.attr_paths as *const _)
+        }
+        // Otherwise, we compare by value
+        else {
+            self.roots == other.roots
+                && self.node_paths == other.node_paths
+                && self.attr_paths == other.attr_paths
+        }
     }
 }
 

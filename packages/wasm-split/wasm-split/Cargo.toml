@@ -1,0 +1,8 @@
+[package]
+name = "wasm-split"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-once-cell = { workspace = true, features = ["std"] }
+wasm-split-macro = { workspace = true }

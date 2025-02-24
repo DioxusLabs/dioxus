@@ -359,8 +359,11 @@ impl WebviewInstance {
                 }
             }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_web_context(&mut web_context)
-            .with_drag_drop_handler(file_drop_handler);
+            .with_web_context(&mut web_context);
+
+        if !cfg.disable_file_drop_handler {
+            webview = webview.with_drag_drop_handler(file_drop_handler);
+        }
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);

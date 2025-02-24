@@ -74,6 +74,10 @@ pub use dioxus_logger as logger;
 #[cfg_attr(docsrs, doc(cfg(feature = "cli-config")))]
 pub use dioxus_cli_config as cli_config;
 
+#[cfg(feature = "wasm-split")]
+#[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
+pub use wasm_split;
+
 pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
@@ -138,6 +142,10 @@ pub mod prelude {
     #[cfg(feature = "asset")]
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
     pub use manganis::{self, *};
+
+    #[cfg(feature = "wasm-split")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "wasm-split")))]
+    pub use wasm_split;
 }
 
 #[cfg(feature = "web")]
@@ -171,3 +179,5 @@ pub use dioxus_ssr as ssr;
 #[cfg(feature = "warnings")]
 #[cfg_attr(docsrs, doc(cfg(feature = "warnings")))]
 pub use warnings;
+
+pub use dioxus_config_macros as config_macros;

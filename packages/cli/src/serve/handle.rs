@@ -760,7 +760,7 @@ We checked the folder: {}
                 tracing::error!("Failed to push .env file to device: {e}");
             }
 
-            // eventually, use the user's MainAcitivty, not our MainAcitivty
+            // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 

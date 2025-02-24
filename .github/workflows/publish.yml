@@ -102,7 +102,7 @@ jobs:
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
-          features: wasm-opt
+          features: optimizations
 
   # todo: these things
   # Run benchmarks, which we'll use to display on the website
