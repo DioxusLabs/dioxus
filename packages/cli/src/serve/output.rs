@@ -662,7 +662,7 @@ impl Output {
         );
 
         self.render_feature_list(frame, app_features, state);
-        
+
         // Render the server address
         let address = match state.server.displayed_address() {
             Some(address) => {

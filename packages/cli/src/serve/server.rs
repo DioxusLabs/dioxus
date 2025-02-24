@@ -27,6 +27,7 @@ use futures_util::{
     StreamExt,
 };
 use hyper::HeaderMap;
+use rustls::crypto::ring;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
@@ -40,7 +41,6 @@ use tower_http::{
     services::fs::{ServeDir, ServeFileSystemResponseBody},
     ServiceBuilderExt,
 };
-use rustls::crypto::ring;
 
 /// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
 /// communication layer that we use to send status updates and hotreloads to the client.
@@ -112,6 +112,14 @@ impl WebServer {
 
         // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
+
+        // Optionally need to initialize the default crypto provider before we start the server
+        // https://github.com/rustls/rustls/issues/1938
+        // This is needed for WSS (dev proxy) / HTTPS (local dev server test)
+        ring::default_provider()
+            .install_default()
+            .expect("Failed to install rustls crypto provider");
+
         let router = build_devserver_router(
             args,
             krate,
@@ -120,14 +128,6 @@ impl WebServer {
             proxied_address,
             build_status.clone(),
         )?;
-
-        // Optionally need to initialize the default crypto provider before we start the server
-        // https://github.com/rustls/rustls/issues/1938
-        if krate.config.web.https.enabled.unwrap_or_default() {
-            ring::default_provider()
-                .install_default()
-                .expect("Failed to install rustls crypto provider");
-        }
 
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
