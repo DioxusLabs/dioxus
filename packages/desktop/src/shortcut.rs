@@ -66,6 +66,10 @@ impl ShortcutRegistry {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub(crate) fn call_handlers(&self, id: GlobalHotKeyEvent) {
+        if id.state != global_hotkey::HotKeyState::Pressed {
+            return;
+        }
+
         if let Some(ShortcutInner { callbacks, .. }) = self.shortcuts.borrow_mut().get_mut(&id.id) {
             for (_, callback) in callbacks.iter_mut() {
                 (callback)();
