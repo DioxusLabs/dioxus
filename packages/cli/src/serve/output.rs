@@ -664,16 +664,18 @@ impl Output {
         self.render_feature_list(frame, app_features, state);
 
         // Render the server address
-        let address = match state.server.displayed_address() {
-            Some(address) => {
-                if state.krate.config.web.https.enabled.unwrap_or_default() {
-                    format!("https://{}", address).blue()
+        let address = state
+            .server
+            .displayed_address()
+            .map(|addr| {
+                let scheme = if state.krate.config.web.https.enabled.unwrap_or_default() {
+                    "https"
                 } else {
-                    format!("http://{}", address).blue()
-                }
-            }
-            None => "no server address".dark_gray(),
-        };
+                    "http"
+                };
+                format!("{}://{}", scheme, addr).blue()
+            })
+            .unwrap_or_else(|| "no server address".dark_gray());
 
         frame.render_widget_ref(
             Paragraph::new(Line::from(vec![
