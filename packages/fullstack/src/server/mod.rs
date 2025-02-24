@@ -57,10 +57,6 @@
 
 pub mod launch;
 
-#[allow(unused)]
-pub(crate) type ContextProviders =
-    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
-
 use axum::routing::*;
 use axum::{
     body::{self, Body},
@@ -73,7 +69,7 @@ use http::header::*;
 
 use std::sync::Arc;
 
-use crate::prelude::*;
+use crate::{prelude::*, ContextProviders};
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
