@@ -1,6 +1,7 @@
 use crate::element::DesktopElement;
 use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
+use crate::WindowCloseBehaviour;
 use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
@@ -159,6 +160,7 @@ pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
+    pub close_behaviour: Option<WindowCloseBehaviour>,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -434,6 +436,7 @@ impl WebviewInstance {
             desktop_context,
             _menu: menu,
             _web_context: web_context,
+            close_behaviour: cfg.window_close_behaviour,
         }
     }
 
