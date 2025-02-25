@@ -37,7 +37,7 @@ pub(crate) use settings::*;
 async fn main() {
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
     if let Some(link_action) = link::LinkAction::from_env() {
-        return link_action.run();
+        return link_action.run().await.unwrap();
     }
 
     let args = TraceController::initialize();

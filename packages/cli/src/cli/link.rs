@@ -11,9 +11,13 @@ pub enum LinkAction {
     },
     FatLink {
         platform: Platform,
+        incremental_dir: PathBuf,
     },
     ThinLink {
         platform: Platform,
+        main_ptr: u64,
+        patch_target: PathBuf,
+        incremental_dir: PathBuf,
     },
 }
 
@@ -60,16 +64,29 @@ impl LinkAction {
                     .expect("Failed to run android linker");
             }
 
-            // Run the system linker but keep any unused sections
-            LinkAction::FatLink { platform } => {
+            // Run the system linker but keep any unused sections.
+            //
+            // This ensures our thin link will work against the binaries built here.
+            LinkAction::FatLink {
+                platform,
+                incremental_dir,
+            } => {
+                // Make sure we *don't* dead-strip the binary so every symbol still exists
                 let args = args
                     .into_iter()
                     .skip(1)
                     .filter(|arg| arg != "-Wl,-dead_strip")
                     .collect::<Vec<String>>();
 
-                let object_files: Vec<_> = args.iter().filter(|arg| arg.ends_with(".o")).collect();
-                cache_incrementals(object_files.as_ref());
+                // Persist the cache of incremental files
+                cache_incrementals(
+                    &incremental_dir.join("old"),
+                    &incremental_dir.join("new"),
+                    args.iter()
+                        .filter(|arg| arg.ends_with(".o"))
+                        .collect::<Vec<&String>>()
+                        .as_ref(),
+                );
 
                 // Run ld with the args
                 let res = Command::new("cc").args(args).output().await?;
@@ -77,23 +94,30 @@ impl LinkAction {
             }
 
             // Run the linker but without rlibs
-            LinkAction::ThinLink { platform } => {
+            LinkAction::ThinLink {
+                platform,
+                patch_target,
+                incremental_dir,
+                main_ptr,
+            } => {
                 let index_of_out = args.iter().position(|arg| arg == "-o").unwrap();
                 let out_file = args[index_of_out + 1].clone();
                 let object_files: Vec<_> = args.iter().filter(|arg| arg.ends_with(".o")).collect();
 
-                cache_incrementals(object_files.as_ref());
+                cache_incrementals(
+                    &incremental_dir.join("old"),
+                    &incremental_dir.join("new"),
+                    object_files.as_ref(),
+                );
 
-                let patch_target =
-                    "/Users/jonkelley/Development/Tinkering/ipbp/target/hotreload/harness".into();
-
-                let main_ptr = std::fs::read_to_string(workspace_root().join("harnessaddr.txt"))
-                    .unwrap()
-                    .parse()
-                    .unwrap();
-
-                crate::build::attempt_partial_link(main_ptr, patch_target, out_file.clone().into())
-                    .await;
+                crate::build::attempt_partial_link(
+                    incremental_dir.join("old"),
+                    incremental_dir.join("new"),
+                    main_ptr,
+                    patch_target,
+                    out_file.clone().into(),
+                )
+                .await;
             }
         }
 
@@ -102,10 +126,7 @@ impl LinkAction {
 }
 
 /// Move all previous object files to "incremental-old" and all new object files to "incremental-new"
-fn cache_incrementals(object_files: &[&String]) {
-    let old = workspace_root().join("data").join("incremental-old");
-    let new = workspace_root().join("data").join("incremental-new");
-
+fn cache_incrementals(old: &PathBuf, new: &PathBuf, object_files: &[&String]) {
     // Remove the old incremental-old directory if it exists
     _ = std::fs::remove_dir_all(&old);
 
@@ -124,16 +145,4 @@ fn cache_incrementals(object_files: &[&String]) {
         let path = PathBuf::from(o);
         std::fs::copy(&path, new.join(path.file_name().unwrap())).unwrap();
     }
-}
-
-fn system_linker(platform: Platform) -> &'static str {
-    // match platform {
-    //     Platform::MacOS => "ld",
-    //     Platform::Windows => "ld",
-    //     Platform::Linux => "ld",
-    //     Platform::Ios => "ld",
-    //     Platform::Android => "ld",
-    //     Platform::Server => "ld",
-    //     Platform::Liveview => "ld",
-    // }
 }

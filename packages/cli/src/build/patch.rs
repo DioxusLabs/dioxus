@@ -12,6 +12,8 @@ use std::{
 };
 use tokio::process::Command;
 
+use crate::Platform;
+
 pub enum ReloadKind {
     /// An RSX-only patch
     Rsx,
@@ -28,8 +30,14 @@ pub struct PatchData {
     pub direct_rustc: Vec<String>,
 }
 
-pub async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, out_path: PathBuf) {
-    let mut object = ObjectDiff::new().unwrap();
+pub async fn attempt_partial_link(
+    old_cache: PathBuf,
+    new_cache: PathBuf,
+    proc_main_addr: u64,
+    patch_target: PathBuf,
+    out_path: PathBuf,
+) {
+    let mut object = ObjectDiff::new(old_cache, new_cache).unwrap();
     object.load().unwrap();
 
     let all_exports = object
@@ -65,7 +73,6 @@ pub async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, ou
         modified_log.push_str(&format!("{m}\n"));
         modified_log.push_str(&format!("{path:#?}\n"));
     }
-    std::fs::write(workspace_dir().join("modified_symbols.txt"), modified_log).unwrap();
 
     let modified = object
         .modified_files
@@ -145,6 +152,19 @@ pub async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, ou
     //     .await?;
 }
 
+fn system_cc(platform: Platform) -> &'static str {
+    match platform {
+        Platform::MacOS => "cc",
+        Platform::Windows => "cc",
+        Platform::Linux => "cc",
+        Platform::Ios => "cc",
+        Platform::Android => "cc",
+        Platform::Server => "cc",
+        Platform::Liveview => "cc",
+        Platform::Web => "wasm-ld",
+    }
+}
+
 struct ObjectDiff {
     old: BTreeMap<String, LoadedFile>,
     new: BTreeMap<String, LoadedFile>,
@@ -154,10 +174,10 @@ struct ObjectDiff {
 }
 
 impl ObjectDiff {
-    fn new() -> Result<Self> {
+    fn new(old_cache: PathBuf, new_cache: PathBuf) -> Result<Self> {
         Ok(Self {
-            old: LoadedFile::from_dir(&workspace_dir().join("data").join("incremental-old"))?,
-            new: LoadedFile::from_dir(&workspace_dir().join("data").join("incremental-new"))?,
+            old: LoadedFile::from_dir(&old_cache)?,
+            new: LoadedFile::from_dir(&new_cache)?,
             modified_files: Default::default(),
             modified_symbols: Default::default(),
             parents: Default::default(),
@@ -609,10 +629,6 @@ fn symbol_name_of_relo<'a>(obj: &impl Object<'a>, target: RelocationTarget) -> O
         RelocationTarget::Absolute => None,
         _ => None,
     }
-}
-
-fn workspace_dir() -> PathBuf {
-    "/Users/jonkelley/Development/Tinkering/ipbp".into()
 }
 
 trait ToUtf8<'a> {
