@@ -27,6 +27,7 @@ use futures_util::{
     StreamExt,
 };
 use hyper::HeaderMap;
+use rustls::crypto::ring;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
@@ -111,6 +112,14 @@ impl WebServer {
 
         // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
+
+        // Optionally need to initialize the default crypto provider before we start the server
+        // https://github.com/rustls/rustls/issues/1938
+        // This is needed for WSS (dev proxy) / HTTPS (local dev server test)
+        ring::default_provider()
+            .install_default()
+            .expect("Failed to install rustls crypto provider");
+
         let router = build_devserver_router(
             args,
             krate,

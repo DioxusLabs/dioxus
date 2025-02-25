@@ -24,7 +24,6 @@ struct ProxyClient {
 
 impl ProxyClient {
     fn new(url: Uri) -> Self {
-        let _ = rustls::crypto::ring::default_provider().install_default();
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
             .unwrap()
