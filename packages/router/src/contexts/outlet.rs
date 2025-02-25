@@ -20,7 +20,7 @@ impl<R> OutletContext<R> {
     /// Creates a new outlet context starting at level 1
     pub fn new() -> Self {
         Self {
-            current_level: 1,
+            current_level: 0,
             _marker: std::marker::PhantomData,
         }
     }
