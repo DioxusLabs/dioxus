@@ -1,16 +1,13 @@
-use dioxus_cli_opt::AssetManifest;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LinkAction {
-    BuildAssetManifest {
-        destination: PathBuf,
-    },
     LinkAndroid {
         linker: PathBuf,
         extra_flags: Vec<String>,
     },
+    FastLink {},
 }
 
 impl LinkAction {
@@ -53,53 +50,7 @@ impl LinkAction {
                     .status()
                     .expect("Failed to run android linker");
             }
-
-            // Assemble an asset manifest by walking the object files being passed to us
-            LinkAction::BuildAssetManifest { destination: dest } => {
-                let mut args: Vec<_> = std::env::args().collect();
-                let mut manifest = AssetManifest::default();
-
-                // Handle command files, usually a windows thing.
-                if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
-                    let path = command.trim().trim_start_matches('@');
-                    let file_binary = std::fs::read(path).unwrap();
-
-                    // This may be a utf-16le file. Let's try utf-8 first.
-                    let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
-                        // Convert Vec<u8> to Vec<u16> to convert into a String
-                        let binary_u16le: Vec<u16> = file_binary
-                            .chunks_exact(2)
-                            .map(|a| u16::from_le_bytes([a[0], a[1]]))
-                            .collect();
-
-                        String::from_utf16_lossy(&binary_u16le)
-                    });
-
-                    // Gather linker args, and reset the args to be just the linker args
-                    args = content
-                        .lines()
-                        .map(|line| {
-                            let line_parsed = line.to_string();
-                            let line_parsed = line_parsed.trim_end_matches('"').to_string();
-                            let line_parsed = line_parsed.trim_start_matches('"').to_string();
-                            line_parsed
-                        })
-                        .collect();
-                }
-
-                // Parse through linker args for `.o` or `.rlib` files.
-                for item in args {
-                    if item.ends_with(".o") || item.ends_with(".rlib") {
-                        let path_to_item = PathBuf::from(item);
-                        if let Ok(path) = path_to_item.canonicalize() {
-                            _ = manifest.add_from_object_path(&path);
-                        }
-                    }
-                }
-
-                let contents = serde_json::to_string(&manifest).expect("Failed to write manifest");
-                std::fs::write(dest, contents).expect("Failed to write output file");
-            }
+            LinkAction::FastLink {} => {}
         }
     }
 }

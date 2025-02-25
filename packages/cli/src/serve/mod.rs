@@ -89,39 +89,44 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 let file = files[0].display().to_string();
                 let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
 
-                // if change is hotreloadable, hotreload it
-                // and then send that update to all connected clients
-                if let Some(hr) = runner.attempt_hot_reload(files).await {
-                    // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                    //
-                    // Also make sure the builder isn't busy since that might cause issues with hotreloads
-                    // https://github.com/DioxusLabs/dioxus/issues/3361
-                    if hr.is_empty() || !builder.can_receive_hotreloads() {
-                        tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
-                        continue;
+                match runner.hotreload(files).await {
+                    crate::ReloadKind::Rsx => {
+                        // // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+                        // //
+                        // // Also make sure the builder isn't busy since that might cause issues with hotreloads
+                        // // https://github.com/DioxusLabs/dioxus/issues/3361
+                        // if hr.is_empty() || !builder.can_receive_hotreloads() {
+                        //     tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+                        //     continue;
+                        // }
+
+                        // tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+
+                        // devserver.send_hotreload(hr).await;
                     }
 
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+                    crate::ReloadKind::Binary => todo!(),
 
-                    devserver.send_hotreload(hr).await;
-                } else if runner.should_full_rebuild {
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
+                    crate::ReloadKind::Full if runner.should_full_rebuild => {
+                        tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
 
-                    // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    builder.rebuild(args.build_arguments.clone());
+                        // We're going to kick off a new build, interrupting the current build if it's ongoing
+                        builder.rebuild(args.build_arguments.clone());
 
-                    // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
-                    runner.clear_hot_reload_changes();
-                    runner.file_map.force_rebuild();
+                        // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
+                        runner.clear_hot_reload_changes();
+                        runner.file_map.force_rebuild();
 
-                    // Tell the server to show a loading page for any new requests
-                    devserver.send_reload_start().await;
-                    devserver.start_build().await;
-                } else {
-                    tracing::warn!(
-                        "Rebuild required but is currently paused - press `r` to rebuild manually"
-                    )
-                }
+                        // Tell the server to show a loading page for any new requests
+                        devserver.send_reload_start().await;
+                        devserver.start_build().await;
+                    }
+                    crate::ReloadKind::Full => {
+                        tracing::warn!(
+                            "Rebuild required but is currently paused - press `r` to rebuild manually"
+                        )
+                    }
+                };
             }
 
             // Run the server in the background

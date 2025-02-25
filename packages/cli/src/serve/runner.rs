@@ -1,6 +1,7 @@
 use super::{AppHandle, ServeUpdate, WebServer};
 use crate::{
-    AppBundle, DioxusCrate, HotreloadFilemap, HotreloadResult, Platform, Result, TraceSrc,
+    AppBundle, DioxusCrate, HotreloadFilemap, HotreloadResult, Platform, ReloadKind, Result,
+    TraceSrc,
 };
 use dioxus_core::internal::TemplateGlobalKey;
 use dioxus_devtools_types::HotReloadMsg;
@@ -151,10 +152,7 @@ impl AppRunner {
         }
     }
 
-    pub(crate) async fn attempt_hot_reload(
-        &mut self,
-        modified_files: Vec<PathBuf>,
-    ) -> Option<HotReloadMsg> {
+    pub(crate) async fn hotreload(&mut self, modified_files: Vec<PathBuf>) -> ReloadKind {
         // If we have any changes to the rust files, we need to update the file map
         let mut templates = vec![];
 
@@ -177,7 +175,7 @@ impl AppRunner {
 
             // Special-case the Cargo.toml file - we want updates here to cause a full rebuild
             if path.file_name().and_then(|v| v.to_str()) == Some("Cargo.toml") {
-                return None;
+                return ReloadKind::Full;
             }
 
             // Otherwise, it might be an asset and we should look for it in all the running apps

@@ -38,6 +38,10 @@ pub(crate) struct ServeArgs {
     #[arg(long, default_missing_value="true", num_args=0..=1, short = 'i')]
     pub(crate) interactive: Option<bool>,
 
+    /// Build this binary using binary patching instead of a full rebuild [default: false]
+    #[arg(long, default_value_t = false)]
+    pub(crate) binary_patch: bool,
+
     /// Arguments for the build itself
     #[clap(flatten)]
     pub(crate) build_arguments: BuildArgs,

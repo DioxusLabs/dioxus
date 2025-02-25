@@ -39,7 +39,7 @@ impl Builder {
     /// Create a new builder and immediately start a build
     pub(crate) fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let request = BuildRequest::new(krate.clone(), args, tx.clone());
+        let request = BuildRequest::new(krate.clone(), args, tx.clone(), None);
 
         Ok(Self {
             krate: krate.clone(),
@@ -183,7 +183,7 @@ impl Builder {
         self.abort_all();
 
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        let request = BuildRequest::new(self.krate.clone(), args, self.tx.clone());
+        let request = BuildRequest::new(self.krate.clone(), args, self.tx.clone(), None);
         self.request = request.clone();
         self.stage = BuildStage::Restarting;
 

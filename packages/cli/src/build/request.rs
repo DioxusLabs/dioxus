@@ -1,10 +1,11 @@
-use super::{progress::ProgressTx, BuildArtifacts};
+use super::{progress::ProgressTx, BuildArtifacts, PatchData};
 use crate::dioxus_crate::DioxusCrate;
 use crate::{link::LinkAction, BuildArgs};
 use crate::{AppBundle, Platform, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::AssetManifest;
+use krates::Utf8PathBuf;
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -26,14 +27,23 @@ pub(crate) struct BuildRequest {
 
     /// The target directory for the build
     pub(crate) custom_target_dir: Option<PathBuf>,
+
+    /// The data for the binary patch
+    pub(crate) patch_data: Option<PatchData>,
 }
 
 impl BuildRequest {
-    pub fn new(krate: DioxusCrate, build: BuildArgs, progress: ProgressTx) -> Self {
+    pub fn new(
+        krate: DioxusCrate,
+        build: BuildArgs,
+        progress: ProgressTx,
+        patch_data: Option<PatchData>,
+    ) -> Self {
         Self {
             build,
             krate,
             progress,
+            patch_data,
             custom_target_dir: None,
         }
     }
@@ -79,6 +89,12 @@ impl BuildRequest {
 
         let start = Instant::now();
         self.prepare_build_dir()?;
+
+        // // If we're able to do a binary patch
+        // if let Some(patch_data) = self.patch_data.as_ref() {
+        //     return self.build_cargo_with_patch(patch_data).await;
+        // }
+
         let exe = self.build_cargo().await?;
         let assets = self.collect_assets(&exe).await?;
 
@@ -242,12 +258,6 @@ impl BuildRequest {
 
         if self.build.skip_assets {
             return Ok(AssetManifest::default());
-        }
-
-        // Experimental feature for testing - if the env var is set, we'll use the deeplinker
-        if std::env::var("DEEPLINK").is_ok() {
-            tracing::debug!("Using deeplinker instead of incremental cache");
-            return self.deep_linker_asset_extract().await;
         }
 
         // walk every file in the incremental cache dir, reading and inserting items into the manifest.
@@ -449,59 +459,6 @@ impl BuildRequest {
                 .sum::<usize>() as f64
                 / 3.5) as usize
         })
-    }
-
-    /// We used to require traversing incremental artifacts for assets that were included but not
-    /// directly exposed to the final binary. Now, however, we force APIs to carry items created
-    /// from asset calls into top-level items such that they *do* get included in the final binary.
-    ///
-    /// There's a chance that's not actually true, so this function is kept around in case we do
-    /// need to revert to "deep extraction".
-    #[allow(unused)]
-    async fn deep_linker_asset_extract(&self) -> Result<AssetManifest> {
-        // Create a temp file to put the output of the args
-        // We need to do this since rustc won't actually print the link args to stdout, so we need to
-        // give `dx` a file to dump its env::args into
-        let tmp_file = tempfile::NamedTempFile::new()?;
-
-        // Run `cargo rustc` again, but this time with a custom linker (dx) and an env var to force
-        // `dx` to act as a linker
-        //
-        // This will force `dx` to look through the incremental cache and find the assets from the previous build
-        Command::new("cargo")
-            .arg("rustc")
-            .args(self.build_arguments())
-            .envs(self.env_vars()?)
-            .arg("--offline") /* don't use the network, should already be resolved */
-            .arg("--")
-            .arg(format!(
-                "-Clinker={}",
-                std::env::current_exe()
-                    .unwrap()
-                    .canonicalize()
-                    .unwrap()
-                    .display()
-            ))
-            .env(
-                LinkAction::ENV_VAR_NAME,
-                LinkAction::BuildAssetManifest {
-                    destination: tmp_file.path().to_path_buf().clone(),
-                }
-                .to_json(),
-            )
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
-
-        // The linker wrote the manifest to the temp file, let's load it!
-        let manifest = AssetManifest::load_from_file(tmp_file.path())?;
-
-        if let Ok(path) = std::env::var("DEEPLINK").map(|s| s.parse::<PathBuf>().unwrap()) {
-            _ = tmp_file.persist(path);
-        }
-
-        Ok(manifest)
     }
 
     fn env_vars(&self) -> Result<Vec<(&str, String)>> {
@@ -967,5 +924,42 @@ impl BuildRequest {
         tracing::debug!("app_kotlin_out: {:?}", kotlin_dir);
 
         kotlin_dir
+    }
+
+    async fn build_cargo_with_patch(&self, patch_data: &PatchData) -> Result<PathBuf> {
+        #[derive(Debug, Deserialize)]
+        struct RustcArtifact {
+            artifact: PathBuf,
+            emit: String,
+        }
+
+        let mut child = Command::new(patch_data.direct_rustc[0].clone())
+            .args(patch_data.direct_rustc[1..].iter())
+            .env("HOTRELOAD_LINK", "reload")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
+        let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
+        let mut output_location = None;
+        let mut stdout = stdout.lines();
+        let mut stderr = stderr.lines();
+
+        loop {
+            let line = tokio::select! {
+                Ok(Some(line)) = stdout.next_line() => line,
+                Ok(Some(line)) = stderr.next_line() => line,
+                else => break,
+            };
+
+            if let Ok(artifact) = serde_json::from_str::<RustcArtifact>(&line) {
+                if artifact.emit == "link" {
+                    output_location = Some(Utf8PathBuf::from_path_buf(artifact.artifact).unwrap());
+                }
+            }
+        }
+
+        todo!()
     }
 }

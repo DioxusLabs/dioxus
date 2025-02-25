@@ -3527,12 +3527,13 @@ dependencies = [
  "hyper-util",
  "ignore",
  "include_dir",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "krates",
  "local-ip-address",
  "log",
  "manganis",
  "manganis-core",
+ "memmap",
  "memoize",
  "notify",
  "object 0.36.5",
@@ -7961,6 +7962,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
+name = "memmap"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "memmap2"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8756,7 +8767,10 @@ version = "0.36.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aedf0a2d09c573ed1d8d85b30c119153926a2b36dce0ab28322c09a117a4683e"
 dependencies = [
+ "crc32fast",
  "flate2",
+ "hashbrown 0.15.2",
+ "indexmap 2.7.0",
  "memchr",
  "ruzstd 0.7.3",
  "wasmparser 0.218.0",
