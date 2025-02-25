@@ -86,47 +86,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     continue;
                 }
 
-                let file = files[0].display().to_string();
-                let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
-
-                match runner.hotreload(files).await {
-                    crate::ReloadKind::Rsx => {
-                        // // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                        // //
-                        // // Also make sure the builder isn't busy since that might cause issues with hotreloads
-                        // // https://github.com/DioxusLabs/dioxus/issues/3361
-                        // if hr.is_empty() || !builder.can_receive_hotreloads() {
-                        //     tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
-                        //     continue;
-                        // }
-
-                        // tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
-
-                        // devserver.send_hotreload(hr).await;
-                    }
-
-                    crate::ReloadKind::Binary => todo!(),
-
-                    crate::ReloadKind::Full if runner.should_full_rebuild => {
-                        tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
-
-                        // We're going to kick off a new build, interrupting the current build if it's ongoing
-                        builder.rebuild(args.build_arguments.clone());
-
-                        // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
-                        runner.clear_hot_reload_changes();
-                        runner.file_map.force_rebuild();
-
-                        // Tell the server to show a loading page for any new requests
-                        devserver.send_reload_start().await;
-                        devserver.start_build().await;
-                    }
-                    crate::ReloadKind::Full => {
-                        tracing::warn!(
-                            "Rebuild required but is currently paused - press `r` to rebuild manually"
-                        )
-                    }
-                };
+                runner.hotreload(files, &mut builder, &mut devserver).await;
             }
 
             // Run the server in the background

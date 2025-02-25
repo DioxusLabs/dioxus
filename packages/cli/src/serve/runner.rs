@@ -152,7 +152,16 @@ impl AppRunner {
         }
     }
 
-    pub(crate) async fn hotreload(&mut self, modified_files: Vec<PathBuf>) -> ReloadKind {
+    /// Attempt to hotreload the given files
+    pub(crate) async fn hotreload(
+        &mut self,
+        modified_files: Vec<PathBuf>,
+        builder: &mut crate::Builder,
+        server: &mut crate::serve::WebServer,
+    ) {
+        let file = modified_files[0].display().to_string();
+        let file = file.trim_start_matches(&self.krate.crate_dir().display().to_string());
+
         // If we have any changes to the rust files, we need to update the file map
         let mut templates = vec![];
 
@@ -169,13 +178,36 @@ impl AppRunner {
 
             // If it's a rust file, we want to hotreload it using the filemap
             if ext == "rs" {
-                edited_rust_files.push(path);
-                continue;
-            }
+                // Strip the prefix before sending it to the filemap
+                let Ok(path) = path.strip_prefix(self.krate.workspace_dir()) else {
+                    tracing::error!(
+                        "Hotreloading file outside of the crate directory: {:?}",
+                        path
+                    );
+                    continue;
+                };
 
-            // Special-case the Cargo.toml file - we want updates here to cause a full rebuild
-            if path.file_name().and_then(|v| v.to_str()) == Some("Cargo.toml") {
-                return ReloadKind::Full;
+                // And grabout the contents
+                let Ok(contents) = std::fs::read_to_string(&path) else {
+                    tracing::debug!("Failed to read rust file while hotreloading: {:?}", path);
+                    continue;
+                };
+
+                match self.file_map.update_rsx::<HtmlCtx>(path, contents) {
+                    HotreloadResult::Rsx(new) => templates.extend(new),
+
+                    // The rust file may have failed to parse, but that is most likely
+                    // because the user is in the middle of adding new code
+                    // We just ignore the error and let Rust analyzer warn about the problem
+                    HotreloadResult::Notreloadable => {
+                        // return ReloadKind::Binary
+                    }
+
+                    HotreloadResult::NotParseable => {
+                        tracing::debug!(dx_src = ?TraceSrc::Dev, "Error hotreloading file - not parseable {path:?}")
+                    }
+                }
+                continue;
             }
 
             // Otherwise, it might be an asset and we should look for it in all the running apps
@@ -188,52 +220,50 @@ impl AppRunner {
             }
         }
 
-        // Multiple runners might have queued the same asset, so dedup them
-        assets.dedup();
+        // let msg = HotReloadMsg { templates, assets };
 
-        // Process the rust files
-        for rust_file in edited_rust_files {
-            // Strip the prefix before sending it to the filemap
-            let Ok(path) = rust_file.strip_prefix(self.krate.workspace_dir()) else {
-                tracing::error!(
-                    "Hotreloading file outside of the crate directory: {:?}",
-                    rust_file
-                );
-                continue;
-            };
+        // self.add_hot_reload_message(&msg);
 
-            // And grabout the contents
-            let Ok(contents) = std::fs::read_to_string(&rust_file) else {
-                tracing::debug!(
-                    "Failed to read rust file while hotreloading: {:?}",
-                    rust_file
-                );
-                continue;
-            };
+        // // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+        // //
+        // // Also make sure the builder isn't busy since that might cause issues with hotreloads
+        // // https://github.com/DioxusLabs/dioxus/issues/3361
+        // if hr.is_empty() || !builder.can_receive_hotreloads() {
+        //     tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+        //     continue;
+        // }
 
-            match self.file_map.update_rsx::<HtmlCtx>(path, contents) {
-                HotreloadResult::Rsx(new) => templates.extend(new),
+        // tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
 
-                // The rust file may have failed to parse, but that is most likely
-                // because the user is in the middle of adding new code
-                // We just ignore the error and let Rust analyzer warn about the problem
-                HotreloadResult::Notreloadable => return None,
-                HotreloadResult::NotParseable => {
-                    tracing::debug!(dx_src = ?TraceSrc::Dev, "Error hotreloading file - not parseable {rust_file:?}")
-                }
-            }
-        }
+        // devserver.send_hotreload(hr).await;
+        // }
 
-        let msg = HotReloadMsg {
-            templates,
-            assets,
-            unknown_files: vec![],
-        };
+        // match  {
+        //     crate::ReloadKind::Full if runner.should_full_rebuild => {
+        //         tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
 
-        self.add_hot_reload_message(&msg);
+        //         // We're going to kick off a new build, interrupting the current build if it's ongoing
+        //         builder.rebuild(args.build_arguments.clone());
 
-        Some(msg)
+        //         // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
+        //         runner.clear_hot_reload_changes();
+        //         runner.file_map.force_rebuild();
+
+        //         // Tell the server to show a loading page for any new requests
+        //         devserver.send_reload_start().await;
+        //         devserver.start_build().await;
+        //     }
+        //     crate::ReloadKind::Full => {
+        //         tracing::warn!(
+        //             "Rebuild required but is currently paused - press `r` to rebuild manually"
+        //         )
+        //     }
+        // };
+
+        todo!()
     }
+
+    fn attempt_rsx_hotreload(&mut self) {}
 
     /// Get any hot reload changes that have been applied since the last full rebuild
     pub(crate) fn applied_hot_reload_changes(&mut self) -> HotReloadMsg {
@@ -257,17 +287,12 @@ impl AppRunner {
             .collect();
         let mut assets: HashSet<PathBuf> =
             std::mem::take(&mut applied.assets).into_iter().collect();
-        let mut unknown_files: HashSet<PathBuf> = std::mem::take(&mut applied.unknown_files)
-            .into_iter()
-            .collect();
         for template in &msg.templates {
             templates.insert(template.key.clone(), template.clone());
         }
         assets.extend(msg.assets.iter().cloned());
-        unknown_files.extend(msg.unknown_files.iter().cloned());
         applied.templates = templates.into_values().collect();
         applied.assets = assets.into_iter().collect();
-        applied.unknown_files = unknown_files.into_iter().collect();
     }
 
     pub(crate) async fn client_connected(&mut self) {

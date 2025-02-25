@@ -101,6 +101,7 @@ ansi-to-tui = "6.0"
 ansi-to-html = "0.2.1"
 path-absolutize = "3.1"
 ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
+shell-words = "1.1.0"
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
 log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }

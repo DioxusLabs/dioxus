@@ -28,6 +28,123 @@ pub struct PatchData {
     pub direct_rustc: Vec<String>,
 }
 
+pub async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, out_path: PathBuf) {
+    let mut object = ObjectDiff::new().unwrap();
+    object.load().unwrap();
+
+    let all_exports = object
+        .new
+        .iter()
+        .flat_map(|(_, f)| f.file.exports().unwrap())
+        .map(|e| e.name().to_utf8())
+        .collect::<HashSet<_>>();
+
+    let mut adrp_imports = HashSet::new();
+
+    let mut satisfied_exports = HashSet::new();
+
+    let modified_symbols = object
+        .modified_symbols
+        .iter()
+        .map(|f| f.as_str())
+        .collect::<HashSet<_>>();
+
+    if modified_symbols.is_empty() {
+        println!("No modified symbols");
+    }
+
+    let mut modified_log = String::new();
+    for m in modified_symbols.iter() {
+        // if m.starts_with("l") {
+        //     continue;
+        // }
+
+        let path = object.find_path_to_main(m);
+        println!("m: {m}");
+        println!("path: {path:#?}\n");
+        modified_log.push_str(&format!("{m}\n"));
+        modified_log.push_str(&format!("{path:#?}\n"));
+    }
+    std::fs::write(workspace_dir().join("modified_symbols.txt"), modified_log).unwrap();
+
+    let modified = object
+        .modified_files
+        .iter()
+        .sorted_by(|a, b| a.0.cmp(&b.0))
+        .collect::<Vec<_>>();
+
+    // Figure out which symbols are required from *existing* code
+    // We're going to create a stub `.o` file that satisfies these by jumping into the original code via a dynamic lookup / and or literally just manually doing it
+    for fil in modified.iter() {
+        let f = object
+            .new
+            .get(fil.0.file_name().unwrap().to_str().unwrap())
+            .unwrap();
+
+        for i in f.file.imports().unwrap() {
+            if all_exports.contains(i.name().to_utf8()) {
+                adrp_imports.insert(i.name().to_utf8());
+            }
+        }
+
+        for e in f.file.exports().unwrap() {
+            satisfied_exports.insert(e.name().to_utf8());
+        }
+    }
+
+    // Remove any imports that are indeed satisifed
+    for s in satisfied_exports.iter() {
+        adrp_imports.remove(s);
+    }
+
+    // Assemble the stub
+    let stub_data = make_stub_file(proc_main_addr, patch_target, adrp_imports);
+    let stub_file = workspace_dir().join("stub.o");
+    std::fs::write(&stub_file, stub_data).unwrap();
+
+    let out = Command::new("cc")
+        .args(modified.iter().map(|(f, _)| f))
+        .arg(stub_file)
+        .arg("-dylib")
+        .arg("-Wl,-undefined,dynamic_lookup")
+        .arg("-Wl,-unexported_symbol,_main")
+        .arg("-arch")
+        .arg("arm64")
+        .arg("-dead_strip")
+        .arg("-o")
+        .arg(out_path)
+        .output()
+        .await
+        .unwrap();
+
+    let err = String::from_utf8_lossy(&out.stderr);
+    println!("err: {err}");
+    std::fs::write(workspace_dir().join("link_errs_partial.txt"), &*err).unwrap();
+
+    // // -O0 ? supposedly faster
+    // // -reproducible - even better?
+    // // -exported_symbol and friends - could help with dead-code stripping
+    // // -e symbol_name - for setting the entrypoint
+    // // -keep_relocs ?
+
+    // // run the linker, but unexport the `_main` symbol
+    // let res = Command::new("cc")
+    //     .args(object_files)
+    //     .arg("-dylib")
+    //     .arg("-undefined")
+    //     .arg("dynamic_lookup")
+    //     .arg("-Wl,-unexported_symbol,_main")
+    //     .arg("-arch")
+    //     .arg("arm64")
+    //     .arg("-dead_strip") // maybe?
+    //     .arg("-o")
+    //     .arg(&out_file)
+    //     .stdout(Stdio::piped())
+    //     .stderr(Stdio::piped())
+    //     .output()
+    //     .await?;
+}
+
 struct ObjectDiff {
     old: BTreeMap<String, LoadedFile>,
     new: BTreeMap<String, LoadedFile>,

@@ -90,16 +90,17 @@ impl BuildRequest {
         let start = Instant::now();
         self.prepare_build_dir()?;
 
-        // // If we're able to do a binary patch
-        // if let Some(patch_data) = self.patch_data.as_ref() {
-        //     return self.build_cargo_with_patch(patch_data).await;
-        // }
+        // If we're able to do a binary patch
+        if let Some(patch_data) = self.patch_data.as_ref() {
+            return self.build_cargo_with_patch(patch_data).await;
+        }
 
-        let exe = self.build_cargo().await?;
+        let (exe, direct_rustc) = self.build_cargo().await?;
         let assets = self.collect_assets(&exe).await?;
 
         Ok(BuildArtifacts {
             exe,
+            direct_rustc,
             assets,
             time_taken: start.elapsed(),
         })
@@ -120,7 +121,7 @@ impl BuildRequest {
     /// Run `cargo`, returning the location of the final executable
     ///
     /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
-    pub(crate) async fn build_cargo(&self) -> Result<PathBuf> {
+    pub(crate) async fn build_cargo(&self) -> Result<(PathBuf, Vec<Vec<String>>)> {
         tracing::debug!("Executing cargo...");
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
@@ -180,6 +181,7 @@ impl BuildRequest {
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
         let mut emitting_error = false;
+        let mut direct_rustc = Vec::new();
 
         loop {
             use cargo_metadata::Message;
@@ -197,6 +199,19 @@ impl BuildRequest {
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
                 Message::TextLine(line) => {
+                    if line.trim().starts_with("Running ") {
+                        // trim everyting but the contents between the quotes
+                        let args = line
+                            .trim()
+                            .trim_start_matches("Running `")
+                            .trim_end_matches('`');
+
+                        // Parse these as shell words so we can get the direct rustc args
+                        if let Ok(split) = shell_words::split(args) {
+                            direct_rustc.push(split);
+                        }
+                    }
+
                     // For whatever reason, if there's an error while building, we still receive the TextLine
                     // instead of an "error" message. However, the following messages *also* tend to
                     // be the error message, and don't start with "error:". So we'll check if we've already

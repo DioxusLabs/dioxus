@@ -79,12 +79,12 @@ impl HotreloadFilemap {
     /// This does not do any caching on what intermediate state, like previous hotreloads, so you need
     /// to do that yourself.
     pub(crate) fn update_rsx<Ctx: HotReloadingContext>(
-        &mut self,
+        &self,
         path: &Path,
         new_contents: String,
     ) -> HotreloadResult {
         // Get the cached file if it exists
-        let Some(cached_file) = self.map.get_mut(path) else {
+        let Some(cached_file) = self.map.get(path) else {
             return HotreloadResult::NotParseable;
         };
 
@@ -99,13 +99,12 @@ impl HotreloadFilemap {
             return HotreloadResult::NotParseable;
         };
 
-        // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
-        cached_file.most_recent = Some(new_contents);
+        // // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
+        // cached_file.most_recent = Some(new_contents);
 
         // todo(jon): allow server-fn hotreloading
         // also whyyyyyyyyy is this (new, old) instead of (old, new)? smh smh smh
         let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
-            tracing::debug!("Diff rsx returned notreladable");
             return HotreloadResult::Notreloadable;
         };
 

@@ -96,6 +96,7 @@ pub(crate) struct AppBundle {
 #[derive(Debug)]
 pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
+    pub(crate) direct_rustc: Vec<Vec<String>>,
     pub(crate) assets: AssetManifest,
     pub(crate) time_taken: Duration,
 }
@@ -269,10 +270,6 @@ impl AppBundle {
         tracing::debug!("Assembling app bundle");
 
         bundle.build.status_start_bundle();
-        /*
-            assume the build dir is already created by BuildRequest
-            todo(jon): maybe refactor this a bit to force AppBundle to be created before it can be filled in
-        */
         bundle
             .write_main_executable()
             .await
@@ -952,4 +949,6 @@ impl AppBundle {
         std::fs::copy(source, destination)?;
         Ok(())
     }
+
+    async fn binary_patch(&self) {}
 }
