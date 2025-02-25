@@ -3,6 +3,7 @@ use anyhow::{anyhow, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
+use walkdir::WalkDir;
 
 use super::*;
 
@@ -187,21 +188,24 @@ impl Bundle {
 
         let asset_dir = bundle.build.asset_dir();
         if asset_dir.exists() {
-            let asset_dir_entries = std::fs::read_dir(&asset_dir)
-                .with_context(|| format!("failed to read asset directory {:?}", asset_dir))?;
-            for entry in asset_dir_entries.flatten() {
-                let old = entry
-                    .path()
-                    .canonicalize()
-                    .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
-                let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
-                tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+            for entry in WalkDir::new(&asset_dir) {
+                let entry = entry.unwrap();
+                let path = entry.path();
 
-                bundle_settings
-                    .resources_map
-                    .as_mut()
-                    .expect("to be set")
-                    .insert(old.display().to_string(), new.display().to_string());
+                if path.is_file() {
+                    let old = path
+                        .canonicalize()
+                        .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
+                    let new =
+                        PathBuf::from("assets").join(path.strip_prefix(&asset_dir).unwrap_or(path));
+
+                    tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+                    bundle_settings
+                        .resources_map
+                        .as_mut()
+                        .expect("to be set")
+                        .insert(old.display().to_string(), new.display().to_string());
+                }
             }
         }
 
