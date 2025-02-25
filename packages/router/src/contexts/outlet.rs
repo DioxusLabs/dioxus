@@ -10,7 +10,7 @@ use crate::{routable::Routable, utils::use_router_internal::use_router_internal}
 /// # Type Parameters
 ///
 /// * `R` - The routable type that implements the routing logic
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct OutletContext<R> {
     current_level: usize,
     _marker: std::marker::PhantomData<R>,
