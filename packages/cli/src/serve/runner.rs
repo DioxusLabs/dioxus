@@ -1,27 +1,43 @@
 use super::{AppHandle, ServeUpdate, WebServer};
-use crate::{
-    AppBundle, DioxusCrate, HotreloadFilemap, HotreloadResult, Platform, ReloadKind, Result,
-    TraceSrc,
+use crate::{AppBundle, DioxusCrate, Platform, ReloadKind, Result, TraceSrc};
+use dioxus_core::internal::{
+    HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
-use dioxus_core::internal::TemplateGlobalKey;
+use dioxus_core_types::HotReloadingContext;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
+use dioxus_rsx::CallBody;
+use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use futures_util::future::OptionFuture;
 use ignore::gitignore::Gitignore;
+use std::path::Path;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     path::PathBuf,
 };
+use syn::spanned::Spanned;
 
 pub(crate) struct AppRunner {
     pub(crate) running: Option<AppHandle>,
     pub(crate) krate: DioxusCrate,
-    pub(crate) file_map: HotreloadFilemap,
     pub(crate) ignore: Gitignore,
     pub(crate) applied_hot_reload_message: HotReloadMsg,
     pub(crate) builds_opened: usize,
-    pub(crate) should_full_rebuild: bool,
+    pub(crate) automatic_rebuilds: bool,
+    pub(crate) file_map: HashMap<PathBuf, CachedFile>,
+}
+
+pub enum HotReloadKind {
+    Rsx(HotReloadMsg),
+    Patch,
+    Full,
+}
+
+struct CachedFile {
+    contents: String,
+    most_recent: Option<String>,
+    templates: HashMap<TemplateGlobalKey, HotReloadedTemplate>,
 }
 
 impl AppRunner {
@@ -29,12 +45,12 @@ impl AppRunner {
     pub(crate) fn start(krate: &DioxusCrate) -> Self {
         let mut runner = Self {
             running: Default::default(),
-            file_map: HotreloadFilemap::new(),
+            file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
             ignore: krate.workspace_gitignore(),
             krate: krate.clone(),
             builds_opened: 0,
-            should_full_rebuild: true,
+            automatic_rebuilds: true,
         };
 
         // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
@@ -153,12 +169,7 @@ impl AppRunner {
     }
 
     /// Attempt to hotreload the given files
-    pub(crate) async fn hotreload(
-        &mut self,
-        modified_files: Vec<PathBuf>,
-        builder: &mut crate::Builder,
-        server: &mut crate::serve::WebServer,
-    ) {
+    pub(crate) async fn hotreload(&mut self, modified_files: Vec<PathBuf>) -> HotReloadKind {
         let file = modified_files[0].display().to_string();
         let file = file.trim_start_matches(&self.krate.crate_dir().display().to_string());
 
@@ -166,9 +177,10 @@ impl AppRunner {
         let mut templates = vec![];
 
         // Prepare the hotreload message we need to send
-        let mut edited_rust_files = Vec::new();
         let mut assets = Vec::new();
+        let mut needs_full_rebuild = false;
 
+        // We attempt to hotreload rsx blocks without a full rebuild
         for path in modified_files {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
@@ -193,20 +205,11 @@ impl AppRunner {
                     continue;
                 };
 
-                match self.file_map.update_rsx::<HtmlCtx>(path, contents) {
-                    HotreloadResult::Rsx(new) => templates.extend(new),
-
-                    // The rust file may have failed to parse, but that is most likely
-                    // because the user is in the middle of adding new code
-                    // We just ignore the error and let Rust analyzer warn about the problem
-                    HotreloadResult::Notreloadable => {
-                        // return ReloadKind::Binary
-                    }
-
-                    HotreloadResult::NotParseable => {
-                        tracing::debug!(dx_src = ?TraceSrc::Dev, "Error hotreloading file - not parseable {path:?}")
-                    }
+                match self.rsx_changed::<HtmlCtx>(path, contents) {
+                    Some(new) => templates.extend(new),
+                    None => needs_full_rebuild = true,
                 }
+
                 continue;
             }
 
@@ -214,53 +217,25 @@ impl AppRunner {
             if let Some(runner) = self.running.as_mut() {
                 if let Some(bundled_name) = runner.hotreload_bundled_asset(&path).await {
                     // todo(jon): don't hardcode this here
-                    let asset_relative = PathBuf::from("/assets/").join(bundled_name);
-                    assets.push(asset_relative);
+                    assets.push(PathBuf::from("/assets/").join(bundled_name));
                 }
             }
         }
 
-        // let msg = HotReloadMsg { templates, assets };
+        match needs_full_rebuild {
+            true => HotReloadKind::Patch,
+            false => {
+                let msg = HotReloadMsg {
+                    templates,
+                    assets,
+                    ..Default::default()
+                };
 
-        // self.add_hot_reload_message(&msg);
+                self.add_hot_reload_message(&msg);
 
-        // // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-        // //
-        // // Also make sure the builder isn't busy since that might cause issues with hotreloads
-        // // https://github.com/DioxusLabs/dioxus/issues/3361
-        // if hr.is_empty() || !builder.can_receive_hotreloads() {
-        //     tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
-        //     continue;
-        // }
-
-        // tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
-
-        // devserver.send_hotreload(hr).await;
-        // }
-
-        // match  {
-        //     crate::ReloadKind::Full if runner.should_full_rebuild => {
-        //         tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
-
-        //         // We're going to kick off a new build, interrupting the current build if it's ongoing
-        //         builder.rebuild(args.build_arguments.clone());
-
-        //         // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
-        //         runner.clear_hot_reload_changes();
-        //         runner.file_map.force_rebuild();
-
-        //         // Tell the server to show a loading page for any new requests
-        //         devserver.send_reload_start().await;
-        //         devserver.start_build().await;
-        //     }
-        //     crate::ReloadKind::Full => {
-        //         tracing::warn!(
-        //             "Rebuild required but is currently paused - press `r` to rebuild manually"
-        //         )
-        //     }
-        // };
-
-        todo!()
+                HotReloadKind::Rsx(msg)
+            }
+        }
     }
 
     fn attempt_rsx_hotreload(&mut self) {}
@@ -342,7 +317,14 @@ impl AppRunner {
         if path.extension().and_then(|s| s.to_str()) == Some("rs") {
             if let Ok(contents) = std::fs::read_to_string(&path) {
                 if let Ok(path) = path.strip_prefix(self.krate.workspace_dir()) {
-                    self.file_map.add_file(path.to_path_buf(), contents);
+                    self.file_map.insert(
+                        path.to_path_buf(),
+                        CachedFile {
+                            contents,
+                            most_recent: None,
+                            templates: Default::default(),
+                        },
+                    );
                 }
             }
             return;
@@ -355,6 +337,116 @@ impl AppRunner {
                     self.fill_filemap(entry.path());
                 }
             }
+        }
+    }
+
+    /// Try to update the rsx in a file, returning the templates that were hotreloaded
+    ///
+    /// If the templates could not be hotreloaded, this will return an error. This error isn't fatal, per se,
+    /// but it does mean that we could not successfully hotreload the file in-place.
+    ///
+    /// It's expected that the file path you pass in is relative the crate root. We have no way of
+    /// knowing if it's *not*, so we'll assume it is.
+    ///
+    /// This does not do any caching on what intermediate state, like previous hotreloads, so you need
+    /// to do that yourself.
+    pub(crate) fn rsx_changed<Ctx: HotReloadingContext>(
+        &mut self,
+        path: &Path,
+        new_contents: String,
+    ) -> Option<Vec<HotReloadTemplateWithLocation>> {
+        // Get the cached file if it exists - ignoring if it doesn't exist
+        let Some(cached_file) = self.file_map.get_mut(path) else {
+            return Some(vec![]);
+        };
+
+        // We assume we can parse the old file and the new file
+        // We should just ignore hotreloading files that we can't parse
+        // todo(jon): we could probably keep the old `File` around instead of re-parsing on every hotreload
+        let (Ok(old_file), Ok(new_file)) = (
+            syn::parse_file(&cached_file.contents),
+            syn::parse_file(&new_contents),
+        ) else {
+            tracing::debug!("Diff rsx returned not parseable");
+            return Some(vec![]);
+        };
+
+        // todo(jon): allow server-fn hotreloading
+        let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
+            return None;
+        };
+
+        // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
+        cached_file.most_recent = Some(new_contents);
+
+        let mut out_templates = vec![];
+        for ChangedRsx { old, new } in changed_rsx {
+            let old_start = old.span().start();
+
+            let old_parsed = syn::parse2::<CallBody>(old.tokens);
+            let new_parsed = syn::parse2::<CallBody>(new.tokens);
+            let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed) else {
+                continue;
+            };
+
+            // Format the template location, normalizing the path
+            let file_name: String = path
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/");
+
+            // Returns a list of templates that are hotreloadable
+            let results = HotReloadResult::new::<Ctx>(
+                &old_call_body.body,
+                &new_call_body.body,
+                file_name.clone(),
+            );
+
+            // If no result is returned, we can't hotreload this file and need to keep the old file
+            let Some(results) = results else {
+                return None;
+            };
+
+            // Only send down templates that have roots, and ideally ones that have changed
+            // todo(jon): maybe cache these and don't send them down if they're the same
+            for (index, template) in results.templates {
+                if template.roots.is_empty() {
+                    continue;
+                }
+
+                // Create the key we're going to use to identify this template
+                let key = TemplateGlobalKey {
+                    file: file_name.clone(),
+                    line: old_start.line,
+                    column: old_start.column + 1,
+                    index,
+                };
+
+                // if the template is the same, don't send its
+                if cached_file.templates.get(&key) == Some(&template) {
+                    continue;
+                };
+
+                cached_file.templates.insert(key.clone(), template.clone());
+                out_templates.push(HotReloadTemplateWithLocation { template, key });
+            }
+        }
+
+        Some(out_templates)
+    }
+
+    /// Commit the changes to the filemap, overwriting the contents of the files
+    ///
+    /// Removes any cached templates and replaces the contents of the files with the most recent
+    ///
+    /// todo: we should-reparse the contents so we never send a new version, ever
+    pub fn clear_cached_rsx(&mut self) {
+        for cached_file in self.file_map.values_mut() {
+            if let Some(most_recent) = cached_file.most_recent.take() {
+                cached_file.contents = most_recent;
+            }
+            cached_file.templates.clear();
         }
     }
 

@@ -85,7 +85,7 @@ impl AppBundle {
         }
 
         // Inject any resources from manganis into the head
-        for asset in self.app.assets.assets.values() {
+        for asset in self.assets.assets.values() {
             let asset_path = asset.bundled_path();
             match asset.options() {
                 AssetOptions::Css(css_options) => {
@@ -115,7 +115,6 @@ impl AppBundle {
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
         let wasm_source_path = self.build.wasm_bindgen_wasm_output_file();
         let wasm_path = self
-            .app
             .assets
             .assets
             .get(&wasm_source_path)
@@ -175,7 +174,6 @@ r#" <script>
         let app_name = &self.build.krate.executable_name();
         let wasm_source_path = self.build.wasm_bindgen_wasm_output_file();
         let wasm_path = self
-            .app
             .assets
             .assets
             .get(&wasm_source_path)
@@ -184,7 +182,6 @@ r#" <script>
         let wasm_path = format!("assets/{wasm_path}");
         let js_source_path = self.build.wasm_bindgen_js_output_file();
         let js_path = self
-            .app
             .assets
             .assets
             .get(&js_source_path)

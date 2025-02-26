@@ -90,14 +90,16 @@ use tokio::process::Command;
 pub(crate) struct AppBundle {
     pub(crate) build: BuildRequest,
     pub(crate) app: BuildArtifacts,
+    pub(crate) assets: AssetManifest,
     pub(crate) server: Option<BuildArtifacts>,
+    pub(crate) server_assets: Option<AssetManifest>,
 }
 
+/// The result of the `cargo rustc` including any additional metadata
 #[derive(Debug)]
 pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: Vec<Vec<String>>,
-    pub(crate) assets: AssetManifest,
     pub(crate) time_taken: Duration,
 }
 
@@ -265,7 +267,13 @@ impl AppBundle {
         app: BuildArtifacts,
         server: Option<BuildArtifacts>,
     ) -> Result<Self> {
-        let mut bundle = Self { app, server, build };
+        let mut bundle = Self {
+            app,
+            server,
+            build,
+            assets: Default::default(),
+            server_assets: Default::default(),
+        };
 
         tracing::debug!("Assembling app bundle");
 
@@ -290,6 +298,31 @@ impl AppBundle {
         tracing::debug!("Bundle created at {}", bundle.build.root_dir().display());
 
         Ok(bundle)
+    }
+
+    /// Apply this build as a patch to the given bundle
+    pub(crate) async fn write_patch(&mut self, exe: &Path) -> Result<()> {
+        Ok(())
+    }
+
+    /// Traverse the target directory and collect all assets from the incremental cache
+    ///
+    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
+    /// One day this system might break and we might need to go back to using the linker approach.
+    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
+        tracing::debug!("Collecting assets ...");
+
+        if self.build.build.skip_assets {
+            return Ok(AssetManifest::default());
+        }
+
+        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
+        let mut manifest = AssetManifest::default();
+
+        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
+        _ = manifest.add_from_object_path(exe);
+
+        Ok(manifest)
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -366,7 +399,6 @@ impl AppBundle {
         _ = tokio::fs::create_dir_all(&asset_dir).await;
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = self
-            .app
             .assets
             .assets
             .values()
@@ -426,7 +458,7 @@ impl AppBundle {
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for (asset, bundled) in &self.app.assets.assets {
+        for (asset, bundled) in &self.assets.assets {
             let from = asset.clone();
             let to = asset_dir.join(bundled.bundled_path());
 
@@ -720,7 +752,6 @@ impl AppBundle {
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = self
-                        .app
                         .assets
                         .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
                 )?;
@@ -747,7 +778,6 @@ impl AppBundle {
 
                     // Again, register this wasm with the asset system
                     url = self
-                        .app
                         .assets
                         .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
 
@@ -789,12 +819,11 @@ impl AppBundle {
         }
 
         // Make sure to register the main wasm file with the asset system
-        self.app
-            .assets
+        self.assets
             .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
 
         // Register the main.js with the asset system so it bundles in the snippets and optimizes
-        self.app.assets.register_asset(
+        self.assets.register_asset(
             &self.build.wasm_bindgen_js_output_file(),
             AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
         )?;

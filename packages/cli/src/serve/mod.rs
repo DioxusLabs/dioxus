@@ -86,7 +86,49 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     continue;
                 }
 
-                runner.hotreload(files, &mut builder, &mut devserver).await;
+                let file = files[0].display().to_string();
+                let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
+
+                // if change is hotreloadable, hotreload it
+                // and then send that update to all connected clients
+                match runner.hotreload(files).await {
+                    HotReloadKind::Rsx(hr) => {
+                        // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+                        //
+                        // Also make sure the builder isn't busy since that might cause issues with hotreloads
+                        // https://github.com/DioxusLabs/dioxus/issues/3361
+                        if hr.is_empty() || !builder.can_receive_hotreloads() {
+                            tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+                            continue;
+                        }
+                        tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+                        devserver.send_hotreload(hr).await;
+                    }
+                    HotReloadKind::Patch => {
+                        builder.patch_rebuild(args.build_arguments.clone());
+
+                        runner.clear_hot_reload_changes();
+                        runner.clear_cached_rsx();
+
+                        devserver.start_patch().await
+                    }
+                    HotReloadKind::Full {} => todo!(),
+                }
+            }
+
+            ServeUpdate::RequestRebuild => {
+                // The spacing here is important-ish: we want
+                // `Full rebuild:` to line up with
+                // `Hotreloading:` to keep the alignment during long edit sessions
+                tracing::info!("Full rebuild: triggered manually");
+
+                builder.rebuild(args.build_arguments.clone());
+
+                runner.clear_hot_reload_changes();
+                runner.clear_cached_rsx();
+
+                devserver.send_reload_start().await;
+                devserver.start_build().await
             }
 
             // Run the server in the background
@@ -173,18 +215,6 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 screen.push_log(log);
             }
 
-            ServeUpdate::RequestRebuild => {
-                // The spacing here is important-ish: we want
-                // `Full rebuild:` to line up with
-                // `Hotreloading:` to keep the alignment during long edit sessions
-                tracing::info!("Full rebuild: triggered manually");
-
-                builder.rebuild(args.build_arguments.clone());
-                runner.file_map.force_rebuild();
-                devserver.send_reload_start().await;
-                devserver.start_build().await
-            }
-
             ServeUpdate::OpenApp => {
                 if let Err(err) = runner.open_existing(&devserver).await {
                     tracing::error!("Failed to open app: {err}")
@@ -196,10 +226,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
             }
 
             ServeUpdate::ToggleShouldRebuild => {
-                runner.should_full_rebuild = !runner.should_full_rebuild;
+                runner.automatic_rebuilds = !runner.automatic_rebuilds;
                 tracing::info!(
                     "Automatic rebuilds are currently: {}",
-                    if runner.should_full_rebuild {
+                    if runner.automatic_rebuilds {
                         "enabled"
                     } else {
                         "disabled"

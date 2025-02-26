@@ -28,8 +28,27 @@ pub(crate) struct BuildRequest {
     /// The target directory for the build
     pub(crate) custom_target_dir: Option<PathBuf>,
 
-    /// The data for the binary patch
-    pub(crate) patch_data: Option<PatchData>,
+    /// How we'll go about building
+    pub(crate) mode: BuildMode,
+}
+
+/// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
+/// modes are used together to achieve binary patching and linking.
+#[derive(Clone, Debug)]
+pub enum BuildMode {
+    /// A normal build generated using `cargo rustc`
+    Base,
+
+    /// A "Fat" build generated with cargo rustc and dx as a custom linker without -Wl,-dead-strip
+    Fat,
+
+    /// A "thin" build generated with `rustc` directly and dx as a custom linker
+    Thin { rustc_args: Vec<String> },
+}
+
+pub struct CargoBuildResult {
+    rustc_args: Vec<Vec<String>>,
+    exe: PathBuf,
 }
 
 impl BuildRequest {
@@ -37,13 +56,13 @@ impl BuildRequest {
         krate: DioxusCrate,
         build: BuildArgs,
         progress: ProgressTx,
-        patch_data: Option<PatchData>,
+        mode: BuildMode,
     ) -> Self {
         Self {
             build,
             krate,
             progress,
-            patch_data,
+            mode,
             custom_target_dir: None,
         }
     }
@@ -73,37 +92,15 @@ impl BuildRequest {
     /// Run the build command with a pretty loader, returning the executable output location
     async fn build_concurrent(&self) -> Result<(BuildArtifacts, Option<BuildArtifacts>)> {
         let (app, server) =
-            futures_util::future::try_join(self.build_app(), self.build_server()).await?;
+            futures_util::future::try_join(self.cargo_build(), self.build_server()).await?;
 
         Ok((app, server))
     }
 
     async fn build_sequential(&self) -> Result<(BuildArtifacts, Option<BuildArtifacts>)> {
-        let app = self.build_app().await?;
+        let app = self.cargo_build().await?;
         let server = self.build_server().await?;
         Ok((app, server))
-    }
-
-    pub(crate) async fn build_app(&self) -> Result<BuildArtifacts> {
-        tracing::debug!("Building app...");
-
-        let start = Instant::now();
-        self.prepare_build_dir()?;
-
-        // If we're able to do a binary patch
-        if let Some(patch_data) = self.patch_data.as_ref() {
-            return self.build_cargo_with_patch(patch_data).await;
-        }
-
-        let (exe, direct_rustc) = self.build_cargo().await?;
-        let assets = self.collect_assets(&exe).await?;
-
-        Ok(BuildArtifacts {
-            exe,
-            direct_rustc,
-            assets,
-            time_taken: start.elapsed(),
-        })
     }
 
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
@@ -115,58 +112,29 @@ impl BuildRequest {
 
         let mut cloned = self.clone();
         cloned.build.platform = Some(Platform::Server);
-        Ok(Some(cloned.build_app().await?))
+
+        Ok(Some(cloned.cargo_build().await?))
     }
 
-    /// Run `cargo`, returning the location of the final executable
-    ///
-    /// todo: add some stats here, like timing reports, crate-graph optimizations, etc
-    pub(crate) async fn build_cargo(&self) -> Result<(PathBuf, Vec<Vec<String>>)> {
+    pub(crate) async fn cargo_build(&self) -> Result<BuildArtifacts> {
+        let start = Instant::now();
+        self.prepare_build_dir()?;
+
         tracing::debug!("Executing cargo...");
 
+        let mut cmd = self.assemble_build_command()?;
+
+        tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
+
         // Extract the unit count of the crate graph so build_cargo has more accurate data
-        let crate_count = self.get_unit_count_estimate().await;
+        // "Thin" builds only build the final exe, so we only need to build one crate
+        let crate_count = match self.mode {
+            BuildMode::Thin { .. } => 1,
+            _ => self.get_unit_count_estimate().await,
+        };
 
         // Update the status to show that we're starting the build and how many crates we expect to build
         self.status_starting_build(crate_count);
-
-        let mut cmd = Command::new("cargo");
-
-        cmd.arg("rustc")
-            .current_dir(self.krate.crate_dir())
-            .arg("--message-format")
-            .arg("json-diagnostic-rendered-ansi")
-            .args(self.build_arguments())
-            .envs(self.env_vars()?);
-
-        if let Some(target_dir) = self.custom_target_dir.as_ref() {
-            cmd.env("CARGO_TARGET_DIR", target_dir);
-        }
-
-        // Android needs a special linker since the linker is actually tied to the android toolchain.
-        // For the sake of simplicity, we're going to pass the linker here using ourselves as the linker,
-        // but in reality we could simply use the android toolchain's linker as the path.
-        //
-        // We don't want to overwrite the user's .cargo/config.toml since that gets committed to git
-        // and we want everyone's install to be the same.
-        if self.build.platform() == Platform::Android {
-            let ndk = self
-                .krate
-                .android_ndk()
-                .context("Could not autodetect android linker")?;
-            let arch = self.build.target_args.arch();
-            let linker = arch.android_linker(&ndk);
-
-            let link_action = LinkAction::LinkAndroid {
-                linker,
-                extra_flags: vec![],
-            }
-            .to_json();
-
-            cmd.env(LinkAction::ENV_VAR_NAME, link_action);
-        }
-
-        tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
 
         let mut child = cmd
             .stdout(Stdio::piped())
@@ -176,7 +144,7 @@ impl BuildRequest {
 
         let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
         let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
-        let mut output_location = None;
+        let mut output_location: Option<PathBuf> = None;
         let mut stdout = stdout.lines();
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
@@ -254,34 +222,73 @@ impl BuildRequest {
             tracing::error!("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.");
         }
 
-        let out_location = output_location.context("Build did not return an executable")?;
+        let exe = output_location.context("Build did not return an executable")?;
 
-        tracing::debug!(
-            "Build completed successfully - output location: {:?}",
-            out_location
-        );
+        tracing::debug!("Build completed successfully - output location: {:?}", exe);
 
-        Ok(out_location)
+        Ok(BuildArtifacts {
+            exe,
+            direct_rustc,
+            time_taken: start.elapsed(),
+        })
     }
 
-    /// Traverse the target directory and collect all assets from the incremental cache
-    ///
-    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
-    /// One day this system might break and we might need to go back to using the linker approach.
-    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
-        tracing::debug!("Collecting assets ...");
+    pub(crate) async fn build_thin_rustc(&self) {}
 
-        if self.build.skip_assets {
-            return Ok(AssetManifest::default());
+    // #[tracing::instrument(
+    //     skip(self),
+    //     level = "trace",
+    //     name = "BuildRequest::assemble_build_command"
+    // )]
+    fn assemble_build_command(&self) -> Result<Command> {
+        let mut cmd = match &self.mode {
+            BuildMode::Fat | BuildMode::Base => {
+                let mut cmd = Command::new("cargo");
+                cmd.arg("rustc")
+                    .current_dir(self.krate.crate_dir())
+                    .arg("--message-format")
+                    .arg("json-diagnostic-rendered-ansi")
+                    .args(self.build_arguments())
+                    .envs(self.env_vars()?);
+                cmd
+            }
+            BuildMode::Thin { rustc_args } => {
+                let mut cmd = Command::new(rustc_args[0].clone());
+                cmd.args(rustc_args[1..].iter())
+                    .env(
+                        LinkAction::ENV_VAR_NAME,
+                        LinkAction::FatLink {
+                            platform: self.build.platform(),
+                            linker: None,
+                            incremental_dir: self.incremental_cache_dir(),
+                        }
+                        .to_json(),
+                    )
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped());
+                cmd
+            }
+        };
+
+        if let Some(target_dir) = self.custom_target_dir.as_ref() {
+            cmd.env("CARGO_TARGET_DIR", target_dir);
         }
 
-        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
-        let mut manifest = AssetManifest::default();
+        if self.build.platform() == Platform::Android {
+            let ndk = self
+                .krate
+                .android_ndk()
+                .context("Could not autodetect android linker")?;
+            let arch = self.build.target_args.arch();
+            let linker = arch.android_linker(&ndk);
 
-        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        _ = manifest.add_from_object_path(exe);
+            cmd.env(
+                LinkAction::ENV_VAR_NAME,
+                LinkAction::LinkAndroid { linker }.to_json(),
+            );
+        }
 
-        Ok(manifest)
+        Ok(cmd)
     }
 
     /// Create a list of arguments for cargo builds
@@ -601,6 +608,10 @@ impl BuildRequest {
         }
 
         Ok(())
+    }
+
+    pub fn incremental_cache_dir(&self) -> PathBuf {
+        self.platform_dir().join("incremental-cache")
     }
 
     /// The directory in which we'll put the main exe

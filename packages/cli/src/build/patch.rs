@@ -31,6 +31,7 @@ pub struct PatchData {
 }
 
 pub async fn attempt_partial_link(
+    work_dir: PathBuf,
     old_cache: PathBuf,
     new_cache: PathBuf,
     proc_main_addr: u64,
@@ -44,7 +45,7 @@ pub async fn attempt_partial_link(
         .new
         .iter()
         .flat_map(|(_, f)| f.file.exports().unwrap())
-        .map(|e| e.name().to_utf8())
+        .map(|e| e.name())
         .collect::<HashSet<_>>();
 
     let mut adrp_imports = HashSet::new();
@@ -89,13 +90,13 @@ pub async fn attempt_partial_link(
             .unwrap();
 
         for i in f.file.imports().unwrap() {
-            if all_exports.contains(i.name().to_utf8()) {
-                adrp_imports.insert(i.name().to_utf8());
+            if all_exports.contains(i.name()) {
+                adrp_imports.insert(i.name());
             }
         }
 
         for e in f.file.exports().unwrap() {
-            satisfied_exports.insert(e.name().to_utf8());
+            satisfied_exports.insert(e.name());
         }
     }
 
@@ -106,7 +107,7 @@ pub async fn attempt_partial_link(
 
     // Assemble the stub
     let stub_data = make_stub_file(proc_main_addr, patch_target, adrp_imports);
-    let stub_file = workspace_dir().join("stub.o");
+    let stub_file = work_dir.join("stub.o");
     std::fs::write(&stub_file, stub_data).unwrap();
 
     let out = Command::new("cc")
@@ -126,7 +127,7 @@ pub async fn attempt_partial_link(
 
     let err = String::from_utf8_lossy(&out.stderr);
     println!("err: {err}");
-    std::fs::write(workspace_dir().join("link_errs_partial.txt"), &*err).unwrap();
+    std::fs::write(work_dir.join("link_errs_partial.txt"), &*err).unwrap();
 
     // // -O0 ? supposedly faster
     // // -reproducible - even better?
@@ -152,11 +153,13 @@ pub async fn attempt_partial_link(
     //     .await?;
 }
 
-fn system_cc(platform: Platform) -> &'static str {
+/// todo: detect if the user specified a custom linker
+fn system_linker(platform: Platform) -> &'static str {
     match platform {
+        // mac + linux use just CC unless the user is trying to use something like mold / lld
         Platform::MacOS => "cc",
-        Platform::Windows => "cc",
         Platform::Linux => "cc",
+        Platform::Windows => "cc",
         Platform::Ios => "cc",
         Platform::Android => "cc",
         Platform::Server => "cc",
@@ -618,33 +621,22 @@ fn compare_masked<'a>(
 
 fn symbol_name_of_relo<'a>(obj: &impl Object<'a>, target: RelocationTarget) -> Option<&'a str> {
     match target {
-        RelocationTarget::Symbol(symbol_index) => Some(
-            obj.symbol_by_index(symbol_index)
-                .unwrap()
-                .name_bytes()
-                .unwrap()
-                .to_utf8(),
-        ),
+        RelocationTarget::Symbol(symbol_index) => obj
+            .symbol_by_index(symbol_index)
+            .unwrap()
+            .name_bytes()
+            .ok()
+            .and_then(|s| std::str::from_utf8(s).ok()),
         RelocationTarget::Section(_) => None,
         RelocationTarget::Absolute => None,
         _ => None,
     }
 }
 
-trait ToUtf8<'a> {
-    fn to_utf8(&self) -> &'a str;
-}
-
-impl<'a> ToUtf8<'a> for &'a [u8] {
-    fn to_utf8(&self) -> &'a str {
-        std::str::from_utf8(self).unwrap()
-    }
-}
-
 fn make_stub_file(
     proc_main_addr: u64,
     patch_target: PathBuf,
-    adrp_imports: HashSet<&str>,
+    adrp_imports: HashSet<&[u8]>,
 ) -> Vec<u8> {
     let data = fs::read(&patch_target).unwrap();
     let old = File::parse(&data as &[u8]).unwrap();
@@ -654,7 +646,7 @@ fn make_stub_file(
         .symbols()
         .filter_map(|sym| {
             adrp_imports
-                .get(sym.name().ok()?)
+                .get(sym.name_bytes().ok()?)
                 .copied()
                 .map(|o| (o, sym.address() + aslr_offset))
         })
@@ -689,7 +681,7 @@ fn build_stub(
     format: BinaryFormat,
     architecture: Architecture,
     endian: Endianness,
-    adrp_imports: HashMap<&str, u64>,
+    adrp_imports: HashMap<&[u8], u64>,
 ) -> Result<Vec<u8>> {
     use object::{
         write::{Object, Symbol, SymbolSection},
@@ -745,7 +737,7 @@ fn build_stub(
         //       _$LT$generational_box..references..GenerationalRef$LT$R$GT$$u20$as$u20$core..fmt..Display$GT$::fmt::h455abb35572b9c11
         // let name = strip_mangled(name);
 
-        let name = if name.starts_with("_") {
+        let name = if name.starts_with(b"_") {
             &name[1..]
         } else {
             name

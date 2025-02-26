@@ -7,10 +7,10 @@ use tokio::process::Command;
 pub enum LinkAction {
     LinkAndroid {
         linker: PathBuf,
-        extra_flags: Vec<String>,
     },
     FatLink {
         platform: Platform,
+        linker: Option<PathBuf>,
         incremental_dir: PathBuf,
     },
     ThinLink {
@@ -41,23 +41,14 @@ impl LinkAction {
     ///
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
-    ///
-    /// This will panic if it fails
-    ///
-    /// hmmmmmmmm tbh I'd rather just pass the object files back and do the parsing here, but the interface
-    /// is nicer to just bounce back the args and let the host do the parsing/canonicalization
     pub(crate) async fn run(self) -> Result<()> {
         let args = std::env::args().collect::<Vec<String>>();
 
         match self {
             // Run the android linker passed to us via the env var
-            LinkAction::LinkAndroid {
-                linker,
-                extra_flags,
-            } => {
+            LinkAction::LinkAndroid { linker } => {
                 let mut cmd = std::process::Command::new(linker);
                 cmd.args(std::env::args().skip(1));
-                cmd.args(extra_flags);
                 cmd.stderr(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::piped())
                     .status()
@@ -70,8 +61,10 @@ impl LinkAction {
             LinkAction::FatLink {
                 platform,
                 incremental_dir,
+                linker,
             } => {
-                // Make sure we *don't* dead-strip the binary so every symbol still exists
+                // Make sure we *don't* dead-strip the binary so every library symbol still exists.
+                //  This is required for thin linking to work correctly.
                 let args = args
                     .into_iter()
                     .skip(1)
@@ -89,7 +82,10 @@ impl LinkAction {
                 );
 
                 // Run ld with the args
-                let res = Command::new("cc").args(args).output().await?;
+                let res = Command::new(linker.unwrap_or("cc".into()))
+                    .args(args)
+                    .output()
+                    .await?;
                 let err = String::from_utf8_lossy(&res.stderr);
             }
 
@@ -111,6 +107,7 @@ impl LinkAction {
                 );
 
                 crate::build::attempt_partial_link(
+                    incremental_dir.clone(),
                     incremental_dir.join("old"),
                     incremental_dir.join("new"),
                     main_ptr,
