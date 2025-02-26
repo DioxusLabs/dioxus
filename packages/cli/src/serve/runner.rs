@@ -97,6 +97,7 @@ impl AppRunner {
         &mut self,
         app: AppBundle,
         devserver_ip: SocketAddr,
+        open_address: Option<SocketAddr>,
         fullstack_address: Option<SocketAddr>,
         should_open_web: bool,
     ) -> Result<&AppHandle> {
@@ -119,6 +120,7 @@ impl AppRunner {
         handle
             .open(
                 devserver_ip,
+                open_address,
                 fullstack_address,
                 self.builds_opened == 0 && should_open_web,
             )
@@ -137,7 +139,12 @@ impl AppRunner {
         if let Some(runner) = self.running.as_mut() {
             runner.soft_kill().await;
             runner
-                .open(devserver.devserver_address(), fullstack_address, true)
+                .open(
+                    devserver.devserver_address(),
+                    devserver.displayed_address(),
+                    fullstack_address,
+                    true,
+                )
                 .await?;
         }
 
