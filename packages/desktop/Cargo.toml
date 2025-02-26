@@ -72,7 +72,7 @@ wry = { workspace = true, features = [
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.5.0"
 rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
-muda = "0.11.3"
+muda = { workspace = true }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]
 tray-icon = { workspace = true }
