@@ -18,7 +18,7 @@ pub(crate) struct DioxusCrate {
     pub(crate) krates: Arc<Krates>,
     pub(crate) package: NodeId,
     pub(crate) config: DioxusConfig,
-    pub(crate) target: Target,
+    pub(crate) target: Arc<Target>,
     pub(crate) settings: Arc<CliSettings>,
 }
 
@@ -109,10 +109,10 @@ impl DioxusCrate {
         let settings = CliSettings::load();
 
         Ok(Self {
-            krates: Arc::new(krates),
             package,
             config: dioxus_config,
-            target,
+            krates: Arc::new(krates),
+            target: Arc::new(target),
             settings,
         })
     }

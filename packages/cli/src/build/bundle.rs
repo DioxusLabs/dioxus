@@ -95,6 +95,13 @@ pub(crate) struct AppBundle {
     pub(crate) server_assets: Option<AssetManifest>,
 }
 
+#[derive(Debug)]
+pub struct UnbundledApp {
+    pub(crate) request: BuildRequest,
+    pub(crate) app: BuildArtifacts,
+    pub(crate) server: Option<BuildArtifacts>,
+}
+
 /// The result of the `cargo rustc` including any additional metadata
 #[derive(Debug)]
 pub struct BuildArtifacts {
@@ -298,11 +305,6 @@ impl AppBundle {
         tracing::debug!("Bundle created at {}", bundle.build.root_dir().display());
 
         Ok(bundle)
-    }
-
-    /// Apply this build as a patch to the given bundle
-    pub(crate) async fn write_patch(&mut self, exe: &Path) -> Result<()> {
-        Ok(())
     }
 
     /// Traverse the target directory and collect all assets from the incremental cache

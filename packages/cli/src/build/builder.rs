@@ -19,7 +19,6 @@ pub(crate) struct Builder {
     pub krate: DioxusCrate,
     pub request: BuildRequest,
     pub build: tokio::task::JoinHandle<Result<AppBundle>>,
-    pub bundle: tokio::task::JoinHandle<Result<AppBundle>>,
     pub tx: ProgressTx,
     pub rx: ProgressRx,
 
@@ -49,13 +48,10 @@ impl Builder {
             request: request.clone(),
             stage: BuildStage::Initializing,
             build: tokio::spawn(async move {
-                // On the first build, we want to verify the tooling
-                // We wont bother verifying on subsequent builds
+                // On the first build, we want to verify the tooling... don't bother on subsequent builds
                 request.verify_tooling().await?;
-
                 request.build_all().await
             }),
-            bundle: tokio::spawn(async move { futures_util::future::pending().await }),
             tx,
             rx,
             compiled_crates: 0,
@@ -186,7 +182,7 @@ impl Builder {
         self.abort_all();
 
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        let request = BuildRequest::new(self.krate.clone(), args, self.tx.clone(), BuildMode::Fat);
+        let request = BuildRequest::new(self.krate.clone(), args, self.tx.clone(), BuildMode::Thin);
         self.request = request.clone();
         self.stage = BuildStage::Restarting;
 

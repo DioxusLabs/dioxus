@@ -116,7 +116,7 @@ impl AppRunner {
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
         should_open_web: bool,
-    ) -> Result<&AppHandle> {
+    ) -> Result<()> {
         // Drop the old handle
         // This is a more forceful kill than soft_kill since the app entropy will be wiped
         self.cleanup().await;
@@ -144,7 +144,7 @@ impl AppRunner {
         self.builds_opened += 1;
         self.running = Some(handle);
 
-        Ok(self.running.as_ref().unwrap())
+        Ok(())
     }
 
     /// Open an existing app bundle, if it exists
@@ -454,5 +454,15 @@ impl AppRunner {
         let cache_dir = self.krate.session_cache_dir();
         _ = std::fs::remove_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(&cache_dir);
+    }
+
+    pub async fn patch(&mut self, bundle: AppBundle) -> Result<()> {
+        let Some(running) = self.running.as_mut() else {
+            return Ok(());
+        };
+
+        // running.app.write_patch(bundle).await
+
+        todo!()
     }
 }

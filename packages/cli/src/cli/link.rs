@@ -5,18 +5,17 @@ use tokio::process::Command;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LinkAction {
-    LinkAndroid {
-        linker: PathBuf,
-    },
-    FatLink {
+    BaseLink {
+        strip: bool,
         platform: Platform,
-        linker: Option<PathBuf>,
+        linker: PathBuf,
         incremental_dir: PathBuf,
     },
     ThinLink {
         platform: Platform,
         main_ptr: u64,
         patch_target: PathBuf,
+        linker: PathBuf,
         incremental_dir: PathBuf,
     },
 }
@@ -45,30 +44,19 @@ impl LinkAction {
         let args = std::env::args().collect::<Vec<String>>();
 
         match self {
-            // Run the android linker passed to us via the env var
-            LinkAction::LinkAndroid { linker } => {
-                let mut cmd = std::process::Command::new(linker);
-                cmd.args(std::env::args().skip(1));
-                cmd.stderr(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .status()
-                    .expect("Failed to run android linker");
-            }
-
-            // Run the system linker but keep any unused sections.
-            //
-            // This ensures our thin link will work against the binaries built here.
-            LinkAction::FatLink {
+            // Run the system linker but (maybe) keep any unused sections.
+            LinkAction::BaseLink {
                 platform,
                 incremental_dir,
                 linker,
+                strip,
             } => {
                 // Make sure we *don't* dead-strip the binary so every library symbol still exists.
                 //  This is required for thin linking to work correctly.
                 let args = args
                     .into_iter()
                     .skip(1)
-                    .filter(|arg| arg != "-Wl,-dead_strip")
+                    .filter(|arg| arg != "-Wl,-dead_strip" && !strip)
                     .collect::<Vec<String>>();
 
                 // Persist the cache of incremental files
@@ -82,15 +70,13 @@ impl LinkAction {
                 );
 
                 // Run ld with the args
-                let res = Command::new(linker.unwrap_or("cc".into()))
-                    .args(args)
-                    .output()
-                    .await?;
+                let res = Command::new(linker).args(args).output().await?;
                 let err = String::from_utf8_lossy(&res.stderr);
             }
 
             // Run the linker but without rlibs
             LinkAction::ThinLink {
+                linker,
                 platform,
                 patch_target,
                 incremental_dir,
@@ -107,6 +93,7 @@ impl LinkAction {
                 );
 
                 crate::build::attempt_partial_link(
+                    linker,
                     incremental_dir.clone(),
                     incremental_dir.join("old"),
                     incremental_dir.join("new"),

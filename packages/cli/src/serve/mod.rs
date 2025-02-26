@@ -168,6 +168,13 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     BuildUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {:?}", err);
                     }
+
+                    BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
+                        devserver.send_patch(bundle.app.exe.clone()).await;
+                        // if runner.patch(bundle).await.is_ok() {
+                        // }
+                    }
+
                     BuildUpdate::BuildReady { bundle } => {
                         let handle = runner
                             .open(
@@ -176,15 +183,12 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                                 devserver.proxied_server_address(),
                                 args.open.unwrap_or(false),
                             )
-                            .await;
+                            .await
+                            .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
 
-                        match handle {
-                            // Update the screen + devserver with the new handle info
-                            Ok(_handle) => {
-                                devserver.send_reload_command().await;
-                            }
-
-                            Err(e) => tracing::error!("Failed to open app: {}", e),
+                        // Update the screen + devserver with the new handle info
+                        if handle.is_ok() {
+                            devserver.send_reload_command().await
                         }
                     }
                 }

@@ -43,7 +43,7 @@ pub enum BuildMode {
     Fat,
 
     /// A "thin" build generated with `rustc` directly and dx as a custom linker
-    Thin { rustc_args: Vec<String> },
+    Thin,
 }
 
 pub struct CargoBuildResult {
@@ -82,25 +82,21 @@ impl BuildRequest {
         );
 
         let (app, server) = match self.build.force_sequential {
-            true => self.build_sequential().await?,
-            false => self.build_concurrent().await?,
+            true => futures_util::future::try_join(self.cargo_build(), self.build_server()).await?,
+            false => (self.cargo_build().await?, self.build_server().await?),
         };
 
-        AppBundle::new(self, app, server).await
-    }
+        // let mut app_bundle = AppBundle::new {
+        //     app,
+        //     server,
+        //     build: self,
+        //     assets: Default::default(),
+        //     server_assets: Default::default(),
+        // };
 
-    /// Run the build command with a pretty loader, returning the executable output location
-    async fn build_concurrent(&self) -> Result<(BuildArtifacts, Option<BuildArtifacts>)> {
-        let (app, server) =
-            futures_util::future::try_join(self.cargo_build(), self.build_server()).await?;
+        // Ok(app_bundle)
 
-        Ok((app, server))
-    }
-
-    async fn build_sequential(&self) -> Result<(BuildArtifacts, Option<BuildArtifacts>)> {
-        let app = self.cargo_build().await?;
-        let server = self.build_server().await?;
-        Ok((app, server))
+        todo!()
     }
 
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
@@ -235,58 +231,47 @@ impl BuildRequest {
 
     pub(crate) async fn build_thin_rustc(&self) {}
 
-    // #[tracing::instrument(
-    //     skip(self),
-    //     level = "trace",
-    //     name = "BuildRequest::assemble_build_command"
-    // )]
+    #[tracing::instrument(
+        skip(self),
+        level = "trace",
+        fields(dx_src = ?TraceSrc::Build)
+    )]
     fn assemble_build_command(&self) -> Result<Command> {
-        let mut cmd = match &self.mode {
-            BuildMode::Fat | BuildMode::Base => {
-                let mut cmd = Command::new("cargo");
-                cmd.arg("rustc")
-                    .current_dir(self.krate.crate_dir())
-                    .arg("--message-format")
-                    .arg("json-diagnostic-rendered-ansi")
-                    .args(self.build_arguments())
-                    .envs(self.env_vars()?);
-                cmd
-            }
-            BuildMode::Thin { rustc_args } => {
-                let mut cmd = Command::new(rustc_args[0].clone());
-                cmd.args(rustc_args[1..].iter())
-                    .env(
-                        LinkAction::ENV_VAR_NAME,
-                        LinkAction::FatLink {
-                            platform: self.build.platform(),
-                            linker: None,
-                            incremental_dir: self.incremental_cache_dir(),
-                        }
-                        .to_json(),
-                    )
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped());
-                cmd
-            }
-        };
+        // let mut cmd = match &self.mode {
+        //     BuildMode::Fat | BuildMode::Base => {
+        //         let mut cmd = Command::new("cargo");
+        //         cmd.arg("rustc")
+        //             .current_dir(self.krate.crate_dir())
+        //             .arg("--message-format")
+        //             .arg("json-diagnostic-rendered-ansi")
+        //             .args(self.build_arguments())
+        //             .envs(self.env_vars()?);
+        //         cmd
+        //     } // BuildMode::Thin { rustc_args } => {
+        //       //     let mut cmd = Command::new(rustc_args[0].clone());
+        //       //     cmd.args(rustc_args[1..].iter())
+        //       //         .env(
+        //       //             LinkAction::ENV_VAR_NAME,
+        //       //             LinkAction::FatLink {
+        //       //                 platform: self.build.platform(),
+        //       //                 linker: None,
+        //       //                 incremental_dir: self.incremental_cache_dir(),
+        //       //             }
+        //       //             .to_json(),
+        //       //         )
+        //       //         .stdout(Stdio::piped())
+        //       //         .stderr(Stdio::piped());
+        //       //     cmd
+        //       // }
+        // };
 
-        if let Some(target_dir) = self.custom_target_dir.as_ref() {
-            cmd.env("CARGO_TARGET_DIR", target_dir);
-        }
-
-        if self.build.platform() == Platform::Android {
-            let ndk = self
-                .krate
-                .android_ndk()
-                .context("Could not autodetect android linker")?;
-            let arch = self.build.target_args.arch();
-            let linker = arch.android_linker(&ndk);
-
-            cmd.env(
-                LinkAction::ENV_VAR_NAME,
-                LinkAction::LinkAndroid { linker }.to_json(),
-            );
-        }
+        let mut cmd = Command::new("cargo");
+        cmd.arg("rustc")
+            .current_dir(self.krate.crate_dir())
+            .arg("--message-format")
+            .arg("json-diagnostic-rendered-ansi")
+            .args(self.build_arguments())
+            .envs(self.env_vars()?);
 
         Ok(cmd)
     }
@@ -372,12 +357,23 @@ impl BuildRequest {
 
         cargo_args.push(self.krate.executable_name().to_string());
 
+        cargo_args.push("--".to_string());
+
         // the bundle splitter needs relocation data
         // we'll trim these out if we don't need them during the bundling process
         // todo(jon): for wasm binary patching we might want to leave these on all the time.
         if self.build.platform() == Platform::Web && self.build.experimental_wasm_split {
-            cargo_args.push("--".to_string());
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
+        }
+
+        match self.mode {
+            BuildMode::Fat | BuildMode::Thin => cargo_args.push(format!(
+                "-Clinker={}",
+                dunce::canonicalize(std::env::current_exe().unwrap())
+                    .unwrap()
+                    .display()
+            )),
+            _ => {}
         }
 
         tracing::debug!(dx_src = ?TraceSrc::Build, "cargo args: {:?}", cargo_args);
@@ -555,6 +551,57 @@ impl BuildRequest {
             // );
             // env_vars.push(("PATH", extended_path));
         };
+
+        let linker = match self.build.platform() {
+            Platform::Web => todo!(),
+            Platform::MacOS => todo!(),
+            Platform::Windows => todo!(),
+            Platform::Linux => todo!(),
+            Platform::Ios => todo!(),
+            Platform::Android => todo!(),
+            Platform::Server => todo!(),
+            Platform::Liveview => todo!(),
+        };
+
+        let custom_linker = if self.build.platform() == Platform::Android {
+            let ndk = self
+                .krate
+                .android_ndk()
+                .context("Could not autodetect android linker")?;
+
+            let linker = self.build.target_args.arch().android_linker(&ndk);
+            Some(linker)
+        } else {
+            None
+        };
+
+        match &self.mode {
+            BuildMode::Base | BuildMode::Fat => env_vars.push((
+                LinkAction::ENV_VAR_NAME,
+                LinkAction::BaseLink {
+                    platform: self.build.platform(),
+                    linker: "cc".into(),
+                    incremental_dir: self.incremental_cache_dir(),
+                    strip: matches!(self.mode, BuildMode::Base),
+                }
+                .to_json(),
+            )),
+            BuildMode::Thin => env_vars.push((
+                LinkAction::ENV_VAR_NAME,
+                LinkAction::ThinLink {
+                    platform: self.build.platform(),
+                    linker: "cc".into(),
+                    incremental_dir: self.incremental_cache_dir(),
+                    main_ptr: todo!(),
+                    patch_target: todo!(),
+                }
+                .to_json(),
+            )),
+        }
+
+        if let Some(target_dir) = self.custom_target_dir.as_ref() {
+            env_vars.push(("CARGO_TARGET_DIR", target_dir.display().to_string()));
+        }
 
         // If this is a release build, bake the base path and title
         // into the binary with env vars
@@ -987,5 +1034,9 @@ impl BuildRequest {
         }
 
         todo!()
+    }
+
+    pub(crate) fn is_patch(&self) -> bool {
+        matches!(&self.mode, BuildMode::Thin { .. })
     }
 }

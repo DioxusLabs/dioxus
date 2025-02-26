@@ -31,6 +31,7 @@ pub struct PatchData {
 }
 
 pub async fn attempt_partial_link(
+    linker: PathBuf,
     work_dir: PathBuf,
     old_cache: PathBuf,
     new_cache: PathBuf,
