@@ -28,7 +28,7 @@ pub enum UserWindowEvent {
 
     /// Handle a hotreload event, basically telling us to update our templates
     #[cfg(all(feature = "devtools", debug_assertions))]
-    HotReloadEvent(dioxus_devtools::DevserverMsg),
+    DevServerEvent(dioxus_devtools::DevserverMsg),
 
     // Windows-only drag-n-drop fix events.
     WindowsDragDrop(WindowId),

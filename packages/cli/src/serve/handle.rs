@@ -278,7 +278,7 @@ impl AppHandle {
             .ok()?;
 
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        if let Some(resource) = self.app.app.assets.assets.get(&changed_file).as_ref() {
+        if let Some(resource) = self.app.assets.assets.get(&changed_file).as_ref() {
             let output_path = asset_dir.join(resource.bundled_path());
             // Remove the old asset if it exists
             _ = std::fs::remove_file(&output_path);

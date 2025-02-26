@@ -18,7 +18,7 @@ pub(crate) trait AnyProps: 'static {
 }
 
 /// A component along with the props the component uses to render.
-pub(crate) struct VProps<F: ComponentFunction<P, M>, P, M> {
+pub(crate) struct VProps<F: ComponentFunction<P, M>, P: 'static, M> {
     render_fn: F,
     memo: fn(&mut P, &P) -> bool,
     props: P,

@@ -1,6 +1,6 @@
 use dioxus_core::internal::HotReloadTemplateWithLocation;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -35,13 +35,14 @@ pub enum ClientMsg {
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct HotReloadMsg {
+    pub patch: Option<PathBuf>,
+    pub changed_symbols: HashSet<String>,
     pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
-    pub unknown_files: Vec<PathBuf>,
 }
 
 impl HotReloadMsg {
     pub fn is_empty(&self) -> bool {
-        self.templates.is_empty() && self.assets.is_empty() && self.unknown_files.is_empty()
+        self.templates.is_empty() && self.assets.is_empty()
     }
 }

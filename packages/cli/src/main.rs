@@ -11,7 +11,6 @@ mod dioxus_crate;
 mod dx_build_info;
 mod error;
 mod fastfs;
-mod filemap;
 mod logging;
 mod metadata;
 mod platform;
@@ -27,7 +26,6 @@ pub(crate) use config::*;
 pub(crate) use dioxus_crate::*;
 pub(crate) use dioxus_dx_wire_format::*;
 pub(crate) use error::*;
-pub(crate) use filemap::*;
 pub(crate) use logging::*;
 pub(crate) use platform::*;
 pub(crate) use rustc::*;
@@ -37,7 +35,7 @@ pub(crate) use settings::*;
 async fn main() {
     // If we're being ran as a linker (likely from ourselves), we want to act as a linker instead.
     if let Some(link_action) = link::LinkAction::from_env() {
-        return link_action.run();
+        return link_action.run().await.unwrap();
     }
 
     let args = TraceController::initialize();
