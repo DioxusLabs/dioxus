@@ -10,7 +10,7 @@ use http::{header::*, response::Builder as ResponseBuilder, status::StatusCode};
 use std::{io::SeekFrom, path::PathBuf};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-const VIDEO_PATH: &str = "./examples/assets/test_video.mp4";
+const VIDEO_PATH: &str = "./assets/test_video.mp4";
 
 fn main() {
     // For the sake of this example, we will download the video file if it doesn't exist
