@@ -8,6 +8,7 @@ mod android_sync_lock;
 mod app;
 mod assets;
 mod config;
+mod default_icon;
 mod desktop_context;
 mod document;
 mod edits;
@@ -23,6 +24,8 @@ mod query;
 mod shortcut;
 mod waker;
 mod webview;
+
+pub use default_icon::default_icon;
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]

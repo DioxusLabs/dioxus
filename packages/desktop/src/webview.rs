@@ -193,18 +193,7 @@ impl WebviewInstance {
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
-            #[cfg(not(target_os = "windows"))]
-            let default = tao::window::Icon::from_rgba(
-                include_bytes!("./assets/default_icon.bin").to_vec(),
-                460,
-                460,
-            );
-            #[cfg(target_os = "windows")]
-            use tao::platform::windows::IconExtWindows;
-            #[cfg(target_os = "windows")]
-            let default = tao::window::Icon::from_resource(32512, None);
-
-            window = window.with_window_icon(Some(default.expect("image parse failed")));
+            window = window.with_window_icon(Some(crate::default_icon()));
         }
 
         let window = window.build(&shared.target).unwrap();

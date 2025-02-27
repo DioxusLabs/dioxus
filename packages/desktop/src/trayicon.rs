@@ -31,21 +31,12 @@ pub type DioxusTray = ();
 pub fn init_tray_icon(menu: DioxusTrayMenu, icon: Option<DioxusTrayIcon>) -> DioxusTray {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        let default = tray_icon::Icon::from_rgba(
-            include_bytes!("./assets/default_icon.bin").to_vec(),
-            460,
-            460,
-        );
-        #[cfg(target_os = "windows")]
-        let default = tray_icon::Icon::from_resource(32512, None);
-
         let builder = tray_icon::TrayIconBuilder::new()
             .with_menu(Box::new(menu))
             .with_menu_on_left_click(false)
             .with_icon(match icon {
                 Some(value) => value,
-                None => default.expect("image parse failed"),
+                None => crate::default_icon(),
             });
 
         provide_context(builder.build().expect("tray icon builder failed"))
