@@ -1,13 +1,15 @@
 //! Configuration for how to serve a Dioxus application
 #![allow(non_snake_case)]
 
+use dioxus_lib::prelude::dioxus_core::LaunchConfig;
+use std::any::Any;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use dioxus_lib::prelude::dioxus_core::LaunchConfig;
-
-use crate::server::ContextProviders;
+pub(crate) type ContextProviders =
+    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
@@ -16,7 +18,8 @@ pub struct ServeConfigBuilder {
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
-    pub(crate) context_providers: ContextProviders,
+    pub(crate) context_providers:
+        Vec<Arc<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>,
     pub(crate) streaming_mode: StreamingMode,
 }
 
@@ -109,20 +112,48 @@ impl ServeConfigBuilder {
         self
     }
 
-    /// Provide context to the root and server functions. You can use this context
-    /// while rendering with [`consume_context`](dioxus_lib::prelude::consume_context) or in server functions with [`FromContext`](crate::prelude::FromContext).
+    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_lib::prelude::consume_context)
+    /// or in server functions with [`FromContext`](crate::prelude::FromContext).
+    ///
+    ///
+    /// The context providers passed into this method will be called when the context type is requested which may happen many times in the lifecycle of the application.
+    ///
     ///
     /// Context will be forwarded from the LaunchBuilder if it is provided.
     ///
     /// ```rust, no_run
+    /// #![allow(non_snake_case)]
     /// use dioxus::prelude::*;
+    /// use std::sync::Arc;
+    /// use std::any::Any;
     ///
-    /// dioxus::LaunchBuilder::new()
-    ///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
-    ///     .with_context(server_only! {
-    ///         1234567890u32
-    ///     })
-    ///     .launch(app);
+    /// fn main() {
+    ///     #[cfg(feature = "web")]
+    ///     // Hydrate the application on the client
+    ///     dioxus::launch(app);
+    ///     #[cfg(feature = "server")]
+    ///     {
+    ///         tokio::runtime::Runtime::new()
+    ///             .unwrap()
+    ///             .block_on(async move {
+    ///                 let address = dioxus_cli_config::fullstack_address_or_localhost();
+    ///                 let listener = tokio::net::TcpListener::bind(address)
+    ///                     .await
+    ///                     .unwrap();
+    ///                 let config = ServeConfigBuilder::default()
+    ///                     // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
+    ///                     .context_providers(Arc::new(vec![Box::new(|| Box::new(1234u32) as Box<dyn Any>) as Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync>]));
+    ///                 axum::serve(
+    ///                         listener,
+    ///                         axum::Router::new()
+    ///                             .serve_dioxus_application(config, app)
+    ///                             .into_make_service(),
+    ///                     )
+    ///                     .await
+    ///                     .unwrap();
+    ///             });
+    ///      }
+    /// }
     ///
     /// #[server]
     /// async fn read_context() -> Result<u32, ServerFnError> {
@@ -139,7 +170,135 @@ impl ServeConfigBuilder {
     /// }
     /// ```
     pub fn context_providers(mut self, state: ContextProviders) -> Self {
-        self.context_providers = state;
+        // This API should probably accept Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>> instead of Arc so we can
+        // continue adding to the context list after calling this method. Changing the type is a breaking change so it cannot
+        // be done until 0.7 is released.
+        let context_providers = (0..state.len()).map(|i| {
+            let state = state.clone();
+            Arc::new(move || state[i]()) as Arc<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync>
+        });
+        self.context_providers.extend(context_providers);
+        self
+    }
+
+    /// Provide context to the root and server functions. You can use this context
+    /// while rendering with [`consume_context`](dioxus_lib::prelude::consume_context) or in server functions with [`FromContext`](crate::prelude::FromContext).
+    ///
+    ///
+    /// The context providers passed into this method will be called when the context type is requested which may happen many times in the lifecycle of the application.
+    ///
+    ///
+    /// Context will be forwarded from the LaunchBuilder if it is provided.
+    ///
+    /// ```rust, no_run
+    /// #![allow(non_snake_case)]
+    /// use dioxus::prelude::*;
+    ///
+    /// fn main() {
+    ///     #[cfg(feature = "web")]
+    ///     // Hydrate the application on the client
+    ///     dioxus::launch(app);
+    ///     #[cfg(feature = "server")]
+    ///     {
+    ///         tokio::runtime::Runtime::new()
+    ///             .unwrap()
+    ///             .block_on(async move {
+    ///                 let address = dioxus_cli_config::fullstack_address_or_localhost();
+    ///                 let listener = tokio::net::TcpListener::bind(address)
+    ///                     .await
+    ///                     .unwrap();
+    ///                 let config = ServeConfigBuilder::default()
+    ///                     // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
+    ///                     .context_provider(move || 1234u32);
+    ///                 axum::serve(
+    ///                         listener,
+    ///                         axum::Router::new()
+    ///                             .serve_dioxus_application(config, app)
+    ///                             .into_make_service(),
+    ///                     )
+    ///                     .await
+    ///                     .unwrap();
+    ///             });
+    ///      }
+    /// }
+    ///
+    /// #[server]
+    /// async fn read_context() -> Result<u32, ServerFnError> {
+    ///     // You can extract values from the server context with the `extract` function
+    ///     let FromContext(value) = extract().await?;
+    ///     Ok(value)
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     let future = use_resource(read_context);
+    ///     rsx! {
+    ///         h1 { "{future:?}" }
+    ///     }
+    /// }
+    /// ```
+    pub fn context_provider<C: 'static>(
+        mut self,
+        state: impl Fn() -> C + Send + Sync + 'static,
+    ) -> Self {
+        self.context_providers
+            .push(Arc::new(move || Box::new(state())));
+        self
+    }
+
+    /// Provide context to the root and server functions. You can use this context while rendering with [`consume_context`](dioxus_lib::prelude::consume_context)
+    /// or in server functions with [`FromContext`](crate::prelude::FromContext).
+    ///
+    /// Context will be forwarded from the LaunchBuilder if it is provided.
+    ///
+    /// ```rust, no_run
+    /// #![allow(non_snake_case)]
+    /// use dioxus::prelude::*;
+    ///
+    /// fn main() {
+    ///     #[cfg(feature = "web")]
+    ///     // Hydrate the application on the client
+    ///     dioxus::launch(app);
+    ///     #[cfg(feature = "server")]
+    ///     {
+    ///         tokio::runtime::Runtime::new()
+    ///             .unwrap()
+    ///             .block_on(async move {
+    ///                 let address = dioxus_cli_config::fullstack_address_or_localhost();
+    ///                 let listener = tokio::net::TcpListener::bind(address)
+    ///                     .await
+    ///                     .unwrap();
+    ///                 let config = ServeConfigBuilder::default()
+    ///                     // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
+    ///                     .context(1234u32);
+    ///                 axum::serve(
+    ///                         listener,
+    ///                         axum::Router::new()
+    ///                             .serve_dioxus_application(config, app)
+    ///                             .into_make_service(),
+    ///                     )
+    ///                     .await
+    ///                     .unwrap();
+    ///             });
+    ///      }
+    /// }
+    ///
+    /// #[server]
+    /// async fn read_context() -> Result<u32, ServerFnError> {
+    ///     // You can extract values from the server context with the `extract` function
+    ///     let FromContext(value) = extract().await?;
+    ///     Ok(value)
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     let future = use_resource(read_context);
+    ///     rsx! {
+    ///         h1 { "{future:?}" }
+    ///     }
+    /// }
+    /// ```
+    pub fn context(mut self, state: impl Any + Clone + Send + Sync + 'static) -> Self {
+        self.context_providers
+            .push(Arc::new(move || Box::new(state.clone())));
         self
     }
 
@@ -195,11 +354,19 @@ impl ServeConfigBuilder {
         };
 
         let index = load_index_html(index_html, root_id);
+        let context_providers = Arc::new(
+            self.context_providers
+                .into_iter()
+                .map(|f| {
+                    Box::new(move || f()) as Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync>
+                })
+                .collect(),
+        );
 
         Ok(ServeConfig {
             index,
             incremental: self.incremental,
-            context_providers: self.context_providers,
+            context_providers,
             streaming_mode: self.streaming_mode,
         })
     }
