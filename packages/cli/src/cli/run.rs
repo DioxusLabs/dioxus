@@ -1,5 +1,5 @@
 use super::*;
-use crate::{serve::ServeUpdate, BuildArgs, Builder, DioxusCrate, Platform, Result};
+use crate::{serve::HandleUpdate, BuildArgs, Builder, DioxusCrate, Platform, Result};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -38,28 +38,18 @@ impl RunArgs {
         // Run the app, but mostly ignore all the other messages
         // They won't generally be emitted
         loop {
-            match runner.wait().await {
-                ServeUpdate::StderrReceived { platform, msg } => {
+            match runner.running.as_mut().unwrap().wait().await {
+                HandleUpdate::StderrReceived { platform, msg } => {
                     tracing::info!("[{platform}]: {msg}")
                 }
-                ServeUpdate::StdoutReceived { platform, msg } => {
+                HandleUpdate::StdoutReceived { platform, msg } => {
                     tracing::info!("[{platform}]: {msg}")
                 }
-                ServeUpdate::ProcessExited { platform, status } => {
+                HandleUpdate::ProcessExited { platform, status } => {
                     runner.cleanup().await;
                     tracing::info!("[{platform}]: process exited with status: {status:?}");
                     break;
                 }
-                ServeUpdate::BuildUpdate { .. } => {}
-                ServeUpdate::TracingLog { .. } => {}
-                ServeUpdate::Exit { .. } => break,
-                ServeUpdate::NewConnection => {}
-                ServeUpdate::WsMessage(_) => {}
-                ServeUpdate::FilesChanged { .. } => {}
-                ServeUpdate::RequestRebuild => {}
-                ServeUpdate::Redraw => {}
-                ServeUpdate::OpenApp => {}
-                ServeUpdate::ToggleShouldRebuild => {}
             }
         }
 

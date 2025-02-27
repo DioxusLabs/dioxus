@@ -43,7 +43,7 @@ pub enum BuildMode {
     Fat,
 
     /// A "thin" build generated with `rustc` directly and dx as a custom linker
-    Thin,
+    Thin { direct_rustc: Vec<Vec<String>> },
 }
 
 pub struct CargoBuildResult {
@@ -86,17 +86,7 @@ impl BuildRequest {
             false => (self.cargo_build().await?, self.build_server().await?),
         };
 
-        // let mut app_bundle = AppBundle::new {
-        //     app,
-        //     server,
-        //     build: self,
-        //     assets: Default::default(),
-        //     server_assets: Default::default(),
-        // };
-
-        // Ok(app_bundle)
-
-        todo!()
+        AppBundle::new(self, app, server).await
     }
 
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
@@ -367,7 +357,7 @@ impl BuildRequest {
         }
 
         match self.mode {
-            BuildMode::Fat | BuildMode::Thin => cargo_args.push(format!(
+            BuildMode::Fat | BuildMode::Thin { .. } => cargo_args.push(format!(
                 "-Clinker={}",
                 dunce::canonicalize(std::env::current_exe().unwrap())
                     .unwrap()
@@ -586,7 +576,7 @@ impl BuildRequest {
                 }
                 .to_json(),
             )),
-            BuildMode::Thin => env_vars.push((
+            BuildMode::Thin { .. } => env_vars.push((
                 LinkAction::ENV_VAR_NAME,
                 LinkAction::ThinLink {
                     platform: self.build.platform(),

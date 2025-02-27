@@ -177,12 +177,17 @@ impl Builder {
         update
     }
 
-    pub(crate) fn patch_rebuild(&mut self, args: BuildArgs) {
+    pub(crate) fn patch_rebuild(&mut self, args: BuildArgs, direct_rustc: Vec<Vec<String>>) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all();
 
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        let request = BuildRequest::new(self.krate.clone(), args, self.tx.clone(), BuildMode::Thin);
+        let request = BuildRequest::new(
+            self.krate.clone(),
+            args,
+            self.tx.clone(),
+            BuildMode::Thin { direct_rustc },
+        );
         self.request = request.clone();
         self.stage = BuildStage::Restarting;
 

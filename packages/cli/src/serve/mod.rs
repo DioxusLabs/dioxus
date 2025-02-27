@@ -105,12 +105,17 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                         devserver.send_hotreload(hr).await;
                     }
                     HotReloadKind::Patch => {
-                        builder.patch_rebuild(args.build_arguments.clone());
+                        if let Some(handle) = runner.running.as_ref() {
+                            builder.patch_rebuild(
+                                args.build_arguments.clone(),
+                                handle.app.app.direct_rustc.clone(),
+                            );
 
-                        runner.clear_hot_reload_changes();
-                        runner.clear_cached_rsx();
+                            runner.clear_hot_reload_changes();
+                            runner.clear_cached_rsx();
 
-                        devserver.start_patch().await
+                            devserver.start_patch().await
+                        }
                     }
                     HotReloadKind::Full {} => todo!(),
                 }
@@ -170,9 +175,8 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     }
 
                     BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
+                        runner.patch(&bundle).await?;
                         devserver.send_patch(bundle.app.exe.clone()).await;
-                        // if runner.patch(bundle).await.is_ok() {
-                        // }
                     }
 
                     BuildUpdate::BuildReady { bundle } => {
@@ -195,7 +199,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
             }
 
             // If the process exited *cleanly*, we can exit
-            ServeUpdate::ProcessExited { status, platform } => {
+            ServeUpdate::HandleUpdate(HandleUpdate::ProcessExited { status, platform }) => {
                 if !status.success() {
                     tracing::error!("Application [{platform}] exited with error: {status}");
                 } else {
@@ -207,11 +211,11 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 }
             }
 
-            ServeUpdate::StdoutReceived { platform, msg } => {
+            ServeUpdate::HandleUpdate(HandleUpdate::StdoutReceived { platform, msg }) => {
                 screen.push_stdio(platform, msg, tracing::Level::INFO);
             }
 
-            ServeUpdate::StderrReceived { platform, msg } => {
+            ServeUpdate::HandleUpdate(HandleUpdate::StderrReceived { platform, msg }) => {
                 screen.push_stdio(platform, msg, tracing::Level::ERROR);
             }
 

@@ -1,6 +1,6 @@
 use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
-use crate::{BuildRequest, Platform, WasmOptConfig};
+use crate::{BuildMode, BuildRequest, Platform, WasmOptConfig};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -282,27 +282,35 @@ impl AppBundle {
             server_assets: Default::default(),
         };
 
-        tracing::debug!("Assembling app bundle");
+        match bundle.build.mode {
+            BuildMode::Base | BuildMode::Fat => {
+                tracing::debug!("Assembling app bundle");
 
-        bundle.build.status_start_bundle();
-        bundle
-            .write_main_executable()
-            .await
-            .context("Failed to write main executable")?;
-        bundle.write_server_executable().await?;
-        bundle
-            .write_assets()
-            .await
-            .context("Failed to write assets")?;
-        bundle.write_metadata().await?;
-        bundle.optimize().await?;
-        bundle.pre_render_ssg_routes().await?;
-        bundle
-            .assemble()
-            .await
-            .context("Failed to assemble app bundle")?;
+                bundle.build.status_start_bundle();
+                bundle
+                    .write_main_executable()
+                    .await
+                    .context("Failed to write main executable")?;
+                bundle.write_server_executable().await?;
+                bundle
+                    .write_assets()
+                    .await
+                    .context("Failed to write assets")?;
+                bundle.write_metadata().await?;
+                bundle.optimize().await?;
+                bundle.pre_render_ssg_routes().await?;
+                bundle
+                    .assemble()
+                    .await
+                    .context("Failed to assemble app bundle")?;
 
-        tracing::debug!("Bundle created at {}", bundle.build.root_dir().display());
+                tracing::debug!("Bundle created at {}", bundle.build.root_dir().display());
+            }
+            BuildMode::Thin { .. } => {
+                tracing::debug!("Patching existing bundle");
+                bundle.write_patch().await?;
+            }
+        }
 
         Ok(bundle)
     }
@@ -530,6 +538,10 @@ impl AppBundle {
             crate::VERSION.as_str(),
         )?;
 
+        Ok(())
+    }
+
+    async fn write_patch(&self) -> Result<()> {
         Ok(())
     }
 

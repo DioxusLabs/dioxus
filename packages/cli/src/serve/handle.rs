@@ -1,10 +1,11 @@
 use crate::{AppBundle, DioxusCrate, Platform, Result};
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
+use futures_util::future::OptionFuture;
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
-    process::Stdio,
+    process::{ExitStatus, Stdio},
 };
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
@@ -48,6 +49,25 @@ pub(crate) struct AppHandle {
     pub(crate) runtime_asst_dir: Option<PathBuf>,
 }
 
+pub enum HandleUpdate {
+    /// A running process has received a stdout.
+    /// May or may not be a complete line - do not treat it as a line. It will include a line if it is a complete line.
+    ///
+    /// We will poll lines and any content in a 50ms interval
+    StdoutReceived { platform: Platform, msg: String },
+
+    /// A running process has received a stderr.
+    /// May or may not be a complete line - do not treat it as a line. It will include a line if it is a complete line.
+    ///
+    /// We will poll lines and any content in a 50ms interval
+    StderrReceived { platform: Platform, msg: String },
+
+    ProcessExited {
+        platform: Platform,
+        status: ExitStatus,
+    },
+}
+
 impl AppHandle {
     pub async fn new(app: AppBundle) -> Result<Self> {
         Ok(AppHandle {
@@ -62,6 +82,44 @@ impl AppHandle {
             entropy_app_exe: None,
             entropy_server_exe: None,
         })
+    }
+
+    pub(crate) async fn wait(&mut self) -> HandleUpdate {
+        let platform = self.app.build.build.platform();
+        use HandleUpdate::*;
+        tokio::select! {
+            Some(Ok(Some(msg))) = OptionFuture::from(self.app_stdout.as_mut().map(|f| f.next_line())) => {
+                StdoutReceived { platform, msg }
+            },
+            Some(Ok(Some(msg))) = OptionFuture::from(self.app_stderr.as_mut().map(|f| f.next_line())) => {
+                StderrReceived { platform, msg }
+            },
+            Some(status) = OptionFuture::from(self.app_child.as_mut().map(|f| f.wait())) => {
+                match status {
+                    Ok(status) => {
+                        self.app_child = None;
+                        ProcessExited { status, platform }
+                    },
+                    Err(_err) => todo!("handle error in process joining?"),
+                }
+            }
+            Some(Ok(Some(msg))) = OptionFuture::from(self.server_stdout.as_mut().map(|f| f.next_line())) => {
+                StdoutReceived { platform: Platform::Server, msg }
+            },
+            Some(Ok(Some(msg))) = OptionFuture::from(self.server_stderr.as_mut().map(|f| f.next_line())) => {
+                StderrReceived { platform: Platform::Server, msg }
+            },
+            Some(status) = OptionFuture::from(self.server_child.as_mut().map(|f| f.wait())) => {
+                match status {
+                    Ok(status) => {
+                        self.server_child = None;
+                        ProcessExited { status, platform }
+                    },
+                    Err(_err) => todo!("handle error in process joining?"),
+                }
+            }
+            else => futures_util::future::pending().await
+        }
     }
 
     pub(crate) async fn open(

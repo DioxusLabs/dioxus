@@ -20,6 +20,7 @@ use syn::spanned::Spanned;
 
 pub(crate) struct AppRunner {
     pub(crate) running: Option<AppHandle>,
+    pub(crate) app: Option<AppBundle>,
     pub(crate) krate: DioxusCrate,
     pub(crate) ignore: Gitignore,
     pub(crate) applied_hot_reload_message: HotReloadMsg,
@@ -45,6 +46,7 @@ impl AppRunner {
     pub(crate) fn start(krate: &DioxusCrate) -> Self {
         let mut runner = Self {
             running: Default::default(),
+            app: Default::default(),
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
             ignore: krate.workspace_gitignore(),
@@ -72,39 +74,8 @@ impl AppRunner {
             return futures_util::future::pending().await;
         };
 
-        use ServeUpdate::*;
-        let platform = handle.app.build.build.platform();
         tokio::select! {
-            Some(Ok(Some(msg))) = OptionFuture::from(handle.app_stdout.as_mut().map(|f| f.next_line())) => {
-                StdoutReceived { platform, msg }
-            },
-            Some(Ok(Some(msg))) = OptionFuture::from(handle.app_stderr.as_mut().map(|f| f.next_line())) => {
-                StderrReceived { platform, msg }
-            },
-            Some(status) = OptionFuture::from(handle.app_child.as_mut().map(|f| f.wait())) => {
-                match status {
-                    Ok(status) => {
-                        handle.app_child = None;
-                        ProcessExited { status, platform }
-                    },
-                    Err(_err) => todo!("handle error in process joining?"),
-                }
-            }
-            Some(Ok(Some(msg))) = OptionFuture::from(handle.server_stdout.as_mut().map(|f| f.next_line())) => {
-                StdoutReceived { platform: Platform::Server, msg }
-            },
-            Some(Ok(Some(msg))) = OptionFuture::from(handle.server_stderr.as_mut().map(|f| f.next_line())) => {
-                StderrReceived { platform: Platform::Server, msg }
-            },
-            Some(status) = OptionFuture::from(handle.server_child.as_mut().map(|f| f.wait())) => {
-                match status {
-                    Ok(status) => {
-                        handle.server_child = None;
-                        ProcessExited { status, platform }
-                    },
-                    Err(_err) => todo!("handle error in process joining?"),
-                }
-            }
+            update = handle.wait() => ServeUpdate::HandleUpdate(update),
             else => futures_util::future::pending().await
         }
     }
@@ -456,7 +427,7 @@ impl AppRunner {
         _ = std::fs::create_dir_all(&cache_dir);
     }
 
-    pub async fn patch(&mut self, bundle: AppBundle) -> Result<()> {
+    pub async fn patch(&mut self, bundle: &AppBundle) -> Result<()> {
         let Some(running) = self.running.as_mut() else {
             return Ok(());
         };
