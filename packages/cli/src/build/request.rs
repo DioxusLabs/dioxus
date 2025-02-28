@@ -10,7 +10,7 @@ use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
-    time::Instant,
+    time::{Instant, SystemTime},
 };
 use tokio::{io::AsyncBufReadExt, process::Command};
 
@@ -43,7 +43,7 @@ pub enum BuildMode {
     Fat,
 
     /// A "thin" build generated with `rustc` directly and dx as a custom linker
-    Thin { direct_rustc: Vec<Vec<String>> },
+    Thin { direct_rustc: Vec<String> },
 }
 
 pub struct CargoBuildResult {
@@ -103,12 +103,12 @@ impl BuildRequest {
     }
 
     pub(crate) async fn cargo_build(&self) -> Result<BuildArtifacts> {
-        let start = Instant::now();
+        let start = SystemTime::now();
         self.prepare_build_dir()?;
 
         tracing::debug!("Executing cargo...");
 
-        let mut cmd = self.assemble_build_command()?;
+        let mut cmd = self.build_command()?;
 
         tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
 
@@ -153,6 +153,7 @@ impl BuildRequest {
             match message {
                 Message::BuildScriptExecuted(_) => units_compiled += 1,
                 Message::TextLine(line) => {
+                    // Try to extract the direct rustc args from the output
                     if line.trim().starts_with("Running ") {
                         // trim everyting but the contents between the quotes
                         let args = line
@@ -163,6 +164,18 @@ impl BuildRequest {
                         // Parse these as shell words so we can get the direct rustc args
                         if let Ok(split) = shell_words::split(args) {
                             direct_rustc.push(split);
+                        }
+                    }
+
+                    #[derive(Debug, Deserialize)]
+                    struct RustcArtifact {
+                        artifact: PathBuf,
+                        emit: String,
+                    }
+
+                    if let Ok(artifact) = serde_json::from_str::<RustcArtifact>(&line) {
+                        if artifact.emit == "link" {
+                            output_location = Some(artifact.artifact);
                         }
                     }
 
@@ -215,7 +228,8 @@ impl BuildRequest {
         Ok(BuildArtifacts {
             exe,
             direct_rustc,
-            time_taken: start.elapsed(),
+            time_start: start,
+            time_end: SystemTime::now(),
         })
     }
 
@@ -226,42 +240,24 @@ impl BuildRequest {
         level = "trace",
         fields(dx_src = ?TraceSrc::Build)
     )]
-    fn assemble_build_command(&self) -> Result<Command> {
-        // let mut cmd = match &self.mode {
-        //     BuildMode::Fat | BuildMode::Base => {
-        //         let mut cmd = Command::new("cargo");
-        //         cmd.arg("rustc")
-        //             .current_dir(self.krate.crate_dir())
-        //             .arg("--message-format")
-        //             .arg("json-diagnostic-rendered-ansi")
-        //             .args(self.build_arguments())
-        //             .envs(self.env_vars()?);
-        //         cmd
-        //     } // BuildMode::Thin { rustc_args } => {
-        //       //     let mut cmd = Command::new(rustc_args[0].clone());
-        //       //     cmd.args(rustc_args[1..].iter())
-        //       //         .env(
-        //       //             LinkAction::ENV_VAR_NAME,
-        //       //             LinkAction::FatLink {
-        //       //                 platform: self.build.platform(),
-        //       //                 linker: None,
-        //       //                 incremental_dir: self.incremental_cache_dir(),
-        //       //             }
-        //       //             .to_json(),
-        //       //         )
-        //       //         .stdout(Stdio::piped())
-        //       //         .stderr(Stdio::piped());
-        //       //     cmd
-        //       // }
-        // };
-
-        let mut cmd = Command::new("cargo");
-        cmd.arg("rustc")
-            .current_dir(self.krate.crate_dir())
-            .arg("--message-format")
-            .arg("json-diagnostic-rendered-ansi")
-            .args(self.build_arguments())
-            .envs(self.env_vars()?);
+    fn build_command(&self) -> Result<Command> {
+        let mut cmd = match &self.mode {
+            BuildMode::Fat | BuildMode::Base => {
+                let mut cmd = Command::new("cargo");
+                cmd.arg("rustc")
+                    .current_dir(self.krate.crate_dir())
+                    .arg("--message-format")
+                    .arg("json-diagnostic-rendered-ansi")
+                    .args(self.build_arguments())
+                    .envs(self.env_vars()?);
+                cmd
+            }
+            BuildMode::Thin { direct_rustc } => {
+                let mut cmd = Command::new(direct_rustc[0].clone());
+                cmd.args(direct_rustc[1..].iter()).envs(self.env_vars()?);
+                cmd
+            }
+        };
 
         Ok(cmd)
     }
@@ -542,35 +538,37 @@ impl BuildRequest {
             // env_vars.push(("PATH", extended_path));
         };
 
-        let linker = match self.build.platform() {
-            Platform::Web => todo!(),
-            Platform::MacOS => todo!(),
-            Platform::Windows => todo!(),
-            Platform::Linux => todo!(),
-            Platform::Ios => todo!(),
-            Platform::Android => todo!(),
-            Platform::Server => todo!(),
-            Platform::Liveview => todo!(),
-        };
-
         let custom_linker = if self.build.platform() == Platform::Android {
             let ndk = self
                 .krate
                 .android_ndk()
                 .context("Could not autodetect android linker")?;
 
-            let linker = self.build.target_args.arch().android_linker(&ndk);
-            Some(linker)
+            Some(self.build.target_args.arch().android_linker(&ndk))
         } else {
             None
         };
 
         match &self.mode {
-            BuildMode::Base | BuildMode::Fat => env_vars.push((
+            BuildMode::Base => {
+                if let Some(linker) = custom_linker {
+                    env_vars.push((
+                        LinkAction::ENV_VAR_NAME,
+                        LinkAction::BaseLink {
+                            platform: self.build.platform(),
+                            linker,
+                            incremental_dir: self.incremental_cache_dir(),
+                            strip: false,
+                        }
+                        .to_json(),
+                    ));
+                }
+            }
+            BuildMode::Fat => env_vars.push((
                 LinkAction::ENV_VAR_NAME,
                 LinkAction::BaseLink {
                     platform: self.build.platform(),
-                    linker: "cc".into(),
+                    linker: custom_linker.unwrap_or_else(|| "cc".into()),
                     incremental_dir: self.incremental_cache_dir(),
                     strip: matches!(self.mode, BuildMode::Base),
                 }
@@ -580,10 +578,10 @@ impl BuildRequest {
                 LinkAction::ENV_VAR_NAME,
                 LinkAction::ThinLink {
                     platform: self.build.platform(),
-                    linker: "cc".into(),
+                    linker: custom_linker.unwrap_or_else(|| "cc".into()),
                     incremental_dir: self.incremental_cache_dir(),
-                    main_ptr: todo!(),
-                    patch_target: todo!(),
+                    main_ptr: 0,
+                    patch_target: Default::default(),
                 }
                 .to_json(),
             )),
@@ -987,43 +985,6 @@ impl BuildRequest {
         tracing::debug!("app_kotlin_out: {:?}", kotlin_dir);
 
         kotlin_dir
-    }
-
-    async fn build_cargo_with_patch(&self, patch_data: &PatchData) -> Result<PathBuf> {
-        #[derive(Debug, Deserialize)]
-        struct RustcArtifact {
-            artifact: PathBuf,
-            emit: String,
-        }
-
-        let mut child = Command::new(patch_data.direct_rustc[0].clone())
-            .args(patch_data.direct_rustc[1..].iter())
-            .env("HOTRELOAD_LINK", "reload")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
-
-        let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
-        let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
-        let mut output_location = None;
-        let mut stdout = stdout.lines();
-        let mut stderr = stderr.lines();
-
-        loop {
-            let line = tokio::select! {
-                Ok(Some(line)) = stdout.next_line() => line,
-                Ok(Some(line)) = stderr.next_line() => line,
-                else => break,
-            };
-
-            if let Ok(artifact) = serde_json::from_str::<RustcArtifact>(&line) {
-                if artifact.emit == "link" {
-                    output_location = Some(Utf8PathBuf::from_path_buf(artifact.artifact).unwrap());
-                }
-            }
-        }
-
-        todo!()
     }
 
     pub(crate) fn is_patch(&self) -> bool {

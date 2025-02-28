@@ -106,22 +106,46 @@ pub async fn attempt_partial_link(
         adrp_imports.remove(s);
     }
 
-    // Assemble the stub
-    let stub_data = make_stub_file(proc_main_addr, patch_target, adrp_imports);
-    let stub_file = work_dir.join("stub.o");
-    std::fs::write(&stub_file, stub_data).unwrap();
+    // // Assemble the stub
+    // let stub_data = make_stub_file(proc_main_addr, patch_target, adrp_imports);
+    // let stub_file = work_dir.join("stub.o");
+    // std::fs::write(&stub_file, stub_data).unwrap();
 
+    // let out = Command::new("cc")
+    //     .args(modified.iter().map(|(f, _)| f))
+    //     .arg(stub_file)
+    //     .arg("-dylib")
+    //     .arg("-Wl,-undefined,dynamic_lookup")
+    //     .arg("-Wl,-unexported_symbol,_main")
+    //     .arg("-arch")
+    //     .arg("arm64")
+    //     .arg("-dead_strip")
+    //     .arg("-o")
+    //     .arg(out_path)
+    //     .output()
+    //     .await
+    //     .unwrap();
+
+    // -O0 ? supposedly faster
+    // -reproducible - even better?
+    // -exported_symbol and friends - could help with dead-code stripping
+    // -e symbol_name - for setting the entrypoint
+    // -keep_relocs ?
+
+    // run the linker, but unexport the `_main` symbol
     let out = Command::new("cc")
         .args(modified.iter().map(|(f, _)| f))
-        .arg(stub_file)
         .arg("-dylib")
-        .arg("-Wl,-undefined,dynamic_lookup")
+        .arg("-undefined")
+        .arg("dynamic_lookup")
         .arg("-Wl,-unexported_symbol,_main")
         .arg("-arch")
         .arg("arm64")
-        .arg("-dead_strip")
+        .arg("-dead_strip") // maybe?
         .arg("-o")
-        .arg(out_path)
+        .arg(&out_path)
+        // .stdout(Stdio::piped())
+        // .stderr(Stdio::piped())
         .output()
         .await
         .unwrap();
@@ -129,29 +153,6 @@ pub async fn attempt_partial_link(
     let err = String::from_utf8_lossy(&out.stderr);
     println!("err: {err}");
     std::fs::write(work_dir.join("link_errs_partial.txt"), &*err).unwrap();
-
-    // // -O0 ? supposedly faster
-    // // -reproducible - even better?
-    // // -exported_symbol and friends - could help with dead-code stripping
-    // // -e symbol_name - for setting the entrypoint
-    // // -keep_relocs ?
-
-    // // run the linker, but unexport the `_main` symbol
-    // let res = Command::new("cc")
-    //     .args(object_files)
-    //     .arg("-dylib")
-    //     .arg("-undefined")
-    //     .arg("dynamic_lookup")
-    //     .arg("-Wl,-unexported_symbol,_main")
-    //     .arg("-arch")
-    //     .arg("arm64")
-    //     .arg("-dead_strip") // maybe?
-    //     .arg("-o")
-    //     .arg(&out_file)
-    //     .stdout(Stdio::piped())
-    //     .stderr(Stdio::piped())
-    //     .output()
-    //     .await?;
 }
 
 /// todo: detect if the user specified a custom linker

@@ -177,7 +177,7 @@ impl Builder {
         update
     }
 
-    pub(crate) fn patch_rebuild(&mut self, args: BuildArgs, direct_rustc: Vec<Vec<String>>) {
+    pub(crate) fn patch_rebuild(&mut self, args: BuildArgs, direct_rustc: Vec<String>) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all();
 

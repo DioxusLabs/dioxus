@@ -88,13 +88,14 @@ impl AppRunner {
         self.cleanup().await;
 
         // Add some cute logging
+        let time_taken = app.app.time_end.duration_since(app.app.time_start).unwrap();
         if self.builds_opened == 0 {
             tracing::info!(
                 "Build completed successfully in {:?}ms, launching app! 💫",
-                app.app.time_taken.as_millis()
+                time_taken.as_millis()
             );
         } else {
-            tracing::info!("Build completed in {:?}ms", app.app.time_taken.as_millis());
+            tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
         }
 
         // Start the new app before we kill the old one to give it a little bit of time
@@ -429,6 +430,6 @@ impl AppRunner {
 
         // running.app.write_patch(bundle).await
 
-        todo!()
+        Ok(())
     }
 }

@@ -6,11 +6,14 @@ use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::future::Future;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::{collections::HashSet, io::Write};
+use std::{future::Future, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
+use std::{pin::Pin, time::SystemTime};
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 
@@ -107,7 +110,8 @@ pub struct UnbundledApp {
 pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: Vec<Vec<String>>,
-    pub(crate) time_taken: Duration,
+    pub(crate) time_start: SystemTime,
+    pub(crate) time_end: SystemTime,
 }
 
 impl AppBundle {
@@ -541,7 +545,33 @@ impl AppBundle {
         Ok(())
     }
 
+    /// patch-{time}.(so/dll/dylib) (next to the main exe)
+    pub fn patch_exe(&self) -> PathBuf {
+        let path = self.main_exe().with_file_name(format!(
+            "patch-{}",
+            self.app
+                .time_start
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis(),
+        ));
+
+        let extension = match self.build.build.platform() {
+            Platform::Web => "wasm",
+            Platform::MacOS => "dylib",
+            Platform::Windows => "dll",
+            Platform::Linux => "so",
+            Platform::Ios => "dylib",
+            Platform::Android => "so",
+            Platform::Server => todo!(),
+            Platform::Liveview => todo!(),
+        };
+
+        path.with_extension(extension)
+    }
+
     async fn write_patch(&self) -> Result<()> {
+        std::fs::copy(&self.app.exe, self.patch_exe())?;
         Ok(())
     }
 
