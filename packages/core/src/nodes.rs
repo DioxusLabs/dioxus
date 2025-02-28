@@ -77,7 +77,7 @@ pub struct VNodeInner {
     ///             color: "{color}",
     ///         }
     ///     }
-    /// };
+    /// }
     /// ```
     ///
     /// Would be represented as:
@@ -382,7 +382,9 @@ fn static_items_merged() -> bool {
     fn a() {}
     fn b() {}
 
-    a as fn() == b as fn()
+    // a as fn() == b as fn()
+    // Fix warning: function pointer comparisons do not produce meaningful results since their addresses are not guaranteed to be unique
+    std::ptr::fn_addr_eq(a as fn(), b as fn())
 }
 
 impl std::hash::Hash for Template {
