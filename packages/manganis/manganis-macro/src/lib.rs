@@ -19,6 +19,11 @@ use linker::generate_link_section;
 /// # use manganis::{asset, Asset};
 /// const _: Asset = asset!("/assets/asset.txt");
 /// ```
+/// Macros like `concat!` and `env!` are supported in the asset path.
+/// ```rust
+/// # use manganis::{asset, Asset};
+/// const _: Asset = asset!(concat!("/assets/", env!("CARGO_CRATE_NAME"), ".dat"));
+/// ```
 ///
 /// # Images
 ///
