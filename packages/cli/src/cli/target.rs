@@ -48,6 +48,10 @@ pub(crate) struct TargetArgs {
     /// Rustc platform triple
     #[clap(long)]
     pub(crate) target: Option<String>,
+
+    /// Specify the server rustc target triple.
+    #[clap(long)]
+    pub(crate) server_target: Option<String>,
 }
 
 impl TargetArgs {
