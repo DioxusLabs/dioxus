@@ -247,7 +247,7 @@ wasmparser = "0.225.0"
 itertools = "0.14.0"
 
 # desktop
-wry = { version = "0.45.0", default-features = false }
+wry = { version = "0.50.1", default-features = false }
 tao = { version = "0.30.8", features = ["rwh_05"] }
 webbrowser = "1.0.1"
 infer = "0.16.0"
