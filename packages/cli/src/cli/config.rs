@@ -14,10 +14,6 @@ pub(crate) enum Config {
         #[clap(long)]
         #[serde(default)]
         force: bool,
-
-        /// Project default platform
-        #[clap(long, default_value = "web")]
-        platform: String,
     },
 
     /// Format print Dioxus config.
@@ -78,11 +74,7 @@ impl Config {
     pub(crate) fn config(self) -> Result<StructuredOutput> {
         let crate_root = crate_root()?;
         match self {
-            Config::Init {
-                name,
-                force,
-                platform,
-            } => {
+            Config::Init { name, force } => {
                 let conf_path = crate_root.join("Dioxus.toml");
                 if conf_path.is_file() && !force {
                     tracing::warn!(
@@ -92,8 +84,7 @@ impl Config {
                 }
                 let mut file = File::create(conf_path)?;
                 let content = String::from(include_str!("../../assets/dioxus.toml"))
-                    .replace("{{project-name}}", &name)
-                    .replace("{{default-platform}}", &platform);
+                    .replace("{{project-name}}", &name);
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Init config file completed.");
             }
