@@ -20,7 +20,6 @@ use syn::spanned::Spanned;
 
 pub(crate) struct AppRunner {
     pub(crate) running: Option<AppHandle>,
-    pub(crate) app: Option<AppBundle>,
     pub(crate) krate: DioxusCrate,
     pub(crate) ignore: Gitignore,
     pub(crate) applied_hot_reload_message: HotReloadMsg,
@@ -46,7 +45,6 @@ impl AppRunner {
     pub(crate) fn start(krate: &DioxusCrate) -> Self {
         let mut runner = Self {
             running: Default::default(),
-            app: Default::default(),
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
             ignore: krate.workspace_gitignore(),
@@ -74,10 +72,7 @@ impl AppRunner {
             return futures_util::future::pending().await;
         };
 
-        tokio::select! {
-            update = handle.wait() => ServeUpdate::HandleUpdate(update),
-            else => futures_util::future::pending().await
-        }
+        ServeUpdate::HandleUpdate(handle.wait().await)
     }
 
     /// Finally "bundle" this app and return a handle to it
