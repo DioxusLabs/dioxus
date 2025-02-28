@@ -29,11 +29,13 @@ impl VNode {
         );
 
         // If the templates are different, we need to replace the entire template
+        // if cfg!(not(debug_assertions)) {
         if self.template != new.template {
             let mount_id = self.mount.get();
             let parent = dom.get_mounted_parent(mount_id);
             return self.replace(std::slice::from_ref(new), parent, dom, to);
         }
+        // }
 
         self.move_mount_to(new, dom);
 
