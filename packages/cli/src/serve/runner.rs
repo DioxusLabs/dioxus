@@ -423,13 +423,15 @@ impl AppRunner {
         _ = std::fs::create_dir_all(&cache_dir);
     }
 
-    pub async fn patch(&mut self, bundle: &AppBundle) -> Result<()> {
-        let Some(running) = self.running.as_mut() else {
-            return Ok(());
-        };
+    pub async fn patch(&mut self, bundle: &AppBundle) -> Result<HashMap<String, usize>> {
+        let time_taken = bundle
+            .app
+            .time_end
+            .duration_since(bundle.app.time_start)
+            .unwrap();
 
-        // running.app.write_patch(bundle).await
+        tracing::info!("Hot-patch completed in {:?}ms", time_taken.as_millis());
 
-        Ok(())
+        Ok(HashMap::new())
     }
 }

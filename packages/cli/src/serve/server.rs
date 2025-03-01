@@ -29,6 +29,7 @@ use futures_util::{
 use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     convert::Infallible,
     fs, io,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
@@ -318,9 +319,14 @@ impl WebServer {
         }
     }
 
-    pub(crate) async fn send_patch(&mut self, app: PathBuf) {
+    pub(crate) async fn send_patch(
+        &mut self,
+        app: PathBuf,
+        changed_symbols: HashMap<String, usize>,
+    ) {
         self.send_devserver_message(DevserverMsg::HotReload(HotReloadMsg {
             patch: Some(app),
+            changed_symbols,
             ..Default::default()
         }))
         .await;

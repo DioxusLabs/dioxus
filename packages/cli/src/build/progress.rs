@@ -70,6 +70,7 @@ impl BuildRequest {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Starting {
                 is_server: self.build.platform() == Platform::Server,
+                patch: self.is_patch(),
                 crate_count,
             },
         });

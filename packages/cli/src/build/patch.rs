@@ -139,6 +139,7 @@ pub async fn attempt_partial_link(
         .arg("-undefined")
         .arg("dynamic_lookup")
         .arg("-Wl,-unexported_symbol,_main")
+        // .arg("-Wl,-export-dynamic")
         .arg("-arch")
         .arg("arm64")
         .arg("-dead_strip") // maybe?

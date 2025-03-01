@@ -1,13 +1,36 @@
-use dioxus_core::{ScopeId, VirtualDom};
+use std::{any::TypeId, cell::Cell, ffi::CString, rc::Rc};
+
+use dioxus_core::{
+    prelude::{consume_context, try_consume_context},
+    Element, ScopeId, VirtualDom,
+};
 pub use dioxus_devtools_types::*;
 use dioxus_signals::{GlobalKey, Writable};
+use libc::dlsym;
 use warnings::Warning;
+
+pub struct Devtools {
+    main_fn: Cell<fn() -> Element>,
+}
+
+impl Devtools {
+    pub fn new(entry: fn() -> Element) -> Self {
+        Self {
+            main_fn: Cell::new(entry),
+        }
+    }
+
+    pub fn main_fn(&self) -> fn() -> Element {
+        self.main_fn.get()
+    }
+}
 
 /// Applies template and literal changes to the VirtualDom
 ///
 /// Assets need to be handled by the renderer.
 pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
     dom.runtime().on_scope(ScopeId::ROOT, || {
+        // Update signals...
         let ctx = dioxus_signals::get_global_context();
 
         for template in &msg.templates {
@@ -24,6 +47,43 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
                         signal.set(Some(value));
                     });
                 });
+            }
+        }
+
+        // Patch the binary
+        println!(
+            "patching binary, looking for id in scope {:?}: {:?}",
+            dioxus_core::prelude::current_scope_id(),
+            TypeId::of::<Rc<Devtools>>()
+        );
+        if let Some(devtools) = try_consume_context::<Rc<Devtools>>() {
+            println!("using devtools context with patch {:?}", msg.patch);
+            if let Some(patch) = msg.patch.clone() {
+                // we *need* to leak the library otherwise it will cause issues with the process not exiting properly
+                // TODO! this needs to be only *ONCE* per process so backend stuff works too
+                let lib = unsafe { libloading::Library::new(patch).ok().unwrap() };
+                let lib = Box::leak(Box::new(lib));
+
+                hot_fn::Runtime::patch_from_binary(&lib);
+                // let main_symbol = CString::new("main").unwrap();
+                // let main_ptr = unsafe { dlsym(libc::RTLD_DEFAULT, main_symbol.as_ptr()) };
+                // println!("main_ptr: {:#?}", main_ptr);
+
+                // let our_main = unsafe {
+                //     dlsym(handle, symbol)
+                // }
+
+                // let new_main = unsafe {
+                //     let new_main = lib
+                //         .get::<unsafe extern "C" fn() -> Element>(b"__hotreload_main") // does this beed to be null terminated?
+                //         .unwrap();
+                //     std::mem::transmute::<*mut (), fn() -> Element>(
+                //         new_main.try_as_raw_ptr().unwrap() as *mut (),
+                //     )
+                // };
+
+                // devtools.main_fn.replace(new_main);
+                // dioxus_core::prelude::force_all_dirty();
             }
         }
     });

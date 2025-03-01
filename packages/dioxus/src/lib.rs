@@ -32,6 +32,8 @@ pub use dioxus_core::{CapturedError, Ok, Result};
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 mod launch;
 
+mod hotpatch;
+
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 pub use crate::launch::*;

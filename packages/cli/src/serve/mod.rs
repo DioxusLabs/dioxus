@@ -108,7 +108,8 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                         if let Some(handle) = runner.running.as_ref() {
                             builder.patch_rebuild(
                                 args.build_arguments.clone(),
-                                handle.app.app.direct_rustc.last().unwrap().clone(),
+                                vec![],
+                                // handle.app.app.direct_rustc.last().unwrap().clone(),
                             );
 
                             runner.clear_hot_reload_changes();
@@ -175,8 +176,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     }
 
                     BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
-                        runner.patch(&bundle).await?;
-                        devserver.send_patch(bundle.patch_exe()).await;
+                        let changed_symbols = runner.patch(&bundle).await?;
+                        devserver
+                            .send_patch(bundle.patch_exe(), changed_symbols)
+                            .await;
                     }
 
                     BuildUpdate::BuildReady { bundle } => {

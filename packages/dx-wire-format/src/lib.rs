@@ -47,6 +47,7 @@ pub enum BuildStage {
     Starting {
         crate_count: usize,
         is_server: bool,
+        patch: bool,
     },
     InstallingTooling,
     Compiling {

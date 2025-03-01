@@ -211,9 +211,14 @@ impl LaunchBuilder {
         self
     }
 
-    fn launch_inner(self, app: fn() -> Element) {
+    /// Launch your application.
+    pub fn launch(mut self, app: fn() -> Element) {
         #[cfg(feature = "logger")]
         dioxus_logger::initialize_default();
+
+        let app = crate::hotpatch::set_app(app);
+
+        hot_fn::Runtime::initialize();
 
         #[cfg(all(feature = "fullstack", any(feature = "desktop", feature = "mobile")))]
         {
@@ -232,11 +237,6 @@ impl LaunchBuilder {
 
         let cfg = self.configs;
         (self.launch_fn)(app, self.contexts, cfg);
-    }
-
-    /// Launch your application.
-    pub fn launch(self, app: fn() -> Element) {
-        self.launch_inner(app);
     }
 }
 

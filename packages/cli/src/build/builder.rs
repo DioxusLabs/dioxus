@@ -101,6 +101,7 @@ impl Builder {
                         BuildStage::Starting {
                             crate_count,
                             is_server,
+                            ..
                         } => {
                             if *is_server {
                                 self.expected_crates_server = *crate_count;

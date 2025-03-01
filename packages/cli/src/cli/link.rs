@@ -92,16 +92,32 @@ impl LinkAction {
                     object_files.as_ref(),
                 );
 
-                crate::build::attempt_partial_link(
-                    linker,
-                    incremental_dir.clone(),
-                    incremental_dir.join("old"),
-                    incremental_dir.join("new"),
-                    main_ptr,
-                    patch_target,
-                    out_file.clone().into(),
-                )
-                .await;
+                let res = Command::new("cc")
+                    .args(object_files)
+                    .arg("-dylib")
+                    .arg("-undefined")
+                    .arg("dynamic_lookup")
+                    .arg("-Wl,-unexported_symbol,_main")
+                    .arg("-arch")
+                    .arg("arm64")
+                    .arg("-dead_strip") // maybe?
+                    .arg("-o")
+                    .arg(&out_file)
+                    // .stdout(Stdio::piped())
+                    // .stderr(Stdio::piped())
+                    .output()
+                    .await?;
+
+                // crate::build::attempt_partial_link(
+                //     linker,
+                //     incremental_dir.clone(),
+                //     incremental_dir.join("old"),
+                //     incremental_dir.join("new"),
+                //     main_ptr,
+                //     patch_target,
+                //     out_file.clone().into(),
+                // )
+                // .await;
             }
         }
 

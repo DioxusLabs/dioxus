@@ -233,31 +233,28 @@ impl BuildRequest {
         })
     }
 
-    pub(crate) async fn build_thin_rustc(&self) {}
-
     #[tracing::instrument(
         skip(self),
         level = "trace",
         fields(dx_src = ?TraceSrc::Build)
     )]
     fn build_command(&self) -> Result<Command> {
-        let mut cmd = match &self.mode {
-            BuildMode::Fat | BuildMode::Base => {
-                let mut cmd = Command::new("cargo");
-                cmd.arg("rustc")
-                    .current_dir(self.krate.crate_dir())
-                    .arg("--message-format")
-                    .arg("json-diagnostic-rendered-ansi")
-                    .args(self.build_arguments())
-                    .envs(self.env_vars()?);
-                cmd
-            }
-            BuildMode::Thin { direct_rustc } => {
+        if let BuildMode::Thin { direct_rustc } = &self.mode {
+            if !direct_rustc.is_empty() {
                 let mut cmd = Command::new(direct_rustc[0].clone());
                 cmd.args(direct_rustc[1..].iter()).envs(self.env_vars()?);
-                cmd
+                return Ok(cmd);
             }
-        };
+        }
+
+        let mut cmd = Command::new("cargo");
+
+        cmd.arg("rustc")
+            .current_dir(self.krate.crate_dir())
+            .arg("--message-format")
+            .arg("json-diagnostic-rendered-ansi")
+            .args(self.build_arguments())
+            .envs(self.env_vars()?);
 
         Ok(cmd)
     }

@@ -71,14 +71,6 @@ fn make_ws(
             match serde_json::from_str::<DevserverMsg>(&string) {
                 Ok(DevserverMsg::HotReload(hr)) => _ = tx_.unbounded_send(hr),
 
-                Ok(DevserverMsg::BinaryPatch(bp)) => {
-                    // load the wasm file
-                    #[wasm_bindgen(inline_js = "export function add(a, b) { return a + b; }")]
-                    extern "C" {
-                        fn load_patch(path: &str) -> u32;
-                    }
-                }
-
                 // todo: we want to throw a screen here that shows the user that the devserver has disconnected
                 // Would be nice to do that with dioxus itself or some html/css
                 // But if the dev server shutsdown we don't want to be super aggressive about it... let's
