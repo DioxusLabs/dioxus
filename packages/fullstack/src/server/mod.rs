@@ -65,11 +65,13 @@ use axum::{
     response::IntoResponse,
 };
 use dioxus_lib::prelude::{Element, VirtualDom};
-use http::header::*;
 
 use std::sync::Arc;
 
-use crate::{prelude::*, ContextProviders};
+use crate::axum_server_fn::add_server_context;
+use crate::prelude::*;
+
+use crate::ContextProviders;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
@@ -175,25 +177,11 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    fn register_server_functions_with_context(
-        mut self,
-        context_providers: ContextProviders,
-    ) -> Self {
-        use http::method::Method;
-
-        for (path, method) in server_fn::axum::server_fn_paths() {
-            tracing::trace!("Registering server function: {} {}", method, path);
-            let context_providers = context_providers.clone();
-            let handler = move |req| handle_server_fns_inner(path, context_providers, req);
-            self = match method {
-                Method::GET => self.route(path, get(handler)),
-                Method::POST => self.route(path, post(handler)),
-                Method::PUT => self.route(path, put(handler)),
-                _ => unimplemented!("Unsupported server function method: {}", method),
-            };
-        }
-
-        self
+    fn register_server_functions_with_context(self, context_providers: ContextProviders) -> Self {
+        <Self as crate::axum_server_fn::DioxusRouterExt<S>>::register_server_functions_with_context(
+            self,
+            context_providers,
+        )
     }
 
     fn serve_static_assets(mut self) -> Self {
@@ -279,13 +267,6 @@ fn apply_request_parts_to_response<B>(
     let mut_headers = response.headers_mut();
     for (key, value) in headers.iter() {
         mut_headers.insert(key, value.clone());
-    }
-}
-
-fn add_server_context(server_context: &DioxusServerContext, context_providers: &ContextProviders) {
-    for index in 0..context_providers.len() {
-        let context_providers = context_providers.clone();
-        server_context.insert_boxed_factory(Box::new(move || context_providers[index]()));
     }
 }
 
@@ -434,101 +415,4 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(body::Body::new(format!("Error: {}", e)))
         .unwrap()
-}
-
-/// A handler for Dioxus server functions. This will run the server function and return the result.
-async fn handle_server_fns_inner(
-    path: &str,
-    additional_context: ContextProviders,
-    req: Request<Body>,
-) -> impl IntoResponse {
-    use server_fn::middleware::Service;
-
-    let path_string = path.to_string();
-
-    let future = move || async move {
-        let (parts, body) = req.into_parts();
-        let req = Request::from_parts(parts.clone(), body);
-        let method = req.method().clone();
-
-        if let Some(mut service) =
-            server_fn::axum::get_server_fn_service(&path_string, method)
-        {
-            // Create the server context with info from the request
-            let server_context = DioxusServerContext::new(parts);
-            // Provide additional context from the render state
-            add_server_context(&server_context, &additional_context);
-
-            // store Accepts and Referrer in case we need them for redirect (below)
-            let accepts_html = req
-                .headers()
-                .get(ACCEPT)
-                .and_then(|v| v.to_str().ok())
-                .map(|v| v.contains("text/html"))
-                .unwrap_or(false);
-            let referrer = req.headers().get(REFERER).cloned();
-
-            // actually run the server fn (which may use the server context)
-            let fut = with_server_context(server_context.clone(), || service.run(req));
-            let mut res = ProvideServerContext::new(fut, server_context.clone()).await;
-
-            // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
-            // Location set, then redirect to Referer
-            if accepts_html {
-                if let Some(referrer) = referrer {
-                    let has_location = res.headers().get(LOCATION).is_some();
-                    if !has_location {
-                        *res.status_mut() = StatusCode::FOUND;
-                        res.headers_mut().insert(LOCATION, referrer);
-                    }
-                }
-            }
-
-            // apply the response parts from the server context to the response
-            let mut res_options = server_context.response_parts_mut();
-            res.headers_mut().extend(res_options.headers.drain());
-
-            Ok(res)
-        } else {
-            Response::builder().status(StatusCode::BAD_REQUEST).body(
-                {
-                    #[cfg(target_family = "wasm")]
-                    {
-                        Body::from(format!(
-                            "No server function found for path: {path_string}\nYou may need to explicitly register the server function with `register_explicit`, rebuild your wasm binary to update a server function link or make sure the prefix your server and client use for server functions match.",
-                        ))
-                    }
-                    #[cfg(not(target_family = "wasm"))]
-                    {
-                        Body::from(format!(
-                            "No server function found for path: {path_string}\nYou may need to rebuild your wasm binary to update a server function link or make sure the prefix your server and client use for server functions match.",
-                        ))
-                    }
-                }
-            )
-        }
-        .expect("could not build Response")
-    };
-    #[cfg(target_arch = "wasm32")]
-    {
-        use futures_util::future::FutureExt;
-
-        let result = tokio::task::spawn_local(future);
-        let result = result.then(|f| async move { f.unwrap() });
-        result.await.unwrap_or_else(|e| {
-            use server_fn::error::NoCustomError;
-            use server_fn::error::ServerFnErrorSerde;
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ServerFnError::<NoCustomError>::ServerError(e.to_string())
-                    .ser()
-                    .unwrap_or_default(),
-            )
-                .into_response()
-        })
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        future().await
-    }
 }
