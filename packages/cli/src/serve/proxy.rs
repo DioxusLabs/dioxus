@@ -15,6 +15,7 @@ use hyper_util::{
     client::legacy::{self, connect::HttpConnector},
     rt::TokioExecutor,
 };
+use rustls::crypto::ring;
 
 #[derive(Debug, Clone)]
 struct ProxyClient {
@@ -24,6 +25,10 @@ struct ProxyClient {
 
 impl ProxyClient {
     fn new(url: Uri) -> Self {
+        // Need to initialize the default crypto provider before we start the server
+        // https://github.com/rustls/rustls/issues/1938
+        // The thread which wins will install the provider
+        let _ = ring::default_provider().install_default();
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
             .unwrap()
