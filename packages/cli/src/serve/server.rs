@@ -27,6 +27,7 @@ use futures_util::{
     StreamExt,
 };
 use hyper::HeaderMap;
+use rustls::crypto::ring;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
@@ -116,7 +117,7 @@ impl WebServer {
         // https://github.com/rustls/rustls/issues/1938
         // This is needed for WSS (dev proxy) / HTTPS (local dev server test)
         // The thread which wins will install the provider
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let _ = ring::default_provider().install_default();
 
         let router = build_devserver_router(
             args,
