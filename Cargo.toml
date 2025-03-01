@@ -191,7 +191,7 @@ tauri-utils = { version = "=2.1.1" }
 tauri-bundler = { version = "=2.2.3" }
 lru = "0.12.2"
 async-trait = "0.1.77"
-axum = "0.7.0"
+axum = { version = "0.7.0", default-features = false }
 axum-server = { version = "0.7.1", default-features = false }
 tower = "0.4.13"
 http = "1.0.0"
@@ -348,6 +348,7 @@ rand = { version = "0.8.4", features = ["small_rng"] }
 form_urlencoded = "1.2.0"
 async-std = "1.12.0"
 web-time = "1.1.0"
+axum = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
