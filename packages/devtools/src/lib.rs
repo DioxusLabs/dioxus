@@ -58,10 +58,14 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
         );
         if let Some(devtools) = try_consume_context::<Rc<Devtools>>() {
             println!("using devtools context with patch {:?}", msg.patch);
-            if let Some(patch) = msg.patch.clone() {
+            if let Some(so) = msg.patch.clone() {
                 // we *need* to leak the library otherwise it will cause issues with the process not exiting properly
                 // TODO! this needs to be only *ONCE* per process so backend stuff works too
-                let lib = unsafe { libloading::Library::new(patch).ok().unwrap() };
+                // let lib = unsafe { libloading::Library::new(patch).unwrap() };
+                use libloading::os::unix::{RTLD_GLOBAL, RTLD_LAZY};
+                let lib = unsafe {
+                    libloading::os::unix::Library::open(Some(so), RTLD_LAZY | RTLD_GLOBAL).unwrap()
+                };
                 let lib = Box::leak(Box::new(lib));
 
                 hot_fn::Runtime::patch_from_binary(&lib);
@@ -83,7 +87,7 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
                 // };
 
                 // devtools.main_fn.replace(new_main);
-                // dioxus_core::prelude::force_all_dirty();
+                dioxus_core::prelude::force_all_dirty();
             }
         }
     });

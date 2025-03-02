@@ -239,13 +239,13 @@ impl BuildRequest {
         fields(dx_src = ?TraceSrc::Build)
     )]
     fn build_command(&self) -> Result<Command> {
-        if let BuildMode::Thin { direct_rustc } = &self.mode {
-            if !direct_rustc.is_empty() {
-                let mut cmd = Command::new(direct_rustc[0].clone());
-                cmd.args(direct_rustc[1..].iter()).envs(self.env_vars()?);
-                return Ok(cmd);
-            }
-        }
+        // if let BuildMode::Thin { direct_rustc } = &self.mode {
+        //     if !direct_rustc.is_empty() {
+        //         let mut cmd = Command::new(direct_rustc[0].clone());
+        //         cmd.args(direct_rustc[1..].iter()).envs(self.env_vars()?);
+        //         return Ok(cmd);
+        //     }
+        // }
 
         let mut cmd = Command::new("cargo");
 

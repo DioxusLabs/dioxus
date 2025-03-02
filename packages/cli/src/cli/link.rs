@@ -53,11 +53,14 @@ impl LinkAction {
             } => {
                 // Make sure we *don't* dead-strip the binary so every library symbol still exists.
                 //  This is required for thin linking to work correctly.
-                let args = args
+                let mut args = args
                     .into_iter()
                     .skip(1)
                     .filter(|arg| arg != "-Wl,-dead_strip" && !strip)
                     .collect::<Vec<String>>();
+
+                // this is ld64 only, we need --whole-archive for gnu/ld
+                args.push("-Wl,-all_load".to_string());
 
                 // Persist the cache of incremental files
                 cache_incrementals(
@@ -97,10 +100,10 @@ impl LinkAction {
                     .arg("-dylib")
                     .arg("-undefined")
                     .arg("dynamic_lookup")
-                    .arg("-Wl,-unexported_symbol,_main")
+                    // .arg("-Wl,-unexported_symbol,_main")
                     .arg("-arch")
                     .arg("arm64")
-                    .arg("-dead_strip") // maybe?
+                    // .arg("-dead_strip") // maybe?
                     .arg("-o")
                     .arg(&out_file)
                     // .stdout(Stdio::piped())

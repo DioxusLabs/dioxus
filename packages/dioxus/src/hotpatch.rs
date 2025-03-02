@@ -28,5 +28,5 @@ pub fn __hotreload_main() -> Element {
         provide_root_context(Rc::new(dioxus_devtools::Devtools::new(app)))
     });
 
-    unsafe { __HOTRELOAD_APP.unwrap()() }
+    hot_fn::Runtime::current(unsafe { __HOTRELOAD_APP.unwrap() })()
 }

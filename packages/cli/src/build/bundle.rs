@@ -391,6 +391,8 @@ impl AppBundle {
             | Platform::Ios
             | Platform::Liveview
             | Platform::Server => {
+                _ = std::fs::remove_dir_all(self.build.exe_dir());
+                std::fs::create_dir_all(self.build.exe_dir())?;
                 std::fs::copy(&self.app.exe, self.main_exe())?;
             }
         }
@@ -567,7 +569,7 @@ impl AppBundle {
             Platform::Liveview => todo!(),
         };
 
-        path.with_extension(extension)
+        path.with_extension("")
     }
 
     async fn write_patch(&self) -> Result<()> {

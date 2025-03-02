@@ -183,3 +183,5 @@ pub use dioxus_ssr as ssr;
 pub use warnings;
 
 pub use dioxus_config_macros as config_macros;
+
+pub use hot_fn;

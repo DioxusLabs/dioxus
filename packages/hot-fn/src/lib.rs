@@ -93,7 +93,7 @@ impl Runtime {
         }
     }
 
-    pub fn patch_from_binary(lib: &libloading::Library) {
+    pub fn patch_from_binary(lib: &libloading::os::unix::Library) {
         let mut handle = WRITER.get().unwrap().lock().unwrap();
         let mut guard = handle.guard();
 
@@ -114,7 +114,7 @@ impl Runtime {
                     println!("Failed to find {:#?}", sname);
                     continue;
                 };
-                let ptr = sym.try_as_raw_ptr().unwrap() as *mut ();
+                let ptr = sym.as_raw_ptr() as *mut ();
                 guard.insert(k, ptr as usize);
             }
 
