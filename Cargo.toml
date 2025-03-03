@@ -190,7 +190,7 @@ tauri-utils = { version = "=2.1.1" }
 tauri-bundler = { version = "=2.2.3" }
 lru = "0.12.2"
 async-trait = "0.1.77"
-axum = "0.7.0"
+axum = "0.8.1"
 axum-server = { version = "0.7.1", default-features = false }
 tower = "0.4.13"
 http = "1.0.0"
