@@ -166,6 +166,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                             .open(
                                 bundle,
                                 devserver.devserver_address(),
+                                devserver.displayed_address(),
                                 devserver.proxied_server_address(),
                                 args.open.unwrap_or(false),
                             )

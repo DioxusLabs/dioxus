@@ -147,13 +147,30 @@ impl DynamicLiteralPool {
         }
     }
 
+    // TODO: This should be marked as private in the next major release
     pub fn get_component_property<'a, T>(
         &self,
         id: usize,
         hot_reload: &'a HotReloadedTemplate,
         f: impl FnOnce(&'a HotReloadLiteral) -> Option<T>,
     ) -> Option<T> {
-        f(hot_reload.component_values.get(id)?)
+        let value = hot_reload.component_values.get(id)?;
+        f(value)
+    }
+
+    fn get_component_property_or_default<'a, T: Default>(
+        &self,
+        id: usize,
+        hot_reload: &'a HotReloadedTemplate,
+        f: impl FnOnce(&'a HotReloadLiteral) -> Option<T>,
+    ) -> Option<T> {
+        // If the component was removed since the last hot reload, the hot reload template may not
+        // have the property. If that is the case, just use a default value since the component is
+        // never rendered.
+        if id >= hot_reload.component_values.len() {
+            return Some(T::default());
+        }
+        self.get_component_property(id, hot_reload, f)
     }
 
     /// Get a component property of a specific type at the component property index
@@ -169,26 +186,25 @@ impl DynamicLiteralPool {
             *(Box::new(t) as Box<dyn Any>).downcast::<T2>().unwrap()
         }
         let grab_float = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_float).unwrap_or_else(|| {
+            self.get_component_property_or_default(id, hot_reload, HotReloadLiteral::as_float).unwrap_or_else(|| {
                 tracing::error!("Expected a float component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
                 Default::default()
-
-        })
+            })
         };
         let grab_int = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_int).unwrap_or_else(|| {
+            self.get_component_property_or_default(id, hot_reload, HotReloadLiteral::as_int).unwrap_or_else(|| {
                 tracing::error!("Expected a integer component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
                 Default::default()
             })
         };
         let grab_bool = || {
-            self.get_component_property(id, hot_reload, HotReloadLiteral::as_bool).unwrap_or_else(|| {
+            self.get_component_property_or_default(id, hot_reload, HotReloadLiteral::as_bool).unwrap_or_else(|| {
                 tracing::error!("Expected a bool component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
                 Default::default()
             })
         };
         let grab_fmted = || {
-            self.get_component_property(id, hot_reload, |fmted| HotReloadLiteral::as_fmted(fmted).map(|segments| self.render_formatted(segments))).unwrap_or_else(|| {
+            self.get_component_property_or_default(id, hot_reload, |fmted| HotReloadLiteral::as_fmted(fmted).map(|segments| self.render_formatted(segments))).unwrap_or_else(|| {
                 tracing::error!("Expected a string component property, because the type was {}. The CLI gave the hot reloading engine a type of {:?}. This is probably caused by a bug in dioxus hot reloading. Please report this issue.", std::any::type_name::<T>(), hot_reload.component_values.get(id));
                 Default::default()
             })

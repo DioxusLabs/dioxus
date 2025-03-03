@@ -270,6 +270,12 @@ impl BuildRequest {
                 get_profile_for_platform(self.build.platform(), self.build.release)
             });
             cargo_args.push(profile.to_string());
+
+            // If the user provided a server target, use it, otherwise use the default host target.
+            if let Some(target) = self.build.target_args.server_target.as_deref() {
+                cargo_args.push("--target".to_string());
+                cargo_args.push(target.to_string());
+            }
         } else {
             // Add required profile flags. If a profile wasn't set manually, use the default one
             cargo_args.push("--profile".to_string());
