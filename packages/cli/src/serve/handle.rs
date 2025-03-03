@@ -356,7 +356,7 @@ impl AppHandle {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
             None => "".to_owned(),
         };
-        _ = open::that(format!("{protocol}://{address}{base_path}"));
+        _ = open::that_detached(format!("{protocol}://{address}{base_path}"));
     }
 
     /// Use `xcrun` to install the app to the simulator
