@@ -26,7 +26,11 @@ impl IfmtInput {
     }
 
     pub fn new_litstr(source: LitStr) -> Result<Self> {
-        let segments = IfmtInput::from_raw(&source.value())?;
+        let segments = IfmtInput::from_raw(&source.value()).map_err(|e| {
+            // If there is an error creating the formatted string, attribute it to the litstr span
+            let span = source.span();
+            syn::Error::new(span, e)
+        })?;
         Ok(Self { segments, source })
     }
 
@@ -320,7 +324,7 @@ impl FormattedSegmentType {
         } else {
             Err(Error::new(
                 Span::call_site(),
-                "Expected Ident or Expression",
+                "Failed to parse formatted segment: Expected Ident or Expression",
             ))
         }
     }
@@ -403,5 +407,11 @@ mod tests {
             input.to_static(),
             Some("body { background: red; }".to_string())
         );
+    }
+
+    #[test]
+    fn error_spans() {
+        let input = syn::parse2::<IfmtInput>(quote! { "body {{ background: red; }" }).unwrap_err();
+        assert_eq!(input.span().byte_range(), 0..28);
     }
 }
