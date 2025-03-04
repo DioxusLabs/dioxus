@@ -47,11 +47,10 @@ where
 
     use_hook(|| {
         provide_router_context(RouterContext::new(props.config.call(())));
+    });
 
-        provide_context(OutletContext::<R> {
-            current_level: 0,
-            _marker: std::marker::PhantomData,
-        });
+    use_hook(|| {
+        provide_context(OutletContext::<R>::new());
     });
 
     rsx! { Outlet::<R> {} }
