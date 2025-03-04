@@ -24,6 +24,7 @@ pub(crate) struct DebianSettings {
     /// the list of debian dependencies.
     pub depends: Option<Vec<String>>,
     /// the list of recommended debian dependencies.
+    #[serde(default)]
     pub recommends: Option<Vec<String>>,
     /// the list of dependencies the package provides.
     pub provides: Option<Vec<String>>,

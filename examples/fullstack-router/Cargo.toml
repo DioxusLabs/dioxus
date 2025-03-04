@@ -10,7 +10,7 @@ publish = false
 dioxus = { workspace = true, features = ["fullstack", "router"] }
 axum = { workspace = true, optional = true }
 tokio = {workspace = true, features = ["full"], optional = true }
-serde = { version = "1.0.159", features = ["derive"] }
+serde = { version = "1.0.218", features = ["derive"] }
 
 [features]
 default = []
