@@ -442,8 +442,6 @@ async fn handle_server_fns_inner(
     additional_context: ContextProviders,
     req: Request<Body>,
 ) -> impl IntoResponse {
-    use server_fn::middleware::Service;
-
     let path_string = path.to_string();
 
     let future = move || async move {
@@ -451,7 +449,7 @@ async fn handle_server_fns_inner(
         let req = Request::from_parts(parts.clone(), body);
 
         if let Some(mut service) =
-            server_fn::axum::get_server_fn_service(&path_string)
+            server_fn::axum::get_server_fn_service(&path_string, req.method().clone())
         {
             // Create the server context with info from the request
             let server_context = DioxusServerContext::new(parts);
@@ -515,11 +513,11 @@ async fn handle_server_fns_inner(
         let result = tokio::task::spawn_local(future);
         let result = result.then(|f| async move { f.unwrap() });
         result.await.unwrap_or_else(|e| {
-            use server_fn::error::NoCustomError;
+            use server_fn::error::ServerFnError;
             use server_fn::error::ServerFnErrorSerde;
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ServerFnError::<NoCustomError>::ServerError(e.to_string())
+                ServerFnError::ServerError(e.to_string())
                     .ser()
                     .unwrap_or_default(),
             )
