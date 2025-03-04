@@ -8,7 +8,11 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
 keywords = ["dom", "ui", "gui", "web", "wasm"]
+<<<<<<< HEAD
 rust-version = "1.73.0"
+=======
+rust-version = "1.71.1"
+>>>>>>> 0a46acb85 (regenerated corrupt Cargo.lock. Set msrv for some crates to 1.71.1 as determined by cargo-msrv v0.18.1)
 
 [dependencies]
 dioxus-core = { workspace = true }

@@ -9,7 +9,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["web", "desktop", "mobile", "gui", "server"]
 resolver = "2"
-rust-version = "1.71.1"
+rust-version = "1.76.0"
 
 [dependencies]
 # server functions
