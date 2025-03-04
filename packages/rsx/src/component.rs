@@ -229,12 +229,15 @@ impl Component {
 
         if !self.children.is_empty() {
             let children = &self.children;
+            // If the props don't accept children, attach the error to the first child
             if manual_props.is_some() {
                 tokens.append_all(
-                    quote_spanned! { inner_scope_span => __manual_props.children = { #children }; },
+                    quote_spanned! { children.first_root_span() => __manual_props.children = { #children }; },
                 )
             } else {
-                tokens.append_all(quote_spanned! { inner_scope_span => .children( { #children } ) })
+                tokens.append_all(
+                    quote_spanned! { children.first_root_span() => .children( { #children } ) },
+                )
             }
         }
 
