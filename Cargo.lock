@@ -13769,6 +13769,7 @@ dependencies = [
  "quote",
  "sha2",
  "syn 2.0.99",
+ "wasm-split",
 ]
 
 [[package]]
