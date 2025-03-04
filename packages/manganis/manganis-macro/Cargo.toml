@@ -20,6 +20,7 @@ quote = { workspace = true }
 syn = { workspace = true, features = ["full", "extra-traits"] }
 manganis-core = { workspace = true }
 dunce = { workspace = true }
+macro-string = { workspace = true }
 
 [features]
 default = []

@@ -20,14 +20,13 @@ once_cell.workspace = true
 jni = "0.21.1"
 
 [features]
-default = ["jnibindings", "tokio_runtime", "devtools", "exception"]
+default = ["jnibindings", "tokio_runtime", "devtools"]
 jnibindings = []
 tokio_runtime = ["dioxus-desktop/tokio_runtime"]
 fullscreen = ["dioxus-desktop/fullscreen"]
 transparent = ["dioxus-desktop/transparent"]
 devtools = ["dioxus-desktop/devtools"]
 gnu = ["dioxus-desktop/gnu"]
-exception = ["dioxus-desktop/exception"]
 
 
 [lib]

@@ -12,11 +12,11 @@ pub struct IndentOptions {
 }
 
 impl IndentOptions {
-    pub fn new(typ: IndentType, width: usize, split_line_attributes: bool) -> Self {
+    pub fn new(ty: IndentType, width: usize, split_line_attributes: bool) -> Self {
         assert_ne!(width, 0, "Cannot have an indent width of 0");
         Self {
             width,
-            indent_string: match typ {
+            indent_string: match ty {
                 IndentType::Tabs => "\t".into(),
                 IndentType::Spaces => " ".repeat(width),
             },

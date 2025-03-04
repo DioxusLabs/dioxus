@@ -19,7 +19,7 @@
 use crate::innerlude::*;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
@@ -211,11 +211,16 @@ impl Component {
 
         let name = &self.name;
         let generics = &self.generics;
+        let inner_scope_span = self
+            .brace
+            .as_ref()
+            .map(|b| b.span.join())
+            .unwrap_or(self.name.span());
 
         let mut tokens = if let Some(props) = manual_props.as_ref() {
-            quote! { let mut __manual_props = #props; }
+            quote_spanned! { props.span() => let mut __manual_props = #props; }
         } else {
-            quote! { fc_to_builder(#name #generics) }
+            quote_spanned! { self.name.span() => fc_to_builder(#name #generics) }
         };
 
         tokens.append_all(self.add_fields_to_builder(
@@ -224,17 +229,23 @@ impl Component {
 
         if !self.children.is_empty() {
             let children = &self.children;
+            // If the props don't accept children, attach the error to the first child
             if manual_props.is_some() {
-                tokens.append_all(quote! { __manual_props.children = { #children }; })
+                tokens.append_all(
+                    quote_spanned! { children.first_root_span() => __manual_props.children = #children; },
+                )
             } else {
-                tokens.append_all(quote! { .children( { #children } ) })
+                tokens.append_all(
+                    quote_spanned! { children.first_root_span() => .children( #children ) },
+                )
             }
         }
 
         if manual_props.is_some() {
             tokens.append_all(quote! { __manual_props })
         } else {
-            tokens.append_all(quote! { .build() })
+            // If this does fail to build, point the compiler error at the Prop braces
+            tokens.append_all(quote_spanned! { inner_scope_span => .build() })
         }
 
         tokens

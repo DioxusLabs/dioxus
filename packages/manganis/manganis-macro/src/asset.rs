@@ -1,10 +1,12 @@
+use macro_string::MacroString;
 use manganis_core::hash::AssetHash;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::path::PathBuf;
+use std::{iter, path::PathBuf};
 use syn::{
     parse::{Parse, ParseStream},
-    LitStr, Token,
+    spanned::Spanned as _,
+    Token,
 };
 
 #[derive(Debug)]
@@ -74,8 +76,8 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
 }
 
 pub struct AssetParser {
-    /// The span of the source string
-    path_span: proc_macro2::Span,
+    /// The token(s) of the source string, for error reporting
+    path_expr: proc_macro2::TokenStream,
 
     /// The asset itself
     asset: Result<PathBuf, AssetParseError>,
@@ -105,14 +107,13 @@ impl Parse for AssetParser {
     // But we need to decide the hint first before parsing the options
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // And then parse the options
-        let src = input.parse::<LitStr>()?;
-        let path_span = src.span();
-        let asset = resolve_path(&src.value());
+        let (MacroString(src), path_expr) = input.call(parse_with_tokens)?;
+        let asset = resolve_path(&src);
         let _comma = input.parse::<Token![,]>();
         let options = input.parse()?;
 
         Ok(Self {
-            path_span,
+            path_expr,
             asset,
             options,
         })
@@ -136,9 +137,9 @@ impl ToTokens for AssetParser {
                 return;
             }
         };
-        let asset_str = asset.display().to_string();
+        let asset_str = asset.to_string_lossy();
         let mut asset_str = proc_macro2::Literal::string(&asset_str);
-        asset_str.set_span(self.path_span);
+        asset_str.set_span(self.path_expr.span());
 
         let hash = match AssetHash::hash_file_contents(asset) {
             Ok(hash) => hash,
@@ -188,4 +189,21 @@ impl ToTokens for AssetParser {
             }
         })
     }
+}
+
+/// Parse `T`, while also collecting the tokens it was parsed from.
+fn parse_with_tokens<T: Parse>(input: ParseStream) -> syn::Result<(T, proc_macro2::TokenStream)> {
+    let begin = input.cursor();
+    let t: T = input.parse()?;
+    let end = input.cursor();
+
+    let mut cursor = begin;
+    let mut tokens = proc_macro2::TokenStream::new();
+    while cursor != end {
+        let (tt, next) = cursor.token_tree().unwrap();
+        tokens.extend(iter::once(tt));
+        cursor = next;
+    }
+
+    Ok((t, tokens))
 }

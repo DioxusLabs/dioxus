@@ -41,6 +41,7 @@ fn app() -> Element {
             Errors {}
         }
         OnMounted {}
+        DefaultServerFnCodec {}
         DocumentElements {}
     }
 }
@@ -57,6 +58,15 @@ fn OnMounted() -> Element {
             "onmounted was called {mounted_triggered_count} times"
         }
     }
+}
+
+#[component]
+fn DefaultServerFnCodec() -> Element {
+    let resource = use_server_future(|| get_server_data_empty_vec(Vec::new()))?;
+    let empty_vec = resource.unwrap().unwrap();
+    assert!(empty_vec.is_empty());
+
+    rsx! {}
 }
 
 #[cfg(feature = "server")]
@@ -77,6 +87,15 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
 async fn get_server_data() -> Result<String, ServerFnError> {
     assert_server_context_provided().await;
     Ok("Hello from the server!".to_string())
+}
+
+// Make sure the default codec work with empty data structures
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/2628
+#[server]
+async fn get_server_data_empty_vec(empty_vec: Vec<String>) -> Result<Vec<String>, ServerFnError> {
+    assert_server_context_provided().await;
+    assert!(empty_vec.is_empty());
+    Ok(Vec::new())
 }
 
 #[server]
