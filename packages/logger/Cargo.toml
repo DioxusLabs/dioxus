@@ -13,7 +13,7 @@ categories = ["development-tools::debugging"]
 
 
 [dependencies]
-dioxus-cli-config = { workspace =  true }
+dioxus-cli-config = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["registry", "std"] }
 
@@ -22,4 +22,7 @@ tracing-wasm = { workspace = true }
 console_error_panic_hook = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tracing-subscriber = { workspace = true, features = [ "fmt" ] }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+
+[dev-dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }

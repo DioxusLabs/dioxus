@@ -3557,6 +3557,7 @@ name = "dioxus-logger"
 version = "0.6.3"
 dependencies = [
  "console_error_panic_hook",
+ "dioxus",
  "dioxus-cli-config",
  "tracing",
  "tracing-subscriber",
@@ -13768,6 +13769,7 @@ dependencies = [
  "quote",
  "sha2",
  "syn 2.0.99",
+ "wasm-split",
 ]
 
 [[package]]
