@@ -442,8 +442,6 @@ async fn handle_server_fns_inner(
     additional_context: ContextProviders,
     req: Request<Body>,
 ) -> impl IntoResponse {
-    use server_fn::middleware::Service;
-
     let path_string = path.to_string();
 
     let future = move || async move {

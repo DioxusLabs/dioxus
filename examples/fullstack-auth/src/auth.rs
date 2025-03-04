@@ -5,8 +5,9 @@ use axum::{
     routing::get,
     Router,
 };
-use axum_session::{SessionConfig, SessionLayer, SessionSqlitePool, SessionStore};
+use axum_session::{SessionConfig, SessionLayer, SessionStore};
 use axum_session_auth::*;
+use axum_session_sqlx::SessionSqlitePool;
 use core::pin::Pin;
 use dioxus_fullstack::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -192,12 +193,8 @@ pub async fn connect_to_database() -> SqlitePool {
         .unwrap()
 }
 
-pub type Session = axum_session_auth::AuthSession<
-    crate::auth::User,
-    i64,
-    axum_session_auth::SessionSqlitePool,
-    sqlx::SqlitePool,
->;
+pub type Session =
+    axum_session_auth::AuthSession<crate::auth::User, i64, SessionSqlitePool, sqlx::SqlitePool>;
 
 pub async fn get_session() -> Result<Session, ServerFnError> {
     extract::<Session, _>()
