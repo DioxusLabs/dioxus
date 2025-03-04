@@ -13,8 +13,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 [dependencies]
 wasm-bindgen = { workspace = true, optional = true }
 wasm-bindgen-futures = { workspace = true, optional = true }
-js-sys = { version = "0.3.56", optional = true }
-web-sys = { version = "0.3.56", optional = true, features = [
+js-sys = { version = "0.3.77", optional = true }
+web-sys = { version = "0.3.77", optional = true, features = [
     "Element",
     "Node",
 ] }
