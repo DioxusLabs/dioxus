@@ -2102,7 +2102,7 @@ version = "0.6.3"
 dependencies = [
  "const-serialize",
  "const-serialize-macro",
- "rand 0.9.0",
+ "rand 0.8.5",
  "serde",
 ]
 
@@ -3181,7 +3181,7 @@ dependencies = [
  "generational-box",
  "longest-increasing-subsequence",
  "pretty_assertions",
- "rand 0.9.0",
+ "rand 0.8.5",
  "reqwest 0.12.12",
  "rustc-hash 2.1.1",
  "rustversion",
@@ -3256,7 +3256,7 @@ dependencies = [
  "objc",
  "objc_id",
  "once_cell",
- "rand 0.9.0",
+ "rand 0.8.5",
  "reqwest 0.12.12",
  "rfd",
  "rustc-hash 2.1.1",
@@ -3341,7 +3341,7 @@ dependencies = [
  "http-range",
  "openssl",
  "ouroboros",
- "rand 0.9.0",
+ "rand 0.8.5",
  "reqwest 0.12.12",
  "separator",
  "serde",
@@ -3712,7 +3712,7 @@ dependencies = [
  "generational-box",
  "once_cell",
  "parking_lot",
- "rand 0.9.0",
+ "rand 0.8.5",
  "reqwest 0.12.12",
  "rustc-hash 2.1.1",
  "serde",
@@ -4900,7 +4900,7 @@ version = "0.6.3"
 dependencies = [
  "criterion",
  "parking_lot",
- "rand 0.9.0",
+ "rand 0.8.5",
  "tracing",
 ]
 

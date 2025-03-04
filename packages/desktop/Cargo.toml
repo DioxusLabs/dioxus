@@ -119,7 +119,7 @@ reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
 dioxus-ssr = { workspace = true, default-features = false }
 separator = "0.4.1"
-rand = { version = "0.9.0", features = ["small_rng"] }
+rand = { workspace = true, features = ["small_rng"] }
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]
