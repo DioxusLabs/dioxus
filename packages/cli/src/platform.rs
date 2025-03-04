@@ -160,7 +160,7 @@ impl Platform {
     pub(crate) fn autodetect_from_cargo_feature(feature: &str) -> Option<Self> {
         match feature {
             "web" => Some(Platform::Web),
-            "desktop" => {
+            "desktop" | "native" => {
                 #[cfg(target_os = "macos")]
                 {
                     Some(Platform::MacOS)
