@@ -67,6 +67,7 @@ impl AppHandle {
     pub(crate) async fn open(
         &mut self,
         devserver_ip: SocketAddr,
+        open_address: Option<SocketAddr>,
         start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
     ) -> Result<()> {
@@ -86,8 +87,12 @@ impl AppHandle {
             ),
             ("RUST_BACKTRACE", "1".to_string()),
             (
-                dioxus_cli_config::DEVSERVER_RAW_ADDR_ENV,
-                devserver_ip.to_string(),
+                dioxus_cli_config::DEVSERVER_IP_ENV,
+                devserver_ip.ip().to_string(),
+            ),
+            (
+                dioxus_cli_config::DEVSERVER_PORT_ENV,
+                devserver_ip.port().to_string(),
             ),
             // unset the cargo dirs in the event we're running `dx` locally
             // since the child process will inherit the env vars, we don't want to confuse the downstream process
@@ -135,7 +140,7 @@ impl AppHandle {
             Platform::Web => {
                 // Only the first build we open the web app, after that the user knows it's running
                 if open_browser {
-                    self.open_web(devserver_ip);
+                    self.open_web(open_address.unwrap_or(devserver_ip));
                 }
 
                 None
@@ -145,7 +150,7 @@ impl AppHandle {
 
             // https://developer.android.com/studio/run/emulator-commandline
             Platform::Android => {
-                self.open_android_sim(envs).await;
+                self.open_android_sim(devserver_ip, envs).await;
                 None
             }
 
@@ -351,7 +356,7 @@ impl AppHandle {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
             None => "".to_owned(),
         };
-        _ = open::that(format!("{protocol}://{address}{base_path}"));
+        _ = open::that_detached(format!("{protocol}://{address}{base_path}"));
     }
 
     /// Use `xcrun` to install the app to the simulator
@@ -697,13 +702,30 @@ We checked the folder: {}
         Ok(())
     }
 
-    async fn open_android_sim(&self, envs: Vec<(&'static str, String)>) {
+    async fn open_android_sim(
+        &self,
+        devserver_socket: SocketAddr,
+        envs: Vec<(&'static str, String)>,
+    ) {
         let apk_path = self.app.apk_path();
         let session_cache = self.app.build.krate.session_cache_dir();
         let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
         tokio::task::spawn(async move {
+            let port = devserver_socket.port();
+            if let Err(e) = Command::new("adb")
+                .arg("reverse")
+                .arg(format!("tcp:{}", port))
+                .arg(format!("tcp:{}", port))
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .output()
+                .await
+            {
+                tracing::error!("failed to forward port {port}: {e}");
+            }
+
             // Install
             // adb install -r app-debug.apk
             if let Err(e) = Command::new(DioxusCrate::android_adb())
@@ -739,7 +761,7 @@ We checked the folder: {}
                 tracing::error!("Failed to push .env file to device: {e}");
             }
 
-            // eventually, use the user's MainAcitivty, not our MainAcitivty
+            // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 

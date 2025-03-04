@@ -28,6 +28,7 @@ impl LinkProps {
     /// Get all the attributes for the link tag
     pub fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        extend_attributes(&mut attributes, &self.additional_attributes);
         if let Some(rel) = &self.rel {
             attributes.push(("rel", rel.clone()));
         }

@@ -57,4 +57,4 @@ server = [
     "http",
     "tower",
 ]
-web = ["dioxus-web"]
+web = ["dioxus/web", "dioxus-web"]

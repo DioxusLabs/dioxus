@@ -193,6 +193,23 @@ impl WebServer {
     }
 
     pub(crate) async fn shutdown(&mut self) {
+        if matches!(self.platform, Platform::Android) {
+            use std::process::{Command, Stdio};
+            if let Err(err) = Command::new("adb")
+                .arg("reverse")
+                .arg("--remove")
+                .arg(format!("tcp:{}", self.devserver_port))
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .output()
+            {
+                tracing::error!(
+                    "failed to remove forwarded port {}: {err}",
+                    self.devserver_port
+                );
+            }
+        }
+
         self.send_shutdown().await;
         for socket in self.hot_reload_sockets.drain(..) {
             _ = socket.close().await;

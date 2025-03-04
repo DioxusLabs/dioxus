@@ -1,8 +1,9 @@
 use crate::{AppBundle, BuildArgs, Builder, DioxusCrate, Platform};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
+use walkdir::WalkDir;
 
 use super::*;
 
@@ -153,11 +154,19 @@ impl Bundle {
 
         let binaries = vec![
             // We use the name of the exe but it has to be in the same directory
-            BundleBinary::new(name.display().to_string(), true)
+            BundleBinary::new(krate.executable_name().to_string(), true)
                 .set_src_path(Some(bundle.app.exe.display().to_string())),
         ];
 
         let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
+
+        // Check if required fields are provided instead of failing silently.
+        if bundle_settings.identifier.is_none() {
+            return Err(anyhow!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n").into());
+        }
+        if bundle_settings.publisher.is_none() {
+            return Err(anyhow!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n").into());
+        }
 
         if cfg!(windows) {
             let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
@@ -179,21 +188,24 @@ impl Bundle {
 
         let asset_dir = bundle.build.asset_dir();
         if asset_dir.exists() {
-            let asset_dir_entries = std::fs::read_dir(&asset_dir)
-                .with_context(|| format!("failed to read asset directory {:?}", asset_dir))?;
-            for entry in asset_dir_entries.flatten() {
-                let old = entry
-                    .path()
-                    .canonicalize()
-                    .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
-                let new = PathBuf::from("assets").join(old.file_name().expect("Filename to exist"));
-                tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+            for entry in WalkDir::new(&asset_dir) {
+                let entry = entry.unwrap();
+                let path = entry.path();
 
-                bundle_settings
-                    .resources_map
-                    .as_mut()
-                    .expect("to be set")
-                    .insert(old.display().to_string(), new.display().to_string());
+                if path.is_file() {
+                    let old = path
+                        .canonicalize()
+                        .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
+                    let new =
+                        PathBuf::from("assets").join(path.strip_prefix(&asset_dir).unwrap_or(path));
+
+                    tracing::debug!("Bundled asset: {old:?} -> {new:?}");
+                    bundle_settings
+                        .resources_map
+                        .as_mut()
+                        .expect("to be set")
+                        .insert(old.display().to_string(), new.display().to_string());
+                }
             }
         }
 
