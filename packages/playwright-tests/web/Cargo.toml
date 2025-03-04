@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["web"]}
-serde_json = "1.0.96"
+serde_json = "1.0.140"
 tracing.workspace = true
 tracing-wasm = "0.2.1"
 wasm-bindgen.workspace = true

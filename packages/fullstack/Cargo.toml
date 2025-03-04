@@ -9,10 +9,16 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["web", "desktop", "mobile", "gui", "server"]
 resolver = "2"
+rust-version = "1.71.1"
 
 [dependencies]
 # server functions
-server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
+# server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
+server_fn = { git = "https://github.com/leptos-rs/leptos", branch = "leptos_0.8", features = [
+  "json",
+  "url",
+  "browser",
+], default-features = false }
 dioxus_server_macro = { workspace = true }
 
 # axum
@@ -41,11 +47,11 @@ dioxus-mobile = { workspace = true, optional = true }
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 once_cell = { workspace = true }
-tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
-async-trait = { version = "0.1.58", optional = true }
+tokio-util = { version = "0.7.13", features = ["rt"], optional = true }
+async-trait = { version = "0.1.87", optional = true }
 
-serde = "1.0.159"
-tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
+serde = "1.0.218"
+tokio-stream = { version = "0.1.17", features = ["sync"], optional = true }
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
 ciborium = { workspace = true }
@@ -53,18 +59,25 @@ base64 = { workspace = true }
 rustls = { workspace = true, optional = true }
 hyper-rustls = { workspace = true, optional = true }
 
-pin-project = { version = "1.1.2", optional = true }
+pin-project = { version = "1.1.10", optional = true }
 thiserror = { workspace = true, optional = true }
-bytes = "1.4.0"
+bytes = "1.10.0"
 tower = { workspace = true, features = ["util"], optional = true }
-tower-layer = { version = "0.3.2", optional = true }
+tower-layer = { version = "0.3.3", optional = true }
 parking_lot = { workspace = true, features = ["send_guard"], optional = true }
-web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
+web-sys = { version = "0.3.77", optional = true, features = [
+  "Window",
+  "Document",
+  "Element",
+  "HtmlDocument",
+  "Storage",
+  "console",
+] }
 
 dioxus-cli-config = { workspace = true, optional = true }
 
 dioxus-devtools = { workspace = true, optional = true }
-aws-lc-rs = { version = "1.8.1", optional = true }
+aws-lc-rs = { version = "1.12.5", optional = true }
 dioxus-history.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -89,24 +102,24 @@ default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
 axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
 server = [
-    "server_fn/ssr",
-    "dioxus_server_macro/server",
-    "dep:tokio",
-    "dep:tokio-util",
-    "dep:tokio-stream",
-    "dep:dioxus-ssr",
-    "dep:dioxus-isrg",
-    "dep:tower",
-    "dep:hyper",
-    "dep:http",
-    "dep:tower-layer",
-    "dep:tracing-futures",
-    "dep:pin-project",
-    "dep:thiserror",
-    "dep:dioxus-cli-config",
-    "dep:async-trait",
-    "dep:parking_lot",
-    "dioxus-interpreter-js",
+  "server_fn/ssr",
+  "dioxus_server_macro/server",
+  "dep:tokio",
+  "dep:tokio-util",
+  "dep:tokio-stream",
+  "dep:dioxus-ssr",
+  "dep:dioxus-isrg",
+  "dep:tower",
+  "dep:hyper",
+  "dep:http",
+  "dep:tower-layer",
+  "dep:tracing-futures",
+  "dep:pin-project",
+  "dep:thiserror",
+  "dep:dioxus-cli-config",
+  "dep:async-trait",
+  "dep:parking_lot",
+  "dioxus-interpreter-js",
 ]
 aws-lc-rs = ["dep:aws-lc-rs"]
 
