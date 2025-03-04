@@ -309,6 +309,7 @@ impl RouterContext {
     }
 }
 
+/// This context is set to the RouterConfig on_update method
 pub struct GenericRouterContext<R> {
     inner: RouterContext,
     _marker: std::marker::PhantomData<R>,
