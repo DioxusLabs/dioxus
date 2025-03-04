@@ -256,7 +256,7 @@ dunce = "1.0.5"
 urlencoding = "2.1.2"
 global-hotkey = "0.6.0"
 rfd = { version = "0.14", default-features = false }
-muda = "0.14.0"
+muda = "0.15.3"
 cocoa = "0.26"
 core-foundation = "0.10.0"
 objc = { version = "0.2.7", features = ["exception"] }
