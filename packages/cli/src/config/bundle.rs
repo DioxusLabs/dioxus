@@ -59,6 +59,9 @@ pub(crate) struct DebianSettings {
     /// Path to script that will be executed after the package is removed. See
     /// <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>
     pub post_remove_script: Option<PathBuf>,
+    /// list of debian dependency recommendations
+    #[serde(default)]
+    pub recommends: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
