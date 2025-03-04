@@ -10797,7 +10797,7 @@ dependencies = [
 [[package]]
 name = "server_fn"
 version = "0.8.0-alpha"
-source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#3dbb25185373860b498030d639c4786e0c366408"
+source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#bfe04593fd5fa4aabe70e311207dc1027b2a01a9"
 dependencies = [
  "axum 0.8.1",
  "base64 0.22.1",
@@ -10835,7 +10835,7 @@ dependencies = [
 [[package]]
 name = "server_fn_macro"
 version = "0.8.0-alpha"
-source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#3dbb25185373860b498030d639c4786e0c366408"
+source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#bfe04593fd5fa4aabe70e311207dc1027b2a01a9"
 dependencies = [
  "const_format",
  "convert_case 0.6.0",
@@ -10848,7 +10848,7 @@ dependencies = [
 [[package]]
 name = "server_fn_macro_default"
 version = "0.8.0-alpha"
-source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#3dbb25185373860b498030d639c4786e0c366408"
+source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#bfe04593fd5fa4aabe70e311207dc1027b2a01a9"
 dependencies = [
  "server_fn_macro",
  "syn 2.0.99",
@@ -12217,9 +12217,9 @@ dependencies = [
 
 [[package]]
 name = "tao"
-version = "0.32.6"
+version = "0.32.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f2c4e9ca3c365b19a95d02cc4b5ef3f4fc7e859f2b2b27193ad5e38b94203f0"
+checksum = "7e7f38988a68dfb559899ea307b97577f008d3254f6cfdd219a67e27ce34c95b"
 dependencies = [
  "bitflags 2.9.0",
  "core-foundation 0.10.0",
@@ -12531,7 +12531,7 @@ dependencies = [
 [[package]]
 name = "throw_error"
 version = "0.3.0"
-source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#3dbb25185373860b498030d639c4786e0c366408"
+source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#bfe04593fd5fa4aabe70e311207dc1027b2a01a9"
 dependencies = [
  "pin-project-lite",
 ]
@@ -13769,7 +13769,6 @@ dependencies = [
  "quote",
  "sha2",
  "syn 2.0.99",
- "wasm-split",
 ]
 
 [[package]]
