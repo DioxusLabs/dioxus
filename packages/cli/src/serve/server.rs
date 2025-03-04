@@ -439,7 +439,7 @@ fn build_devserver_router(
         // For fullstack, liveview, and server, forward all requests to the inner server
         let address = fullstack_address.unwrap();
         tracing::debug!("Proxying requests to fullstack server at {address}");
-        router = router.nest_service("/",super::proxy::proxy_to(
+        router = router.fallback_service(super::proxy::proxy_to(
             format!("http://{address}").parse().unwrap(),
             true,
             |error| {
@@ -466,8 +466,11 @@ fn build_devserver_router(
                 .unwrap_or_default()
                 .trim_matches('/')
         );
-
-        router = router.nest_service(&base_path, build_serve_dir(args, krate));
+        if base_path == "/" {
+            router = router.fallback_service(build_serve_dir(args, krate));
+        } else {
+            router = router.nest_service(&base_path, build_serve_dir(args, krate));
+        }
     }
 
     // Setup middleware to intercept html requests if the build status is "Building"
