@@ -449,9 +449,10 @@ async fn handle_server_fns_inner(
     let future = move || async move {
         let (parts, body) = req.into_parts();
         let req = Request::from_parts(parts.clone(), body);
+        let method = req.method().clone();
 
         if let Some(mut service) =
-            server_fn::axum::get_server_fn_service(&path_string)
+            server_fn::axum::get_server_fn_service(&path_string, method)
         {
             // Create the server context with info from the request
             let server_context = DioxusServerContext::new(parts);
