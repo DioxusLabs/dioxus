@@ -232,7 +232,7 @@ chrono = { version = "0.4.40" }
 gloo = { version = "0.11.0" }
 gloo-utils = { version = "0.2.0" }
 rustversion = "1.0.20"
-rand = "0.9.0"
+rand = "0.8"
 longest-increasing-subsequence = "0.1.0"
 trybuild = "1.0"
 dirs = "6.0.0"
@@ -351,7 +351,7 @@ futures-util = "0.3.31"
 separator = "0.4.1"
 serde = { version = "1.0.218", features = ["derive"] }
 serde_json = "1.0.140"
-rand = { version = "0.9.0", features = ["small_rng"] }
+rand = { version = "0.8", features = ["small_rng"] }
 form_urlencoded = "1.2.1"
 async-std = "1.13.0"
 web-time = "1.1.0"
