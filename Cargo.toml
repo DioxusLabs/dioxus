@@ -186,8 +186,8 @@ thiserror = "1.0.40"
 prettyplease = { version = "0.2.20", features = ["verbatim"] }
 const_format = "0.2.32"
 cargo_toml = { version = "0.20.3" }
-tauri-utils = { version = "=2.0.2" }
-tauri-bundler = { version = "=2.0.4" }
+tauri-utils = { version = "=2.1.1" }
+tauri-bundler = { version = "=2.2.3" }
 lru = "0.12.2"
 async-trait = "0.1.77"
 axum = "0.7.0"
