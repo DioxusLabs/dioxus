@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
 keywords = ["dom", "ui", "gui", "web", "wasm"]
+rust-version = "1.71.1"
 
 [dependencies]
 dioxus-core = { workspace = true }
