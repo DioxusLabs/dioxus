@@ -194,7 +194,7 @@ impl LaunchBuilder {
     /// # Example
     /// ```rust, no_run
     /// use dioxus::prelude::*;
-    /// use dioxus_desktop::Config;
+    /// use dioxus_desktop::{Config,WindowBuilder};
     ///
     /// fn app() -> Element {
     ///     rsx! {
@@ -202,8 +202,13 @@ impl LaunchBuilder {
     ///     }
     /// }
     ///
-    /// dioxus::LaunchBuilder::desktop()
-    ///     .with_cfg(Config::new().with_window(|w| w.with_title("My App")))
+    /// dioxus::LaunchBuilder::new()
+    ///    .with_cfg(desktop! {
+    ///        Config::new().with_window(
+    ///            WindowBuilder::new()
+    ///                .with_title("My App")
+    ///        )
+    ///     })
     ///     .launch(app);
     /// ```
     pub fn with_cfg(mut self, config: impl LaunchConfig) -> Self {
