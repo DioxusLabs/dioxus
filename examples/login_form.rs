@@ -17,8 +17,8 @@ fn app() -> Element {
         let resp = reqwest::Client::new()
             .post("http://localhost:8080/login")
             .form(&[
-                ("username", &evt.values()["username"]),
-                ("password", &evt.values()["password"]),
+                ("username", evt.values()["username"].as_value()),
+                ("password", evt.values()["password"].as_value()),
             ])
             .send()
             .await;
