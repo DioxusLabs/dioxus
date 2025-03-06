@@ -515,7 +515,7 @@ required-features = ["desktop"]
 doc-scrape-examples = true
 
 [[example]]
-name = "wgpu"
+name = "wgpu_child_window"
 required-features = ["desktop", "gpu"]
 
 [[example]]
