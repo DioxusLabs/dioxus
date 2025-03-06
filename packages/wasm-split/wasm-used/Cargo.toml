@@ -1,0 +1,9 @@
+[package]
+name = "wasm-used"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+walrus = { workspace = true, features = ["parallel"] }
+id-arena = { workspace = true }
+tracing = { workspace = true }

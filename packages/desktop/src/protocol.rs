@@ -282,13 +282,13 @@ pub(crate) fn to_java_load_asset(filepath: &str) -> Option<Vec<u8>> {
     // in debug mode, the asset might be under `/data/local/tmp/dx/` - attempt to read it from there if it exists
     #[cfg(debug_assertions)]
     {
-        let path = std::path::PathBuf::from("/data/local/tmp/dx/").join(normalized);
+        let path = dioxus_cli_config::android_session_cache_dir().join(normalized);
         if path.exists() {
             return std::fs::read(path).ok();
         }
     }
 
-    use std::{io::Read, ptr::NonNull};
+    use std::ptr::NonNull;
 
     let ctx = ndk_context::android_context();
     let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.unwrap();

@@ -1,17 +1,16 @@
 use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
-use crate::wasm_bindgen::WasmBindgenBuilder;
-use crate::{BuildRequest, Platform};
+use crate::{BuildRequest, Platform, WasmOptConfig};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
-use manganis_core::AssetOptions;
+use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::collections::HashSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::Ordering;
+use std::{collections::HashSet, io::Write};
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 
@@ -265,7 +264,7 @@ impl AppBundle {
         app: BuildArtifacts,
         server: Option<BuildArtifacts>,
     ) -> Result<Self> {
-        let bundle = Self { app, server, build };
+        let mut bundle = Self { app, server, build };
 
         tracing::debug!("Assembling app bundle");
 
@@ -301,7 +300,7 @@ impl AppBundle {
     /// For wasm, we'll want to run `wasm-bindgen` to make it a wasm binary along with some other optimizations
     /// Other platforms we might do some stripping or other optimizations
     /// Move the executable to the workdir
-    async fn write_main_executable(&self) -> Result<()> {
+    async fn write_main_executable(&mut self) -> Result<()> {
         match self.build.build.platform() {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
             // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
@@ -326,21 +325,7 @@ impl AppBundle {
             //                        logo.png
             // ```
             Platform::Web => {
-                // Run wasm-bindgen and drop its output into the assets folder under "dioxus"
-                self.build.status_wasm_bindgen_start();
-                self.run_wasm_bindgen(&self.app.exe.with_extension("wasm"), &self.build.exe_dir())
-                    .await?;
-
-                // Only run wasm-opt if the feature is enabled
-                // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
-                // We put it behind the "wasm-opt" feature flag so that it can be disabled when iterating on the cli
-                self.run_wasm_opt(&self.build.exe_dir())?;
-
-                // Write the index.html file with the pre-configured contents we got from pre-rendering
-                std::fs::write(
-                    self.build.root_dir().join("index.html"),
-                    self.build.prepare_html()?,
-                )?;
+                self.bundle_web().await?;
             }
 
             // this will require some extra oomf to get the multi architecture builds...
@@ -383,29 +368,42 @@ impl AppBundle {
         // First, clear the asset dir of any files that don't exist in the new manifest
         _ = tokio::fs::create_dir_all(&asset_dir).await;
         // Create a set of all the paths that new files will be bundled to
-        let bundled_output_paths: HashSet<_> = self
+        let mut keep_bundled_output_paths: HashSet<_> = self
             .app
             .assets
             .assets
             .values()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
+        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
+        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
+        // all assets.
+        let version_file = self.build.asset_optimizer_version_file();
+        let clear_cache = std::fs::read_to_string(&version_file)
+            .ok()
+            .filter(|s| s == crate::VERSION.as_str())
+            .is_none();
+        if clear_cache {
+            keep_bundled_output_paths.clear();
+        }
+
         // one possible implementation of walking a directory only visiting files
         fn remove_old_assets<'a>(
             path: &'a Path,
-            bundled_output_paths: &'a HashSet<PathBuf>,
+            keep_bundled_output_paths: &'a HashSet<PathBuf>,
         ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
             Box::pin(async move {
                 // If this asset is in the manifest, we don't need to remove it
                 let canon_path = dunce::canonicalize(path)?;
-                if bundled_output_paths.contains(canon_path.as_path()) {
+                if keep_bundled_output_paths.contains(canon_path.as_path()) {
                     return Ok(());
                 }
+
                 // Otherwise, if it is a directory, we need to walk it and remove child files
                 if path.is_dir() {
                     for entry in std::fs::read_dir(path)?.flatten() {
                         let path = entry.path();
-                        remove_old_assets(&path, bundled_output_paths).await?;
+                        remove_old_assets(&path, keep_bundled_output_paths).await?;
                     }
                     if path.read_dir()?.next().is_none() {
                         // If the directory is empty, remove it
@@ -415,12 +413,17 @@ impl AppBundle {
                     // If it is a file, remove it
                     tokio::fs::remove_file(path).await?;
                 }
+
                 Ok(())
             })
         }
 
         tracing::debug!("Removing old assets");
-        remove_old_assets(&asset_dir, &bundled_output_paths).await?;
+        tracing::trace!(
+            "Keeping bundled output paths: {:#?}",
+            keep_bundled_output_paths
+        );
+        remove_old_assets(&asset_dir, &keep_bundled_output_paths).await?;
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
@@ -429,7 +432,16 @@ impl AppBundle {
         for (asset, bundled) in &self.app.assets.assets {
             let from = asset.clone();
             let to = asset_dir.join(bundled.bundled_path());
-            tracing::debug!("Copying asset {from:?} to {to:?}");
+
+            // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
+            let from_ = from
+                .strip_prefix(self.build.krate.workspace_dir())
+                .unwrap_or(from.as_path());
+            let to_ = from
+                .strip_prefix(self.build.krate.workspace_dir())
+                .unwrap_or(to.as_path());
+
+            tracing::debug!("Copying asset {from_:?} to {to_:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
         }
 
@@ -447,13 +459,17 @@ impl AppBundle {
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
+        let ws_dir = self.build.krate.workspace_dir();
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
                     let processing = started_processing.fetch_add(1, Ordering::SeqCst);
-                    tracing::trace!("Starting asset copy {processing}/{asset_count} from {from:?}");
+                    let from_ = from.strip_prefix(&ws_dir).unwrap_or(from);
+                    tracing::trace!(
+                        "Starting asset copy {processing}/{asset_count} from {from_:?}"
+                    );
 
                     let res = process_file_to(options, from, to);
                     if let Err(err) = res.as_ref() {
@@ -473,6 +489,15 @@ impl AppBundle {
         })
         .await
         .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
+
+        // // Remove the wasm bindgen output directory if it exists
+        // _ = std::fs::remove_dir_all(self.build.wasm_bindgen_out_dir());
+
+        // Write the version file so we know what version of the optimizer we used
+        std::fs::write(
+            self.build.asset_optimizer_version_file(),
+            crate::VERSION.as_str(),
+        )?;
 
         Ok(())
     }
@@ -554,9 +579,10 @@ impl AppBundle {
                     .krate
                     .should_pre_compress_web_assets(self.build.build.release);
 
-                let bindgen_dir = self.build.exe_dir();
+                self.build.status_compressing_assets();
+                let asset_dir = self.build.asset_dir();
                 tokio::task::spawn_blocking(move || {
-                    crate::fastfs::pre_compress_folder(&bindgen_dir, pre_compress)
+                    crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
                 })
                 .await
                 .unwrap()?;
@@ -592,93 +618,195 @@ impl AppBundle {
         None
     }
 
-    pub(crate) async fn run_wasm_bindgen(
-        &self,
-        input_path: &Path,
-        bindgen_outdir: &Path,
-    ) -> anyhow::Result<()> {
-        tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
+    /// Bundle the web app
+    /// - Run wasm-bindgen
+    /// - Bundle split
+    /// - Run wasm-opt
+    /// - Register the .wasm and .js files with the asset system
+    async fn bundle_web(&mut self) -> Result<()> {
+        use crate::{wasm_bindgen::WasmBindgen, wasm_opt};
+        use std::fmt::Write;
 
-        let input_path = input_path.to_path_buf();
-        let bindgen_outdir = bindgen_outdir.to_path_buf();
-        let name = self.build.krate.executable_name().to_string();
-        let keep_debug =
-            // if we're in debug mode, or we're generating debug symbols, keep debug info
-            (self.build.krate.config.web.wasm_opt.debug || self.build.build.debug_symbols)
-            // but only if we're not in release mode
-            && !self.build.build.release;
-
-        let start = std::time::Instant::now();
-
+        // Locate the output of the build files and the bindgen output
+        // We'll fill these in a second if they don't already exist
+        let bindgen_outdir = self.build.wasm_bindgen_out_dir();
+        let prebindgen = self.app.exe.clone();
+        let post_bindgen_wasm = self.build.wasm_bindgen_wasm_output_file();
+        let should_bundle_split = self.build.build.experimental_wasm_split;
+        let rustc_exe = self.app.exe.with_extension("wasm");
         let bindgen_version = self
             .build
             .krate
             .wasm_bindgen_version()
             .expect("this should have been checked by tool verification");
 
-        WasmBindgenBuilder::new(bindgen_version)
-            .input_path(&input_path)
+        // Prepare any work dirs
+        std::fs::create_dir_all(&bindgen_outdir)?;
+
+        // Prepare our configuration
+        //
+        // we turn off debug symbols in dev mode but leave them on in release mode (weird!) since
+        // wasm-opt and wasm-split need them to do better optimizations.
+        //
+        // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
+        // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
+        let will_wasm_opt = (self.build.build.release || self.build.build.experimental_wasm_split)
+            && crate::wasm_opt::wasm_opt_available();
+        let keep_debug = self.build.krate.config.web.wasm_opt.debug
+            || self.build.build.debug_symbols
+            || self.build.build.experimental_wasm_split
+            || !self.build.build.release
+            || will_wasm_opt;
+        let demangle = false;
+        let wasm_opt_options = WasmOptConfig {
+            memory_packing: self.build.build.experimental_wasm_split,
+            debug: self.build.build.debug_symbols,
+            ..self.build.krate.config.web.wasm_opt.clone()
+        };
+
+        // Run wasm-bindgen. Some of the options are not "optimal" but will be fixed up by wasm-opt
+        //
+        // There's performance implications here. Running with --debug is slower than without
+        // We're keeping around lld sections and names but wasm-opt will fix them
+        // todo(jon): investigate a good balance of wiping debug symbols during dev (or doing a double build?)
+        self.build.status_wasm_bindgen_start();
+        tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
+        let start = std::time::Instant::now();
+        WasmBindgen::new(&bindgen_version)
+            .input_path(&rustc_exe)
             .target("web")
             .debug(keep_debug)
-            .demangle(keep_debug)
+            .demangle(demangle)
             .keep_debug(keep_debug)
-            .remove_name_section(!keep_debug)
-            .remove_producers_section(!keep_debug)
-            .out_name(&name)
+            .keep_lld_sections(true)
+            .out_name(self.build.krate.executable_name())
             .out_dir(&bindgen_outdir)
-            .build()
+            .remove_name_section(!will_wasm_opt)
+            .remove_producers_section(!will_wasm_opt)
             .run()
             .await
             .context("Failed to generate wasm-bindgen bindings")?;
-
         tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
 
-        Ok(())
-    }
+        // Run bundle splitting if the user has requested it
+        // It's pretty expensive but because of rayon should be running separate threads, hopefully
+        // not blocking this thread. Dunno if that's true
+        if should_bundle_split {
+            self.build.status_splitting_bundle();
 
-    #[allow(unused)]
-    pub(crate) fn run_wasm_opt(&self, bindgen_outdir: &std::path::Path) -> Result<()> {
-        if !self.build.build.release {
-            return Ok(());
-        };
-        self.build.status_optimizing_wasm();
+            if !will_wasm_opt {
+                return Err(anyhow::anyhow!(
+                    "Bundle splitting requires wasm-opt to be installed or the CLI to be built with `--features optimizations`. Please install wasm-opt and try again."
+                )
+                .into());
+            }
 
-        #[cfg(feature = "optimizations")]
-        {
-            use crate::config::WasmOptLevel;
+            // Load the contents of these binaries since we need both of them
+            // We're going to use the default makeLoad glue from wasm-split
+            let original = std::fs::read(&prebindgen)?;
+            let bindgened = std::fs::read(&post_bindgen_wasm)?;
+            let mut glue = wasm_split_cli::MAKE_LOAD_JS.to_string();
 
-            tracing::info!(dx_src = ?TraceSrc::Build, "Running optimization with wasm-opt...");
+            // Run the emitter
+            let splitter = wasm_split_cli::Splitter::new(&original, &bindgened);
+            let modules = splitter
+                .context("Failed to parse wasm for splitter")?
+                .emit()
+                .context("Failed to emit wasm split modules")?;
 
-            let mut options = match self.build.krate.config.web.wasm_opt.level {
-                WasmOptLevel::Z => {
-                    wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
-                }
-                WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
-                WasmOptLevel::Zero => wasm_opt::OptimizationOptions::new_opt_level_0(),
-                WasmOptLevel::One => wasm_opt::OptimizationOptions::new_opt_level_1(),
-                WasmOptLevel::Two => wasm_opt::OptimizationOptions::new_opt_level_2(),
-                WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
-                WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
-            };
-            let wasm_file =
-                bindgen_outdir.join(format!("{}_bg.wasm", self.build.krate.executable_name()));
-            let old_size = wasm_file.metadata()?.len();
-            options
-                // WASM bindgen relies on reference types
-                .enable_feature(wasm_opt::Feature::ReferenceTypes)
-                .debug_info(self.build.krate.config.web.wasm_opt.debug)
-                .run(&wasm_file, &wasm_file)
-                .map_err(|err| crate::Error::Other(anyhow::anyhow!(err)))?;
+            // Write the chunks that contain shared imports
+            // These will be in the format of chunk_0_modulename.wasm - this is hardcoded in wasm-split
+            tracing::debug!("Writing split chunks to disk");
+            for (idx, chunk) in modules.chunks.iter().enumerate() {
+                let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
+                wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
+                writeln!(
+                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
+                    url = self
+                        .app
+                        .assets
+                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+                )?;
+            }
 
-            let new_size = wasm_file.metadata()?.len();
-            tracing::debug!(
-                dx_src = ?TraceSrc::Build,
-                "wasm-opt reduced WASM size from {} to {} ({:2}%)",
-                old_size,
-                new_size,
-                (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
-            );
+            // Write the modules that contain the entrypoints
+            tracing::debug!("Writing split modules to disk");
+            for (idx, module) in modules.modules.iter().enumerate() {
+                let comp_name = module
+                    .component_name
+                    .as_ref()
+                    .context("generated bindgen module has no name?")?;
+
+                let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
+                wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options).await?;
+
+                let hash_id = module.hash_id.as_ref().unwrap();
+
+                writeln!(
+                    glue,
+                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    module = module.module_name,
+
+
+                    // Again, register this wasm with the asset system
+                    url = self
+                        .app
+                        .assets
+                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+
+                    // This time, make sure to write the dependencies of this chunk
+                    // The names here are again, hardcoded in wasm-split - fix this eventually.
+                    deps = module
+                        .relies_on_chunks
+                        .iter()
+                        .map(|idx| format!("__wasm_split_load_chunk_{idx}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )?;
+            }
+
+            // Write the js binding
+            // It's not registered as an asset since it will get included in the main.js file
+            let js_output_path = bindgen_outdir.join("__wasm_split.js");
+            std::fs::write(&js_output_path, &glue)?;
+
+            // Make sure to write some entropy to the main.js file so it gets a new hash
+            // If we don't do this, the main.js file will be cached and never pick up the chunk names
+            let uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, glue.as_bytes());
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(self.build.wasm_bindgen_js_output_file())
+                .context("Failed to open main.js file")?
+                .write_all(format!("/*{uuid}*/").as_bytes())?;
+
+            // Write the main wasm_bindgen file and register it with the asset system
+            // This will overwrite the file in place
+            // We will wasm-opt it in just a second...
+            std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
         }
+
+        // Make sure to optimize the main wasm file if requested or if bundle splitting
+        if should_bundle_split || self.build.build.release {
+            self.build.status_optimizing_wasm();
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
+        }
+
+        // Make sure to register the main wasm file with the asset system
+        self.app
+            .assets
+            .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+
+        // Register the main.js with the asset system so it bundles in the snippets and optimizes
+        self.app.assets.register_asset(
+            &self.build.wasm_bindgen_js_output_file(),
+            AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+        )?;
+
+        // Write the index.html file with the pre-configured contents we got from pre-rendering
+        std::fs::write(
+            self.build.root_dir().join("index.html"),
+            self.prepare_html()?,
+        )?;
 
         Ok(())
     }
@@ -731,23 +859,7 @@ impl AppBundle {
         if let Platform::Android = self.build.build.platform() {
             self.build.status_running_gradle();
 
-            // make sure we can execute the gradlew script
-            #[cfg(unix)]
-            {
-                use std::os::unix::prelude::PermissionsExt;
-                std::fs::set_permissions(
-                    self.build.root_dir().join("gradlew"),
-                    std::fs::Permissions::from_mode(0o755),
-                )?;
-            }
-
-            let gradle_exec_name = match cfg!(windows) {
-                true => "gradlew.bat",
-                false => "gradlew",
-            };
-            let gradle_exec = self.build.root_dir().join(gradle_exec_name);
-
-            let output = Command::new(gradle_exec)
+            let output = Command::new(self.gradle_exe()?)
                 .arg("assembleDebug")
                 .current_dir(self.build.root_dir())
                 .stderr(std::process::Stdio::piped())
@@ -761,6 +873,62 @@ impl AppBundle {
         }
 
         Ok(())
+    }
+
+    /// Run bundleRelease and return the path to the `.aab` file
+    ///
+    /// https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and
+    pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
+        let output = Command::new(self.gradle_exe()?)
+            .arg("bundleRelease")
+            .current_dir(self.build.root_dir())
+            .output()
+            .await
+            .context("Failed to run gradle bundleRelease")?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("Failed to bundleRelease: {output:?}").into());
+        }
+
+        let app_release = self
+            .build
+            .root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("bundle")
+            .join("release");
+
+        // Rename it to Name-arch.aab
+        let from = app_release.join("app-release.aab");
+        let to = app_release.join(format!(
+            "{}-{}.aab",
+            self.build.krate.bundled_app_name(),
+            self.build.build.target_args.arch()
+        ));
+
+        std::fs::rename(from, &to).context("Failed to rename aab")?;
+
+        Ok(to)
+    }
+
+    fn gradle_exe(&self) -> Result<PathBuf> {
+        // make sure we can execute the gradlew script
+        #[cfg(unix)]
+        {
+            use std::os::unix::prelude::PermissionsExt;
+            std::fs::set_permissions(
+                self.build.root_dir().join("gradlew"),
+                std::fs::Permissions::from_mode(0o755),
+            )?;
+        }
+
+        let gradle_exec_name = match cfg!(windows) {
+            true => "gradlew.bat",
+            false => "gradlew",
+        };
+
+        Ok(self.build.root_dir().join(gradle_exec_name))
     }
 
     pub(crate) fn apk_path(&self) -> PathBuf {

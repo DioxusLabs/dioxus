@@ -51,6 +51,10 @@ pub(crate) struct BuildArgs {
     #[clap(long, default_value_t = true)]
     pub(crate) inject_loading_scripts: bool,
 
+    /// Experimental: Bundle split the wasm binary into multiple chunks based on `#[wasm_split]` annotations [default: false]
+    #[clap(long, default_value_t = false)]
+    pub(crate) experimental_wasm_split: bool,
+
     /// Generate debug symbols for the wasm binary [default: true]
     ///
     /// This will make the binary larger and take longer to compile, but will allow you to debug the
@@ -156,7 +160,7 @@ impl BuildArgs {
         if self.platform == Some(Platform::Android) && self.target_args.arch.is_none() {
             tracing::debug!("No android arch provided, attempting to auto detect.");
 
-            let arch = Arch::autodetect().await;
+            let arch = DioxusCrate::autodetect_android_arch().await;
 
             // Some extra logs
             let arch = match arch {

@@ -58,7 +58,7 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-22.04
           # - target: aarch64-unknown-linux-gnu
           #   os: ubuntu-latest
     steps:
@@ -76,7 +76,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.79.0"
+          toolchain: "1.84.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -102,7 +102,7 @@ jobs:
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
-          features: wasm-opt
+          features: optimizations
 
   # todo: these things
   # Run benchmarks, which we'll use to display on the website

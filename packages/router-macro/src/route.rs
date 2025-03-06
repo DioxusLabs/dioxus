@@ -64,7 +64,7 @@ pub(crate) struct Route {
 }
 
 impl Route {
-    pub fn parse(
+    pub(crate) fn parse(
         nests: Vec<NestId>,
         layouts: Vec<LayoutId>,
         variant: syn::Variant,
@@ -167,7 +167,7 @@ impl Route {
         })
     }
 
-    pub fn display_match(&self, nests: &[Nest]) -> TokenStream2 {
+    pub(crate) fn display_match(&self, nests: &[Nest]) -> TokenStream2 {
         let name = &self.route_name;
         let dynamic_segments = self.dynamic_segments();
         let write_query: Option<TokenStream2> = self.query.as_ref().map(|q| q.write());
@@ -211,7 +211,12 @@ impl Route {
         }
     }
 
-    pub fn routable_match(&self, layouts: &[Layout], nests: &[Nest]) -> TokenStream2 {
+    pub(crate) fn routable_match(
+        &self,
+        layouts: &[Layout],
+        nests: &[Nest],
+        router_name: &Ident,
+    ) -> TokenStream2 {
         let name = &self.route_name;
 
         let mut tokens = TokenStream2::new();
@@ -265,12 +270,91 @@ impl Route {
             RouteType::Leaf { component } => {
                 let dynamic_segments = self.dynamic_segments();
                 let dynamic_segments_from_route = self.dynamic_segments();
+
+                /*
+                The implementation of this is pretty gnarly/gross.
+
+                We achieve the bundle splitting by wrapping the incoming function in a new component
+                that suspends based on an internal lazy loader. This lets us use suspense features
+                without breaking the rules of hooks. The router derive is quite complex so this shoves
+                the complexity towards the "leaf" of the codegen rather to its core. In the future though,
+                we should think about restructuring the router macro completely since its codegen
+                makes up nearly 30-40% of the binary size in the dioxus docsite.
+                */
+                use sha2::Digest;
+                let dynamic_segments_receiver = self.dynamic_segments();
+                let dynamic_segments_from_route_ = self.dynamic_segments();
+                let dynamic_segments_from_route__ = self.dynamic_segments();
+                    let unique_identifier = base16::encode_lower(
+                    &sha2::Sha256::digest(format!("{name} {span:?}", span = name.span()))[..16],
+                );
+                let module_name = format_ident!("module{}{unique_identifier}", name).to_string();
+                let comp_name = format_ident!("route{}{unique_identifier}", name);
+
                 quote! {
                     #[allow(unused)]
                     (#last_index, Self::#name { #(#dynamic_segments,)* }) => {
-                        rsx! {
-                            #component {
-                                #(#dynamic_segments_from_route: #dynamic_segments_from_route,)*
+                        dioxus::config_macros::maybe_wasm_split! {
+                            if wasm_split {
+                                {
+                                    fn #comp_name(args: #router_name) -> Element {
+                                        match args {
+                                            #router_name::#name { #(#dynamic_segments_from_route_,)* } => {
+                                                rsx! {
+                                                    #component {
+                                                        #(#dynamic_segments_from_route__: #dynamic_segments_from_route__,)*
+                                                    }
+                                                }
+                                            }
+                                            _ => unreachable!()
+                                        }
+                                    }
+
+
+
+                                    #[component]
+                                    fn LoaderInner(args: NoPartialEq<#router_name>) -> Element {
+                                        static MODULE: wasm_split::LazyLoader<#router_name, Element> =
+                                            wasm_split::lazy_loader!(extern #module_name fn #comp_name(props: #router_name) -> Element);
+
+                                        use_resource(|| async move { MODULE.load().await }).suspend()?;
+                                        MODULE.call(args.0).unwrap()
+                                    }
+
+                                    struct NoPartialEq<T>(T);
+
+                                    impl<T: Clone> Clone for NoPartialEq<T> {
+                                        fn clone(&self) -> Self {
+                                            Self(self.0.clone())
+                                        }
+                                    }
+
+                                    impl<T: std::fmt::Display> std::fmt::Display for NoPartialEq<T> {
+                                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                                            self.0.fmt(f)
+                                        }
+                                    }
+
+                                    impl<T> PartialEq for NoPartialEq<T> {
+                                        fn eq(&self, _other: &Self) -> bool {
+                                            false
+                                        }
+                                    }
+
+                                    rsx! {
+                                        LoaderInner {
+                                            args: NoPartialEq(#router_name::#name { #(#dynamic_segments_receiver,)* } )
+                                        }
+                                    }
+                                }
+                            } else {
+                                {
+                                    rsx! {
+                                        #component {
+                                            #(#dynamic_segments_from_route: #dynamic_segments_from_route,)*
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -287,7 +371,7 @@ impl Route {
         })
     }
 
-    pub fn construct(&self, nests: &[Nest], enum_name: Ident) -> TokenStream2 {
+    pub(crate) fn construct(&self, nests: &[Nest], enum_name: Ident) -> TokenStream2 {
         let segments = self.fields.iter().map(|(name, _)| {
             let mut from_route = false;
 
@@ -343,11 +427,11 @@ impl Route {
         }
     }
 
-    pub fn error_ident(&self) -> Ident {
+    pub(crate) fn error_ident(&self) -> Ident {
         format_ident!("{}ParseError", self.route_name)
     }
 
-    pub fn error_type(&self) -> TokenStream2 {
+    pub(crate) fn error_type(&self) -> TokenStream2 {
         let error_name = self.error_ident();
         let child_type = match &self.ty {
             RouteType::Child(field) => Some(&field.ty),
@@ -357,14 +441,14 @@ impl Route {
         create_error_type(&self.route, error_name, &self.segments, child_type)
     }
 
-    pub fn parse_query(&self) -> TokenStream2 {
+    pub(crate) fn parse_query(&self) -> TokenStream2 {
         match &self.query {
             Some(query) => query.parse(),
             None => quote! {},
         }
     }
 
-    pub fn parse_hash(&self) -> TokenStream2 {
+    pub(crate) fn parse_hash(&self) -> TokenStream2 {
         match &self.hash {
             Some(hash) => hash.parse(),
             None => quote! {},

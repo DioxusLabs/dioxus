@@ -15,10 +15,11 @@ mod filemap;
 mod logging;
 mod metadata;
 mod platform;
-mod rustup;
+mod rustc;
 mod serve;
 mod settings;
 mod wasm_bindgen;
+mod wasm_opt;
 
 pub(crate) use build::*;
 pub(crate) use cli::*;
@@ -29,7 +30,7 @@ pub(crate) use error::*;
 pub(crate) use filemap::*;
 pub(crate) use logging::*;
 pub(crate) use platform::*;
-pub(crate) use rustup::*;
+pub(crate) use rustc::*;
 pub(crate) use settings::*;
 
 #[tokio::main]
@@ -40,6 +41,10 @@ async fn main() {
     }
 
     let args = TraceController::initialize();
+
+    #[cfg(debug_assertions)]
+    tracing::warn!("CLI was built with debug profile. Commands will run slower.");
+
     let result = match args.action {
         Commands::Translate(opts) => opts.translate(),
         Commands::New(opts) => opts.create(),

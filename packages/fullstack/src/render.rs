@@ -191,6 +191,13 @@ impl SsrRendererPool {
             // poll the future, which may call server_context()
             with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
+            // If streaming is disabled, wait for the virtual dom to finish all suspense work
+            // before rendering anything
+            if streaming_mode == StreamingMode::Disabled {
+                ProvideServerContext::new(virtual_dom.wait_for_suspense(), server_context.clone())
+                    .await
+            }
+
             let mut pre_body = String::new();
 
             if let Err(err) = wrapper.render_head(&mut pre_body, &virtual_dom) {
@@ -216,13 +223,6 @@ impl SsrRendererPool {
                     stream.close_with_error($e);
                     return;
                 };
-            }
-
-            // If streaming is disabled, wait for the virtual dom to finish all suspense work
-            // before rendering anything
-            if streaming_mode == StreamingMode::Disabled {
-                ProvideServerContext::new(virtual_dom.wait_for_suspense(), server_context.clone())
-                    .await
             }
 
             // Render the initial frame with loading placeholders

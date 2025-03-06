@@ -57,10 +57,6 @@
 
 pub mod launch;
 
-#[allow(unused)]
-pub(crate) type ContextProviders =
-    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
-
 use axum::routing::*;
 use axum::{
     body::{self, Body},
@@ -73,7 +69,7 @@ use http::header::*;
 
 use std::sync::Arc;
 
-use crate::prelude::*;
+use crate::{prelude::*, ContextProviders};
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
@@ -453,9 +449,10 @@ async fn handle_server_fns_inner(
     let future = move || async move {
         let (parts, body) = req.into_parts();
         let req = Request::from_parts(parts.clone(), body);
+        let method = req.method().clone();
 
         if let Some(mut service) =
-            server_fn::axum::get_server_fn_service(&path_string)
+            server_fn::axum::get_server_fn_service(&path_string, method)
         {
             // Create the server context with info from the request
             let server_context = DioxusServerContext::new(parts);

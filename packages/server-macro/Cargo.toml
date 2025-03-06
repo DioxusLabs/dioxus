@@ -16,7 +16,7 @@ description = "Server function macros for Dioxus"
 proc-macro2 = "^1.0.63"
 quote = "^1.0.26"
 syn = { workspace = true, features = ["full"] }
-server_fn_macro = "0.6.11"
+server_fn_macro = { version = "0.7.3" }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }

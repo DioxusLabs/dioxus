@@ -2,7 +2,7 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-use component::ComponentBody;
+use component::{ComponentBody, ComponentMacroOptions};
 use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::parse_macro_input;
@@ -36,6 +36,7 @@ pub fn rsx(tokens: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
     parse_macro_input!(input as ComponentBody)
+        .with_options(parse_macro_input!(_args as ComponentMacroOptions))
         .into_token_stream()
         .into()
 }

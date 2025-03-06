@@ -19,7 +19,7 @@ pub(crate) struct WebConfig {
     pub(crate) https: WebHttpsConfig,
 
     /// Whether to enable pre-compression of assets and wasm during a web build in release mode
-    #[serde(default = "true_bool")]
+    #[serde(default = "false_bool")]
     pub(crate) pre_compress: bool,
 
     /// The wasm-opt configuration
@@ -30,7 +30,7 @@ pub(crate) struct WebConfig {
 impl Default for WebConfig {
     fn default() -> Self {
         Self {
-            pre_compress: true_bool(),
+            pre_compress: false_bool(),
             app: Default::default(),
             https: Default::default(),
             wasm_opt: Default::default(),
@@ -58,13 +58,18 @@ pub(crate) struct WasmOptConfig {
     /// Keep debug symbols in the wasm file
     #[serde(default = "false_bool")]
     pub(crate) debug: bool,
+
+    /// Enable memory packing
+    #[serde(default = "false_bool")]
+    pub(crate) memory_packing: bool,
 }
 
-/// The wasm-opt level to use for release web builds [default: 4]
+/// The wasm-opt level to use for release web builds [default: Z]
 #[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
 pub(crate) enum WasmOptLevel {
     /// Optimize aggressively for size
     #[serde(rename = "z")]
+    #[default]
     Z,
     /// Optimize for size
     #[serde(rename = "s")]
@@ -83,7 +88,6 @@ pub(crate) enum WasmOptLevel {
     Three,
     /// Optimize aggressively for speed
     #[serde(rename = "4")]
-    #[default]
     Four,
 }
 

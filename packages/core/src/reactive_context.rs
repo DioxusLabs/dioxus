@@ -311,3 +311,17 @@ struct Inner {
     // The scope that this reactive context is associated with
     scope: Option<ScopeId>,
 }
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        let Some(self_) = self.self_.take() else {
+            return;
+        };
+
+        for subscriber in std::mem::take(&mut self.subscribers) {
+            if let Ok(mut subscriber) = subscriber.0.lock() {
+                subscriber.remove(&self_);
+            }
+        }
+    }
+}
