@@ -23,6 +23,7 @@ tracing = { workspace = true }
 warnings = { workspace = true }
 futures-util = { workspace = true, default-features = false, features = ["alloc", "std"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
+hot-fn = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }

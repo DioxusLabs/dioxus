@@ -3484,6 +3484,7 @@ dependencies = [
  "dioxus-web",
  "env_logger 0.10.2",
  "futures-util",
+ "hot-fn",
  "manganis",
  "rand 0.8.5",
  "serde",
@@ -3572,12 +3573,13 @@ dependencies = [
  "hyper-util",
  "ignore",
  "include_dir",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "krates",
  "local-ip-address",
  "log",
  "manganis",
  "manganis-core",
+ "memmap",
  "memoize",
  "notify",
  "object 0.36.5",
@@ -3594,6 +3596,7 @@ dependencies = [
  "rustls 0.23.19",
  "serde",
  "serde_json",
+ "shell-words",
  "strum 0.26.3",
  "syn 2.0.98",
  "tar",
@@ -3709,6 +3712,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
+ "hot-fn",
  "longest-increasing-subsequence",
  "pretty_assertions",
  "rand 0.8.5",
@@ -3813,6 +3817,9 @@ dependencies = [
  "dioxus-core",
  "dioxus-devtools-types",
  "dioxus-signals",
+ "hot-fn",
+ "libc",
+ "libloading 0.8.6",
  "serde",
  "serde_json",
  "tokio",
@@ -5012,6 +5019,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
+name = "flashmap"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f108275c5ad3af6192474d22485daee1a40adc08f8ed8bdd5a472b763e5c11a7"
+dependencies = [
+ "hashbrown 0.12.3",
+ "loom",
+ "num_cpus",
+ "slab",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5470,6 +5489,19 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "tracing",
+]
+
+[[package]]
+name = "generator"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cc16584ff22b460a382b7feec54b23d2908d858152e5739a120b949293bd74e"
+dependencies = [
+ "cc",
+ "libc",
+ "log",
+ "rustversion",
+ "windows 0.48.0",
 ]
 
 [[package]]
@@ -6407,6 +6439,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3d1354bf6b7235cb4a0576c2619fd4ed18183f689b12b006a0ee7329eeff9a5"
 dependencies = [
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "hot-fn"
+version = "0.6.3"
+dependencies = [
+ "flashmap",
+ "libc",
+ "libloading 0.8.6",
+ "once_cell",
 ]
 
 [[package]]
@@ -7578,9 +7620,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.168"
+version = "0.2.170"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aaeb2981e0606ca11d79718f8bb01164f1d6ed75080182d3abf017e6d244b6d"
+checksum = "875b3680cb2f8f71bdcf9a30f38d48282f5d3c95cbf9b3fa57269bb5d5c06828"
 
 [[package]]
 name = "libfuzzer-sys"
@@ -7862,6 +7904,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3bd0dd2cd90571056fdb71f6275fada10131182f84899f4b2a916e565d81d86"
 
 [[package]]
+name = "loom"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff50ecb28bb86013e935fb6683ab1f6d3a20016f123c76fd4c27470076ac30f5"
+dependencies = [
+ "cfg-if",
+ "generator",
+ "scoped-tls",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "loop9"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8044,6 +8101,16 @@ name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+
+[[package]]
+name = "memmap"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
+dependencies = [
+ "libc",
+ "winapi",
+]
 
 [[package]]
 name = "memmap2"
@@ -8823,7 +8890,10 @@ version = "0.36.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aedf0a2d09c573ed1d8d85b30c119153926a2b36dce0ab28322c09a117a4683e"
 dependencies = [
+ "crc32fast",
  "flate2",
+ "hashbrown 0.15.2",
+ "indexmap 2.7.0",
  "memchr",
  "ruzstd 0.7.3",
  "wasmparser 0.218.0",
@@ -14719,6 +14789,15 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "windows"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e686886bc078bc1b0b600cac0147aadb815089b6e4da64016cbd754b6342700f"
+dependencies = [
+ "windows-targets 0.48.5",
+]
 
 [[package]]
 name = "windows"

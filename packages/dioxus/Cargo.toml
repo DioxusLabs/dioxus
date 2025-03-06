@@ -31,6 +31,7 @@ manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
 wasm-split = { workspace = true, optional = true }
+hot-fn = { workspace = true }
 
 serde = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
