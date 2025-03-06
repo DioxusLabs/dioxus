@@ -1,11 +1,13 @@
-use crate::Config;
+use crate::webview::WebviewInstance;
 use crate::{
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
 };
+use crate::{Config, DesktopService};
 use dioxus_core::*;
 use dioxus_document::eval;
 use std::any::Any;
+use std::rc::Rc;
 use tao::event::{Event, StartCause, WindowEvent};
 
 /// Launch the WebView and run the event loop, with configuration and root props.
@@ -38,7 +40,29 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
 
             Event::UserEvent(event) => match event {
                 UserWindowEvent::Poll(id) => app.poll_vdom(id),
-                UserWindowEvent::NewWindow => app.handle_new_window(),
+                UserWindowEvent::NewWindow => {
+                    // Create new windows/webviews
+                    {
+                        let mut pending_windows = app.shared.pending_windows.borrow_mut();
+                        let mut pending_webviews = app.shared.pending_webviews.borrow_mut();
+
+                        for (dom, cfg, sender) in pending_windows.drain(..) {
+                            let window = WebviewInstance::new(cfg, dom, app.shared.clone());
+
+                            // Send the desktop context to the MaybeDesktopService
+                            let cx = window.dom.in_runtime(|| {
+                                ScopeId::ROOT
+                                    .consume_context::<Rc<DesktopService>>()
+                                    .unwrap()
+                            });
+                            let _ = sender.send(Rc::downgrade(&cx));
+
+                            pending_webviews.push(window);
+                        }
+                    }
+
+                    app.handle_new_windows();
+                }
                 UserWindowEvent::CloseWindow(id) => app.handle_close_msg(id),
                 UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
 
