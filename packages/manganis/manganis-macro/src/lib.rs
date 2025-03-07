@@ -65,7 +65,58 @@ pub fn asset(input: TokenStream) -> TokenStream {
     quote! { #asset }.into_token_stream().into()
 }
 
-/// Generate type-safe and project-unique
+/// Generate type-safe and globally-unique CSS identifiers from a CSS module.
+/// 
+/// CSS modules allow you to have unique, scoped and type-safe CSS identifiers. A CSS module is identified by the `.module.css` file name suffix.
+/// 
+/// The `css_module!` macro does two things:
+/// 1. It generates an asset using the [`asset`] macro.
+/// 2. It generates a struct with snake-case field names of your CSS idents.
+/// 
+/// ```rust
+/// // This macro usage:
+/// css_module!(MY_ASSET, STYLES, "/mycss.module.css");
+/// 
+/// // Will produce these constants:
+/// const MY_ASSET: Asset = asset!("/mycss.module.css", CssModuleAssetOptions::new());
+/// const STYLES: Styles = Styles { ..yourcssidents.. }
+/// ```
+/// 
+/// ### CSS Identifiers
+/// The macro will collect all identifiers used in your CSS module, convert them into snake_case, and generate a struct and fields around those identifier names.
+/// For example, if you have the ids `#actionButton`, `#header`, and classes `.button`, `.example-item`, 
+/// 
+/// ### Variable Visibility
+/// If you want your asset or styles variable to be public, you can add the `pub` keyword in front of them. 
+/// We do not currently support scoped public such as `pub(crate)` or `pub(super)`.
+/// ```rust
+/// css_module!(pub MY_ASSET, pub STYLES, "/mycss.module.css");
+/// ```
+/// 
+/// ### Asset Options
+/// 
+/// # Examples
+/// First you need a CSS module file:
+/// ```css
+/// /* mycss.module.css */
+/// #header {
+///     margin: 0;
+/// }
+/// 
+/// .button {
+///     background-color: #373737;        
+/// }
+/// ```
+/// Then you can use the `css_module!` macro in your Rust files:
+/// ```rust
+/// css_module!(MY_CSS, STYLES, "/mycss.module.css");
+/// 
+/// fn main() {
+///     println!("{}", MY_CSS);
+///     println!("{}", STYLES.header);
+///     println!("{}", STYLES.button);
+/// }
+/// ```
 #[proc_macro]
 pub fn css_module(input: TokenStream) -> TokenStream {
     let style = parse_macro_input!(input as CssModuleParser);
