@@ -7,17 +7,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use css_module::CssModuleParser;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use styles::StyleParser;
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
 };
 
 pub(crate) mod asset;
+pub(crate) mod css_module;
 pub(crate) mod linker;
-pub(crate) mod styles;
 
 use linker::generate_link_section;
 
@@ -65,10 +65,10 @@ pub fn asset(input: TokenStream) -> TokenStream {
     quote! { #asset }.into_token_stream().into()
 }
 
-/// styles
+/// Generate type-safe and project-unique
 #[proc_macro]
-pub fn styles(input: TokenStream) -> TokenStream {
-    let style = parse_macro_input!(input as StyleParser);
+pub fn css_module(input: TokenStream) -> TokenStream {
+    let style = parse_macro_input!(input as CssModuleParser);
 
     quote! { #style }.into_token_stream().into()
 }

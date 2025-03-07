@@ -86,7 +86,7 @@ pub(crate) fn process_file_to_with_options(
             process_css(options, source, &temp_path)?;
         }
         AssetOptions::CssModule(options) => {
-            process_css_module(options, source, output_path)?;
+            process_css_module(options, source, output_path, &temp_path)?;
         }
         AssetOptions::Js(options) => {
             process_js(options, source, &temp_path, !in_folder)?;

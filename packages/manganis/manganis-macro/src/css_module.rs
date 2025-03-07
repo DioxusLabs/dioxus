@@ -1,34 +1,44 @@
 use crate::{asset::AssetParser, resolve_path};
 use macro_string::MacroString;
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     token::Comma,
-    Ident,
+    Ident, Token,
 };
 
-pub(crate) struct StyleParser {
+pub(crate) struct CssModuleParser {
+    asset_is_pub: bool,
     asset_ident: Ident,
+    styles_is_pub: bool,
     styles_ident: Ident,
     asset_parser: AssetParser,
 }
 
-impl Parse for StyleParser {
+impl Parse for CssModuleParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        // macro!(pub? ASSET_IDENT, pub? STYLES_IDENT, ASSET_PATH, ASSET_OPTIONS?)
+        // Asset struct ident
+        let asset_is_pub = input.parse::<Option<Token![pub]>>()?.is_some();
         let asset_ident = input.parse::<Ident>()?;
         input.parse::<Comma>()?;
+
+        // Styles struct ident
+        let styles_is_pub = input.parse::<Option<Token![pub]>>()?.is_some();
         let styles_ident = input.parse::<Ident>()?;
         input.parse::<Comma>()?;
+
+        // Asset path
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
         let asset = resolve_path(&src);
         let _comma = input.parse::<Comma>();
 
+        // Optional options
         let mut options = input.parse::<TokenStream>()?;
         if options.is_empty() {
             options = quote! { manganis::CssModuleAssetOptions::new() }
         }
-        // TODO: Verify that this is actually a `CssModuleAssetOptions`
 
         let asset_parser = AssetParser {
             path_expr,
@@ -37,18 +47,28 @@ impl Parse for StyleParser {
         };
 
         Ok(Self {
+            asset_is_pub,
             asset_ident,
+            styles_is_pub,
             styles_ident,
             asset_parser,
         })
     }
 }
 
-impl ToTokens for StyleParser {
+impl ToTokens for CssModuleParser {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         // Use the regular asset parser to generate the linker bridge.
         let asset_ident = &self.asset_ident;
-        let mut linker_tokens = quote! { const #asset_ident: manganis::Asset = };
+        let asset_public_quote = match self.asset_is_pub {
+            true => quote! { pub },
+            false => quote! {},
+        };
+        let mut linker_tokens = quote! {
+            /// Auto-generated Manganis asset for css modules.
+            #[allow(missing_docs)]
+            #asset_public_quote const #asset_ident: manganis::Asset =
+        };
         self.asset_parser.to_tokens(&mut linker_tokens);
         tokens.extend(quote! { #linker_tokens; });
 
@@ -78,6 +98,11 @@ impl ToTokens for StyleParser {
         let mut fields = Vec::new();
         let mut values = Vec::new();
 
+        // Create unique module name based on styles ident.
+        let styles_ident = &self.styles_ident;
+        let mod_name = format_ident!("__{}_module", styles_ident);
+
+        // Generate id struct field tokens.
         for id in ids.iter() {
             let as_snake = to_snake_case(id);
             let ident = Ident::new(&as_snake, Span::call_site());
@@ -87,10 +112,11 @@ impl ToTokens for StyleParser {
             });
 
             values.push(quote! {
-                #ident: manganis::macro_helpers::const_serialize::ConstStr::new(#id).push_str(__styles::__ASSET_HASH.as_str()).as_str(),
+                #ident: manganis::macro_helpers::const_serialize::ConstStr::new(#id).push_str(#mod_name::__ASSET_HASH.as_str()).as_str(),
             });
         }
 
+        // Generate class struct field tokens.
         for class in classes.iter() {
             let as_snake = to_snake_case(class);
             let as_snake = match ids.contains(class) {
@@ -104,31 +130,37 @@ impl ToTokens for StyleParser {
             });
 
             values.push(quote! {
-                #ident: manganis::macro_helpers::const_serialize::ConstStr::new(#class).push_str(__styles::__ASSET_HASH.as_str()).as_str(),
+                #ident: manganis::macro_helpers::const_serialize::ConstStr::new(#class).push_str(#mod_name::__ASSET_HASH.as_str()).as_str(),
             });
         }
 
-        if fields.is_empty() {
-            panic!("NO CSS IDENTS!");
-        }
-
-        let styles_ident = &self.styles_ident;
         let options = &self.asset_parser.options;
 
+        let styles_public_quote = match self.styles_is_pub {
+            true => quote! { pub },
+            false => quote! {},
+        };
+
+        // We use a PhantomData to prevent Rust from complaining about an unused lifetime if a css module without any idents is used.
         tokens.extend(quote! {
             #[doc(hidden)]
-            mod __styles {
+            #[allow(missing_docs, non_snake_case)]
+            mod #mod_name {
                 use super::manganis;
 
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
                 pub(super) const __ASSET_HASH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::hash_asset(&__ASSET_OPTIONS, #hash);
 
                 pub(super) struct Styles<'a> {
+                    pub(super) __phantom: std::marker::PhantomData<&'a ()>,
                     #( #fields )*
                 }
             }
 
-            const #styles_ident: __styles::Styles = __styles::Styles {
+            /// Auto-generated idents struct for CSS modules.
+            #[allow(missing_docs, non_snake_case)]
+            #styles_public_quote const #styles_ident: #mod_name::Styles = #mod_name::Styles {
+                __phantom: std::marker::PhantomData,
                 #( #values )*
             };
         })

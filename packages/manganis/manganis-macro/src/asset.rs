@@ -1,3 +1,4 @@
+use crate::{resolve_path, AssetParseError};
 use macro_string::MacroString;
 use manganis_core::hash::AssetHash;
 use proc_macro2::TokenStream as TokenStream2;
@@ -8,7 +9,6 @@ use syn::{
     spanned::Spanned as _,
     Token,
 };
-use crate::{resolve_path, AssetParseError};
 
 pub struct AssetParser {
     /// The token(s) of the source string, for error reporting

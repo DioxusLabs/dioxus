@@ -171,8 +171,6 @@ const fn bytes_equal(left: &[u8], right: &[u8]) -> bool {
     true
 }
 
-
-
 #[test]
 fn test_unique_path() {
     use manganis_core::{ImageAssetOptions, ImageFormat};

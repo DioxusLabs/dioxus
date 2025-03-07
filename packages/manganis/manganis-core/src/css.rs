@@ -155,10 +155,10 @@ impl CssModuleAssetOptions {
 ///
 /// This is a rudementary css classes & ids collector.
 /// Idents used only in media queries will not be collected. (not support yet)
-/// 
+///
 /// There are likely a number of edge cases that will show up.
-/// 
-/// Returns (HashSet<Classes>, HashSet<Ids>)
+///
+/// Returns `(HashSet<Classes>, HashSet<Ids>)`
 pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>) {
     const ALLOWED: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
 

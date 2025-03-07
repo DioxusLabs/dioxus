@@ -46,6 +46,7 @@ pub(crate) fn process_css(
 pub(crate) fn process_css_module(
     css_options: &CssModuleAssetOptions,
     source: &Path,
+    final_path: &Path,
     output_path: &Path,
 ) -> anyhow::Result<()> {
     let mut css = std::fs::read_to_string(source)?;
@@ -61,14 +62,12 @@ pub(crate) fn process_css_module(
 
     src_name.push('-');
 
-    let out_name = output_path
+    let out_name = final_path
         .file_name()
         .and_then(|x| x.to_str())
         .ok_or(anyhow!("Failed to read name of css module output file."))?
         .strip_suffix(".css")
         .unwrap();
-
-    //panic!("OUT_NAME: {:?} | SRC NAME: {:?}", out_name, src_name);
 
     let hash = out_name
         .strip_prefix(&src_name)
