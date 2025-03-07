@@ -70,7 +70,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// CSS modules allow you to have unique, scoped and type-safe CSS identifiers. A CSS module is identified by the `.module.css` file name suffix.
 ///
 /// The `css_module!` macro does two things:
-/// 1. It generates an asset using the [`asset`] macro.
+/// 1. It generates an asset using the `asset` macro.
 /// 2. It generates a struct with snake-case field names of your CSS idents.
 ///
 /// ```rust
