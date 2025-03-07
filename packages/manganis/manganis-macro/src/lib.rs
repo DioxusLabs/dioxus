@@ -1,12 +1,19 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-use std::{hash::Hasher, io::Read, path::{Path, PathBuf}};
+use std::{
+    hash::Hasher,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use styles::StyleParser;
-use syn::parse_macro_input;
+use syn::{
+    parse::{Parse, ParseStream},
+    parse_macro_input,
+};
 
 pub(crate) mod asset;
 pub(crate) mod linker;
@@ -149,8 +156,25 @@ fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
     Ok(hash.finish())
 }
 
+/// Parse `T`, while also collecting the tokens it was parsed from.
+fn parse_with_tokens<T: Parse>(input: ParseStream) -> syn::Result<(T, proc_macro2::TokenStream)> {
+    let begin = input.cursor();
+    let t: T = input.parse()?;
+    let end = input.cursor();
+
+    let mut cursor = begin;
+    let mut tokens = proc_macro2::TokenStream::new();
+    while cursor != end {
+        let (tt, next) = cursor.token_tree().unwrap();
+        tokens.extend(std::iter::once(tt));
+        cursor = next;
+    }
+
+    Ok((t, tokens))
+}
+
 #[derive(Debug)]
-pub(crate) enum AssetParseError {
+enum AssetParseError {
     AssetDoesntExist { path: PathBuf },
     IoError { err: std::io::Error, path: PathBuf },
     InvalidPath { path: PathBuf },

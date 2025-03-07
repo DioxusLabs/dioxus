@@ -1,10 +1,11 @@
 use crate::{asset::AssetParser, resolve_path};
+use macro_string::MacroString;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     token::Comma,
-    Ident, LitStr,
+    Ident,
 };
 
 pub(crate) struct StyleParser {
@@ -19,9 +20,8 @@ impl Parse for StyleParser {
         input.parse::<Comma>()?;
         let styles_ident = input.parse::<Ident>()?;
         input.parse::<Comma>()?;
-        let src = input.parse::<LitStr>()?;
-        let path_span = src.span();
-        let asset = resolve_path(&src.value());
+        let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
+        let asset = resolve_path(&src);
         let _comma = input.parse::<Comma>();
 
         let mut options = input.parse::<TokenStream>()?;
@@ -31,12 +31,16 @@ impl Parse for StyleParser {
         // TODO: Verify that this is actually a `CssModuleAssetOptions`
 
         let asset_parser = AssetParser {
-            path_span,
+            path_expr,
             asset,
             options,
         };
 
-        Ok(Self { asset_ident, styles_ident, asset_parser })
+        Ok(Self {
+            asset_ident,
+            styles_ident,
+            asset_parser,
+        })
     }
 }
 
@@ -47,7 +51,7 @@ impl ToTokens for StyleParser {
         let mut linker_tokens = quote! { const #asset_ident: manganis::Asset = };
         self.asset_parser.to_tokens(&mut linker_tokens);
         tokens.extend(quote! { #linker_tokens; });
-        
+
         let path = match self.asset_parser.asset.as_ref() {
             Ok(path) => path,
             Err(err) => {
