@@ -75,7 +75,7 @@ pub(crate) fn process_css_module(
         .ok_or(anyhow!("Failed to read hash of css module."))?;
 
     // Rewrite CSS idents with ident+hash.
-    let (classes, ids, _comment_scopes) = manganis_core::collect_css_idents(&css);
+    let (classes, ids) = manganis_core::collect_css_idents(&css);
 
     for class in classes {
         css = css.replace(&format!(".{class}"), &format!(".{class}{hash}"));

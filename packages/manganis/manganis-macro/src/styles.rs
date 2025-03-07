@@ -73,7 +73,7 @@ impl ToTokens for StyleParser {
 
         // Process css idents
         let css = std::fs::read_to_string(path).unwrap();
-        let (classes, ids, _) = manganis_core::collect_css_idents(&css);
+        let (classes, ids) = manganis_core::collect_css_idents(&css);
 
         let mut fields = Vec::new();
         let mut values = Vec::new();

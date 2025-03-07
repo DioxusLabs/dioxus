@@ -1,8 +1,6 @@
-use std::{collections::HashSet, ops::Range};
-
-use const_serialize::SerializeConst;
-
 use crate::AssetOptions;
+use const_serialize::SerializeConst;
+use std::collections::HashSet;
 
 /// Options for a css asset
 #[derive(
@@ -153,15 +151,19 @@ impl CssModuleAssetOptions {
     }
 }
 
-/// Collect CSS classes & ids
+/// Collect CSS classes & ids.
 ///
-/// Returns (HashSet<Classes>, HashSet<Ids>, Vec<CommentScopeRange>)
-pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>, Vec<Range<usize>>) {
+/// This is a rudementary css classes & ids collector.
+/// Idents used only in media queries will not be collected. (not support yet)
+/// 
+/// There are likely a number of edge cases that will show up.
+/// 
+/// Returns (HashSet<Classes>, HashSet<Ids>)
+pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>) {
     const ALLOWED: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
 
     let mut classes = HashSet::new();
     let mut ids = HashSet::new();
-    let mut comment_scopes = Vec::new();
 
     // Collected ident name and true for ids.
     let mut start: Option<(String, bool)> = None;
@@ -172,14 +174,16 @@ pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>, Vec<R
     let mut comment_end = false;
     // True if we're in a comment scope.
     let mut in_comment_scope = false;
-    let mut comment_scope_start: usize = 0;
+
+    // True if we're in a block scope: `#hi { this is block scope }`
+    let mut in_block_scope = false;
 
     // If we are currently collecting an ident:
     // - Check if the char is allowed, put it into the ident string.
     // - If not allowed, finalize the ident string and reset start.
     // Otherwise:
     // Check if character is a `.` or `#` representing a class or string, and start collecting.
-    for (byte_index, c) in css.char_indices() {
+    for (_byte_index, c) in css.char_indices() {
         if let Some(ident) = start.as_mut() {
             if ALLOWED.find(c).is_some() {
                 // CSS ignore idents that start with a number.
@@ -200,7 +204,7 @@ pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>, Vec<R
                 start = None;
             }
         } else {
-            // Handle entering an exiting comment scope.
+            // Handle entering an exiting scopede.
             match c {
                 // Mark as comment scope if we have comment start: /*
                 '*' if comment_start => {
@@ -212,15 +216,16 @@ pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>, Vec<R
                 // Mark as comment start if not in comment scope and no comment start, mark comment_start
                 '/' if !in_comment_scope => {
                     comment_start = true;
-                    comment_scope_start = byte_index;
                 }
                 // If we get the closing delimiter, mark as non-comment scope.
                 '/' if comment_end => {
                     in_comment_scope = false;
                     comment_start = false;
                     comment_end = false;
-                    comment_scopes.push(comment_scope_start..byte_index);
                 }
+                // Entering & Exiting block scope.
+                '{' => in_block_scope = true,
+                '}' => in_block_scope = false,
                 // Any other character, reset comment start and end if not in scope.
                 _ => {
                     comment_start = false;
@@ -228,8 +233,8 @@ pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>, Vec<R
                 }
             }
 
-            // No need to process this char if in comment scope.
-            if in_comment_scope {
+            // No need to process this char if in bad scope.
+            if in_comment_scope || in_block_scope {
                 continue;
             }
 
@@ -241,5 +246,5 @@ pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>, Vec<R
         }
     }
 
-    (classes, ids, comment_scopes)
+    (classes, ids)
 }
