@@ -17,7 +17,7 @@ pub struct OutletContext<R> {
 }
 
 impl<R> OutletContext<R> {
-    /// Creates a new outlet context starting at level 1
+    /// Creates a new outlet context starting at level 0
     pub fn new() -> Self {
         Self {
             current_level: 0,
@@ -62,7 +62,7 @@ impl<R> OutletContext<R> {
 /// Returns the current outlet context from the component hierarchy.
 ///
 /// This hook retrieves the outlet context from the current component scope. If no context is found,
-/// it creates a new context with a default level of 1.
+/// it creates a new context with a default level of 0.
 ///
 /// # Type Parameters
 ///
