@@ -1,89 +1,24 @@
+use crate::{resolve_path, AssetParseError};
 use macro_string::MacroString;
 use manganis_core::hash::AssetHash;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::{iter, path::PathBuf};
+use std::path::PathBuf;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned as _,
     Token,
 };
 
-#[derive(Debug)]
-pub(crate) enum AssetParseError {
-    AssetDoesntExist { path: PathBuf },
-    InvalidPath { path: PathBuf },
-}
-
-impl std::fmt::Display for AssetParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AssetParseError::AssetDoesntExist { path } => {
-                write!(f, "Asset at {} doesn't exist", path.display())
-            }
-            AssetParseError::InvalidPath { path } => {
-                write!(
-                    f,
-                    "Asset path {} is invalid. Make sure the asset exists within this crate.",
-                    path.display()
-                )
-            }
-        }
-    }
-}
-
-fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
-    // Get the location of the root of the crate which is where all assets are relative to
-    //
-    // IE
-    // /users/dioxus/dev/app/
-    // is the root of
-    // /users/dioxus/dev/app/assets/blah.css
-    let manifest_dir = dunce::canonicalize(
-        std::env::var("CARGO_MANIFEST_DIR")
-            .map(PathBuf::from)
-            .unwrap(),
-    )
-    .unwrap();
-
-    // 1. the input file should be a pathbuf
-    let input = PathBuf::from(raw);
-
-    // 2. absolute path to the asset
-    let Ok(path) = std::path::absolute(manifest_dir.join(raw.trim_start_matches('/'))) else {
-        return Err(AssetParseError::InvalidPath {
-            path: input.clone(),
-        });
-    };
-
-    // 3. Ensure the path exists
-    let Ok(path) = dunce::canonicalize(path) else {
-        return Err(AssetParseError::AssetDoesntExist {
-            path: input.clone(),
-        });
-    };
-
-    // 4. Ensure the path doesn't escape the crate dir
-    //
-    // - Note: since we called canonicalize on both paths, we can safely compare the parent dirs.
-    //   On windows, we can only compare the prefix if both paths are canonicalized (not just absolute)
-    //   https://github.com/rust-lang/rust/issues/42869
-    if path == manifest_dir || !path.starts_with(manifest_dir) {
-        return Err(AssetParseError::InvalidPath { path });
-    }
-
-    Ok(path)
-}
-
 pub struct AssetParser {
     /// The token(s) of the source string, for error reporting
-    path_expr: proc_macro2::TokenStream,
+    pub(crate) path_expr: proc_macro2::TokenStream,
 
     /// The asset itself
-    asset: Result<PathBuf, AssetParseError>,
+    pub(crate) asset: Result<PathBuf, AssetParseError>,
 
     /// The source of the trailing options
-    options: TokenStream2,
+    pub(crate) options: TokenStream2,
 }
 
 impl Parse for AssetParser {
@@ -107,7 +42,7 @@ impl Parse for AssetParser {
     // But we need to decide the hint first before parsing the options
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // And then parse the options
-        let (MacroString(src), path_expr) = input.call(parse_with_tokens)?;
+        let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
         let asset = resolve_path(&src);
         let _comma = input.parse::<Token![,]>();
         let options = input.parse()?;
@@ -189,21 +124,4 @@ impl ToTokens for AssetParser {
             }
         })
     }
-}
-
-/// Parse `T`, while also collecting the tokens it was parsed from.
-fn parse_with_tokens<T: Parse>(input: ParseStream) -> syn::Result<(T, proc_macro2::TokenStream)> {
-    let begin = input.cursor();
-    let t: T = input.parse()?;
-    let end = input.cursor();
-
-    let mut cursor = begin;
-    let mut tokens = proc_macro2::TokenStream::new();
-    while cursor != end {
-        let (tt, next) = cursor.token_tree().unwrap();
-        tokens.extend(iter::once(tt));
-        cursor = next;
-    }
-
-    Ok((t, tokens))
 }
