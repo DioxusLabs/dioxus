@@ -118,7 +118,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 ///
 /// # Variable Visibility
 /// If you want your asset or styles constant to be public, you can add the `pub` keyword in front of them.
-/// Scoped visibility such as `pub(crate)` or `pub(super)` is not supported.
+/// Restricted visibility (`pub(super)`, `pub(crate)`, etc) is also supported.
 /// ```rust
 /// css_module!(pub MY_ASSET, pub STYLES, "/mycss.module.css");
 /// ```

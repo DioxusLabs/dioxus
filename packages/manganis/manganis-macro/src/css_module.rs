@@ -5,13 +5,13 @@ use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     token::Comma,
-    Ident, Token,
+    Ident, Visibility,
 };
 
 pub(crate) struct CssModuleParser {
-    asset_is_pub: bool,
+    asset_vis: Visibility,
     asset_ident: Ident,
-    styles_is_pub: bool,
+    styles_vis: Visibility,
     styles_ident: Ident,
     asset_parser: AssetParser,
 }
@@ -20,12 +20,12 @@ impl Parse for CssModuleParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // macro!(pub? ASSET_IDENT, pub? STYLES_IDENT, ASSET_PATH, ASSET_OPTIONS?)
         // Asset struct ident
-        let asset_is_pub = input.parse::<Option<Token![pub]>>()?.is_some();
+        let asset_vis = input.parse::<Visibility>()?;
         let asset_ident = input.parse::<Ident>()?;
         input.parse::<Comma>()?;
 
         // Styles struct ident
-        let styles_is_pub = input.parse::<Option<Token![pub]>>()?.is_some();
+        let styles_vis = input.parse::<Visibility>()?;
         let styles_ident = input.parse::<Ident>()?;
         input.parse::<Comma>()?;
 
@@ -47,9 +47,9 @@ impl Parse for CssModuleParser {
         };
 
         Ok(Self {
-            asset_is_pub,
+            asset_vis,
             asset_ident,
-            styles_is_pub,
+            styles_vis,
             styles_ident,
             asset_parser,
         })
@@ -59,15 +59,12 @@ impl Parse for CssModuleParser {
 impl ToTokens for CssModuleParser {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         // Use the regular asset parser to generate the linker bridge.
+        let asset_vis = &self.asset_vis;
         let asset_ident = &self.asset_ident;
-        let asset_public_quote = match self.asset_is_pub {
-            true => quote! { pub },
-            false => quote! {},
-        };
         let mut linker_tokens = quote! {
             /// Auto-generated Manganis asset for css modules.
             #[allow(missing_docs)]
-            #asset_public_quote const #asset_ident: manganis::Asset =
+            #asset_vis const #asset_ident: manganis::Asset =
         };
         self.asset_parser.to_tokens(&mut linker_tokens);
         tokens.extend(quote! { #linker_tokens; });
@@ -135,11 +132,7 @@ impl ToTokens for CssModuleParser {
         }
 
         let options = &self.asset_parser.options;
-
-        let styles_public_quote = match self.styles_is_pub {
-            true => quote! { pub },
-            false => quote! {},
-        };
+        let styles_vis = &self.styles_vis;
 
         // We use a PhantomData to prevent Rust from complaining about an unused lifetime if a css module without any idents is used.
         tokens.extend(quote! {
@@ -152,14 +145,14 @@ impl ToTokens for CssModuleParser {
                 pub(super) const __ASSET_HASH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::hash_asset(&__ASSET_OPTIONS, #hash);
 
                 pub(super) struct Styles<'a> {
-                    pub(super) __phantom: std::marker::PhantomData<&'a ()>,
+                    pub __phantom: std::marker::PhantomData<&'a ()>,
                     #( #fields )*
                 }
             }
 
             /// Auto-generated idents struct for CSS modules.
             #[allow(missing_docs, non_snake_case)]
-            #styles_public_quote const #styles_ident: #mod_name::Styles = #mod_name::Styles {
+            #styles_vis const #styles_ident: #mod_name::Styles = #mod_name::Styles {
                 __phantom: std::marker::PhantomData,
                 #( #values )*
             };
