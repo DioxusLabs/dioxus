@@ -18,8 +18,9 @@ pub(crate) type ContextProviders =
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 pub mod server;
 
-#[cfg(feature = "axum_server_fn")]
-mod axum_server_fn;
+#[cfg(feature = "axum_wasm")]
+#[cfg_attr(docsrs, doc(cfg(feature = "axum_wasm")))]
+pub mod axum_wasm;
 
 mod hooks;
 
@@ -35,11 +36,8 @@ mod serve_config;
 #[cfg(feature = "server")]
 pub use serve_config::*;
 
-#[cfg(any(feature = "server", feature = "axum_server_fn"))]
+#[cfg(feature = "server")]
 mod server_context;
-
-#[cfg(all(feature = "axum_server_fn", not(feature = "axum")))]
-pub use crate::axum_server_fn::DioxusRouterExt;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
@@ -49,6 +47,9 @@ pub mod prelude {
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use crate::server::*;
+
+    #[cfg(feature = "axum_wasm")]
+    pub use crate::axum_wasm::*;
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
@@ -62,7 +63,7 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "axum"))))]
     pub use crate::server_context::Axum;
 
-    #[cfg(any(feature = "server", feature = "axum_server_fn"))]
+    #[cfg(any(feature = "server", feature = "axum_wasm"))]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::server_context::{
         extract, server_context, with_server_context, DioxusServerContext, FromContext,
