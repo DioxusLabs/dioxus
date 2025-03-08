@@ -69,29 +69,29 @@ pub fn asset(input: TokenStream) -> TokenStream {
 ///
 /// CSS modules allow you to have unique, scoped and type-safe CSS identifiers. A CSS module is a CSS file with the `.module.css` file extension.
 /// The `css_module!()` macro allows you to utilize CSS modules in your Rust projects.
-/// 
+///
 /// # Syntax
-/// 
+///
 /// The `css_module!()` macro takes a comma separated list of items:
 /// - The asset constant identifier. This is the `const` variable for the `Asset` of the CSS module.
 /// - The styles constant identifier. This is the `const` variable to access your type-safe CSS identifiers in Rust.
 /// - The asset string path. This is the absolute path (from the crate root) to your CSS module.
 /// - An optional `CssModuleAssetOptions` struct to configure the processing of your CSS module.
-/// 
+///
 /// ```rust
 /// css_module!(ASSET_IDENT, STYLES_IDENT, "/my.module.css", CssModuleAssetOptions::new());
 /// ```
-/// 
+///
 /// Both the asset constant, and styles constant can optionally be made public by appending `pub` before the identifier.
 /// Read the [Variable Visibility](#variable-visibility) section for more information.
-/// 
+///
 /// # Generation
-/// 
+///
 /// The `css_module!()` macro does a few things:
 /// - It generates an asset using the `asset!()` macro and provides a constant to it.
 /// - It generates a struct with snake-case field names of your CSS idents.
 /// - It creates a constant of the generated struct with the final unique CSS identifiers.
-/// 
+///
 /// ```rust
 /// // This macro usage:
 /// css_module!(MY_ASSET, STYLES, "/mycss.module.css");
@@ -103,14 +103,14 @@ pub fn asset(input: TokenStream) -> TokenStream {
 ///
 /// # CSS Identifier Collection
 /// The macro will collect all identifiers used in your CSS module, convert them into snake_case, and generate a struct and fields around those identifier names.
-/// 
+///
 /// For example, `#fooBar` will become `foo_bar`.
-/// 
+///
 /// Identifier used only inside of a media query, will not be collected (not yet supported). To get around this, you can use an empty block for the identifier:
 /// ```css
 /// /* Empty ident block to ensure collection */
 /// #foo {}
-/// 
+///
 /// @media ... {
 ///     #foo { ... }
 /// }
@@ -127,11 +127,11 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// Similar to the  `asset!()` macro, you can pass an optional `CssModuleAssetOptions` to configure a few processing settings.
 /// ```rust
 /// use manganis::CssModuleAssetOptions;
-/// 
+///
 /// css_module!(
-///     MY_CSS, 
-///     STYLES, 
-///     "/mycss.module.css", 
+///     MY_CSS,
+///     STYLES,
+///     "/mycss.module.css",
 ///     CssModuleAssetOptions::new()
 ///         .with_minify(true)
 ///         .with_preload(false),
@@ -142,11 +142,11 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// First you need a CSS module:
 /// ```css
 /// /* mycss.module.css */
-/// 
+///
 /// #header {
 ///     padding: 50px;
 /// }
-/// 
+///
 /// .header {
 ///     margin: 20px;
 /// }
