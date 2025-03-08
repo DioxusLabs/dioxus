@@ -4,13 +4,23 @@
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+use std::sync::Arc;
+
 pub use once_cell;
 
 mod html_storage;
 
+#[allow(unused)]
+pub(crate) type ContextProviders =
+    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
+
 #[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 pub mod server;
+
+#[cfg(feature = "axum_wasm")]
+#[cfg_attr(docsrs, doc(cfg(feature = "axum_wasm")))]
+pub mod axum_wasm;
 
 mod hooks;
 
@@ -22,6 +32,7 @@ mod streaming;
 
 #[cfg(feature = "server")]
 mod serve_config;
+
 #[cfg(feature = "server")]
 pub use serve_config::*;
 
@@ -37,6 +48,9 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use crate::server::*;
 
+    #[cfg(feature = "axum_wasm")]
+    pub use crate::axum_wasm::*;
+
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::render::{FullstackHTMLTemplate, SSRState};
@@ -49,7 +63,7 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "axum"))))]
     pub use crate::server_context::Axum;
 
-    #[cfg(feature = "server")]
+    #[cfg(any(feature = "server", feature = "axum_wasm"))]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::server_context::{
         extract, server_context, with_server_context, DioxusServerContext, FromContext,
