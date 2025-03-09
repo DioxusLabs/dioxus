@@ -392,6 +392,9 @@ async fn devserver_mainloop(
     listener: TcpListener,
     router: Router,
 ) -> Result<()> {
+    // We have a native listener that we're going to give to tokio, so we need to make it non-blocking
+    let _ = listener.set_nonblocking(true);
+
     // If we're not using rustls, just use regular axum
     if https_cfg.enabled != Some(true) {
         axum::serve(
