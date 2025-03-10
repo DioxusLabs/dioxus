@@ -91,37 +91,50 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = runner.attempt_hot_reload(files).await {
-                    // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                    //
-                    // Also make sure the builder isn't busy since that might cause issues with hotreloads
-                    // https://github.com/DioxusLabs/dioxus/issues/3361
-                    if hr.is_empty() || !builder.can_receive_hotreloads() {
-                        tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
-                        continue;
+                match runner.hotreload(files).await {
+                    HotReloadKind::Rsx(hr) => {
+                        // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+                        //
+                        // Also make sure the builder isn't busy since that might cause issues with hotreloads
+                        // https://github.com/DioxusLabs/dioxus/issues/3361
+                        if hr.is_empty() || !builder.can_receive_hotreloads() {
+                            tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+                            continue;
+                        }
+                        tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+                        devserver.send_hotreload(hr).await;
                     }
+                    HotReloadKind::Patch => {
+                        if let Some(handle) = runner.running.as_ref() {
+                            builder.patch_rebuild(
+                                args.build_arguments.clone(),
+                                vec![],
+                                // handle.app.app.direct_rustc.last().unwrap().clone(),
+                            );
 
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+                            runner.clear_hot_reload_changes();
+                            runner.clear_cached_rsx();
 
-                    devserver.send_hotreload(hr).await;
-                } else if runner.should_full_rebuild {
-                    tracing::info!(dx_src = ?TraceSrc::Dev, "Full rebuild: {}", file);
-
-                    // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    builder.rebuild(args.build_arguments.clone());
-
-                    // Clear the hot reload changes so we don't have out-of-sync issues with changed UI
-                    runner.clear_hot_reload_changes();
-                    runner.file_map.force_rebuild();
-
-                    // Tell the server to show a loading page for any new requests
-                    devserver.send_reload_start().await;
-                    devserver.start_build().await;
-                } else {
-                    tracing::warn!(
-                        "Rebuild required but is currently paused - press `r` to rebuild manually"
-                    )
+                            devserver.start_patch().await
+                        }
+                    }
+                    HotReloadKind::Full {} => todo!(),
                 }
+            }
+
+            ServeUpdate::RequestRebuild => {
+                // The spacing here is important-ish: we want
+                // `Full rebuild:` to line up with
+                // `Hotreloading:` to keep the alignment during long edit sessions
+                tracing::info!("Full rebuild: triggered manually");
+
+                builder.rebuild(args.build_arguments.clone());
+
+                runner.clear_hot_reload_changes();
+                runner.clear_cached_rsx();
+
+                devserver.send_reload_start().await;
+                devserver.start_build().await
             }
 
             // Run the server in the background
@@ -161,6 +174,14 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     BuildUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {:?}", err);
                     }
+
+                    BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
+                        let changed_symbols = runner.patch(&bundle).await?;
+                        devserver
+                            .send_patch(bundle.patch_exe(), changed_symbols)
+                            .await;
+                    }
+
                     BuildUpdate::BuildReady { bundle } => {
                         let handle = runner
                             .open(
@@ -170,22 +191,19 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                                 devserver.proxied_server_address(),
                                 args.open.unwrap_or(false),
                             )
-                            .await;
+                            .await
+                            .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
 
-                        match handle {
-                            // Update the screen + devserver with the new handle info
-                            Ok(_handle) => {
-                                devserver.send_reload_command().await;
-                            }
-
-                            Err(e) => tracing::error!("Failed to open app: {}", e),
+                        // Update the screen + devserver with the new handle info
+                        if handle.is_ok() {
+                            devserver.send_reload_command().await
                         }
                     }
                 }
             }
 
             // If the process exited *cleanly*, we can exit
-            ServeUpdate::ProcessExited { status, platform } => {
+            ServeUpdate::HandleUpdate(HandleUpdate::ProcessExited { status, platform }) => {
                 if !status.success() {
                     tracing::error!("Application [{platform}] exited with error: {status}");
                 } else {
@@ -197,28 +215,16 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 }
             }
 
-            ServeUpdate::StdoutReceived { platform, msg } => {
+            ServeUpdate::HandleUpdate(HandleUpdate::StdoutReceived { platform, msg }) => {
                 screen.push_stdio(platform, msg, tracing::Level::INFO);
             }
 
-            ServeUpdate::StderrReceived { platform, msg } => {
+            ServeUpdate::HandleUpdate(HandleUpdate::StderrReceived { platform, msg }) => {
                 screen.push_stdio(platform, msg, tracing::Level::ERROR);
             }
 
             ServeUpdate::TracingLog { log } => {
                 screen.push_log(log);
-            }
-
-            ServeUpdate::RequestRebuild => {
-                // The spacing here is important-ish: we want
-                // `Full rebuild:` to line up with
-                // `Hotreloading:` to keep the alignment during long edit sessions
-                tracing::info!("Full rebuild: triggered manually");
-
-                builder.rebuild(args.build_arguments.clone());
-                runner.file_map.force_rebuild();
-                devserver.send_reload_start().await;
-                devserver.start_build().await
             }
 
             ServeUpdate::OpenApp => {
@@ -232,10 +238,10 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
             }
 
             ServeUpdate::ToggleShouldRebuild => {
-                runner.should_full_rebuild = !runner.should_full_rebuild;
+                runner.automatic_rebuilds = !runner.automatic_rebuilds;
                 tracing::info!(
                     "Automatic rebuilds are currently: {}",
-                    if runner.should_full_rebuild {
+                    if runner.automatic_rebuilds {
                         "enabled"
                     } else {
                         "disabled"

@@ -520,7 +520,13 @@ impl Output {
         let mut lines = vec!["Status:  ".white()];
         match &state.build_engine.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
-            BuildStage::Starting { .. } => lines.push("Starting build".yellow()),
+            BuildStage::Starting { patch, .. } => {
+                if *patch {
+                    lines.push("Hot-patching...".yellow())
+                } else {
+                    lines.push("Starting build".yellow())
+                }
+            }
             BuildStage::InstallingTooling {} => lines.push("Installing tooling".yellow()),
             BuildStage::Compiling {
                 current,

@@ -29,10 +29,11 @@ use futures_util::{
 use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     convert::Infallible,
     fs, io,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
 use tower_http::{
@@ -237,6 +238,14 @@ impl WebServer {
         });
         self.send_build_status().await;
     }
+    /// Sends a start build message to all clients.
+    pub(crate) async fn start_patch(&mut self) {
+        self.build_status.set(Status::Building {
+            progress: 0.0,
+            build_message: "Starting the patch...".to_string(),
+        });
+        self.send_build_status().await;
+    }
 
     /// Sends an updated build status to all clients.
     pub(crate) async fn new_build_update(
@@ -308,6 +317,19 @@ impl WebServer {
                 i += 1;
             }
         }
+    }
+
+    pub(crate) async fn send_patch(
+        &mut self,
+        app: PathBuf,
+        changed_symbols: HashMap<String, usize>,
+    ) {
+        self.send_devserver_message(DevserverMsg::HotReload(HotReloadMsg {
+            patch: Some(app),
+            changed_symbols,
+            ..Default::default()
+        }))
+        .await;
     }
 
     /// Tells all clients that a full rebuild has started.

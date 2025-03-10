@@ -13,8 +13,8 @@ use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use dioxus_document::eval;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
-use wasm_bindgen::JsCast;
 use wasm_bindgen::{closure::Closure, JsValue};
+use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
 use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
 
 const POLL_INTERVAL_MIN: i32 = 250;
@@ -67,7 +67,6 @@ fn make_ws(
 
             // The devserver messages have some &'static strs in them, so we need to leak the source string
             let string: String = text.into();
-            // let leaked: &'static str = Box::leak(Box::new(string));
 
             match serde_json::from_str::<DevserverMsg>(&string) {
                 Ok(DevserverMsg::HotReload(hr)) => _ = tx_.unbounded_send(hr),
@@ -217,6 +216,11 @@ fn show_toast(
         true => "scheduleDXToast",
         false => "showDXToast",
     };
+
+    // #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+    //     console.log("hello");
+    // "#)]
+    // pub fn show_test() {}
 
     // Create the guard before running eval which uses the global runtime context
     let _guard = RuntimeGuard::new(runtime);

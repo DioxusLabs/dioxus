@@ -1,6 +1,9 @@
 use dioxus_core::internal::HotReloadTemplateWithLocation;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -35,13 +38,20 @@ pub enum ClientMsg {
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct HotReloadMsg {
+    pub patch: Option<PathBuf>,
     pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
-    pub unknown_files: Vec<PathBuf>,
+    /// map of name to *original* address of the function
+    /// must defeat aslr while patching
+    pub changed_symbols: HashMap<String, usize>,
+
+    /// Reference point of the main symbol in the file system binary
+    /// This lets the target program know the offsets where to patch new symbols
+    pub main_reference: usize,
 }
 
 impl HotReloadMsg {
     pub fn is_empty(&self) -> bool {
-        self.templates.is_empty() && self.assets.is_empty() && self.unknown_files.is_empty()
+        self.templates.is_empty() && self.assets.is_empty()
     }
 }

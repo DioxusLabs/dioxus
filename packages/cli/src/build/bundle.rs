@@ -1,16 +1,19 @@
 use super::prerender::pre_render_static_routes;
 use super::templates::InfoPlistData;
-use crate::{BuildRequest, Platform, WasmOptConfig};
+use crate::{BuildMode, BuildRequest, Platform, WasmOptConfig};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::future::Future;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::{collections::HashSet, io::Write};
+use std::{future::Future, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
+use std::{pin::Pin, time::SystemTime};
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 
@@ -90,14 +93,25 @@ use tokio::process::Command;
 pub(crate) struct AppBundle {
     pub(crate) build: BuildRequest,
     pub(crate) app: BuildArtifacts,
+    pub(crate) assets: AssetManifest,
     pub(crate) server: Option<BuildArtifacts>,
+    pub(crate) server_assets: Option<AssetManifest>,
 }
 
 #[derive(Debug)]
+pub struct UnbundledApp {
+    pub(crate) request: BuildRequest,
+    pub(crate) app: BuildArtifacts,
+    pub(crate) server: Option<BuildArtifacts>,
+}
+
+/// The result of the `cargo rustc` including any additional metadata
+#[derive(Debug)]
 pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
-    pub(crate) assets: AssetManifest,
-    pub(crate) time_taken: Duration,
+    pub(crate) direct_rustc: Vec<Vec<String>>,
+    pub(crate) time_start: SystemTime,
+    pub(crate) time_end: SystemTime,
 }
 
 impl AppBundle {
@@ -264,35 +278,65 @@ impl AppBundle {
         app: BuildArtifacts,
         server: Option<BuildArtifacts>,
     ) -> Result<Self> {
-        let mut bundle = Self { app, server, build };
+        let mut bundle = Self {
+            app,
+            server,
+            build,
+            assets: Default::default(),
+            server_assets: Default::default(),
+        };
 
-        tracing::debug!("Assembling app bundle");
+        match bundle.build.mode {
+            BuildMode::Base | BuildMode::Fat => {
+                tracing::debug!("Assembling app bundle");
 
-        bundle.build.status_start_bundle();
-        /*
-            assume the build dir is already created by BuildRequest
-            todo(jon): maybe refactor this a bit to force AppBundle to be created before it can be filled in
-        */
-        bundle
-            .write_main_executable()
-            .await
-            .context("Failed to write main executable")?;
-        bundle.write_server_executable().await?;
-        bundle
-            .write_assets()
-            .await
-            .context("Failed to write assets")?;
-        bundle.write_metadata().await?;
-        bundle.optimize().await?;
-        bundle.pre_render_ssg_routes().await?;
-        bundle
-            .assemble()
-            .await
-            .context("Failed to assemble app bundle")?;
+                bundle.build.status_start_bundle();
+                bundle
+                    .write_main_executable()
+                    .await
+                    .context("Failed to write main executable")?;
+                bundle.write_server_executable().await?;
+                bundle
+                    .write_assets()
+                    .await
+                    .context("Failed to write assets")?;
+                bundle.write_metadata().await?;
+                bundle.optimize().await?;
+                bundle.pre_render_ssg_routes().await?;
+                bundle
+                    .assemble()
+                    .await
+                    .context("Failed to assemble app bundle")?;
 
-        tracing::debug!("Bundle created at {}", bundle.build.root_dir().display());
+                tracing::debug!("Bundle created at {}", bundle.build.root_dir().display());
+            }
+            BuildMode::Thin { .. } => {
+                tracing::debug!("Patching existing bundle");
+                bundle.write_patch().await?;
+            }
+        }
 
         Ok(bundle)
+    }
+
+    /// Traverse the target directory and collect all assets from the incremental cache
+    ///
+    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
+    /// One day this system might break and we might need to go back to using the linker approach.
+    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
+        tracing::debug!("Collecting assets ...");
+
+        if self.build.build.skip_assets {
+            return Ok(AssetManifest::default());
+        }
+
+        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
+        let mut manifest = AssetManifest::default();
+
+        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
+        _ = manifest.add_from_object_path(exe);
+
+        Ok(manifest)
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -347,6 +391,8 @@ impl AppBundle {
             | Platform::Ios
             | Platform::Liveview
             | Platform::Server => {
+                _ = std::fs::remove_dir_all(self.build.exe_dir());
+                std::fs::create_dir_all(self.build.exe_dir())?;
                 std::fs::copy(&self.app.exe, self.main_exe())?;
             }
         }
@@ -369,7 +415,6 @@ impl AppBundle {
         _ = tokio::fs::create_dir_all(&asset_dir).await;
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = self
-            .app
             .assets
             .assets
             .values()
@@ -429,7 +474,7 @@ impl AppBundle {
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for (asset, bundled) in &self.app.assets.assets {
+        for (asset, bundled) in &self.assets.assets {
             let from = asset.clone();
             let to = asset_dir.join(bundled.bundled_path());
 
@@ -499,6 +544,36 @@ impl AppBundle {
             crate::VERSION.as_str(),
         )?;
 
+        Ok(())
+    }
+
+    /// patch-{time}.(so/dll/dylib) (next to the main exe)
+    pub fn patch_exe(&self) -> PathBuf {
+        let path = self.main_exe().with_file_name(format!(
+            "patch-{}",
+            self.app
+                .time_start
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis(),
+        ));
+
+        let extension = match self.build.build.platform() {
+            Platform::Web => "wasm",
+            Platform::MacOS => "dylib",
+            Platform::Windows => "dll",
+            Platform::Linux => "so",
+            Platform::Ios => "dylib",
+            Platform::Android => "so",
+            Platform::Server => todo!(),
+            Platform::Liveview => todo!(),
+        };
+
+        path.with_extension("")
+    }
+
+    async fn write_patch(&self) -> Result<()> {
+        std::fs::copy(&self.app.exe, self.patch_exe())?;
         Ok(())
     }
 
@@ -723,7 +798,6 @@ impl AppBundle {
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
                     url = self
-                        .app
                         .assets
                         .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
                 )?;
@@ -750,7 +824,6 @@ impl AppBundle {
 
                     // Again, register this wasm with the asset system
                     url = self
-                        .app
                         .assets
                         .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
 
@@ -792,12 +865,11 @@ impl AppBundle {
         }
 
         // Make sure to register the main wasm file with the asset system
-        self.app
-            .assets
+        self.assets
             .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
 
         // Register the main.js with the asset system so it bundles in the snippets and optimizes
-        self.app.assets.register_asset(
+        self.assets.register_asset(
             &self.build.wasm_bindgen_js_output_file(),
             AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
         )?;
@@ -952,4 +1024,6 @@ impl AppBundle {
         std::fs::copy(source, destination)?;
         Ok(())
     }
+
+    async fn binary_patch(&self) {}
 }

@@ -101,6 +101,7 @@ ansi-to-tui = "6.0"
 ansi-to-html = "0.2.1"
 path-absolutize = "3.1"
 ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
+shell-words = "1.1.0"
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
 log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
@@ -111,9 +112,9 @@ manganis = { workspace = true }
 manganis-core = { workspace = true }
 
 # Extracting data from an executable
-object = {version="0.36.0", features=["wasm"]}
+object = { version = "0.36.0", features = ["all"] }
 tokio-util = { version = "0.7.11", features = ["full"] }
-itertools = "0.13.0"
+itertools = "0.14.0"
 throbber-widgets-tui = "=0.7.0"
 unicode-segmentation = "1.12.0"
 handlebars = "6.1.0"
@@ -128,6 +129,8 @@ local-ip-address = "0.6.3"
 dircpy = "0.3.19"
 plist = "1.7.0"
 memoize = "0.5.1"
+
+memmap = "0.7.0"
 
 [build-dependencies]
 built = { version = "=0.7.4", features = ["git2"] }

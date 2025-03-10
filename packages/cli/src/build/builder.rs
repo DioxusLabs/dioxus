@@ -4,6 +4,8 @@ use crate::{
 };
 use std::time::{Duration, Instant};
 
+use super::BuildMode;
+
 /// The component of the serve engine that watches ongoing builds and manages their state, handle,
 /// and progress.
 ///
@@ -39,17 +41,15 @@ impl Builder {
     /// Create a new builder and immediately start a build
     pub(crate) fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let request = BuildRequest::new(krate.clone(), args, tx.clone());
+        let request = BuildRequest::new(krate.clone(), args, tx.clone(), BuildMode::Fat);
 
         Ok(Self {
             krate: krate.clone(),
             request: request.clone(),
             stage: BuildStage::Initializing,
             build: tokio::spawn(async move {
-                // On the first build, we want to verify the tooling
-                // We wont bother verifying on subsequent builds
+                // On the first build, we want to verify the tooling... don't bother on subsequent builds
                 request.verify_tooling().await?;
-
                 request.build_all().await
             }),
             tx,
@@ -101,6 +101,7 @@ impl Builder {
                         BuildStage::Starting {
                             crate_count,
                             is_server,
+                            ..
                         } => {
                             if *is_server {
                                 self.expected_crates_server = *crate_count;
@@ -177,13 +178,31 @@ impl Builder {
         update
     }
 
+    pub(crate) fn patch_rebuild(&mut self, args: BuildArgs, direct_rustc: Vec<String>) {
+        // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
+        self.abort_all();
+
+        // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
+        let request = BuildRequest::new(
+            self.krate.clone(),
+            args,
+            self.tx.clone(),
+            BuildMode::Thin { direct_rustc },
+        );
+        self.request = request.clone();
+        self.stage = BuildStage::Restarting;
+
+        // This build doesn't have any extra special logging - rebuilds would get pretty noisy
+        self.build = tokio::spawn(async move { request.build_all().await });
+    }
+
     /// Restart this builder with new build arguments.
     pub(crate) fn rebuild(&mut self, args: BuildArgs) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all();
 
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        let request = BuildRequest::new(self.krate.clone(), args, self.tx.clone());
+        let request = BuildRequest::new(self.krate.clone(), args, self.tx.clone(), BuildMode::Fat);
         self.request = request.clone();
         self.stage = BuildStage::Restarting;
 
