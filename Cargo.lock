@@ -1322,7 +1322,6 @@ checksum = "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f"
 dependencies = [
  "async-trait",
  "axum-core 0.4.5",
- "axum-macros",
  "base64 0.22.1",
  "bytes",
  "futures-util",
@@ -1413,17 +1412,6 @@ dependencies = [
  "tower 0.5.1",
  "tower-layer",
  "tower-service",
-]
-
-[[package]]
-name = "axum-macros"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d123550fa8d071b7255cb0cc04dc302baa6c8c4a79f55701552684d8399bce"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.98",
 ]
 
 [[package]]
@@ -3870,6 +3858,7 @@ name = "dioxus-examples"
 version = "0.6.3"
 dependencies = [
  "async-std",
+ "axum 0.7.9",
  "base64 0.22.1",
  "ciborium",
  "dioxus",
