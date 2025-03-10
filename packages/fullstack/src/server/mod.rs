@@ -442,8 +442,6 @@ async fn handle_server_fns_inner(
     additional_context: ContextProviders,
     req: Request<Body>,
 ) -> impl IntoResponse {
-    use server_fn::middleware::Service;
-
     let path_string = path.to_string();
 
     let future = move || async move {
@@ -516,11 +514,11 @@ async fn handle_server_fns_inner(
         let result = tokio::task::spawn_local(future);
         let result = result.then(|f| async move { f.unwrap() });
         result.await.unwrap_or_else(|e| {
-            use server_fn::error::NoCustomError;
+            use server_fn::error::ServerFnError;
             use server_fn::error::ServerFnErrorSerde;
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                ServerFnError::<NoCustomError>::ServerError(e.to_string())
+                ServerFnError::ServerError(e.to_string())
                     .ser()
                     .unwrap_or_default(),
             )
