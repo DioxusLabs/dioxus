@@ -1,4 +1,4 @@
-//! Dioxus utilities for the [Axum](https://docs.rs/axum/latest/axum/index.html) server framework compatible with WASM.
+//! Dioxus core utilities for the [Axum](https://docs.rs/axum/latest/axum/index.html) server framework.
 //!
 //! # Example
 //! ```rust, no_run
@@ -57,6 +57,10 @@
 //! async fn get_server_data() -> Result<String, ServerFnError> {
 //!     Ok("Hello from the server!".to_string())
 //! }
+//!
+//! # WASM support
+//!
+//! These utilities compile to the WASM family of targets, while the more complete ones found in [server] don't
 //! ```
 
 use std::sync::Arc;
@@ -75,8 +79,8 @@ use axum::{
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
 
-/// A extension trait with utilities compatible with WASM for integrating Dioxus with your Axum router.
-pub trait DioxusRouterWasmExt<S> {
+/// A extension trait with server function utilites for integrating Dioxus with your Axum router.
+pub trait DioxusRouterFnExt<S> {
     /// Registers server functions with the default handler. This handler function will pass an empty [`DioxusServerContext`] to your server functions.
     ///
     /// # Example
@@ -123,7 +127,7 @@ pub trait DioxusRouterWasmExt<S> {
     fn register_server_functions_with_context(self, context_providers: ContextProviders) -> Self;
 }
 
-impl<S> DioxusRouterWasmExt<S> for Router<S>
+impl<S> DioxusRouterFnExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {

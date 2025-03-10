@@ -3858,6 +3858,7 @@ name = "dioxus-examples"
 version = "0.6.3"
 dependencies = [
  "async-std",
+ "axum 0.7.9",
  "base64 0.22.1",
  "ciborium",
  "dioxus",

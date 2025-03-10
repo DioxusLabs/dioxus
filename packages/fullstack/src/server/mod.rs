@@ -63,7 +63,7 @@ use dioxus_lib::prelude::Element;
 use crate::prelude::*;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
-pub trait DioxusRouterExt<S>: DioxusRouterWasmExt<S> {
+pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     /// Serves the static WASM for your Dioxus application (except the generated index.html).
     ///
     /// # Example

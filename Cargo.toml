@@ -347,6 +347,7 @@ rand = { version = "0.8.4", features = ["small_rng"] }
 form_urlencoded = "1.2.0"
 async-std = "1.12.0"
 web-time = "1.1.0"
+axum = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
