@@ -79,7 +79,7 @@ use axum::{
 use dioxus_lib::prelude::{Element, VirtualDom};
 use http::header::*;
 
-/// A extension trait with server function utilites for integrating Dioxus with your Axum router.
+/// A extension trait with server function utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterFnExt<S> {
     /// Registers server functions with the default handler. This handler function will pass an empty [`DioxusServerContext`] to your server functions.
     ///
