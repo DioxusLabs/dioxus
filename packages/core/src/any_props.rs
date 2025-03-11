@@ -74,7 +74,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
         &mut self.props
     }
 
-    fn render<'a>(&'a self) -> Element {
+    fn render(&self) -> Element {
         fn render_inner(name: &str, res: Result<Element, Box<dyn Any + Send>>) -> Element {
             match res {
                 Ok(node) => node,
@@ -96,26 +96,6 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
                 self.render_fn.rebuild(self.props.clone())
             })),
         )
-
-        // // // todo: maybe hot-reload it here?
-        // // let rebuild_fn: fn(&'a F, P) -> Element = <F as ComponentFunction<P, M>>::rebuild;
-
-        // // Get the vtable entry for the component's render function
-        // let rebuild_fn: fn(&'a F, P) -> Element = <F as ComponentFunction<P, M>>::rebuild;
-        // println!(
-        //     "Pointer of rebuild_fn: {:#?} -> {}",
-        //     rebuild_fn as *const (), self.name
-        // );
-
-        // // And then patch it
-        // let rebuild_fn = hot_fn::Runtime::current(rebuild_fn as fn(&'a F, P) -> Element);
-
-        // render_inner(
-        //     self.name,
-        //     std::panic::catch_unwind(AssertUnwindSafe(move || {
-        //         rebuild_fn(&self.render_fn, self.props.clone())
-        //     })),
-        // )
     }
 
     fn duplicate(&self) -> BoxedAnyProps {

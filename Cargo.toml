@@ -66,7 +66,6 @@ members = [
     "packages/dx-wire-format",
     "packages/logger",
     "packages/config-macros",
-    "packages/hot-fn",
     "packages/subsecond",
 
     # manganis
@@ -150,7 +149,6 @@ const-serialize = { path = "packages/const-serialize", version = "0.6.2" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.2" }
 generational-box = { path = "packages/generational-box", version = "0.6.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
-hot-fn = { path = "packages/hot-fn", version = "0.6.3" }
 subsecond = { path = "packages/subsecond", version = "0.6.3" }
 
 manganis = { path = "packages/manganis/manganis", version = "0.6.2" }
