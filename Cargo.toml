@@ -66,6 +66,8 @@ members = [
     "packages/dx-wire-format",
     "packages/logger",
     "packages/config-macros",
+    "packages/hot-fn",
+    "packages/subsecond",
 
     # manganis
     "packages/manganis/manganis",
@@ -101,7 +103,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
-    "packages/playwright-tests/wasm-split-harness", "packages/hot-fn",
+    "packages/playwright-tests/wasm-split-harness",
 ]
 
 [workspace.package]
@@ -149,6 +151,7 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.
 generational-box = { path = "packages/generational-box", version = "0.6.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
 hot-fn = { path = "packages/hot-fn", version = "0.6.3" }
+subsecond = { path = "packages/subsecond", version = "0.6.3" }
 
 manganis = { path = "packages/manganis/manganis", version = "0.6.2" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.2" }

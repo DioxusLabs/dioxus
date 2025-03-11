@@ -182,20 +182,24 @@ where
 }
 
 /// Accept any callbacks that take props
-impl<F: Fn(P) -> Element + Clone + 'static, P> ComponentFunction<P> for F
+impl<F, P> ComponentFunction<P> for F
 where
     P: 'static,
+    F: Fn(P) -> Element + Clone + 'static,
 {
     fn rebuild(&self, props: P) -> Element {
-        self(props)
+        subsecond::current(self).call(props)
     }
 }
 
 /// Accept any callbacks that take no props
 pub struct EmptyMarker;
-impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<(), EmptyMarker> for F {
-    fn rebuild(&self, _: ()) -> Element {
-        self()
+impl<F> ComponentFunction<(), EmptyMarker> for F
+where
+    F: Fn() -> Element + Clone + 'static,
+{
+    fn rebuild(&self, props: ()) -> Element {
+        subsecond::current(self).call(props)
     }
 }
 

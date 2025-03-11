@@ -36,6 +36,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
+use subsecond::JumpTable;
 use tower_http::{
     cors::Any,
     services::fs::{ServeDir, ServeFileSystemResponseBody},
@@ -319,14 +320,10 @@ impl WebServer {
         }
     }
 
-    pub(crate) async fn send_patch(
-        &mut self,
-        app: PathBuf,
-        changed_symbols: HashMap<String, usize>,
-    ) {
+    pub(crate) async fn send_patch(&mut self, app: PathBuf, jump_table: JumpTable) {
         self.send_devserver_message(DevserverMsg::HotReload(HotReloadMsg {
             patch: Some(app),
-            changed_symbols,
+            jump_table: Some(jump_table),
             ..Default::default()
         }))
         .await;

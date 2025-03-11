@@ -59,34 +59,8 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
         if let Some(devtools) = try_consume_context::<Rc<Devtools>>() {
             println!("using devtools context with patch {:?}", msg.patch);
             if let Some(so) = msg.patch.clone() {
-                // we *need* to leak the library otherwise it will cause issues with the process not exiting properly
-                // TODO! this needs to be only *ONCE* per process so backend stuff works too
-                // let lib = unsafe { libloading::Library::new(patch).unwrap() };
-                use libloading::os::unix::{RTLD_GLOBAL, RTLD_LAZY};
-                let lib = unsafe {
-                    libloading::os::unix::Library::open(Some(so), RTLD_LAZY | RTLD_GLOBAL).unwrap()
-                };
-                let lib = Box::leak(Box::new(lib));
-
-                hot_fn::Runtime::patch_from_binary(&lib);
-                // let main_symbol = CString::new("main").unwrap();
-                // let main_ptr = unsafe { dlsym(libc::RTLD_DEFAULT, main_symbol.as_ptr()) };
-                // println!("main_ptr: {:#?}", main_ptr);
-
-                // let our_main = unsafe {
-                //     dlsym(handle, symbol)
-                // }
-
-                // let new_main = unsafe {
-                //     let new_main = lib
-                //         .get::<unsafe extern "C" fn() -> Element>(b"__hotreload_main") // does this beed to be null terminated?
-                //         .unwrap();
-                //     std::mem::transmute::<*mut (), fn() -> Element>(
-                //         new_main.try_as_raw_ptr().unwrap() as *mut (),
-                //     )
-                // };
-
-                // devtools.main_fn.replace(new_main);
+                let jump_table = msg.jump_table.clone().unwrap();
+                subsecond::run_patch(so, jump_table);
                 dioxus_core::prelude::force_all_dirty();
             }
         }

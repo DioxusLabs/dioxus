@@ -216,9 +216,9 @@ impl LaunchBuilder {
         #[cfg(feature = "logger")]
         dioxus_logger::initialize_default();
 
-        let app = crate::hotpatch::set_app(app);
+        // let app = crate::hotpatch::set_app(app);
 
-        hot_fn::Runtime::initialize();
+        // hot_fn::Runtime::initialize();
 
         #[cfg(all(feature = "fullstack", any(feature = "desktop", feature = "mobile")))]
         {

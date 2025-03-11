@@ -423,7 +423,7 @@ impl AppRunner {
         _ = std::fs::create_dir_all(&cache_dir);
     }
 
-    pub async fn patch(&mut self, bundle: &AppBundle) -> Result<HashMap<String, usize>> {
+    pub async fn patch(&mut self, bundle: &AppBundle) -> Result<subsecond::JumpTable> {
         let time_taken = bundle
             .app
             .time_end
@@ -431,7 +431,53 @@ impl AppRunner {
             .unwrap();
 
         tracing::info!("Hot-patch completed in {:?}ms", time_taken.as_millis());
-
-        Ok(HashMap::new())
+        let original = self.running.as_ref().unwrap().app.main_exe();
+        let new = bundle.patch_exe();
+        let jump_table = create_jump_table(&original, &new);
+        Ok(jump_table)
     }
+}
+
+pub fn create_jump_table(original: &Path, patch: &Path) -> subsecond::JumpTable {
+    use object::{
+        read::File, Architecture, BinaryFormat, Endianness, Object, ObjectSection, ObjectSymbol,
+        Relocation, RelocationTarget, SectionIndex,
+    };
+
+    let obj1_bytes = std::fs::read(original).unwrap();
+    let obj2_bytes = std::fs::read(patch).unwrap();
+    let obj1 = File::parse(&obj1_bytes as &[u8]).unwrap();
+    let obj2 = File::parse(&obj2_bytes as &[u8]).unwrap();
+
+    let mut map = HashMap::new();
+
+    let old_syms = obj1.symbol_map();
+    let new_syms = obj2.symbol_map();
+
+    let old_name_to_addr = old_syms
+        .symbols()
+        .iter()
+        .map(|s| (s.name(), s.address()))
+        .collect::<HashMap<_, _>>();
+
+    let new_name_to_addr = new_syms
+        .symbols()
+        .iter()
+        .map(|s| (s.name(), s.address()))
+        .collect::<HashMap<_, _>>();
+
+    let main_address = new_syms
+        .symbols()
+        .iter()
+        .find(|s| s.name() == "_main")
+        .unwrap()
+        .address();
+
+    for (new_name, new_addr) in new_name_to_addr {
+        if let Some(old_addr) = old_name_to_addr.get(new_name) {
+            map.insert(*old_addr, new_addr);
+        }
+    }
+
+    subsecond::JumpTable { map, main_address }
 }
