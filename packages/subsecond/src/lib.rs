@@ -37,14 +37,14 @@ impl<A, M, T: SomeFn<A, M>> HotFn<A, M, T> {
             // will likely end up in the vtable and will never be hot-reloaded since signature takes self.
             if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                 let known_fn_ptr = <T as SomeFn<A, M>>::call_it as *const ();
-                let ptr = jump_table.map.get(&(known_fn_ptr as u64)).unwrap().clone() as *const ();
-
-                // https://stackoverflow.com/questions/46134477/how-can-i-call-a-raw-address-from-rust
-                let _f = std::mem::transmute::<*const (), fn(&T, A) -> T::Return>(ptr);
-                _f(&self.inner, args)
-            } else {
-                self.inner.call_it(args)
+                if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
+                    let ptr = ptr as *const ();
+                    let _f = std::mem::transmute::<*const (), fn(&T, A) -> T::Return>(ptr);
+                    return _f(&self.inner, args);
+                }
             }
+
+            self.inner.call_it(args)
         }
     }
 }
@@ -75,12 +75,14 @@ where
                 let real = std::mem::transmute_copy::<Self, Self::Real>(&self);
 
                 let known_fn_ptr = real as *const ();
-                let ptr = jump_table.map.get(&(known_fn_ptr as u64)).unwrap().clone() as *const ();
-                let detoured = std::mem::transmute::<*const (), Self::Real>(ptr);
-                detoured()
-            } else {
-                self.call_it(_args)
+                if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
+                    let ptr = ptr as *const ();
+                    let detoured = std::mem::transmute::<*const (), Self::Real>(ptr);
+                    return detoured();
+                }
             }
+
+            self.call_it(_args)
         }
     }
 }
@@ -99,14 +101,15 @@ where
         unsafe {
             if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                 let real = std::mem::transmute_copy::<Self, Self::Real>(&self);
-
                 let known_fn_ptr = real as *const ();
-                let ptr = jump_table.map.get(&(known_fn_ptr as u64)).unwrap().clone() as *const ();
-                let detoured = std::mem::transmute::<*const (), Self::Real>(ptr);
-                detoured(_args)
-            } else {
-                self.call_it(_args)
+                if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
+                    let ptr = ptr as *const ();
+                    let detoured = std::mem::transmute::<*const (), Self::Real>(ptr);
+                    return detoured(_args);
+                }
             }
+
+            self.call_it(_args)
         }
     }
 }
@@ -121,7 +124,7 @@ pub extern "C" fn hotfn_load_binary_patch(path: *const i8, jump_table_path: *con
 #[derive(serde::Deserialize, Debug)]
 pub struct JumpTable {
     pub map: HashMap<u64, u64>,
-    pub main_address: u64,
+    pub new_main_address: u64,
 }
 
 /// Run the patch
@@ -134,20 +137,35 @@ pub fn run_patch(patch: PathBuf, jump_table: PathBuf) {
         bincode::deserialize(&std::fs::read(jump_table).unwrap()).unwrap();
 
     // Correct the jump table since dlopen will load the binary at a different address than the original
-    let dl_offset = unsafe { lib.get::<*const ()>(b"main") }
+    // This involves defeating asl
+    let old_dl_offset = unsafe { libloading::os::unix::Library::this().get::<*const ()>(b"main") }
         .unwrap()
         .as_raw_ptr()
-        .wrapping_sub(jump_table.main_address as usize);
+        .wrapping_sub(jump_table.new_main_address as usize);
+
+    let new_dl_offset = unsafe { lib.get::<*const ()>(b"main") }
+        .unwrap()
+        .as_raw_ptr()
+        .wrapping_sub(jump_table.new_main_address as usize);
 
     // Modify the jump table to be relative to the base address of the loaded library
-    for new in jump_table.map.values_mut() {
-        *new += dl_offset as u64;
-    }
+    jump_table.map = jump_table
+        .map
+        .iter()
+        .map(|(k, v)| (*k, *v + new_dl_offset as u64))
+        // .map(|(k, v)| (*k + old_dl_offset as u64, *v + new_dl_offset as u64))
+        .collect();
 
     unsafe { APP_JUMP_TABLE = Some(jump_table) }
 
     // And then call the original main function
     for handler in unsafe { HOTRELOAD_HANDLERS.iter() } {
         handler();
+    }
+}
+
+pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
+    unsafe {
+        HOTRELOAD_HANDLERS.push(handler);
     }
 }

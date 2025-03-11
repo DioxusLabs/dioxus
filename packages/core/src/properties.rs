@@ -188,7 +188,7 @@ where
     F: Fn(P) -> Element + Clone + 'static,
 {
     fn rebuild(&self, props: P) -> Element {
-        subsecond::current(self).call(props)
+        subsecond::current(self.clone()).call(props)
     }
 }
 
@@ -199,7 +199,7 @@ where
     F: Fn() -> Element + Clone + 'static,
 {
     fn rebuild(&self, props: ()) -> Element {
-        subsecond::current(self).call(props)
+        subsecond::current(self.clone()).call(props)
     }
 }
 

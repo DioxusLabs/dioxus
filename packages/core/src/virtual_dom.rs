@@ -15,8 +15,8 @@ use crate::{
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
-use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
+use std::{collections::BTreeSet, sync::Arc};
 use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -329,7 +329,14 @@ impl VirtualDom {
             RootProps(root),
             "RootWrapper",
         );
-        dom.new_scope(Box::new(root), "app");
+
+        let sender = dom.runtime().sender.clone();
+        let scope = dom.new_scope(Box::new(root), "app");
+        let id = scope.id();
+
+        subsecond::register_handler(Arc::new(move || {
+            sender.unbounded_send(SchedulerMsg::AllDirty).unwrap();
+        }));
 
         dom
     }
@@ -373,6 +380,20 @@ impl VirtualDom {
     /// This method is useful for when you want to provide a context in your app without knowing its type
     pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
         self.base_scope().state().provide_any_context(context);
+    }
+
+    pub fn mark_all_dirty(&mut self) {
+        let mut orders = vec![];
+
+        for (idx, scope) in self.scopes.iter() {
+            let order = ScopeOrder::new(scope.state().height(), scope.id());
+            drop(scope);
+            orders.push(order);
+        }
+
+        for order in orders {
+            self.queue_scope(order);
+        }
     }
 
     /// Manually mark a scope as requiring a re-render
@@ -458,6 +479,7 @@ impl VirtualDom {
                 self.mark_task_dirty(Task::from_id(id));
             }
             SchedulerMsg::EffectQueued => {}
+            SchedulerMsg::AllDirty => self.mark_all_dirty(),
         };
     }
 
@@ -469,6 +491,7 @@ impl VirtualDom {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
                 SchedulerMsg::EffectQueued => {}
+                SchedulerMsg::AllDirty => self.mark_all_dirty(),
             }
         }
     }

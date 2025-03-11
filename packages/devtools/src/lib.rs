@@ -7,6 +7,7 @@ use dioxus_core::{
 pub use dioxus_devtools_types::*;
 use dioxus_signals::{GlobalKey, Writable};
 use libc::dlsym;
+use subsecond::JumpTable;
 use warnings::Warning;
 
 pub struct Devtools {
@@ -59,9 +60,10 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
         if let Some(devtools) = try_consume_context::<Rc<Devtools>>() {
             println!("using devtools context with patch {:?}", msg.patch);
             if let Some(so) = msg.patch.clone() {
-                let jump_table = msg.jump_table.clone().unwrap();
-                subsecond::run_patch(so, jump_table);
-                dioxus_core::prelude::force_all_dirty();
+                // let jump_table = msg.jump_table.clone().unwrap();
+                // let jump_table = JumpTable::default();
+                // subsecond::run_patch(so, jump_table);
+                // dioxus_core::prelude::force_all_dirty();
             }
         }
     });

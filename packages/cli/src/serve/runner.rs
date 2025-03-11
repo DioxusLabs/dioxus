@@ -479,5 +479,8 @@ pub fn create_jump_table(original: &Path, patch: &Path) -> subsecond::JumpTable 
         }
     }
 
-    subsecond::JumpTable { map, main_address }
+    subsecond::JumpTable {
+        map,
+        new_main_address: main_address,
+    }
 }
