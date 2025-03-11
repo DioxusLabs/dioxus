@@ -411,7 +411,7 @@ pub async fn render_handler(
             freshness.write(response.headers_mut());
             let headers = server_context.response_parts().headers.clone();
             apply_request_parts_to_response(headers, &mut response);
-            Result::<http::Response::<axum::body::Body>, StatusCode>::Ok(response)
+            Result::<http::Response<axum::body::Body>, StatusCode>::Ok(response)
         }
         Err(e) => {
             tracing::error!("Failed to render page: {}", e);
