@@ -5,12 +5,11 @@ use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     token::Comma,
-    Ident, Visibility,
+    Ident, Token, Visibility,
 };
 
 pub(crate) struct CssModuleParser {
-    asset_vis: Visibility,
-    asset_ident: Ident,
+    /// Whether the ident is const or static.
     styles_vis: Visibility,
     styles_ident: Ident,
     asset_parser: AssetParser,
@@ -18,20 +17,18 @@ pub(crate) struct CssModuleParser {
 
 impl Parse for CssModuleParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        // macro!(pub? ASSET_IDENT, pub? STYLES_IDENT, ASSET_PATH, ASSET_OPTIONS?)
-        // Asset struct ident
-        let asset_vis = input.parse::<Visibility>()?;
-        let asset_ident = input.parse::<Ident>()?;
-        input.parse::<Comma>()?;
-
-        // Styles struct ident
+        // NEW: macro!(pub? STYLES_IDENT = "/path.css");
+        // pub(x)?
         let styles_vis = input.parse::<Visibility>()?;
-        let styles_ident = input.parse::<Ident>()?;
-        input.parse::<Comma>()?;
 
-        // Asset path
+        // Styles Ident
+        let styles_ident = input.parse::<Ident>()?;
+        let _equals = input.parse::<Token![=]>()?;
+
+        // Asset path "/path.css"
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
         let asset = resolve_path(&src);
+
         let _comma = input.parse::<Comma>();
 
         // Optional options
@@ -47,8 +44,6 @@ impl Parse for CssModuleParser {
         };
 
         Ok(Self {
-            asset_vis,
-            asset_ident,
             styles_vis,
             styles_ident,
             asset_parser,
@@ -59,15 +54,12 @@ impl Parse for CssModuleParser {
 impl ToTokens for CssModuleParser {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         // Use the regular asset parser to generate the linker bridge.
-        let asset_vis = &self.asset_vis;
-        let asset_ident = &self.asset_ident;
         let mut linker_tokens = quote! {
             /// Auto-generated Manganis asset for css modules.
             #[allow(missing_docs)]
-            #asset_vis const #asset_ident: manganis::Asset =
+            const ASSET: manganis::Asset =
         };
         self.asset_parser.to_tokens(&mut linker_tokens);
-        tokens.extend(quote! { #linker_tokens; });
 
         let path = match self.asset_parser.asset.as_ref() {
             Ok(path) => path,
@@ -92,7 +84,6 @@ impl ToTokens for CssModuleParser {
         let css = std::fs::read_to_string(path).unwrap();
         let (classes, ids) = manganis_core::collect_css_idents(&css);
 
-        let mut fields = Vec::new();
         let mut values = Vec::new();
 
         // Create unique module name based on styles ident.
@@ -104,12 +95,8 @@ impl ToTokens for CssModuleParser {
             let as_snake = to_snake_case(id);
             let ident = Ident::new(&as_snake, Span::call_site());
 
-            fields.push(quote! {
-                pub #ident: &'a str,
-            });
-
             values.push(quote! {
-                #ident: manganis::macro_helpers::const_serialize::ConstStr::new(#id).push_str(#mod_name::__ASSET_HASH.as_str()).as_str(),
+                pub const #ident: #mod_name::__CssIdent = #mod_name::__CssIdent { inner: manganis::macro_helpers::const_serialize::ConstStr::new(#id).push_str(#mod_name::__ASSET_HASH.as_str()).as_str() };
             });
         }
 
@@ -122,12 +109,8 @@ impl ToTokens for CssModuleParser {
             };
 
             let ident = Ident::new(&as_snake, Span::call_site());
-            fields.push(quote! {
-                pub #ident: &'a str,
-            });
-
             values.push(quote! {
-                #ident: manganis::macro_helpers::const_serialize::ConstStr::new(#class).push_str(#mod_name::__ASSET_HASH.as_str()).as_str(),
+                pub const #ident: #mod_name::__CssIdent = #mod_name::__CssIdent { inner: manganis::macro_helpers::const_serialize::ConstStr::new(#class).push_str(#mod_name::__ASSET_HASH.as_str()).as_str() };
             });
         }
 
@@ -139,23 +122,41 @@ impl ToTokens for CssModuleParser {
             #[doc(hidden)]
             #[allow(missing_docs, non_snake_case)]
             mod #mod_name {
-                use super::manganis;
+                #[allow(unused_imports)]
+                use super::manganis::{self, CssModuleAssetOptions};
 
+                #linker_tokens;
+
+                // Get the hash to use when builidng hashed css idents.
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
                 pub(super) const __ASSET_HASH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::hash_asset(&__ASSET_OPTIONS, #hash);
 
-                pub(super) struct Styles<'a> {
-                    pub __phantom: std::marker::PhantomData<&'a ()>,
-                    #( #fields )*
+                // Css ident class for deref stylesheet inclusion.
+                pub(super) struct __CssIdent { pub inner: &'static str }
+
+                use std::ops::Deref;
+                impl Deref for __CssIdent {
+                    type Target = str;
+
+                    fn deref(&self) -> &Self::Target {
+                        self.inner
+                    }
+                }
+
+                impl std::fmt::Display for __CssIdent {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+                        self.deref().fmt(f)
+                    }
                 }
             }
 
             /// Auto-generated idents struct for CSS modules.
             #[allow(missing_docs, non_snake_case)]
-            #styles_vis const #styles_ident: #mod_name::Styles = #mod_name::Styles {
-                __phantom: std::marker::PhantomData,
+            #styles_vis struct #styles_ident {}
+            
+            impl #styles_ident {
                 #( #values )*
-            };
+            }
         })
     }
 }
