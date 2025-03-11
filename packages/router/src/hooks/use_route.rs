@@ -42,7 +42,10 @@ use crate::utils::use_router_internal::use_router_internal;
 /// ```
 #[doc(alias = "use_url")]
 #[must_use]
-pub fn use_route<R: Routable + Clone>() -> R {
+pub fn use_route<R: Routable + Clone>() -> R
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
     match use_router_internal() {
         Some(r) => r.current(),
         None => {

@@ -41,6 +41,7 @@ impl<R> OutletContext<R> {
     pub(crate) fn render() -> Element
     where
         R: Routable + Clone,
+        <R as std::str::FromStr>::Err: std::fmt::Display,
     {
         let router = use_router_internal().expect("Outlet must be inside of a router");
         let outlet: OutletContext<R> = use_outlet_context();
