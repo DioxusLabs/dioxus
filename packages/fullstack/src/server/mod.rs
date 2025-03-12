@@ -375,15 +375,6 @@ pub async fn render_handler(
     State(state): State<RenderHandleState>,
     request: Request<Body>,
 ) -> impl IntoResponse {
-    // Only respond to requests for HTML
-    if let Some(mime) = request.headers().get("Accept") {
-        let mime = mime.to_str().map(|mime| mime.to_ascii_lowercase());
-        match mime {
-            Ok(accepts) if accepts.contains("text/html") => {}
-            _ => return Err(StatusCode::NOT_ACCEPTABLE),
-        }
-    }
-
     let cfg = &state.config;
     let ssr_state = state.ssr_state();
     let build_virtual_dom = {
@@ -420,7 +411,7 @@ pub async fn render_handler(
             freshness.write(response.headers_mut());
             let headers = server_context.response_parts().headers.clone();
             apply_request_parts_to_response(headers, &mut response);
-            Ok(response)
+            Result::<http::Response<axum::body::Body>, StatusCode>::Ok(response)
         }
         Err(e) => {
             tracing::error!("Failed to render page: {}", e);
