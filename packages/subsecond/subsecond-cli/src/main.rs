@@ -3,7 +3,6 @@ use std::{
     ffi::{CString, OsStr},
     path::PathBuf,
     process::Stdio,
-    ptr::{self, null_mut},
     time::SystemTime,
 };
 
@@ -27,8 +26,8 @@ use tokio::{
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Go through the linker if we need to
-    if let Ok(action) = std::env::var("HOTRELOAD_LINK") {
-        return link(action).await;
+    if let Ok(_action) = std::env::var("HOTRELOAD_LINK") {
+        return link().await;
     }
 
     hotreload_loop().await
@@ -72,87 +71,15 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     std::fs::copy(&exe, &fat_exe).unwrap();
 
     // Launch the fat exe. We'll overwrite the slim exe location, so this prevents the app from bugging out
-    // todo - we can launch exe with lldb directly to force aslr off. This won't work for wasm though
-    // let app = Command::new(&fat_exe)
-    //     .stdin(Stdio::piped())
-    //     .kill_on_drop(true)
-    //     .spawn()?;
-
-    let mut pid = 0;
-    unsafe {
-        let program_c = std::ffi::CString::new(fat_exe.as_os_str().to_str().unwrap()).unwrap();
-        let mut attr: libc::posix_spawnattr_t = unsafe { std::mem::zeroed() };
-        let ret = libc::posix_spawnattr_init(&mut attr);
-        if ret != 0 {
-            panic!("posix_spawnattr_init failed");
-        }
-
-        // Use current environment
-        extern "C" {
-            static environ: *const *const libc::c_char;
-        }
-
-        // Convert args to CStrings
-        let args: Vec<String> = vec![];
-        let mut args_vec: Vec<CString> = Vec::with_capacity(args.len() + 1);
-        args_vec.push(program_c.clone());
-        for arg in args {
-            args_vec.push(CString::new(arg)?);
-        }
-
-        // Create null-terminated array of pointers to args
-        let mut args_ptr: Vec<*const libc::c_char> =
-            args_vec.iter().map(|arg| arg.as_ptr()).collect();
-        args_ptr.push(ptr::null());
-
-        const POSIX_SPAWN_DISABLE_ASLR: libc::c_int = 0x0100;
-
-        // Set the flag to disable ASLR
-        let ret = libc::posix_spawnattr_setflags(
-            &mut attr,
-            (POSIX_SPAWN_DISABLE_ASLR) as _,
-            // (POSIX_SPAWN_DISABLE_ASLR | libc::POSIX_SPAWN_SETEXEC) as _,
-        );
-        if ret != 0 {
-            libc::posix_spawnattr_destroy(&mut attr);
-            panic!("posix_spawnattr_setflags failed");
-        }
-
-        let mut fileactions: libc::posix_spawn_file_actions_t = null_mut();
-        let ret = libc::posix_spawn_file_actions_init(&mut fileactions);
-
-        println!("Bout to spawn with attr: {:?}", attr);
-        libc::posix_spawn(
-            &mut pid,
-            program_c.as_ptr(),
-            &fileactions,
-            &attr,
-            args_ptr.as_ptr() as *const *mut libc::c_char,
-            environ as *const _,
-        );
-
-        println!("Spawning process with pid: {}", pid);
-    };
-
-    // Launch with lldb, disabling ASLR
-    let mut lldb = Command::new("lldb")
-        // .arg("-o")
-        // .arg("run")
-        .arg("-p")
-        .arg(format!("{}", pid))
-        // .arg(format!("{}", app.id().unwrap()))
-        .arg(&fat_exe)
-        .kill_on_drop(true)
+    // todo: we can launch exe with lldb directly to force aslr off. This won't work for wasm though
+    // todo: kill on drop! can we use posix spawn directly?
+    let app = Command::new(&fat_exe)
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
+        .kill_on_drop(true)
         .spawn()?;
 
-    // Immediately resume the process
-    lldb.stdin
-        .as_mut()
-        .unwrap()
-        .write_all(b"process continue\n")
-        .await?;
+    // Connect to the process with lldb
+    let mut lldb = attach_lldb(&fat_exe, app).await?;
 
     // don't log if the screen has been taken over - important for tui apps
     let should_log = !crossterm::terminal::is_raw_mode_enabled().unwrap_or(false);
@@ -178,9 +105,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
             continue;
         };
 
-        let jump_table = create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path());
-        let jump_table_path = subsecond_folder().join("data").join("jump_table.bin");
-        std::fs::write(&jump_table_path, bincode::serialize(&jump_table).unwrap()).unwrap();
+        let jump_table = write_jumptable(&fat_exe, &output_temp);
 
         // Pause the process with lldb, run the "hotfn_load_binary_patch" command and then continue
         lldb.stdin
@@ -190,7 +115,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
                 format!(
                     "process interrupt\nexpr (void) hotfn_load_binary_patch(\"{}\", \"{}\")\ncontinue\n",
                     output_temp,
-                    jump_table_path.display(),
+                    jump_table.display(),
 
                 )
                 .as_bytes(),
@@ -207,6 +132,33 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn write_jumptable(fat_exe: &Utf8PathBuf, output_temp: &Utf8PathBuf) -> PathBuf {
+    let jump_table = create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path());
+    let jump_table_path = subsecond_folder().join("data").join("jump_table.bin");
+    std::fs::write(&jump_table_path, bincode::serialize(&jump_table).unwrap()).unwrap();
+
+    jump_table_path
+}
+
+async fn attach_lldb(fat_exe: &Utf8PathBuf, app: Child) -> Result<Child, anyhow::Error> {
+    let mut lldb = Command::new("lldb")
+        .arg("-p")
+        .arg(format!("{}", app.id().unwrap()))
+        .arg(fat_exe)
+        .kill_on_drop(true)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    lldb.stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"process continue\n")
+        .await?;
+
+    Ok(lldb)
+}
+
 struct FsWatcher {
     files: HashMap<PathBuf, String>,
     rx: futures_channel::mpsc::UnboundedReceiver<Result<notify::Event, notify::Error>>,
@@ -214,7 +166,7 @@ struct FsWatcher {
 
 impl FsWatcher {
     fn watch(src_folder: PathBuf) -> anyhow::Result<Self> {
-        let (tx, mut rx) = futures_channel::mpsc::unbounded();
+        let (tx, rx) = futures_channel::mpsc::unbounded();
         let mut watcher =
             notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 _ = tx.unbounded_send(res);
@@ -248,14 +200,16 @@ impl FsWatcher {
 }
 
 /// Store the linker args in a file for the main process to read.
-async fn link(action: String) -> anyhow::Result<()> {
+async fn link() -> anyhow::Result<()> {
     let args = std::env::args().collect::<Vec<String>>();
 
+    // Write the linker args to a file for the main process to read
     std::fs::write(
         subsecond_folder().join("data").join("link.txt"),
         args.join("\n"),
     )?;
 
+    // Write a dummy object file to the output file to satisfy rust when it tries to strip the symbols
     let out = args.iter().position(|arg| arg == "-o").unwrap();
     let out_file = args[out + 1].clone();
     let dummy_object_file = Object::new(
@@ -322,14 +276,10 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
         .sorted()
         .collect::<Vec<_>>();
 
-    // println!("Fast link objects: {:?}", object_files);
-
     let epoch = std::time::SystemTime::UNIX_EPOCH;
     let target_loc = original
         .output_location
         .with_file_name(format!("patch-{}", epoch.elapsed().unwrap().as_millis()));
-
-    // println!("target_loc: {target_loc:?}");
 
     // we should throw out symbols that we don't need and/or assemble them manually
     let res = Command::new("cc")
@@ -337,7 +287,6 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
         .arg("-dylib")
         .arg("-Wl,-undefined,dynamic_lookup")
         .arg("-Wl,-export_dynamic")
-        // .arg("-Wl,-unexported_symbol,_main")
         .arg("-arch")
         .arg("arm64")
         .arg("-o")
@@ -346,27 +295,11 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
         .stderr(Stdio::piped())
         .output()
         .await?;
+
     let errs = String::from_utf8_lossy(&res.stderr);
     if !errs.is_empty() {
         println!("errs: {errs}");
     }
-
-    // println!("Fast link args: {:?}", output.link_args);
-    // .arg("-undefined")
-    // .arg("dynamic_lookup")
-    // .arg("-Wl,-export_dynamic")
-    // .arg("-Wl,-exported_symbol,__ZN7harness3app17h0df796a0810dae7cE")
-    // .arg("-Wl,-exported_symbol,___ZN7harness3app17h0df796a0810dae7cE")
-    // .arg("-Wl,-exported_symbol,_ZN7harness3app17h0df796a0810dae7cE")
-    // .arg("-Wl,-all_load")
-    //         // -O0 ? supposedly faster
-    //         // -reproducible - even better?
-    //         // -exported_symbol and friends - could help with dead-code stripping
-    //         // -e symbol_name - for setting the entrypoint
-    //         // -keep_relocs ?
-    // .arg("-Clink-dead-code")
-    // .arg("-Wl,-unexported_symbol,_main")
-    // .arg("-dead_strip") // maybe?
 
     Ok(target_loc)
 }

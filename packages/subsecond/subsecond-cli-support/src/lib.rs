@@ -13,6 +13,9 @@ use std::{
 pub use subsecond_types::*;
 use tokio::process::Command;
 
+mod spawn_aslr;
+pub use spawn_aslr::spawn_aslr_posix;
+
 pub fn create_jump_table(original: &Path, patch: &Path) -> JumpTable {
     let obj1_bytes = std::fs::read(original).unwrap();
     let obj2_bytes = std::fs::read(patch).unwrap();

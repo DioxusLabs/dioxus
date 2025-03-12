@@ -1,6 +1,7 @@
-use std::{collections::HashMap, ffi::CStr, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, ffi::CStr, os::raw::c_void, path::PathBuf, sync::Arc};
 
 pub use subsecond_macro::hot;
+pub use subsecond_types::JumpTable;
 
 mod fn_impl;
 use fn_impl::*;
@@ -43,8 +44,7 @@ impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
             if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                 let known_fn_ptr = <T as HotFunction<A, M>>::call_it as *const ();
                 if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                    let ptr = ptr as *const ();
-                    let _f = std::mem::transmute::<*const (), fn(&T, A) -> T::Return>(ptr);
+                    let _f = std::mem::transmute::<_, fn(&T, A) -> T::Return>(ptr as *const ());
                     return _f(&self.inner, args);
                 }
             }
@@ -58,30 +58,18 @@ impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
 pub extern "C" fn hotfn_load_binary_patch(path: *const i8, jump_table_path: *const i8) {
     let patch = PathBuf::from(unsafe { CStr::from_ptr(path).to_str().unwrap() });
     let jump_table = PathBuf::from(unsafe { CStr::from_ptr(jump_table_path).to_str().unwrap() });
+    let jump_table: JumpTable = bincode::deserialize(&std::fs::read(jump_table).unwrap()).unwrap();
     run_patch(patch, jump_table)
 }
 
-#[derive(serde::Deserialize, Debug)]
-pub struct JumpTable {
-    pub map: HashMap<u64, u64>,
-    pub new_main_address: u64,
-    pub old_main_address: u64,
-}
-
-/// Run the patch
-pub fn run_patch(patch: PathBuf, jump_table: PathBuf) {
+/// Apply the patch using the jump table
+pub fn run_patch(patch: PathBuf, mut jump_table: JumpTable) {
     let lib = unsafe { libloading::os::unix::Library::new(patch).unwrap() };
     let lib = Box::leak(Box::new(lib));
 
-    // Load the jump table by deserializing it from the file
-    let mut jump_table: JumpTable =
-        bincode::deserialize(&std::fs::read(jump_table).unwrap()).unwrap();
-
     let old_dl_offset =
-        unsafe { libloading::os::unix::Library::this().get::<*const ()>(b"_mh_execute_header") }
-            .unwrap()
-            .as_raw_ptr()
-            .wrapping_sub(0x0000000100000000);
+        aslr_offset_of_library(&libloading::os::unix::Library::this().into(), &jump_table)
+            .expect("Could not find ASLR offset");
 
     let new_dl_offset = unsafe { lib.get::<*const ()>(b"main") }
         .unwrap()
@@ -112,4 +100,21 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
     unsafe {
         HOTRELOAD_HANDLERS.push(handler);
     }
+}
+
+/// Get the offset of the library in the address space of the current process
+///
+/// Attempts to use a known symbol on the platform, and if not, falls back to using `main`
+fn aslr_offset_of_library(lib: &libloading::Library, table: &JumpTable) -> Option<*mut c_void> {
+    #[cfg(target_os = "macos")]
+    return {
+        unsafe {
+            lib.get::<*const ()>(b"_mh_execute_header")
+                .unwrap()
+                .try_as_raw_ptr()
+                .map(|ptr| ptr.wrapping_sub(0x100000000))
+        }
+    };
+
+    None
 }

@@ -12355,6 +12355,7 @@ dependencies = [
  "anyhow",
  "bincode",
  "itertools 0.14.0",
+ "libc",
  "memmap",
  "object 0.36.5",
  "pretty-hex",
