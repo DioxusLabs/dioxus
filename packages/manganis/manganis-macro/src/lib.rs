@@ -96,7 +96,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 ///
 /// // Will generate this (simplified):
 /// struct Styles {}
-/// 
+///
 /// impl Styles {
 ///     // This can be accessed with `Styles::your_ident`
 ///     pub const your_ident: &str = "abc",
