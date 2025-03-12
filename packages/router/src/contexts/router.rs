@@ -15,12 +15,12 @@ use crate::{
 
 /// An error that is thrown when the router fails to parse a route
 #[derive(Debug, Clone)]
-pub struct RoutingFailed {
+pub struct ParseRouteError {
     message: String,
 }
 
-impl Error for RoutingFailed {}
-impl Display for RoutingFailed {
+impl Error for ParseRouteError {}
+impl Display for ParseRouteError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.message.fmt(f)
     }
@@ -263,7 +263,7 @@ impl RouterContext {
         match route {
             Ok(route) => route,
             Err(err) => {
-                throw_error(RoutingFailed { message: err });
+                throw_error(ParseRouteError { message: err });
                 "/".parse().unwrap_or_else(|err| panic!("{err}"))
             }
         }

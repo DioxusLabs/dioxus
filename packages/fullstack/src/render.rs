@@ -6,7 +6,7 @@ use dioxus_cli_config::base_path;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_lib::document::Document;
-use dioxus_router::prelude::RoutingFailed;
+use dioxus_router::prelude::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
@@ -53,7 +53,7 @@ where
 
 pub enum SSRError {
     Incremental(IncrementalRendererError),
-    Routing(RoutingFailed),
+    Routing(ParseRouteError),
 }
 
 struct SsrRendererPool {

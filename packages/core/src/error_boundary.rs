@@ -3,7 +3,7 @@ use crate::{
     Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     backtrace::Backtrace,
     cell::{Ref, RefCell},
     error::Error,
