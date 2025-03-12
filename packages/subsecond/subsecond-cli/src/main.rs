@@ -1,11 +1,3 @@
-use std::{
-    collections::HashMap,
-    ffi::{CString, OsStr},
-    path::PathBuf,
-    process::Stdio,
-    time::SystemTime,
-};
-
 use anyhow::Context;
 use cargo_metadata::camino::Utf8PathBuf;
 use futures::StreamExt;
@@ -16,7 +8,7 @@ use notify::{
 };
 use object::write::Object;
 use serde::Deserialize;
-use subsecond_cli_support::create_jump_table;
+use std::{collections::HashMap, env, ffi::OsStr, path::PathBuf, process::Stdio, time::SystemTime};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},
     process::{Child, Command},
@@ -26,8 +18,8 @@ use tokio::{
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Go through the linker if we need to
-    if let Ok(_action) = std::env::var("HOTRELOAD_LINK") {
-        return link().await;
+    if let Ok(action) = std::env::var("HOTRELOAD_LINK") {
+        return link(action).await;
     }
 
     hotreload_loop().await
@@ -45,16 +37,17 @@ async fn main() -> anyhow::Result<()> {
 /// 8. Repeat
 async fn hotreload_loop() -> anyhow::Result<()> {
     // Save the state of the rust files
-    let src_folder = subsecond_folder().join("subsecond-harness/src");
-    let main_rs = PathBuf::from(src_folder.join("main.rs"));
+    let src_folder = subsecond_folder().join("subsecond-harness/src/");
+    let main_rs = src_folder.join("main.rs");
 
     // Modify the main.rs mtime so we skip "fresh" builds
     // Basically `touch main.rs` in the directory
     std::fs::File::open(&main_rs)?.set_modified(SystemTime::now())?;
 
     // Perform the initial build
-    let epoch = std::time::SystemTime::UNIX_EPOCH;
+    let epoch = SystemTime::UNIX_EPOCH;
     let now = std::time::Instant::now();
+    println!("Starting build...");
     let result = initial_build().await?;
     println!(
         "Initial build: {:?} -> {}",
@@ -62,7 +55,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         &result.output_location,
     );
 
-    // copy the exe and give it a "fat" name
+    // copy the exe and give it a "fat" name. todo: wipe the ld entry that points to `/deps`
     let exe = &result.output_location;
     let fat_exe = exe.with_file_name(format!(
         "fatharness-{}",
@@ -71,18 +64,13 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     std::fs::copy(&exe, &fat_exe).unwrap();
 
     // Launch the fat exe. We'll overwrite the slim exe location, so this prevents the app from bugging out
-    // todo: we can launch exe with lldb directly to force aslr off. This won't work for wasm though
-    // todo: kill on drop! can we use posix spawn directly?
-    let app = Command::new(&fat_exe)
-        .stdin(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
+    let app = Command::new(&fat_exe).kill_on_drop(true).spawn()?;
 
     // Connect to the process with lldb
-    let mut lldb = attach_lldb(&fat_exe, app).await?;
+    let mut lldb = attach_lldb(&fat_exe, app.id().unwrap()).await?;
 
     // don't log if the screen has been taken over - important for tui apps
-    let should_log = !crossterm::terminal::is_raw_mode_enabled().unwrap_or(false);
+    let should_log = rust_log_enabled();
 
     // Watch the source folder for changes
     let mut watcher = FsWatcher::watch(src_folder)?;
@@ -105,9 +93,12 @@ async fn hotreload_loop() -> anyhow::Result<()> {
             continue;
         };
 
+        // Assemble the jump table of redirected addresses
+        // todo: keep track of this and merge it over time
         let jump_table = write_jumptable(&fat_exe, &output_temp);
 
         // Pause the process with lldb, run the "hotfn_load_binary_patch" command and then continue
+        // todo: read the output and pull in any data - ie the dl address to update the jump table
         lldb.stdin
             .as_mut()
             .unwrap()
@@ -133,17 +124,17 @@ async fn hotreload_loop() -> anyhow::Result<()> {
 }
 
 fn write_jumptable(fat_exe: &Utf8PathBuf, output_temp: &Utf8PathBuf) -> PathBuf {
-    let jump_table = create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path());
+    let jump_table =
+        subsecond_cli_support::create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path());
     let jump_table_path = subsecond_folder().join("data").join("jump_table.bin");
     std::fs::write(&jump_table_path, bincode::serialize(&jump_table).unwrap()).unwrap();
-
     jump_table_path
 }
 
-async fn attach_lldb(fat_exe: &Utf8PathBuf, app: Child) -> Result<Child, anyhow::Error> {
+async fn attach_lldb(fat_exe: &Utf8PathBuf, pid: u32) -> Result<Child, anyhow::Error> {
     let mut lldb = Command::new("lldb")
         .arg("-p")
-        .arg(format!("{}", app.id().unwrap()))
+        .arg(pid.to_string())
         .arg(fat_exe)
         .kill_on_drop(true)
         .stdin(Stdio::piped())
@@ -160,6 +151,7 @@ async fn attach_lldb(fat_exe: &Utf8PathBuf, app: Child) -> Result<Child, anyhow:
 }
 
 struct FsWatcher {
+    _watcher: notify::RecommendedWatcher,
     files: HashMap<PathBuf, String>,
     rx: futures_channel::mpsc::UnboundedReceiver<Result<notify::Event, notify::Error>>,
 }
@@ -171,6 +163,7 @@ impl FsWatcher {
             notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 _ = tx.unbounded_send(res);
             })?;
+
         let mut files = HashMap::new();
         for entry in walkdir::WalkDir::new(src_folder) {
             let entry = entry?;
@@ -182,9 +175,14 @@ impl FsWatcher {
             watcher.watch(&path, notify::RecursiveMode::NonRecursive)?;
         }
 
-        Ok(FsWatcher { files, rx })
+        Ok(FsWatcher {
+            files,
+            rx,
+            _watcher: watcher,
+        })
     }
 
+    /// Check if the file has changed and update the internal state
     fn file_changed(&mut self, path: &PathBuf) -> bool {
         if let Some(contents) = self.files.get_mut(path) {
             let new_contents = std::fs::read_to_string(&path).unwrap();
@@ -200,7 +198,7 @@ impl FsWatcher {
 }
 
 /// Store the linker args in a file for the main process to read.
-async fn link() -> anyhow::Result<()> {
+async fn link(action: String) -> anyhow::Result<()> {
     let args = std::env::args().collect::<Vec<String>>();
 
     // Write the linker args to a file for the main process to read
@@ -209,16 +207,25 @@ async fn link() -> anyhow::Result<()> {
         args.join("\n"),
     )?;
 
-    // Write a dummy object file to the output file to satisfy rust when it tries to strip the symbols
-    let out = args.iter().position(|arg| arg == "-o").unwrap();
-    let out_file = args[out + 1].clone();
-    let dummy_object_file = Object::new(
-        object::BinaryFormat::MachO,
-        object::Architecture::Aarch64,
-        object::Endianness::Big,
-    );
-    let bytes = dummy_object_file.write().unwrap();
-    std::fs::write(out_file, bytes)?;
+    match action.as_str() {
+        // Write a dummy object file to the output file to satisfy rust when it tries to strip the symbols
+        "patch" => {
+            let out = args.iter().position(|arg| arg == "-o").unwrap();
+            let out_file = args[out + 1].clone();
+            let dummy_object_file = Object::new(
+                object::BinaryFormat::MachO,
+                object::Architecture::Aarch64,
+                object::Endianness::Big,
+            );
+            let bytes = dummy_object_file.write().unwrap();
+            std::fs::write(out_file, bytes)?;
+        }
+
+        // Actually link the object file. todo: figure out which linker we should be using
+        "link" => {}
+
+        _ => anyhow::bail!("Unknown action: {}", action),
+    }
 
     Ok(())
 }
@@ -231,27 +238,41 @@ async fn initial_build() -> anyhow::Result<CargoOutputResult> {
     let inital_build = Command::new("cargo")
         .arg("rustc")
         .arg("--package")
-        .arg("harness")
+        .arg("subsecond-harness")
         .arg("--bin")
-        .arg("harness")
+        .arg("subsecond-harness")
         .arg("--profile")
-        .arg("hotreload")
+        .arg("subsecond-dev")
         .arg("--message-format")
         .arg("json-diagnostic-rendered-ansi")
         .arg("--verbose")
         .arg("--")
         // these args are required to prevent DCE, save intermediates, and print the link args for future usage
+        // -all_load ensures all statics get bubbled out
+        // -link-dead-code prevents the flag `-Wl,-dead_strip` from being passed
+        // -save-temps ensures the intermediates are saved so we can use them for comparsions
+        //
+        // todo: delete the temps
         .arg("-Clink-arg=-Wl,-all_load")
         .arg("-Clink-dead-code")
         .arg("-Csave-temps=true")
+        // we capture the link args, but eventually we should actually just use ourselves as the linker since that's more robust
         .arg("--print")
         .arg("link-args")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
+        .current_dir(workspace_dir())
         .spawn()?;
 
-    run_cargo_output(inital_build, false).await
+    run_cargo_output(inital_build, rust_log_enabled()).await
+}
+
+fn rust_log_enabled() -> bool {
+    match env::var("RUST_LOG").as_deref() {
+        Ok("debug") => true,
+        _ => false,
+    }
 }
 
 async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf> {
@@ -262,12 +283,13 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
             "linker={}",
             std::env::current_exe().unwrap().display()
         ))
-        .env("HOTRELOAD_LINK", "reload")
+        .env("HOTRELOAD_LINK", "patch")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .current_dir(workspace_dir())
         .spawn()?;
 
-    let output = run_cargo_output(fast_build, false).await?;
+    let output = run_cargo_output(fast_build, rust_log_enabled()).await?;
 
     let object_files = output
         .link_args
@@ -276,12 +298,12 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
         .sorted()
         .collect::<Vec<_>>();
 
-    let epoch = std::time::SystemTime::UNIX_EPOCH;
-    let target_loc = original
-        .output_location
-        .with_file_name(format!("patch-{}", epoch.elapsed().unwrap().as_millis()));
+    let output_location = original.output_location.with_file_name(format!(
+        "patch-{}",
+        SystemTime::UNIX_EPOCH.elapsed().unwrap().as_millis()
+    ));
 
-    // we should throw out symbols that we don't need and/or assemble them manually
+    // todo: we should throw out symbols that we don't need and/or assemble them manually
     let res = Command::new("cc")
         .args(object_files)
         .arg("-dylib")
@@ -290,7 +312,7 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
         .arg("-arch")
         .arg("arm64")
         .arg("-o")
-        .arg(&target_loc)
+        .arg(&output_location)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -301,12 +323,7 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
         println!("errs: {errs}");
     }
 
-    Ok(target_loc)
-}
-
-/// Folder representing dioxus/packages/subsecond
-fn subsecond_folder() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../")
+    Ok(output_location)
 }
 
 struct CargoOutputResult {
@@ -416,6 +433,21 @@ async fn run_cargo_output(
     })
 }
 
+fn workspace_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../")
+        .canonicalize()
+        .unwrap()
+}
+
+/// Folder representing dioxus/packages/subsecond
+fn subsecond_folder() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../")
+        .canonicalize()
+        .unwrap()
+}
+
 /// Move all previous object files to "incremental-old" and all new object files to "incremental-new"
 fn cache_incrementals(object_files: &[&String]) {
     let old = subsecond_folder().join("data").join("incremental-old");
@@ -439,10 +471,4 @@ fn cache_incrementals(object_files: &[&String]) {
         let path = PathBuf::from(o);
         std::fs::copy(&path, new.join(path.file_name().unwrap())).unwrap();
     }
-}
-
-#[test]
-fn where_are_we() {
-    let root = subsecond_folder();
-    println!("{root:?}");
 }

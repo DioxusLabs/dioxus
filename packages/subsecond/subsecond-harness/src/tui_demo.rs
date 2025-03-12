@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use color_eyre::{eyre::Context, Result};
+use color_eyre::Result;
 use rand::{rng, Rng};
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
@@ -22,7 +22,6 @@ pub fn launch() -> anyhow::Result<()> {
 struct App {
     should_exit: bool,
     temperatures: Vec<u8>,
-    hot_tx: std::sync::mpsc::Sender<()>,
     hot_rx: std::sync::mpsc::Receiver<()>,
 }
 
@@ -30,15 +29,14 @@ impl App {
     fn new() -> Self {
         let mut rng = rand::rng();
         let temperatures = (0..24).map(|_| rng.random_range(50..90)).collect();
+
         let (hot_tx, hot_rx) = std::sync::mpsc::channel();
-        let _hot_tx = hot_tx.clone();
-        subsecond::register_handler(std::sync::Arc::new(move || {
-            _hot_tx.send(()).unwrap();
-        }));
+        subsecond::register_handler(std::sync::Arc::new(move || _ = hot_tx.send(())));
+
         Self {
             should_exit: false,
             temperatures,
-            hot_tx,
+
             hot_rx,
         }
     }
@@ -54,7 +52,6 @@ impl App {
     fn tick(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         terminal.draw(|frame| self.draw(frame))?;
         self.handle_events()?;
-
         Ok(())
     }
 
@@ -88,7 +85,7 @@ impl App {
             .areas(frame.area());
 
         frame.render_widget(
-            "Damn rust hot-reload is so sick"
+            "Tui development has never been soooo"
                 .bold()
                 .italic()
                 .into_centered_line()

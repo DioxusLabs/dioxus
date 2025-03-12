@@ -306,6 +306,11 @@ opt-level = 'z'
 lto = true
 debug=true
 
+[profile.subsecond-dev]
+inherits = "dev"
+debug = 0
+strip = "debuginfo"
+
 # a profile for running the CLI that's also incremental
 [profile.cli-release-dev]
 inherits = "release"

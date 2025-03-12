@@ -36,7 +36,8 @@ macro_rules! impl_hot_function {
                     unsafe {
                         if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                             let real = std::mem::transmute_copy::<Self, Self::Real>(&self);
-                            if let Some(ptr) = jump_table.map.get(&(real as *const () as u64)).cloned() {
+                            let real = real as *const ();
+                            if let Some(ptr) = jump_table.map.get(&(real as u64)).cloned() {
                                 let detoured = std::mem::transmute::<*const (), Self::Real>(ptr as *const ());
                                 #[allow(non_snake_case)]
                                 let ( $($arg,)* ) = args;

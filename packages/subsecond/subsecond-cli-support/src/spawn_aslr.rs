@@ -10,6 +10,8 @@ use std::{ffi::CString, path::Path};
 
 use anyhow::bail;
 
+// todo: we can launch exe with lldb directly to force aslr off. This won't work for wasm though
+// todo: kill on drop! can we use posix spawn directly?
 /// Spawn a process at memory address 0, disabling ASLR
 pub fn spawn_aslr_posix(exe: &Path, args: Vec<String>) -> anyhow::Result<i32> {
     let mut pid = 0;

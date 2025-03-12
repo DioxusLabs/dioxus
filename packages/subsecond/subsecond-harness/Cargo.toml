@@ -4,7 +4,7 @@ edition = "2021"
 version.workspace = true
 
 [dependencies]
-dioxus = { workspace = true }
+dioxus = { workspace = true, features = ["desktop"] }
 anyhow = { workspace = true }
 rand = { workspace = true }
 color-eyre = { workspace = true }

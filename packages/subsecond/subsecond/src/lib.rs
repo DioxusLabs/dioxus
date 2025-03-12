@@ -88,10 +88,11 @@ pub fn run_patch(patch: PathBuf, mut jump_table: JumpTable) {
         })
         .collect();
 
-    unsafe { APP_JUMP_TABLE = Some(jump_table) }
+    let old = unsafe { APP_JUMP_TABLE.replace(jump_table) };
+    drop(old);
 
     // And then call the original main function
-    for handler in unsafe { HOTRELOAD_HANDLERS.iter() } {
+    for handler in unsafe { HOTRELOAD_HANDLERS.clone() } {
         handler();
     }
 }
