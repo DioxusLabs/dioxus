@@ -135,10 +135,24 @@ impl ToTokens for CssModuleParser {
                 pub(super) struct __CssIdent { pub inner: &'static str }
 
                 use std::ops::Deref;
+                use std::sync::OnceLock;
+                use dioxus::document::{document, LinkProps};
+
                 impl Deref for __CssIdent {
                     type Target = str;
 
                     fn deref(&self) -> &Self::Target {
+                        static CELL: OnceLock<()> = OnceLock::new();
+                        CELL.get_or_init(move || {
+                            let doc = document();
+                            doc.create_link(
+                                LinkProps::builder()
+                                    .rel(Some("stylesheet".to_string()))
+                                    .href(Some(ASSET.to_string()))
+                                    .build(),
+                            );
+                        });
+
                         self.inner
                     }
                 }
@@ -153,7 +167,7 @@ impl ToTokens for CssModuleParser {
             /// Auto-generated idents struct for CSS modules.
             #[allow(missing_docs, non_snake_case)]
             #styles_vis struct #styles_ident {}
-            
+
             impl #styles_ident {
                 #( #values )*
             }
