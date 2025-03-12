@@ -39,7 +39,7 @@ pub enum ClientMsg {
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct HotReloadMsg {
     pub patch: Option<PathBuf>,
-    pub jump_table: Option<PathBuf>,
+    pub jump_table: Option<subsecond_types::JumpTable>,
     pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
     /// map of name to *original* address of the function

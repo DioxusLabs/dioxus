@@ -23,7 +23,7 @@ dioxus-cli-config = { workspace = true }
 dioxus-cli-opt = { workspace = true }
 dioxus-fullstack = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
-subsecond = { workspace = true }
+subsecond-cli-support = { workspace = true }
 wasm-split-cli = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
@@ -97,12 +97,12 @@ tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter", "jso
 console-subscriber = { version = "0.3.0", optional = true }
 tracing = { workspace = true }
 wasm-opt = { version = "0.116.1", optional = true }
-crossterm = { version = "0.28.0", features = ["event-stream"] }
-ansi-to-tui = "6.0"
-ansi-to-html = "0.2.1"
-path-absolutize = "3.1"
-ratatui = { version = "0.28.0", features = ["crossterm", "unstable"] }
-shell-words = "1.1.0"
+ansi-to-tui = { workspace = true }
+ansi-to-html = { workspace = true }
+path-absolutize = { workspace = true }
+crossterm = { workspace = true, features = ["event-stream"] }
+ratatui = { workspace = true, features = ["crossterm", "unstable"] }
+shell-words = { workspace = true }
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
 log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
@@ -113,7 +113,7 @@ manganis = { workspace = true }
 manganis-core = { workspace = true }
 
 # Extracting data from an executable
-object = { version = "0.36.0", features = ["all"] }
+object = { workspace = true, features = ["all"] }
 tokio-util = { version = "0.7.11", features = ["full"] }
 itertools = "0.14.0"
 throbber-widgets-tui = "=0.7.0"

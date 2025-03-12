@@ -1,0 +1,12 @@
+[package]
+name = "subsecond-harness"
+edition = "2021"
+version.workspace = true
+
+[dependencies]
+dioxus = { workspace = true }
+anyhow = { workspace = true }
+rand = { workspace = true }
+color-eyre = { workspace = true }
+ratatui = { workspace = true, features = ["crossterm"] }
+subsecond = { workspace = true }

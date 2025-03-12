@@ -323,20 +323,17 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root = VProps::new(
-            RootScopeWrapper,
-            |_, _| true,
-            RootProps(root),
-            "RootWrapper",
+        dom.new_scope(
+            Box::new(VProps::new(
+                RootScopeWrapper,
+                |_, _| true,
+                RootProps(root),
+                "RootWrapper",
+            )),
+            "app",
         );
 
-        let sender = dom.runtime().sender.clone();
-        let scope = dom.new_scope(Box::new(root), "app");
-        let id = scope.id();
-
-        subsecond::register_handler(Arc::new(move || {
-            sender.unbounded_send(SchedulerMsg::AllDirty).unwrap();
-        }));
+        dom.register_subsecond_handler();
 
         dom
     }
@@ -382,13 +379,12 @@ impl VirtualDom {
         self.base_scope().state().provide_any_context(context);
     }
 
+    /// Mark all scopes as dirty. Each scope will be re-rendered.
     pub fn mark_all_dirty(&mut self) {
         let mut orders = vec![];
 
-        for (idx, scope) in self.scopes.iter() {
-            let order = ScopeOrder::new(scope.state().height(), scope.id());
-            drop(scope);
-            orders.push(order);
+        for (_idx, scope) in self.scopes.iter() {
+            orders.push(ScopeOrder::new(scope.state().height(), scope.id()));
         }
 
         for order in orders {
@@ -766,6 +762,13 @@ impl VirtualDom {
     pub fn handle_event(&self, name: &str, event: Rc<dyn Any>, element: ElementId, bubbling: bool) {
         let event = crate::Event::new(event, bubbling);
         self.runtime().handle_event(name, event, element);
+    }
+
+    fn register_subsecond_handler(&self) {
+        let sender = self.runtime().sender.clone();
+        subsecond::register_handler(Arc::new(move || {
+            _ = sender.unbounded_send(SchedulerMsg::AllDirty);
+        }));
     }
 }
 

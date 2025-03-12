@@ -66,7 +66,6 @@ members = [
     "packages/dx-wire-format",
     "packages/logger",
     "packages/config-macros",
-    "packages/subsecond",
 
     # manganis
     "packages/manganis/manganis",
@@ -78,6 +77,14 @@ members = [
     "packages/wasm-split/wasm-split-macro",
     "packages/wasm-split/wasm-split-cli",
     "packages/wasm-split/wasm-used",
+
+    # subsecond
+    "packages/subsecond/subsecond",
+    "packages/subsecond/subsecond-macro",
+    "packages/subsecond/subsecond-cli-support",
+    "packages/subsecond/subsecond-types",
+    "packages/subsecond/subsecond-cli",
+    "packages/subsecond/subsecond-harness",
 
     # Full project examples
     "example-projects/fullstack-hackernews",
@@ -103,6 +110,8 @@ members = [
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
+
+
 ]
 
 [workspace.package]
@@ -149,12 +158,19 @@ const-serialize = { path = "packages/const-serialize", version = "0.6.2" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.6.2" }
 generational-box = { path = "packages/generational-box", version = "0.6.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.2" }
-subsecond = { path = "packages/subsecond", version = "0.6.3" }
 
+# subsecond
+subsecond-cli-support = { path = "packages/subsecond/subsecond-cli-support", version = "0.6.3" }
+subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.6.3" }
+subsecond-macro = { path = "packages/subsecond/subsecond-macro", version = "0.6.3" }
+subsecond = { path = "packages/subsecond/subsecond", version = "0.6.3" }
+
+# manganis
 manganis = { path = "packages/manganis/manganis", version = "0.6.2" }
 manganis-core = { path = "packages/manganis/manganis-core", version = "0.6.2" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.6.2" }
 
+# wasm-split
 wasm-split = { path = "packages/wasm-split/wasm-split", version = "0.1.0" }
 wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.1.0" }
 wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.1.0" }
@@ -225,7 +241,7 @@ chrono = { version = "0.4.34" }
 gloo = { version = "0.8.0" }
 gloo-utils = { version = "0.1.6" }
 rustversion = "1.0.17"
-rand = "0.8.5"
+rand = "0.9.0"
 longest-increasing-subsequence = "0.1.0"
 trybuild = "1.0"
 dirs = "5.0.1"
@@ -246,6 +262,7 @@ async-once-cell = { version = "0.5.3" }
 rayon = "1.2.0"
 wasmparser = "0.225.0"
 itertools = "0.14.0"
+object = { version = "0.36.0" }
 
 # desktop
 wry = { version = "0.45.0", default-features = false }
@@ -262,6 +279,15 @@ core-foundation = "0.10.0"
 objc = { version = "0.2.7", features = ["exception"] }
 objc_id = "0.1.1"
 tray-icon = "0.19"
+
+# tui stuff
+ansi-to-tui = "6.0"
+ansi-to-html = "0.2.1"
+path-absolutize = "3.1"
+crossterm = { version = "0.28.0" }
+ratatui = { version = "0.28.0" }
+shell-words = "1.1.0"
+color-eyre = "0.6.3"
 
 # disable debug symbols in dev builds - shouldn't matter for downstream crates but makes our binaries (examples, cli, etc) build faster
 [profile.dev]
@@ -339,11 +365,11 @@ wasm-split = { workspace = true }
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
-futures-util = "0.3.31"
+futures-util = { workspace = true }
 separator = "0.4.1"
-serde = { version = "1.0.136", features = ["derive"] }
-serde_json = "1.0.79"
-rand = { version = "0.8.4", features = ["small_rng"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+rand = { workspace = true, features = ["small_rng"] }
 form_urlencoded = "1.2.0"
 async-std = "1.12.0"
 web-time = "1.1.0"

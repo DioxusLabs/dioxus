@@ -1,5 +1,10 @@
 use std::{collections::HashMap, ffi::CStr, path::PathBuf, sync::Arc};
 
+pub use subsecond_macro::hot;
+
+mod fn_impl;
+use fn_impl::*;
+
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
 static mut APP_JUMP_TABLE: Option<JumpTable> = None;
@@ -7,7 +12,7 @@ static mut HOTRELOAD_HANDLERS: Vec<Arc<dyn Fn()>> = vec![];
 
 pub const fn current<A, M, F>(f: F) -> HotFn<A, M, F>
 where
-    F: SomeFn<A, M>,
+    F: HotFunction<A, M>,
 {
     HotFn {
         inner: f,
@@ -15,12 +20,12 @@ where
     }
 }
 
-pub struct HotFn<A, M, T: SomeFn<A, M>> {
+pub struct HotFn<A, M, T: HotFunction<A, M>> {
     inner: T,
     _marker: std::marker::PhantomData<(A, M)>,
 }
 
-impl<A, M, T: SomeFn<A, M>> HotFn<A, M, T> {
+impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
     pub fn call(&self, args: A) -> T::Return {
         unsafe {
             // Try to handle known function pointers. This is *really really* unsafe, but due to how
@@ -36,7 +41,7 @@ impl<A, M, T: SomeFn<A, M>> HotFn<A, M, T> {
             // For non-zst (trait object) types, then there might be an issue. The real call function
             // will likely end up in the vtable and will never be hot-reloaded since signature takes self.
             if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
-                let known_fn_ptr = <T as SomeFn<A, M>>::call_it as *const ();
+                let known_fn_ptr = <T as HotFunction<A, M>>::call_it as *const ();
                 if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
                     let ptr = ptr as *const ();
                     let _f = std::mem::transmute::<*const (), fn(&T, A) -> T::Return>(ptr);
@@ -45,71 +50,6 @@ impl<A, M, T: SomeFn<A, M>> HotFn<A, M, T> {
             }
 
             self.inner.call_it(args)
-        }
-    }
-}
-
-pub trait SomeFn<Args, Marker> {
-    type Return;
-    type Real;
-
-    // rust-call isnt' stable, so we wrap the underyling call with our own, giving it a stable vtable entry
-    fn call_it(&self, args: Args) -> Self::Return;
-
-    // call this as if it were a real function pointer. This is very unsafe
-    unsafe fn call_as_ptr(&self, _args: Args) -> Self::Return;
-}
-
-impl<T, R> SomeFn<(), ()> for T
-where
-    T: Fn() -> R,
-{
-    type Return = R;
-    type Real = fn() -> R;
-    fn call_it(&self, _args: ()) -> Self::Return {
-        self()
-    }
-    unsafe fn call_as_ptr(&self, _args: ()) -> Self::Return {
-        unsafe {
-            if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
-                let real = std::mem::transmute_copy::<Self, Self::Real>(&self);
-
-                let known_fn_ptr = real as *const ();
-                if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                    let ptr = ptr as *const ();
-                    let detoured = std::mem::transmute::<*const (), Self::Real>(ptr);
-                    return detoured();
-                }
-            }
-
-            self.call_it(_args)
-        }
-    }
-}
-
-pub struct FnAMarker;
-impl<T, A, R> SomeFn<A, FnAMarker> for T
-where
-    T: Fn(A) -> R,
-{
-    type Return = R;
-    type Real = fn(A) -> R;
-    fn call_it(&self, _args: A) -> Self::Return {
-        self(_args)
-    }
-    unsafe fn call_as_ptr(&self, _args: A) -> Self::Return {
-        unsafe {
-            if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
-                let real = std::mem::transmute_copy::<Self, Self::Real>(&self);
-                let known_fn_ptr = real as *const ();
-                if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                    let ptr = ptr as *const ();
-                    let detoured = std::mem::transmute::<*const (), Self::Real>(ptr);
-                    return detoured(_args);
-                }
-            }
-
-            self.call_it(_args)
         }
     }
 }
@@ -125,6 +65,7 @@ pub extern "C" fn hotfn_load_binary_patch(path: *const i8, jump_table_path: *con
 pub struct JumpTable {
     pub map: HashMap<u64, u64>,
     pub new_main_address: u64,
+    pub old_main_address: u64,
 }
 
 /// Run the patch
@@ -136,12 +77,11 @@ pub fn run_patch(patch: PathBuf, jump_table: PathBuf) {
     let mut jump_table: JumpTable =
         bincode::deserialize(&std::fs::read(jump_table).unwrap()).unwrap();
 
-    // Correct the jump table since dlopen will load the binary at a different address than the original
-    // This involves defeating asl
-    let old_dl_offset = unsafe { libloading::os::unix::Library::this().get::<*const ()>(b"main") }
-        .unwrap()
-        .as_raw_ptr()
-        .wrapping_sub(jump_table.new_main_address as usize);
+    let old_dl_offset =
+        unsafe { libloading::os::unix::Library::this().get::<*const ()>(b"_mh_execute_header") }
+            .unwrap()
+            .as_raw_ptr()
+            .wrapping_sub(0x0000000100000000);
 
     let new_dl_offset = unsafe { lib.get::<*const ()>(b"main") }
         .unwrap()
@@ -152,8 +92,12 @@ pub fn run_patch(patch: PathBuf, jump_table: PathBuf) {
     jump_table.map = jump_table
         .map
         .iter()
-        .map(|(k, v)| (*k, *v + new_dl_offset as u64))
-        // .map(|(k, v)| (*k + old_dl_offset as u64, *v + new_dl_offset as u64))
+        .map(|(k, v)| {
+            (
+                (*k as usize + old_dl_offset as usize) as u64,
+                *v + new_dl_offset as u64,
+            )
+        })
         .collect();
 
     unsafe { APP_JUMP_TABLE = Some(jump_table) }

@@ -423,7 +423,7 @@ impl AppRunner {
         _ = std::fs::create_dir_all(&cache_dir);
     }
 
-    pub async fn patch(&mut self, bundle: &AppBundle) -> Result<subsecond::JumpTable> {
+    pub async fn patch(&mut self, bundle: &AppBundle) -> Result<subsecond_cli_support::JumpTable> {
         let time_taken = bundle
             .app
             .time_end
@@ -438,7 +438,7 @@ impl AppRunner {
     }
 }
 
-pub fn create_jump_table(original: &Path, patch: &Path) -> subsecond::JumpTable {
+pub fn create_jump_table(original: &Path, patch: &Path) -> subsecond_cli_support::JumpTable {
     use object::{
         read::File, Architecture, BinaryFormat, Endianness, Object, ObjectSection, ObjectSymbol,
         Relocation, RelocationTarget, SectionIndex,
@@ -466,12 +466,8 @@ pub fn create_jump_table(original: &Path, patch: &Path) -> subsecond::JumpTable 
         .map(|s| (s.name(), s.address()))
         .collect::<HashMap<_, _>>();
 
-    let main_address = new_syms
-        .symbols()
-        .iter()
-        .find(|s| s.name() == "_main")
-        .unwrap()
-        .address();
+    let new_main_address = new_name_to_addr.get("_main").unwrap().clone();
+    let old_main_address = old_name_to_addr.get("_main").unwrap().clone();
 
     for (new_name, new_addr) in new_name_to_addr {
         if let Some(old_addr) = old_name_to_addr.get(new_name) {
@@ -479,8 +475,9 @@ pub fn create_jump_table(original: &Path, patch: &Path) -> subsecond::JumpTable 
         }
     }
 
-    subsecond::JumpTable {
+    subsecond_cli_support::JumpTable {
         map,
-        new_main_address: main_address,
+        new_main_address,
+        old_main_address,
     }
 }

@@ -36,7 +36,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
-use subsecond::JumpTable;
+use subsecond_cli_support::JumpTable;
 use tower_http::{
     cors::Any,
     services::fs::{ServeDir, ServeFileSystemResponseBody},
