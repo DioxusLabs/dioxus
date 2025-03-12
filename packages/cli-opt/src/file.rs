@@ -2,7 +2,7 @@ use anyhow::Context;
 use manganis_core::{AssetOptions, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
 use std::path::Path;
 
-use crate::css::process_scss;
+use crate::css::{process_css_module, process_scss};
 
 use super::{
     css::process_css, folder::process_folder, image::process_image, js::process_js,
@@ -84,6 +84,9 @@ pub(crate) fn process_file_to_with_options(
         },
         AssetOptions::Css(options) => {
             process_css(options, source, &temp_path)?;
+        }
+        AssetOptions::CssModule(options) => {
+            process_css_module(options, source, output_path, &temp_path)?;
         }
         AssetOptions::Js(options) => {
             process_js(options, source, &temp_path, !in_folder)?;
