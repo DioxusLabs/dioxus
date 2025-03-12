@@ -1,9 +1,22 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
 
+// Wait for the build to finish
+async function waitForBuild(request) {
+  for (let i = 0; i < 10; i++) {
+    const build = await request.get("http://localhost:8888");
+    let text = await build.text();
+    if (!text.includes("Backend connection failed")) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
 // The home and id routes should return 200
 test("home route", async ({ request }) => {
-  const response = await request.get("/");
+  await waitForBuild(request);
+  const response = await request.get("http://localhost:8888");
 
   expect(response.status()).toBe(200);
 
@@ -12,7 +25,8 @@ test("home route", async ({ request }) => {
 });
 
 test("blog route", async ({ request }) => {
-  const response = await request.get("/blog/123");
+  await waitForBuild(request);
+  const response = await request.get("http://localhost:8888/blog/123");
 
   expect(response.status()).toBe(200);
 
@@ -22,14 +36,18 @@ test("blog route", async ({ request }) => {
 
 // The error route should return 500
 test("error route", async ({ request }) => {
-  const response = await request.get("/error");
+  await waitForBuild(request);
+  const response = await request.get("http://localhost:8888/error");
 
   expect(response.status()).toBe(500);
 });
 
 // An unknown route should return 404
 test("unknown route", async ({ request }) => {
-  const response = await request.get("/this-route-does-not-exist");
+  await waitForBuild(request);
+  const response = await request.get(
+    "http://localhost:8888/this-route-does-not-exist"
+  );
 
   expect(response.status()).toBe(404);
 });
