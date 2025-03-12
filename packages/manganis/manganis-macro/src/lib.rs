@@ -72,33 +72,35 @@ pub fn asset(input: TokenStream) -> TokenStream {
 ///
 /// # Syntax
 ///
-/// The `css_module!()` macro takes a comma separated list of items:
-/// - The asset constant identifier. This is the `const` variable for the `Asset` of the CSS module.
-/// - The styles constant identifier. This is the `const` variable to access your type-safe CSS identifiers in Rust.
+/// The `css_module!()` macro takes a few items.
+/// - A styles struct identifier. This is the `struct` you use to access your type-safe CSS identifiers in Rust.
 /// - The asset string path. This is the absolute path (from the crate root) to your CSS module.
 /// - An optional `CssModuleAssetOptions` struct to configure the processing of your CSS module.
 ///
 /// ```rust
-/// css_module!(ASSET_IDENT, STYLES_IDENT, "/my.module.css", CssModuleAssetOptions::new());
+/// css_module!(StylesIdent = "/my.module.css", CssModuleAssetOptions::new());
 /// ```
 ///
-/// Both the asset constant, and styles constant can optionally be made public by appending `pub` before the identifier.
+/// The styles struct can be made public by appending `pub` before the identifier.
 /// Read the [Variable Visibility](#variable-visibility) section for more information.
 ///
 /// # Generation
 ///
-/// The `css_module!()` macro does a few things:
-/// - It generates an asset using the `asset!()` macro and provides a constant to it.
-/// - It generates a struct with snake-case field names of your CSS idents.
-/// - It creates a constant of the generated struct with the final unique CSS identifiers.
+/// The `css_module!()` macro does two few things:
+/// - It generates an asset using the `asset!()` macro and automatically inserts it into the app meta.
+/// - It generates a struct with snake-case associated constants of your CSS idents.
 ///
 /// ```rust
 /// // This macro usage:
-/// css_module!(MY_ASSET, STYLES, "/mycss.module.css");
+/// css_module!(Styles = "/mycss.module.css");
 ///
-/// // Will produce these constants:
-/// const MY_ASSET: Asset = asset!("/mycss.module.css", CssModuleAssetOptions::new());
-/// const STYLES: Styles = Styles { ..yourcssidents.. };
+/// // Will generate this (simplified):
+/// struct Styles {}
+/// 
+/// impl Styles {
+///     // This can be accessed with `Styles::your_ident`
+///     pub const your_ident: &str = "abc",
+/// }
 /// ```
 ///
 /// # CSS Identifier Collection
@@ -120,7 +122,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// If you want your asset or styles constant to be public, you can add the `pub` keyword in front of them.
 /// Restricted visibility (`pub(super)`, `pub(crate)`, etc) is also supported.
 /// ```rust
-/// css_module!(pub MY_ASSET, pub STYLES, "/mycss.module.css");
+/// css_module!(pub Styles = "/mycss.module.css");
 /// ```
 ///
 /// # Asset Options
@@ -128,10 +130,7 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// ```rust
 /// use manganis::CssModuleAssetOptions;
 ///
-/// css_module!(
-///     MY_CSS,
-///     STYLES,
-///     "/mycss.module.css",
+/// css_module!(Styles = "/mycss.module.css",
 ///     CssModuleAssetOptions::new()
 ///         .with_minify(true)
 ///         .with_preload(false),
@@ -157,12 +156,11 @@ pub fn asset(input: TokenStream) -> TokenStream {
 /// ```
 /// Then you can use the `css_module!()` macro in your Rust project:
 /// ```rust
-/// css_module!(MY_CSS, STYLES, "/mycss.module.css");
+/// css_module!(Styles = "/mycss.module.css");
 ///
-/// println!("{}", MY_CSS);
-/// println!("{}", STYLES.header);
-/// println!("{}", STYLES.header_class);
-/// println!("{}", STYLES.button);
+/// println!("{}", Styles::header);
+/// println!("{}", Styles::header_class);
+/// println!("{}", Styles::button);
 /// ```
 #[proc_macro]
 pub fn css_module(input: TokenStream) -> TokenStream {
