@@ -254,7 +254,7 @@ impl RouterContext {
         let route = match mapping.as_ref() {
             Some(mapping) => mapping
                 .parse_route_from_root_route(&absolute_route)
-                .ok_or_else(|| format!("Failed to parse route")),
+                .ok_or_else(|| "Failed to parse route".to_string()),
             None => {
                 R::from_str(&absolute_route).map_err(|err| format!("Failed to parse route {err}"))
             }

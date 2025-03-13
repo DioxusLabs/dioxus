@@ -52,7 +52,7 @@ where
 }
 
 /// Errors that can occur during server side rendering before the initial chunk is sent down
-pub(crate) enum SSRError {
+pub enum SSRError {
     /// An error from the incremental renderer. This should result in a 500 code
     Incremental(IncrementalRendererError),
     /// An error from the dioxus router. This should result in a 404 code
