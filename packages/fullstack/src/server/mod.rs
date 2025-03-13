@@ -418,10 +418,13 @@ pub async fn render_handler(
             tracing::error!("Failed to render page: {}", e);
             Ok(report_err(e).into_response())
         }
-        Err(SSRError::Routing(e)) => Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(body::Body::new(format!("Page not found: {}", e)))
-            .unwrap()),
+        Err(SSRError::Routing(e)) => {
+            tracing::trace!("Page not found: {}", e);
+            Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::from("Page not found"))
+                .unwrap())
+        }
     }
 }
 
