@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use std::str::FromStr;
 
 #[component]
 fn Root() -> Element {
