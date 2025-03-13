@@ -69,9 +69,6 @@ use dioxus_lib::prelude::*;
 /// # vdom.rebuild_in_place();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Child</p>");
 /// ```
-pub fn Outlet<R: Routable + Clone>() -> Element
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
+pub fn Outlet<R: Routable + Clone>() -> Element {
     OutletContext::<R>::render()
 }

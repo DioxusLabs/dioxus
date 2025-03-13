@@ -109,10 +109,7 @@ pub struct RouterContext {
 }
 
 impl RouterContext {
-    pub(crate) fn new<R: Routable + 'static>(cfg: RouterConfig<R>) -> Self
-    where
-        <R as std::str::FromStr>::Err: std::fmt::Display,
-    {
+    pub(crate) fn new<R: Routable + 'static>(cfg: RouterConfig<R>) -> Self {
         let subscribers = Arc::new(Mutex::new(HashSet::new()));
         let mapping = consume_child_route_mapping();
 
@@ -244,10 +241,7 @@ impl RouterContext {
     }
 
     /// The route that is currently active.
-    pub fn current<R: Routable>(&self) -> R
-    where
-        <R as std::str::FromStr>::Err: std::fmt::Display,
-    {
+    pub fn current<R: Routable>(&self) -> R {
         let absolute_route = self.full_route_string();
         // If this is a child route, map the absolute route to the child route before parsing
         let mapping = consume_child_route_mapping::<R>();
@@ -393,7 +387,6 @@ where
     pub fn current(&self) -> R
     where
         R: Clone,
-        <R as std::str::FromStr>::Err: std::fmt::Display,
     {
         self.inner.current()
     }
