@@ -1,7 +1,7 @@
 use dioxus_lib::prelude::*;
 
 use crate::{
-    prelude::{provide_router_context, router, Outlet},
+    prelude::{provide_router_context, Outlet},
     routable::Routable,
     router_cfg::RouterConfig,
 };

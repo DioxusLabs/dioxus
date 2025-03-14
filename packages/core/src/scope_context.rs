@@ -447,7 +447,12 @@ impl Scope {
         let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
         if cur_hook >= hooks.len() {
-            hooks.push(Box::new(initializer()));
+            Runtime::with(|rt| {
+                rt.while_not_rendering(|| {
+                    hooks.push(Box::new(initializer()));
+                });
+            })
+            .unwrap()
         }
 
         self.use_hook_inner::<State>(hooks, cur_hook)
@@ -621,20 +626,8 @@ impl ScopeId {
         throw_into(error, self)
     }
 
-    /// Check if the scope is currently under a suspense boundary
-    pub fn under_suspense_boundary(&self) -> bool {
-        Runtime::with_scope(*self, |cx| {
-            matches!(cx.suspense_boundary, SuspenseLocation::UnderSuspense(_))
-        })
-        .unwrap()
-    }
-
-    /// Check if the scope is currently suspended
-    pub fn is_suspended(&self) -> bool {
-        Runtime::with_scope(*self, |cx| match cx.suspense_boundary.suspense_context() {
-            Some(context) => context.is_suspended(),
-            None => false,
-        })
-        .unwrap()
+    /// Get the suspense context the current scope is in
+    pub fn suspense_context(&self) -> Option<SuspenseContext> {
+        Runtime::with_scope(*self, |cx| cx.suspense_boundary.suspense_context().cloned()).unwrap()
     }
 }
