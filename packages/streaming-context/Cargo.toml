@@ -1,0 +1,19 @@
+[package]
+name = "dioxus-streaming-context"
+authors = ["Jonathan Kelley", "Evan Almloff"]
+version = { workspace = true }
+edition = "2021"
+description = "Fullstack streaming status context for Dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["web", "gui", "server"]
+resolver = "2"
+
+[dependencies]
+dioxus-core = { workspace = true }
+dioxus-signals.workspace = true
+futures-channel = { workspace = true }
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

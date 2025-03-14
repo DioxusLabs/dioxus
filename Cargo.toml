@@ -102,7 +102,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
-    "packages/playwright-tests/wasm-split-harness",
+    "packages/playwright-tests/wasm-split-harness", "packages/streaming-context",
 ]
 
 [workspace.package]
@@ -141,6 +141,7 @@ dioxus-cli-opt = { path = "packages/cli-opt", version = "0.6.2" }
 dioxus-devtools = { path = "packages/devtools", version = "0.6.2" }
 dioxus-devtools-types = { path = "packages/devtools-types", version = "0.6.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.6.2" }
+dioxus-streaming-context = { path = "packages/streaming-context", version = "0.6.3" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.2", default-features = false }
 dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.6.2" }
 dioxus-logger = { path = "packages/logger", version = "0.6.2" }
