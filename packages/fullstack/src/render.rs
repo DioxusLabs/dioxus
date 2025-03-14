@@ -6,6 +6,7 @@ use dioxus_cli_config::base_path;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_lib::document::Document;
+use dioxus_router::prelude::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
@@ -48,6 +49,14 @@ where
     {
         tokio::task::spawn_local(f())
     }
+}
+
+/// Errors that can occur during server side rendering before the initial chunk is sent down
+pub enum SSRError {
+    /// An error from the incremental renderer. This should result in a 500 code
+    Incremental(IncrementalRendererError),
+    /// An error from the dioxus router. This should result in a 404 code
+    Routing(ParseRouteError),
 }
 
 struct SsrRendererPool {
@@ -112,7 +121,7 @@ impl SsrRendererPool {
             RenderFreshness,
             impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
         ),
-        dioxus_isrg::IncrementalRendererError,
+        SSRError,
     > {
         struct ReceiverWithDrop {
             receiver: futures_channel::mpsc::Receiver<
@@ -144,6 +153,8 @@ impl SsrRendererPool {
         let (mut into, rx) = futures_channel::mpsc::channel::<
             Result<String, dioxus_isrg::IncrementalRendererError>,
         >(1000);
+
+        let (initial_result_tx, initial_result_rx) = futures_channel::oneshot::channel();
 
         // before we even spawn anything, we can check synchronously if we have the route cached
         if let Some(freshness) = self.check_cached_route(&route, &mut into) {
@@ -188,7 +199,7 @@ impl SsrRendererPool {
             virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
-            // poll the future, which may call server_context()
+            // rebuild the virtual dom, which may call server_context()
             with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             // If streaming is disabled, wait for the virtual dom to finish all suspense work
@@ -196,6 +207,41 @@ impl SsrRendererPool {
             if streaming_mode == StreamingMode::Disabled {
                 ProvideServerContext::new(virtual_dom.wait_for_suspense(), server_context.clone())
                     .await
+            }
+            // check if there are any errors
+            let errors = with_server_context(server_context.clone(), || {
+                virtual_dom.in_runtime(|| {
+                    let error_context: ErrorContext = ScopeId::APP
+                        .consume_context()
+                        .expect("The root should be under an error boundary");
+                    let errors = error_context.errors();
+                    errors.to_vec()
+                })
+            });
+            if errors.is_empty() {
+                // If routing was successful, we can return a 200 status and render into the stream
+                _ = initial_result_tx.send(Ok(()));
+            } else {
+                // If there was an error while routing, return the error with a 400 status
+                // Return a routing error if any of the errors were a routing error
+                let routing_error = errors.iter().find_map(|err| err.downcast().cloned());
+                if let Some(routing_error) = routing_error {
+                    _ = initial_result_tx.send(Err(SSRError::Routing(routing_error)));
+                    return;
+                }
+                #[derive(thiserror::Error, Debug)]
+                #[error("{0}")]
+                pub struct ErrorWhileRendering(String);
+                let mut all_errors = String::new();
+                for error in errors {
+                    all_errors += &error.to_string();
+                    all_errors += "\n"
+                }
+                let error = ErrorWhileRendering(all_errors);
+                _ = initial_result_tx.send(Err(SSRError::Incremental(
+                    IncrementalRendererError::Other(Box::new(error)),
+                )));
+                return;
             }
 
             let mut pre_body = String::new();
@@ -325,6 +371,11 @@ impl SsrRendererPool {
             myself.renderers.write().unwrap().push(renderer);
         });
 
+        // Wait for the initial result which determines the status code
+        initial_result_rx.await.map_err(|err| {
+            SSRError::Incremental(IncrementalRendererError::Other(Box::new(err)))
+        })??;
+
         Ok((
             RenderFreshness::now(None),
             ReceiverWithDrop {
@@ -447,7 +498,7 @@ impl SSRState {
             RenderFreshness,
             impl Stream<Item = Result<String, dioxus_isrg::IncrementalRendererError>>,
         ),
-        dioxus_isrg::IncrementalRendererError,
+        SSRError,
     > {
         self.renderers
             .clone()
