@@ -4,7 +4,7 @@ use crate::{
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
     query::QueryEngine,
-    shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
+    shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::WebviewInstance,
     AssetRequest, Config, WryEventHandler,
 };
@@ -214,7 +214,7 @@ impl DesktopService {
     pub fn create_shortcut(
         &self,
         hotkey: HotKey,
-        callback: impl FnMut() + 'static,
+        callback: impl FnMut(HotKeyState) + 'static,
     ) -> Result<ShortcutHandle, ShortcutRegistryError> {
         self.shared
             .shortcut_manager

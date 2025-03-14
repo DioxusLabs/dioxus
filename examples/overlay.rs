@@ -6,7 +6,7 @@
 //! We also add a global shortcut to toggle the overlay on and off, so you could build a raycast-type app with this.
 
 use dioxus::desktop::{
-    tao::dpi::PhysicalPosition, use_global_shortcut, LogicalSize, WindowBuilder,
+    tao::dpi::PhysicalPosition, use_global_shortcut, HotKeyState, LogicalSize, WindowBuilder,
 };
 use dioxus::prelude::*;
 
@@ -19,7 +19,11 @@ fn main() {
 fn app() -> Element {
     let mut show_overlay = use_signal(|| true);
 
-    _ = use_global_shortcut("cmd+g", move || show_overlay.toggle());
+    _ = use_global_shortcut("cmd+g", move |state| {
+        if state == HotKeyState::Pressed {
+            show_overlay.toggle();
+        }
+    });
 
     rsx! {
         document::Link {
