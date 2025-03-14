@@ -590,12 +590,12 @@ fn un_resolve_suspense(dom: &mut VirtualDom, scope_id: ScopeId) {
 
 impl SuspenseContext {
     /// Run a closure under a suspense boundary
-    pub fn under_suspense_boundary<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
+    pub(crate) fn under_suspense_boundary<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
         runtime.with_suspense_location(SuspenseLocation::UnderSuspense(self.clone()), f)
     }
 
     /// Run a closure under a suspense placeholder
-    pub fn in_suspense_placeholder<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
+    pub(crate) fn in_suspense_placeholder<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
         runtime.with_suspense_location(SuspenseLocation::InSuspensePlaceholder(self.clone()), f)
     }
 

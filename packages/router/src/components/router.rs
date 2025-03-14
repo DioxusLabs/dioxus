@@ -1,7 +1,7 @@
 use dioxus_lib::prelude::*;
 
 use crate::{
-    prelude::{provide_router_context, Outlet},
+    prelude::{provide_router_context, router, Outlet},
     routable::Routable,
     router_cfg::RouterConfig,
 };
@@ -42,6 +42,11 @@ pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element {
 
     use_hook(|| {
         provide_router_context(RouterContext::new(props.config.call(())));
+    });
+
+    #[cfg(feature = "streaming")]
+    use_after_suspense_resolved(|| {
+        dioxus_streaming_context::commit_initial_chunk();
     });
 
     use_hook(|| {

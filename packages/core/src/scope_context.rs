@@ -620,4 +620,21 @@ impl ScopeId {
     pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
         throw_into(error, self)
     }
+
+    /// Check if the scope is currently under a suspense boundary
+    pub fn under_suspense_boundary(&self) -> bool {
+        Runtime::with_scope(*self, |cx| {
+            matches!(cx.suspense_boundary, SuspenseLocation::UnderSuspense(_))
+        })
+        .unwrap()
+    }
+
+    /// Check if the scope is currently suspended
+    pub fn is_suspended(&self) -> bool {
+        Runtime::with_scope(*self, |cx| match cx.suspense_boundary.suspense_context() {
+            Some(context) => context.is_suspended(),
+            None => false,
+        })
+        .unwrap()
+    }
 }
