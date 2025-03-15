@@ -1,0 +1,10 @@
+[package]
+name = "dioxus-fullstack-protocol"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+ciborium.workspace = true
+dioxus-core = { workspace = true }
+base64 = { workspace = true }
+serde = { workspace = true }

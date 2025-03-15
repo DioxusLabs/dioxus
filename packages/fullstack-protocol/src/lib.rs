@@ -1,23 +1,25 @@
-#![cfg(feature = "server")]
-
-use dioxus_lib::prelude::{has_context, provide_context, use_hook};
+use dioxus_core::prelude::{has_context, provide_context, use_hook};
 use serde::Serialize;
 use std::{cell::RefCell, rc::Rc};
 
 pub(crate) mod serialize;
 
 #[derive(Default, Clone)]
-pub(crate) struct SerializeContext {
+pub struct SerializeContext {
     data: Rc<RefCell<HTMLData>>,
 }
 
 impl SerializeContext {
     /// Create a new entry in the data that will be sent to the client without inserting any data. Returns an id that can be used to insert data into the entry once it is ready.
-    pub(crate) fn create_entry(&self) -> usize {
-        self.data.borrow_mut().create_entry()
+    pub fn create_entry(&self) -> SerializeContextEntry {
+        let entry_index = self.data.borrow_mut().create_entry();
+
+        SerializeContextEntry {
+            id: entry_index,
+            context: self.clone(),
+        }
     }
 
-    /// Insert data into an entry that was created with [`Self::create_entry`]
     pub(crate) fn insert<T: Serialize>(
         &self,
         id: usize,
@@ -26,22 +28,25 @@ impl SerializeContext {
     ) {
         self.data.borrow_mut().insert(id, value, location);
     }
+}
 
-    /// Push resolved data into the serialized server data
-    pub(crate) fn push<T: Serialize>(
-        &self,
-        data: &T,
-        location: &'static std::panic::Location<'static>,
-    ) {
-        self.data.borrow_mut().push(data, location);
+pub struct SerializeContextEntry {
+    id: usize,
+    context: SerializeContext,
+}
+
+impl SerializeContextEntry {
+    /// Insert data into an entry that was created with [`Self::create_entry`]
+    pub fn insert<T: Serialize>(self, value: &T, location: &'static std::panic::Location<'static>) {
+        self.context.insert(self.id, value, location);
     }
 }
 
-pub(crate) fn use_serialize_context() -> SerializeContext {
+pub fn use_serialize_context() -> SerializeContext {
     use_hook(serialize_context)
 }
 
-pub(crate) fn serialize_context() -> SerializeContext {
+pub fn serialize_context() -> SerializeContext {
     has_context().unwrap_or_else(|| provide_context(SerializeContext::default()))
 }
 

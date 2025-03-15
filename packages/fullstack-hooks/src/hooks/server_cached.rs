@@ -1,4 +1,4 @@
-use dioxus_lib::prelude::use_hook;
+use dioxus_core::prelude::use_hook;
 use serde::{de::DeserializeOwned, Serialize};
 
 /// This allows you to send data from the server to the client. The data is serialized into the HTML on the server and hydrated on the client.
@@ -34,7 +34,7 @@ pub(crate) fn server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
 ) -> O {
     #[cfg(feature = "server")]
     {
-        let serialize = crate::html_storage::serialize_context();
+        let serialize = html_storage::serialize_context();
         let data = value();
         serialize.push(&data, location);
         data

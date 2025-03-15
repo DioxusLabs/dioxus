@@ -273,19 +273,6 @@ where
     }
 }
 
-fn apply_request_parts_to_response<B>(
-    parts: &http::response::Parts,
-    response: &mut axum::response::Response<B>,
-) {
-    let mut_headers = response.headers_mut();
-    for (key, value) in parts.headers.iter() {
-        mut_headers.insert(key, value.clone());
-    }
-    *response.status_mut() = parts.status;
-    *response.version_mut() = parts.version;
-    *response.extensions_mut() = parts.extensions.clone();
-}
-
 fn add_server_context(server_context: &DioxusServerContext, context_providers: &ContextProviders) {
     for index in 0..context_providers.len() {
         let context_providers = context_providers.clone();
@@ -413,8 +400,7 @@ pub async fn render_handler(
         Ok((freshness, rx)) => {
             let mut response = axum::response::Html::from(Body::from_stream(rx)).into_response();
             freshness.write(response.headers_mut());
-            let parts = server_context.response_parts();
-            apply_request_parts_to_response(&parts, &mut response);
+            server_context.send_response(&mut response);
             Result::<http::Response<axum::body::Body>, StatusCode>::Ok(response)
         }
         Err(SSRError::Incremental(e)) => {
@@ -487,8 +473,7 @@ async fn handle_server_fns_inner(
             }
 
             // apply the response parts from the server context to the response
-            let mut res_options = server_context.response_parts_mut();
-            res.headers_mut().extend(res_options.headers.drain());
+            server_context.send_response(&mut res);
 
             Ok(res)
         } else {

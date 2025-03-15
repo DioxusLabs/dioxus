@@ -1,6 +1,8 @@
 use base64::Engine;
-use dioxus_lib::prelude::dioxus_core::DynamicNode;
-use dioxus_lib::prelude::{has_context, ErrorContext, ScopeId, SuspenseContext, VNode, VirtualDom};
+use dioxus_core::DynamicNode;
+use dioxus_core::prelude::{
+    ErrorContext, ScopeId, SuspenseContext, VNode, VirtualDom, has_context,
+};
 
 use super::SerializeContext;
 
@@ -71,7 +73,6 @@ impl super::HTMLData {
         }
     }
 
-    #[cfg(feature = "server")]
     /// Encode data as base64. This is intended to be used in the server to send data to the client.
     pub(crate) fn serialized(&self) -> SerializedHydrationData {
         let mut serialized = Vec::new();
@@ -101,7 +102,6 @@ impl super::HTMLData {
     }
 }
 
-#[cfg(feature = "server")]
 /// Data that was serialized on the server for hydration on the client. This includes
 /// extra information about the types and sources of the serialized data in debug mode
 pub(crate) struct SerializedHydrationData {

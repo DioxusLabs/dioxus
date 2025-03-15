@@ -1,9 +1,9 @@
 [package]
-name = "dioxus-streaming-context"
+name = "dioxus-fullstack-hooks"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
 edition = "2021"
-description = "Fullstack streaming status context for Dioxus"
+description = "Hooks for serializing futures, values in dioxus-fullstack and other utilities"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
@@ -12,8 +12,18 @@ resolver = "2"
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-signals.workspace = true
+dioxus-signals = { workspace = true }
+dioxus-hooks = { workspace = true }
+dioxus-web = { workspace = true, optional = true }
 futures-channel = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+dioxus-fullstack = { workspace = true, features = ["server"] }
+
+[features]
+web = ["dep:dioxus-web"]
+server = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
