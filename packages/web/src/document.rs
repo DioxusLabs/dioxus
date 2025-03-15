@@ -136,6 +136,8 @@ impl Document for WebDocument {
 const PROMISE_WRAPPER: &str = r#"
     return (async function(){
         {JS_CODE}
+        
+        dioxus.close();
     })();
 "#;
 
