@@ -33,7 +33,9 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                 let fields = quote!(#(#fields)*).into_iter();
                 let required_fields = struct_info
                     .included_fields()
-                    .filter(|f| f.builder_attr.default.is_none())
+                    .filter(|f| {
+                        f.builder_attr.default.is_none() && f.builder_attr.extends.is_empty()
+                    })
                     .map(|f| struct_info.required_field_impl(f))
                     .collect::<Result<Vec<_>, _>>()?;
                 let build_method = struct_info.build_method_impl();
@@ -566,9 +568,7 @@ mod struct_info {
 
     impl<'a> StructInfo<'a> {
         pub fn included_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
-            self.fields
-                .iter()
-                .filter(|f| !f.builder_attr.skip && f.builder_attr.extends.is_empty())
+            self.fields.iter().filter(|f| !f.builder_attr.skip)
         }
 
         pub fn extend_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
@@ -670,7 +670,6 @@ mod struct_info {
 
             let regular_fields: Vec<_> = self
                 .included_fields()
-                .chain(self.extend_fields())
                 .filter(|f| !looks_like_signal_type(f.ty) && !looks_like_callback_type(f.ty))
                 .map(|f| {
                     let name = f.name;
@@ -837,24 +836,10 @@ Finally, call `.build()` to create the instance of `{name}`.
 
             let memoize = self.memoize_impl()?;
 
-            let global_fields = self
-                .extend_fields()
-                .map(|f| {
-                    let name = f.name;
-                    let ty = f.ty;
-                    quote!(#name: #ty)
-                })
-                .chain(self.has_child_owned_fields().then(|| quote!(owner: Owner)));
+            let global_fields = self.has_child_owned_fields().then(|| quote!(owner: Owner,));
             let global_fields_value = self
-                .extend_fields()
-                .map(|f| {
-                    let name = f.name;
-                    quote!(#name: Vec::new())
-                })
-                .chain(
-                    self.has_child_owned_fields()
-                        .then(|| quote!(owner: Owner::default())),
-                );
+                .has_child_owned_fields()
+                .then(|| quote!(owner: Owner::default(),));
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -862,7 +847,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[allow(dead_code, clippy::type_complexity)]
                     #vis fn builder() -> #builder_name #generics_with_empty {
                         #builder_name {
-                            #(#global_fields_value,)*
+                            #global_fields_value
                             fields: #empties_tuple,
                             _phantom: ::core::default::Default::default(),
                         }
@@ -873,7 +858,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #builder_type_doc
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
                 #vis struct #builder_name #b_generics {
-                    #(#global_fields,)*
+                    #global_fields
                     fields: #all_fields_param,
                     _phantom: (#( #phantom_generics ),*),
                 }
@@ -925,12 +910,8 @@ Finally, call `.build()` to create the instance of `{name}`.
             let field_name = field.name;
 
             let descructuring = self.included_fields().map(|f| {
-                if f.ordinal == field.ordinal {
-                    quote!(_)
-                } else {
-                    let name = f.name;
-                    quote!(#name)
-                }
+                let name = f.name;
+                quote!(#name)
             });
             let reconstructing = self.included_fields().map(|f| f.name);
 
@@ -962,7 +943,12 @@ Finally, call `.build()` to create the instance of `{name}`.
                     .count();
                 for f in self.included_fields() {
                     if f.ordinal == field.ordinal {
-                        ty_generics_tuple.elems.push_value(empty_type());
+                        g.params.insert(
+                            index_after_lifetime_in_generics,
+                            syn::GenericParam::Type(self.generic_builder_param(f)),
+                        );
+                        let generic_argument: syn::Type = f.type_ident();
+                        ty_generics_tuple.elems.push_value(generic_argument.clone());
                         target_generics_tuple
                             .elems
                             .push_value(f.tuplized_type_ty_param());
@@ -992,11 +978,6 @@ Finally, call `.build()` to create the instance of `{name}`.
             );
             let (impl_generics, _, where_clause) = generics.split_for_impl();
 
-            let forward_extended_fields = self.extend_fields().map(|f| {
-                let name = f.name;
-                quote!(#name: self.#name)
-            });
-
             let forward_owner = self
                 .has_child_owned_fields()
                 .then(|| quote!(owner: self.owner))
@@ -1015,18 +996,23 @@ Finally, call `.build()` to create the instance of `{name}`.
                 }
             });
 
+            let helper_trait_name = &self.conversion_helper_trait_name;
+
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
+                    type Output = #builder_name < #( #target_generics ),* >;
+
                     fn push_attribute<L>(
                         mut self,
                         ____name: &'static str,
                         ____ns: Option<&'static str>,
                         ____attr: impl dioxus_core::prelude::IntoAttributeValue<L>,
                         ____volatile: bool
-                    ) -> Self {
+                    ) -> Self::Output {
                         let ( #(#descructuring,)* ) = self.fields;
-                        self.#field_name.push(
+                        let mut #field_name = #helper_trait_name::into_value(#field_name, || ::core::default::Default::default());
+                        #field_name.push(
                             dioxus_core::Attribute::new(
                                 ____name,
                                 {
@@ -1037,8 +1023,8 @@ Finally, call `.build()` to create the instance of `{name}`.
                                 ____volatile,
                             )
                         );
+                        let #field_name = (#field_name,);
                         #builder_name {
-                            #(#forward_extended_fields,)*
                             #(#forward_owner,)*
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
@@ -1174,15 +1160,8 @@ Finally, call `.build()` to create the instance of `{name}`.
             let repeated_fields_error_message = format!("Repeated field {field_name}");
 
             let forward_fields = self
-                .extend_fields()
-                .map(|f| {
-                    let name = f.name;
-                    quote!(#name: self.#name)
-                })
-                .chain(
-                    self.has_child_owned_fields()
-                        .then(|| quote!(owner: self.owner)),
-                );
+                .has_child_owned_fields()
+                .then(|| quote!(owner: self.owner,));
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
@@ -1193,7 +1172,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let #field_name = (#arg_expr,);
                         let ( #(#descructuring,)* ) = self.fields;
                         #builder_name {
-                            #(#forward_fields,)*
+                            #forward_fields
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }
@@ -1323,6 +1302,31 @@ Finally, call `.build()` to create the instance of `{name}`.
             })
         }
 
+        fn generic_builder_param(&self, field: &FieldInfo) -> syn::TypeParam {
+            let trait_ref = syn::TraitBound {
+                paren_token: None,
+                lifetimes: None,
+                modifier: syn::TraitBoundModifier::None,
+                path: syn::PathSegment {
+                    ident: self.conversion_helper_trait_name.clone(),
+                    arguments: syn::PathArguments::AngleBracketed(
+                        syn::AngleBracketedGenericArguments {
+                            colon2_token: None,
+                            lt_token: Default::default(),
+                            args: make_punctuated_single(syn::GenericArgument::Type(
+                                field.ty.clone(),
+                            )),
+                            gt_token: Default::default(),
+                        },
+                    ),
+                }
+                .into(),
+            };
+            let mut generic_param: syn::TypeParam = field.generic_ident.clone().into();
+            generic_param.bounds.push(trait_ref.into());
+            generic_param
+        }
+
         pub fn build_method_impl(&self) -> TokenStream {
             let StructInfo {
                 ref name,
@@ -1338,27 +1342,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     .count();
                 for field in self.included_fields() {
                     if field.builder_attr.default.is_some() {
-                        let trait_ref = syn::TraitBound {
-                            paren_token: None,
-                            lifetimes: None,
-                            modifier: syn::TraitBoundModifier::None,
-                            path: syn::PathSegment {
-                                ident: self.conversion_helper_trait_name.clone(),
-                                arguments: syn::PathArguments::AngleBracketed(
-                                    syn::AngleBracketedGenericArguments {
-                                        colon2_token: None,
-                                        lt_token: Default::default(),
-                                        args: make_punctuated_single(syn::GenericArgument::Type(
-                                            field.ty.clone(),
-                                        )),
-                                        gt_token: Default::default(),
-                                    },
-                                ),
-                            }
-                            .into(),
-                        };
-                        let mut generic_param: syn::TypeParam = field.generic_ident.clone().into();
-                        generic_param.bounds.push(trait_ref.into());
+                        let generic_param = self.generic_builder_param(field);
                         g.params
                             .insert(index_after_lifetime_in_generics, generic_param.into());
                     }
@@ -1396,9 +1380,8 @@ Finally, call `.build()` to create the instance of `{name}`.
             let assignments = self.fields.iter().map(|field| {
                 let name = &field.name;
                 if !field.builder_attr.extends.is_empty() {
-                    quote!(let #name = self.#name;)
+                    quote!(let #name = #helper_trait_name::into_value(#name, || ::core::default::Default::default());)
                 } else if let Some(ref default) = field.builder_attr.default {
-
                     // If field has `into`, apply it to the default value.
                     // Ignore any blank defaults as it causes type inference errors.
                     let is_default = *default == parse_quote!(::core::default::Default::default());

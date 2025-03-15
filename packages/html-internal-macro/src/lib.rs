@@ -43,7 +43,7 @@ impl ToTokens for ImplExtensionAttributes {
         let impls = self.attrs.iter().map(|ident| {
             let d = quote! { #name::#ident };
             quote! {
-                fn #ident(self, value: impl IntoAttributeValue) -> Self {
+                fn #ident(self, value: impl IntoAttributeValue) -> Self::Output {
                     let d = #d;
                     self.push_attribute(d.0, d.1, value, d.2)
                 }
