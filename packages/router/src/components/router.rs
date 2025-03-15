@@ -1,7 +1,5 @@
 use dioxus_lib::prelude::*;
 
-use std::str::FromStr;
-
 use crate::{
     prelude::{provide_router_context, Outlet},
     routable::Routable,
@@ -39,10 +37,7 @@ impl<R: Clone> PartialEq for RouterProps<R> {
 }
 
 /// A component that renders the current route.
-pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
+pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element {
     use crate::prelude::{outlet::OutletContext, RouterContext};
 
     use_hook(|| {

@@ -98,6 +98,7 @@ members = [
     "packages/playwright-tests/web",
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/fullstack-mounted",
+    "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",

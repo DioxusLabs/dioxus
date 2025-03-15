@@ -1,5 +1,7 @@
 use std::{
     collections::HashSet,
+    error::Error,
+    fmt::Display,
     sync::{Arc, Mutex},
 };
 
@@ -10,6 +12,19 @@ use crate::{
     components::child_router::consume_child_route_mapping, navigation::NavigationTarget,
     prelude::SiteMapSegment, routable::Routable, router_cfg::RouterConfig,
 };
+
+/// An error that is thrown when the router fails to parse a route
+#[derive(Debug, Clone)]
+pub struct ParseRouteError {
+    message: String,
+}
+
+impl Error for ParseRouteError {}
+impl Display for ParseRouteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.message.fmt(f)
+    }
+}
 
 /// This context is set in the root of the virtual dom if there is a router present.
 #[derive(Clone, Copy)]
@@ -94,10 +109,7 @@ pub struct RouterContext {
 }
 
 impl RouterContext {
-    pub(crate) fn new<R: Routable + 'static>(cfg: RouterConfig<R>) -> Self
-    where
-        <R as std::str::FromStr>::Err: std::fmt::Display,
-    {
+    pub(crate) fn new<R: Routable + 'static>(cfg: RouterConfig<R>) -> Self {
         let subscribers = Arc::new(Mutex::new(HashSet::new()));
         let mapping = consume_child_route_mapping();
 
@@ -233,15 +245,21 @@ impl RouterContext {
         let absolute_route = self.full_route_string();
         // If this is a child route, map the absolute route to the child route before parsing
         let mapping = consume_child_route_mapping::<R>();
-        match mapping.as_ref() {
+        let route = match mapping.as_ref() {
             Some(mapping) => mapping
                 .parse_route_from_root_route(&absolute_route)
-                .unwrap_or_else(|| {
-                    panic!("route's display implementation must be parsable by FromStr")
-                }),
-            None => R::from_str(&absolute_route).unwrap_or_else(|_| {
-                panic!("route's display implementation must be parsable by FromStr")
-            }),
+                .ok_or_else(|| "Failed to parse route".to_string()),
+            None => {
+                R::from_str(&absolute_route).map_err(|err| format!("Failed to parse route {err}"))
+            }
+        };
+
+        match route {
+            Ok(route) => route,
+            Err(err) => {
+                throw_error(ParseRouteError { message: err });
+                "/".parse().unwrap_or_else(|err| panic!("{err}"))
+            }
         }
     }
 

@@ -3,7 +3,7 @@ use crate::{
     Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     backtrace::Backtrace,
     cell::{Ref, RefCell},
     error::Error,
@@ -493,11 +493,7 @@ impl Display for CapturedError {
 impl CapturedError {
     /// Downcast the error type into a concrete error type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        if TypeId::of::<T>() == (*self.error).type_id() {
-            self.error.as_any().downcast_ref::<T>()
-        } else {
-            None
-        }
+        self.error.as_any().downcast_ref::<T>()
     }
 }
 

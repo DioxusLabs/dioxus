@@ -3921,6 +3921,7 @@ dependencies = [
  "dioxus-isrg",
  "dioxus-lib",
  "dioxus-mobile",
+ "dioxus-router",
  "dioxus-ssr",
  "dioxus-web",
  "dioxus_server_macro",
@@ -4116,6 +4117,15 @@ dependencies = [
 
 [[package]]
 name = "dioxus-playwright-fullstack-mounted-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "dioxus-playwright-fullstack-routing-test"
 version = "0.1.0"
 dependencies = [
  "dioxus",
@@ -15400,9 +15410,9 @@ checksum = "1e9df38ee2d2c3c5948ea468a8406ff0db0b29ae1ffde1bcf20ef305bcc95c51"
 
 [[package]]
 name = "wry"
-version = "0.50.3"
+version = "0.50.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2ec139df5102db821f92a42033c3fa0467c5ab434511e79c65881d6bdf2b369"
+checksum = "804a7d1613bd699beccaa60f3b3c679acee21cebba1945a693f5eab95c08d1fa"
 dependencies = [
  "base64 0.22.1",
  "block2 0.6.0",

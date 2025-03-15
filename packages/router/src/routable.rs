@@ -592,7 +592,7 @@ type SiteMapFlattened<'a> = FlatMap<
         note = "Routable should generally be derived using the `#[derive(Routable)]` macro."
     )
 )]
-pub trait Routable: FromStr + Display + Clone + 'static {
+pub trait Routable: FromStr<Err: Display> + Display + Clone + 'static {
     /// The error that can occur when parsing a route.
     const SITE_MAP: &'static [SiteMapSegment];
 

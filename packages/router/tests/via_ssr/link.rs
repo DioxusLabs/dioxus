@@ -1,19 +1,13 @@
 use dioxus::prelude::*;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_router::components::HistoryProvider;
-use std::{rc::Rc, str::FromStr};
+use std::rc::Rc;
 
-fn prepare<R: Routable>() -> String
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
+fn prepare<R: Routable>() -> String {
     prepare_at::<R>("/")
 }
 
-fn prepare_at<R: Routable>(at: impl ToString) -> String
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
+fn prepare_at<R: Routable>(at: impl ToString) -> String {
     let mut vdom = VirtualDom::new_with_props(
         App,
         AppProps::<R> {
@@ -46,10 +40,7 @@ where
     }
 
     #[allow(non_snake_case)]
-    fn App<R: Routable>(props: AppProps<R>) -> Element
-    where
-        <R as FromStr>::Err: std::fmt::Display,
-    {
+    fn App<R: Routable>(props: AppProps<R>) -> Element {
         rsx! {
             h1 { "App" }
             HistoryProvider {
