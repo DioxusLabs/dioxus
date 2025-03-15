@@ -343,7 +343,6 @@ impl ServeConfigBuilder {
 
         let index_path = self
             .index_path
-            .map(PathBuf::from)
             .unwrap_or_else(|| public_path.join("index.html"));
 
         let root_id = self.root_id.unwrap_or("main");
