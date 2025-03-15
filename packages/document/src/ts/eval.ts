@@ -67,4 +67,7 @@ export abstract class DioxusChannel {
 
   // Receive data sent from javascript in rust
   abstract rustRecv(): Promise<any>;
+
+  // Close the channel, dropping it.
+  abstract close(): void;
 }
