@@ -149,13 +149,13 @@ fn removes_one_by_one() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(2) },
-            CreateTextNode { value: "0".to_string(), id: ElementId(6) },
+            CreateTextNode { value: "0".to_string(), id: ElementId(3) },
             ReplacePlaceholder { path: &[0], m: 1 },
-            LoadTemplate { index: 0, id: ElementId(8) },
-            CreateTextNode { value: "1".to_string(), id: ElementId(9) },
+            LoadTemplate { index: 0, id: ElementId(5) },
+            CreateTextNode { value: "1".to_string(), id: ElementId(6) },
             ReplacePlaceholder { path: &[0], m: 1 },
-            LoadTemplate { index: 0, id: ElementId(10) },
-            CreateTextNode { value: "2".to_string(), id: ElementId(11) },
+            LoadTemplate { index: 0, id: ElementId(7) },
+            CreateTextNode { value: "2".to_string(), id: ElementId(8) },
             ReplacePlaceholder { path: &[0], m: 1 },
             ReplaceWith { id: ElementId(4), m: 3 }
         ]
@@ -420,7 +420,7 @@ fn remove_many() {
             edits.edits,
             [
                 LoadTemplate { index: 0, id: ElementId(9,) },
-                CreateTextNode { value: "hello 0".to_string(), id: ElementId(7,) },
+                CreateTextNode { value: "hello 0".to_string(), id: ElementId(10,) },
                 ReplacePlaceholder { path: &[0,], m: 1 },
                 ReplaceWith { id: ElementId(11,), m: 1 },
             ]
