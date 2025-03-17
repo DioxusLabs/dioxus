@@ -39,7 +39,7 @@ members = [
     "packages/extension",
     "packages/fullstack",
     "packages/fullstack-hooks",
-    "packages/fullstack-data",
+    "packages/fullstack-protocol",
     "packages/generational-box",
     "packages/history",
     "packages/hooks",

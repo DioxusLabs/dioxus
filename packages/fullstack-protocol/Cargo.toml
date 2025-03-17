@@ -8,3 +8,4 @@ ciborium.workspace = true
 dioxus-core = { workspace = true }
 base64 = { workspace = true }
 serde = { workspace = true }
+tracing.workspace = true

@@ -3917,6 +3917,7 @@ dependencies = [
  "dioxus-desktop",
  "dioxus-devtools",
  "dioxus-fullstack-hooks",
+ "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-interpreter-js",
  "dioxus-isrg",
@@ -3956,6 +3957,7 @@ version = "0.6.3"
 dependencies = [
  "dioxus-core",
  "dioxus-fullstack",
+ "dioxus-fullstack-protocol",
  "dioxus-hooks",
  "dioxus-signals",
  "dioxus-web",
@@ -3971,6 +3973,7 @@ dependencies = [
  "ciborium",
  "dioxus-core",
  "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -4320,13 +4323,13 @@ name = "dioxus-web"
 version = "0.6.3"
 dependencies = [
  "async-trait",
- "ciborium",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools",
  "dioxus-document",
+ "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-html",
  "dioxus-interpreter-js",

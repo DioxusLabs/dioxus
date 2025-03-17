@@ -6,8 +6,6 @@
 
 pub use once_cell;
 
-mod html_storage;
-
 #[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 pub mod server;

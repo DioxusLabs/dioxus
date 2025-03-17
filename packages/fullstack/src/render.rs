@@ -1,14 +1,15 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::document::ServerDocument;
-use crate::html_storage::serialize::SerializedHydrationData;
 use crate::streaming::{Mount, StreamingRenderer};
 use dioxus_cli_config::base_path;
+use dioxus_fullstack_hooks::{StreamingContext, StreamingStatus};
+use dioxus_fullstack_protocol::{HydrationContext, SerializedHydrationData};
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_isrg::{CachedRender, IncrementalRendererError, RenderFreshness};
 use dioxus_lib::document::Document;
+use dioxus_lib::prelude::dioxus_core::DynamicNode;
 use dioxus_router::prelude::ParseRouteError;
 use dioxus_ssr::Renderer;
-use dioxus_streaming_context::{StreamingContext, StreamingStatus};
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
 use std::fmt::Write;
@@ -485,11 +486,81 @@ fn start_capturing_errors(suspense_scope: ScopeId) {
 fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> SerializedHydrationData {
     // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
     // Extract any data we serialized for hydration (from server futures)
-    let html_data =
-        crate::html_storage::HTMLData::extract_from_suspense_boundary(virtual_dom, scope);
+    let html_data = extract_from_suspense_boundary(virtual_dom, scope);
 
     // serialize the server state into a base64 string
     html_data.serialized()
+}
+
+/// Walks through the suspense boundary in a depth first order and extracts the data from the context API.
+/// We use depth first order instead of relying on the order the hooks are called in because during suspense on the server, the order that futures are run in may be non deterministic.
+pub(crate) fn extract_from_suspense_boundary(
+    vdom: &VirtualDom,
+    scope: ScopeId,
+) -> HydrationContext {
+    let data = HydrationContext::default();
+    serialize_errors(&data, vdom, scope);
+    take_from_scope(&data, vdom, scope);
+    data
+}
+
+/// Get the errors from the suspense boundary
+fn serialize_errors(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
+    // If there is an error boundary on the suspense boundary, grab the error from the context API
+    // and throw it on the client so that it bubbles up to the nearest error boundary
+    let error = vdom.in_runtime(|| {
+        scope
+            .consume_context::<ErrorContext>()
+            .and_then(|error_context| error_context.errors().first().cloned())
+    });
+    context
+        .error_entry()
+        .insert(&error, std::panic::Location::caller());
+}
+
+fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
+    vdom.in_runtime(|| {
+        scope.in_runtime(|| {
+            // Grab any serializable server context from this scope
+            let other: Option<HydrationContext> = has_context();
+            if let Some(other) = other {
+                context.extend(&other);
+            }
+        });
+    });
+
+    // then continue to any children
+    if let Some(scope) = vdom.get_scope(scope) {
+        // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
+        if let Some(suspense_boundary) =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
+        {
+            if let Some(node) = suspense_boundary.suspended_nodes() {
+                take_from_vnode(context, vdom, &node);
+            }
+        }
+        if let Some(node) = scope.try_root_node() {
+            take_from_vnode(context, vdom, node);
+        }
+    }
+}
+
+fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
+    for (dynamic_node_index, dyn_node) in vnode.dynamic_nodes.iter().enumerate() {
+        match dyn_node {
+            DynamicNode::Component(comp) => {
+                if let Some(scope) = comp.mounted_scope(dynamic_node_index, vnode, vdom) {
+                    take_from_scope(context, vdom, scope.id());
+                }
+            }
+            DynamicNode::Fragment(nodes) => {
+                for node in nodes {
+                    take_from_vnode(context, vdom, node);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.
