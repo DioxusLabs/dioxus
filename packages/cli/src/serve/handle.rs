@@ -46,6 +46,9 @@ pub(crate) struct AppHandle {
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
     pub(crate) runtime_asst_dir: Option<PathBuf>,
+
+    /// The debugger for the app - must be enabled with the `d` key
+    pub(crate) app_debugger: Option<Child>,
 }
 
 impl AppHandle {
@@ -61,6 +64,7 @@ impl AppHandle {
             server_stderr: None,
             entropy_app_exe: None,
             entropy_server_exe: None,
+            app_debugger: None,
         })
     }
 

@@ -263,6 +263,12 @@ impl Output {
                 self.trace = !self.trace;
                 tracing::info!("Tracing is now {}", if self.trace { "on" } else { "off" });
             }
+            KeyCode::Char('d') => {
+                // if key.modifiers.contains(KeyModifiers::SHIFT) {
+                tracing::info!("Opening debugger");
+                return Ok(Some(ServeUpdate::OpenDebugger));
+                // }
+            }
 
             KeyCode::Char('c') => {
                 stdout()
