@@ -54,9 +54,11 @@ impl HydrationContext {
 
     /// Get the entry for the error in the suspense boundary
     pub fn error_entry(&self) -> SerializeContextEntry<Option<CapturedError>> {
+        // The first entry is reserved for the error
+        let entry_index = self.data.borrow_mut().create_entry_with_id(0);
+
         SerializeContextEntry {
-            // The first index is always reserved for the error
-            index: 0,
+            index: entry_index,
             context: self.clone(),
             phantom: std::marker::PhantomData,
         }
@@ -196,6 +198,10 @@ impl HTMLData {
     fn create_entry(&mut self) -> usize {
         let id = self.cursor;
         self.cursor += 1;
+        self.create_entry_with_id(id)
+    }
+
+    fn create_entry_with_id(&mut self, id: usize) -> usize {
         while self.cursor > self.data.len() {
             self.data.push(None);
             #[cfg(debug_assertions)]
