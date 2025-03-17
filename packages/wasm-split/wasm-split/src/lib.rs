@@ -34,7 +34,7 @@ impl std::fmt::Display for SplitLoaderError {
 /// which module the function should be loaded from. If you don't know which module to use, use `auto`
 /// and wasm-split will automatically combine all the modules into one.
 ///
-/// ```rust, no_run
+/// ```rust, ignore
 /// static LOADER: wasm_split::LazyLoader<Args, Ret> = wasm_split::lazy_loader!(extern "auto" fn SomeFunction(args: Args) -> Ret);
 ///
 /// fn SomeFunction(args: Args) -> Ret {
