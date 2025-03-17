@@ -16,7 +16,7 @@ server_fn = { version = "0.7.3", features = ["json", "url", "browser"], default-
 dioxus_server_macro = { workspace = true }
 
 # axum
-axum = { workspace = true, features = ["ws", "macros"], optional = true }
+axum = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs"] }
 
 dioxus-lib = { workspace = true }
@@ -88,7 +88,18 @@ desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwe
 mobile = ["dep:dioxus-mobile", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
-axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
+axum_core = [
+    "dep:axum",
+    "server_fn/axum-no-default",
+    "dioxus_server_macro/axum",
+    "default-tls",
+    "server",
+]
+axum = [
+    "dep:tower-http",
+    "server_fn/axum",
+    "axum_core",
+]
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",
