@@ -1,6 +1,6 @@
 use anyhow::Context;
 use cargo_metadata::camino::Utf8PathBuf;
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use itertools::Itertools;
 use notify::{
     event::{DataChange, ModifyKind},
@@ -9,11 +9,14 @@ use notify::{
 use object::write::Object;
 use serde::Deserialize;
 use std::{collections::HashMap, env, ffi::OsStr, path::PathBuf, process::Stdio, time::SystemTime};
+use subsecond_cli_support::create_jump_table;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},
+    net::TcpListener,
     process::{Child, Command},
     time::Instant,
 };
+use tokio_tungstenite::WebSocketStream;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -66,8 +69,8 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     // Launch the fat exe. We'll overwrite the slim exe location, so this prevents the app from bugging out
     let app = Command::new(&fat_exe).kill_on_drop(true).spawn()?;
 
-    // Connect to the process with lldb
-    let mut lldb = attach_lldb(&fat_exe, app.id().unwrap()).await?;
+    // Wait for the websocket to come up
+    let mut websocket = wait_for_ws(9393).await?;
 
     // don't log if the screen has been taken over - important for tui apps
     let should_log = rust_log_enabled();
@@ -95,22 +98,12 @@ async fn hotreload_loop() -> anyhow::Result<()> {
 
         // Assemble the jump table of redirected addresses
         // todo: keep track of this and merge it over time
-        let jump_table = write_jumptable(&fat_exe, &output_temp);
+        let jump_table = create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path());
 
-        // Pause the process with lldb, run the "hotfn_load_binary_patch" command and then continue
-        // todo: read the output and pull in any data - ie the dl address to update the jump table
-        lldb.stdin
-            .as_mut()
-            .unwrap()
-            .write_all(
-                format!(
-                    "process interrupt\nexpr (void) hotfn_load_binary_patch(\"{}\", \"{}\")\ncontinue\n",
-                    output_temp,
-                    jump_table.display(),
-
-                )
-                .as_bytes(),
-            )
+        websocket
+            .send(tokio_tungstenite::tungstenite::Message::Binary(
+                bincode::serialize(&jump_table).unwrap().into(),
+            ))
             .await?;
 
         if should_log {
@@ -118,36 +111,9 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         }
     }
 
-    drop(lldb);
+    drop(app);
 
     Ok(())
-}
-
-fn write_jumptable(fat_exe: &Utf8PathBuf, output_temp: &Utf8PathBuf) -> PathBuf {
-    let jump_table =
-        subsecond_cli_support::create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path());
-    let jump_table_path = subsecond_folder().join("data").join("jump_table.bin");
-    std::fs::write(&jump_table_path, bincode::serialize(&jump_table).unwrap()).unwrap();
-    jump_table_path
-}
-
-async fn attach_lldb(fat_exe: &Utf8PathBuf, pid: u32) -> Result<Child, anyhow::Error> {
-    let mut lldb = Command::new("lldb")
-        .arg("-p")
-        .arg(pid.to_string())
-        .arg(fat_exe)
-        .kill_on_drop(true)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-
-    lldb.stdin
-        .as_mut()
-        .unwrap()
-        .write_all(b"process continue\n")
-        .await?;
-
-    Ok(lldb)
 }
 
 struct FsWatcher {
@@ -195,6 +161,16 @@ impl FsWatcher {
 
         false
     }
+}
+
+async fn wait_for_ws(port: u16) -> anyhow::Result<WebSocketStream<tokio::net::TcpStream>> {
+    let port = port;
+    let addr = format!("127.0.0.1:{}", port);
+    let try_socket = TcpListener::bind(&addr).await;
+    let listener = try_socket.expect("Failed to bind");
+    let (conn, sock) = listener.accept().await?;
+    let socket = tokio_tungstenite::accept_async(conn).await?;
+    Ok(socket)
 }
 
 /// Store the linker args in a file for the main process to read.

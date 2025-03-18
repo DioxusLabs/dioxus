@@ -7,7 +7,7 @@ pub fn launch() -> anyhow::Result<()> {
 
 fn app() -> Element {
     let mut count = use_signal(|| 0);
-    let abcv = 105;
+    let abcv = 12312123;
 
     rsx! {
         h1 { "{count}" }
@@ -29,8 +29,7 @@ fn app() -> Element {
             },
             "Increment {abcv}"
         }
-        div { "hello world" }
-        for x in 0..12 {
+        for x in 0..1 {
             Child { id: x, opt: "hello".to_string() }
         }
     }
@@ -50,6 +49,8 @@ fn Child(id: u32, opt: String) -> Element {
 #[component]
 fn Child4(id: u32, opt: String) -> Element {
     rsx! {
+        div { "Hello ?? child: {id} - {opt} ?" }
+        div { "Hello ?? child: {id} - {opt} ?" }
         div { "Hello ?? child: {id} - {opt} ?" }
     }
 }

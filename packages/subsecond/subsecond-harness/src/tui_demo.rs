@@ -14,7 +14,9 @@ use ratatui::{
 pub fn launch() -> anyhow::Result<()> {
     color_eyre::install().map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut terminal = ratatui::init();
-    let app_result = App::new().run(&mut terminal);
+
+    let app_result = subsecond::resume(|| App::new().run(&mut terminal));
+
     ratatui::restore();
     app_result.map_err(|e| anyhow::anyhow!("{e}"))
 }
@@ -22,7 +24,6 @@ pub fn launch() -> anyhow::Result<()> {
 struct App {
     should_exit: bool,
     temperatures: Vec<u8>,
-    hot_rx: std::sync::mpsc::Receiver<()>,
 }
 
 impl App {
@@ -30,14 +31,9 @@ impl App {
         let mut rng = rand::rng();
         let temperatures = (0..24).map(|_| rng.random_range(50..90)).collect();
 
-        let (hot_tx, hot_rx) = std::sync::mpsc::channel();
-        subsecond::register_handler(std::sync::Arc::new(move || _ = hot_tx.send(())));
-
         Self {
             should_exit: false,
             temperatures,
-
-            hot_rx,
         }
     }
 
@@ -57,26 +53,29 @@ impl App {
 
     fn handle_events(&mut self) -> Result<()> {
         loop {
-            if event::poll(Duration::from_millis(100))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
-                        self.should_exit = true;
-                    }
-
-                    if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('t') {
-                        let mut rng = rng();
-                        self.temperatures = (0..24).map(|_| rng.random_range(50..90)).collect();
-                    }
-                }
-                break;
+            // Attempt to hot-reload
+            if subsecond::changed() {
+                return Ok(());
             }
 
-            if self.hot_rx.try_recv().is_ok() {
-                break;
+            // Otherwise poll for events
+            if !event::poll(Duration::from_millis(100)).unwrap_or_else(|_| false) {
+                continue;
+            }
+
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
+                    self.should_exit = true;
+                }
+
+                if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('t') {
+                    let mut rng = rng();
+                    self.temperatures = (0..24).map(|_| rng.random_range(50..90)).collect();
+                }
+
+                return Ok(());
             }
         }
-
-        Ok(())
     }
 
     fn draw(&self, frame: &mut Frame) {
@@ -85,7 +84,7 @@ impl App {
             .areas(frame.area());
 
         frame.render_widget(
-            "Tui development has never been soooo"
+            "Tui development has never been so easy!"
                 .bold()
                 .italic()
                 .into_centered_line()

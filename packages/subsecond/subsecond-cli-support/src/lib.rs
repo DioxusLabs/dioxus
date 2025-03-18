@@ -53,6 +53,7 @@ pub fn create_jump_table(original: &Path, patch: &Path) -> JumpTable {
     }
 
     JumpTable {
+        lib: patch.to_path_buf(),
         map,
         old_main_address,
         new_main_address,

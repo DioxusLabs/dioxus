@@ -34,6 +34,6 @@ sysinfo = "0.33.1"
 page_size = "0.6.0"
 ouroboros = "0.18.5"
 walkdir = "2.5.0"
-
+tokio-tungstenite = "0.23.0"
 crossterm = { workspace = true }
 subsecond-cli-support = { path = "../subsecond-cli-support" }

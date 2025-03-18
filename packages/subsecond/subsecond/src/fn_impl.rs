@@ -5,10 +5,10 @@ pub trait HotFunction<Args, Marker> {
     type Real;
 
     // rust-call isnt' stable, so we wrap the underyling call with our own, giving it a stable vtable entry
-    fn call_it(&self, args: Args) -> Self::Return;
+    fn call_it(&mut self, args: Args) -> Self::Return;
 
     // call this as if it were a real function pointer. This is very unsafe
-    unsafe fn call_as_ptr(&self, _args: Args) -> Self::Return;
+    unsafe fn call_as_ptr(&mut self, _args: Args) -> Self::Return;
 }
 
 macro_rules! impl_hot_function {
@@ -21,18 +21,18 @@ macro_rules! impl_hot_function {
             pub struct $marker;
             impl<T, $($arg,)* R> HotFunction<($($arg,)*), $marker> for T
             where
-                T: Fn($($arg),*) -> R,
+                T: FnMut($($arg),*) -> R,
             {
                 type Return = R;
                 type Real = fn($($arg),*) -> R;
 
-                fn call_it(&self, args: ($($arg,)*)) -> Self::Return {
+                fn call_it(&mut self, args: ($($arg,)*)) -> Self::Return {
                     #[allow(non_snake_case)]
                     let ( $($arg,)* ) = args;
                     self($($arg),*)
                 }
 
-                unsafe fn call_as_ptr(&self, args: ($($arg,)*)) -> Self::Return {
+                unsafe fn call_as_ptr(&mut self, args: ($($arg,)*)) -> Self::Return {
                     unsafe {
                         if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                             let real = std::mem::transmute_copy::<Self, Self::Real>(&self);

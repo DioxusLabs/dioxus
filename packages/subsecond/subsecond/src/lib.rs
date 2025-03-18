@@ -1,4 +1,12 @@
-use std::{collections::HashMap, ffi::CStr, os::raw::c_void, path::PathBuf, sync::Arc};
+use std::{
+    any::TypeId,
+    collections::HashMap,
+    ffi::CStr,
+    os::raw::c_void,
+    panic::{AssertUnwindSafe, UnwindSafe},
+    path::PathBuf,
+    sync::Arc,
+};
 
 pub use subsecond_macro::hot;
 pub use subsecond_types::JumpTable;
@@ -10,10 +18,56 @@ use fn_impl::*;
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
 static mut APP_JUMP_TABLE: Option<JumpTable> = None;
 static mut HOTRELOAD_HANDLERS: Vec<Arc<dyn Fn()>> = vec![];
+static mut CHANGED: bool = false;
+static mut UNWINDING: bool = false;
+static mut SUBSECOND_ENABLED: bool = false;
+
+/// Run the given function in a subsecond root context
+///
+/// Whenever the code changes, the function will be re-executed
+///
+/// Generally you might block inside the function, so downstream subsecond code might throw a panic.
+///
+/// This will catch those panics and re-execute the function.
+///
+/// Calling this function registers this location is a "resume" point if subsecond is enabled.
+///
+/// Unfortunately, panic unwinding is not implemented for WASM, so resume points won't work for WASM
+/// targets. Fortunately, subsecond is still quite usable without resume points.
+pub fn resume<T>(mut f: impl FnMut() -> T) -> T {
+    loop {
+        let res = std::panic::catch_unwind(AssertUnwindSafe(|| f()));
+
+        match res {
+            Ok(res) => return res,
+            Err(err) => {
+                // If this is *our* panic, then we need to re-run the function
+                // Othwerwise, we just return the result
+                unsafe {
+                    if UNWINDING {
+                        UNWINDING = false;
+                        continue;
+                    }
+                }
+
+                // If we're not manually unwinding, then it's their panic
+                // We issue a sigstop to the process so it can be debugged
+                unsafe {
+                    if SUBSECOND_ENABLED {
+                        // todo: wait for the new patch to be applied
+                        continue;
+                    }
+                }
+
+                std::panic::resume_unwind(err);
+            }
+        }
+    }
+}
 
 pub const fn current<A, M, F>(f: F) -> HotFn<A, M, F>
 where
-    F: HotFunction<A, M>,
+    F: HotFunction<A, M> + 'static,
 {
     HotFn {
         inner: f,
@@ -21,13 +75,27 @@ where
     }
 }
 
+pub fn call<O: 'static>(f: impl FnMut() -> O + 'static) -> O {
+    let mut f = current(f);
+    f.call(())
+}
+
 pub struct HotFn<A, M, T: HotFunction<A, M>> {
     inner: T,
     _marker: std::marker::PhantomData<(A, M)>,
 }
 
-impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
-    pub fn call(&self, args: A) -> T::Return {
+impl<A, M, T: HotFunction<A, M> + 'static> HotFn<A, M, T> {
+    pub fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
+    }
+
+    pub fn call(&mut self, args: A) -> T::Return {
+        // If we need to unwind, then let's throw a panic
+        // This will occur when the pending patch is "over our head" and needs to be applied to a
+        // "resume point". We can eventually look into migrating the datastructures over but for now
+        // the resume point will force the struct to be re-built.
+
         unsafe {
             // Try to handle known function pointers. This is *really really* unsafe, but due to how
             // rust trait objects work, it's impossible to make an arbitrary usize-sized type implement Fn()
@@ -44,7 +112,10 @@ impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
             if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                 let known_fn_ptr = <T as HotFunction<A, M>>::call_it as *const ();
                 if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                    let _f = std::mem::transmute::<_, fn(&T, A) -> T::Return>(ptr as *const ());
+                    // let _f = std::mem::transmute::<_, fn(&T, A) -> T::Return>(ptr as *const ());
+                    // return _f(&self.inner, args);
+                    let ptr = ptr as *const ();
+                    let _f = std::mem::transmute::<*const (), fn(&T, A) -> T::Return>(ptr);
                     return _f(&self.inner, args);
                 }
             }
@@ -54,27 +125,29 @@ impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn hotfn_load_binary_patch(path: *const i8, jump_table_path: *const i8) {
-    let patch = PathBuf::from(unsafe { CStr::from_ptr(path).to_str().unwrap() });
-    let jump_table = PathBuf::from(unsafe { CStr::from_ptr(jump_table_path).to_str().unwrap() });
-    let jump_table: JumpTable = bincode::deserialize(&std::fs::read(jump_table).unwrap()).unwrap();
-    run_patch(patch, jump_table)
-}
-
 /// Apply the patch using the jump table
-pub fn run_patch(patch: PathBuf, mut jump_table: JumpTable) {
-    let lib = unsafe { libloading::os::unix::Library::new(patch).unwrap() };
+pub fn run_patch(mut jump_table: JumpTable) {
+    let lib = unsafe { libloading::os::unix::Library::new(&jump_table.lib).unwrap() };
     let lib = Box::leak(Box::new(lib));
 
-    let old_dl_offset =
-        aslr_offset_of_library(&libloading::os::unix::Library::this().into(), &jump_table)
-            .expect("Could not find ASLR offset");
+    let old_dl_offset = unsafe {
+        libloading::os::unix::Library::this()
+            .get::<*const ()>(b"_mh_execute_header")
+            .unwrap()
+            .as_raw_ptr()
+            .wrapping_sub(0x100000000)
+    };
 
-    let new_dl_offset = unsafe { lib.get::<*const ()>(b"main") }
-        .unwrap()
-        .as_raw_ptr()
-        .wrapping_sub(jump_table.new_main_address as usize);
+    let new_dl_offset = unsafe {
+        lib.get::<*const ()>(b"_mh_execute_header")
+            .unwrap()
+            .as_raw_ptr()
+            .wrapping_sub(0x100000000)
+    };
+    // let new_dl_offset = unsafe { lib.get::<*const ()>(b"main") }
+    //     .unwrap()
+    //     .as_raw_ptr()
+    //     .wrapping_sub(jump_table.new_main_address as usize);
 
     // Modify the jump table to be relative to the base address of the loaded library
     jump_table.map = jump_table
@@ -88,8 +161,9 @@ pub fn run_patch(patch: PathBuf, mut jump_table: JumpTable) {
         })
         .collect();
 
-    let old = unsafe { APP_JUMP_TABLE.replace(jump_table) };
-    drop(old);
+    unsafe { APP_JUMP_TABLE = Some(jump_table) };
+
+    unsafe { CHANGED = true };
 
     // And then call the original main function
     for handler in unsafe { HOTRELOAD_HANDLERS.clone() } {
@@ -101,6 +175,12 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
     unsafe {
         HOTRELOAD_HANDLERS.push(handler);
     }
+}
+
+pub fn changed() -> bool {
+    let changed = unsafe { CHANGED };
+    unsafe { CHANGED = false };
+    changed
 }
 
 /// Get the offset of the library in the address space of the current process

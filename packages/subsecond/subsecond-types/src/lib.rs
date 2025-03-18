@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct JumpTable {
+    /// The dylib containing the patch
+    pub lib: PathBuf,
+
     // old -> new
     // does not take into account the base address of the patch when loaded into memory - need dlopen for that
     pub map: HashMap<u64, u64>,

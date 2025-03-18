@@ -10,3 +10,6 @@ rand = { workspace = true }
 color-eyre = { workspace = true }
 ratatui = { workspace = true, features = ["crossterm"] }
 subsecond = { workspace = true }
+tungstenite = { version = "0.23.0" }
+bincode = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
