@@ -1,13 +1,12 @@
 use dioxus::prelude::*;
 
-pub fn launch() -> anyhow::Result<()> {
+pub fn launch() {
     dioxus::launch(app);
-    Ok(())
 }
 
 fn app() -> Element {
     let mut count = use_signal(|| 0);
-    let abcv = 12312123;
+    let abcv = 123;
 
     rsx! {
         h1 { "{count}" }
@@ -17,6 +16,7 @@ fn app() -> Element {
             },
             "Increment {abcv}"
         }
+        button { onclick: move |_| dioxus::desktop::window().set_zoom_level(3.0), "Zoom 3x" }
         button {
             onclick: move |_| {
                 count.set(count() + 2);
@@ -29,7 +29,7 @@ fn app() -> Element {
             },
             "Increment {abcv}"
         }
-        for x in 0..1 {
+        for x in 0..5 {
             Child { id: x, opt: "hello".to_string() }
         }
     }

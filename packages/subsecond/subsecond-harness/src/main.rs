@@ -3,7 +3,7 @@ mod loop_demo;
 mod tui_demo;
 mod ws_conn;
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     ws_conn::initialize();
 
     let demo = std::env::var("DEMO").unwrap_or("dioxus".to_string());
@@ -12,6 +12,6 @@ fn main() -> anyhow::Result<()> {
         "dioxus" => dioxus_demo::launch(),
         "loop" => loop_demo::launch(),
         "tui" => tui_demo::launch(),
-        _ => Err(anyhow::anyhow!("Unknown demo: {}", demo)),
+        _ => panic!("Unknown demo: {}", demo),
     }
 }

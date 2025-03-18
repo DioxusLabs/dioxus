@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use color_eyre::Result;
 use rand::{rng, Rng};
 use ratatui::{
@@ -10,15 +8,14 @@ use ratatui::{
     widgets::{Bar, BarChart, BarGroup},
     DefaultTerminal, Frame,
 };
+use std::time::Duration;
 
-pub fn launch() -> anyhow::Result<()> {
-    color_eyre::install().map_err(|e| anyhow::anyhow!("{e}"))?;
+pub fn launch() {
+    color_eyre::install().unwrap();
     let mut terminal = ratatui::init();
-
-    let app_result = subsecond::resume(|| App::new().run(&mut terminal));
-
+    let app_result = subsecond::call(|| App::new().run(&mut terminal));
     ratatui::restore();
-    app_result.map_err(|e| anyhow::anyhow!("{e}"))
+    app_result.unwrap();
 }
 
 struct App {
@@ -39,30 +36,20 @@ impl App {
 
     fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.should_exit {
-            self.tick(terminal)?;
+            subsecond::call(|| self.tick(terminal))?;
         }
         Ok(())
     }
 
-    #[subsecond::hot]
     fn tick(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         terminal.draw(|frame| self.draw(frame))?;
         self.handle_events()?;
         Ok(())
     }
 
+    // wait 100ms for an event to occur
     fn handle_events(&mut self) -> Result<()> {
-        loop {
-            // Attempt to hot-reload
-            if subsecond::changed() {
-                return Ok(());
-            }
-
-            // Otherwise poll for events
-            if !event::poll(Duration::from_millis(100)).unwrap_or_else(|_| false) {
-                continue;
-            }
-
+        if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('q') {
                     self.should_exit = true;
@@ -72,10 +59,10 @@ impl App {
                     let mut rng = rng();
                     self.temperatures = (0..24).map(|_| rng.random_range(50..90)).collect();
                 }
-
-                return Ok(());
             }
         }
+
+        Ok(())
     }
 
     fn draw(&self, frame: &mut Frame) {

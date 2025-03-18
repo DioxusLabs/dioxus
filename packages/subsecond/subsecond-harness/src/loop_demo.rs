@@ -1,4 +1,4 @@
-pub fn launch() -> anyhow::Result<()> {
+pub fn launch() {
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
         subsecond::call(|| tick());
@@ -6,5 +6,5 @@ pub fn launch() -> anyhow::Result<()> {
 }
 
 fn tick() {
-    println!("boom!");
+    println!("boom!12312312");
 }
