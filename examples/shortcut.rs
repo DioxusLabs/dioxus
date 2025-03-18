@@ -5,7 +5,7 @@
 //!
 //! These are *global* shortcuts, so they will work even if your app is not in focus.
 
-use dioxus::desktop::use_global_shortcut;
+use dioxus::desktop::{use_global_shortcut, HotKeyState};
 use dioxus::prelude::*;
 
 fn main() {
@@ -15,7 +15,11 @@ fn main() {
 fn app() -> Element {
     let mut toggled = use_signal(|| false);
 
-    _ = use_global_shortcut("ctrl+s", move || toggled.toggle());
+    _ = use_global_shortcut("ctrl+s", move |state| {
+        if state == HotKeyState::Pressed {
+            toggled.toggle();
+        }
+    });
 
     rsx!("toggle: {toggled}")
 }

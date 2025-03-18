@@ -78,6 +78,16 @@ impl fmt::Display for HotkeyError {
 
 pub struct GlobalHotKeyEvent {
     pub id: u32,
+    pub state: HotKeyState,
+}
+
+/// Describes the state of the hotkey.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HotKeyState {
+    /// The hotkey is pressed.
+    Pressed,
+    /// The hotkey is released.
+    Released,
 }
 
 pub(crate) type Code = dioxus_html::input_data::keyboard_types::Code;
