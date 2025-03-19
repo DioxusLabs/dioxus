@@ -22,7 +22,7 @@ dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
     "webonly",
 ] }
-dioxus-fullstack-protocol = { workspace = true, optional = true }
+dioxus-fullstack-protocol = { workspace = true, features = ["web"], optional = true }
 generational-box = { workspace = true }
 
 js-sys = "0.3.70"

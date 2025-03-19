@@ -2,13 +2,11 @@
 #![doc = include_str!("../README.md")]
 
 use base64::Engine;
-use dioxus_core::{
-    CapturedError,
-    prelude::{has_context, provide_context},
-};
+use dioxus_core::CapturedError;
 use serde::Serialize;
 use std::{cell::RefCell, io::Cursor, rc::Rc};
 
+#[cfg(feature = "web")]
 thread_local! {
     static CONTEXT: RefCell<Option<HydrationContext>> = RefCell::new(None);
 }
@@ -17,6 +15,9 @@ thread_local! {
 /// of server functions
 #[derive(Default, Clone)]
 pub struct HydrationContext {
+    #[cfg(feature = "web")]
+    /// Is resolving suspense done on the client
+    suspense_finished: bool,
     data: Rc<RefCell<HTMLData>>,
 }
 
@@ -28,6 +29,8 @@ impl HydrationContext {
         debug_locations: Option<Vec<String>>,
     ) -> Self {
         Self {
+            #[cfg(feature = "web")]
+            suspense_finished: false,
             data: Rc::new(RefCell::new(HTMLData::from_serialized(
                 data,
                 debug_types,
@@ -69,6 +72,7 @@ impl HydrationContext {
         self.data.borrow_mut().extend(&other.data.borrow());
     }
 
+    #[cfg(feature = "web")]
     /// Run a closure inside of this context
     pub fn in_context<T>(&self, f: impl FnOnce() -> T) -> T {
         CONTEXT.with(|context| {
@@ -87,6 +91,18 @@ impl HydrationContext {
         location: &'static std::panic::Location<'static>,
     ) {
         self.data.borrow_mut().insert(id, value, location);
+    }
+
+    pub(crate) fn get<T: serde::de::DeserializeOwned>(
+        &self,
+        id: usize,
+    ) -> Result<T, TakeDataError> {
+        // If suspense is finished on the client, we can assume that the data is available
+        #[cfg(feature = "web")]
+        if self.suspense_finished {
+            return Err(TakeDataError::DataNotAvailable);
+        }
+        self.data.borrow().get(id)
     }
 }
 
@@ -125,18 +141,26 @@ impl<T> SerializeContextEntry<T> {
     where
         T: serde::de::DeserializeOwned,
     {
-        self.context.data.borrow().get(self.index)
+        self.context.get(self.index)
     }
 }
 
 /// Get or insert the current serialize context
 pub fn serialize_context() -> HydrationContext {
+    #[cfg(feature = "web")]
     // On the client, the hydration logic provides the context in a global
     if let Some(current_context) = CONTEXT.with(|context| context.borrow().clone()) {
         return current_context;
+    } else {
+        // If the context is not set, then suspense is not active
+        let mut context = HydrationContext::default();
+        context.suspense_finished = true;
+        return context;
     }
+    #[cfg(not(feature = "web"))]
     // On the server each scope creates the context lazily
-    has_context().unwrap_or_else(|| provide_context(HydrationContext::default()))
+    dioxus_core::prelude::has_context()
+        .unwrap_or_else(|| dioxus_core::prelude::provide_context(HydrationContext::default()))
 }
 
 pub(crate) struct HTMLData {
@@ -267,7 +291,7 @@ impl HTMLData {
                     Err(TakeDataError::DeserializationError(err))
                 }
             },
-            None => Err(TakeDataError::DataNotAvailable),
+            None => Err(TakeDataError::DataPending),
         }
     }
 
@@ -357,6 +381,8 @@ pub enum TakeDataError {
     DeserializationError(ciborium::de::Error<std::io::Error>),
     /// No data was available
     DataNotAvailable,
+    /// The server serialized a placeholder for the data, but it isn't available yet
+    DataPending,
 }
 
 impl std::fmt::Display for TakeDataError {
@@ -364,6 +390,7 @@ impl std::fmt::Display for TakeDataError {
         match self {
             Self::DeserializationError(e) => write!(f, "DeserializationError: {}", e),
             Self::DataNotAvailable => write!(f, "DataNotAvailable"),
+            Self::DataPending => write!(f, "DataPending"),
         }
     }
 }
