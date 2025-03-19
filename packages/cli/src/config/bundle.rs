@@ -16,6 +16,7 @@ pub(crate) struct BundleConfig {
     pub(crate) deb: Option<DebianSettings>,
     pub(crate) macos: Option<MacOsSettings>,
     pub(crate) windows: Option<WindowsSettings>,
+    pub(crate) android: Option<AndroidSettings>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -140,6 +141,11 @@ pub(crate) struct WindowsSettings {
     /// if you are on another platform and want to cross-compile and sign you will
     /// need to use another tool like `osslsigncode`.
     pub sign_command: Option<CustomSignCommandSettings>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub(crate) struct AndroidSettings {
+    pub(crate) permissions: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
