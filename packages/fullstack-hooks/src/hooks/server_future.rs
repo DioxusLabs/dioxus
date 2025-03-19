@@ -66,11 +66,10 @@ where
     T: Serialize + DeserializeOwned + 'static,
     F: Future<Output = T> + 'static,
 {
-    #[cfg(any(feature = "web", feature = "server"))]
     let serialize_context = use_hook(dioxus_fullstack_protocol::serialize_context);
 
     // We always create a storage entry, even if the data isn't ready yet to make it possible to deserialize pending server futures on the client
-    #[cfg(any(feature = "web", feature = "server"))]
+    #[allow(unused)]
     let storage_entry: dioxus_fullstack_protocol::SerializeContextEntry<T> =
         use_hook(|| serialize_context.create_entry());
 

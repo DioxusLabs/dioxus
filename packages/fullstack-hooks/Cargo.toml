@@ -14,7 +14,6 @@ resolver = "2"
 dioxus-core = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
-dioxus-web = { workspace = true, optional = true }
 dioxus-fullstack-protocol = { workspace = true }
 futures-channel = { workspace = true }
 serde = { workspace = true }
@@ -23,7 +22,7 @@ serde = { workspace = true }
 dioxus-fullstack = { workspace = true, features = ["server"] }
 
 [features]
-web = ["dep:dioxus-web"]
+web = []
 server = []
 
 [package.metadata.docs.rs]

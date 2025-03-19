@@ -132,7 +132,7 @@ fn Errors() -> Element {
 pub fn ThrowsError() -> Element {
     use_server_future(server_error)?
         .unwrap()
-        .map_err(|err| RenderError::Aborted(CapturedError::from_display(err)))?;
+        .map_err(|err| CapturedError::from_display(err))?;
     rsx! {
         "success"
     }

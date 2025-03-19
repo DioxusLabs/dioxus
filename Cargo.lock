@@ -3960,7 +3960,6 @@ dependencies = [
  "dioxus-fullstack-protocol",
  "dioxus-hooks",
  "dioxus-signals",
- "dioxus-web",
  "futures-channel",
  "serde",
 ]

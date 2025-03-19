@@ -44,7 +44,7 @@ pub(crate) fn server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
     }
     #[cfg(all(not(feature = "server"), feature = "web"))]
     {
-        match serialize = entry.get() {
+        match entry.get() {
             Ok(value) => value,
             Err(_) => value(),
         }

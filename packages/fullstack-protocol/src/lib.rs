@@ -202,7 +202,7 @@ impl HTMLData {
     }
 
     fn create_entry_with_id(&mut self, id: usize) -> usize {
-        while self.cursor > self.data.len() {
+        while id + 1 > self.data.len() {
             self.data.push(None);
             #[cfg(debug_assertions)]
             {
@@ -273,12 +273,38 @@ impl HTMLData {
 
     /// Extend this data with the data from another [`HTMLData`]
     pub(crate) fn extend(&mut self, other: &Self) {
-        self.data.extend_from_slice(&other.data[1..]);
+        // Make sure this vectors error entry exists even if it is empty
+        if self.data.is_empty() {
+            self.data.push(None);
+            #[cfg(debug_assertions)]
+            {
+                self.debug_types.push(None);
+                self.debug_locations.push(None);
+            }
+        }
+
+        let mut other_data_iter = other.data.iter().cloned();
+        #[cfg(debug_assertions)]
+        let mut other_debug_types_iter = other.debug_types.iter().cloned();
+        #[cfg(debug_assertions)]
+        let mut other_debug_locations_iter = other.debug_locations.iter().cloned();
+
+        // Merge the error entry from the other context
+        if let Some(Some(other_error)) = other_data_iter.next() {
+            self.data[0] = Some(other_error.clone());
+            #[cfg(debug_assertions)]
+            {
+                self.debug_types[0] = other_debug_types_iter.next().unwrap_or(None);
+                self.debug_locations[0] = other_debug_locations_iter.next().unwrap_or(None);
+            }
+        }
+
+        // Don't copy the error from the other context
+        self.data.extend(other_data_iter);
         #[cfg(debug_assertions)]
         {
-            self.debug_types.extend_from_slice(&other.debug_types);
-            self.debug_locations
-                .extend_from_slice(&other.debug_locations);
+            self.debug_types.extend(other_debug_types_iter);
+            self.debug_locations.extend(other_debug_locations_iter);
         }
     }
 

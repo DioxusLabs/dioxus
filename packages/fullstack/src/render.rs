@@ -220,7 +220,7 @@ impl SsrRendererPool {
                 loop {
                     // Check if the router has finished and set the streaming context to finished
                     let streaming_context_finished =
-                        in_root_scope(&virtual_dom, || dbg!(streaming_context.current_status()))
+                        in_root_scope(&virtual_dom, || streaming_context.current_status())
                             == StreamingStatus::InitialChunkCommitted;
                     // Or if this app isn't using the router and has finished suspense
                     let suspense_finished = !virtual_dom.suspended_tasks_remaining();
