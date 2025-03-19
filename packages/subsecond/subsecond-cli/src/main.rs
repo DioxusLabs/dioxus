@@ -10,8 +10,9 @@ use object::write::Object;
 use serde::Deserialize;
 use std::{collections::HashMap, env, ffi::OsStr, path::PathBuf, process::Stdio, time::SystemTime};
 use subsecond_cli_support::create_jump_table;
+use target_lexicon::Triple;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt},
+    io::AsyncBufReadExt,
     net::TcpListener,
     process::{Child, Command},
     time::Instant,
@@ -98,7 +99,12 @@ async fn hotreload_loop() -> anyhow::Result<()> {
 
         // Assemble the jump table of redirected addresses
         // todo: keep track of this and merge it over time
-        let jump_table = create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path());
+        let jump_table = create_jump_table(
+            fat_exe.as_std_path(),
+            output_temp.as_std_path(),
+            &Triple::host(),
+        )
+        .unwrap();
 
         websocket
             .send(tokio_tungstenite::tungstenite::Message::Binary(
@@ -168,7 +174,7 @@ async fn wait_for_ws(port: u16) -> anyhow::Result<WebSocketStream<tokio::net::Tc
     let addr = format!("127.0.0.1:{}", port);
     let try_socket = TcpListener::bind(&addr).await;
     let listener = try_socket.expect("Failed to bind");
-    let (conn, sock) = listener.accept().await?;
+    let (conn, _sock) = listener.accept().await?;
     let socket = tokio_tungstenite::accept_async(conn).await?;
     Ok(socket)
 }
@@ -184,6 +190,9 @@ async fn link(action: String) -> anyhow::Result<()> {
     )?;
 
     match action.as_str() {
+        // Actually link the object file. todo: figure out which linker we should be using
+        "link" => {}
+
         // Write a dummy object file to the output file to satisfy rust when it tries to strip the symbols
         "patch" => {
             let out = args.iter().position(|arg| arg == "-o").unwrap();
@@ -196,9 +205,6 @@ async fn link(action: String) -> anyhow::Result<()> {
             let bytes = dummy_object_file.write().unwrap();
             std::fs::write(out_file, bytes)?;
         }
-
-        // Actually link the object file. todo: figure out which linker we should be using
-        "link" => {}
 
         _ => anyhow::bail!("Unknown action: {}", action),
     }
@@ -229,9 +235,9 @@ async fn initial_build() -> anyhow::Result<CargoOutputResult> {
         // -save-temps ensures the intermediates are saved so we can use them for comparsions
         //
         // todo: delete the temps
-        .arg("-Clink-arg=-Wl,-all_load")
-        .arg("-Clink-dead-code")
         .arg("-Csave-temps=true")
+        .arg("-Clink-dead-code")
+        .arg("-Clink-arg=-Wl,-all_load")
         // we capture the link args, but eventually we should actually just use ourselves as the linker since that's more robust
         .arg("--print")
         .arg("link-args")
@@ -282,7 +288,7 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
     // todo: we should throw out symbols that we don't need and/or assemble them manually
     let res = Command::new("cc")
         .args(object_files)
-        .arg("-dylib")
+        .arg("-Wl,-dylib")
         .arg("-Wl,-undefined,dynamic_lookup")
         .arg("-Wl,-export_dynamic")
         .arg("-arch")

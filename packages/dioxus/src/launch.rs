@@ -216,8 +216,6 @@ impl LaunchBuilder {
         #[cfg(feature = "logger")]
         dioxus_logger::initialize_default();
 
-        // let app = crate::hotpatch::set_app(app);
-
         #[cfg(all(feature = "fullstack", any(feature = "desktop", feature = "mobile")))]
         {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
@@ -233,8 +231,7 @@ impl LaunchBuilder {
             }
         }
 
-        let cfg = self.configs;
-        (self.launch_fn)(app, self.contexts, cfg);
+        (self.launch_fn)(app, self.contexts, self.configs);
     }
 }
 

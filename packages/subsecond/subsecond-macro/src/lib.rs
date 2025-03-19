@@ -49,7 +49,7 @@ use syn::{parse_macro_input, parse_quote, FnArg, Ident, ItemFn, PatIdent, Return
 /// You could also just call `subsecond::current()` yourself, though that interface is slightly
 /// unwieldy and intended for use by framework authors.
 #[proc_macro_attribute]
-pub fn hot(args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn hot(_args: TokenStream, input: TokenStream) -> TokenStream {
     /*
     #[hot]
     fn do_thing(a: A, b: B) -> C {

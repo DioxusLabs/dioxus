@@ -38,17 +38,9 @@ pub enum ClientMsg {
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct HotReloadMsg {
-    pub patch: Option<PathBuf>,
     pub jump_table: Option<subsecond_types::JumpTable>,
     pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
-    /// map of name to *original* address of the function
-    /// must defeat aslr while patching
-    pub changed_symbols: HashMap<String, usize>,
-
-    /// Reference point of the main symbol in the file system binary
-    /// This lets the target program know the offsets where to patch new symbols
-    pub main_reference: usize,
 }
 
 impl HotReloadMsg {

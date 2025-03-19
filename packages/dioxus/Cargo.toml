@@ -34,8 +34,6 @@ wasm-split = { workspace = true, optional = true }
 
 serde = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
-
-[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
 dioxus-devtools = { workspace = true, optional = true }
 
 [features]

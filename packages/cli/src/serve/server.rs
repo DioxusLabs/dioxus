@@ -320,9 +320,8 @@ impl WebServer {
         }
     }
 
-    pub(crate) async fn send_patch(&mut self, app: PathBuf, jump_table: JumpTable) {
+    pub(crate) async fn send_patch(&mut self, jump_table: JumpTable) {
         self.send_devserver_message(DevserverMsg::HotReload(HotReloadMsg {
-            patch: Some(app),
             jump_table: Some(jump_table),
             ..Default::default()
         }))

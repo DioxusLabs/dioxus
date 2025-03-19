@@ -16,3 +16,4 @@ itertools = "0.14.0"
 serde = { version = "1.0.217", features = ["derive"] }
 subsecond-types = { workspace = true }
 libc = "0.2.155"
+target-lexicon = "0.13.2"

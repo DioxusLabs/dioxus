@@ -91,7 +91,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                match runner.hotreload(files).await {
+                match runner.hotreload(files.clone()).await {
                     HotReloadKind::Rsx(hr) => {
                         // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                         //
@@ -108,8 +108,8 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                         if let Some(handle) = runner.running.as_ref() {
                             builder.patch_rebuild(
                                 args.build_arguments.clone(),
-                                vec![],
-                                // handle.app.app.direct_rustc.last().unwrap().clone(),
+                                handle.app.app.direct_rustc.clone(),
+                                files,
                             );
 
                             runner.clear_hot_reload_changes();
@@ -126,6 +126,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 // The spacing here is important-ish: we want
                 // `Full rebuild:` to line up with
                 // `Hotreloading:` to keep the alignment during long edit sessions
+                // `Hot-patching:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
 
                 builder.rebuild(args.build_arguments.clone());
@@ -176,10 +177,8 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                     }
 
                     BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
-                        let changed_symbols = runner.patch(&bundle).await?;
-                        devserver
-                            .send_patch(bundle.patch_exe(), changed_symbols)
-                            .await;
+                        let jump_table = runner.patch(&bundle).await?;
+                        devserver.send_patch(jump_table).await;
                     }
 
                     BuildUpdate::BuildReady { bundle } => {

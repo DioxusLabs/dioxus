@@ -11,18 +11,20 @@ use std::{
     path::Path,
 };
 pub use subsecond_types::*;
+use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
 
-mod spawn_aslr;
-// pub use spawn_aslr::spawn_aslr_posix;
-
-pub fn create_jump_table(original: &Path, patch: &Path) -> JumpTable {
-    let obj1_bytes = std::fs::read(original).unwrap();
-    let obj2_bytes = std::fs::read(patch).unwrap();
+pub fn create_jump_table(
+    original: &Path,
+    patch: &Path,
+    triple: &Triple,
+) -> anyhow::Result<JumpTable> {
+    let obj1_bytes = std::fs::read(original).context("Could not read original file")?;
+    let obj2_bytes = std::fs::read(patch).context("Could not read patch file")?;
     let obj1 = File::parse(&obj1_bytes as &[u8]).unwrap();
     let obj2 = File::parse(&obj2_bytes as &[u8]).unwrap();
 
-    let mut map = HashMap::new();
+    let mut map = AddressMap::default();
 
     let old_syms = obj1.symbol_map();
     let new_syms = obj2.symbol_map();
@@ -39,12 +41,22 @@ pub fn create_jump_table(original: &Path, patch: &Path) -> JumpTable {
         .map(|s| (s.name(), s.address()))
         .collect::<HashMap<_, _>>();
 
-    let old_main_address = old_name_to_addr.get("_main").unwrap().clone();
-    let new_main_address = new_name_to_addr.get("_main").unwrap().clone();
-    // println!("Base of old: {:?}", obj1.relative_address_base());
-    // println!("Main of old: {:?}", old_main_address as *const ());
-    // println!("Base of new: {:?}", obj2.relative_address_base());
-    // println!("Main of new: {:?}", new_main_address as *const ());
+    // on windows there is no symbol so we leave the old address as 0
+    // on wasm there is no ASLR so we leave the old address as 0
+    let mut old_base_address = 0;
+    let mut new_base_address = 0;
+
+    match triple.operating_system {
+        OperatingSystem::Darwin(_)
+        | OperatingSystem::Linux
+        | OperatingSystem::MacOSX(_)
+        | OperatingSystem::IOS(_)
+        | OperatingSystem::Windows => {
+            old_base_address = old_name_to_addr.get("___rust_alloc").unwrap().clone();
+            new_base_address = new_name_to_addr.get("___rust_alloc").unwrap().clone();
+        }
+        _ => return Err(anyhow::anyhow!("Unsupported operating system")),
+    }
 
     for (new_name, new_addr) in new_name_to_addr {
         if let Some(old_addr) = old_name_to_addr.get(new_name) {
@@ -52,12 +64,12 @@ pub fn create_jump_table(original: &Path, patch: &Path) -> JumpTable {
         }
     }
 
-    JumpTable {
+    Ok(JumpTable {
         lib: patch.to_path_buf(),
         map,
-        old_main_address,
-        new_main_address,
-    }
+        old_base_address,
+        new_base_address,
+    })
 }
 
 pub async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, out_path: PathBuf) {

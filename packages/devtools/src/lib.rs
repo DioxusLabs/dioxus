@@ -51,20 +51,9 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
             }
         }
 
-        // Patch the binary
-        println!(
-            "patching binary, looking for id in scope {:?}: {:?}",
-            dioxus_core::prelude::current_scope_id(),
-            TypeId::of::<Rc<Devtools>>()
-        );
-        if let Some(devtools) = try_consume_context::<Rc<Devtools>>() {
-            println!("using devtools context with patch {:?}", msg.patch);
-            if let Some(so) = msg.patch.clone() {
-                // let jump_table = msg.jump_table.clone().unwrap();
-                // let jump_table = JumpTable::default();
-                // subsecond::run_patch(so, jump_table);
-                // dioxus_core::prelude::force_all_dirty();
-            }
+        if let Some(jump_table) = msg.jump_table.as_ref() {
+            unsafe { subsecond::run_patch(jump_table.clone()) };
+            dioxus_core::prelude::force_all_dirty();
         }
     });
 }

@@ -2,7 +2,10 @@ use crate::{
     AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, DioxusCrate, ProgressRx,
     ProgressTx, Result, StructuredOutput,
 };
-use std::time::{Duration, Instant};
+use std::{
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 use super::BuildMode;
 
@@ -178,7 +181,12 @@ impl Builder {
         update
     }
 
-    pub(crate) fn patch_rebuild(&mut self, args: BuildArgs, direct_rustc: Vec<String>) {
+    pub(crate) fn patch_rebuild(
+        &mut self,
+        args: BuildArgs,
+        direct_rustc: Vec<String>,
+        changed_files: Vec<PathBuf>,
+    ) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all();
 
@@ -187,7 +195,10 @@ impl Builder {
             self.krate.clone(),
             args,
             self.tx.clone(),
-            BuildMode::Thin { direct_rustc },
+            BuildMode::Thin {
+                direct_rustc,
+                changed_files,
+            },
         );
         self.request = request.clone();
         self.stage = BuildStage::Restarting;

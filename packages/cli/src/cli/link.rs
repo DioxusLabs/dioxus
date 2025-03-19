@@ -1,6 +1,7 @@
 use crate::{Platform, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use target_lexicon::Triple;
 use tokio::process::Command;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,6 +18,8 @@ pub enum LinkAction {
         patch_target: PathBuf,
         linker: PathBuf,
         incremental_dir: PathBuf,
+        save_link_args: PathBuf,
+        triple: Triple,
     },
 }
 
@@ -84,43 +87,22 @@ impl LinkAction {
                 patch_target,
                 incremental_dir,
                 main_ptr,
+                save_link_args,
+                triple,
             } => {
-                let index_of_out = args.iter().position(|arg| arg == "-o").unwrap();
-                let out_file = args[index_of_out + 1].clone();
-                let object_files: Vec<_> = args.iter().filter(|arg| arg.ends_with(".o")).collect();
+                // Write the linker args to a file for the main process to read
+                std::fs::write(save_link_args, args.join("\n"))?;
 
-                cache_incrementals(
-                    &incremental_dir.join("old"),
-                    &incremental_dir.join("new"),
-                    object_files.as_ref(),
-                );
+                // Extract the out
+                let out = args.iter().position(|arg| arg == "-o").unwrap();
+                let out_file: PathBuf = args[out + 1].clone().into();
 
-                let res = Command::new("cc")
-                    .args(object_files)
-                    .arg("-dylib")
-                    .arg("-undefined")
-                    .arg("dynamic_lookup")
-                    // .arg("-Wl,-unexported_symbol,_main")
-                    .arg("-arch")
-                    .arg("arm64")
-                    // .arg("-dead_strip") // maybe?
-                    .arg("-o")
-                    .arg(&out_file)
-                    // .stdout(Stdio::piped())
-                    // .stderr(Stdio::piped())
-                    .output()
-                    .await?;
-
-                // crate::build::attempt_partial_link(
-                //     linker,
-                //     incremental_dir.clone(),
-                //     incremental_dir.join("old"),
-                //     incremental_dir.join("new"),
-                //     main_ptr,
-                //     patch_target,
-                //     out_file.clone().into(),
-                // )
-                // .await;
+                // Write a dummy object file to satisfy rust/linker since it'll run llvm-objcopy
+                // ... I wish it *didn't* do that but I can't tell how to disable the linker without
+                // using --emit=obj which is not exactly what we want since that will still pull in
+                // the dependencies.
+                std::fs::create_dir_all(out_file.parent().unwrap())?;
+                std::fs::write(out_file, make_dummy_object_file(triple))?;
             }
         }
 
@@ -148,4 +130,45 @@ fn cache_incrementals(old: &PathBuf, new: &PathBuf, object_files: &[&String]) {
         let path = PathBuf::from(o);
         std::fs::copy(&path, new.join(path.file_name().unwrap())).unwrap();
     }
+}
+
+fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
+    let format = match triple.binary_format {
+        target_lexicon::BinaryFormat::Unknown => todo!(),
+        target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
+        target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
+        target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
+        target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
+        target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
+        _ => todo!(),
+    };
+
+    let arch = match triple.architecture {
+        target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
+        target_lexicon::Architecture::Wasm64 => object::Architecture::Wasm64,
+        target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
+        target_lexicon::Architecture::Arm(arm_architecture) => object::Architecture::Arm,
+        target_lexicon::Architecture::Aarch64(aarch64_architecture) => {
+            object::Architecture::Aarch64
+        }
+        target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
+        target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
+        _ => todo!(),
+    };
+
+    let endian = match triple.endianness() {
+        Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
+        Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
+        Err(_) => todo!(),
+    };
+
+    // todo: these are architecture specific but should not be
+    let dummy_object_file = object::write::Object::new(format, arch, endian);
+
+    dummy_object_file.write().unwrap()
+}
+
+#[test]
+fn creates_dummy_object_file_ios() {
+    let dummy_object_file = make_dummy_object_file(Platform::Ios);
 }

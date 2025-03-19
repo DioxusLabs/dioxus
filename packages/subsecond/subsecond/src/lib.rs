@@ -11,6 +11,11 @@ use std::{
 pub use subsecond_macro::hot;
 pub use subsecond_types::JumpTable;
 
+mod macho;
+mod unix;
+mod wasm;
+mod windows;
+
 pub mod prelude {
     pub use subsecond_macro::hot;
 }
@@ -122,49 +127,6 @@ impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
     }
 }
 
-/// Apply the patch using the jump table
-pub fn run_patch(mut jump_table: JumpTable) {
-    let lib = unsafe { libloading::os::unix::Library::new(&jump_table.lib).unwrap() };
-    let lib = Box::leak(Box::new(lib));
-
-    let old_dl_offset = unsafe {
-        libloading::os::unix::Library::this()
-            .get::<*const ()>(b"_mh_execute_header")
-            .unwrap()
-            .as_raw_ptr()
-            .wrapping_sub(0x100000000)
-    };
-
-    let new_dl_offset = unsafe {
-        lib.get::<*const ()>(b"_mh_execute_header")
-            .unwrap()
-            .as_raw_ptr()
-            .wrapping_sub(0x100000000)
-    };
-
-    // Modify the jump table to be relative to the base address of the loaded library
-    jump_table.map = jump_table
-        .map
-        .iter()
-        .map(|(k, v)| {
-            (
-                (*k as usize + old_dl_offset as usize) as u64,
-                *v + new_dl_offset as u64,
-            )
-        })
-        .collect();
-
-    unsafe {
-        APP_JUMP_TABLE = Some(jump_table);
-        CHANGED = true;
-
-        // And then call the original main function
-        for handler in HOTRELOAD_HANDLERS.clone() {
-            handler();
-        }
-    }
-}
-
 pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
     unsafe {
         HOTRELOAD_HANDLERS.push(handler);
@@ -177,19 +139,111 @@ pub fn changed() -> bool {
     changed
 }
 
-/// Get the offset of the library in the address space of the current process
+/// Apply the patch using the jump table.
 ///
-/// Attempts to use a known symbol on the platform, and if not, falls back to using `main`
-fn aslr_offset_of_library(lib: &libloading::Library, table: &JumpTable) -> Option<*mut c_void> {
-    #[cfg(target_os = "macos")]
-    return {
+/// # Safety
+///
+/// This function is unsafe because it is detouring existing functions in memory. This is wildly unsafe,
+/// especially if the JumpTable is malformed. Only run this if you know what you're doing.
+pub unsafe fn run_patch(jump_table: JumpTable) {
+    // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
+    #[cfg(any(unix, windows))]
+    let jump_table = relocate_native_jump_table(jump_table);
+
+    // On wasm we need to do a lot more work - merging our ifunc table, etc
+    #[cfg(target_arch = "wasm32")]
+    let jump_table = relocate_wasm_jump_table(jump_table);
+
+    // Update runtime state
+    unsafe {
+        APP_JUMP_TABLE = Some(jump_table);
+        CHANGED = true;
+        HOTRELOAD_HANDLERS.clone().iter().for_each(|handler| {
+            handler();
+        });
+    }
+}
+
+#[cfg(any(unix, windows))]
+fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
+    let old_offset = alsr_offset(
+        jump_table.old_base_address as usize,
+        #[cfg(unix)]
+        libloading::os::unix::Library::this(),
+        #[cfg(windows)]
+        libloading::os::windows::Library::this().unwrap(),
+    )
+    .unwrap();
+
+    let new_offset = alsr_offset(
+        jump_table.new_base_address as usize,
+        #[cfg(unix)]
         unsafe {
-            lib.get::<*const ()>(b"_mh_execute_header")
-                .unwrap()
-                .try_as_raw_ptr()
-                .map(|ptr| ptr.wrapping_sub(0x100000000))
-        }
+            libloading::os::unix::Library::new(&jump_table.lib).unwrap()
+        },
+        #[cfg(windows)]
+        unsafe { libloading::Library::new(&jump_table.lib).unwrap() }.into(),
+    )
+    .unwrap();
+
+    // Modify the jump table to be relative to the base address of the loaded library
+    jump_table.map = jump_table
+        .map
+        .iter()
+        .map(|(k, v)| {
+            (
+                (*k + old_offset as u64) as u64,
+                (*v + new_offset as u64) as u64,
+            )
+        })
+        .collect();
+
+    jump_table
+}
+
+/// Get the offset of the current executable in the address space of the current process.
+///
+/// Forgets the library to prevent its drop from being calleds
+fn alsr_offset(
+    base_address: usize,
+    #[cfg(unix)] lib: libloading::os::unix::Library,
+    #[cfg(windows)] lib: libloading::os::windows::Library,
+) -> Option<*mut c_void> {
+    #[allow(unused_assignments)]
+    let mut offset = None;
+
+    // the only "known global symbol" for everything we compile is __rust_alloc
+    // however some languages won't have this. we could consider linking in a known symbol but this works for now
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    unsafe {
+        offset = lib
+            .get::<*const ()>(b"__rust_alloc")
+            .ok()
+            .map(|ptr| ptr.as_raw_ptr());
     };
 
-    None
+    #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+    unsafe {
+        // used to be __executable_start by that doesn't work for shared libraries
+        offset = lib
+            .get::<*const ()>(b"__rust_alloc")
+            .ok()
+            .map(|ptr| ptr.as_raw_ptr());
+    };
+
+    // Leak the library to prevent its drop from being called and unloading the library
+    let _handle = lib.into_raw() as *mut c_void;
+
+    // windows needs the raw handle directly to lookup the base address
+    #[cfg(windows)]
+    unsafe {
+        offset = windows::get_module_base_address(_handle);
+    }
+
+    offset.map(|offset| offset.wrapping_byte_sub(base_address))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn relocate_wasm_jump_table(jump_table: JumpTable) -> JumpTable {
+    todo!()
 }

@@ -6,5 +6,5 @@ pub fn launch() {
 }
 
 fn tick() {
-    println!("boom!12312312");
+    println!("oh gulp!!!!??????");
 }

@@ -5,6 +5,7 @@ use crate::{AppBundle, Platform, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::AssetManifest;
+use itertools::Itertools;
 use krates::Utf8PathBuf;
 use serde::Deserialize;
 use std::{
@@ -34,7 +35,7 @@ pub(crate) struct BuildRequest {
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
 /// modes are used together to achieve binary patching and linking.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BuildMode {
     /// A normal build generated using `cargo rustc`
     Base,
@@ -43,7 +44,10 @@ pub enum BuildMode {
     Fat,
 
     /// A "thin" build generated with `rustc` directly and dx as a custom linker
-    Thin { direct_rustc: Vec<String> },
+    Thin {
+        direct_rustc: Vec<String>,
+        changed_files: Vec<PathBuf>,
+    },
 }
 
 pub struct CargoBuildResult {
@@ -162,9 +166,7 @@ impl BuildRequest {
                             .trim_end_matches('`');
 
                         // Parse these as shell words so we can get the direct rustc args
-                        if let Ok(split) = shell_words::split(args) {
-                            direct_rustc.push(split);
-                        }
+                        direct_rustc = shell_words::split(args).unwrap();
                     }
 
                     #[derive(Debug, Deserialize)]
@@ -239,23 +241,32 @@ impl BuildRequest {
         fields(dx_src = ?TraceSrc::Build)
     )]
     fn build_command(&self) -> Result<Command> {
-        // if let BuildMode::Thin { direct_rustc } = &self.mode {
-        //     if !direct_rustc.is_empty() {
-        //         let mut cmd = Command::new(direct_rustc[0].clone());
-        //         cmd.args(direct_rustc[1..].iter()).envs(self.env_vars()?);
-        //         return Ok(cmd);
-        //     }
-        // }
+        // Prefer using the direct rustc if we have it
+        if let BuildMode::Thin { direct_rustc, .. } = &self.mode {
+            tracing::debug!("Using direct rustc: {:?}", direct_rustc);
+            if !direct_rustc.is_empty() {
+                let mut cmd = Command::new(direct_rustc[0].clone());
+                cmd.args(direct_rustc[1..].iter());
+                cmd.envs(self.env_vars()?);
+                cmd.current_dir(self.krate.workspace_dir());
+                cmd.arg(format!(
+                    "-Clinker={}",
+                    dunce::canonicalize(std::env::current_exe().unwrap())
+                        .unwrap()
+                        .display()
+                ));
+                return Ok(cmd);
+            }
+        }
 
+        // Otherwise build up the command using cargo rustc
         let mut cmd = Command::new("cargo");
-
         cmd.arg("rustc")
             .current_dir(self.krate.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
             .args(self.build_arguments())
             .envs(self.env_vars()?);
-
         Ok(cmd)
     }
 
@@ -350,7 +361,50 @@ impl BuildRequest {
         }
 
         match self.mode {
-            BuildMode::Fat | BuildMode::Thin { .. } => cargo_args.push(format!(
+            BuildMode::Fat => {
+                // This prevents rust from passing -dead_strip to the linker
+                // todo: don't save temps here unless we become the linker for the base app
+                cargo_args.extend_from_slice(&[
+                    "-Csave-temps=true".to_string(),
+                    "-Clink-dead-code".to_string(),
+                ]);
+
+                match self.build.platform() {
+                    // if macos/ios, -Wl,-all_load is required for the linker to work correctly
+                    // macos uses ld64 but through the `cc` interface.a
+                    Platform::MacOS | Platform::Ios => {
+                        cargo_args.push("-Clink-args=-Wl,-all_load".to_string());
+                    }
+
+                    // if linux -Wl,--whole-archive is required for the linker to work correctly
+                    Platform::Linux => {
+                        cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+                    }
+
+                    // if windows -Wl,--whole-archive is required for the linker to work correctly
+                    // https://learn.microsoft.com/en-us/cpp/build/reference/wholearchive-include-all-library-object-files?view=msvc-170
+                    Platform::Windows => {
+                        cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+                    }
+
+                    // if web, -Wl,--whole-archive is required for the linker to work correctly.
+                    // We also use --no-gc-sections and --export-all to push every symbol into the export table.
+                    //
+                    // rust uses its own wasm-ld linker which can be found here (it's just gcc-ld):
+                    // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld
+                    //
+                    // export all should place things like env.memory into the export table so we can access them
+                    // when loading the patches
+                    Platform::Web => {
+                        cargo_args.push(
+                            "-Clink-args=-Wl,--whole-archive,-Wl,--no-gc-sections,-Wl,--export-all"
+                                .to_string(),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            BuildMode::Thin { .. } => cargo_args.push(format!(
                 "-Clinker={}",
                 dunce::canonicalize(std::env::current_exe().unwrap())
                     .unwrap()
@@ -449,17 +503,19 @@ impl BuildRequest {
     /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
     pub(crate) async fn get_unit_count_estimate(&self) -> usize {
         // Try to get it from nightly
-        self.get_unit_count().await.unwrap_or_else(|_| {
-            // Otherwise, use cargo metadata
-            (self
-                .krate
-                .krates
-                .krates_filtered(krates::DepKind::Dev)
-                .iter()
-                .map(|k| k.targets.len())
-                .sum::<usize>() as f64
-                / 3.5) as usize
-        })
+        if let Ok(count) = self.get_unit_count().await {
+            return count;
+        }
+
+        // Otherwise, use cargo metadata
+        let units = self
+            .krate
+            .krates
+            .krates_filtered(krates::DepKind::Dev)
+            .iter()
+            .map(|k| k.targets.len())
+            .sum::<usize>();
+        (units as f64 / 3.5) as usize
     }
 
     fn env_vars(&self) -> Result<Vec<(&str, String)>> {
@@ -548,40 +604,50 @@ impl BuildRequest {
 
         match &self.mode {
             BuildMode::Base => {
-                if let Some(linker) = custom_linker {
-                    env_vars.push((
-                        LinkAction::ENV_VAR_NAME,
-                        LinkAction::BaseLink {
-                            platform: self.build.platform(),
-                            linker,
-                            incremental_dir: self.incremental_cache_dir(),
-                            strip: false,
-                        }
-                        .to_json(),
-                    ));
-                }
+                todo!()
+                // if let Some(linker) = custom_linker {
+                //     env_vars.push((
+                //         LinkAction::ENV_VAR_NAME,
+                //         LinkAction::BaseLink {
+                //             platform: self.build.platform(),
+                //             linker,
+                //             incremental_dir: self.incremental_cache_dir(),
+                //             strip: false,
+                //         }
+                //         .to_json(),
+                //     ));
+                // }
             }
-            BuildMode::Fat => env_vars.push((
-                LinkAction::ENV_VAR_NAME,
-                LinkAction::BaseLink {
-                    platform: self.build.platform(),
-                    linker: custom_linker.unwrap_or_else(|| "cc".into()),
-                    incremental_dir: self.incremental_cache_dir(),
-                    strip: matches!(self.mode, BuildMode::Base),
-                }
-                .to_json(),
-            )),
-            BuildMode::Thin { .. } => env_vars.push((
-                LinkAction::ENV_VAR_NAME,
-                LinkAction::ThinLink {
-                    platform: self.build.platform(),
-                    linker: custom_linker.unwrap_or_else(|| "cc".into()),
-                    incremental_dir: self.incremental_cache_dir(),
-                    main_ptr: 0,
-                    patch_target: Default::default(),
-                }
-                .to_json(),
-            )),
+            BuildMode::Fat => {
+                //
+                // env_vars.push((
+                //     LinkAction::ENV_VAR_NAME,
+                //     LinkAction::BaseLink {
+                //         platform: self.build.platform(),
+                //         linker: custom_linker.unwrap_or_else(|| "cc".into()),
+                //         incremental_dir: self.incremental_cache_dir(),
+                //         strip: matches!(self.mode, BuildMode::Base),
+                //     }
+                //     .to_json(),
+                // ))
+            }
+            BuildMode::Thin { .. } => {
+                //
+                std::fs::create_dir_all(self.incremental_cache_dir());
+                env_vars.push((
+                    LinkAction::ENV_VAR_NAME,
+                    LinkAction::ThinLink {
+                        triple: self.build.platform_triple(),
+                        platform: self.build.platform(),
+                        linker: custom_linker.unwrap_or_else(|| "cc".into()),
+                        incremental_dir: self.incremental_cache_dir(),
+                        main_ptr: 0,
+                        patch_target: Default::default(),
+                        save_link_args: self.link_args_file(),
+                    }
+                    .to_json(),
+                ))
+            }
         }
 
         if let Some(target_dir) = self.custom_target_dir.as_ref() {
@@ -644,6 +710,10 @@ impl BuildRequest {
 
     pub fn incremental_cache_dir(&self) -> PathBuf {
         self.platform_dir().join("incremental-cache")
+    }
+
+    pub fn link_args_file(&self) -> PathBuf {
+        self.incremental_cache_dir().join("link_args.txt")
     }
 
     /// The directory in which we'll put the main exe

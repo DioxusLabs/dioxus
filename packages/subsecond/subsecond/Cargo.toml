@@ -4,9 +4,10 @@ edition = "2021"
 version.workspace = true
 
 [dependencies]
-libloading = "0.8.6"
-bincode = "1.3.3"
 serde = { version = "1.0.203", features = ["derive"] }
-libc = "0.2.170"
 subsecond-macro = { workspace = true }
 subsecond-types = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+libloading = "0.8.6"
+libc = "0.2.170"

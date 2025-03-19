@@ -120,10 +120,7 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
 
-    #[cfg(all(
-        not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")),
-        feature = "devtools"
-    ))]
+    #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
     pub use dioxus_devtools;
 

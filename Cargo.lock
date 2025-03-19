@@ -2212,7 +2212,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d067ad48b8650848b989a59a86c6c36a995d02d2bf778d45c3c5d57bc2718f02"
 dependencies = [
  "smallvec",
- "target-lexicon",
+ "target-lexicon 0.12.16",
 ]
 
 [[package]]
@@ -3611,6 +3611,7 @@ dependencies = [
  "subsecond-cli-support",
  "syn 2.0.90",
  "tar",
+ "target-lexicon 0.13.2",
  "tauri-bundler",
  "tauri-utils",
  "tempfile",
@@ -12303,7 +12304,6 @@ dependencies = [
 name = "subsecond"
 version = "0.6.3"
 dependencies = [
- "bincode",
  "libc",
  "libloading 0.8.6",
  "serde",
@@ -12342,6 +12342,7 @@ dependencies = [
  "shell-words",
  "subsecond-cli-support",
  "sysinfo 0.33.1",
+ "target-lexicon 0.13.2",
  "tokio",
  "tokio-tungstenite 0.23.1",
  "tracing",
@@ -12364,6 +12365,7 @@ dependencies = [
  "rustc-demangle",
  "serde",
  "subsecond-types",
+ "target-lexicon 0.13.2",
  "tokio",
 ]
 
@@ -13115,6 +13117,15 @@ name = "target-lexicon"
 version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
+
+[[package]]
+name = "target-lexicon"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e502f78cdbb8ba4718f566c418c52bc729126ffd16baee5baa718cf25dd5a69a"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "target-triple"

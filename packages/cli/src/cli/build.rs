@@ -1,3 +1,7 @@
+use std::str::FromStr;
+
+use target_lexicon::Triple;
+
 use super::*;
 use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 
@@ -190,5 +194,19 @@ impl BuildArgs {
     /// Get the platform from the build arguments
     pub(crate) fn platform(&self) -> Platform {
         self.platform.expect("Platform was not set")
+    }
+
+    pub(crate) fn platform_triple(&self) -> Triple {
+        match self.platform() {
+            Platform::MacOS => Triple::from_str("aarc64-apple-darwin").unwrap(),
+            Platform::Windows => Triple::from_str("x86_64-pc-windows-msvc").unwrap(),
+            Platform::Linux => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
+            Platform::Web => Triple::from_str("wasm32-unknown-unknown").unwrap(),
+            Platform::Ios => Triple::from_str("aarch64-apple-ios-sim").unwrap(),
+            Platform::Android => Triple::from_str("aarch64-linux-android").unwrap(),
+            Platform::Server => Triple::from_str("aarc64-apple-darwin").unwrap(),
+            // Platform::Server => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
+            Platform::Liveview => Triple::from_str("aarc64-apple-darwin").unwrap(),
+        }
     }
 }

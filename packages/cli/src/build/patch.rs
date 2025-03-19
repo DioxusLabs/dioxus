@@ -135,10 +135,9 @@ pub async fn attempt_partial_link(
     // run the linker, but unexport the `_main` symbol
     let out = Command::new("cc")
         .args(modified.iter().map(|(f, _)| f))
-        .arg("-dylib")
-        .arg("-undefined")
-        .arg("dynamic_lookup")
-        .arg("-Wl,-unexported_symbol,_main")
+        .arg("-Wl,-dylib")
+        .arg("-Wl,-undefined,dynamic_lookup")
+        // .arg("-Wl,-unexported_symbol,_main")
         // .arg("-Wl,-export-dynamic")
         .arg("-arch")
         .arg("arm64")

@@ -1,5 +1,5 @@
 use super::{AppHandle, ServeUpdate, WebServer};
-use crate::{AppBundle, DioxusCrate, Platform, ReloadKind, Result, TraceSrc};
+use crate::{AppBundle, BuildMode, DioxusCrate, Platform, ReloadKind, Result, TraceSrc};
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -10,13 +10,15 @@ use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use futures_util::future::OptionFuture;
 use ignore::gitignore::Gitignore;
-use std::path::Path;
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     path::PathBuf,
+    str::FromStr,
 };
+use std::{path::Path, time::SystemTime};
 use syn::spanned::Spanned;
+use target_lexicon::Triple;
 
 pub(crate) struct AppRunner {
     pub(crate) running: Option<AppHandle>,
@@ -34,7 +36,7 @@ pub enum HotReloadKind {
     Full,
 }
 
-struct CachedFile {
+pub(crate) struct CachedFile {
     contents: String,
     most_recent: Option<String>,
     templates: HashMap<TemplateGlobalKey, HotReloadedTemplate>,
@@ -137,9 +139,6 @@ impl AppRunner {
 
     /// Attempt to hotreload the given files
     pub(crate) async fn hotreload(&mut self, modified_files: Vec<PathBuf>) -> HotReloadKind {
-        let file = modified_files[0].display().to_string();
-        let file = file.trim_start_matches(&self.krate.crate_dir().display().to_string());
-
         // If we have any changes to the rust files, we need to update the file map
         let mut templates = vec![];
 
@@ -158,7 +157,7 @@ impl AppRunner {
             // If it's a rust file, we want to hotreload it using the filemap
             if ext == "rs" {
                 // Strip the prefix before sending it to the filemap
-                let Ok(path) = path.strip_prefix(self.krate.workspace_dir()) else {
+                if path.strip_prefix(self.krate.workspace_dir()).is_err() {
                     tracing::error!(
                         "Hotreloading file outside of the crate directory: {:?}",
                         path
@@ -172,7 +171,7 @@ impl AppRunner {
                     continue;
                 };
 
-                match self.rsx_changed::<HtmlCtx>(path, contents) {
+                match self.rsx_changed::<HtmlCtx>(&path, contents) {
                     Some(new) => templates.extend(new),
                     None => needs_full_rebuild = true,
                 }
@@ -204,8 +203,6 @@ impl AppRunner {
             }
         }
     }
-
-    fn attempt_rsx_hotreload(&mut self) {}
 
     /// Get any hot reload changes that have been applied since the last full rebuild
     pub(crate) fn applied_hot_reload_changes(&mut self) -> HotReloadMsg {
@@ -276,14 +273,18 @@ impl AppRunner {
     ///
     /// If a file couldn't be parsed, we don't fail. Instead, we save the error.
     pub fn fill_filemap(&mut self, path: PathBuf) {
-        if self.ignore.matched(&path, path.is_dir()).is_ignore() {
-            return;
-        }
+        for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
+            if self
+                .ignore
+                .matched(&entry.path(), entry.file_type().is_dir())
+                .is_ignore()
+            {
+                continue;
+            }
 
-        // If the file is a .rs file, add it to the filemap
-        if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-            if let Ok(contents) = std::fs::read_to_string(&path) {
-                if let Ok(path) = path.strip_prefix(self.krate.workspace_dir()) {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                if let Ok(contents) = std::fs::read_to_string(&path) {
                     self.file_map.insert(
                         path.to_path_buf(),
                         CachedFile {
@@ -294,17 +295,37 @@ impl AppRunner {
                     );
                 }
             }
-            return;
         }
 
-        // If it's not, we'll try to read the directory
-        if path.is_dir() {
-            if let Ok(read_dir) = std::fs::read_dir(&path) {
-                for entry in read_dir.flatten() {
-                    self.fill_filemap(entry.path());
-                }
-            }
-        }
+        // if self.ignore.matched(&path, path.is_dir()).is_ignore() {
+        //     return;
+        // }
+
+        // // If the file is a .rs file, add it to the filemap
+        // if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+        //     if let Ok(contents) = std::fs::read_to_string(&path) {
+        //         if let Ok(path) = path.strip_prefix(self.krate.workspace_dir()) {
+        //             self.file_map.insert(
+        //                 path.to_path_buf(),
+        //                 CachedFile {
+        //                     contents,
+        //                     most_recent: None,
+        //                     templates: Default::default(),
+        //                 },
+        //             );
+        //         }
+        //     }
+        //     return;
+        // }
+
+        // // If it's not, we'll try to read the directory
+        // if path.is_dir() {
+        //     if let Ok(read_dir) = std::fs::read_dir(&path) {
+        //         for entry in read_dir.flatten() {
+        //             self.fill_filemap(entry.path());
+        //         }
+        //     }
+        // }
     }
 
     /// Try to update the rsx in a file, returning the templates that were hotreloaded
@@ -324,6 +345,7 @@ impl AppRunner {
     ) -> Option<Vec<HotReloadTemplateWithLocation>> {
         // Get the cached file if it exists - ignoring if it doesn't exist
         let Some(cached_file) = self.file_map.get_mut(path) else {
+            tracing::debug!("No entry for file in filemap: {:?}", path);
             return Some(vec![]);
         };
 
@@ -424,60 +446,33 @@ impl AppRunner {
     }
 
     pub async fn patch(&mut self, bundle: &AppBundle) -> Result<subsecond_cli_support::JumpTable> {
-        let time_taken = bundle
-            .app
-            .time_end
-            .duration_since(bundle.app.time_start)
-            .unwrap();
-
-        tracing::info!("Hot-patch completed in {:?}ms", time_taken.as_millis());
         let original = self.running.as_ref().unwrap().app.main_exe();
         let new = bundle.patch_exe();
-        let jump_table = create_jump_table(&original, &new);
+
+        let triple = bundle.build.build.platform_triple();
+
+        let jump_table =
+            subsecond_cli_support::create_jump_table(&original, &new, &triple).unwrap();
+
+        let changed_files = match &bundle.build.mode {
+            BuildMode::Thin { changed_files, .. } => changed_files.clone(),
+            _ => vec![],
+        };
+
+        let changed_file = changed_files.first().unwrap();
+
+        tracing::info!(
+            "Hot-patching: {} in {:?}ms",
+            changed_file
+                .strip_prefix(std::env::current_dir().unwrap())
+                .unwrap_or_else(|_| changed_file.as_path())
+                .display(),
+            SystemTime::now()
+                .duration_since(bundle.app.time_start)
+                .unwrap()
+                .as_millis()
+        );
+
         Ok(jump_table)
-    }
-}
-
-pub fn create_jump_table(original: &Path, patch: &Path) -> subsecond_cli_support::JumpTable {
-    use object::{
-        read::File, Architecture, BinaryFormat, Endianness, Object, ObjectSection, ObjectSymbol,
-        Relocation, RelocationTarget, SectionIndex,
-    };
-
-    let obj1_bytes = std::fs::read(original).unwrap();
-    let obj2_bytes = std::fs::read(patch).unwrap();
-    let obj1 = File::parse(&obj1_bytes as &[u8]).unwrap();
-    let obj2 = File::parse(&obj2_bytes as &[u8]).unwrap();
-
-    let mut map = HashMap::new();
-
-    let old_syms = obj1.symbol_map();
-    let new_syms = obj2.symbol_map();
-
-    let old_name_to_addr = old_syms
-        .symbols()
-        .iter()
-        .map(|s| (s.name(), s.address()))
-        .collect::<HashMap<_, _>>();
-
-    let new_name_to_addr = new_syms
-        .symbols()
-        .iter()
-        .map(|s| (s.name(), s.address()))
-        .collect::<HashMap<_, _>>();
-
-    let new_main_address = new_name_to_addr.get("_main").unwrap().clone();
-    let old_main_address = old_name_to_addr.get("_main").unwrap().clone();
-
-    for (new_name, new_addr) in new_name_to_addr {
-        if let Some(old_addr) = old_name_to_addr.get(new_name) {
-            map.insert(*old_addr, new_addr);
-        }
-    }
-
-    subsecond_cli_support::JumpTable {
-        map,
-        new_main_address,
-        old_main_address,
     }
 }

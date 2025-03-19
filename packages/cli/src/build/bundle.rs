@@ -4,9 +4,9 @@ use crate::{BuildMode, BuildRequest, Platform, WasmOptConfig};
 use crate::{Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_opt::{process_file_to, AssetManifest};
+use itertools::Itertools;
 use manganis::{AssetOptions, JsAssetOptions};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::sync::atomic::Ordering;
 use std::{collections::HashSet, io::Write};
 use std::{future::Future, time::Instant};
 use std::{
@@ -14,6 +14,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 use std::{pin::Pin, time::SystemTime};
+use std::{process::Stdio, sync::atomic::Ordering};
 use std::{sync::atomic::AtomicUsize, time::Duration};
 use tokio::process::Command;
 
@@ -98,18 +99,11 @@ pub(crate) struct AppBundle {
     pub(crate) server_assets: Option<AssetManifest>,
 }
 
-#[derive(Debug)]
-pub struct UnbundledApp {
-    pub(crate) request: BuildRequest,
-    pub(crate) app: BuildArtifacts,
-    pub(crate) server: Option<BuildArtifacts>,
-}
-
 /// The result of the `cargo rustc` including any additional metadata
 #[derive(Debug)]
 pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
-    pub(crate) direct_rustc: Vec<Vec<String>>,
+    pub(crate) direct_rustc: Vec<String>,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
 }
@@ -295,11 +289,11 @@ impl AppBundle {
                     .write_main_executable()
                     .await
                     .context("Failed to write main executable")?;
-                bundle.write_server_executable().await?;
-                bundle
-                    .write_assets()
-                    .await
-                    .context("Failed to write assets")?;
+                // bundle.write_server_executable().await?;
+                // bundle
+                //     .write_assets()
+                //     .await
+                //     .context("Failed to write assets")?;
                 bundle.write_metadata().await?;
                 bundle.optimize().await?;
                 bundle.pre_render_ssg_routes().await?;
@@ -559,21 +553,92 @@ impl AppBundle {
         ));
 
         let extension = match self.build.build.platform() {
-            Platform::Web => "wasm",
             Platform::MacOS => "dylib",
+            Platform::Ios => "dylib",
+            Platform::Web => "wasm",
             Platform::Windows => "dll",
             Platform::Linux => "so",
-            Platform::Ios => "dylib",
             Platform::Android => "so",
             Platform::Server => todo!(),
             Platform::Liveview => todo!(),
         };
 
-        path.with_extension("")
+        path.with_extension(extension)
     }
 
+    /// Run our custom linker setup to generate a patch file in the right location
     async fn write_patch(&self) -> Result<()> {
-        std::fs::copy(&self.app.exe, self.patch_exe())?;
+        let raw_args = std::fs::read_to_string(&self.build.link_args_file())
+            .context("Failed to read link args from file")?;
+
+        let args = raw_args.lines().collect::<Vec<_>>();
+
+        let object_files = args
+            .iter()
+            .filter(|arg| arg.ends_with(".rcgu.o"))
+            .sorted()
+            .collect::<Vec<_>>();
+
+        let extract_value = |arg: &str| -> Option<String> {
+            args.iter()
+                .position(|a| *a == arg)
+                .map(|i| args[i + 1].to_string())
+        };
+
+        let mut extra_args = vec![];
+        if let Some(vale) = extract_value("-target") {
+            extra_args.push("-target".to_string());
+            extra_args.push(vale);
+        }
+
+        if let Some(vale) = extract_value("-isysroot") {
+            extra_args.push("-isysroot".to_string());
+            extra_args.push(vale);
+        }
+
+        // todo: we should throw out symbols that we don't need and/or assemble them manually
+        // also we should make sure to propagate the right arguments (target, sysroot, etc)
+        //
+        // also, https://developer.apple.com/forums/thread/773907
+        //       -undefined,dynamic_lookup is deprecated for ios but supposedly cpython is using it
+        //       we might need to link a new patch file that implements the lookups
+        let res = Command::new("cc")
+            .args(object_files.iter())
+            .arg("-Wl,-dylib")
+            .arg("-Wl,-export_dynamic")
+            .arg("-Wl,-unexported_symbol,_main")
+            .arg("-Wl,-undefined,dynamic_lookup")
+            .arg("-arch")
+            .arg("arm64")
+            .args(extra_args)
+            .arg("-o")
+            .arg(&self.patch_exe())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+
+        let errs = String::from_utf8_lossy(&res.stderr);
+        if !errs.is_empty() {
+            if !self.patch_exe().exists() {
+                tracing::error!("Failed to generate patch: {}", errs.trim());
+            } else {
+                tracing::debug!("Warnigns during linking: {}", errs.trim());
+            }
+        }
+
+        // Clean up the temps manually
+        // todo: we might want to keep them around for debugging purposes
+        for file in object_files {
+            _ = std::fs::remove_file(file);
+        }
+
+        // Also clean up the original fat file since that's causing issues with rtld_global
+        // todo: this might not be platform portable
+        let link_orig = args.iter().position(|arg| *arg == "-o").unwrap();
+        let link_file: PathBuf = args[link_orig + 1].clone().into();
+        _ = std::fs::remove_file(&link_file);
+
         Ok(())
     }
 

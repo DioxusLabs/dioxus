@@ -1,6 +1,21 @@
+use dioxus::prelude::dioxus_devtools;
 use subsecond::JumpTable;
 
 pub fn initialize() {
+    if let Some(endpoint) = dioxus::cli_config::devserver_ws_endpoint() {
+        dioxus_devtools::connect(endpoint, |msg| match msg {
+            dioxus_devtools::DevserverMsg::HotReload(hot_reload_msg) => {
+                if let Some(jump_table) = hot_reload_msg.jump_table {
+                    unsafe { subsecond::run_patch(jump_table) };
+                }
+            }
+            _ => {}
+        });
+
+        // don't boot the default
+        return;
+    }
+
     // Spawn a thread that will read bytes from the fd
     // the host process will write new bytes to the fd when it wants to reload the binary
     std::thread::spawn(|| {
@@ -15,7 +30,7 @@ pub fn initialize() {
         while let Ok(msg) = websocket.read() {
             if let tungstenite::Message::Binary(bytes) = msg {
                 if let Ok(msg) = bincode::deserialize::<JumpTable>(bytes.as_ref()) {
-                    subsecond::run_patch(msg);
+                    unsafe { subsecond::run_patch(msg) };
                 }
             }
         }
