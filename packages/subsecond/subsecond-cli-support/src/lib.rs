@@ -45,7 +45,6 @@ pub fn create_jump_table(
     // on wasm there is no ASLR so we leave the old address as 0
     let mut old_base_address = 0;
     let mut new_base_address = 0;
-
     match triple.operating_system {
         OperatingSystem::Darwin(_)
         | OperatingSystem::Linux
@@ -55,7 +54,7 @@ pub fn create_jump_table(
             old_base_address = old_name_to_addr.get("___rust_alloc").unwrap().clone();
             new_base_address = new_name_to_addr.get("___rust_alloc").unwrap().clone();
         }
-        _ => return Err(anyhow::anyhow!("Unsupported operating system")),
+        _ => {}
     }
 
     for (new_name, new_addr) in new_name_to_addr {

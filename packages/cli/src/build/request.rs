@@ -637,7 +637,7 @@ impl BuildRequest {
                 env_vars.push((
                     LinkAction::ENV_VAR_NAME,
                     LinkAction::ThinLink {
-                        triple: self.build.platform_triple(),
+                        triple: self.build.triple(),
                         platform: self.build.platform(),
                         linker: custom_linker.unwrap_or_else(|| "cc".into()),
                         incremental_dir: self.incremental_cache_dir(),

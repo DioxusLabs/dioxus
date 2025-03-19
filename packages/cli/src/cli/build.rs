@@ -196,7 +196,7 @@ impl BuildArgs {
         self.platform.expect("Platform was not set")
     }
 
-    pub(crate) fn platform_triple(&self) -> Triple {
+    pub(crate) fn triple(&self) -> Triple {
         match self.platform() {
             Platform::MacOS => Triple::from_str("aarc64-apple-darwin").unwrap(),
             Platform::Windows => Triple::from_str("x86_64-pc-windows-msvc").unwrap(),

@@ -16,6 +16,7 @@ use std::{
 use std::{pin::Pin, time::SystemTime};
 use std::{process::Stdio, sync::atomic::Ordering};
 use std::{sync::atomic::AtomicUsize, time::Duration};
+use target_lexicon::OperatingSystem;
 use tokio::process::Command;
 
 /// The end result of a build.
@@ -579,23 +580,6 @@ impl AppBundle {
             .sorted()
             .collect::<Vec<_>>();
 
-        let extract_value = |arg: &str| -> Option<String> {
-            args.iter()
-                .position(|a| *a == arg)
-                .map(|i| args[i + 1].to_string())
-        };
-
-        let mut extra_args = vec![];
-        if let Some(vale) = extract_value("-target") {
-            extra_args.push("-target".to_string());
-            extra_args.push(vale);
-        }
-
-        if let Some(vale) = extract_value("-isysroot") {
-            extra_args.push("-isysroot".to_string());
-            extra_args.push(vale);
-        }
-
         // todo: we should throw out symbols that we don't need and/or assemble them manually
         // also we should make sure to propagate the right arguments (target, sysroot, etc)
         //
@@ -604,13 +588,7 @@ impl AppBundle {
         //       we might need to link a new patch file that implements the lookups
         let res = Command::new("cc")
             .args(object_files.iter())
-            .arg("-Wl,-dylib")
-            .arg("-Wl,-export_dynamic")
-            .arg("-Wl,-unexported_symbol,_main")
-            .arg("-Wl,-undefined,dynamic_lookup")
-            .arg("-arch")
-            .arg("arm64")
-            .args(extra_args)
+            .args(self.fat_link_args(&args))
             .arg("-o")
             .arg(&self.patch_exe())
             .stdout(Stdio::piped())
@@ -640,6 +618,84 @@ impl AppBundle {
         _ = std::fs::remove_file(&link_file);
 
         Ok(())
+    }
+
+    fn fat_link_args(&self, original_args: &[&str]) -> Vec<String> {
+        use target_lexicon::OperatingSystem;
+
+        let triple = self.build.build.triple();
+        let mut args = vec![];
+
+        match triple.operating_system {
+            // this uses "cc" and these args need to be ld compatible
+            OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
+                args.extend([
+                    "-Wl,-dylib".to_string(),
+                    "-Wl,-export_dynamic".to_string(),
+                    "-Wl,-unexported_symbol,_main".to_string(),
+                    "-Wl,-undefined,dynamic_lookup".to_string(),
+                ]);
+
+                match triple.architecture {
+                    target_lexicon::Architecture::Aarch64(_) => {
+                        args.push("-arch".to_string());
+                        args.push("arm64".to_string());
+                    }
+                    target_lexicon::Architecture::X86_64 => {
+                        args.push("-arch".to_string());
+                        args.push("x86_64".to_string());
+                    }
+                    _ => {}
+                }
+            }
+
+            // android/linux
+            // need to be compatible with lld
+            OperatingSystem::Linux => {
+                args.extend([
+                    "-Wl,--whole-archive".to_string(),
+                    "-Wl,--no-gc-sections".to_string(),
+                    "-Wl,--export-all".to_string(),
+                ]);
+
+                // match triple.architecture {
+                //     target_lexicon::Architecture::Aarch64(_) => {
+                //         args.push("-Wl,--target=aarch64-linux-android".to_string());
+                //     }
+                //     target_lexicon::Architecture::X86_64 => {
+                //         args.push("-Wl,--target=x86_64-unknown-linux-gnu".to_string());
+                //     }
+                //     _ => {}
+                // }
+            }
+
+            OperatingSystem::Windows => todo!(),
+
+            // might be wasm?
+            OperatingSystem::Unknown => todo!(),
+
+            // Lots of other OSes we don't support yet - tvos, watchos, etc
+            _ => todo!(),
+        }
+
+        let extract_value = |arg: &str| -> Option<String> {
+            original_args
+                .iter()
+                .position(|a| *a == arg)
+                .map(|i| original_args[i + 1].to_string())
+        };
+
+        if let Some(vale) = extract_value("-target") {
+            args.push("-target".to_string());
+            args.push(vale);
+        }
+
+        if let Some(vale) = extract_value("-isysroot") {
+            args.push("-isysroot".to_string());
+            args.push(vale);
+        }
+
+        args
     }
 
     /// The item that we'll try to run directly if we need to.

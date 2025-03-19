@@ -449,7 +449,7 @@ impl AppRunner {
         let original = self.running.as_ref().unwrap().app.main_exe();
         let new = bundle.patch_exe();
 
-        let triple = bundle.build.build.platform_triple();
+        let triple = bundle.build.build.triple();
 
         let jump_table =
             subsecond_cli_support::create_jump_table(&original, &new, &triple).unwrap();
