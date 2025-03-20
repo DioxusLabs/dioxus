@@ -18,6 +18,12 @@ pub struct StreamingContext {
     current_status: Signal<StreamingStatus>,
 }
 
+impl Default for StreamingContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StreamingContext {
     /// Create a new streaming context. You should not need to call this directly. Dioxus fullstack will
     /// provide this context for you.

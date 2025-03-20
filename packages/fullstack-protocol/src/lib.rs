@@ -8,7 +8,7 @@ use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 #[cfg(feature = "web")]
 thread_local! {
-    static CONTEXT: RefCell<Option<HydrationContext>> = RefCell::new(None);
+    static CONTEXT: RefCell<Option<HydrationContext>> = const { RefCell::new(None) };
 }
 
 /// Data shared between the frontend and the backend for hydration
@@ -108,7 +108,6 @@ impl HydrationContext {
 
 /// An entry into the serialized context. The order entries are created in must be consistent
 /// between the server and the client.
-
 pub struct SerializeContextEntry<T> {
     /// The index this context will be inserted into inside the serialize context
     index: usize,
@@ -151,17 +150,20 @@ pub fn serialize_context() -> HydrationContext {
     #[cfg(feature = "web")]
     // On the client, the hydration logic provides the context in a global
     if let Some(current_context) = CONTEXT.with(|context| context.borrow().clone()) {
-        return current_context;
+        current_context
     } else {
         // If the context is not set, then suspense is not active
-        let mut context = HydrationContext::default();
-        context.suspense_finished = true;
-        return context;
+        HydrationContext {
+            suspense_finished: true,
+            ..Default::default()
+        }
     }
     #[cfg(not(feature = "web"))]
-    // On the server each scope creates the context lazily
-    dioxus_core::prelude::has_context()
-        .unwrap_or_else(|| dioxus_core::prelude::provide_context(HydrationContext::default()))
+    {
+        // On the server each scope creates the context lazily
+        dioxus_core::prelude::has_context()
+            .unwrap_or_else(|| dioxus_core::prelude::provide_context(HydrationContext::default()))
+    }
 }
 
 pub(crate) struct HTMLData {
