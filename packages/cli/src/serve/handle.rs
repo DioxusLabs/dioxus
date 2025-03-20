@@ -85,7 +85,7 @@ impl AppHandle {
     }
 
     pub(crate) async fn wait(&mut self) -> HandleUpdate {
-        let platform = self.app.build.build.platform();
+        let platform = self.app.build.platform;
         use HandleUpdate::*;
         tokio::select! {
             Some(Ok(Some(msg))) = OptionFuture::from(self.app_stdout.as_mut().map(|f| f.next_line())) => {
@@ -190,7 +190,7 @@ impl AppHandle {
         }
 
         // We try to use stdin/stdout to communicate with the app
-        let running_process = match self.app.build.build.platform() {
+        let running_process = match self.app.build.platform {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
             // use use the websocket to communicate with it. I wish we could merge the concepts here,
             // like say, opening the socket as a subprocess, but alas, it's simpler to do that somewhere else.
@@ -352,11 +352,11 @@ impl AppHandle {
         }
 
         // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-        if self.app.build.build.platform() == Platform::Android {
+        if self.app.build.platform == Platform::Android {
             if let Some(bundled_name) = bundled_name.as_ref() {
                 let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
                 tracing::debug!("Pushing asset to device: {target:?}");
-                let res = tokio::process::Command::new(DioxusCrate::android_adb())
+                let res = tokio::process::Command::new(crate::build::android_tools().adb())
                     .arg("push")
                     .arg(&changed_file)
                     .arg(target)
@@ -770,6 +770,8 @@ We checked the folder: {}
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
         tokio::task::spawn(async move {
+            let adb = crate::build::android_tools().adb();
+
             let port = devserver_socket.port();
             if let Err(e) = Command::new("adb")
                 .arg("reverse")
@@ -785,7 +787,7 @@ We checked the folder: {}
 
             // Install
             // adb install -r app-debug.apk
-            if let Err(e) = Command::new(DioxusCrate::android_adb())
+            if let Err(e) = Command::new(&adb)
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
@@ -807,7 +809,7 @@ We checked the folder: {}
             _ = std::fs::write(&env_file, contents);
 
             // Push the env file to the device
-            if let Err(e) = tokio::process::Command::new(DioxusCrate::android_adb())
+            if let Err(e) = tokio::process::Command::new(&adb)
                 .arg("push")
                 .arg(env_file)
                 .arg(dioxus_cli_config::android_session_cache_dir().join(".env"))
@@ -822,7 +824,7 @@ We checked the folder: {}
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
             let activity_name = format!("{}/dev.dioxus.main.MainActivity", full_mobile_app_name,);
 
-            if let Err(e) = Command::new(DioxusCrate::android_adb())
+            if let Err(e) = Command::new(&adb)
                 .arg("shell")
                 .arg("am")
                 .arg("start")
@@ -878,7 +880,7 @@ We checked the folder: {}
         let mut main_exe = self.app.main_exe();
 
         // The requirement here is based on the platform, not necessarily our current architecture.
-        let requires_entropy = match self.app.build.build.platform() {
+        let requires_entropy = match self.app.build.platform {
             // When running "bundled", we don't need entropy
             Platform::Web => false,
             Platform::MacOS => false,

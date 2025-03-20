@@ -19,6 +19,7 @@ use std::{
 use std::{path::Path, time::SystemTime};
 use syn::spanned::Spanned;
 use target_lexicon::Triple;
+use tokio::process::Command;
 
 pub(crate) struct AppRunner {
     pub(crate) running: Option<AppHandle>,
@@ -135,6 +136,23 @@ impl AppRunner {
         if let Some(mut process) = self.running.take() {
             process.cleanup().await;
         }
+
+        // if matches!(self.platform, Platform::Android) {
+        //     use std::process::{Command, Stdio};
+        //     if let Err(err) = Command::new("adb")
+        //         .arg("reverse")
+        //         .arg("--remove")
+        //         .arg(format!("tcp:{}", self.devserver_port))
+        //         .stderr(Stdio::piped())
+        //         .stdout(Stdio::piped())
+        //         .output()
+        //     {
+        //         tracing::error!(
+        //             "failed to remove forwarded port {}: {err}",
+        //             self.devserver_port
+        //         );
+        //     }
+        // }
     }
 
     /// Attempt to hotreload the given files
@@ -240,9 +258,9 @@ impl AppRunner {
         };
 
         // Assign the runtime asset dir to the runner
-        if handle.app.build.build.platform() == Platform::Ios {
+        if handle.app.build.platform == Platform::Ios {
             // xcrun simctl get_app_container booted com.dioxuslabs
-            let res = tokio::process::Command::new("xcrun")
+            let res = Command::new("xcrun")
                 .arg("simctl")
                 .arg("get_app_container")
                 .arg("booted")
@@ -449,10 +467,9 @@ impl AppRunner {
         let original = self.running.as_ref().unwrap().app.main_exe();
         let new = bundle.patch_exe();
 
-        let triple = bundle.build.build.triple();
-
         let jump_table =
-            subsecond_cli_support::create_jump_table(&original, &new, &triple).unwrap();
+            subsecond_cli_support::create_jump_table(&original, &new, &bundle.build.triple)
+                .unwrap();
 
         let changed_files = match &bundle.build.mode {
             BuildMode::Thin { changed_files, .. } => changed_files.clone(),

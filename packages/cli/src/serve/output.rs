@@ -497,7 +497,7 @@ impl Output {
             state.build_engine.compile_duration(),
         );
 
-        if state.build_engine.request.build.fullstack {
+        if state.build_engine.request.fullstack {
             self.render_single_gauge(
                 frame,
                 second_progress,

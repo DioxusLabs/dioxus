@@ -35,7 +35,7 @@ impl AppBundle {
     }
 
     fn is_dev_build(&self) -> bool {
-        !self.build.build.release
+        !self.build.release
     }
 
     // Inject any resources from the config into the html
@@ -132,7 +132,7 @@ impl AppBundle {
     /// Inject loading scripts if they are not already present
     fn inject_loading_scripts(&self, html: &mut String) {
         // If it looks like we are already loading wasm or the current build opted out of injecting loading scripts, don't inject anything
-        if !self.build.build.inject_loading_scripts || html.contains("__wbindgen_start") {
+        if !self.build.inject_loading_scripts || html.contains("__wbindgen_start") {
             return;
         }
 

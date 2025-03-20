@@ -54,17 +54,12 @@ impl ServeArgs {
     /// higher log levels
     pub(crate) async fn serve(self) -> Result<StructuredOutput> {
         crate::serve::serve_all(self).await?;
-
         Ok(StructuredOutput::Success)
     }
 
     pub(crate) async fn load_krate(&mut self) -> Result<DioxusCrate> {
         let krate = DioxusCrate::new(&self.build_arguments.target_args)?;
-        self.resolve(&krate).await?;
-        Ok(krate)
-    }
 
-    pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
         // Enable hot reload.
         if self.hot_reload.is_none() {
             self.hot_reload = Some(krate.settings.always_hot_reload.unwrap_or(true));
@@ -85,10 +80,7 @@ impl ServeArgs {
             self.always_on_top = Some(krate.settings.always_on_top.unwrap_or(true))
         }
 
-        // Resolve the build arguments
-        self.build_arguments.resolve(krate).await?;
-
-        Ok(())
+        Ok(krate)
     }
 
     pub(crate) fn should_hotreload(&self) -> bool {
@@ -105,11 +97,14 @@ impl ServeArgs {
     }
 
     pub(crate) fn should_proxy_build(&self) -> bool {
-        match self.build_arguments.platform() {
-            Platform::Server => true,
-            // During SSG, just serve the static files instead of running the server
-            _ => self.build_arguments.fullstack && !self.build_arguments.ssg,
-        }
+        tracing::error!("todo: should_proxy_build is not implemented");
+        false
+
+        // match self.build_arguments.platform() {
+        //     Platform::Server => true,
+        //     // During SSG, just serve the static files instead of running the server
+        //     _ => self.build_arguments.fullstack && !self.build_arguments.ssg,
+        // }
     }
 }
 

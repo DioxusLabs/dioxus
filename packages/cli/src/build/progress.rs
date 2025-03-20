@@ -69,7 +69,7 @@ impl BuildRequest {
     pub(crate) fn status_starting_build(&self, crate_count: usize) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Starting {
-                is_server: self.build.platform() == Platform::Server,
+                is_server: self.platform == Platform::Server,
                 patch: self.is_patch(),
                 crate_count,
             },
@@ -116,6 +116,6 @@ impl BuildRequest {
     }
 
     pub(crate) fn is_server(&self) -> bool {
-        self.build.platform() == Platform::Server
+        self.platform == Platform::Server
     }
 }

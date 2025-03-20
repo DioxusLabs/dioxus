@@ -32,37 +32,37 @@ impl Bundle {
     pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
         tracing::info!("Bundling project...");
 
+        // We always use `release` mode for bundling
+        // todo - maybe not? what if you want a devmode bundle?
+        self.build_arguments.release = true;
+
         let krate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
-        // We always use `release` mode for bundling
-        self.build_arguments.release = true;
-        self.build_arguments.resolve(&krate).await?;
-
         tracing::info!("Building app...");
 
-        let bundle = Builder::start(&krate, self.build_arguments.clone())?
+        let bundle = Builder::start(&krate, self.build_arguments)?
             .finish()
             .await?;
 
         // If we're building for iOS, we need to bundle the iOS bundle
-        if self.build_arguments.platform() == Platform::Ios && self.package_types.is_none() {
+        if bundle.build.platform == Platform::Ios && self.package_types.is_none() {
             self.package_types = Some(vec![crate::PackageType::IosBundle]);
         }
 
         let mut bundles = vec![];
 
         // Copy the server over if it exists
-        if bundle.build.build.fullstack {
+        if bundle.build.fullstack {
             bundles.push(bundle.server_exe().unwrap());
         }
 
         // Create a list of bundles that we might need to copy
-        match self.build_arguments.platform() {
+        match bundle.build.platform {
             // By default, mac/win/linux work with tauri bundle
             Platform::MacOS | Platform::Linux | Platform::Windows => {
                 tracing::info!("Running desktop bundler...");
-                for bundle in self.bundle_desktop(&krate, &bundle)? {
+                for bundle in Self::bundle_desktop(&krate, &bundle, &self.package_types)? {
                     bundles.extend(bundle.bundle_paths);
                 }
             }
@@ -130,24 +130,22 @@ impl Bundle {
     }
 
     fn bundle_desktop(
-        &self,
         krate: &DioxusCrate,
         bundle: &AppBundle,
+        package_types: &Option<Vec<crate::PackageType>>,
     ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
-        _ = std::fs::remove_dir_all(krate.bundle_dir(self.build_arguments.platform()));
+        _ = std::fs::remove_dir_all(krate.bundle_dir(bundle.build.platform));
 
         let package = krate.package();
         let mut name: PathBuf = krate.executable_name().into();
         if cfg!(windows) {
             name.set_extension("exe");
         }
-        std::fs::create_dir_all(krate.bundle_dir(self.build_arguments.platform()))
+        std::fs::create_dir_all(krate.bundle_dir(bundle.build.platform))
             .context("Failed to create bundle directory")?;
         std::fs::copy(
             &bundle.app.exe,
-            krate
-                .bundle_dir(self.build_arguments.platform())
-                .join(&name),
+            krate.bundle_dir(bundle.build.platform).join(&name),
         )
         .with_context(|| "Failed to copy the output executable into the bundle directory")?;
 
@@ -214,7 +212,7 @@ impl Bundle {
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(krate.bundle_dir(self.build_arguments.platform()))
+            .project_out_directory(krate.bundle_dir(bundle.build.platform))
             .package_settings(PackageSettings {
                 product_name: krate.bundled_app_name(),
                 version: package.version.to_string(),
@@ -227,17 +225,11 @@ impl Bundle {
             .binaries(binaries)
             .bundle_settings(bundle_settings);
 
-        if let Some(packages) = &self.package_types {
+        if let Some(packages) = &package_types {
             settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
         }
 
-        if let Some(target) = self.build_arguments.target_args.target.as_ref() {
-            settings = settings.target(target.to_string());
-        }
-
-        if self.build_arguments.platform() == Platform::Ios {
-            settings = settings.target("aarch64-apple-ios".to_string());
-        }
+        settings = settings.target(bundle.build.triple.to_string());
 
         let settings = settings
             .build()

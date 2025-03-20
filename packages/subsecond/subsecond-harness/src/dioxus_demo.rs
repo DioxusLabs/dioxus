@@ -7,15 +7,21 @@ pub fn launch() {
 
 fn app() -> Element {
     let mut count = use_signal(|| 0);
-    let value = 12312;
+    let value = 10;
 
     rsx! {
         h2 { "iOS Binary Patching - {count}" }
-        button { onclick: move |_| { count.set(count() + 1) }, "Increment {value}" }
+        button {
+            onclick: move |_| {
+                count.set(count() + 5);
+            },
+            "Increment {value}"
+        }
         button { onclick: move |_| window().set_zoom_level(1.0), "Zoom 1x" }
-        button { onclick: move |_| window().set_zoom_level(1.5), "Zoom 2x" }
+        button { onclick: move |_| window().set_zoom_level(1.5), "Zoom 1.5x" }
+        button { onclick: move |_| window().set_zoom_level(2.0), "Zoom 2x" }
         button { onclick: move |_| window().set_zoom_level(3.0), "Zoom 3x" }
-        for x in 0..2 {
+        for x in 0..3 {
             Child { id: x, opt: "List entry" }
         }
     }

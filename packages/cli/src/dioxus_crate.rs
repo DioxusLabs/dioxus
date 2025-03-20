@@ -1,5 +1,5 @@
+use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
-use crate::{Arch, CliSettings};
 use crate::{Platform, Result};
 use anyhow::Context;
 use itertools::Itertools;
@@ -9,10 +9,23 @@ use once_cell::sync::OnceCell;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use target_lexicon::Triple;
 use tokio::process::Command;
 use toml_edit::Item;
 
-// Contains information about the crate we are currently in and the dioxus config for that crate
+/// Contains information about the crate we are currently in and the dioxus config for that crate
+///
+/// The intention of this struct is to provide a source of truth for the user's configuration and workspace.
+/// However do note that as the user's workspace evolves, this might be out of sync with the actual
+/// state of the workspace.
+///
+/// Eventually we need to provide a way of updating this struct to reflect the current state of the
+/// workspace and configuration, potentially by simply re-running the `new()` function and replacing
+/// the original.
+///
+/// Also, currently, this assumes a "Target" crate which may or may not always be the case.
+/// For multi-target runs, this won't much sense anymore and the target info should be stored in
+/// a new Target struct (or merged with BuildRequest).
 #[derive(Clone)]
 pub(crate) struct DioxusCrate {
     pub(crate) krates: Arc<Krates>,
@@ -35,7 +48,7 @@ impl DioxusCrate {
             .build(cmd, |_| {})
             .context("Failed to run cargo metadata")?;
 
-        let package = find_main_package(&krates, target.package.clone())?;
+        let package = Self::find_main_package(&krates, target.package.clone())?;
         tracing::debug!("Found package {package:?}");
 
         let dioxus_config = DioxusConfig::load(&krates, package)?.unwrap_or_default();
@@ -628,106 +641,6 @@ impl DioxusCrate {
         krates
     }
 
-    /// Attempt to retrieve the path to ADB
-    pub(crate) fn android_adb() -> PathBuf {
-        static PATH: once_cell::sync::Lazy<PathBuf> = once_cell::sync::Lazy::new(|| {
-            let Some(sdk) = DioxusCrate::android_sdk() else {
-                return PathBuf::from("adb");
-            };
-
-            let tools = sdk.join("platform-tools");
-
-            if tools.join("adb").exists() {
-                return tools.join("adb");
-            }
-
-            if tools.join("adb.exe").exists() {
-                return tools.join("adb.exe");
-            }
-
-            PathBuf::from("adb")
-        });
-
-        PATH.clone()
-    }
-
-    pub(crate) fn android_sdk() -> Option<PathBuf> {
-        var_or_debug("ANDROID_SDK_ROOT")
-            .or_else(|| var_or_debug("ANDROID_SDK"))
-            .or_else(|| var_or_debug("ANDROID_HOME"))
-    }
-
-    pub(crate) fn android_ndk(&self) -> Option<PathBuf> {
-        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
-        static PATH: once_cell::sync::Lazy<Option<PathBuf>> = once_cell::sync::Lazy::new(|| {
-            // attempt to autodetect the ndk path from env vars (usually set by the shell)
-            let auto_detected_ndk =
-                var_or_debug("NDK_HOME").or_else(|| var_or_debug("ANDROID_NDK_HOME"));
-
-            if let Some(home) = auto_detected_ndk {
-                return Some(home);
-            }
-
-            let sdk = var_or_debug("ANDROID_SDK_ROOT")
-                .or_else(|| var_or_debug("ANDROID_SDK"))
-                .or_else(|| var_or_debug("ANDROID_HOME"))?;
-
-            let ndk = sdk.join("ndk");
-
-            ndk.read_dir()
-                .ok()?
-                .flatten()
-                .map(|dir| (dir.file_name(), dir.path()))
-                .sorted()
-                .last()
-                .map(|(_, path)| path.to_path_buf())
-        });
-
-        PATH.clone()
-    }
-
-    pub(crate) async fn autodetect_android_arch() -> Option<Arch> {
-        // Try auto detecting arch through adb.
-        static AUTO_ARCH: OnceCell<Option<Arch>> = OnceCell::new();
-
-        match AUTO_ARCH.get() {
-            Some(a) => *a,
-            None => {
-                // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
-                let output = Command::new("adb")
-                    .arg("shell")
-                    .arg("uname")
-                    .arg("-m")
-                    .output()
-                    .await;
-
-                let out = match output {
-                    Ok(o) => o,
-                    Err(e) => {
-                        tracing::debug!("ADB command failed: {:?}", e);
-                        return None;
-                    }
-                };
-
-                // Parse ADB output
-                let Ok(out) = String::from_utf8(out.stdout) else {
-                    tracing::debug!("ADB returned unexpected data.");
-                    return None;
-                };
-                let trimmed = out.trim().to_string();
-                tracing::trace!("ADB Returned: `{trimmed:?}`");
-
-                // Set the cell
-                let arch = Arch::try_from(trimmed).ok();
-                AUTO_ARCH
-                    .set(arch)
-                    .expect("the cell should have been checked empty by the match condition");
-
-                arch
-            }
-        }
-    }
-
     pub(crate) fn mobile_org(&self) -> String {
         let identifier = self.bundle_identifier();
         let mut split = identifier.splitn(3, '.');
@@ -756,72 +669,61 @@ impl DioxusCrate {
 
         format!("com.example.{}", self.bundled_app_name())
     }
-}
 
-impl std::fmt::Debug for DioxusCrate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DioxusCrate")
-            .field("package", &self.krates[self.package])
-            .field("dioxus_config", &self.config)
-            .field("target", &self.target)
-            .finish()
-    }
-}
+    /// Find the main package in the workspace
+    fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId> {
+        if let Some(package) = package {
+            let mut workspace_members = krates.workspace_members();
+            let found = workspace_members.find_map(|node| {
+                if let krates::Node::Krate { id, krate, .. } = node {
+                    if krate.name == package {
+                        return Some(id);
+                    }
+                }
+                None
+            });
 
-// Find the main package in the workspace
-fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId> {
-    if let Some(package) = package {
-        let mut workspace_members = krates.workspace_members();
-        let found = workspace_members.find_map(|node| {
-            if let krates::Node::Krate { id, krate, .. } = node {
-                if krate.name == package {
-                    return Some(id);
+            if found.is_none() {
+                tracing::error!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
+                tracing::error!("Packages in the workspace:");
+                for package in krates.workspace_members() {
+                    if let krates::Node::Krate { krate, .. } = package {
+                        tracing::error!("{}", krate.name());
+                    }
                 }
             }
-            None
-        });
 
-        if found.is_none() {
-            tracing::error!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
-            tracing::error!("Packages in the workspace:");
-            for package in krates.workspace_members() {
-                if let krates::Node::Krate { krate, .. } = package {
-                    tracing::error!("{}", krate.name());
-                }
-            }
-        }
+            let kid = found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?;
 
-        let kid = found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?;
+            return Ok(krates.nid_for_kid(kid).unwrap());
+        };
 
-        return Ok(krates.nid_for_kid(kid).unwrap());
-    };
+        // Otherwise find the package that is the closest parent of the current directory
+        let current_dir = std::env::current_dir()?;
+        let current_dir = current_dir.as_path();
 
-    // Otherwise find the package that is the closest parent of the current directory
-    let current_dir = std::env::current_dir()?;
-    let current_dir = current_dir.as_path();
-
-    // Go through each member and find the path that is a parent of the current directory
-    let mut closest_parent = None;
-    for member in krates.workspace_members() {
-        if let krates::Node::Krate { id, krate, .. } = member {
-            let member_path = krate.manifest_path.parent().unwrap();
-            if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
-                let len = path.components().count();
-                match closest_parent {
-                    Some((_, closest_parent_len)) => {
-                        if len < closest_parent_len {
+        // Go through each member and find the path that is a parent of the current directory
+        let mut closest_parent = None;
+        for member in krates.workspace_members() {
+            if let krates::Node::Krate { id, krate, .. } = member {
+                let member_path = krate.manifest_path.parent().unwrap();
+                if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
+                    let len = path.components().count();
+                    match closest_parent {
+                        Some((_, closest_parent_len)) => {
+                            if len < closest_parent_len {
+                                closest_parent = Some((id, len));
+                            }
+                        }
+                        None => {
                             closest_parent = Some((id, len));
                         }
                     }
-                    None => {
-                        closest_parent = Some((id, len));
-                    }
                 }
             }
         }
-    }
 
-    let kid = closest_parent
+        let kid = closest_parent
         .map(|(id, _)| id)
         .with_context(|| {
             let bin_targets = krates.workspace_members().filter_map(|krate|match krate {
@@ -833,16 +735,17 @@ fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId>
             format!("Failed to find binary package to build.\nYou need to either run dx from inside a binary crate or specify a binary package to build with the `--package` flag. Try building again with one of the binary packages in the workspace:\n{}", bin_targets.join("\n"))
         })?;
 
-    let package = krates.nid_for_kid(kid).unwrap();
-    Ok(package)
+        let package = krates.nid_for_kid(kid).unwrap();
+        Ok(package)
+    }
 }
 
-fn var_or_debug(name: &str) -> Option<PathBuf> {
-    use std::env::var;
-    use tracing::debug;
-
-    var(name)
-        .inspect_err(|_| debug!("{name} not set"))
-        .ok()
-        .map(PathBuf::from)
+impl std::fmt::Debug for DioxusCrate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DioxusCrate")
+            .field("package", &self.krates[self.package])
+            .field("dioxus_config", &self.config)
+            .field("target", &self.target)
+            .finish()
+    }
 }

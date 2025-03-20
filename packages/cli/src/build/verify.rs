@@ -22,7 +22,7 @@ impl BuildRequest {
             }
         };
 
-        match self.build.platform() {
+        match self.platform {
             Platform::Web => self.verify_web_tooling(rustc).await?,
             Platform::Ios => self.verify_ios_tooling(rustc).await?,
             Platform::Android => self.verify_android_tooling(rustc).await?,
@@ -116,15 +116,16 @@ impl BuildRequest {
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     pub(crate) async fn verify_android_tooling(&self, _rustc: RustcDetails) -> Result<()> {
-        let result = self
-            .krate
-            .android_ndk()
-            .map(|ndk| self.build.target_args.arch().android_linker(&ndk));
+        let android = crate::build::android_tools();
 
-        if let Some(path) = result {
-            if path.exists() {
-                return Ok(());
-            }
+        if !android.ndk_exists() {
+            return Err(anyhow::anyhow!(
+                "Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation."
+            ) .into());
+        }
+
+        if android.linker(&self.triple).exists() {
+            return Ok(());
         }
 
         Err(anyhow::anyhow!(

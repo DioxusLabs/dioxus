@@ -19,6 +19,7 @@ mod serve;
 mod settings;
 mod wasm_bindgen;
 mod wasm_opt;
+mod workspace;
 
 pub(crate) use build::*;
 pub(crate) use cli::*;

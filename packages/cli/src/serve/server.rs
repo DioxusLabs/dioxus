@@ -60,7 +60,6 @@ pub(crate) struct WebServer {
     new_build_status_sockets: UnboundedReceiver<WebSocket>,
     build_status: SharedStatus,
     application_name: String,
-    platform: Platform,
 }
 
 impl WebServer {
@@ -140,7 +139,6 @@ impl WebServer {
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
             application_name: krate.executable_name().to_string(),
-            platform: args.build_arguments.platform(),
         })
     }
 
@@ -170,7 +168,8 @@ impl WebServer {
                     drop(new_message);
 
                     // Update the socket with project info and current build status
-                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
+                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone() });
+                    // let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform });
                     if project_info.send_to(&mut new_socket).await.is_ok() {
                         _ = self.build_status.send_to(&mut new_socket).await;
                         self.build_status_sockets.push(new_socket);
@@ -195,23 +194,6 @@ impl WebServer {
     }
 
     pub(crate) async fn shutdown(&mut self) {
-        if matches!(self.platform, Platform::Android) {
-            use std::process::{Command, Stdio};
-            if let Err(err) = Command::new("adb")
-                .arg("reverse")
-                .arg("--remove")
-                .arg(format!("tcp:{}", self.devserver_port))
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
-                .output()
-            {
-                tracing::error!(
-                    "failed to remove forwarded port {}: {err}",
-                    self.devserver_port
-                );
-            }
-        }
-
         self.send_shutdown().await;
         for socket in self.hot_reload_sockets.drain(..) {
             _ = socket.close().await;
@@ -378,10 +360,12 @@ impl WebServer {
     }
 
     pub fn server_address(&self) -> Option<SocketAddr> {
-        match self.platform {
-            Platform::Web | Platform::Server => Some(self.devserver_address()),
-            _ => self.proxied_server_address(),
-        }
+        tracing::error!("todo: server_address is not implemented");
+        None
+        // match self.platform {
+        //     Platform::Web | Platform::Server => Some(self.devserver_address()),
+        //     _ => self.proxied_server_address(),
+        // }
     }
 
     /// Get the address the server is running - showing 127.0.0.1 if the devserver is bound to 0.0.0.0
@@ -739,7 +723,8 @@ struct SharedStatus(Arc<RwLock<Status>>);
 enum Status {
     ClientInit {
         application_name: String,
-        platform: Platform,
+        // platform: Platform,
+        // platform: Platform,
     },
     Building {
         progress: f64,

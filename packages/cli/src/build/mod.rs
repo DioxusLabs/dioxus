@@ -8,6 +8,7 @@
 mod builder;
 mod bundle;
 mod patch;
+mod platform;
 mod prerender;
 mod progress;
 mod request;
@@ -18,5 +19,6 @@ mod web;
 pub(crate) use builder::*;
 pub(crate) use bundle::*;
 pub(crate) use patch::*;
+pub(crate) use platform::*;
 pub(crate) use progress::*;
 pub(crate) use request::*;

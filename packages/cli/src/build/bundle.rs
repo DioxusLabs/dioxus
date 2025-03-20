@@ -305,6 +305,7 @@ impl AppBundle {
 
                 tracing::debug!("Bundle created at {}", bundle.build.root_dir().display());
             }
+
             BuildMode::Thin { .. } => {
                 tracing::debug!("Patching existing bundle");
                 bundle.write_patch().await?;
@@ -321,7 +322,7 @@ impl AppBundle {
     pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
-        if self.build.build.skip_assets {
+        if self.build.skip_assets {
             return Ok(AssetManifest::default());
         }
 
@@ -340,7 +341,7 @@ impl AppBundle {
     /// Other platforms we might do some stripping or other optimizations
     /// Move the executable to the workdir
     async fn write_main_executable(&mut self) -> Result<()> {
-        match self.build.build.platform() {
+        match self.build.platform {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
             // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
             //
@@ -400,7 +401,7 @@ impl AppBundle {
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
     async fn write_assets(&self) -> Result<()> {
         // Server doesn't need assets - web will provide them
-        if self.build.build.platform() == Platform::Server {
+        if self.build.platform == Platform::Server {
             return Ok(());
         }
 
@@ -553,7 +554,7 @@ impl AppBundle {
                 .as_millis(),
         ));
 
-        let extension = match self.build.build.platform() {
+        let extension = match self.build.platform {
             Platform::MacOS => "dylib",
             Platform::Ios => "dylib",
             Platform::Web => "wasm",
@@ -623,7 +624,7 @@ impl AppBundle {
     fn fat_link_args(&self, original_args: &[&str]) -> Vec<String> {
         use target_lexicon::OperatingSystem;
 
-        let triple = self.build.build.triple();
+        let triple = self.build.triple.clone();
         let mut args = vec![];
 
         match triple.operating_system {
@@ -729,7 +730,7 @@ impl AppBundle {
     /// todo(jon): use handlebars templates instead of these prebaked templates
     async fn write_metadata(&self) -> Result<()> {
         // write the Info.plist file
-        match self.build.build.platform() {
+        match self.build.platform {
             Platform::MacOS => {
                 let dest = self.build.root_dir().join("Contents").join("Info.plist");
                 let plist = self.macos_plist_contents()?;
@@ -766,14 +767,14 @@ impl AppBundle {
 
     /// Run the optimizers, obfuscators, minimizers, signers, etc
     pub(crate) async fn optimize(&self) -> Result<()> {
-        match self.build.build.platform() {
+        match self.build.platform {
             Platform::Web => {
                 // Compress the asset dir
                 // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
                 let pre_compress = self
                     .build
                     .krate
-                    .should_pre_compress_web_assets(self.build.build.release);
+                    .should_pre_compress_web_assets(self.build.release);
 
                 self.build.status_compressing_assets();
                 let asset_dir = self.build.asset_dir();
@@ -800,7 +801,7 @@ impl AppBundle {
             let mut path = self
                 .build
                 .krate
-                .build_dir(Platform::Server, self.build.build.release);
+                .build_dir(Platform::Server, self.build.release);
 
             if cfg!(windows) {
                 path.push("server.exe");
@@ -828,7 +829,7 @@ impl AppBundle {
         let bindgen_outdir = self.build.wasm_bindgen_out_dir();
         let prebindgen = self.app.exe.clone();
         let post_bindgen_wasm = self.build.wasm_bindgen_wasm_output_file();
-        let should_bundle_split = self.build.build.experimental_wasm_split;
+        let should_bundle_split = self.build.wasm_split;
         let rustc_exe = self.app.exe.with_extension("wasm");
         let bindgen_version = self
             .build
@@ -846,17 +847,17 @@ impl AppBundle {
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = (self.build.build.release || self.build.build.experimental_wasm_split)
-            && crate::wasm_opt::wasm_opt_available();
+        let will_wasm_opt =
+            (self.build.release || self.build.wasm_split) && crate::wasm_opt::wasm_opt_available();
         let keep_debug = self.build.krate.config.web.wasm_opt.debug
-            || self.build.build.debug_symbols
-            || self.build.build.experimental_wasm_split
-            || !self.build.build.release
+            || self.build.debug_symbols
+            || self.build.wasm_split
+            || !self.build.release
             || will_wasm_opt;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
-            memory_packing: self.build.build.experimental_wasm_split,
-            debug: self.build.build.debug_symbols,
+            memory_packing: self.build.wasm_split,
+            debug: self.build.debug_symbols,
             ..self.build.krate.config.web.wasm_opt.clone()
         };
 
@@ -980,7 +981,7 @@ impl AppBundle {
         }
 
         // Make sure to optimize the main wasm file if requested or if bundle splitting
-        if should_bundle_split || self.build.build.release {
+        if should_bundle_split || self.build.release {
             self.build.status_optimizing_wasm();
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
@@ -1006,7 +1007,7 @@ impl AppBundle {
 
     async fn pre_render_ssg_routes(&self) -> Result<()> {
         // Run SSG and cache static routes
-        if !self.build.build.ssg {
+        if !self.build.ssg {
             return Ok(());
         }
         self.build.status_prerendering_routes();
@@ -1049,7 +1050,7 @@ impl AppBundle {
 
     /// Run any final tools to produce apks or other artifacts we might need.
     async fn assemble(&self) -> Result<()> {
-        if let Platform::Android = self.build.build.platform() {
+        if let Platform::Android = self.build.platform {
             self.build.status_running_gradle();
 
             let output = Command::new(self.gradle_exe()?)
@@ -1097,7 +1098,7 @@ impl AppBundle {
         let to = app_release.join(format!(
             "{}-{}.aab",
             self.build.krate.bundled_app_name(),
-            self.build.build.target_args.arch()
+            self.build.triple
         ));
 
         std::fs::rename(from, &to).context("Failed to rename aab")?;

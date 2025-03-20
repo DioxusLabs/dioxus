@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use target_lexicon::Triple;
 
@@ -57,7 +57,7 @@ pub(crate) struct BuildArgs {
 
     /// Experimental: Bundle split the wasm binary into multiple chunks based on `#[wasm_split]` annotations [default: false]
     #[clap(long, default_value_t = false)]
-    pub(crate) experimental_wasm_split: bool,
+    pub(crate) wasm_split: bool,
 
     /// Generate debug symbols for the wasm binary [default: true]
     ///
@@ -72,141 +72,18 @@ pub(crate) struct BuildArgs {
 }
 
 impl BuildArgs {
-    pub async fn run_cmd(mut self) -> Result<StructuredOutput> {
+    pub async fn run_cmd(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
         let krate =
             DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
 
-        self.resolve(&krate).await?;
-
-        let bundle = Builder::start(&krate, self.clone())?.finish().await?;
+        let bundle = Builder::start(&krate, self)?.finish().await?;
 
         tracing::info!(path = ?bundle.build.root_dir(), "Build completed successfully! 🚀");
 
         Ok(StructuredOutput::BuildFinished {
             path: bundle.build.root_dir(),
         })
-    }
-
-    /// Update the arguments of the CLI by inspecting the DioxusCrate itself and learning about how
-    /// the user has configured their app.
-    ///
-    /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
-    /// fullstack variant even if they omitted the `--fullstack` flag.
-    pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
-        let default_platform = krate.default_platform();
-        let auto_platform = krate.autodetect_platform();
-
-        // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
-        // We want to strip out the default platform and use the one they passed, setting no-default-features
-        if self.platform.is_some() && default_platform.is_some() {
-            self.target_args.no_default_features = true;
-            self.target_args
-                .features
-                .extend(krate.platformless_features());
-        }
-
-        // Inherit the platform from the args, or auto-detect it
-        if self.platform.is_none() {
-            let (platform, _feature) = auto_platform.ok_or_else(|| {
-                anyhow::anyhow!("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>` or set a default platform using a cargo feature.")
-            })?;
-            self.platform = Some(platform);
-        }
-
-        let platform = self
-            .platform
-            .expect("Platform to be set after autodetection");
-
-        // Add any features required to turn on the client
-        self.target_args
-            .client_features
-            .push(krate.feature_for_platform(platform));
-
-        // Add any features required to turn on the server
-        // This won't take effect in the server is not built, so it's fine to just set it here even if it's not used
-        self.target_args
-            .server_features
-            .push(krate.feature_for_platform(Platform::Server));
-
-        // Make sure we set the fullstack platform so we actually build the fullstack variant
-        // Users need to enable "fullstack" in their default feature set.
-        // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-        self.fullstack = self.fullstack || krate.has_dioxus_feature("fullstack");
-
-        // Make sure we have a server feature if we're building a fullstack app
-        //
-        // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
-        // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
-        if self.fullstack && self.target_args.server_features.is_empty() {
-            return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
-        }
-
-        // Set the profile of the build if it's not already set
-        // We do this for android/wasm since they require
-        if self.profile.is_none() && !self.release {
-            match self.platform {
-                Some(Platform::Android) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_ANDROID.to_string());
-                }
-                Some(Platform::Web) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_WASM.to_string());
-                }
-                Some(Platform::Server) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_SERVER.to_string());
-                }
-                _ => {}
-            }
-        }
-
-        // Determine arch if android
-        if self.platform == Some(Platform::Android) && self.target_args.arch.is_none() {
-            tracing::debug!("No android arch provided, attempting to auto detect.");
-
-            let arch = DioxusCrate::autodetect_android_arch().await;
-
-            // Some extra logs
-            let arch = match arch {
-                Some(a) => {
-                    tracing::debug!(
-                        "Autodetected `{}` Android arch.",
-                        a.android_target_triplet()
-                    );
-                    a.to_owned()
-                }
-                None => {
-                    let a = Arch::default();
-                    tracing::debug!(
-                        "Could not detect Android arch, defaulting to `{}`",
-                        a.android_target_triplet()
-                    );
-                    a
-                }
-            };
-
-            self.target_args.arch = Some(arch);
-        }
-
-        Ok(())
-    }
-
-    /// Get the platform from the build arguments
-    pub(crate) fn platform(&self) -> Platform {
-        self.platform.expect("Platform was not set")
-    }
-
-    pub(crate) fn triple(&self) -> Triple {
-        match self.platform() {
-            Platform::MacOS => Triple::from_str("aarc64-apple-darwin").unwrap(),
-            Platform::Windows => Triple::from_str("x86_64-pc-windows-msvc").unwrap(),
-            Platform::Linux => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
-            Platform::Web => Triple::from_str("wasm32-unknown-unknown").unwrap(),
-            Platform::Ios => Triple::from_str("aarch64-apple-ios-sim").unwrap(),
-            Platform::Android => Triple::from_str("aarch64-linux-android").unwrap(),
-            Platform::Server => Triple::from_str("aarc64-apple-darwin").unwrap(),
-            // Platform::Server => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
-            Platform::Liveview => Triple::from_str("aarc64-apple-darwin").unwrap(),
-        }
     }
 }
