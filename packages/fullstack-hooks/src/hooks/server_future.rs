@@ -1,7 +1,7 @@
-use dioxus_core::prelude::{RenderError, suspend, use_hook};
+use dioxus_core::prelude::{suspend, use_hook, RenderError};
 use dioxus_hooks::*;
 use dioxus_signals::Readable;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use std::future::Future;
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
