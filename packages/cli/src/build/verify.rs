@@ -116,15 +116,9 @@ impl BuildRequest {
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
     pub(crate) async fn verify_android_tooling(&self, _rustc: RustcDetails) -> Result<()> {
-        let android = crate::build::android_tools();
+        let android = crate::build::android_tools().context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?;
 
-        if !android.ndk_exists() {
-            return Err(anyhow::anyhow!(
-                "Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation."
-            ) .into());
-        }
-
-        if android.linker(&self.triple).exists() {
+        if android.linker(&self.target).exists() {
             return Ok(());
         }
 

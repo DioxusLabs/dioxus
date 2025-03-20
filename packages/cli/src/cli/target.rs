@@ -2,6 +2,22 @@ use super::*;
 use target_lexicon::Triple;
 
 /// Information about the target to build
+///
+/// When running `dx serve / build / bundle` you can pass multiple targets to build for.
+/// The args here are stand-in for `cargo rustc --args -- <more-args>`.
+/// This lets you set up multiple projects to be ran in parallel.
+///
+/// The `@` sign is basically a task name and the args are passed to the task. We look for the task
+/// in the Dioxus.toml and if it's not found, we just use the default args.
+///
+/// Any args preceeding the targets will be passed to *all* the targets, letting us keep some backwards
+/// compatibility with the previous version of `dx serve`.
+///
+/// ```
+/// dx serve --release
+///     \ @client <target-args>
+///     \ @server <target-args>
+/// ```
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct TargetArgs {
     /// Build for nightly [default: false]

@@ -1,4 +1,4 @@
-use super::{progress::ProgressTx, BuildArtifacts, PatchData};
+use super::{progress::ProgressTx, AndroidTools, BuildArtifacts, PatchData};
 use crate::dioxus_crate::DioxusCrate;
 use crate::{link::LinkAction, BuildArgs};
 use crate::{AppBundle, Platform, Result, TraceSrc};
@@ -6,7 +6,7 @@ use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::AssetManifest;
 use itertools::Itertools;
-use krates::Utf8PathBuf;
+use krates::{cm::TargetKind, Utf8PathBuf};
 use serde::Deserialize;
 use std::{
     path::{Path, PathBuf},
@@ -37,11 +37,48 @@ pub(crate) struct BuildRequest {
     pub(crate) id: Uuid,
 
     ///
+    pub(crate) krate: DioxusCrate,
+
+    ///
     pub(crate) fullstack: bool,
 
     pub(crate) profile: String,
 
     pub(crate) release: bool,
+
+    ///
+    pub(crate) platform: Platform,
+
+    ///
+    pub(crate) target: Triple,
+
+    pub(crate) device: bool,
+
+    /// Build for nightly [default: false]
+    pub(crate) nightly: bool,
+
+    /// The package to build
+    pub(crate) package: String,
+
+    /// Space separated list of features to activate
+    pub(crate) features: Vec<String>,
+
+    /// Extra arguments to pass to cargo
+    pub(crate) cargo_args: Vec<String>,
+
+    /// Don't include the default features in the build
+    pub(crate) no_default_features: bool,
+
+    pub(crate) target_kind: TargetKind,
+
+    /// The target directory for the build
+    pub(crate) custom_target_dir: Option<PathBuf>,
+
+    /// How we'll go about building
+    pub(crate) mode: BuildMode,
+
+    /// Status channel to send our progress updates to
+    pub(crate) progress: ProgressTx,
 
     ///
     pub(crate) skip_assets: bool,
@@ -55,38 +92,6 @@ pub(crate) struct BuildRequest {
     pub(crate) inject_loading_scripts: bool,
 
     pub(crate) force_sequential: bool,
-
-    ///
-    pub(crate) platform: Platform,
-
-    ///
-    pub(crate) triple: Triple,
-
-    pub(crate) device: bool,
-
-    /// Build for nightly [default: false]
-    pub(crate) nightly: bool,
-
-    /// The package to build
-    pub(crate) package: String,
-
-    /// Space separated list of features to activate
-    pub(crate) features: Vec<String>,
-
-    /// Don't include the default features in the build
-    pub(crate) no_default_features: bool,
-
-    /// The target directory for the build
-    pub(crate) custom_target_dir: Option<PathBuf>,
-
-    /// How we'll go about building
-    pub(crate) mode: BuildMode,
-
-    /// Status channel to send our progress updates to
-    pub(crate) progress: ProgressTx,
-
-    ///
-    pub(crate) krate: DioxusCrate,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -112,112 +117,138 @@ pub struct CargoBuildResult {
 }
 
 impl BuildRequest {
+    /// Create a new build request
+    ///
+    /// This will combine the many inputs here into a single source of truth. Fields will be duplicated
+    /// from the inputs since various things might need to be autodetected.
+    ///
+    /// When creating a new build request we need to take into account
+    /// - The user's command line arguments
+    /// - The crate's Cargo.toml
+    /// - The dioxus.tomkl
+    /// - The user's CliSettings
+    /// - The workspace
+    /// - The host (android tools, installed frameworks, etc)
+    /// - The intended platform
+    ///
+    /// We will attempt to autodetect a number of things if not provided.
     pub fn new(
+        args: BuildArgs,
         krate: DioxusCrate,
-        build: BuildArgs,
         progress: ProgressTx,
         mode: BuildMode,
-    ) -> Self {
+    ) -> Result<Self> {
         let default_platform = krate.default_platform();
-        let auto_platform = krate.autodetect_platform();
+        let mut features = vec![];
+        let mut no_default_features = false;
 
         // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
         // We want to strip out the default platform and use the one they passed, setting no-default-features
-        if self.platform.is_some() && default_platform.is_some() {
-            self.no_default_features = true;
-            self.target_args
-                .features
-                .extend(krate.platformless_features());
+        if args.platform.is_some() && default_platform.is_some() {
+            no_default_features = true;
+            features.extend(krate.platformless_features());
         }
 
         // Inherit the platform from the args, or auto-detect it
-        if self.platform.is_none() {
-            let (platform, _feature) = auto_platform.ok_or_else(|| {
-                anyhow::anyhow!("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>` or set a default platform using a cargo feature.")
-            })?;
-            self.platform = Some(platform);
-        }
-
-        let platform = self
+        let platform = args
             .platform
-            .expect("Platform to be set after autodetection");
+            .map(|p| Some(p))
+            .unwrap_or_else(|| krate.autodetect_platform().map(|a| a.0))
+            .context("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>` or set a default platform using a cargo feature.")?;
 
         // Add any features required to turn on the client
-        self.target_args
-            .client_features
-            .push(krate.feature_for_platform(platform));
-
-        // Add any features required to turn on the server
-        // This won't take effect in the server is not built, so it's fine to just set it here even if it's not used
-        self.target_args
-            .server_features
-            .push(krate.feature_for_platform(Platform::Server));
+        features.push(krate.feature_for_platform(platform));
 
         // Make sure we set the fullstack platform so we actually build the fullstack variant
         // Users need to enable "fullstack" in their default feature set.
         // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-        self.fullstack = self.fullstack || krate.has_dioxus_feature("fullstack");
-
-        // Make sure we have a server feature if we're building a fullstack app
-        //
-        // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
-        // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
-        if self.fullstack && self.server_features.is_empty() {
-            return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
-        }
+        let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
 
         // Set the profile of the build if it's not already set
-        // We do this for android/wasm since they require
-        if self.profile.is_none() && !self.release {
-            match self.platform {
-                Some(Platform::Android) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_ANDROID.to_string());
-                }
-                Some(Platform::Web) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_WASM.to_string());
-                }
-                Some(Platform::Server) => {
-                    self.profile = Some(crate::dioxus_crate::PROFILE_SERVER.to_string());
-                }
-                _ => {}
-            }
-        }
+        // This is mostly used for isolation of builds (preventing thrashing) but also useful to have multiple performance profiles
+        // We might want to move some of these profiles into dioxus.toml and make them "virtual".
+        let client_profile = match args.profile {
+            Some(profile) => profile,
+            None if args.release => "release".to_string(),
+            None => match platform {
+                Platform::Android => crate::dioxus_crate::PROFILE_ANDROID.to_string(),
+                Platform::Web => crate::dioxus_crate::PROFILE_WASM.to_string(),
+                Platform::Server => crate::dioxus_crate::PROFILE_SERVER.to_string(),
+                _ => "dev".to_string(),
+            },
+        };
+
+        // // todo: use the right arch based on the current arch
+        // let custom_target = match self.platform {
+        //     Platform::Web => Some("wasm32-unknown-unknown"),
+        //     Platform::Ios => match self.device {
+        //         Some(true) => Some("aarch64-apple-ios"),
+        //         _ => Some("aarch64-apple-ios-sim"),
+        //     },
+        //     Platform::Android => Some(self.arch().android_target_triplet()),
+        //     Platform::Server => None,
+        //     // we're assuming we're building for the native platform for now... if you're cross-compiling
+        //     // the targets here might be different
+        //     Platform::MacOS => None,
+        //     Platform::Windows => None,
+        //     Platform::Linux => None,
+        //     Platform::Liveview => None,
+        // };
 
         // Determine arch if android
-        if self.platform == Some(Platform::Android) && self.arch.is_none() {
-            tracing::debug!("No android arch provided, attempting to auto detect.");
 
-            let arch = DioxusCrate::autodetect_android_arch().await;
+        // if platform == Platform::Android && args.target_args.target.is_none() {
+        //     tracing::debug!("No android arch provided, attempting to auto detect.");
 
-            // Some extra logs
-            let arch = match arch {
-                Some(a) => {
-                    tracing::debug!(
-                        "Autodetected `{}` Android arch.",
-                        a.android_target_triplet()
-                    );
-                    a.to_owned()
-                }
-                None => {
-                    let a = Arch::default();
-                    tracing::debug!(
-                        "Could not detect Android arch, defaulting to `{}`",
-                        a.android_target_triplet()
-                    );
-                    a
-                }
-            };
+        //     let arch = DioxusCrate::autodetect_android_arch().await;
 
-            self.arch = Some(arch);
-        }
+        //     // Some extra logs
+        //     let arch = match arch {
+        //         Some(a) => {
+        //             tracing::debug!(
+        //                 "Autodetected `{}` Android arch.",
+        //                 a.android_target_triplet()
+        //             );
+        //             a.to_owned()
+        //         }
+        //         None => {
+        //             let a = Arch::default();
+        //             tracing::debug!(
+        //                 "Could not detect Android arch, defaulting to `{}`",
+        //                 a.android_target_triplet()
+        //             );
+        //             a
+        //         }
+        //     };
 
-        Self {
-            build,
-            krate,
+        //     self.arch = Some(arch);
+        // }
+
+        Ok(Self {
             progress,
             mode,
             custom_target_dir: None,
-        }
+            cargo_args: todo!(),
+            target_kind: todo!(),
+            id: todo!(),
+            fullstack: todo!(),
+            profile: todo!(),
+            release: todo!(),
+            skip_assets: todo!(),
+            ssg: todo!(),
+            wasm_split: todo!(),
+            debug_symbols: todo!(),
+            inject_loading_scripts: todo!(),
+            force_sequential: todo!(),
+            platform,
+            target: todo!(),
+            device: todo!(),
+            nightly: todo!(),
+            package: todo!(),
+            features: todo!(),
+            no_default_features: todo!(),
+            krate,
+        })
     }
 
     /// Run the build command with a pretty loader, returning the executable output location
@@ -423,52 +454,13 @@ impl BuildRequest {
     pub(crate) fn build_arguments(&self) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
-        // Set the target, profile and features that vary between the app and server builds
-        if self.platform == Platform::Server {
-            cargo_args.push("--profile".to_string());
-            match self.release {
-                true => cargo_args.push("release".to_string()),
-                false => cargo_args.push(self.server_profile.to_string()),
-            };
-        } else {
-            // Add required profile flags. --release overrides any custom profiles.
-            let custom_profile = &self.profile.as_ref();
-            if custom_profile.is_some() || self.release {
-                cargo_args.push("--profile".to_string());
-                match self.release {
-                    true => cargo_args.push("release".to_string()),
-                    false => {
-                        cargo_args.push(
-                            custom_profile
-                                .expect("custom_profile should have been checked by is_some")
-                                .to_string(),
-                        );
-                    }
-                };
-            }
+        // Add required profile flags. --release overrides any custom profiles.
+        cargo_args.push("--profile".to_string());
+        cargo_args.push(self.profile.to_string());
 
-            // todo: use the right arch based on the current arch
-            let custom_target = match self.platform {
-                Platform::Web => Some("wasm32-unknown-unknown"),
-                Platform::Ios => match self.device {
-                    Some(true) => Some("aarch64-apple-ios"),
-                    _ => Some("aarch64-apple-ios-sim"),
-                },
-                Platform::Android => Some(self.arch().android_target_triplet()),
-                Platform::Server => None,
-                // we're assuming we're building for the native platform for now... if you're cross-compiling
-                // the targets here might be different
-                Platform::MacOS => None,
-                Platform::Windows => None,
-                Platform::Linux => None,
-                Platform::Liveview => None,
-            };
-
-            if let Some(target) = custom_target.or(self.target.as_mut()) {
-                cargo_args.push("--target".to_string());
-                cargo_args.push(target.to_string());
-            }
-        }
+        // Pass the appropriate target to cargo. We *always* specify a target which is somewhat helpful for preventing thrashing
+        cargo_args.push("--target".to_string());
+        cargo_args.push(self.target.to_string());
 
         // We always run in verbose since the CLI itself is the one doing the presentation
         cargo_args.push("--verbose".to_string());
@@ -477,19 +469,14 @@ impl BuildRequest {
             cargo_args.push("--no-default-features".to_string());
         }
 
-        let features = self.target_features();
-
-        if !features.is_empty() {
+        if !self.features.is_empty() {
             cargo_args.push("--features".to_string());
-            cargo_args.push(features.join(" "));
+            cargo_args.push(self.features.join(" "));
         }
 
-        if let Some(ref package) = self.package {
-            cargo_args.push(String::from("-p"));
-            cargo_args.push(package.clone());
-        }
-
-        cargo_args.append(&mut self.cargo_args.clone());
+        // We always set a package even if the user didn't specify it. This is deduced from cargo metadata
+        cargo_args.push(String::from("-p"));
+        cargo_args.push(self.package.clone());
 
         match self.krate.executable_type() {
             krates::cm::TargetKind::Bin => cargo_args.push("--bin".to_string()),
@@ -499,6 +486,8 @@ impl BuildRequest {
         };
 
         cargo_args.push(self.krate.executable_name().to_string());
+
+        cargo_args.extend(self.cargo_args.clone());
 
         cargo_args.push("--".to_string());
 
@@ -584,22 +573,8 @@ impl BuildRequest {
         rust_flags
     }
 
-    /// Create the list of features we need to pass to cargo to build the app by merging together
-    /// either the client or server features depending on if we're building a server or not.
-    pub(crate) fn target_features(&self) -> Vec<String> {
-        let mut features = self.features.clone();
-
-        if self.platform == Platform::Server {
-            features.extend(self.server_features.clone());
-        } else {
-            features.extend(self.client_features.clone());
-        }
-
-        features
-    }
-
     pub(crate) fn all_target_features(&self) -> Vec<String> {
-        let mut features = self.target_features();
+        let mut features = self.features.clone();
 
         if !self.no_default_features {
             features.extend(
@@ -670,18 +645,19 @@ impl BuildRequest {
     fn env_vars(&self) -> Result<Vec<(&str, String)>> {
         let mut env_vars = vec![];
 
+        let mut custom_linker = None;
+
         if self.platform == Platform::Android {
-            let ndk = self
-                .krate
-                .android_ndk()
-                .context("Could not autodetect android linker")?;
-            let arch = self.arch();
-            let linker = arch.android_linker(&ndk);
-            let min_sdk_version = arch.android_min_sdk_version();
-            let ar_path = arch.android_ar_path(&ndk);
-            let target_cc = arch.target_cc(&ndk);
-            let target_cxx = arch.target_cxx(&ndk);
-            let java_home = arch.java_home();
+            let tools =
+                crate::build::android_tools().context("Could not determine android tools")?;
+
+            let linker = tools.linker(&self.target);
+            let min_sdk_version = tools.min_sdk_version();
+            let ar_path = tools.ar_path();
+            let target_cc = tools.target_cc();
+            let target_cxx = tools.target_cxx();
+            let java_home = tools.java_home();
+            let ndk = tools.ndk.clone();
 
             tracing::debug!(
                 r#"Using android:
@@ -694,6 +670,7 @@ impl BuildRequest {
             "#
             );
 
+            custom_linker = Some(linker);
             env_vars.push(("ANDROID_NATIVE_API_LEVEL", min_sdk_version.to_string()));
             env_vars.push(("TARGET_AR", ar_path.display().to_string()));
             env_vars.push(("TARGET_CC", target_cc.display().to_string()));
@@ -717,7 +694,7 @@ impl BuildRequest {
                     .to_string(),
             ));
 
-            env_vars.push(("RUSTFLAGS", self.android_rust_flags()))
+            env_vars.push(("RUSTFLAGS", self.android_rust_flags()));
 
             // todo(jon): the guide for openssl recommends extending the path to include the tools dir
             //            in practice I couldn't get this to work, but this might eventually become useful.
@@ -738,17 +715,6 @@ impl BuildRequest {
             //     std::env::var("PATH").unwrap_or_default()
             // );
             // env_vars.push(("PATH", extended_path));
-        };
-
-        let custom_linker = if self.platform == Platform::Android {
-            let ndk = self
-                .krate
-                .android_ndk()
-                .context("Could not autodetect android linker")?;
-
-            Some(self.arch().android_linker(&ndk))
-        } else {
-            None
         };
 
         match &self.mode {
@@ -786,7 +752,7 @@ impl BuildRequest {
                 env_vars.push((
                     LinkAction::ENV_VAR_NAME,
                     LinkAction::ThinLink {
-                        triple: self.triple.clone(),
+                        triple: self.target.clone(),
                         platform: self.platform,
                         linker: custom_linker.unwrap_or_else(|| "cc".into()),
                         incremental_dir: self.incremental_cache_dir(),
@@ -887,7 +853,7 @@ impl BuildRequest {
                 .join("src")
                 .join("main")
                 .join("jniLibs")
-                .join(self.arch().android_jnilib()),
+                .join(AndroidTools::android_jnilib(&self.target)),
 
             // these are all the same, I think?
             Platform::Windows
@@ -1221,70 +1187,62 @@ impl BuildRequest {
     // }
 }
 
-impl TryFrom<String> for Arch {
-    type Error = ();
+// pub(crate) async fn autodetect_android_arch() -> Option<Triple> {
+//     // Try auto detecting arch through adb.
+//     static AUTO_ARCH: OnceCell<Option<Triple>> = OnceCell::new();
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        match value.as_str() {
-            "armv7l" => Ok(Self::Arm),
-            "aarch64" => Ok(Self::Arm64),
-            "i386" => Ok(Self::X86),
-            "x86_64" => Ok(Self::X64),
-            _ => Err(()),
-        }
-    }
-}
+//     match AUTO_ARCH.get() {
+//         Some(a) => *a,
+//         None => {
+//             // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
+//             let output = Command::new("adb")
+//                 .arg("shell")
+//                 .arg("uname")
+//                 .arg("-m")
+//                 .output()
+//                 .await;
 
-impl std::fmt::Display for Arch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Arch::Arm => "armv7l",
-            Arch::Arm64 => "aarch64",
-            Arch::X86 => "i386",
-            Arch::X64 => "x86_64",
-        }
-        .fmt(f)
-    }
-}
+//             let out = match output {
+//                 Ok(o) => o,
+//                 Err(e) => {
+//                     tracing::debug!("ADB command failed: {:?}", e);
+//                     return None;
+//                 }
+//             };
 
-pub(crate) async fn autodetect_android_arch() -> Option<Triple> {
-    // Try auto detecting arch through adb.
-    static AUTO_ARCH: OnceCell<Option<Triple>> = OnceCell::new();
+//             // Parse ADB output
+//             let Ok(out) = String::from_utf8(out.stdout) else {
+//                 tracing::debug!("ADB returned unexpected data.");
+//                 return None;
+//             };
+//             let trimmed = out.trim().to_string();
+//             tracing::trace!("ADB Returned: `{trimmed:?}`");
 
-    match AUTO_ARCH.get() {
-        Some(a) => *a,
-        None => {
-            // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
-            let output = Command::new("adb")
-                .arg("shell")
-                .arg("uname")
-                .arg("-m")
-                .output()
-                .await;
+//             // Set the cell
+//             let arch = match trimmed.as_str() {
+//                 "armv7l" => Ok(Self::Arm),
+//                 "aarch64" => Ok(Self::Arm64),
+//                 "i386" => Ok(Self::X86),
+//                 "x86_64" => Ok(Self::X64),
+//                 _ => Err(()),
+//             };
+//             AUTO_ARCH
+//                 .set(arch)
+//                 .expect("the cell should have been checked empty by the match condition");
 
-            let out = match output {
-                Ok(o) => o,
-                Err(e) => {
-                    tracing::debug!("ADB command failed: {:?}", e);
-                    return None;
-                }
-            };
+//             arch
+//         }
+//     }
+// }
 
-            // Parse ADB output
-            let Ok(out) = String::from_utf8(out.stdout) else {
-                tracing::debug!("ADB returned unexpected data.");
-                return None;
-            };
-            let trimmed = out.trim().to_string();
-            tracing::trace!("ADB Returned: `{trimmed:?}`");
-
-            // Set the cell
-            let arch = Arch::try_from(trimmed).ok();
-            AUTO_ARCH
-                .set(arch)
-                .expect("the cell should have been checked empty by the match condition");
-
-            arch
-        }
-    }
-}
+// impl std::fmt::Display for Arch {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Arch::Arm => "armv7l",
+//             Arch::Arm64 => "aarch64",
+//             Arch::X86 => "i386",
+//             Arch::X64 => "x86_64",
+//         }
+//         .fmt(f)
+//     }
+// }

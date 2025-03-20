@@ -1,19 +1,19 @@
-use std::path::PathBuf;
-
+use crate::Result;
+use anyhow::Context;
 use itertools::Itertools;
+use std::{path::PathBuf, sync::Arc};
 use target_lexicon::Triple;
 
 /// The tools for Android (ndk, sdk, etc)
 #[derive(Debug, Clone)]
-pub struct AndroidTools {
-    ndk: Option<PathBuf>,
-    sdk: Option<PathBuf>,
-    adb: Option<PathBuf>,
-    java_home: Option<PathBuf>,
+pub(crate) struct AndroidTools {
+    pub(crate) ndk: PathBuf,
+    pub(crate) adb: PathBuf,
+    pub(crate) java_home: Option<PathBuf>,
 }
 
 #[memoize::memoize]
-pub fn android_tools() -> AndroidTools {
+pub fn android_tools() -> Option<AndroidTools> {
     // We check for SDK first since users might install Android Studio and then install the SDK
     // After that they might install the NDK, so the SDK drives the source of truth.
     let sdk = var_or_debug("ANDROID_SDK_ROOT")
@@ -38,19 +38,22 @@ pub fn android_tools() -> AndroidTools {
                 .sorted()
                 .last()
                 .map(|(_, path)| path.to_path_buf())
-        });
+        })?;
 
     // Look for ADB in the SDK. If it's not there we'll use `adb` from the PATH
-    let adb = sdk.as_ref().and_then(|sdk| {
-        let tools = sdk.join("platform-tools");
-        if tools.join("adb").exists() {
-            return Some(tools.join("adb"));
-        }
-        if tools.join("adb.exe").exists() {
-            return Some(tools.join("adb.exe"));
-        }
-        None
-    });
+    let adb = sdk
+        .as_ref()
+        .and_then(|sdk| {
+            let tools = sdk.join("platform-tools");
+            if tools.join("adb").exists() {
+                return Some(tools.join("adb"));
+            }
+            if tools.join("adb.exe").exists() {
+                return Some(tools.join("adb.exe"));
+            }
+            None
+        })
+        .unwrap_or_else(|| PathBuf::from("adb"));
 
     // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
     // always respect the user's JAVA_HOME env var above all other options
@@ -104,31 +107,16 @@ pub fn android_tools() -> AndroidTools {
             None
         });
 
-    AndroidTools {
-        sdk,
+    Some(AndroidTools {
         ndk,
         adb,
         java_home,
-    }
+    })
 }
 
 impl AndroidTools {
-    pub(crate) fn ndk_exists(&self) -> bool {
-        self.ndk.is_some()
-    }
-
-    pub(crate) fn adb(&self) -> PathBuf {
-        self.adb.clone().unwrap_or_else(|| PathBuf::from("adb"))
-    }
-
     pub(crate) fn android_tools_dir(&self) -> PathBuf {
-        let prebuilt = self
-            .ndk
-            .as_ref()
-            .expect("Android NDK not found")
-            .join("toolchains")
-            .join("llvm")
-            .join("prebuilt");
+        let prebuilt = self.ndk.join("toolchains").join("llvm").join("prebuilt");
 
         if cfg!(target_os = "macos") {
             // for whatever reason, even on aarch64 macos, the linker is under darwin-x86_64
@@ -143,7 +131,14 @@ impl AndroidTools {
             return prebuilt.join("windows-x86_64").join("bin");
         }
 
-        unimplemented!("Unsupported target os for android toolchain autodetection")
+        // Otherwise return the first entry in the prebuilt directory
+        prebuilt
+            .read_dir()
+            .expect("Failed to read android toolchains directory")
+            .next()
+            .expect("Failed to find android toolchains directory")
+            .expect("Failed to read android toolchain file")
+            .path()
     }
 
     pub(crate) fn linker(&self, triple: &Triple) -> PathBuf {
@@ -154,12 +149,16 @@ impl AndroidTools {
             ""
         };
 
-        self.android_tools_dir()
-            .join(format!("{}24-clang{}", triple, suffix))
+        self.android_tools_dir().join(format!(
+            "{}{}-clang{}",
+            triple,
+            self.min_sdk_version(),
+            suffix
+        ))
     }
 
+    // todo(jon): this should be configurable
     pub(crate) fn min_sdk_version(&self) -> u32 {
-        // todo(jon): this should be configurable
         24
     }
 
@@ -175,28 +174,44 @@ impl AndroidTools {
         self.android_tools_dir().join("clang++")
     }
 
+    pub(crate) fn java_home(&self) -> Option<PathBuf> {
+        self.java_home.clone()
+        // copilot suggested this??
+        // self.ndk.join("platforms").join("android-24").join("arch-arm64").join("usr").join("lib")
+        //     .join("jvm")
+        //     .join("default")
+        //     .join("lib")
+        //     .join("server")
+        //     .join("libjvm.so")
+    }
+
+    pub(crate) fn android_jnilib(triple: &Triple) -> &'static str {
+        use target_lexicon::Architecture;
+        match triple.architecture {
+            Architecture::Aarch64(_) => "arm64-v8a",
+            Architecture::Arm(_) => "armeabi-v7a",
+            Architecture::X86_32(_) => "x86",
+            Architecture::X86_64 => "x86_64",
+            _ => todo!("Unsupported architecture"),
+        }
+    }
+
+    // todo: the new Triple type might be able to handle the different arm flavors
+    // ie armv7 vs armv7a
+    pub(crate) fn android_clang_triplet(triple: &Triple) -> String {
+        use target_lexicon::Architecture;
+        match triple.architecture {
+            Architecture::Arm(_) => "armv7a-linux-androideabi".to_string(),
+            _ => triple.to_string(),
+        }
+    }
+
     // pub(crate) fn android_target_triplet(&self) -> &'static str {
     //     match self {
     //         Arch::Arm => "armv7-linux-androideabi",
     //         Arch::Arm64 => "aarch64-linux-android",
     //         Arch::X86 => "i686-linux-android",
     //         Arch::X64 => "x86_64-linux-android",
-    //     }
-    // }
-
-    // pub(crate) fn android_jnilib(&self) -> &'static str {
-    //     match self {
-    //         Arch::Arm => "armeabi-v7a",
-    //         Arch::Arm64 => "arm64-v8a",
-    //         Arch::X86 => "x86",
-    //         Arch::X64 => "x86_64",
-    //     }
-    // }
-
-    // pub(crate) fn android_clang_triplet(&self) -> &'static str {
-    //     match self {
-    //         Self::Arm => "armv7a-linux-androideabi",
-    //         _ => self.android_target_triplet(),
     //     }
     // }
 }

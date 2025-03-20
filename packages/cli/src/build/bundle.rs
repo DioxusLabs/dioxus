@@ -624,7 +624,7 @@ impl AppBundle {
     fn fat_link_args(&self, original_args: &[&str]) -> Vec<String> {
         use target_lexicon::OperatingSystem;
 
-        let triple = self.build.triple.clone();
+        let triple = self.build.target.clone();
         let mut args = vec![];
 
         match triple.operating_system {
@@ -1098,7 +1098,7 @@ impl AppBundle {
         let to = app_release.join(format!(
             "{}-{}.aab",
             self.build.krate.bundled_app_name(),
-            self.build.triple
+            self.build.target
         ));
 
         std::fs::rename(from, &to).context("Failed to rename aab")?;

@@ -468,7 +468,7 @@ impl AppRunner {
         let new = bundle.patch_exe();
 
         let jump_table =
-            subsecond_cli_support::create_jump_table(&original, &new, &bundle.build.triple)
+            subsecond_cli_support::create_jump_table(&original, &new, &bundle.build.target)
                 .unwrap();
 
         let changed_files = match &bundle.build.mode {

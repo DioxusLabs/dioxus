@@ -119,6 +119,14 @@ impl DioxusCrate {
             })?
             .clone();
 
+        // // Make sure we have a server feature if we're building a fullstack app
+        // //
+        // // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
+        // // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
+        // if self.fullstack && self.server_features.is_empty() {
+        //     return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
+        // }
+
         let settings = CliSettings::load();
 
         Ok(Self {

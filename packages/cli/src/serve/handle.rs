@@ -356,7 +356,7 @@ impl AppHandle {
             if let Some(bundled_name) = bundled_name.as_ref() {
                 let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
                 tracing::debug!("Pushing asset to device: {target:?}");
-                let res = tokio::process::Command::new(crate::build::android_tools().adb())
+                let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
                     .arg("push")
                     .arg(&changed_file)
                     .arg(target)
@@ -770,7 +770,7 @@ We checked the folder: {}
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
         tokio::task::spawn(async move {
-            let adb = crate::build::android_tools().adb();
+            let adb = crate::build::android_tools().unwrap().adb;
 
             let port = devserver_socket.port();
             if let Err(e) = Command::new("adb")

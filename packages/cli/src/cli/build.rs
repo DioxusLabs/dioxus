@@ -72,7 +72,7 @@ pub(crate) struct BuildArgs {
 }
 
 impl BuildArgs {
-    pub async fn run_cmd(self) -> Result<StructuredOutput> {
+    pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
         let krate =

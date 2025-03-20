@@ -48,7 +48,7 @@ async fn main() {
         Commands::Autoformat(opts) => opts.autoformat(),
         Commands::Check(opts) => opts.check().await,
         Commands::Clean(opts) => opts.clean().await,
-        Commands::Build(opts) => opts.run_cmd().await,
+        Commands::Build(opts) => opts.build().await,
         Commands::Serve(opts) => opts.serve().await,
         Commands::Bundle(opts) => opts.bundle().await,
         Commands::Run(opts) => opts.run().await,
