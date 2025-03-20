@@ -12,7 +12,7 @@ thread_local! {
 }
 
 /// Data shared between the frontend and the backend for hydration
-/// of server functions
+/// of server functions.
 #[derive(Default, Clone)]
 pub struct HydrationContext {
     #[cfg(feature = "web")]
@@ -145,7 +145,8 @@ impl<T> SerializeContextEntry<T> {
     }
 }
 
-/// Get or insert the current serialize context
+/// Get or insert the current serialize context. On the client, the hydration context this returns
+/// will always return `TakeDataError::DataNotAvailable` if hydration of the current chunk is finished.
 pub fn serialize_context() -> HydrationContext {
     #[cfg(feature = "web")]
     // On the client, the hydration logic provides the context in a global

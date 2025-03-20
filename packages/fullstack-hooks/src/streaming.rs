@@ -49,6 +49,19 @@ impl StreamingContext {
 /// to call this manually to start the streaming part of the response.
 ///
 /// On the client, this will do nothing.
+///
+/// # Example
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_fullstack_hooks::*;
+/// # fn Children() -> Element { unimplemented!() }
+/// fn App() -> Element {
+///     // This will start streaming immediately after the current render is complete.
+///     use_hook(commit_initial_chunk);
+///
+///     rsx! { Children {} }
+/// }
+/// ```
 pub fn commit_initial_chunk() {
     if let Some(mut streaming) = try_consume_context::<StreamingContext>() {
         streaming.commit_initial_chunk();
@@ -59,6 +72,24 @@ pub fn commit_initial_chunk() {
 /// the current reactive context to rerun when the status changes.
 ///
 /// On the client, this will always return `StreamingStatus::InitialChunkCommitted`.
+///
+/// # Example
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_fullstack_hooks::*;
+/// #[component]
+/// fn MetaTitle(title: String) -> Element {
+///     // If streaming has already started, warn the user that the meta tag will not show
+///     // up in the initial chunk.
+///     use_hook(|| {
+///         if current_status() == StreamingStatus::InitialChunkCommitted {
+///            log::warn!("Since `MetaTitle` was rendered after the initial chunk was committed, the meta tag will not show up in the head without javascript enabled.");
+///         }
+///     });
+///
+///     rsx! { meta { property: "og:title", content: title } }
+/// }
+/// ```
 pub fn current_status() -> StreamingStatus {
     if let Some(streaming) = try_consume_context::<StreamingContext>() {
         streaming.current_status()
