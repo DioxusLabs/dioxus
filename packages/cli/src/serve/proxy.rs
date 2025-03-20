@@ -4,6 +4,7 @@ use crate::{Error, Result};
 
 use anyhow::{anyhow, Context};
 use axum::body::Body;
+use axum::http::request::Parts;
 use axum::{body::Body as MyBody, response::IntoResponse};
 use axum::{
     http::StatusCode,
@@ -100,7 +101,7 @@ pub(crate) fn proxy_to(
 ) -> MethodRouter {
     let client = ProxyClient::new(url.clone());
 
-    any(move |mut req: Request<MyBody>| async move {
+    any(move |parts: Parts, mut req: Request<MyBody>| async move {
         // Prevent request loops
         if req.headers().get("x-proxied-by-dioxus").is_some() {
             return Err(Response::builder()
@@ -122,21 +123,7 @@ pub(crate) fn proxy_to(
             || req.uri().scheme().map(|f| f.as_str()) == Some("wss")
             || req.headers().get(UPGRADE).and_then(|h| h.to_str().ok()) == Some("websocket")
         {
-            let new_host = url.host().unwrap_or("localhost");
-            let proxied_uri = format!(
-                "{scheme}://{host}:{port}{path_and_query}",
-                scheme = req.uri().scheme_str().unwrap_or("ws"),
-                port = url.port().unwrap(),
-                host = new_host,
-                path_and_query = req
-                    .uri()
-                    .path_and_query()
-                    .map(|f| f.to_string())
-                    .unwrap_or_default()
-            );
-            tracing::info!(dx_src = ?TraceSrc::Dev, "Proxied websocket request {req:?} to {proxied_uri}");
-
-            return Ok(axum::response::Redirect::permanent(&proxied_uri).into_response());
+            return Ok(super::proxy_ws::proxy_websocket(parts, req, &url).await);
         }
 
         if nocache {
