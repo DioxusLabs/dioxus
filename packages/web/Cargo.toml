@@ -22,6 +22,7 @@ dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
     "webonly",
 ] }
+dioxus-fullstack-protocol = { workspace = true, features = ["web"], optional = true }
 generational-box = { workspace = true }
 
 js-sys = "0.3.70"
@@ -39,7 +40,6 @@ serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", optional = true }
 serde-wasm-bindgen = { version = "0.5.0", optional = true }
 
-ciborium = { workspace = true, optional = true }
 async-trait = { version = "0.1.58", optional = true }
 
 [dependencies.web-sys]
@@ -86,7 +86,7 @@ lazy-js-bundle = { workspace = true }
 
 [features]
 default = ["mounted", "file_engine", "devtools", "document"]
-hydrate = ["web-sys/Comment", "ciborium", "dep:serde"]
+hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-protocol"]
 mounted = [
     "web-sys/Element",
     "dioxus-html/mounted",

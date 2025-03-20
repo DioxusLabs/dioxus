@@ -4,10 +4,12 @@
 use dioxus_lib::{document::*, prelude::queue_effect};
 use dioxus_web::WebDocument;
 
+use super::head_element_hydration_entry;
+
 fn head_element_written_on_server() -> bool {
-    dioxus_web::take_server_data()
+    head_element_hydration_entry()
+        .get()
         .ok()
-        .flatten()
         .unwrap_or_default()
 }
 

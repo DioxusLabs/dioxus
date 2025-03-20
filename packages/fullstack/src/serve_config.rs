@@ -483,6 +483,8 @@ pub enum StreamingMode {
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    // This is used in the axum integration
+    #[allow(unused)]
     pub(crate) context_providers: ContextProviders,
     pub(crate) streaming_mode: StreamingMode,
 }

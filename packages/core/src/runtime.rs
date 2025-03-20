@@ -116,6 +116,15 @@ impl Runtime {
         result
     }
 
+    /// Run a closure with the rendering flag set to false
+    pub(crate) fn while_not_rendering<T>(&self, f: impl FnOnce() -> T) -> T {
+        let previous = self.rendering.get();
+        self.rendering.set(false);
+        let result = f();
+        self.rendering.set(previous);
+        result
+    }
+
     /// Create a scope context. This slab is synchronized with the scope slab.
     pub(crate) fn create_scope(&self, context: Scope) {
         let id = context.id;
