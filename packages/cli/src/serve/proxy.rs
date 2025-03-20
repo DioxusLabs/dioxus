@@ -10,6 +10,7 @@ use axum::{
     routing::{any, MethodRouter},
     Router,
 };
+use hyper::header::*;
 use hyper::{Request, Response, Uri};
 use hyper_util::{
     client::legacy::{self, connect::HttpConnector},
@@ -119,6 +120,7 @@ pub(crate) fn proxy_to(
         // Our _dioxus handler will override this in the default case
         if req.uri().scheme().map(|f| f.as_str()) == Some("ws")
             || req.uri().scheme().map(|f| f.as_str()) == Some("wss")
+            || req.headers().get(UPGRADE).and_then(|h| h.to_str().ok()) == Some("websocket")
         {
             let new_host = url.host().unwrap_or("localhost");
             let proxied_uri = format!(
