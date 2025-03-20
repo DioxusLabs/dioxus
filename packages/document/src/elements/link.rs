@@ -4,6 +4,14 @@ use dioxus_html as dioxus_elements;
 
 #[non_exhaustive]
 #[derive(Clone, Props, PartialEq)]
+pub struct OtherLinkProps {
+    pub rel: String,
+    #[props(extends = link, extends = GlobalAttributes)]
+    pub additional_attributes: Vec<Attribute>,
+}
+
+#[non_exhaustive]
+#[derive(Clone, Props, PartialEq)]
 pub struct LinkProps {
     pub rel: Option<String>,
     pub media: Option<String>,

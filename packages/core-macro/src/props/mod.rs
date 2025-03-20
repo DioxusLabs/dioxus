@@ -33,7 +33,9 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                 let fields = quote!(#(#fields)*).into_iter();
                 let required_fields = struct_info
                     .included_fields()
-                    .filter(|f| f.builder_attr.default.is_none())
+                    .filter(|f| {
+                        f.builder_attr.default.is_none() && f.builder_attr.extends.is_empty()
+                    })
                     .map(|f| struct_info.required_field_impl(f))
                     .collect::<Result<Vec<_>, _>>()?;
                 let build_method = struct_info.build_method_impl();
@@ -172,7 +174,7 @@ mod util {
 mod field_info {
     use crate::props::type_from_inside_option;
     use proc_macro2::TokenStream;
-    use quote::quote;
+    use quote::{format_ident, quote};
     use syn::spanned::Spanned;
     use syn::{parse::Error, punctuated::Punctuated};
     use syn::{parse_quote, Expr, Path};
@@ -268,6 +270,13 @@ mod field_info {
                 elems: types,
             }
             .into()
+        }
+
+        pub fn extends_vec_ident(&self) -> Option<syn::Ident> {
+            (!self.builder_attr.extends.is_empty()).then(|| {
+                let ident = &self.name;
+                format_ident!("__{ident}_attributes")
+            })
         }
     }
 
@@ -566,9 +575,7 @@ mod struct_info {
 
     impl<'a> StructInfo<'a> {
         pub fn included_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
-            self.fields
-                .iter()
-                .filter(|f| !f.builder_attr.skip && f.builder_attr.extends.is_empty())
+            self.fields.iter().filter(|f| !f.builder_attr.skip)
         }
 
         pub fn extend_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
@@ -670,7 +677,6 @@ mod struct_info {
 
             let regular_fields: Vec<_> = self
                 .included_fields()
-                .chain(self.extend_fields())
                 .filter(|f| !looks_like_signal_type(f.ty) && !looks_like_callback_type(f.ty))
                 .map(|f| {
                     let name = f.name;
@@ -840,7 +846,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let global_fields = self
                 .extend_fields()
                 .map(|f| {
-                    let name = f.name;
+                    let name = f.extends_vec_ident();
                     let ty = f.ty;
                     quote!(#name: #ty)
                 })
@@ -848,7 +854,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let global_fields_value = self
                 .extend_fields()
                 .map(|f| {
-                    let name = f.name;
+                    let name = f.extends_vec_ident();
                     quote!(#name: Vec::new())
                 })
                 .chain(
@@ -922,15 +928,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ref builder_name, ..
             } = *self;
 
-            let field_name = field.name;
+            let field_name = field.extends_vec_ident().unwrap();
 
             let descructuring = self.included_fields().map(|f| {
-                if f.ordinal == field.ordinal {
-                    quote!(_)
-                } else {
-                    let name = f.name;
-                    quote!(#name)
-                }
+                let name = f.name;
+                quote!(#name)
             });
             let reconstructing = self.included_fields().map(|f| f.name);
 
@@ -962,7 +964,12 @@ Finally, call `.build()` to create the instance of `{name}`.
                     .count();
                 for f in self.included_fields() {
                     if f.ordinal == field.ordinal {
-                        ty_generics_tuple.elems.push_value(empty_type());
+                        g.params.insert(
+                            index_after_lifetime_in_generics,
+                            syn::GenericParam::Type(self.generic_builder_param(f)),
+                        );
+                        let generic_argument: syn::Type = f.type_ident();
+                        ty_generics_tuple.elems.push_value(generic_argument.clone());
                         target_generics_tuple
                             .elems
                             .push_value(f.tuplized_type_ty_param());
@@ -993,7 +1000,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let (impl_generics, _, where_clause) = generics.split_for_impl();
 
             let forward_extended_fields = self.extend_fields().map(|f| {
-                let name = f.name;
+                let name = f.extends_vec_ident();
                 quote!(#name: self.#name)
             });
 
@@ -1176,7 +1183,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let forward_fields = self
                 .extend_fields()
                 .map(|f| {
-                    let name = f.name;
+                    let name = f.extends_vec_ident();
                     quote!(#name: self.#name)
                 })
                 .chain(
@@ -1323,6 +1330,31 @@ Finally, call `.build()` to create the instance of `{name}`.
             })
         }
 
+        fn generic_builder_param(&self, field: &FieldInfo) -> syn::TypeParam {
+            let trait_ref = syn::TraitBound {
+                paren_token: None,
+                lifetimes: None,
+                modifier: syn::TraitBoundModifier::None,
+                path: syn::PathSegment {
+                    ident: self.conversion_helper_trait_name.clone(),
+                    arguments: syn::PathArguments::AngleBracketed(
+                        syn::AngleBracketedGenericArguments {
+                            colon2_token: None,
+                            lt_token: Default::default(),
+                            args: make_punctuated_single(syn::GenericArgument::Type(
+                                field.ty.clone(),
+                            )),
+                            gt_token: Default::default(),
+                        },
+                    ),
+                }
+                .into(),
+            };
+            let mut generic_param: syn::TypeParam = field.generic_ident.clone().into();
+            generic_param.bounds.push(trait_ref.into());
+            generic_param
+        }
+
         pub fn build_method_impl(&self) -> TokenStream {
             let StructInfo {
                 ref name,
@@ -1338,27 +1370,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     .count();
                 for field in self.included_fields() {
                     if field.builder_attr.default.is_some() {
-                        let trait_ref = syn::TraitBound {
-                            paren_token: None,
-                            lifetimes: None,
-                            modifier: syn::TraitBoundModifier::None,
-                            path: syn::PathSegment {
-                                ident: self.conversion_helper_trait_name.clone(),
-                                arguments: syn::PathArguments::AngleBracketed(
-                                    syn::AngleBracketedGenericArguments {
-                                        colon2_token: None,
-                                        lt_token: Default::default(),
-                                        args: make_punctuated_single(syn::GenericArgument::Type(
-                                            field.ty.clone(),
-                                        )),
-                                        gt_token: Default::default(),
-                                    },
-                                ),
-                            }
-                            .into(),
-                        };
-                        let mut generic_param: syn::TypeParam = field.generic_ident.clone().into();
-                        generic_param.bounds.push(trait_ref.into());
+                        let generic_param = self.generic_builder_param(field);
                         g.params
                             .insert(index_after_lifetime_in_generics, generic_param.into());
                     }
@@ -1395,10 +1407,12 @@ Finally, call `.build()` to create the instance of `{name}`.
             // reordering based on that, but for now this much simpler thing is a reasonable approach.
             let assignments = self.fields.iter().map(|field| {
                 let name = &field.name;
-                if !field.builder_attr.extends.is_empty() {
-                    quote!(let #name = self.#name;)
+                if let Some(extends_vec) = field.extends_vec_ident() {
+                    quote!{
+                        let mut #name = #helper_trait_name::into_value(#name, || ::core::default::Default::default());
+                        #name.extend(self.#extends_vec);
+                    }
                 } else if let Some(ref default) = field.builder_attr.default {
-
                     // If field has `into`, apply it to the default value.
                     // Ignore any blank defaults as it causes type inference errors.
                     let is_default = *default == parse_quote!(::core::default::Default::default());
