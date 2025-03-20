@@ -28,7 +28,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    llet cb = use_callback(move |_| {
+    let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
         state.set(UseResourceState::Pending);
     
