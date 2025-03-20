@@ -1222,11 +1222,6 @@ where
 
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {
-    /// The output type after the attribute has been added. This
-    /// can be used by the properties macro to prevent duplicate
-    /// attributes
-    type Output;
-
     /// Push an attribute onto the list of attributes
     fn push_attribute<T>(
         self,
@@ -1234,5 +1229,5 @@ pub trait HasAttributes {
         ns: Option<&'static str>,
         attr: impl IntoAttributeValue<T>,
         volatile: bool,
-    ) -> Self::Output;
+    ) -> Self;
 }

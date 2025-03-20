@@ -174,7 +174,7 @@ mod util {
 mod field_info {
     use crate::props::type_from_inside_option;
     use proc_macro2::TokenStream;
-    use quote::quote;
+    use quote::{format_ident, quote};
     use syn::spanned::Spanned;
     use syn::{parse::Error, punctuated::Punctuated};
     use syn::{parse_quote, Expr, Path};
@@ -270,6 +270,13 @@ mod field_info {
                 elems: types,
             }
             .into()
+        }
+
+        pub fn extends_vec_ident(&self) -> Option<syn::Ident> {
+            (!self.builder_attr.extends.is_empty()).then(|| {
+                let ident = &self.name;
+                format_ident!("__{ident}_attributes")
+            })
         }
     }
 
@@ -836,10 +843,24 @@ Finally, call `.build()` to create the instance of `{name}`.
 
             let memoize = self.memoize_impl()?;
 
-            let global_fields = self.has_child_owned_fields().then(|| quote!(owner: Owner,));
+            let global_fields = self
+                .extend_fields()
+                .map(|f| {
+                    let name = f.extends_vec_ident();
+                    let ty = f.ty;
+                    quote!(#name: #ty)
+                })
+                .chain(self.has_child_owned_fields().then(|| quote!(owner: Owner)));
             let global_fields_value = self
-                .has_child_owned_fields()
-                .then(|| quote!(owner: Owner::default(),));
+                .extend_fields()
+                .map(|f| {
+                    let name = f.extends_vec_ident();
+                    quote!(#name: Vec::new())
+                })
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: Owner::default())),
+                );
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -847,7 +868,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[allow(dead_code, clippy::type_complexity)]
                     #vis fn builder() -> #builder_name #generics_with_empty {
                         #builder_name {
-                            #global_fields_value
+                            #(#global_fields_value,)*
                             fields: #empties_tuple,
                             _phantom: ::core::default::Default::default(),
                         }
@@ -858,7 +879,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #builder_type_doc
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
                 #vis struct #builder_name #b_generics {
-                    #global_fields
+                    #(#global_fields,)*
                     fields: #all_fields_param,
                     _phantom: (#( #phantom_generics ),*),
                 }
@@ -907,7 +928,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ref builder_name, ..
             } = *self;
 
-            let field_name = field.name;
+            let field_name = field.extends_vec_ident().unwrap();
 
             let descructuring = self.included_fields().map(|f| {
                 let name = f.name;
@@ -978,6 +999,11 @@ Finally, call `.build()` to create the instance of `{name}`.
             );
             let (impl_generics, _, where_clause) = generics.split_for_impl();
 
+            let forward_extended_fields = self.extend_fields().map(|f| {
+                let name = f.extends_vec_ident();
+                quote!(#name: self.#name)
+            });
+
             let forward_owner = self
                 .has_child_owned_fields()
                 .then(|| quote!(owner: self.owner))
@@ -996,23 +1022,18 @@ Finally, call `.build()` to create the instance of `{name}`.
                 }
             });
 
-            let helper_trait_name = &self.conversion_helper_trait_name;
-
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
-                    type Output = #builder_name < #( #target_generics ),* >;
-
                     fn push_attribute<L>(
                         mut self,
                         ____name: &'static str,
                         ____ns: Option<&'static str>,
                         ____attr: impl dioxus_core::prelude::IntoAttributeValue<L>,
                         ____volatile: bool
-                    ) -> Self::Output {
+                    ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;
-                        let mut #field_name = #helper_trait_name::into_value(#field_name, || ::core::default::Default::default());
-                        #field_name.push(
+                        self.#field_name.push(
                             dioxus_core::Attribute::new(
                                 ____name,
                                 {
@@ -1023,8 +1044,8 @@ Finally, call `.build()` to create the instance of `{name}`.
                                 ____volatile,
                             )
                         );
-                        let #field_name = (#field_name,);
                         #builder_name {
+                            #(#forward_extended_fields,)*
                             #(#forward_owner,)*
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
@@ -1160,8 +1181,15 @@ Finally, call `.build()` to create the instance of `{name}`.
             let repeated_fields_error_message = format!("Repeated field {field_name}");
 
             let forward_fields = self
-                .has_child_owned_fields()
-                .then(|| quote!(owner: self.owner,));
+                .extend_fields()
+                .map(|f| {
+                    let name = f.extends_vec_ident();
+                    quote!(#name: self.#name)
+                })
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: self.owner)),
+                );
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
@@ -1172,7 +1200,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let #field_name = (#arg_expr,);
                         let ( #(#descructuring,)* ) = self.fields;
                         #builder_name {
-                            #forward_fields
+                            #(#forward_fields,)*
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }
@@ -1379,8 +1407,11 @@ Finally, call `.build()` to create the instance of `{name}`.
             // reordering based on that, but for now this much simpler thing is a reasonable approach.
             let assignments = self.fields.iter().map(|field| {
                 let name = &field.name;
-                if !field.builder_attr.extends.is_empty() {
-                    quote!(let #name = #helper_trait_name::into_value(#name, || ::core::default::Default::default());)
+                if let Some(extends_vec) = field.extends_vec_ident() {
+                    quote!{
+                        let mut #name = #helper_trait_name::into_value(#name, || ::core::default::Default::default());
+                        #name.extend(self.#extends_vec);
+                    }
                 } else if let Some(ref default) = field.builder_attr.default {
                     // If field has `into`, apply it to the default value.
                     // Ignore any blank defaults as it causes type inference errors.
