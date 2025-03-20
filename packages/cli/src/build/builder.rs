@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::BuildMode;
+use super::{BuildMode, BuildPlan};
 
 /// The component of the serve engine that watches ongoing builds and manages their state, handle,
 /// and progress.
@@ -42,9 +42,9 @@ pub(crate) struct Builder {
 
 impl Builder {
     /// Create a new builder and immediately start a build
-    pub(crate) fn start(krate: &DioxusCrate, args: BuildArgs) -> Result<Self> {
+    pub(crate) fn start(krate: &DioxusCrate, args: &BuildArgs) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let request = BuildRequest::new(args, krate.clone(), tx.clone(), BuildMode::Fat)?;
+        let request = BuildRequest::new(args.clone(), krate.clone(), tx.clone(), BuildMode::Fat)?;
 
         Ok(Self {
             krate: krate.clone(),

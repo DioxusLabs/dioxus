@@ -45,8 +45,8 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
     let krate = args.load_krate().await?;
 
     // Note that starting the builder will queue up a build immediately
-    let mut screen = Output::start(&args).await?;
-    let mut builder = Builder::start(&krate, args.build_args())?;
+    let mut builder = Builder::start(&krate, &args.build_arguments)?;
+    let mut screen = Output::start(&args, builder.request.platform).await?;
     let mut devserver = WebServer::start(&krate, &args)?;
     let mut watcher = Watcher::start(&krate, &args);
     let mut runner = AppRunner::start(&krate);

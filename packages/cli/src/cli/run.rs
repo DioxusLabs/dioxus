@@ -11,15 +11,13 @@ pub(crate) struct RunArgs {
 
 impl RunArgs {
     pub(crate) async fn run(self) -> Result<StructuredOutput> {
-        let krate = DioxusCrate::new(&self.build_args.target_args)
-            .context("Failed to load Dioxus workspace")?;
+        let krate =
+            DioxusCrate::new(&self.build_args.args).context("Failed to load Dioxus workspace")?;
 
         tracing::trace!("Building crate krate data: {:#?}", krate);
         tracing::trace!("Build args: {:#?}", self.build_args);
 
-        let bundle = Builder::start(&krate, self.build_args.clone())?
-            .finish()
-            .await?;
+        let bundle = Builder::start(&krate, &self.build_args)?.finish().await?;
 
         let devserver_ip = "127.0.0.1:8081".parse().unwrap();
         let fullstack_ip = "127.0.0.1:8080".parse().unwrap();

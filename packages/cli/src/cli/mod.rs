@@ -1,6 +1,7 @@
 pub(crate) mod autoformat;
 pub(crate) mod build;
 pub(crate) mod bundle;
+pub(crate) mod chained_command;
 pub(crate) mod check;
 pub(crate) mod clean;
 pub(crate) mod config;

@@ -192,7 +192,7 @@ impl AndroidTools {
             Architecture::Arm(_) => "armeabi-v7a",
             Architecture::X86_32(_) => "x86",
             Architecture::X86_64 => "x86_64",
-            _ => todo!("Unsupported architecture"),
+            _ => unimplemented!("Unsupported architecture"),
         }
     }
 

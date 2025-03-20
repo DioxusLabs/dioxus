@@ -136,7 +136,12 @@ impl AppHandle {
             (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
             (
                 dioxus_cli_config::ALWAYS_ON_TOP_ENV,
-                krate.settings.always_on_top.unwrap_or(true).to_string(),
+                krate
+                    .workspace
+                    .settings
+                    .always_on_top
+                    .unwrap_or(true)
+                    .to_string(),
             ),
             (
                 dioxus_cli_config::APP_TITLE_ENV,

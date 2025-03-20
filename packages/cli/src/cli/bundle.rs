@@ -25,7 +25,7 @@ pub struct Bundle {
 
     /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub(crate) build_arguments: BuildArgs,
+    pub(crate) args: BuildArgs,
 }
 
 impl Bundle {
@@ -34,16 +34,13 @@ impl Bundle {
 
         // We always use `release` mode for bundling
         // todo - maybe not? what if you want a devmode bundle?
-        self.build_arguments.release = true;
+        self.args.args.release = true;
 
-        let krate = DioxusCrate::new(&self.build_arguments.target_args)
-            .context("Failed to load Dioxus workspace")?;
+        let krate = DioxusCrate::new(&self.args.args).context("Failed to load Dioxus workspace")?;
 
         tracing::info!("Building app...");
 
-        let bundle = Builder::start(&krate, self.build_arguments)?
-            .finish()
-            .await?;
+        let bundle = Builder::start(&krate, &self.args)?.finish().await?;
 
         // If we're building for iOS, we need to bundle the iOS bundle
         if bundle.build.platform == Platform::Ios && self.package_types.is_none() {

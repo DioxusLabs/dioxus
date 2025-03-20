@@ -1,7 +1,7 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, Builder, ServeUpdate, Watcher, WebServer},
-    BuildStage, BuildUpdate, DioxusCrate, Platform, RustcDetails, ServeArgs, TraceContent,
-    TraceMsg, TraceSrc,
+    BuildPlan, BuildStage, BuildUpdate, DioxusCrate, Platform, RustcDetails, ServeArgs,
+    TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
@@ -79,7 +79,7 @@ struct RenderState<'a> {
 }
 
 impl Output {
-    pub(crate) async fn start(cfg: &ServeArgs) -> crate::Result<Self> {
+    pub(crate) async fn start(cfg: &ServeArgs, platform: Platform) -> crate::Result<Self> {
         let mut output = Self {
             term: Rc::new(RefCell::new(None)),
             interactive: cfg.is_interactive_tty(),
@@ -88,7 +88,7 @@ impl Output {
                 env!("CARGO_PKG_VERSION"),
                 crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("main")
             ),
-            platform: cfg.build_arguments.platform.expect("To be resolved by now"),
+            platform,
             events: None,
             more_modal_open: false,
             pending_logs: VecDeque::new(),

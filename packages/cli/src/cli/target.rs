@@ -1,56 +1,56 @@
 use super::*;
+use crate::Platform;
 use target_lexicon::Triple;
 
 /// Information about the target to build
 ///
-/// When running `dx serve / build / bundle` you can pass multiple targets to build for.
-/// The args here are stand-in for `cargo rustc --args -- <more-args>`.
-/// This lets you set up multiple projects to be ran in parallel.
-///
-/// The `@` sign is basically a task name and the args are passed to the task. We look for the task
-/// in the Dioxus.toml and if it's not found, we just use the default args.
-///
-/// Any args preceeding the targets will be passed to *all* the targets, letting us keep some backwards
-/// compatibility with the previous version of `dx serve`.
-///
-/// ```
-/// dx serve --release
-///     \ @client <target-args>
-///     \ @server <target-args>
-/// ```
+/// This should be enough information to build the target.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
+#[group(required = false, multiple = true)]
 pub(crate) struct TargetArgs {
+    #[clap(long)]
+    pub(crate) name: Option<String>,
+
     /// Build for nightly [default: false]
     #[clap(long)]
     pub(crate) nightly: bool,
 
-    /// Build a example [default: ""]
-    #[clap(long)]
-    pub(crate) example: Option<String>,
+    /// Build platform: support Web & Desktop [default: "default_platform"]
+    #[clap(long, value_enum)]
+    pub(crate) platform: Option<Platform>,
 
-    /// Build a binary [default: ""]
-    #[clap(long)]
-    pub(crate) bin: Option<String>,
+    /// Build in release mode [default: false]
+    #[clap(long, short)]
+    #[serde(default)]
+    pub(crate) release: bool,
 
     /// The package to build
     #[clap(short, long)]
     pub(crate) package: Option<String>,
 
+    /// Build a specific binary [default: ""]
+    #[clap(long)]
+    pub(crate) bin: Option<String>,
+
+    /// Build a specific example [default: ""]
+    #[clap(long)]
+    pub(crate) example: Option<String>,
+
+    /// Build the app with custom a profile
+    #[clap(long)]
+    pub(crate) profile: Option<String>,
+
     /// Space separated list of features to activate
     #[clap(long)]
     pub(crate) features: Vec<String>,
 
-    /// The feature to use for the client in a fullstack app [default: "web"]
-    #[clap(long)]
-    pub(crate) client_features: Vec<String>,
-
-    /// The feature to use for the server in a fullstack app [default: "server"]
-    #[clap(long)]
-    pub(crate) server_features: Vec<String>,
-
     /// Don't include the default features in the build
     #[clap(long)]
     pub(crate) no_default_features: bool,
+
+    /// Include all features in the build
+    #[clap(long)]
+    pub(crate) all_features: bool,
 
     /// Are we building for a device or just the simulator.
     /// If device is false, then we'll build for the simulator
@@ -60,11 +60,16 @@ pub(crate) struct TargetArgs {
     /// Rustc platform triple
     #[clap(long)]
     pub(crate) target: Option<Triple>,
-
-    /// The target to build for the server.
+    // todo -- make a subcommand called "--" that takes all the remaining args
+    /// Extra arguments passed to `rustc`
     ///
-    /// This can be different than the host allowing cross-compilation of the server. This is useful for
-    /// platforms like Cloudflare Workers where the server is compiled to wasm and then uploaded to the edge.
-    #[clap(long)]
-    pub(crate) server_target: Option<Triple>,
+    /// cargo rustc -- -Clinker
+    #[clap(value_delimiter = ',')]
+    pub(crate) cargo_args: Vec<String>,
+    // #[clap(last = true)]
+    // pub(crate) cargo_args: Vec<String>,
+}
+
+struct CargoArgs {
+    args: Vec<String>,
 }

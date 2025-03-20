@@ -530,7 +530,7 @@ fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::Method
     };
 
     let out_dir = cfg
-        .build_dir(Platform::Web, args.build_arguments.release)
+        .build_dir(Platform::Web, args.build_arguments.args.release)
         .join("public");
     let index_on_404 = cfg.config.web.watcher.index_on_404;
 

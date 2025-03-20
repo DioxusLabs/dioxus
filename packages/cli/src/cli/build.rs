@@ -2,35 +2,23 @@ use std::{path::Path, str::FromStr};
 
 use target_lexicon::Triple;
 
-use super::*;
+use super::{chained_command::ChainedCommand, *};
 use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
-/// Produces a final output bundle designed to be run on the target platform.
+/// Produces a final output build. For fullstack builds you need to build the server and client separately.
+///
+/// ```
+/// dx build --platform web
+/// dx build --platform server
+/// ```
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct BuildArgs {
-    /// Build in release mode [default: false]
-    #[clap(long, short)]
-    #[serde(default)]
-    pub(crate) release: bool,
-
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     #[clap(long)]
     #[serde(default)]
     pub(crate) force_sequential: bool,
-
-    /// Build the app with custom a profile
-    #[clap(long)]
-    pub(crate) profile: Option<String>,
-
-    /// Build with custom profile for the fullstack server
-    #[clap(long, default_value_t = PROFILE_SERVER.to_string())]
-    pub(crate) server_profile: String,
-
-    /// Build platform: support Web & Desktop [default: "default_platform"]
-    #[clap(long, value_enum)]
-    pub(crate) platform: Option<Platform>,
 
     /// Build the fullstack variant of this app, using that as the fileserver and backend
     ///
@@ -46,10 +34,6 @@ pub(crate) struct BuildArgs {
     #[clap(long)]
     #[serde(default)]
     pub(crate) skip_assets: bool,
-
-    /// Extra arguments passed to cargo build
-    #[clap(last = true)]
-    pub(crate) cargo_args: Vec<String>,
 
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
     #[clap(long, default_value_t = true)]
@@ -67,18 +51,19 @@ pub(crate) struct BuildArgs {
     pub(crate) debug_symbols: bool,
 
     /// Information about the target to build
+    ///
+    /// These are the same args as `targets``
     #[clap(flatten)]
-    pub(crate) target_args: TargetArgs,
+    pub(crate) args: TargetArgs,
 }
 
 impl BuildArgs {
     pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
-        let krate =
-            DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
+        let krate = DioxusCrate::new(&self.args).context("Failed to load Dioxus workspace")?;
 
-        let bundle = Builder::start(&krate, self)?.finish().await?;
+        let bundle = Builder::start(&krate, &self)?.finish().await?;
 
         tracing::info!(path = ?bundle.build.root_dir(), "Build completed successfully! 🚀");
 

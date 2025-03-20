@@ -1,5 +1,5 @@
 use super::{progress::ProgressTx, AndroidTools, BuildArtifacts, PatchData};
-use crate::dioxus_crate::DioxusCrate;
+use crate::{dioxus_crate::DioxusCrate, TargetArgs};
 use crate::{link::LinkAction, BuildArgs};
 use crate::{AppBundle, Platform, Result, TraceSrc};
 use anyhow::Context;
@@ -33,13 +33,10 @@ use uuid::Uuid;
 /// since we have the freedom to evolve the schema internally without breaking the API.
 #[derive(Clone, Debug)]
 pub(crate) struct BuildRequest {
-    /// The ID for this build, used in a variety of places, including emitting status updates
-    pub(crate) id: Uuid,
-
     ///
     pub(crate) krate: DioxusCrate,
 
-    ///
+    // /
     pub(crate) fullstack: bool,
 
     pub(crate) profile: String,
@@ -69,8 +66,6 @@ pub(crate) struct BuildRequest {
     /// Don't include the default features in the build
     pub(crate) no_default_features: bool,
 
-    pub(crate) target_kind: TargetKind,
-
     /// The target directory for the build
     pub(crate) custom_target_dir: Option<PathBuf>,
 
@@ -80,7 +75,8 @@ pub(crate) struct BuildRequest {
     /// Status channel to send our progress updates to
     pub(crate) progress: ProgressTx,
 
-    ///
+    pub(crate) cranelift: bool,
+
     pub(crate) skip_assets: bool,
 
     pub(crate) ssg: bool,
@@ -111,11 +107,6 @@ pub enum BuildMode {
     },
 }
 
-pub struct CargoBuildResult {
-    rustc_args: Vec<Vec<String>>,
-    exe: PathBuf,
-}
-
 impl BuildRequest {
     /// Create a new build request
     ///
@@ -144,13 +135,13 @@ impl BuildRequest {
 
         // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
         // We want to strip out the default platform and use the one they passed, setting no-default-features
-        if args.platform.is_some() && default_platform.is_some() {
+        if args.args.platform.is_some() && default_platform.is_some() {
             no_default_features = true;
             features.extend(krate.platformless_features());
         }
 
         // Inherit the platform from the args, or auto-detect it
-        let platform = args
+        let platform = args.args
             .platform
             .map(|p| Some(p))
             .unwrap_or_else(|| krate.autodetect_platform().map(|a| a.0))
@@ -162,14 +153,14 @@ impl BuildRequest {
         // Make sure we set the fullstack platform so we actually build the fullstack variant
         // Users need to enable "fullstack" in their default feature set.
         // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-        let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
+        // let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
 
         // Set the profile of the build if it's not already set
         // This is mostly used for isolation of builds (preventing thrashing) but also useful to have multiple performance profiles
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
-        let client_profile = match args.profile {
+        let client_profile = match args.args.profile {
             Some(profile) => profile,
-            None if args.release => "release".to_string(),
+            None if args.args.release => "release".to_string(),
             None => match platform {
                 Platform::Android => crate::dioxus_crate::PROFILE_ANDROID.to_string(),
                 Platform::Web => crate::dioxus_crate::PROFILE_WASM.to_string(),
@@ -227,10 +218,13 @@ impl BuildRequest {
         Ok(Self {
             progress,
             mode,
+            platform,
+            features,
+            no_default_features,
+            krate,
             custom_target_dir: None,
-            cargo_args: todo!(),
-            target_kind: todo!(),
-            id: todo!(),
+            cranelift: false,
+            cargo_args: args.args.cargo_args,
             fullstack: todo!(),
             profile: todo!(),
             release: todo!(),
@@ -240,14 +234,10 @@ impl BuildRequest {
             debug_symbols: todo!(),
             inject_loading_scripts: todo!(),
             force_sequential: todo!(),
-            platform,
             target: todo!(),
             device: todo!(),
             nightly: todo!(),
             package: todo!(),
-            features: todo!(),
-            no_default_features: todo!(),
-            krate,
         })
     }
 
@@ -274,16 +264,17 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
-        tracing::debug!("Building server...");
+        todo!()
+        // tracing::debug!("Building server...");
 
-        if !self.fullstack {
-            return Ok(None);
-        }
+        // if !self.fullstack {
+        //     return Ok(None);
+        // }
 
-        let mut cloned = self.clone();
-        cloned.platform = Platform::Server;
+        // let mut cloned = self.clone();
+        // cloned.platform = Platform::Server;
 
-        Ok(Some(cloned.cargo_build().await?))
+        // Ok(Some(cloned.cargo_build().await?))
     }
 
     pub(crate) async fn cargo_build(&self) -> Result<BuildArtifacts> {
@@ -634,6 +625,7 @@ impl BuildRequest {
         // Otherwise, use cargo metadata
         let units = self
             .krate
+            .workspace
             .krates
             .krates_filtered(krates::DepKind::Dev)
             .iter()

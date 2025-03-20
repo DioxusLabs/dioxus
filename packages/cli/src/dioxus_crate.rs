@@ -13,6 +13,34 @@ use target_lexicon::Triple;
 use tokio::process::Command;
 use toml_edit::Item;
 
+pub(crate) static PROFILE_WASM: &str = "wasm-dev";
+pub(crate) static PROFILE_ANDROID: &str = "android-dev";
+pub(crate) static PROFILE_SERVER: &str = "server-dev";
+
+pub struct Workspace {
+    pub(crate) krates: Krates,
+    pub(crate) settings: CliSettings,
+}
+
+impl Workspace {
+    pub fn load() -> Result<Arc<Workspace>> {
+        tracing::debug!("Loading workspace");
+        let cmd = Cmd::new();
+        let builder = krates::Builder::new();
+        let krates = builder
+            .build(cmd, |_| {})
+            .context("Failed to run cargo metadata")?;
+
+        let settings = CliSettings::global_or_default();
+
+        Ok(Arc::new(Self { krates, settings }))
+    }
+
+    pub fn get_krate(&self, target: &TargetArgs) -> Result<DioxusCrate> {
+        todo!()
+    }
+}
+
 /// Contains information about the crate we are currently in and the dioxus config for that crate
 ///
 /// The intention of this struct is to provide a source of truth for the user's configuration and workspace.
@@ -28,39 +56,27 @@ use toml_edit::Item;
 /// a new Target struct (or merged with BuildRequest).
 #[derive(Clone)]
 pub(crate) struct DioxusCrate {
-    pub(crate) krates: Arc<Krates>,
+    pub(crate) workspace: Arc<Workspace>,
     pub(crate) package: NodeId,
     pub(crate) config: DioxusConfig,
     pub(crate) target: Arc<Target>,
-    pub(crate) settings: Arc<CliSettings>,
 }
-
-pub(crate) static PROFILE_WASM: &str = "wasm-dev";
-pub(crate) static PROFILE_ANDROID: &str = "android-dev";
-pub(crate) static PROFILE_SERVER: &str = "server-dev";
 
 impl DioxusCrate {
     pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
-        tracing::debug!("Loading crate");
-        let cmd = Cmd::new();
-        let builder = krates::Builder::new();
-        let krates = builder
-            .build(cmd, |_| {})
-            .context("Failed to run cargo metadata")?;
+        let workspace = Workspace::load()?;
 
-        let package = Self::find_main_package(&krates, target.package.clone())?;
+        let package = Self::find_main_package(&workspace.krates, target.package.clone())?;
         tracing::debug!("Found package {package:?}");
 
-        let dioxus_config = DioxusConfig::load(&krates, package)?.unwrap_or_default();
+        let dioxus_config = DioxusConfig::load(&workspace.krates, package)?.unwrap_or_default();
 
-        let package_name = krates[package].name.clone();
-        let target_kind = if target.example.is_some() {
-            TargetKind::Example
-        } else {
-            TargetKind::Bin
+        let target_kind = match target.example.is_some() {
+            true => TargetKind::Example,
+            false => TargetKind::Bin,
         };
 
-        let main_package = &krates[package];
+        let main_package = &workspace.krates[package];
 
         let target_name = target
             .example
@@ -76,6 +92,7 @@ impl DioxusCrate {
                     .iter()
                     .filter(|x| x.kind.contains(&target_kind))
                     .count();
+
                 if bin_count != 1 {
                     return None;
                 }
@@ -88,7 +105,7 @@ impl DioxusCrate {
                     }
                 })
             })
-            .unwrap_or(package_name);
+            .unwrap_or(workspace.krates[package].name.clone());
 
         let target = main_package
             .targets
@@ -127,14 +144,11 @@ impl DioxusCrate {
         //     return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
         // }
 
-        let settings = CliSettings::load();
-
         Ok(Self {
+            workspace,
             package,
             config: dioxus_config,
-            krates: Arc::new(krates),
             target: Arc::new(target),
-            settings,
         })
     }
 
@@ -226,7 +240,11 @@ impl DioxusCrate {
 
     /// Get the workspace directory for the crate
     pub(crate) fn workspace_dir(&self) -> PathBuf {
-        self.krates.workspace_root().as_std_path().to_path_buf()
+        self.workspace
+            .krates
+            .workspace_root()
+            .as_std_path()
+            .to_path_buf()
     }
 
     /// Get the directory of the crate
@@ -246,7 +264,7 @@ impl DioxusCrate {
 
     /// Get the package we are currently in
     pub(crate) fn package(&self) -> &krates::cm::Package {
-        &self.krates[self.package]
+        &self.workspace.krates[self.package]
     }
 
     /// Get the name of the package we are compiling
@@ -263,11 +281,12 @@ impl DioxusCrate {
     ///
     /// Read the default-features list and/or the features list on dioxus to see if we can autodetect the platform
     pub(crate) fn autodetect_platform(&self) -> Option<(Platform, String)> {
-        let krate = self.krates.krates_by_name("dioxus").next()?;
+        let krate = self.workspace.krates.krates_by_name("dioxus").next()?;
 
         // We're going to accumulate the platforms that are enabled
         // This will let us create a better warning if multiple platforms are enabled
         let manually_enabled_platforms = self
+            .workspace
             .krates
             .get_enabled_features(krate.kid)?
             .iter()
@@ -335,12 +354,16 @@ impl DioxusCrate {
 
     /// Check if dioxus is being built with a particular feature
     pub(crate) fn has_dioxus_feature(&self, filter: &str) -> bool {
-        self.krates.krates_by_name("dioxus").any(|dioxus| {
-            self.krates
-                .get_enabled_features(dioxus.kid)
-                .map(|features| features.contains(filter))
-                .unwrap_or_default()
-        })
+        self.workspace
+            .krates
+            .krates_by_name("dioxus")
+            .any(|dioxus| {
+                self.workspace
+                    .krates
+                    .get_enabled_features(dioxus.kid)
+                    .map(|features| features.contains(filter))
+                    .unwrap_or_default()
+            })
     }
 
     /// Get the features required to build for the given platform
@@ -474,7 +497,8 @@ impl DioxusCrate {
 
     /// Return the version of the wasm-bindgen crate if it exists
     pub fn wasm_bindgen_version(&self) -> Option<String> {
-        self.krates
+        self.workspace
+            .krates
             .krates_by_name("wasm-bindgen")
             .next()
             .map(|krate| krate.krate.version.to_string())
@@ -605,10 +629,12 @@ impl DioxusCrate {
     pub(crate) fn local_dependencies(&self) -> Vec<PathBuf> {
         let mut paths = vec![];
 
-        for (dependency, _edge) in self.krates.get_deps(self.package) {
+        for (dependency, _edge) in self.workspace.krates.get_deps(self.package) {
             let krate = match dependency {
                 krates::Node::Krate { krate, .. } => krate,
-                krates::Node::Feature { krate_index, .. } => &self.krates[krate_index.index()],
+                krates::Node::Feature { krate_index, .. } => {
+                    &self.workspace.krates[krate_index.index()]
+                }
             };
 
             if krate
@@ -751,7 +777,7 @@ impl DioxusCrate {
 impl std::fmt::Debug for DioxusCrate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DioxusCrate")
-            .field("package", &self.krates[self.package])
+            .field("package", &self.workspace.krates[self.package])
             .field("dioxus_config", &self.config)
             .field("target", &self.target)
             .finish()
