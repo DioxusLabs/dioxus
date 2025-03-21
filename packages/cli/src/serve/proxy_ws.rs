@@ -1,12 +1,14 @@
 use crate::logging::TraceSrc;
 use axum::body::Body;
-use axum::extract::ws::{CloseFrame as ACloseFrame, Message as AMessage};
+use axum::extract::ws::{CloseFrame as ClientCloseFrame, Message as ClientMessage};
 use axum::extract::{FromRequestParts, WebSocketUpgrade};
 use axum::http::request::Parts;
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use hyper::{Request, Response, Uri};
-use tokio_tungstenite::tungstenite::protocol::{CloseFrame as TCloseFrame, Message as TMessage};
+use tokio_tungstenite::tungstenite::protocol::{
+    CloseFrame as ServerCloseFrame, Message as ServerMessage,
+};
 
 pub(crate) async fn proxy_websocket(
     mut parts: Parts,
@@ -43,7 +45,7 @@ pub(crate) async fn proxy_websocket(
 }
 
 #[derive(thiserror::Error, Debug)]
-enum WSError {
+enum WsError {
     #[error("Error connecting to server: {0}")]
     Connect(tokio_tungstenite::tungstenite::Error),
     #[error("Error sending message to server: {0}")]
@@ -59,24 +61,24 @@ enum WSError {
 async fn handle_ws_connection(
     mut client_ws: axum::extract::ws::WebSocket,
     proxied_url: &str,
-) -> Result<(), WSError> {
+) -> Result<(), WsError> {
     let (mut server_ws, _) = tokio_tungstenite::connect_async(proxied_url)
         .await
-        .map_err(WSError::Connect)?;
+        .map_err(WsError::Connect)?;
 
     let mut closed = false;
     while !closed {
         tokio::select! {
             Some(server_msg) = server_ws.next() => {
-                closed = matches!(server_msg, Ok(TMessage::Close(..)));
-                if let Some(msg) = server_msg.map_err(WSError::FromServer)?.into_msg() {
-                    client_ws.send(msg).await.map_err(WSError::ToClient)?;
+                closed = matches!(server_msg, Ok(ServerMessage::Close(..)));
+                if let Some(msg) = server_msg.map_err(WsError::FromServer)?.into_msg() {
+                    client_ws.send(msg).await.map_err(WsError::ToClient)?;
                 }
             },
             Some(client_msg) = client_ws.next() => {
-                closed = matches!(client_msg, Ok(AMessage::Close(..)));
-                let msg = client_msg.map_err(WSError::FromClient)?.into_msg();
-                server_ws.send(msg).await.map_err(WSError::ToServer)?;
+                closed = matches!(client_msg, Ok(ClientMessage::Close(..)));
+                let msg = client_msg.map_err(WsError::FromClient)?.into_msg();
+                server_ws.send(msg).await.map_err(WsError::ToServer)?;
             },
             else => break,
         }
@@ -89,15 +91,15 @@ trait IntoMsg<T> {
     fn into_msg(self) -> T;
 }
 
-impl IntoMsg<TMessage> for AMessage {
-    fn into_msg(self) -> TMessage {
-        use TMessage as TM;
+impl IntoMsg<ServerMessage> for ClientMessage {
+    fn into_msg(self) -> ServerMessage {
+        use ServerMessage as SM;
         match self {
-            Self::Text(v) => TM::Text(v.into()),
-            Self::Binary(v) => TM::Binary(v.into()),
-            Self::Ping(v) => TM::Ping(v.into()),
-            Self::Pong(v) => TM::Pong(v.into()),
-            Self::Close(v) => TM::Close(v.map(|cf| TCloseFrame {
+            Self::Text(v) => SM::Text(v.into()),
+            Self::Binary(v) => SM::Binary(v.into()),
+            Self::Ping(v) => SM::Ping(v.into()),
+            Self::Pong(v) => SM::Pong(v.into()),
+            Self::Close(v) => SM::Close(v.map(|cf| ServerCloseFrame {
                 code: cf.code.into(),
                 reason: cf.reason.into_owned().into(),
             })),
@@ -105,15 +107,15 @@ impl IntoMsg<TMessage> for AMessage {
     }
 }
 
-impl IntoMsg<Option<AMessage>> for TMessage {
-    fn into_msg(self) -> Option<AMessage> {
-        use AMessage as AM;
+impl IntoMsg<Option<ClientMessage>> for ServerMessage {
+    fn into_msg(self) -> Option<ClientMessage> {
+        use ClientMessage as CM;
         Some(match self {
-            Self::Text(v) => AM::Text(v.to_string()),
-            Self::Binary(v) => AM::Binary(v.into()),
-            Self::Ping(v) => AM::Ping(v.into()),
-            Self::Pong(v) => AM::Pong(v.into()),
-            Self::Close(v) => AM::Close(v.map(|cf| ACloseFrame {
+            Self::Text(v) => CM::Text(v.to_string()),
+            Self::Binary(v) => CM::Binary(v.into()),
+            Self::Ping(v) => CM::Ping(v.into()),
+            Self::Pong(v) => CM::Pong(v.into()),
+            Self::Close(v) => CM::Close(v.map(|cf| ClientCloseFrame {
                 code: cf.code.into(),
                 reason: cf.reason.to_string().into(),
             })),
