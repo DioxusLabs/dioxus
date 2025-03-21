@@ -39,6 +39,7 @@ html_parser = { workspace = true }
 cargo_metadata = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = "0.1.15"
+tokio-tungstenite = "0.26.2"
 chrono = "0.4.19"
 anyhow = { workspace = true }
 hyper = { workspace = true }
