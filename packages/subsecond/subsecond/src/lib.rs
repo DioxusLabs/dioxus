@@ -2,6 +2,7 @@ use std::{
     any::TypeId,
     collections::HashMap,
     ffi::CStr,
+    ops::Deref,
     os::raw::c_void,
     panic::{panic_any, AssertUnwindSafe, UnwindSafe},
     path::PathBuf,
@@ -24,9 +25,10 @@ pub mod prelude {
 mod fn_impl;
 use fn_impl::*;
 
+#[inline(never)]
 #[no_mangle]
-pub extern "C" fn aslr_reference() -> u64 {
-    aslr_reference as *const () as u64
+pub extern "C" fn aslr_reference() -> usize {
+    aslr_reference as *const () as usize
 }
 
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
@@ -178,16 +180,18 @@ pub unsafe fn run_patch(jump_table: JumpTable) {
 
 #[cfg(any(unix, windows))]
 fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
-    // let old_offset = aslr_reference() - jump_table.aslr_reference;
+    // let old_offset = aslr_reference() - jump_table.aslr_reference as usize;
+    let old_offset = aslr_reference() as usize - jump_table.aslr_reference as usize;
 
-    let old_offset = alsr_offset(
-        jump_table.old_base_address as usize,
-        #[cfg(unix)]
-        libloading::os::unix::Library::this(),
-        #[cfg(windows)]
-        libloading::os::windows::Library::this().unwrap(),
-    )
-    .unwrap();
+    // let old_offset  j
+    // let old_offset = alsr_offset(
+    //     jump_table.old_base_address as usize,
+    //     #[cfg(unix)]
+    //     libloading::os::unix::Library::this(),
+    //     #[cfg(windows)]
+    //     libloading::os::windows::Library::this().unwrap(),
+    // )
+    // .unwrap();
 
     let new_offset = alsr_offset(
         jump_table.new_base_address as usize,
@@ -195,30 +199,41 @@ fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
         unsafe { libloading::os::unix::Library::new(&jump_table.lib).unwrap() }.into(),
         #[cfg(windows)]
         unsafe { libloading::Library::new(&jump_table.lib).unwrap() }.into(),
-    )
-    .unwrap();
+    );
 
-    println!("known reference: {:#x}", aslr_reference());
-    println!("jump orig base: {:#x}", jump_table.old_base_address);
-    println!("jump new base: {:#x}", jump_table.new_base_address);
-    println!("jump orig offset: {:?}", old_offset);
-    println!("jump new offset: {:?}", new_offset);
+    // println!("known reference: {:#x}", aslr_reference());
+    // println!("jump orig base: {:#x}", jump_table.old_base_address);
+    // println!("jump new base: {:#x}", jump_table.new_base_address);
+    // println!("jump orig offset: {:?}", old_offset);
+    // println!("jump new offset: {:?}", new_offset);
 
     // 487557233524
 
+    println!("Before: ");
+    for (k, v) in &jump_table.map {
+        println!("k: {k:#x}, v: {v:#x}");
+    }
+
+    println!("Shifting old by {old_offset:?}");
+    println!("Shifting new by {new_offset:?}");
     // Modify the jump table to be relative to the base address of the loaded library
     jump_table.map = jump_table
         .map
         .iter()
         .map(|(k, v)| {
             (
-                (*k + old_offset as u64) as u64,
-                (*v + new_offset as u64) as u64,
+                (*k as usize + old_offset) as u64,
+                (*v as usize + new_offset) as u64,
             )
         })
         .collect();
 
-    println!("adjusted jump_table: {jump_table:#?}");
+    println!("After: ");
+    for (k, v) in &jump_table.map {
+        println!("k: {k:#x}, v: {v:#x}");
+    }
+
+    // println!("adjusted jump_table: {jump_table:#?}");
 
     jump_table
 }
@@ -230,26 +245,87 @@ fn alsr_offset(
     base_address: usize,
     #[cfg(unix)] lib: libloading::os::unix::Library,
     #[cfg(windows)] lib: libloading::os::windows::Library,
-) -> Option<*mut c_void> {
-    #[allow(unused_assignments)]
-    let mut offset = None;
+) -> usize {
+    // leak the libary
+    let lib = Box::leak(Box::new(lib));
 
-    // the only "known global symbol" for everything we compile is __rust_alloc
-    // however some languages won't have this. we could consider linking in a known symbol but this works for now
-    // #[cfg(any(target_os = "macos", target_os = "ios"))]
-    unsafe {
-        offset = lib
-            .get::<*const ()>(b"__rust_alloc")
+    let offset = unsafe {
+        lib.get::<*const ()>(b"__rust_alloc")
             .ok()
-            .map(|ptr| ptr.as_raw_ptr());
+            .unwrap()
+            .as_raw_ptr()
     };
 
-    println!("-aslr calc offset: {offset:?}");
-    println!("-aslr calc base_address: {base_address:?}");
+    offset.wrapping_byte_sub(base_address) as usize
 
-    // attempt to determine the aslr slide by using the on-disk rust-alloc symbol
-    // offset.map(|offset| offset.wrapping_byte_sub(base_address as usize))
-    offset.map(|offset| offset.wrapping_byte_sub(base_address))
+    // // We're going to use our reference function that we manually linked in
+    // let reference = unsafe { leak.get::<*mut u64>(b"dynamic_aslr_reference").unwrap() };
+    // let reference_addr = *reference as *mut u64;
+    // let reference_value = unsafe { *reference_addr } as usize;
+
+    // println!("reference: {reference_addr:#x?}");
+    // println!("reference value: {reference_value:#x?}");
+
+    // // because the program is opened above address 0, the addr will always be higher than the value
+    // let out = reference_addr as usize - reference_value;
+    // println!("out: {out:#x?}");
+    // out
+
+    // #[allow(unused_assignments)]
+    // let mut offset = None;
+
+    // // the only "known global symbol" for everything we compile is __rust_alloc
+    // // however some languages won't have this. we could consider linking in a known symbol but this works for now
+    // #[cfg(any(target_os = "macos", target_os = "ios"))]
+    // unsafe {
+    //     offset = lib
+    //         .get::<*const ()>(b"__rust_alloc")
+    //         .ok()
+    //         .map(|ptr| ptr.as_raw_ptr());
+    // };
+
+    // #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+    // unsafe {
+    //     offset = lib
+    //         .get::<*const ()>(b"__rust_alloc")
+    //         .ok()
+    //         .map(|ptr| ptr.as_raw_ptr());
+    // };
+
+    // // Leak the library to prevent its drop from being called and unloading the library
+    // let _handle = lib.into_raw() as *mut c_void;
+
+    // // windows needs the raw handle directly to lookup the base address
+    // #[cfg(windows)]
+    // unsafe {
+    //     offset = windows::get_module_base_address(_handle);
+    // }
+
+    // 03-21 02:20:20.332 25787 25811 I RustStdoutStderr: offset: Some(0x71ff1d87f8)
+    // 03-21 02:20:20.332 25787 25811 I RustStdoutStderr: base_address: 354296
+
+    // println!("offset: {offset:?}");
+    // println!("base_address: {base_address:?}");
+    // // offset.map(|offset| offset as usize - base_address)
+    // let offset = offset.unwrap();
+    // offset as usize - base_address
+
+    // // the only "known global symbol" for everything we compile is __rust_alloc
+    // // however some languages won't have this. we could consider linking in a known symbol but this works for now
+    // // #[cfg(any(target_os = "macos", target_os = "ios"))]
+    // unsafe {
+    //     offset = lib
+    //         .get::<*const ()>(b"__rust_alloc")
+    //         .ok()
+    //         .map(|ptr| ptr.as_raw_ptr());
+    // };
+
+    // println!("-aslr calc offset: {offset:?}");
+    // println!("-aslr calc base_address: {base_address:?}");
+
+    // // attempt to determine the aslr slide by using the on-disk rust-alloc symbol
+    // // offset.map(|offset| offset.wrapping_byte_sub(base_address as usize))
+    // offset.map(|offset| offset.wrapping_byte_sub(base_address))
 
     // #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
     // unsafe {
@@ -352,3 +428,13 @@ fn relocate_wasm_jump_table(jump_table: JumpTable) -> JumpTable {
 //
 // 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump orig offset: 0x74c3950fa4
 // 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump new offset: 0x71ff194000
+
+//  pointer entry at 0x74c588e000
+//         detour at 0x718536f3a8  -> true 0x34DB1B8 (55423416)
+//
+// aslr reference at 487543059968 (0x7183D4B600) (true 0000000001eb7410)
+// aslr offset 0x7181E941F0
+
+//
+// 0x59814
+//

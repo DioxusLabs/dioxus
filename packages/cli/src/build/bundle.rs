@@ -569,7 +569,7 @@ impl AppBundle {
     }
 
     /// Run our custom linker setup to generate a patch file in the right location
-    async fn write_patch(&self, aslr_offset: u64) -> Result<()> {
+    async fn write_patch(&self, aslr_reference: u64) -> Result<()> {
         let raw_args = std::fs::read_to_string(&self.build.link_args_file())
             .context("Failed to read link args from file")?;
 
@@ -589,7 +589,7 @@ impl AppBundle {
             &orig_exe,
             &object_files,
             &self.build.target,
-            aslr_offset,
+            aslr_reference,
         )
         .expect("failed to resolve patch symbols");
 

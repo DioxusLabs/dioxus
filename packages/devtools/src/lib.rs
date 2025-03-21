@@ -83,7 +83,7 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
 
         websocket.send(tungstenite::Message::Text(
             serde_json::to_string(&ClientMsg::Initialize {
-                aslr_reference: subsecond::aslr_reference(),
+                aslr_reference: subsecond::aslr_reference() as _,
             })
             .unwrap(),
         ));
