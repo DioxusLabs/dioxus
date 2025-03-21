@@ -11,7 +11,7 @@ pub fn launch() {
 
 fn app() -> Element {
     let mut count = use_signal(|| 0);
-    let value = 12211231;
+    let value = 12211123;
 
     rsx! {
         h2 { "iOS Binary Patching - {count}" }

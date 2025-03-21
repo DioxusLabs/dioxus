@@ -7,9 +7,6 @@ pub extern "C" fn aslr_reference() -> u64 {
 }
 
 pub fn initialize() {
-    let aslr_file = std::env::var("ASLR_FILE").unwrap();
-    std::fs::write(aslr_file, format!("{}", aslr_reference())).unwrap();
-
     if let Some(endpoint) = dioxus::cli_config::devserver_ws_endpoint() {
         // dioxus_devtools::connect(endpoint, |msg| match msg {
         //     dioxus_devtools::DevserverMsg::HotReload(hot_reload_msg) => {
@@ -34,6 +31,10 @@ pub fn initialize() {
             Ok((websocket, req)) => (websocket, req),
             Err(_) => panic!("Failed to connect to hotreload endpoint"),
         };
+
+        websocket
+            .send(tungstenite::Message::Text(aslr_reference().to_string()))
+            .unwrap();
 
         while let Ok(msg) = websocket.read() {
             if let tungstenite::Message::Binary(bytes) = msg {

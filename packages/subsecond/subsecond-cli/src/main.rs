@@ -77,7 +77,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         .spawn()?;
 
     // Wait for the websocket to come up
-    let mut websocket = wait_for_ws(9393).await?;
+    let mut client = wait_for_ws(9393).await?;
 
     // don't log if the screen has been taken over - important for tui apps
     let should_log = rust_log_enabled();
@@ -99,7 +99,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         }
 
         let started = Instant::now();
-        let Ok(output_temp) = fast_build(&result).await else {
+        let Ok(output_temp) = fast_build(&result, client.aslr_reference).await else {
             continue;
         };
 
@@ -112,7 +112,8 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         )
         .unwrap();
 
-        websocket
+        client
+            .socket
             .send(tokio_tungstenite::tungstenite::Message::Binary(
                 bincode::serialize(&jump_table).unwrap().into(),
             ))
@@ -175,14 +176,24 @@ impl FsWatcher {
     }
 }
 
-async fn wait_for_ws(port: u16) -> anyhow::Result<WebSocketStream<tokio::net::TcpStream>> {
+struct WsClient {
+    aslr_reference: u64,
+    socket: WebSocketStream<tokio::net::TcpStream>,
+}
+
+async fn wait_for_ws(port: u16) -> anyhow::Result<WsClient> {
     let port = port;
     let addr = format!("127.0.0.1:{}", port);
     let try_socket = TcpListener::bind(&addr).await;
     let listener = try_socket.expect("Failed to bind");
     let (conn, _sock) = listener.accept().await?;
-    let socket = tokio_tungstenite::accept_async(conn).await?;
-    Ok(socket)
+    let mut socket = tokio_tungstenite::accept_async(conn).await?;
+    let msg = socket.next().await.unwrap()?;
+    let aslr_reference = msg.into_text().unwrap().parse().unwrap();
+    Ok(WsClient {
+        aslr_reference,
+        socket,
+    })
 }
 
 /// Store the linker args in a file for the main process to read.
@@ -263,7 +274,10 @@ fn rust_log_enabled() -> bool {
     }
 }
 
-async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf> {
+async fn fast_build(
+    original: &CargoOutputResult,
+    aslr_reference: u64,
+) -> anyhow::Result<Utf8PathBuf> {
     let fast_build = Command::new(original.direct_rustc[0].clone())
         .args(original.direct_rustc[1..].iter())
         .arg("-C")
@@ -287,16 +301,11 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
         .map(|arg| PathBuf::from(arg))
         .collect::<Vec<_>>();
 
-    let refernce: u64 = std::fs::read_to_string(subsecond_folder().join("data").join("aslr.txt"))
-        .unwrap()
-        .parse()
-        .unwrap();
-
     let resolved = subsecond_cli_support::resolve::resolve_undefined(
         &original.output_location.as_std_path(),
         &object_files,
         &Triple::host(),
-        refernce,
+        aslr_reference,
     )
     .unwrap();
     let syms = subsecond_folder().join("data").join("syms.o");
