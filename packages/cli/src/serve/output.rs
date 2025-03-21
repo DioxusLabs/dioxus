@@ -1,7 +1,7 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, Builder, ServeUpdate, Watcher, WebServer},
-    BuildPlan, BuildStage, BuildUpdate, DioxusCrate, Platform, RustcDetails, ServeArgs,
-    TraceContent, TraceMsg, TraceSrc,
+    BuildStage, BuildUpdate, DioxusCrate, Platform, RustcDetails, ServeArgs, TraceContent,
+    TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},

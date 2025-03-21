@@ -20,7 +20,8 @@ where
     U: Subcommand,
 {
     fn commands(self) -> Vec<Self> {
-        todo!()
+        let mut commands = vec![];
+        commands
     }
 }
 

@@ -141,7 +141,7 @@ impl AndroidTools {
             .path()
     }
 
-    pub(crate) fn linker(&self, triple: &Triple) -> PathBuf {
+    pub(crate) fn android_cc(&self, triple: &Triple) -> PathBuf {
         // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         let suffix = if cfg!(target_os = "windows") {
             ".cmd"
@@ -151,6 +151,22 @@ impl AndroidTools {
 
         self.android_tools_dir().join(format!(
             "{}{}-clang{}",
+            triple,
+            self.min_sdk_version(),
+            suffix
+        ))
+    }
+
+    pub(crate) fn android_ld(&self, triple: &Triple) -> PathBuf {
+        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/ld"
+        let suffix = if cfg!(target_os = "windows") {
+            ".cmd"
+        } else {
+            ""
+        };
+
+        self.android_tools_dir().join(format!(
+            "{}{}-clang++{}",
             triple,
             self.min_sdk_version(),
             suffix
@@ -188,8 +204,8 @@ impl AndroidTools {
     pub(crate) fn android_jnilib(triple: &Triple) -> &'static str {
         use target_lexicon::Architecture;
         match triple.architecture {
-            Architecture::Aarch64(_) => "arm64-v8a",
             Architecture::Arm(_) => "armeabi-v7a",
+            Architecture::Aarch64(_) => "arm64-v8a",
             Architecture::X86_32(_) => "x86",
             Architecture::X86_64 => "x86_64",
             _ => unimplemented!("Unsupported architecture"),

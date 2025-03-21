@@ -50,6 +50,17 @@ pub(crate) struct BuildArgs {
     #[clap(long, default_value_t = true)]
     pub(crate) debug_symbols: bool,
 
+    /// Use the cranelift backend to compile the app [default: false]
+    ///
+    /// This can speed up compile times by up to 100% but is experimental within the compiler.
+    #[clap(long)]
+    pub(crate) cranelift: bool,
+
+    /// Are we building for a device or just the simulator.
+    /// If device is false, then we'll build for the simulator
+    #[clap(long)]
+    pub(crate) device: Option<bool>,
+
     /// Information about the target to build
     ///
     /// These are the same args as `targets``

@@ -359,24 +359,37 @@ impl AppHandle {
         // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
         if self.app.build.platform == Platform::Android {
             if let Some(bundled_name) = bundled_name.as_ref() {
-                let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
-                tracing::debug!("Pushing asset to device: {target:?}");
-                let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
-                    .arg("push")
-                    .arg(&changed_file)
-                    .arg(target)
-                    .output()
-                    .await
-                    .context("Failed to push asset to device");
-
-                if let Err(e) = res {
-                    tracing::debug!("Failed to push asset to device: {e}");
-                }
+                _ = self
+                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
+                    .await;
             }
         }
 
         // Now we can return the bundled asset name to send to the hotreload engine
         bundled_name
+    }
+
+    /// Copy this file to the tmp folder on the android device, returning the path to the copied file
+    pub(crate) async fn copy_file_to_android_tmp(
+        &self,
+        changed_file: &Path,
+        bundled_name: &Path,
+    ) -> Result<PathBuf> {
+        let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
+        tracing::debug!("Pushing asset to device: {target:?}");
+        let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
+            .arg("push")
+            .arg(&changed_file)
+            .arg(&target)
+            .output()
+            .await
+            .context("Failed to push asset to device");
+
+        if let Err(e) = res {
+            tracing::debug!("Failed to push asset to device: {e}");
+        }
+
+        Ok(target)
     }
 
     /// Open the native app simply by running its main exe

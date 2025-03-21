@@ -467,9 +467,18 @@ impl AppRunner {
         let original = self.running.as_ref().unwrap().app.main_exe();
         let new = bundle.patch_exe();
 
-        let jump_table =
+        let mut jump_table =
             subsecond_cli_support::create_jump_table(&original, &new, &bundle.build.target)
                 .unwrap();
+
+        // If it's android, we need to copy the assets to the device and then change the location of the patch
+        if let Some(handle) = self.running.as_mut() {
+            if handle.app.build.platform == Platform::Android {
+                jump_table.lib = handle
+                    .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
+                    .await?;
+            }
+        }
 
         let changed_files = match &bundle.build.mode {
             BuildMode::Thin { changed_files, .. } => changed_files.clone(),
@@ -477,7 +486,6 @@ impl AppRunner {
         };
 
         let changed_file = changed_files.first().unwrap();
-
         tracing::info!(
             "Hot-patching: {} in {:?}ms",
             changed_file

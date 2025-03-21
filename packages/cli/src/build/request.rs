@@ -19,11 +19,7 @@ use uuid::Uuid;
 
 /// This struct is used to plan the build process.
 ///
-/// The point here is to separate the DioxusCrate from the build process so we can update the DioxusCrate
-/// when the user changes their config or workspace. Previously, they needed to `ctrl-c` the devserver
-/// and then restart the build process.
-///
-/// We also have want to be able to take in the user's config from the CLI without modifying the
+/// The point here is to be able to take in the user's config from the CLI without modifying the
 /// arguments in place. Creating a buildplan "resolves" their config into a build plan that can be
 /// introspected. For example, the users might not specify a "Triple" in the CLI but the triple will
 /// be guaranteed to be resolved here.
@@ -55,7 +51,7 @@ pub(crate) struct BuildRequest {
     pub(crate) nightly: bool,
 
     /// The package to build
-    pub(crate) package: String,
+    pub(crate) package: Option<String>,
 
     /// Space separated list of features to activate
     pub(crate) features: Vec<String>,
@@ -153,12 +149,12 @@ impl BuildRequest {
         // Make sure we set the fullstack platform so we actually build the fullstack variant
         // Users need to enable "fullstack" in their default feature set.
         // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-        // let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
+        let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
 
         // Set the profile of the build if it's not already set
         // This is mostly used for isolation of builds (preventing thrashing) but also useful to have multiple performance profiles
         // We might want to move some of these profiles into dioxus.toml and make them "virtual".
-        let client_profile = match args.args.profile {
+        let profile = match args.args.profile {
             Some(profile) => profile,
             None if args.args.release => "release".to_string(),
             None => match platform {
@@ -169,22 +165,54 @@ impl BuildRequest {
             },
         };
 
-        // // todo: use the right arch based on the current arch
-        // let custom_target = match self.platform {
-        //     Platform::Web => Some("wasm32-unknown-unknown"),
-        //     Platform::Ios => match self.device {
-        //         Some(true) => Some("aarch64-apple-ios"),
-        //         _ => Some("aarch64-apple-ios-sim"),
-        //     },
-        //     Platform::Android => Some(self.arch().android_target_triplet()),
-        //     Platform::Server => None,
-        //     // we're assuming we're building for the native platform for now... if you're cross-compiling
-        //     // the targets here might be different
-        //     Platform::MacOS => None,
-        //     Platform::Windows => None,
-        //     Platform::Linux => None,
-        //     Platform::Liveview => None,
-        // };
+        let device = args.device.unwrap_or(false);
+
+        // We want a real triple to build with, so we'll autodetect it if it's not provided
+        // The triple ends up being a source of truth for us later hence this work to figure it out
+        let target = match args.args.target {
+            Some(target) => target,
+            None => match platform {
+                // Generally just use the host's triple for native executables
+                Platform::MacOS => target_lexicon::HOST,
+                Platform::Windows => target_lexicon::HOST,
+                Platform::Linux => target_lexicon::HOST,
+                Platform::Server => target_lexicon::HOST,
+                Platform::Liveview => target_lexicon::HOST,
+                Platform::Web => "wasm32-unknown-unknown".parse().unwrap(),
+
+                // For iOS we should prefer the architecture for the simulator, but in lieu of actually
+                // figuring that out, we'll assume aarch64 on m-series and x86_64 otherwise
+                Platform::Ios => {
+                    // use the host's architecture and sim if --device is passed
+                    use target_lexicon::{Architecture, HOST};
+                    match HOST.architecture {
+                        Architecture::Aarch64(_) if device => "aarch64-apple-ios".parse().unwrap(),
+                        Architecture::Aarch64(_) => "aarch64-apple-ios-sim".parse().unwrap(),
+                        _ if device => "x86_64-apple-ios".parse().unwrap(),
+                        _ => "x86_64-apple-ios-sim".parse().unwrap(),
+                    }
+                }
+
+                // Same idea with android but we figure out the connected device using adb
+                // for now we use
+                Platform::Android => {
+                    // use the host's architecture and sim if --device is passed
+                    // use target_lexicon::{Architecture, HOST};
+                    // match HOST.architecture {
+                    //     Architecture::Aarch64(_) if device => {
+                    //         "aarch64-linux-android".parse().unwrap()
+                    //     }
+                    //     Architecture::Aarch64(_) => "aarch64-linux-android".parse().unwrap(),
+                    //     _ if device => "x86_64-linux-android".parse().unwrap(),
+                    //     _ => "x86_64-linux-android".parse().unwrap(),
+                    // }
+                    //
+                    // ... for known we don't know the architecture and we'll discover it during compilation
+                    "aarch64-linux-android".parse().unwrap()
+                    // "unknown-linux-android".parse().unwrap()
+                }
+            },
+        };
 
         // Determine arch if android
 
@@ -223,21 +251,21 @@ impl BuildRequest {
             no_default_features,
             krate,
             custom_target_dir: None,
-            cranelift: false,
+            profile,
+            fullstack,
+            target,
+            device,
+            nightly: args.args.nightly,
+            package: args.args.package,
+            release: args.args.release,
+            skip_assets: args.skip_assets,
+            ssg: args.ssg,
+            cranelift: args.cranelift,
             cargo_args: args.args.cargo_args,
-            fullstack: todo!(),
-            profile: todo!(),
-            release: todo!(),
-            skip_assets: todo!(),
-            ssg: todo!(),
-            wasm_split: todo!(),
-            debug_symbols: todo!(),
-            inject_loading_scripts: todo!(),
-            force_sequential: todo!(),
-            target: todo!(),
-            device: todo!(),
-            nightly: todo!(),
-            package: todo!(),
+            wasm_split: args.wasm_split,
+            debug_symbols: args.debug_symbols,
+            inject_loading_scripts: args.inject_loading_scripts,
+            force_sequential: args.force_sequential,
         })
     }
 
@@ -264,17 +292,16 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
-        todo!()
-        // tracing::debug!("Building server...");
+        tracing::debug!("Building server...");
 
-        // if !self.fullstack {
-        //     return Ok(None);
-        // }
+        if !self.fullstack {
+            return Ok(None);
+        }
 
-        // let mut cloned = self.clone();
-        // cloned.platform = Platform::Server;
+        let mut cloned = self.clone();
+        cloned.platform = Platform::Server;
 
-        // Ok(Some(cloned.cargo_build().await?))
+        Ok(Some(cloned.cargo_build().await?))
     }
 
     pub(crate) async fn cargo_build(&self) -> Result<BuildArtifacts> {
@@ -465,9 +492,11 @@ impl BuildRequest {
             cargo_args.push(self.features.join(" "));
         }
 
-        // We always set a package even if the user didn't specify it. This is deduced from cargo metadata
-        cargo_args.push(String::from("-p"));
-        cargo_args.push(self.package.clone());
+        // todo: maybe always set a package to reduce ambiguity?
+        if let Some(package) = &self.package {
+            cargo_args.push(String::from("-p"));
+            cargo_args.push(package.clone());
+        }
 
         match self.krate.executable_type() {
             krates::cm::TargetKind::Bin => cargo_args.push("--bin".to_string()),
@@ -489,7 +518,19 @@ impl BuildRequest {
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
         }
 
+        // dx *always* links android and thin builds
+        if self.platform == Platform::Android || matches!(self.mode, BuildMode::Thin { .. }) {
+            cargo_args.push(format!(
+                "-Clinker={}",
+                dunce::canonicalize(std::env::current_exe().unwrap())
+                    .unwrap()
+                    .display()
+            ));
+        }
+
         match self.mode {
+            BuildMode::Base => {}
+            BuildMode::Thin { .. } => {}
             BuildMode::Fat => {
                 // This prevents rust from passing -dead_strip to the linker
                 // todo: don't save temps here unless we become the linker for the base app
@@ -498,11 +539,21 @@ impl BuildRequest {
                     "-Clink-dead-code".to_string(),
                 ]);
 
+                // args.extend([
+                //     "-Wl,--whole-archive".to_string(),
+                //     "-Wl,--no-gc-sections".to_string(),
+                //     "-Wl,--export-all".to_string(),
+                // ]);
+
                 match self.platform {
                     // if macos/ios, -Wl,-all_load is required for the linker to work correctly
                     // macos uses ld64 but through the `cc` interface.a
                     Platform::MacOS | Platform::Ios => {
                         cargo_args.push("-Clink-args=-Wl,-all_load".to_string());
+                    }
+
+                    Platform::Android => {
+                        cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
                     }
 
                     // if linux -Wl,--whole-archive is required for the linker to work correctly
@@ -513,7 +564,11 @@ impl BuildRequest {
                     // if windows -Wl,--whole-archive is required for the linker to work correctly
                     // https://learn.microsoft.com/en-us/cpp/build/reference/wholearchive-include-all-library-object-files?view=msvc-170
                     Platform::Windows => {
-                        cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
+                        // --export-dynamic
+                        cargo_args.push(
+                            "-Clink-args=-Wl,--whole-archive".to_string(),
+                            // "-Clink-args=-Wl,--whole-archive,-Wl,--export-dynamic".to_string(),
+                        );
                     }
 
                     // if web, -Wl,--whole-archive is required for the linker to work correctly.
@@ -533,35 +588,11 @@ impl BuildRequest {
                     _ => {}
                 }
             }
-            BuildMode::Thin { .. } => cargo_args.push(format!(
-                "-Clinker={}",
-                dunce::canonicalize(std::env::current_exe().unwrap())
-                    .unwrap()
-                    .display()
-            )),
-            _ => {}
         }
 
         tracing::debug!(dx_src = ?TraceSrc::Build, "cargo args: {:?}", cargo_args);
 
         cargo_args
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn android_rust_flags(&self) -> String {
-        let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
-
-        // todo(jon): maybe we can make the symbol aliasing logic here instead of using llvm-objcopy
-        if self.platform == Platform::Android {
-            let cur_exe = std::env::current_exe().unwrap();
-            rust_flags.push_str(format!(" -Clinker={}", cur_exe.display()).as_str());
-            rust_flags.push_str(" -Clink-arg=-landroid");
-            rust_flags.push_str(" -Clink-arg=-llog");
-            rust_flags.push_str(" -Clink-arg=-lOpenSLES");
-            rust_flags.push_str(" -Clink-arg=-Wl,--export-dynamic");
-        }
-
-        rust_flags
     }
 
     pub(crate) fn all_target_features(&self) -> Vec<String> {
@@ -639,54 +670,9 @@ impl BuildRequest {
 
         let mut custom_linker = None;
 
+        // Make sure to set all the crazy android flags
         if self.platform == Platform::Android {
-            let tools =
-                crate::build::android_tools().context("Could not determine android tools")?;
-
-            let linker = tools.linker(&self.target);
-            let min_sdk_version = tools.min_sdk_version();
-            let ar_path = tools.ar_path();
-            let target_cc = tools.target_cc();
-            let target_cxx = tools.target_cxx();
-            let java_home = tools.java_home();
-            let ndk = tools.ndk.clone();
-
-            tracing::debug!(
-                r#"Using android:
-            min_sdk_version: {min_sdk_version}
-            linker: {linker:?}
-            ar_path: {ar_path:?}
-            target_cc: {target_cc:?}
-            target_cxx: {target_cxx:?}
-            java_home: {java_home:?}
-            "#
-            );
-
-            custom_linker = Some(linker);
-            env_vars.push(("ANDROID_NATIVE_API_LEVEL", min_sdk_version.to_string()));
-            env_vars.push(("TARGET_AR", ar_path.display().to_string()));
-            env_vars.push(("TARGET_CC", target_cc.display().to_string()));
-            env_vars.push(("TARGET_CXX", target_cxx.display().to_string()));
-            env_vars.push(("ANDROID_NDK_ROOT", ndk.display().to_string()));
-
-            // attempt to set java_home to the android studio java home if it exists.
-            // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
-            // attempt to set java_home to the android studio java home if it exists and java_home was not already set
-            if let Some(java_home) = java_home {
-                tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-                env_vars.push(("JAVA_HOME", java_home.display().to_string()));
-            }
-
-            env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
-            env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
-            env_vars.push((
-                "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
-                self.wry_android_kotlin_files_out_dir()
-                    .display()
-                    .to_string(),
-            ));
-
-            env_vars.push(("RUSTFLAGS", self.android_rust_flags()));
+            let linker = self.build_android_env(&mut env_vars, true)?;
 
             // todo(jon): the guide for openssl recommends extending the path to include the tools dir
             //            in practice I couldn't get this to work, but this might eventually become useful.
@@ -707,49 +693,35 @@ impl BuildRequest {
             //     std::env::var("PATH").unwrap_or_default()
             // );
             // env_vars.push(("PATH", extended_path));
+
+            // Also make sure to set the linker
+            custom_linker = Some(linker);
         };
 
         match &self.mode {
-            BuildMode::Base => {
-                todo!()
-                // if let Some(linker) = custom_linker {
-                //     env_vars.push((
-                //         LinkAction::ENV_VAR_NAME,
-                //         LinkAction::BaseLink {
-                //             platform: self.platform,
-                //             linker,
-                //             incremental_dir: self.incremental_cache_dir(),
-                //             strip: false,
-                //         }
-                //         .to_json(),
-                //     ));
-                // }
+            // We don't usually employ a custom linker for fat/base builds unless it's android
+            // This might change in the future for "zero-linking"
+            BuildMode::Base | BuildMode::Fat => {
+                if let Some(linker) = custom_linker {
+                    tracing::info!("Using custom linker for base link: {linker:?}");
+                    env_vars.push((
+                        LinkAction::ENV_VAR_NAME,
+                        LinkAction::BaseLink {
+                            linker,
+                            extra_flags: vec![],
+                        }
+                        .to_json(),
+                    ));
+                }
             }
-            BuildMode::Fat => {
-                //
-                // env_vars.push((
-                //     LinkAction::ENV_VAR_NAME,
-                //     LinkAction::BaseLink {
-                //         platform: self.platform,
-                //         linker: custom_linker.unwrap_or_else(|| "cc".into()),
-                //         incremental_dir: self.incremental_cache_dir(),
-                //         strip: matches!(self.mode, BuildMode::Base),
-                //     }
-                //     .to_json(),
-                // ))
-            }
+
+            // We use a custom linker here (dx) but it doesn't actually do anything
             BuildMode::Thin { .. } => {
-                //
-                std::fs::create_dir_all(self.incremental_cache_dir());
+                std::fs::create_dir_all(self.link_args_file().parent().unwrap());
                 env_vars.push((
                     LinkAction::ENV_VAR_NAME,
                     LinkAction::ThinLink {
                         triple: self.target.clone(),
-                        platform: self.platform,
-                        linker: custom_linker.unwrap_or_else(|| "cc".into()),
-                        incremental_dir: self.incremental_cache_dir(),
-                        main_ptr: 0,
-                        patch_target: Default::default(),
                         save_link_args: self.link_args_file(),
                     }
                     .to_json(),
@@ -773,10 +745,71 @@ impl BuildRequest {
         Ok(env_vars)
     }
 
+    pub fn build_android_env(
+        &self,
+        env_vars: &mut Vec<(&str, String)>,
+        rustf_flags: bool,
+    ) -> Result<PathBuf, crate::Error> {
+        let tools = crate::build::android_tools().context("Could not determine android tools")?;
+        let linker = tools.android_cc(&self.target);
+        let min_sdk_version = tools.min_sdk_version();
+        let ar_path = tools.ar_path();
+        let target_cc = tools.target_cc();
+        let target_cxx = tools.target_cxx();
+        let java_home = tools.java_home();
+        let ndk = tools.ndk.clone();
+        tracing::debug!(
+            r#"Using android:
+            min_sdk_version: {min_sdk_version}
+            linker: {linker:?}
+            ar_path: {ar_path:?}
+            target_cc: {target_cc:?}
+            target_cxx: {target_cxx:?}
+            java_home: {java_home:?}
+            "#
+        );
+        env_vars.push(("ANDROID_NATIVE_API_LEVEL", min_sdk_version.to_string()));
+        env_vars.push(("TARGET_AR", ar_path.display().to_string()));
+        env_vars.push(("TARGET_CC", target_cc.display().to_string()));
+        env_vars.push(("TARGET_CXX", target_cxx.display().to_string()));
+        env_vars.push(("ANDROID_NDK_ROOT", ndk.display().to_string()));
+        if let Some(java_home) = java_home {
+            tracing::debug!("Setting JAVA_HOME to {java_home:?}");
+            env_vars.push(("JAVA_HOME", java_home.display().to_string()));
+        }
+        env_vars.push(("WRY_ANDROID_PACKAGE", "dev.dioxus.main".to_string()));
+        env_vars.push(("WRY_ANDROID_LIBRARY", "dioxusmain".to_string()));
+        env_vars.push((
+            "WRY_ANDROID_KOTLIN_FILES_OUT_DIR",
+            self.wry_android_kotlin_files_out_dir()
+                .display()
+                .to_string(),
+        ));
+
+        if rustf_flags {
+            env_vars.push(("RUSTFLAGS", {
+                let mut rust_flags = std::env::var("RUSTFLAGS").unwrap_or_default();
+
+                // todo(jon): maybe we can make the symbol aliasing logic here instead of using llvm-objcopy
+                if self.platform == Platform::Android {
+                    let cur_exe = std::env::current_exe().unwrap();
+                    rust_flags.push_str(format!(" -Clinker={}", cur_exe.display()).as_str());
+                    rust_flags.push_str(" -Clink-arg=-landroid");
+                    rust_flags.push_str(" -Clink-arg=-llog");
+                    rust_flags.push_str(" -Clink-arg=-lOpenSLES");
+                    rust_flags.push_str(" -Clink-arg=-Wl,--export-dynamic");
+                }
+
+                rust_flags
+            }));
+        }
+        Ok(linker)
+    }
+
     /// We only really currently care about:
     ///
     /// - app dir (.app, .exe, .apk, etc)
-    /// - assets dir
+    /// - assetas dir
     /// - exe dir (.exe, .app, .apk, etc)
     /// - extra scaffolding
     ///

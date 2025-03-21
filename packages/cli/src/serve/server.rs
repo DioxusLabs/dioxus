@@ -360,7 +360,7 @@ impl WebServer {
     }
 
     pub fn server_address(&self) -> Option<SocketAddr> {
-        tracing::error!("todo: server_address is not implemented");
+        // tracing::error!("todo: server_address is not implemented");
         None
         // match self.platform {
         //     Platform::Web | Platform::Server => Some(self.devserver_address()),

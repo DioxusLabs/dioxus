@@ -35,10 +35,6 @@ impl Workspace {
 
         Ok(Arc::new(Self { krates, settings }))
     }
-
-    pub fn get_krate(&self, target: &TargetArgs) -> Result<DioxusCrate> {
-        todo!()
-    }
 }
 
 /// Contains information about the crate we are currently in and the dioxus config for that crate

@@ -7,17 +7,10 @@ use tokio::process::Command;
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LinkAction {
     BaseLink {
-        strip: bool,
-        platform: Platform,
         linker: PathBuf,
-        incremental_dir: PathBuf,
+        extra_flags: Vec<String>,
     },
     ThinLink {
-        platform: Platform,
-        main_ptr: u64,
-        patch_target: PathBuf,
-        linker: PathBuf,
-        incremental_dir: PathBuf,
         save_link_args: PathBuf,
         triple: Triple,
     },
@@ -49,44 +42,51 @@ impl LinkAction {
         match self {
             // Run the system linker but (maybe) keep any unused sections.
             LinkAction::BaseLink {
-                platform,
-                incremental_dir,
                 linker,
-                strip,
+                extra_flags,
             } => {
+                let mut cmd = std::process::Command::new(linker);
+                cmd.args(args.iter().skip(1));
+                cmd.args(extra_flags);
+                let res = cmd
+                    .stderr(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .output()
+                    .expect("Failed to run android linker");
+
+                let err = String::from_utf8_lossy(&res.stderr);
+                std::fs::write(
+                    "/Users/jonkelley/Development/dioxus/packages/subsecond/data/link-err.txt",
+                    format!("err: {err}"),
+                )
+                .unwrap();
+
                 // Make sure we *don't* dead-strip the binary so every library symbol still exists.
                 //  This is required for thin linking to work correctly.
-                let mut args = args
-                    .into_iter()
-                    .skip(1)
-                    .filter(|arg| arg != "-Wl,-dead_strip" && !strip)
-                    .collect::<Vec<String>>();
+                // let args = args.into_iter().skip(1).collect::<Vec<String>>();
+                // let res = Command::new(linker).args(args).output().await?;
+                // let err = String::from_utf8_lossy(&res.stderr);
+
+                // .filter(|arg| arg != "-Wl,-dead_strip" && !strip)
 
                 // this is ld64 only, we need --whole-archive for gnu/ld
-                args.push("-Wl,-all_load".to_string());
+                // args.push("-Wl,-all_load".to_string());
 
-                // Persist the cache of incremental files
-                cache_incrementals(
-                    &incremental_dir.join("old"),
-                    &incremental_dir.join("new"),
-                    args.iter()
-                        .filter(|arg| arg.ends_with(".o"))
-                        .collect::<Vec<&String>>()
-                        .as_ref(),
-                );
+                // // Persist the cache of incremental files
+                // cache_incrementals(
+                //     &incremental_dir.join("old"),
+                //     &incremental_dir.join("new"),
+                //     args.iter()
+                //         .filter(|arg| arg.ends_with(".o"))
+                //         .collect::<Vec<&String>>()
+                //         .as_ref(),
+                // );
 
                 // Run ld with the args
-                let res = Command::new(linker).args(args).output().await?;
-                let err = String::from_utf8_lossy(&res.stderr);
             }
 
             // Run the linker but without rlibs
             LinkAction::ThinLink {
-                linker,
-                platform,
-                patch_target,
-                incremental_dir,
-                main_ptr,
                 save_link_args,
                 triple,
             } => {
@@ -132,14 +132,20 @@ fn cache_incrementals(old: &PathBuf, new: &PathBuf, object_files: &[&String]) {
     }
 }
 
+/// This creates an object file that satisfies rust's use of llvm-objcopy
+///
+/// I'd rather we *not* do this and instead generate a truly linked file (and then delete it) but
+/// this at least lets us delay linking until the host compiler is ready.
+///
+/// This is because our host compiler is a stateful server and not a stateless linker.
 fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
     let format = match triple.binary_format {
-        target_lexicon::BinaryFormat::Unknown => todo!(),
         target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
         target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
         target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
         target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
         target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
+        target_lexicon::BinaryFormat::Unknown => todo!(),
         _ => todo!(),
     };
 
@@ -147,10 +153,8 @@ fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
         target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
         target_lexicon::Architecture::Wasm64 => object::Architecture::Wasm64,
         target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
-        target_lexicon::Architecture::Arm(arm_architecture) => object::Architecture::Arm,
-        target_lexicon::Architecture::Aarch64(aarch64_architecture) => {
-            object::Architecture::Aarch64
-        }
+        target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
+        target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
         target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
         target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
         _ => todo!(),
@@ -162,10 +166,9 @@ fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
         Err(_) => todo!(),
     };
 
-    // todo: these are architecture specific but should not be
-    let dummy_object_file = object::write::Object::new(format, arch, endian);
-
-    dummy_object_file.write().unwrap()
+    object::write::Object::new(format, arch, endian)
+        .write()
+        .unwrap()
 }
 
 #[test]

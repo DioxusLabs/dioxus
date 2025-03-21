@@ -1,4 +1,4 @@
-use std::{any::TypeId, cell::Cell, ffi::CString, rc::Rc};
+use std::{any::TypeId, cell::Cell, ffi::CString, path::PathBuf, rc::Rc};
 
 use dioxus_core::{
     prelude::{consume_context, try_consume_context},
@@ -51,8 +51,20 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
             }
         }
 
-        if let Some(jump_table) = msg.jump_table.as_ref() {
-            unsafe { subsecond::run_patch(jump_table.clone()) };
+        if let Some(mut jump_table) = msg.jump_table.as_ref().cloned() {
+            if cfg!(target_os = "android") {
+                // copy the jump table to the libs directory to satisfy the namespace requirements
+                let libs_dir = PathBuf::from("/data/data/com.example.SubsecondHarness/files/");
+                std::fs::create_dir_all(&libs_dir).unwrap();
+
+                let patch_place = libs_dir.join(jump_table.lib.file_name().unwrap());
+                std::fs::copy(jump_table.lib, &patch_place).unwrap();
+                jump_table.lib = patch_place;
+
+                println!("Patched jump table: {:#?}", jump_table);
+            }
+
+            unsafe { subsecond::run_patch(jump_table) };
             dioxus_core::prelude::force_all_dirty();
         }
     });

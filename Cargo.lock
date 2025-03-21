@@ -12367,6 +12367,7 @@ dependencies = [
  "subsecond-types",
  "target-lexicon 0.13.2",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

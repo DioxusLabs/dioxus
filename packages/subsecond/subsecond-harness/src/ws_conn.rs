@@ -1,16 +1,24 @@
 use dioxus::prelude::dioxus_devtools;
 use subsecond::JumpTable;
 
+#[no_mangle]
+pub extern "C" fn aslr_reference() -> u64 {
+    aslr_reference as *const () as u64
+}
+
 pub fn initialize() {
+    let aslr_file = std::env::var("ASLR_FILE").unwrap();
+    std::fs::write(aslr_file, format!("{}", aslr_reference())).unwrap();
+
     if let Some(endpoint) = dioxus::cli_config::devserver_ws_endpoint() {
-        dioxus_devtools::connect(endpoint, |msg| match msg {
-            dioxus_devtools::DevserverMsg::HotReload(hot_reload_msg) => {
-                if let Some(jump_table) = hot_reload_msg.jump_table {
-                    unsafe { subsecond::run_patch(jump_table) };
-                }
-            }
-            _ => {}
-        });
+        // dioxus_devtools::connect(endpoint, |msg| match msg {
+        //     dioxus_devtools::DevserverMsg::HotReload(hot_reload_msg) => {
+        //         if let Some(jump_table) = hot_reload_msg.jump_table {
+        //             unsafe { subsecond::run_patch(jump_table) };
+        //         }
+        //     }
+        //     _ => {}
+        // });
 
         // don't boot the default
         return;

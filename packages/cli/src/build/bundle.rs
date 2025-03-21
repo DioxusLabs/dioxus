@@ -16,7 +16,7 @@ use std::{
 use std::{pin::Pin, time::SystemTime};
 use std::{process::Stdio, sync::atomic::Ordering};
 use std::{sync::atomic::AtomicUsize, time::Duration};
-use target_lexicon::OperatingSystem;
+use target_lexicon::{Environment, OperatingSystem};
 use tokio::process::Command;
 
 /// The end result of a build.
@@ -543,10 +543,10 @@ impl AppBundle {
         Ok(())
     }
 
-    /// patch-{time}.(so/dll/dylib) (next to the main exe)
+    /// libpatch-{time}.(so/dll/dylib) (next to the main exe)
     pub fn patch_exe(&self) -> PathBuf {
         let path = self.main_exe().with_file_name(format!(
-            "patch-{}",
+            "libpatch-{}",
             self.app
                 .time_start
                 .duration_since(UNIX_EPOCH)
@@ -554,15 +554,15 @@ impl AppBundle {
                 .as_millis(),
         ));
 
-        let extension = match self.build.platform {
-            Platform::MacOS => "dylib",
-            Platform::Ios => "dylib",
-            Platform::Web => "wasm",
-            Platform::Windows => "dll",
-            Platform::Linux => "so",
-            Platform::Android => "so",
-            Platform::Server => todo!(),
-            Platform::Liveview => todo!(),
+        let extension = match self.build.target.operating_system {
+            OperatingSystem::Darwin(_) => "dylib",
+            OperatingSystem::MacOSX(_) => "dylib",
+            OperatingSystem::IOS(_) => "dylib",
+            OperatingSystem::Unknown if self.build.platform == Platform::Web => "wasm",
+            OperatingSystem::Windows => "dll",
+            OperatingSystem::Linux => "so",
+            OperatingSystem::Wasi => "wasm",
+            _ => "",
         };
 
         path.with_extension(extension)
@@ -581,16 +581,38 @@ impl AppBundle {
             .sorted()
             .collect::<Vec<_>>();
 
+        let linker = match self.build.platform {
+            Platform::Android => {
+                let tools =
+                    crate::build::android_tools().context("Could not determine android tools")?;
+                tools.android_cc(&self.build.target)
+            }
+            Platform::Web => PathBuf::from("wasm-ld"),
+            Platform::MacOS => PathBuf::from("cc"),
+            Platform::Ios => PathBuf::from("cc"),
+            Platform::Windows => todo!(),
+            Platform::Linux => todo!(),
+            Platform::Server => todo!(),
+            Platform::Liveview => todo!(),
+        };
+
+        // let orig_exe = self.main_exe();
+
+        let thin_args = self.thin_link_args(&args);
+        // let mut env_vars = vec![];
+        // self.build.build_android_env(&mut env_vars, false)?;
+
         // todo: we should throw out symbols that we don't need and/or assemble them manually
         // also we should make sure to propagate the right arguments (target, sysroot, etc)
         //
         // also, https://developer.apple.com/forums/thread/773907
         //       -undefined,dynamic_lookup is deprecated for ios but supposedly cpython is using it
         //       we might need to link a new patch file that implements the lookups
-        let res = Command::new("cc")
+        let res = Command::new(linker)
             .args(object_files.iter())
-            .args(self.fat_link_args(&args))
-            .arg("-o")
+            .args(thin_args)
+            .arg("-v")
+            .arg("-o") // is it "-o" everywhere?
             .arg(&self.patch_exe())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -606,11 +628,11 @@ impl AppBundle {
             }
         }
 
-        // Clean up the temps manually
-        // todo: we might want to keep them around for debugging purposes
-        for file in object_files {
-            _ = std::fs::remove_file(file);
-        }
+        // // Clean up the temps manually
+        // // todo: we might want to keep them around for debugging purposes
+        // for file in object_files {
+        //     _ = std::fs::remove_file(file);
+        // }
 
         // Also clean up the original fat file since that's causing issues with rtld_global
         // todo: this might not be platform portable
@@ -621,11 +643,13 @@ impl AppBundle {
         Ok(())
     }
 
-    fn fat_link_args(&self, original_args: &[&str]) -> Vec<String> {
+    fn thin_link_args(&self, original_args: &[&str]) -> Vec<String> {
         use target_lexicon::OperatingSystem;
 
         let triple = self.build.target.clone();
         let mut args = vec![];
+
+        tracing::debug!("original args:\n{}", original_args.join("\n"));
 
         match triple.operating_system {
             // this uses "cc" and these args need to be ld compatible
@@ -653,26 +677,78 @@ impl AppBundle {
             // android/linux
             // need to be compatible with lld
             OperatingSystem::Linux => {
-                args.extend([
-                    "-Wl,--whole-archive".to_string(),
-                    "-Wl,--no-gc-sections".to_string(),
-                    "-Wl,--export-all".to_string(),
-                ]);
+                args.extend(
+                    [
+                        "-shared".to_string(),
+                        // dynamically link against libdioxusmain.so
+                        // format!("-L{}", self.main_exe().parent().unwrap().display()),
+                        // "-ldioxusmain".to_string(),
+                        // "-Wl,-"
+                        // "-landroid",
+                        // "-llog",
+                        // "-lOpenSLES",
+                        // "-Wl,--unresolved-symbols=ignore-all",
+                        // "-landroid",
+                        // "-ldl",
+                        // "-ldl",
+                        // "-llog",
+                        // "-lunwind",
+                        // "-ldl",
+                        // "-lm",
+                        // "-lc",
+                        "-Wl,--eh-frame-hdr".to_string(),
+                        // "-Wl,-z,noexecstack".to_string(),
+                        // "-Wl,-u,__rdl_alloc".to_string(),
+                        // "-Wl,-u,__rdl_dealloc".to_string(),
+                        // "-Wl,-u,__rdl_realloc".to_string(),
+                        // "-Wl,-u,__rdl_alloc_zeroed".to_string(),
+                        // "-Wl,-u,__rg_oom".to_string(),
+                        // "-Wl,--allow-shlib-undefined".to_string(),
+                        "-Wl,--defsym,__rdl_alloc=0".to_string(),
+                        "-Wl,--defsym,__rdl_dealloc=0".to_string(),
+                        "-Wl,--defsym,__rdl_realloc=0".to_string(),
+                        "-Wl,--defsym,__rdl_alloc_zeroed=0".to_string(),
+                        "-Wl,--defsym,__rg_oom=0".to_string(),
+                    ]
+                    .iter()
+                    .map(|s| s.to_string()),
+                );
 
-                // match triple.architecture {
-                //     target_lexicon::Architecture::Aarch64(_) => {
-                //         args.push("-Wl,--target=aarch64-linux-android".to_string());
-                //     }
-                //     target_lexicon::Architecture::X86_64 => {
-                //         args.push("-Wl,--target=x86_64-unknown-linux-gnu".to_string());
-                //     }
-                //     _ => {}
-                // }
+                // args.extend([
+                //     "-fno-pie".to_string(),
+                //     "-landroid".to_string(),
+                //     "-llog".to_string(),
+                //     "-lOpenSLES".to_string(),
+                //     "-Wl,--export-dynamic".to_string(),
+                //     "-Wl,-shared".to_string(),
+                //     // "-Wl,--shared".to_string(),
+                //     "-Wl,--export-dynamic".to_string(),
+                //     "-Wl,--allow-shlib-undefined".to_string(),
+                //     // "-Wl,--unresolved-symbols=ignore-in-object-files".to_string(),
+                //     // "-Wl,-unexported_symbol,_main".to_string(),
+                //     // "-Wl,-undefined,dynamic_lookup".to_string(),
+                //     // "-Wl,--unexported-symbol,_main".to_string(),
+                //     // "-Wl,--export-dynamic".to_string(),
+                //     // "-Wl,-undefined,dynamic_lookup".to_string(),
+                //     // "-Wl,--unresolved-symbols=ignore-all".to_string(),
+                // ]);
+
+                match triple.architecture {
+                    target_lexicon::Architecture::Aarch64(_) => {
+                        // args.push("-Wl,--target=aarch64-linux-android".to_string());
+                    }
+                    target_lexicon::Architecture::X86_64 => {
+                        // args.push("-Wl,--target=x86_64-linux-android".to_string());
+                    }
+                    _ => {}
+                }
             }
 
             OperatingSystem::Windows => todo!(),
 
-            // might be wasm?
+            // use wasm-ld (gnu-lld)
+            OperatingSystem::Unknown if self.build.platform == Platform::Web => todo!(),
+
             OperatingSystem::Unknown => todo!(),
 
             // Lots of other OSes we don't support yet - tvos, watchos, etc
@@ -695,6 +771,8 @@ impl AppBundle {
             args.push("-isysroot".to_string());
             args.push(vale);
         }
+
+        tracing::info!("final args:{:#?}", args);
 
         args
     }
@@ -1143,9 +1221,8 @@ impl AppBundle {
         //
         // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
         // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
+        tracing::debug!("Copying android executable from {source:?} to {destination:?}");
         std::fs::copy(source, destination)?;
         Ok(())
     }
-
-    async fn binary_patch(&self) {}
 }

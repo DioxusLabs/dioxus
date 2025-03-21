@@ -68,7 +68,13 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     std::fs::copy(&exe, &fat_exe).unwrap();
 
     // Launch the fat exe. We'll overwrite the slim exe location, so this prevents the app from bugging out
-    let app = Command::new(&fat_exe).kill_on_drop(true).spawn()?;
+    let app = Command::new(&fat_exe)
+        .kill_on_drop(true)
+        .env(
+            "ASLR_FILE",
+            subsecond_folder().join("data").join("aslr.txt"),
+        )
+        .spawn()?;
 
     // Wait for the websocket to come up
     let mut websocket = wait_for_ws(9393).await?;
@@ -273,12 +279,29 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
 
     let output = run_cargo_output(fast_build, rust_log_enabled()).await?;
 
-    let object_files = output
+    let mut object_files = output
         .link_args
         .iter()
         .filter(|arg| arg.ends_with(".rcgu.o"))
         .sorted()
+        .map(|arg| PathBuf::from(arg))
         .collect::<Vec<_>>();
+
+    let refernce: u64 = std::fs::read_to_string(subsecond_folder().join("data").join("aslr.txt"))
+        .unwrap()
+        .parse()
+        .unwrap();
+
+    let resolved = subsecond_cli_support::resolve::resolve_undefined(
+        &original.output_location.as_std_path(),
+        &object_files,
+        &Triple::host(),
+        refernce,
+    )
+    .unwrap();
+    let syms = subsecond_folder().join("data").join("syms.o");
+    std::fs::write(&syms, resolved).unwrap();
+    object_files.push(syms);
 
     let output_location = original.output_location.with_file_name(format!(
         "patch-{}",
@@ -289,8 +312,8 @@ async fn fast_build(original: &CargoOutputResult) -> anyhow::Result<Utf8PathBuf>
     let res = Command::new("cc")
         .args(object_files)
         .arg("-Wl,-dylib")
-        .arg("-Wl,-undefined,dynamic_lookup")
-        .arg("-Wl,-export_dynamic")
+        // .arg("-Wl,-undefined,dynamic_lookup")
+        // .arg("-Wl,-export_dynamic")
         .arg("-arch")
         .arg("arm64")
         .arg("-o")

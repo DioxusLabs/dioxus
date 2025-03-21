@@ -4,7 +4,7 @@ edition = "2021"
 version.workspace = true
 
 [dependencies]
-dioxus = { workspace = true, features = ["desktop"] }
+dioxus = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
 color-eyre = { workspace = true }
@@ -13,3 +13,8 @@ subsecond = { workspace = true }
 tungstenite = { version = "0.23.0" }
 bincode = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+
+[features]
+default = [ "desktop" ]
+desktop = [ "dioxus/desktop" ]
+mobile = [ "dioxus/mobile" ]

@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::{BuildMode, BuildPlan};
+use super::BuildMode;
 
 /// The component of the serve engine that watches ongoing builds and manages their state, handle,
 /// and progress.
