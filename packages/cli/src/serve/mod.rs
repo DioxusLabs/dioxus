@@ -110,6 +110,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                                 args.build_arguments.clone(),
                                 handle.app.app.direct_rustc.clone(),
                                 files,
+                                runner.aslr_reference.unwrap(),
                             );
 
                             runner.clear_hot_reload_changes();
@@ -151,7 +152,8 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
             // Received a message from the devtools server - currently we only use this for
             // logging, so we just forward it the tui
             ServeUpdate::WsMessage(msg) => {
-                screen.push_ws_message(Platform::Web, msg);
+                screen.push_ws_message(Platform::Web, &msg);
+                runner.handle_ws_message(&msg).await;
             }
 
             // Wait for logs from the build engine

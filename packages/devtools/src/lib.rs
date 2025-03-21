@@ -81,6 +81,13 @@ pub fn connect(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Send +
             Err(_) => return,
         };
 
+        websocket.send(tungstenite::Message::Text(
+            serde_json::to_string(&ClientMsg::Initialize {
+                aslr_reference: subsecond::aslr_reference(),
+            })
+            .unwrap(),
+        ));
+
         while let Ok(msg) = websocket.read() {
             if let tungstenite::Message::Text(text) = msg {
                 if let Ok(msg) = serde_json::from_str(&text) {

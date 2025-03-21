@@ -11,6 +11,7 @@ use std::{
 pub use subsecond_macro::hot;
 pub use subsecond_types::JumpTable;
 
+mod android;
 mod macho;
 mod unix;
 mod wasm;
@@ -22,6 +23,11 @@ pub mod prelude {
 
 mod fn_impl;
 use fn_impl::*;
+
+#[no_mangle]
+pub extern "C" fn aslr_reference() -> u64 {
+    aslr_reference as *const () as u64
+}
 
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
@@ -115,10 +121,16 @@ impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
             // will likely end up in the vtable and will never be hot-reloaded since signature takes self.
             if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                 let known_fn_ptr = <T as HotFunction<A, M>>::call_it as *const ();
-                if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
+                let canonical_addr = known_fn_ptr as u64;
+                // let canonical_addr = known_fn_ptr as u64 & 0x00FFFFFFFFFFFFFF;
+                // let canonical_addr = known_fn_ptr as u64 & 0x00FFFFFFFFFFFFFF;
+                if let Some(ptr) = jump_table.map.get(&canonical_addr).cloned() {
+                    // let tag = known_fn_ptr as u64 & 0xFF00000000000000;
                     let ptr = ptr as *const ();
                     let true_fn = std::mem::transmute::<*const (), fn(&T, A) -> T::Return>(ptr);
                     return true_fn(&self.inner, args);
+                } else {
+                    println!("Could not find detour for {:#x}", canonical_addr);
                 }
             }
 
@@ -166,6 +178,8 @@ pub unsafe fn run_patch(jump_table: JumpTable) {
 
 #[cfg(any(unix, windows))]
 fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
+    // let old_offset = aslr_reference() - jump_table.aslr_reference;
+
     let old_offset = alsr_offset(
         jump_table.old_base_address as usize,
         #[cfg(unix)]
@@ -184,6 +198,14 @@ fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
     )
     .unwrap();
 
+    println!("known reference: {:#x}", aslr_reference());
+    println!("jump orig base: {:#x}", jump_table.old_base_address);
+    println!("jump new base: {:#x}", jump_table.new_base_address);
+    println!("jump orig offset: {:?}", old_offset);
+    println!("jump new offset: {:?}", new_offset);
+
+    // 487557233524
+
     // Modify the jump table to be relative to the base address of the loaded library
     jump_table.map = jump_table
         .map
@@ -196,102 +218,9 @@ fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
         })
         .collect();
 
+    println!("adjusted jump_table: {jump_table:#?}");
+
     jump_table
-}
-
-fn load_android_lib(path: &PathBuf) -> *mut c_void {
-    use std::ffi::{c_char, c_int, c_void, CString};
-    use std::mem;
-    use std::ptr;
-
-    #[repr(C)]
-    struct AndroidNamespaceT {
-        _private: [u8; 0],
-    }
-
-    #[repr(C)]
-    struct AndroidDlextinfo {
-        flags: u64,
-        reserved_addr: *mut c_void,
-        reserved_size: usize,
-        library_namespace: *mut AndroidNamespaceT,
-    }
-
-    const ANDROID_DLEXT_USE_NAMESPACE: u64 = 0x80;
-    const RTLD_NOW: c_int = 2;
-    const RTLD_DEFAULT: *mut c_void = 0 as *mut c_void;
-
-    type AndroidDlopenExtFn =
-        unsafe extern "C" fn(*const c_char, c_int, *const AndroidDlextinfo) -> *mut c_void;
-    type AndroidGetExportedNamespaceFn =
-        unsafe extern "C" fn(*const c_char) -> *mut AndroidNamespaceT;
-
-    extern "C" {
-        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
-        fn dlerror() -> *const c_char;
-        fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
-    }
-
-    pub fn load_in_app_namespace(library_path: &str) -> Result<*mut c_void, String> {
-        unsafe {
-            // Get function pointers dynamically
-            let android_dlopen_ext_name = CString::new("android_dlopen_ext").unwrap();
-            let android_get_exported_namespace_name =
-                CString::new("android_get_exported_namespace").unwrap();
-
-            let android_dlopen_ext_ptr = dlsym(RTLD_DEFAULT, android_dlopen_ext_name.as_ptr());
-            if android_dlopen_ext_ptr.is_null() {
-                return Err("Could not find android_dlopen_ext function".to_string());
-            }
-
-            let android_get_exported_namespace_ptr =
-                dlsym(RTLD_DEFAULT, android_get_exported_namespace_name.as_ptr());
-            if android_get_exported_namespace_ptr.is_null() {
-                return Err("Could not find android_get_exported_namespace function".to_string());
-            }
-
-            let android_dlopen_ext: AndroidDlopenExtFn = mem::transmute(android_dlopen_ext_ptr);
-            let android_get_exported_namespace: AndroidGetExportedNamespaceFn =
-                mem::transmute(android_get_exported_namespace_ptr);
-
-            // Rest of the code as before
-            let c_lib_path = match CString::new(library_path) {
-                Ok(s) => s,
-                Err(_) => return Err("Invalid library path".to_string()),
-            };
-
-            let app_namespace_name = CString::new("app").unwrap();
-            let app_namespace = android_get_exported_namespace(app_namespace_name.as_ptr());
-
-            if app_namespace.is_null() {
-                return Err("Could not find app namespace".to_string());
-            }
-
-            let mut dlextinfo: AndroidDlextinfo = mem::zeroed();
-            dlextinfo.flags = ANDROID_DLEXT_USE_NAMESPACE;
-            dlextinfo.library_namespace = app_namespace;
-
-            let handle = android_dlopen_ext(c_lib_path.as_ptr(), RTLD_NOW, &dlextinfo);
-
-            if handle.is_null() {
-                let error = dlerror();
-                if error.is_null() {
-                    Err("Unknown error loading library".to_string())
-                } else {
-                    let error_str = std::ffi::CStr::from_ptr(error)
-                        .to_string_lossy()
-                        .to_string();
-                    Err(format!("Error loading library: {}", error_str))
-                }
-            } else {
-                Ok(handle)
-            }
-        }
-    }
-
-    let lib = load_in_app_namespace(path.display().to_string().as_str()).unwrap();
-
-    lib
 }
 
 /// Get the offset of the current executable in the address space of the current process.
@@ -307,7 +236,7 @@ fn alsr_offset(
 
     // the only "known global symbol" for everything we compile is __rust_alloc
     // however some languages won't have this. we could consider linking in a known symbol but this works for now
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    // #[cfg(any(target_os = "macos", target_os = "ios"))]
     unsafe {
         offset = lib
             .get::<*const ()>(b"__rust_alloc")
@@ -315,28 +244,111 @@ fn alsr_offset(
             .map(|ptr| ptr.as_raw_ptr());
     };
 
-    #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
-    unsafe {
-        // used to be __executable_start by that doesn't work for shared libraries
-        offset = lib
-            .get::<*const ()>(b"__rust_alloc")
-            .ok()
-            .map(|ptr| ptr.as_raw_ptr());
-    };
+    println!("-aslr calc offset: {offset:?}");
+    println!("-aslr calc base_address: {base_address:?}");
+
+    // attempt to determine the aslr slide by using the on-disk rust-alloc symbol
+    // offset.map(|offset| offset.wrapping_byte_sub(base_address as usize))
+    offset.map(|offset| offset.wrapping_byte_sub(base_address))
+
+    // #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+    // unsafe {
+    //     // used to be __executable_start by that doesn't work for shared libraries
+    //     offset = lib
+    //         .get::<*const ()>(b"__rust_alloc")
+    //         .ok()
+    //         .map(|ptr| ptr.as_raw_ptr());
+    // };
 
     // Leak the library to prevent its drop from being called and unloading the library
-    let _handle = lib.into_raw() as *mut c_void;
+    // let _handle = lib.into_raw() as *mut c_void;
 
-    // windows needs the raw handle directly to lookup the base address
-    #[cfg(windows)]
-    unsafe {
-        offset = windows::get_module_base_address(_handle);
-    }
+    // // windows needs the raw handle directly to lookup the base address
+    // #[cfg(windows)]
+    // unsafe {
+    //     offset = windows::get_module_base_address(_handle);
+    // }
 
-    offset.map(|offset| offset.wrapping_byte_sub(base_address))
+    // let offset = offset.unwrap() as usize;
+    // // strip the tag
+    // //
+    // let offset = offset & 0x00FFFFFFFFFFFFFF;
+    // // let offset = offset & 0x00FFFFFFFFFFFFFF;
+
+    // // println!("offset: {offset:?}");
+    // // println!("base_address: {base_address:?}");
+    // // println!("base_address: {base_address:x?}");
+
+    // let res = offset - base_address as usize;
+    // // let res = offset.map(|offset| offset.wrapping_byte_sub(base_address as usize));
+    // println!("res: {res:?}");
+    // Some(res as _)
 }
 
 #[cfg(target_arch = "wasm32")]
 fn relocate_wasm_jump_table(jump_table: JumpTable) -> JumpTable {
     todo!()
 }
+
+// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: -aslr calc offset: Some(0x71ff1ef834)
+// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: -aslr calc base_address: 354356
+// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: known reference: 0x719fef5078
+// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: jump orig base: 0x114766c
+// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: jump new base: 0x56834
+// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: jump orig offset: 487982350336 (0x719E03C000)
+// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: jump new offset:                0x71ff199000
+
+// 0x71874444b0 - 17877148
+//
+// 0x7187 4444 b0
+// 0x1787 7148 b0
+//
+// seems to be flipped and tagged
+
+//
+// 487987849236 aslr reference
+// 487973692928 looking for
+//
+//
+// calculated aslr offset 0x719c546000
+
+// 01:16:49 [dev] Setting aslr_reference: 487569719956 -> 0x71856B8294
+//
+// 01:16:56 [dev] aslr_offset: 0x7183801000
+//
+// 0x71856B8294
+// 0x7183801000
+//
+// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:         18092028: 360016,
+// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:         19054588: 377400,
+// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:     },
+// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:     old_base_address: 18107204,
+// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:     new_base_address: 352976,
+// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr: }
+// 03-21 01:16:54.843 23835 23860 I RustStdoutStderr: Could not find detour for.. 487569422812
+// 03-21 01:16:54.843 23835 23860 I RustStdoutStderr: Could not find detour for.. 487569674160
+// 03-21 01:16:54.843 23835 23860 I RustStdoutStderr: Could not find detour for   487555413852
+// 03-21 01:16:54.846 23835 23860 I RustStdoutStderr: Could not find detour for.. 487555557228
+// 03-21 01:16:54.846 23835 23860 I RustStdoutStderr: Could not find detour for.. 487555557228
+//
+// 03-21 01:19:28.613 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186fa2514
+// 03-21 01:19:28.613 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186fdfec0
+// 03-21 01:19:28.613 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186245cf0
+// 03-21 01:19:28.614 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186268fac
+// 03-21 01:19:28.614 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186268fac
+//
+// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: known reference: 0x7186feb118 (in the program)
+// on disk the aslr reference is 0000000001eb8118
+//
+// locations of rust_alloc shift
+//
+// aslr slide is 0x7185133000a
+//
+// addr if symbol looking for is 0x1135FAC (or 18046892) which is very similar to 18092028
+//
+// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump orig base: 0x11452f8  (base of __rust_alloc on disk)
+// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump new base: 0x567f0  (base of __rust_alloc in patch)
+//
+//
+// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump orig offset: 0x74c3950fa4
+// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump new offset: 0x71ff194000

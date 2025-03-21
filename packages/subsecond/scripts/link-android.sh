@@ -158,7 +158,7 @@
     -shared \
     -Wl,--eh-frame-hdr \
     -Wl,-z,noexecstack \
-    -Wl,-undefined=dynamic_lookup
+    # -Wl,-undefined=dynamic_lookup
     # -Wl,--allow-shlib-undefined \
     # -Wl,--unresolved-symbols=ignore-all \
     # -Wl,--defsym,__rdl_alloc=0 \

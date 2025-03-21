@@ -37,11 +37,16 @@ macro_rules! impl_hot_function {
                         if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                             let real = std::mem::transmute_copy::<Self, Self::Real>(&self);
                             let real = real as *const ();
-                            if let Some(ptr) = jump_table.map.get(&(real as u64)).cloned() {
+                            let canonical_addr = real as u64;
+                            // let canonical_addr = real as u64 & 0x00FFFFFFFFFFFFFF;
+                            // let canonical_addr = real as u64 & 0x00FFFFFFFFFFFFFF;
+                            if let Some(ptr) = jump_table.map.get(&canonical_addr).cloned() {
                                 let detoured = std::mem::transmute::<*const (), Self::Real>(ptr as *const ());
                                 #[allow(non_snake_case)]
                                 let ( $($arg,)* ) = args;
                                 return detoured($($arg),*);
+                            } else {
+                                println!("Could not find detour for {:#x}", canonical_addr);
                             }
                         }
 

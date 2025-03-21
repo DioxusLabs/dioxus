@@ -30,6 +30,9 @@ pub enum DevserverMsg {
 /// This is used to communicate with the devserver
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum ClientMsg {
+    Initialize {
+        aslr_reference: u64,
+    },
     Log {
         level: String,
         messages: Vec<String>,

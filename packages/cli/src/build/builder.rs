@@ -186,6 +186,7 @@ impl Builder {
         args: BuildArgs,
         direct_rustc: Vec<String>,
         changed_files: Vec<PathBuf>,
+        aslr_offset: u64,
     ) -> Result<()> {
         // Initialize a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         let request = BuildRequest::new(
@@ -195,6 +196,7 @@ impl Builder {
             BuildMode::Thin {
                 direct_rustc,
                 changed_files,
+                aslr_reference: aslr_offset,
             },
         )?;
 

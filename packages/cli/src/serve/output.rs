@@ -329,7 +329,7 @@ impl Output {
     }
 
     /// Push a message from the websocket to the logs
-    pub fn push_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
+    pub fn push_ws_message(&mut self, platform: Platform, message: &axum::extract::ws::Message) {
         use dioxus_devtools_types::ClientMsg;
 
         // We can only handle text messages from the websocket...
@@ -341,12 +341,16 @@ impl Output {
         let res = serde_json::from_str::<ClientMsg>(text.as_str());
 
         // Client logs being errors aren't fatal, but we should still report them them
-        let ClientMsg::Log { level, messages } = match res {
+        let msg = match res {
             Ok(msg) => msg,
             Err(err) => {
                 tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", platform, err);
                 return;
             }
+        };
+
+        let ClientMsg::Log { level, messages } = msg else {
+            return;
         };
 
         // FIXME(jon): why are we pulling only the first message here?

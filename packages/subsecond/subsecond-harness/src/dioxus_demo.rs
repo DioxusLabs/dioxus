@@ -11,7 +11,7 @@ pub fn launch() {
 
 fn app() -> Element {
     let mut count = use_signal(|| 0);
-    let value = 12211123;
+    let value = 12121212;
 
     rsx! {
         h2 { "iOS Binary Patching - {count}" }
@@ -22,11 +22,8 @@ fn app() -> Element {
             "Increment! {value}"
         }
 
-        for x in 0..1 {
-            Child { id: x, opt: "List entr!!y" }
-        }
         for x in 0..2 {
-            Child { id: x, opt: "List entry" }
+            Child { id: x, opt: "List entr!!y" }
         }
     }
 }

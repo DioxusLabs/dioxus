@@ -306,9 +306,9 @@ impl AppBundle {
                 tracing::debug!("Bundle created at {}", bundle.build.root_dir().display());
             }
 
-            BuildMode::Thin { .. } => {
+            BuildMode::Thin { aslr_reference, .. } => {
                 tracing::debug!("Patching existing bundle");
-                bundle.write_patch().await?;
+                bundle.write_patch(aslr_reference).await?;
             }
         }
 
@@ -569,17 +569,32 @@ impl AppBundle {
     }
 
     /// Run our custom linker setup to generate a patch file in the right location
-    async fn write_patch(&self) -> Result<()> {
+    async fn write_patch(&self, aslr_offset: u64) -> Result<()> {
         let raw_args = std::fs::read_to_string(&self.build.link_args_file())
             .context("Failed to read link args from file")?;
 
         let args = raw_args.lines().collect::<Vec<_>>();
 
+        let orig_exe = self.main_exe();
+        tracing::debug!("writing patch - orig_exe: {:?}", orig_exe);
+
         let object_files = args
             .iter()
             .filter(|arg| arg.ends_with(".rcgu.o"))
             .sorted()
+            .map(|arg| PathBuf::from(arg))
             .collect::<Vec<_>>();
+
+        let resolved_patch_bytes = subsecond_cli_support::resolve::resolve_undefined(
+            &orig_exe,
+            &object_files,
+            &self.build.target,
+            aslr_offset,
+        )
+        .expect("failed to resolve patch symbols");
+
+        let patch_file = self.main_exe().with_file_name("patch-syms.o");
+        std::fs::write(&patch_file, resolved_patch_bytes)?;
 
         let linker = match self.build.platform {
             Platform::Android => {
@@ -596,9 +611,8 @@ impl AppBundle {
             Platform::Liveview => todo!(),
         };
 
-        // let orig_exe = self.main_exe();
-
         let thin_args = self.thin_link_args(&args);
+
         // let mut env_vars = vec![];
         // self.build.build_android_env(&mut env_vars, false)?;
 
@@ -610,6 +624,7 @@ impl AppBundle {
         //       we might need to link a new patch file that implements the lookups
         let res = Command::new(linker)
             .args(object_files.iter())
+            .arg(patch_file)
             .args(thin_args)
             .arg("-v")
             .arg("-o") // is it "-o" everywhere?
@@ -636,7 +651,10 @@ impl AppBundle {
 
         // Also clean up the original fat file since that's causing issues with rtld_global
         // todo: this might not be platform portable
-        let link_orig = args.iter().position(|arg| *arg == "-o").unwrap();
+        let link_orig = args
+            .iter()
+            .position(|arg| *arg == "-o")
+            .expect("failed to find -o");
         let link_file: PathBuf = args[link_orig + 1].clone().into();
         _ = std::fs::remove_file(&link_file);
 
@@ -656,9 +674,9 @@ impl AppBundle {
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
                 args.extend([
                     "-Wl,-dylib".to_string(),
-                    "-Wl,-export_dynamic".to_string(),
-                    "-Wl,-unexported_symbol,_main".to_string(),
-                    "-Wl,-undefined,dynamic_lookup".to_string(),
+                    // "-Wl,-export_dynamic".to_string(),
+                    // "-Wl,-unexported_symbol,_main".to_string(),
+                    // "-Wl,-undefined,dynamic_lookup".to_string(),
                 ]);
 
                 match triple.architecture {
@@ -697,18 +715,18 @@ impl AppBundle {
                         // "-lm",
                         // "-lc",
                         "-Wl,--eh-frame-hdr".to_string(),
-                        // "-Wl,-z,noexecstack".to_string(),
+                        "-Wl,-z,noexecstack".to_string(),
                         // "-Wl,-u,__rdl_alloc".to_string(),
                         // "-Wl,-u,__rdl_dealloc".to_string(),
                         // "-Wl,-u,__rdl_realloc".to_string(),
                         // "-Wl,-u,__rdl_alloc_zeroed".to_string(),
                         // "-Wl,-u,__rg_oom".to_string(),
                         // "-Wl,--allow-shlib-undefined".to_string(),
-                        "-Wl,--defsym,__rdl_alloc=0".to_string(),
-                        "-Wl,--defsym,__rdl_dealloc=0".to_string(),
-                        "-Wl,--defsym,__rdl_realloc=0".to_string(),
-                        "-Wl,--defsym,__rdl_alloc_zeroed=0".to_string(),
-                        "-Wl,--defsym,__rg_oom=0".to_string(),
+                        // "-Wl,--defsym,__rdl_alloc=0".to_string(),
+                        // "-Wl,--defsym,__rdl_dealloc=0".to_string(),
+                        // "-Wl,--defsym,__rdl_realloc=0".to_string(),
+                        // "-Wl,--defsym,__rdl_alloc_zeroed=0".to_string(),
+                        // "-Wl,--defsym,__rg_oom=0".to_string(),
                     ]
                     .iter()
                     .map(|s| s.to_string()),

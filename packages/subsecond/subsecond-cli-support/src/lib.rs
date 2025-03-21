@@ -58,7 +58,6 @@ pub fn create_jump_table(
         | OperatingSystem::IOS(_)
         | OperatingSystem::Windows => {
             let options = ["___rust_alloc", "__rust_alloc"];
-            let options = ["___rust_alloc", "__rust_alloc"];
             for option in options {
                 if old_name_to_addr.contains_key(option) {
                     old_base_address = old_name_to_addr.get(option).unwrap().clone();
@@ -76,10 +75,24 @@ pub fn create_jump_table(
         }
     }
 
+    let aslr_reference = old_name_to_addr
+        .get("aslr_reference")
+        .unwrap_or_else(|| {
+            old_name_to_addr
+                .get("_aslr_reference")
+                .expect("failed to find aslr_reference")
+        })
+        .clone();
+
+    if new_base_address == 0 {
+        panic!("new_base_address is 0");
+    }
+
     Ok(JumpTable {
         lib: patch.to_path_buf(),
         map,
         old_base_address,
         new_base_address,
+        aslr_reference,
     })
 }

@@ -1,13 +1,9 @@
 use dioxus::prelude::dioxus_devtools;
 use subsecond::JumpTable;
 
-#[no_mangle]
-pub extern "C" fn aslr_reference() -> u64 {
-    aslr_reference as *const () as u64
-}
-
 pub fn initialize() {
     if let Some(endpoint) = dioxus::cli_config::devserver_ws_endpoint() {
+        // dioxus_devtools::connect(endpoint, callback);
         // dioxus_devtools::connect(endpoint, |msg| match msg {
         //     dioxus_devtools::DevserverMsg::HotReload(hot_reload_msg) => {
         //         if let Some(jump_table) = hot_reload_msg.jump_table {
@@ -33,7 +29,9 @@ pub fn initialize() {
         };
 
         websocket
-            .send(tungstenite::Message::Text(aslr_reference().to_string()))
+            .send(tungstenite::Message::Text(
+                subsecond::aslr_reference().to_string(),
+            ))
             .unwrap();
 
         while let Ok(msg) = websocket.read() {

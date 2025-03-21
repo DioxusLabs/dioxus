@@ -1,5 +1,6 @@
 use super::{AppHandle, ServeUpdate, WebServer};
 use crate::{AppBundle, BuildMode, DioxusCrate, Platform, ReloadKind, Result, TraceSrc};
+use anyhow::Context;
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -29,6 +30,7 @@ pub(crate) struct AppRunner {
     pub(crate) builds_opened: usize,
     pub(crate) automatic_rebuilds: bool,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
+    pub(crate) aslr_reference: Option<u64>,
 }
 
 pub enum HotReloadKind {
@@ -54,6 +56,7 @@ impl AppRunner {
             krate: krate.clone(),
             builds_opened: 0,
             automatic_rebuilds: true,
+            aslr_reference: None,
         };
 
         // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
@@ -499,5 +502,35 @@ impl AppRunner {
         );
 
         Ok(jump_table)
+    }
+
+    pub(crate) async fn handle_ws_message(
+        &mut self,
+        msg: &axum::extract::ws::Message,
+    ) -> Result<()> {
+        use dioxus_devtools_types::ClientMsg;
+
+        let res = serde_json::from_str::<ClientMsg>(
+            &msg.to_text()
+                .context("client message not proper encoding")?,
+        );
+
+        // Client logs being errors aren't fatal, but we should still report them them
+        let msg = match res {
+            Ok(msg) => msg,
+            Err(err) => {
+                tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", Platform::Web, err);
+                return Ok(());
+            }
+        };
+
+        let ClientMsg::Initialize { aslr_reference } = msg else {
+            return Ok(());
+        };
+
+        tracing::debug!("Setting aslr_reference: {aslr_reference}");
+        self.aslr_reference = Some(aslr_reference);
+
+        Ok(())
     }
 }

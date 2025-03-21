@@ -100,6 +100,7 @@ pub enum BuildMode {
     Thin {
         direct_rustc: Vec<String>,
         changed_files: Vec<PathBuf>,
+        aslr_reference: u64,
     },
 }
 
