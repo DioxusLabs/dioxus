@@ -1676,7 +1676,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "lazy_static",
  "lazycell",
  "log",
@@ -3280,7 +3280,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e3d747f100290a1ca24b752186f61f6637e1deffe3bf6320de6fcb29510a307"
 dependencies = [
  "bitflags 2.6.0",
- "libloading 0.8.6",
+ "libloading 0.7.4",
  "winapi",
 ]
 
@@ -6389,7 +6389,7 @@ dependencies = [
  "bitflags 2.6.0",
  "com",
  "libc",
- "libloading 0.8.6",
+ "libloading 0.7.4",
  "thiserror 1.0.69",
  "widestring",
  "winapi",
@@ -7709,7 +7709,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -9490,7 +9490,7 @@ dependencies = [
  "aes-gcm",
  "aes-kw",
  "argon2",
- "base64 0.22.1",
+ "base64 0.21.7",
  "bitfield",
  "block-padding",
  "blowfish",
@@ -10058,7 +10058,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81bddcdb20abf9501610992b6759a4c888aef7d1a7247ef75e2404275ac24af1"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.98",
@@ -11488,8 +11488,8 @@ dependencies = [
 
 [[package]]
 name = "server_fn"
-version = "0.8.0-alpha"
-source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#3dbb25185373860b498030d639c4786e0c366408"
+version = "0.8.0-beta"
+source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#716c770a45af09fab00d142cd46d6b67f12da5a0"
 dependencies = [
  "axum 0.8.1",
  "base64 0.22.1",
@@ -11514,6 +11514,8 @@ dependencies = [
  "server_fn_macro_default",
  "thiserror 2.0.11",
  "throw_error",
+ "tokio",
+ "tokio-tungstenite 0.26.2",
  "tower 0.5.2",
  "tower-layer",
  "url",
@@ -11526,21 +11528,22 @@ dependencies = [
 
 [[package]]
 name = "server_fn_macro"
-version = "0.8.0-alpha"
-source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#3dbb25185373860b498030d639c4786e0c366408"
+version = "0.8.0-beta"
+source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#716c770a45af09fab00d142cd46d6b67f12da5a0"
 dependencies = [
  "const_format",
  "convert_case 0.6.0",
  "proc-macro2",
  "quote",
+ "rustc_version 0.4.1",
  "syn 2.0.98",
  "xxhash-rust",
 ]
 
 [[package]]
 name = "server_fn_macro_default"
-version = "0.8.0-alpha"
-source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#3dbb25185373860b498030d639c4786e0c366408"
+version = "0.8.0-beta"
+source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#716c770a45af09fab00d142cd46d6b67f12da5a0"
 dependencies = [
  "server_fn_macro",
  "syn 2.0.98",
@@ -12005,7 +12008,7 @@ dependencies = [
  "quote",
  "sqlx-core",
  "sqlx-macros-core",
- "syn 2.0.90",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -12028,7 +12031,7 @@ dependencies = [
  "sqlx-mysql",
  "sqlx-postgres",
  "sqlx-sqlite",
- "syn 2.0.90",
+ "syn 2.0.98",
  "tempfile",
  "tokio",
  "url",
@@ -13226,7 +13229,7 @@ dependencies = [
 [[package]]
 name = "throw_error"
 version = "0.3.0"
-source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#3dbb25185373860b498030d639c4786e0c366408"
+source = "git+https://github.com/leptos-rs/leptos?branch=leptos_0.8#716c770a45af09fab00d142cd46d6b67f12da5a0"
 dependencies = [
  "pin-project-lite",
 ]
@@ -13321,9 +13324,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.42.0"
+version = "1.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cec9b21b0450273377fc97bd4c33a8acffc8c996c987a7c5b319a0083707551"
+checksum = "f382da615b842244d4b8738c82ed1275e6c5dd90c459a30941cd07080b06c91a"
 dependencies = [
  "backtrace",
  "bytes",
@@ -13350,9 +13353,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "693d596312e88961bc67d7f1f97af8a70227d9f90c31bba5806eec004978d752"
+checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -13424,6 +13427,7 @@ checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
 dependencies = [
  "futures-util",
  "log",
+ "rustls 0.23.19",
  "tokio",
  "tungstenite 0.26.2",
 ]
@@ -14767,7 +14771,7 @@ dependencies = [
  "js-sys",
  "khronos-egl",
  "libc",
- "libloading 0.8.6",
+ "libloading 0.7.4",
  "log",
  "metal",
  "naga",
@@ -14883,7 +14887,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

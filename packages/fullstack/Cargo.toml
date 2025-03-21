@@ -12,8 +12,7 @@ resolver = "2"
 
 [dependencies]
 # server functions
-# server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
-server_fn = { git = "https://github.com/leptos-rs/leptos", branch = "leptos_0.8", features = ["json", "url", "browser"], default-features = false }
+server_fn = { git = "https://github.com/leptos-rs/leptos", branch = "leptos_0.8", features = ["browser"], default-features = false }
 dioxus_server_macro = { workspace = true }
 
 # axum
