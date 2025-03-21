@@ -25,12 +25,12 @@ fn transform_rx(message: Result<Message, axum::Error>) -> Result<Vec<u8>, LiveVi
     message
         .map_err(|_| LiveViewError::SendingFailed)?
         .into_text()
-        .map(|s| s.into_bytes())
+        .map(|s| s.as_str().into())
         .map_err(|_| LiveViewError::SendingFailed)
 }
 
 async fn transform_tx(message: Vec<u8>) -> Result<Message, axum::Error> {
-    Ok(Message::Binary(message))
+    Ok(Message::Binary(message.into()))
 }
 
 impl LiveviewRouter for Router {
