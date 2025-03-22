@@ -7,7 +7,8 @@ pub fn initialize() {
     }
 
     // Spawn a thread that will read bytes from the fd
-    // the host process will write new bytes to the fd when it wants to reload the binary
+    // the host process will write newa bytes to the fd when it wants to reload the binary
+    #[cfg(not(target_arch = "wasm32"))]
     std::thread::spawn(|| {
         let endpoint =
             std::env::var("HOTRELOAD_ENDPOINT").unwrap_or("ws://localhost:9393".to_string());

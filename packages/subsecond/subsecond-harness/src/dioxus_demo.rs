@@ -1,8 +1,3 @@
-// use dioxus::desktop::window;
-// button { onclick: move |_| window().set_zoom_level(1.0), "Zoom 1x" }
-// button { onclick: move |_| window().set_zoom_level(1.5), "Zoom 1.5x" }
-// button { onclick: move |_| window().set_zoom_level(2.0), "Zoom 2x" }
-// button { onclick: move |_| window().set_zoom_level(3.0), "Zoom 3x" }
 use dioxus::prelude::*;
 
 pub fn launch() {
@@ -10,14 +5,13 @@ pub fn launch() {
 }
 
 fn app() -> Element {
-    let value = 123456;
+    let count = 123456789;
 
     rsx! {
-        "hi {value}"
-
+        "hi {count}"
         div {
-            for x in 0..5 {
-                Child { id: x, opt: "List entr!!y" }
+            for x in 0..7 {
+                Child { id: x, opt: "List entry" }
             }
         }
     }
@@ -61,5 +55,17 @@ fn Child4(id: u32, opt: String) -> Element {
         div { "Hello ?? child: {id} - {opt} ?" }
         div { "Hello ?? child: {id} - {opt} ?" }
         div { "Hello ?? child: {id} - {opt} ?" }
+    }
+}
+
+#[component]
+fn ZoomComponent() -> Element {
+    // use dioxus::desktop::window;
+    // button { onclick: move |_| window().set_zoom_level(1.0), "Zoom 1x" }
+    // button { onclick: move |_| window().set_zoom_level(1.5), "Zoom 1.5x" }
+    // button { onclick: move |_| window().set_zoom_level(2.0), "Zoom 2x" }
+    // button { onclick: move |_| window().set_zoom_level(3.0), "Zoom 3x" }
+    rsx! {
+        div { "Zoom me!" }
     }
 }

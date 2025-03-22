@@ -37,27 +37,25 @@ macro_rules! impl_hot_function {
                         if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                             let real = std::mem::transmute_copy::<Self, Self::Real>(&self);
                             let real = real as *const ();
-                            let nibble /*   */ = real as u64 & 0xFF000_000_0000_0000;
-                            let canonical_addr = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
-                            // let canonical_addr = real as u64 & 0x00FFFFFFFFFFFFFF;
-                            // let canonical_addr = real as u64 & 0x00FFFFFFFFFFFFFF;
-                            if let Some(ptr) = jump_table.map.get(&canonical_addr).cloned() {
-                                println!("Detouring fat pointer ({canonical_addr:?}) {:#x} -> {:#x}", canonical_addr, ptr as u64);
-                                println!("its nibble is {:#x}", nibble);
-                                // apply the nibble
-                                let ptr = ptr | nibble;
-                                // align the ptr to 16 bytes
-                                #[repr(C, align(8))]
-                                struct AlignedPtr<T>(*const T);
-                                let ptr = AlignedPtr(ptr as *const ());
 
-                                let detoured = std::mem::transmute::<AlignedPtr<_>, Self::Real>(ptr);
+                            // Android implements MTE / pointer tagging and we need to preserve the tag. Todo - we might not actually need to do this anymore
+                            // This is only implemented on 64-bit platforms
+                            #[cfg(target_pointer_width = "64")] let nibble    = real as u64 & 0x00FFFFFFFFFFFFFF;
+                            #[cfg(target_pointer_width = "64")] let canonical = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
+
+                            // No nibble on 32-bit platforms, but we still need to assume u64 since the host always writes 64-bit pointers
+                            #[cfg(target_pointer_width = "32")] let canonical = real as u64;
+
+                            if let Some(ptr) = jump_table.map.get(&canonical).cloned() {
+                                // Re-apply the nibble
+                                #[cfg(target_pointer_width = "64")] let ptr: u64 = ptr | nibble;
+                                #[cfg(target_pointer_width = "32")] let ptr: u32 = ptr as u32;
+
+                                let detoured = std::mem::transmute::<_, Self::Real>(ptr);
+
                                 #[allow(non_snake_case)]
                                 let ( $($arg,)* ) = args;
                                 return detoured($($arg),*);
-                            } else {
-                                let weare = std::any::type_name::<Self>();
-                                println!("Could not find detour for {:?} while calling {weare}", real);
                             }
                         }
 

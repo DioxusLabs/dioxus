@@ -6,15 +6,18 @@ version.workspace = true
 [dependencies]
 dioxus = { workspace = true }
 anyhow = { workspace = true }
+subsecond = { workspace = true }
+bincode = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = { workspace = true }
 color-eyre = { workspace = true }
 ratatui = { workspace = true, features = ["crossterm"] }
-subsecond = { workspace = true }
 tungstenite = { version = "0.23.0" }
-bincode = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = [ "desktop" ]
+default = [ ]
 desktop = [ "dioxus/desktop" ]
 mobile = [ "dioxus/mobile" ]
+web = [ "dioxus/web" ]

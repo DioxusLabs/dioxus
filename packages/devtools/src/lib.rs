@@ -6,7 +6,6 @@ use dioxus_core::{
 };
 pub use dioxus_devtools_types::*;
 use dioxus_signals::{GlobalKey, Writable};
-use libc::dlsym;
 use subsecond::JumpTable;
 use warnings::Warning;
 

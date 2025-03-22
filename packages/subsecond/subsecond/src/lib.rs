@@ -124,19 +124,10 @@ impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
             if let Some(jump_table) = APP_JUMP_TABLE.as_ref() {
                 let known_fn_ptr = <T as HotFunction<A, M>>::call_it as *const ();
                 let canonical_addr = known_fn_ptr as u64;
-                // let canonical_addr = known_fn_ptr as u64 & 0x00FFFFFFFFFFFFFF;
-                // let canonical_addr = known_fn_ptr as u64 & 0x00FFFFFFFFFFFFFF;
                 if let Some(ptr) = jump_table.map.get(&canonical_addr).cloned() {
-                    // let tag = known_fn_ptr as u64 & 0xFF00000000000000;
                     let ptr = ptr as *const ();
-                    println!(
-                        "Detouring fat pointer ({known_fn_ptr:?}) {:#x} -> {:#x}",
-                        canonical_addr, ptr as u64
-                    );
                     let true_fn = std::mem::transmute::<*const (), fn(&T, A) -> T::Return>(ptr);
                     return true_fn(&self.inner, args);
-                } else {
-                    println!("Could not find detour for {:#x}", canonical_addr);
                 }
             }
 
@@ -246,6 +237,7 @@ fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
 /// Get the offset of the current executable in the address space of the current process.
 ///
 /// Forgets the library to prevent its drop from being calleds
+#[cfg(any(unix, windows))]
 fn alsr_offset(
     base_address: usize,
     #[cfg(unix)] lib: libloading::os::unix::Library,
@@ -262,108 +254,6 @@ fn alsr_offset(
     };
 
     offset.wrapping_byte_sub(base_address) as usize
-
-    // // We're going to use our reference function that we manually linked in
-    // let reference = unsafe { leak.get::<*mut u64>(b"dynamic_aslr_reference").unwrap() };
-    // let reference_addr = *reference as *mut u64;
-    // let reference_value = unsafe { *reference_addr } as usize;
-
-    // println!("reference: {reference_addr:#x?}");
-    // println!("reference value: {reference_value:#x?}");
-
-    // // because the program is opened above address 0, the addr will always be higher than the value
-    // let out = reference_addr as usize - reference_value;
-    // println!("out: {out:#x?}");
-    // out
-
-    // #[allow(unused_assignments)]
-    // let mut offset = None;
-
-    // // the only "known global symbol" for everything we compile is __rust_alloc
-    // // however some languages won't have this. we could consider linking in a known symbol but this works for now
-    // #[cfg(any(target_os = "macos", target_os = "ios"))]
-    // unsafe {
-    //     offset = lib
-    //         .get::<*const ()>(b"__rust_alloc")
-    //         .ok()
-    //         .map(|ptr| ptr.as_raw_ptr());
-    // };
-
-    // #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
-    // unsafe {
-    //     offset = lib
-    //         .get::<*const ()>(b"__rust_alloc")
-    //         .ok()
-    //         .map(|ptr| ptr.as_raw_ptr());
-    // };
-
-    // // Leak the library to prevent its drop from being called and unloading the library
-    // let _handle = lib.into_raw() as *mut c_void;
-
-    // // windows needs the raw handle directly to lookup the base address
-    // #[cfg(windows)]
-    // unsafe {
-    //     offset = windows::get_module_base_address(_handle);
-    // }
-
-    // 03-21 02:20:20.332 25787 25811 I RustStdoutStderr: offset: Some(0x71ff1d87f8)
-    // 03-21 02:20:20.332 25787 25811 I RustStdoutStderr: base_address: 354296
-
-    // println!("offset: {offset:?}");
-    // println!("base_address: {base_address:?}");
-    // // offset.map(|offset| offset as usize - base_address)
-    // let offset = offset.unwrap();
-    // offset as usize - base_address
-
-    // // the only "known global symbol" for everything we compile is __rust_alloc
-    // // however some languages won't have this. we could consider linking in a known symbol but this works for now
-    // // #[cfg(any(target_os = "macos", target_os = "ios"))]
-    // unsafe {
-    //     offset = lib
-    //         .get::<*const ()>(b"__rust_alloc")
-    //         .ok()
-    //         .map(|ptr| ptr.as_raw_ptr());
-    // };
-
-    // println!("-aslr calc offset: {offset:?}");
-    // println!("-aslr calc base_address: {base_address:?}");
-
-    // // attempt to determine the aslr slide by using the on-disk rust-alloc symbol
-    // // offset.map(|offset| offset.wrapping_byte_sub(base_address as usize))
-    // offset.map(|offset| offset.wrapping_byte_sub(base_address))
-
-    // #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
-    // unsafe {
-    //     // used to be __executable_start by that doesn't work for shared libraries
-    //     offset = lib
-    //         .get::<*const ()>(b"__rust_alloc")
-    //         .ok()
-    //         .map(|ptr| ptr.as_raw_ptr());
-    // };
-
-    // Leak the library to prevent its drop from being called and unloading the library
-    // let _handle = lib.into_raw() as *mut c_void;
-
-    // // windows needs the raw handle directly to lookup the base address
-    // #[cfg(windows)]
-    // unsafe {
-    //     offset = windows::get_module_base_address(_handle);
-    // }
-
-    // let offset = offset.unwrap() as usize;
-    // // strip the tag
-    // //
-    // let offset = offset & 0x00FFFFFFFFFFFFFF;
-    // // let offset = offset & 0x00FFFFFFFFFFFFFF;
-
-    // // println!("offset: {offset:?}");
-    // // println!("base_address: {base_address:?}");
-    // // println!("base_address: {base_address:x?}");
-
-    // let res = offset - base_address as usize;
-    // // let res = offset.map(|offset| offset.wrapping_byte_sub(base_address as usize));
-    // println!("res: {res:?}");
-    // Some(res as _)
 }
 
 #[cfg(target_arch = "wasm32")]

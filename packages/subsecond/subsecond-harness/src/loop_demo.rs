@@ -6,5 +6,5 @@ pub fn launch() {
 }
 
 fn tick() {
-    println!("oh gulp!!!!??????");
+    println!("edit me to see the loop in action");
 }

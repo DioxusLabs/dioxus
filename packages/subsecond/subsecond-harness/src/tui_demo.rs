@@ -1,3 +1,5 @@
+#![cfg(not(target_arch = "wasm32"))]
+
 use color_eyre::Result;
 use rand::{rng, Rng};
 use ratatui::{

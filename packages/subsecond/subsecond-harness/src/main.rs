@@ -3,6 +3,7 @@ mod loop_demo;
 mod tui_demo;
 mod ws_conn;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     ws_conn::initialize();
 
@@ -14,4 +15,9 @@ fn main() {
         "tui" => tui_demo::launch(),
         _ => panic!("Unknown demo: {}", demo),
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    dioxus_demo::launch();
 }
