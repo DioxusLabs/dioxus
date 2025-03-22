@@ -10,7 +10,7 @@ fn app() -> Element {
     rsx! {
         "hi {count}"
         div {
-            for x in 0..7 {
+            for x in 0..2 {
                 Child { id: x, opt: "List entry" }
             }
         }

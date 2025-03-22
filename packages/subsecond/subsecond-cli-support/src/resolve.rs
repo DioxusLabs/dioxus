@@ -29,7 +29,7 @@ pub fn resolve_undefined(
     source: &Path,
     incrementals: &[PathBuf],
     triple: &Triple,
-    aslr_reference: u64,
+    aslr_reference: Option<u64>,
 ) -> Result<Vec<u8>> {
     let sorted: Vec<_> = incrementals.iter().sorted().collect();
 
@@ -111,15 +111,21 @@ pub fn resolve_undefined(
         .collect::<HashMap<_, _>>();
 
     // Get the offset from the main module
-    let aslr_offset = aslr_reference
-        - symbol_table
-            .get("_aslr_reference")
-            .unwrap_or_else(|| {
-                symbol_table
-                    .get("aslr_reference")
-                    .expect("failed to find aslr_reference")
-            })
-            .address();
+    let aslr_offset = match triple.architecture {
+        target_lexicon::Architecture::Wasm32 => 0,
+        _ => {
+            let aslr_reference = aslr_reference.unwrap();
+            aslr_reference
+                - symbol_table
+                    .get("_aslr_reference")
+                    .unwrap_or_else(|| {
+                        symbol_table
+                            .get("aslr_reference")
+                            .expect("failed to find aslr_reference")
+                    })
+                    .address()
+        }
+    };
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry

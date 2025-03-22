@@ -19,6 +19,7 @@ use tokio::{
     time::Instant,
 };
 use tokio_tungstenite::WebSocketStream;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -47,6 +48,8 @@ struct Args {
 /// 7. Pause the process with lldb, run the "hotfn_load_binary_patch" command and then continue
 /// 8. Repeat
 async fn hotreload_loop() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
+
     let args = Args::parse();
     let target: Triple = args
         .target
@@ -84,7 +87,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     let app = launch_app(&fat_exe, &target)?;
 
     // Wait for the websocket to come up
-    let mut client = wait_for_ws(9393).await?;
+    let mut client = wait_for_ws(9393, &target).await?;
 
     // don't log if the screen has been taken over - important for tui apps
     let should_log = rust_log_enabled();
@@ -101,12 +104,12 @@ async fn hotreload_loop() -> anyhow::Result<()> {
             continue;
         }
 
-        if should_log {
-            println!("Fast reloading... ");
-        }
+        tracing::info!("Fast reloading... ");
 
         let started = Instant::now();
-        let Ok(output_temp) = fast_build(&result, &target, client.aslr_reference).await else {
+        let Ok(output_temp) =
+            fast_build(&result, &target, client.as_ref().map(|s| s.aslr_reference)).await
+        else {
             continue;
         };
 
@@ -119,16 +122,16 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         )
         .unwrap();
 
-        client
-            .socket
-            .send(tokio_tungstenite::tungstenite::Message::Binary(
-                bincode::serialize(&jump_table).unwrap().into(),
-            ))
-            .await?;
-
-        if should_log {
-            println!("Patching complete in {}ms", started.elapsed().as_millis())
+        if let Some(client) = client.as_mut() {
+            client
+                .socket
+                .send(tokio_tungstenite::tungstenite::Message::Binary(
+                    bincode::serialize(&jump_table).unwrap().into(),
+                ))
+                .await?;
         }
+
+        tracing::info!("Patching complete in {}ms", started.elapsed().as_millis())
     }
 
     drop(app);
@@ -138,15 +141,18 @@ async fn hotreload_loop() -> anyhow::Result<()> {
 
 fn launch_app(fat_exe: &Utf8PathBuf, target: &Triple) -> Result<Child, anyhow::Error> {
     let app = match target.architecture {
-        target_lexicon::Architecture::Wasm32 => Command::new("python3")
-            .current_dir(static_folder())
-            .arg("-m")
-            .arg("http.server")
-            .arg("9394")
-            .arg("--directory")
-            .arg(".")
-            .kill_on_drop(true)
-            .spawn()?,
+        target_lexicon::Architecture::Wasm32 => {
+            info!("Serving wasm at http://127.0.0.1:9393");
+            Command::new("python3")
+                .current_dir(static_folder())
+                .arg("-m")
+                .arg("http.server")
+                .arg("9394")
+                .arg("--directory")
+                .arg(".")
+                .kill_on_drop(true)
+                .spawn()?
+        }
         _ => Command::new(fat_exe).kill_on_drop(true).spawn()?,
     };
 
@@ -205,19 +211,24 @@ struct WsClient {
     socket: WebSocketStream<tokio::net::TcpStream>,
 }
 
-async fn wait_for_ws(port: u16) -> anyhow::Result<WsClient> {
-    let port = port;
+async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<Option<WsClient>> {
+    if target.architecture == target_lexicon::Architecture::Wasm32 {
+        return Ok(None);
+    }
+
     let addr = format!("127.0.0.1:{}", port);
     let try_socket = TcpListener::bind(&addr).await;
     let listener = try_socket.expect("Failed to bind");
+
     let (conn, _sock) = listener.accept().await?;
     let mut socket = tokio_tungstenite::accept_async(conn).await?;
     let msg = socket.next().await.unwrap()?;
     let aslr_reference = msg.into_text().unwrap().parse().unwrap();
-    Ok(WsClient {
+
+    Ok(Some(WsClient {
         aslr_reference,
         socket,
-    })
+    }))
 }
 
 /// Store the linker args in a file for the main process to read.
@@ -225,10 +236,7 @@ async fn link(action: String) -> anyhow::Result<()> {
     let args = std::env::args().collect::<Vec<String>>();
 
     // Write the linker args to a file for the main process to read
-    std::fs::write(
-        subsecond_folder().join("data").join("link.txt"),
-        args.join("\n"),
-    )?;
+    std::fs::write(link_args_file(), args.join("\n"))?;
 
     match action.as_str() {
         // Actually link the object file. todo: figure out which linker we should be using
@@ -251,6 +259,10 @@ async fn link(action: String) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn link_args_file() -> PathBuf {
+    subsecond_folder().join("data").join("link.txt")
 }
 
 async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
@@ -302,6 +314,7 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             build.arg("-Clink-arg=--no-gc-sections");
             build.arg("-Clink-arg=--growable-table");
             build.arg("-Clink-arg=--whole-archive");
+            // build.arg("-Clink-arg=--export-all");
             // build.arg("-Clink-arg=--export-dynamic");
         }
         _ => {}
@@ -331,6 +344,7 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             .arg(static_folder())
             .arg("--out-name")
             .arg("main")
+            .arg("--no-demangle")
             .arg(out.output_location.as_std_path())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -360,7 +374,7 @@ fn rust_log_enabled() -> bool {
 async fn fast_build(
     original: &CargoOutputResult,
     target: &Triple,
-    aslr_reference: u64,
+    aslr_reference: Option<u64>,
 ) -> anyhow::Result<Utf8PathBuf> {
     let fast_build = Command::new(original.direct_rustc[0].clone())
         .args(original.direct_rustc[1..].iter())
@@ -377,18 +391,22 @@ async fn fast_build(
 
     let output = run_cargo_output(fast_build, rust_log_enabled()).await?;
 
-    let mut object_files = output
-        .link_args
-        .iter()
+    tracing::info!("fast_build output: {output:#?}");
+
+    let link_args = std::fs::read_to_string(link_args_file())?;
+    let mut object_files = link_args
+        .lines()
         .filter(|arg| arg.ends_with(".rcgu.o"))
         .sorted()
         .map(|arg| PathBuf::from(arg))
         .collect::<Vec<_>>();
 
+    tracing::info!("object_files: {object_files:#?}");
+
     let resolved = subsecond_cli_support::resolve::resolve_undefined(
         &original.output_location.as_std_path(),
         &object_files,
-        &Triple::host(),
+        target,
         aslr_reference,
     )
     .unwrap();
@@ -440,12 +458,13 @@ async fn fast_build(
 
     let errs = String::from_utf8_lossy(&res.stderr);
     if !errs.is_empty() {
-        println!("errs: {errs}");
+        tracing::error!("errs: {errs}");
     }
 
     Ok(output_location)
 }
 
+#[derive(Debug)]
 struct CargoOutputResult {
     output_location: Utf8PathBuf,
     direct_rustc: Vec<String>,
@@ -481,7 +500,7 @@ async fn run_cargo_output(
                 Some(Ok(message)) => message,
                 None => break,
                 other => {
-                    println!("other: {other:?}");
+                    // println!("other: {other:?}");
                     break;
                 }
             };
@@ -494,9 +513,9 @@ async fn run_cargo_output(
                 }
                 Message::CompilerMessage(compiler_message) => {
                     if let Some(rendered) = &compiler_message.message.rendered {
-                        if should_render {
-                            println!("rendered: {rendered}");
-                        }
+                        // if should_render {
+                        //     println!("rendered: {rendered}");
+                        // }
                     }
                 }
                 Message::BuildScriptExecuted(_build_script) => {}
@@ -534,9 +553,9 @@ async fn run_cargo_output(
                         }
                     }
 
-                    if should_render {
-                        println!("text: {word}")
-                    }
+                    // if should_render {
+                    //     println!("text: {word}")
+                    // }
                 }
                 _ => {}
             }

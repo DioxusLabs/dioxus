@@ -38,3 +38,4 @@ tokio-tungstenite = "0.23.0"
 crossterm = { workspace = true }
 subsecond-cli-support = { path = "../subsecond-cli-support" }
 target-lexicon = "0.13.2"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
