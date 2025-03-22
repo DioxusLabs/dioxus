@@ -1,16 +1,17 @@
 use anyhow::Context;
 use cargo_metadata::camino::Utf8PathBuf;
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use itertools::Itertools;
 use notify::{
     event::{DataChange, ModifyKind},
     Watcher,
 };
-use object::write::Object;
+use object::{write::Object, Architecture};
 use serde::Deserialize;
 use std::{collections::HashMap, env, ffi::OsStr, path::PathBuf, process::Stdio, time::SystemTime};
 use subsecond_cli_support::create_jump_table;
-use target_lexicon::Triple;
+use target_lexicon::{Environment, Triple};
 use tokio::{
     io::AsyncBufReadExt,
     net::TcpListener,
@@ -29,6 +30,12 @@ async fn main() -> anyhow::Result<()> {
     hotreload_loop().await
 }
 
+#[derive(Debug, Parser)]
+struct Args {
+    #[clap(long)]
+    target: Option<String>,
+}
+
 /// The main loop of the hotreload process
 ///
 /// 1. Create initial "fat" build
@@ -40,6 +47,12 @@ async fn main() -> anyhow::Result<()> {
 /// 7. Pause the process with lldb, run the "hotfn_load_binary_patch" command and then continue
 /// 8. Repeat
 async fn hotreload_loop() -> anyhow::Result<()> {
+    let args = Args::parse();
+    let target: Triple = args
+        .target
+        .map(|t| t.parse().unwrap())
+        .unwrap_or_else(|| Triple::host());
+
     // Save the state of the rust files
     let src_folder = subsecond_folder().join("subsecond-harness/src/");
     let main_rs = src_folder.join("main.rs");
@@ -51,8 +64,8 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     // Perform the initial build
     let epoch = SystemTime::UNIX_EPOCH;
     let now = std::time::Instant::now();
-    println!("Starting build...");
-    let result = initial_build().await?;
+    println!("Starting build for target {target:?}...");
+    let result = initial_build(&target).await?;
     println!(
         "Initial build: {:?} -> {}",
         now.elapsed(),
@@ -68,13 +81,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     std::fs::copy(&exe, &fat_exe).unwrap();
 
     // Launch the fat exe. We'll overwrite the slim exe location, so this prevents the app from bugging out
-    let app = Command::new(&fat_exe)
-        .kill_on_drop(true)
-        .env(
-            "ASLR_FILE",
-            subsecond_folder().join("data").join("aslr.txt"),
-        )
-        .spawn()?;
+    let app = launch_app(&fat_exe, &target)?;
 
     // Wait for the websocket to come up
     let mut client = wait_for_ws(9393).await?;
@@ -99,7 +106,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         }
 
         let started = Instant::now();
-        let Ok(output_temp) = fast_build(&result, client.aslr_reference).await else {
+        let Ok(output_temp) = fast_build(&result, &target, client.aslr_reference).await else {
             continue;
         };
 
@@ -127,6 +134,23 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     drop(app);
 
     Ok(())
+}
+
+fn launch_app(fat_exe: &Utf8PathBuf, target: &Triple) -> Result<Child, anyhow::Error> {
+    let app = match target.architecture {
+        target_lexicon::Architecture::Wasm32 => Command::new("python3")
+            .current_dir(static_folder())
+            .arg("-m")
+            .arg("http.server")
+            .arg("9394")
+            .arg("--directory")
+            .arg(".")
+            .kill_on_drop(true)
+            .spawn()?,
+        _ => Command::new(fat_exe).kill_on_drop(true).spawn()?,
+    };
+
+    Ok(app)
 }
 
 struct FsWatcher {
@@ -229,12 +253,14 @@ async fn link(action: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn initial_build() -> anyhow::Result<CargoOutputResult> {
+async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
     // Perform the initial build and print out the link arguments. Don't strip dead code and preserve temp files.
     // This results in a "fat" executable that we can bind to
     //
     // todo: clean up the temps manually
-    let inital_build = Command::new("cargo")
+    let mut build = Command::new("cargo");
+
+    build
         .arg("rustc")
         .arg("--package")
         .arg("subsecond-harness")
@@ -245,26 +271,83 @@ async fn initial_build() -> anyhow::Result<CargoOutputResult> {
         .arg("--message-format")
         .arg("json-diagnostic-rendered-ansi")
         .arg("--verbose")
+        .arg("--target")
+        .arg(target.to_string());
+
+    match target.architecture {
+        target_lexicon::Architecture::Wasm32 => {
+            build.arg("--features").arg("web");
+        }
+        _ => {}
+    }
+
+    // these args are required to prevent DCE, save intermediates, and print the link args for future usage
+    // -all_load ensures all statics get bubbled out
+    // -link-dead-code prevents the flag `-Wl,-dead_strip` from being passed
+    // -save-temps ensures the intermediates are saved so we can use them for comparsions
+    build
         .arg("--")
-        // these args are required to prevent DCE, save intermediates, and print the link args for future usage
-        // -all_load ensures all statics get bubbled out
-        // -link-dead-code prevents the flag `-Wl,-dead_strip` from being passed
-        // -save-temps ensures the intermediates are saved so we can use them for comparsions
-        //
-        // todo: delete the temps
         .arg("-Csave-temps=true")
-        .arg("-Clink-dead-code")
-        .arg("-Clink-arg=-Wl,-all_load")
-        // we capture the link args, but eventually we should actually just use ourselves as the linker since that's more robust
+        .arg("-Clink-dead-code");
+
+    match target.architecture {
+        // usually just ld64 - uses your `cc`
+        target_lexicon::Architecture::Aarch64(_) => {
+            build.arg("-Clink-arg=-Wl,-all_load");
+        }
+
+        // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
+        target_lexicon::Architecture::Wasm32 => {
+            // we want "all-load", adjustable ifunc table,
+            build.arg("-Clink-arg=--no-gc-sections");
+            build.arg("-Clink-arg=--growable-table");
+            build.arg("-Clink-arg=--whole-archive");
+            // build.arg("-Clink-arg=--export-dynamic");
+        }
+        _ => {}
+    }
+
+    // we capture the link args, but eventually we should actually just use ourselves as the linker since that's more robust
+    build
         .arg("--print")
         .arg("link-args")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
-        .current_dir(workspace_dir())
-        .spawn()?;
+        .current_dir(workspace_dir());
 
-    run_cargo_output(inital_build, rust_log_enabled()).await
+    let build = build.spawn()?;
+
+    let out = run_cargo_output(build, rust_log_enabled()).await?;
+
+    if target.architecture == target_lexicon::Architecture::Wasm32 {
+        std::fs::remove_dir_all(static_folder()).unwrap();
+
+        let bind = Command::new("wasm-bindgen")
+            .arg("--target")
+            .arg("web")
+            .arg("--no-typescript")
+            .arg("--out-dir")
+            .arg(static_folder())
+            .arg("--out-name")
+            .arg("main")
+            .arg(out.output_location.as_std_path())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .current_dir(workspace_dir())
+            .output()
+            .await?;
+
+        let index = include_str!("./index.html");
+        std::fs::write(static_folder().join("index.html"), index).unwrap();
+    }
+
+    Ok(out)
+}
+
+fn static_folder() -> PathBuf {
+    subsecond_folder().join("subsecond-harness").join("static")
 }
 
 fn rust_log_enabled() -> bool {
@@ -276,6 +359,7 @@ fn rust_log_enabled() -> bool {
 
 async fn fast_build(
     original: &CargoOutputResult,
+    target: &Triple,
     aslr_reference: u64,
 ) -> anyhow::Result<Utf8PathBuf> {
     let fast_build = Command::new(original.direct_rustc[0].clone())
@@ -317,20 +401,42 @@ async fn fast_build(
         SystemTime::UNIX_EPOCH.elapsed().unwrap().as_millis()
     ));
 
-    // todo: we should throw out symbols that we don't need and/or assemble them manually
-    let res = Command::new("cc")
-        .args(object_files)
-        .arg("-Wl,-dylib")
-        // .arg("-Wl,-undefined,dynamic_lookup")
-        // .arg("-Wl,-export_dynamic")
-        .arg("-arch")
-        .arg("arm64")
-        .arg("-o")
-        .arg(&output_location)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await?;
+    let res = match target.architecture {
+        // usually just ld64 - uses your `cc`
+        target_lexicon::Architecture::Aarch64(_) => {
+            // todo: we should throw out symbols that we don't need and/or assemble them manually
+            Command::new("cc")
+                .args(object_files)
+                .arg("-Wl,-dylib")
+                // .arg("-Wl,-undefined,dynamic_lookup")
+                // .arg("-Wl,-export_dynamic")
+                .arg("-arch")
+                .arg("arm64")
+                .arg("-o")
+                .arg(&output_location)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()
+                .await?
+        }
+        target_lexicon::Architecture::Wasm32 => {
+            let ld = wasm_ld().await?;
+            // --import-memory         Import the module's memory from the default module of "env" with the name "memory".
+            // --import-table          Import function table from the environment
+            Command::new(ld)
+                .args(object_files)
+                .arg("-Wl,--import-memory")
+                .arg("-Wl,--import-table")
+                .arg("-Wl,--growable-table")
+                .arg("-o")
+                .arg(&output_location)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()
+                .await?
+        }
+        _ => todo!(),
+    };
 
     let errs = String::from_utf8_lossy(&res.stderr);
     if !errs.is_empty() {
@@ -447,6 +553,17 @@ async fn run_cargo_output(
     })
 }
 
+async fn wasm_ld() -> anyhow::Result<PathBuf> {
+    let root = Command::new("rustc")
+        .arg("--print")
+        .arg("--sysroot")
+        .output()
+        .await?;
+    let root = String::from_utf8(root.stdout)?;
+    let root = PathBuf::from(root.trim());
+    Ok(root.join("lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld"))
+}
+
 fn workspace_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../../")
@@ -460,29 +577,4 @@ fn subsecond_folder() -> PathBuf {
         .join("../")
         .canonicalize()
         .unwrap()
-}
-
-/// Move all previous object files to "incremental-old" and all new object files to "incremental-new"
-fn cache_incrementals(object_files: &[&String]) {
-    let old = subsecond_folder().join("data").join("incremental-old");
-    let new = subsecond_folder().join("data").join("incremental-new");
-
-    // Remove the old incremental-old directory if it exists
-    _ = std::fs::remove_dir_all(&old);
-
-    // Rename incremental-new to incremental-old if it exists. Faster than moving all the files
-    _ = std::fs::rename(&new, &old);
-
-    // Create the new incremental-new directory to place the outputs in
-    std::fs::create_dir_all(&new).unwrap();
-
-    // Now drop in all the new object files
-    for o in object_files.iter() {
-        if !o.ends_with(".rcgu.o") {
-            continue;
-        }
-
-        let path = PathBuf::from(o);
-        std::fs::copy(&path, new.join(path.file_name().unwrap())).unwrap();
-    }
 }
