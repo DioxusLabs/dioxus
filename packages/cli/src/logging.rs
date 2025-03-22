@@ -69,11 +69,11 @@ impl TraceController {
             EnvFilter::from_env(LOG_ENV)
         } else if matches!(args.action, Commands::Serve(_)) {
             EnvFilter::new(
-                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace",
+                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace",
             )
         } else {
             EnvFilter::new(format!(
-                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},,wasm_split_cli={our_level}",
+                "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},,wasm_split_cli={our_level},subsecond_cli_support={our_level}",
                 our_level = if args.verbosity.verbose {
                     "debug"
                 } else {

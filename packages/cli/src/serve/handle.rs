@@ -375,7 +375,8 @@ impl AppHandle {
         changed_file: &Path,
         bundled_name: &Path,
     ) -> Result<PathBuf> {
-        let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
+        let target = PathBuf::from("/data/app/~~OE9KIaCNz0l5pwJue6zY8Q==/com.example.SubsecondHarness-pilWFhddpEHdzmzy-khHRA==/lib/arm64/").join(bundled_name);
+        // let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
         let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
             .arg("push")

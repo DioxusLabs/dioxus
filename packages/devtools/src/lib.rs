@@ -53,13 +53,21 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
 
         if let Some(mut jump_table) = msg.jump_table.as_ref().cloned() {
             if cfg!(target_os = "android") {
-                // copy the jump table to the libs directory to satisfy the namespace requirements
-                let libs_dir = PathBuf::from("/data/data/com.example.SubsecondHarness/files/");
-                std::fs::create_dir_all(&libs_dir).unwrap();
+                // // copy the jump table to the libs directory to satisfy the namespace requirements
+                // let libs_dir = PathBuf::from(r#"/data/app/~~OE9KIaCNz0l5pwJue6zY8Q\=\=/com.example.SubsecondHarness-pilWFhddpEHdzmzy-khHRA\=\=/lib/arm64"#);
+                // // let libs_dir = PathBuf::from("/data/data/com.example.SubsecondHarness/lib/");
+                // std::fs::create_dir_all(&libs_dir).unwrap();
 
-                let patch_place = libs_dir.join(jump_table.lib.file_name().unwrap());
-                std::fs::copy(jump_table.lib, &patch_place).unwrap();
-                jump_table.lib = patch_place;
+                // let patch_place = libs_dir.join(jump_table.lib.file_name().unwrap());
+                // std::fs::copy(jump_table.lib, &patch_place).unwrap();
+
+                // // make the file read-only
+                // // android 14 requires this.
+                // use std::os::unix::fs::PermissionsExt;
+                // std::fs::set_permissions(&patch_place, std::fs::Permissions::from_mode(0o400))
+                //     .unwrap();
+
+                // jump_table.lib = patch_place;
 
                 println!("Patched jump table: {:#?}", jump_table);
             }

@@ -11,3 +11,4 @@ subsecond-types = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libloading = "0.8.6"
 libc = "0.2.170"
+memmap = "0.7.0"

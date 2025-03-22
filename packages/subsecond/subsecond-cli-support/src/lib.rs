@@ -44,8 +44,8 @@ pub fn create_jump_table(
         .map(|s| (s.name(), s.address()))
         .collect::<HashMap<_, _>>();
 
-    tracing::debug!("old_name_to_addr: {:#?}", old_name_to_addr);
-    tracing::debug!("new_name_to_addr: {:#?}", new_name_to_addr);
+    // tracing::debug!("old_name_to_addr: {:#?}", old_name_to_addr);
+    // tracing::debug!("new_name_to_addr: {:#?}", new_name_to_addr);
 
     // on windows there is no symbol so we leave the old address as 0
     // on wasm there is no ASLR so we leave the old address as 0
@@ -84,9 +84,9 @@ pub fn create_jump_table(
         })
         .clone();
 
-    if new_base_address == 0 {
-        panic!("new_base_address is 0");
-    }
+    // if new_base_address == 0 {
+    //     panic!("new_base_address is 0");
+    // }
 
     Ok(JumpTable {
         lib: patch.to_path_buf(),

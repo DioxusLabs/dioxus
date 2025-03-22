@@ -12306,6 +12306,7 @@ version = "0.6.3"
 dependencies = [
  "libc",
  "libloading 0.8.6",
+ "memmap",
  "serde",
  "subsecond-macro",
  "subsecond-types",

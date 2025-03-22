@@ -129,6 +129,10 @@ impl<A, M, T: HotFunction<A, M>> HotFn<A, M, T> {
                 if let Some(ptr) = jump_table.map.get(&canonical_addr).cloned() {
                     // let tag = known_fn_ptr as u64 & 0xFF00000000000000;
                     let ptr = ptr as *const ();
+                    println!(
+                        "Detouring fat pointer ({known_fn_ptr:?}) {:#x} -> {:#x}",
+                        canonical_addr, ptr as u64
+                    );
                     let true_fn = std::mem::transmute::<*const (), fn(&T, A) -> T::Return>(ptr);
                     return true_fn(&self.inner, args);
                 } else {
@@ -180,18 +184,7 @@ pub unsafe fn run_patch(jump_table: JumpTable) {
 
 #[cfg(any(unix, windows))]
 fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
-    // let old_offset = aslr_reference() - jump_table.aslr_reference as usize;
     let old_offset = aslr_reference() as usize - jump_table.aslr_reference as usize;
-
-    // let old_offset  j
-    // let old_offset = alsr_offset(
-    //     jump_table.old_base_address as usize,
-    //     #[cfg(unix)]
-    //     libloading::os::unix::Library::this(),
-    //     #[cfg(windows)]
-    //     libloading::os::windows::Library::this().unwrap(),
-    // )
-    // .unwrap();
 
     let new_offset = alsr_offset(
         jump_table.new_base_address as usize,
@@ -209,13 +202,23 @@ fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
 
     // 487557233524
 
-    println!("Before: ");
-    for (k, v) in &jump_table.map {
-        println!("k: {k:#x}, v: {v:#x}");
-    }
+    // let old_offset  j
+    // let old_offset = alsr_offset(
+    //     jump_table.old_base_address as usize,
+    //     #[cfg(unix)]
+    //     libloading::os::unix::Library::this(),
+    //     #[cfg(windows)]
+    //     libloading::os::windows::Library::this().unwrap(),
+    // )
+    // .unwrap();
 
-    println!("Shifting old by {old_offset:?}");
-    println!("Shifting new by {new_offset:?}");
+    // println!("Before: ");
+    // for (k, v) in &jump_table.map {
+    //     println!("k: {k:#x}, v: {v:#x}");
+    // }
+
+    // println!("Shifting old by {old_offset:?}");
+    // println!("Shifting new by {new_offset:?}");
     // Modify the jump table to be relative to the base address of the loaded library
     jump_table.map = jump_table
         .map
@@ -228,10 +231,12 @@ fn relocate_native_jump_table(mut jump_table: JumpTable) -> JumpTable {
         })
         .collect();
 
-    println!("After: ");
-    for (k, v) in &jump_table.map {
-        println!("k: {k:#x}, v: {v:#x}");
-    }
+    // println!("After: ");
+    // for (k, v) in &jump_table.map {
+    //     println!("k: {k:#x}, v: {v:#x}");
+    // }
+
+    // std::thread::sleep(std::time::Duration::from_secs(5));
 
     // println!("adjusted jump_table: {jump_table:#?}");
 
@@ -365,76 +370,3 @@ fn alsr_offset(
 fn relocate_wasm_jump_table(jump_table: JumpTable) -> JumpTable {
     todo!()
 }
-
-// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: -aslr calc offset: Some(0x71ff1ef834)
-// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: -aslr calc base_address: 354356
-// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: known reference: 0x719fef5078
-// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: jump orig base: 0x114766c
-// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: jump new base: 0x56834
-// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: jump orig offset: 487982350336 (0x719E03C000)
-// 03-21 01:39:54.474 24535 24566 I RustStdoutStderr: jump new offset:                0x71ff199000
-
-// 0x71874444b0 - 17877148
-//
-// 0x7187 4444 b0
-// 0x1787 7148 b0
-//
-// seems to be flipped and tagged
-
-//
-// 487987849236 aslr reference
-// 487973692928 looking for
-//
-//
-// calculated aslr offset 0x719c546000
-
-// 01:16:49 [dev] Setting aslr_reference: 487569719956 -> 0x71856B8294
-//
-// 01:16:56 [dev] aslr_offset: 0x7183801000
-//
-// 0x71856B8294
-// 0x7183801000
-//
-// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:         18092028: 360016,
-// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:         19054588: 377400,
-// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:     },
-// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:     old_base_address: 18107204,
-// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr:     new_base_address: 352976,
-// 03-21 01:16:54.842 23835 23860 I RustStdoutStderr: }
-// 03-21 01:16:54.843 23835 23860 I RustStdoutStderr: Could not find detour for.. 487569422812
-// 03-21 01:16:54.843 23835 23860 I RustStdoutStderr: Could not find detour for.. 487569674160
-// 03-21 01:16:54.843 23835 23860 I RustStdoutStderr: Could not find detour for   487555413852
-// 03-21 01:16:54.846 23835 23860 I RustStdoutStderr: Could not find detour for.. 487555557228
-// 03-21 01:16:54.846 23835 23860 I RustStdoutStderr: Could not find detour for.. 487555557228
-//
-// 03-21 01:19:28.613 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186fa2514
-// 03-21 01:19:28.613 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186fdfec0
-// 03-21 01:19:28.613 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186245cf0
-// 03-21 01:19:28.614 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186268fac
-// 03-21 01:19:28.614 23996 24020 I RustStdoutStderr: Could not find detour for 0x7186268fac
-//
-// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: known reference: 0x7186feb118 (in the program)
-// on disk the aslr reference is 0000000001eb8118
-//
-// locations of rust_alloc shift
-//
-// aslr slide is 0x7185133000a
-//
-// addr if symbol looking for is 0x1135FAC (or 18046892) which is very similar to 18092028
-//
-// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump orig base: 0x11452f8  (base of __rust_alloc on disk)
-// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump new base: 0x567f0  (base of __rust_alloc in patch)
-//
-//
-// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump orig offset: 0x74c3950fa4
-// 03-21 01:19:28.608 23996 24020 I RustStdoutStderr: jump new offset: 0x71ff194000
-
-//  pointer entry at 0x74c588e000
-//         detour at 0x718536f3a8  -> true 0x34DB1B8 (55423416)
-//
-// aslr reference at 487543059968 (0x7183D4B600) (true 0000000001eb7410)
-// aslr offset 0x7181E941F0
-
-//
-// 0x59814
-//
