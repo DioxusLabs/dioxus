@@ -12311,6 +12311,7 @@ dependencies = [
  "serde",
  "subsecond-macro",
  "subsecond-types",
+ "tracing",
  "wasm-bindgen",
 ]
 

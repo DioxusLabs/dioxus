@@ -3,4 +3,5 @@
     //     // "wasm32-unknown-unknown",
     //     // "aarch64-apple-darwin"
     // ],
+    "dioxus.formatOnSave": "disabled"
 }

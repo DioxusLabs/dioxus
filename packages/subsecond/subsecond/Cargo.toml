@@ -8,6 +8,8 @@ serde = { version = "1.0.203", features = ["derive"] }
 subsecond-macro = { workspace = true }
 subsecond-types = { workspace = true }
 
+
+tracing = { workspace = true }
 wasm-bindgen = { workspace = true }
 js-sys = { workspace = true}
 

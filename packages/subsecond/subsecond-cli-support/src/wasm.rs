@@ -104,60 +104,84 @@ pub fn prepare_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
     let bindgen_funcs = collect_all_wasm_bindgen_funcs(&pre_bindgen);
 
+    // Due to monomorphizations, functions will get merged and multiple names will point to the same function.
+    // Walrus loses this information, so we need to manually parse the names table to get the indices
+    // and names of these functions.
     let raw_data = parse_bytes_to_data_segment(bytes)?;
 
-    for func in bindgen_funcs.iter() {
-        let name = pre_bindgen.funcs.get(*func).name.as_ref().unwrap();
-        // tracing::warn!("Wasm-bindgen function: {}", name);
-    }
+    // name -> index
+    // we want to export *all* these functions
+    let all_funcs = raw_data
+        .symbols
+        .iter()
+        .flat_map(|sym| match sym {
+            SymbolInfo::Func { flags, index, name } => Some((name.unwrap(), *index)),
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
 
-    let funcs_to_export = pre_bindgen
+    let index_to_func = pre_bindgen
         .funcs
         .iter()
-        .filter(|func| !bindgen_funcs.contains(&func.id()))
-        .filter(|func| matches!(func.kind, FunctionKind::Local(_)))
-        .map(|func| func.id())
-        .collect::<HashSet<_>>();
+        .enumerate()
+        .collect::<HashMap<_, _>>();
 
     let mut already_exported = pre_bindgen
         .exports
         .iter()
         .map(|exp| exp.name.clone())
+        .chain(
+            bindgen_funcs
+                .iter()
+                .map(|id| pre_bindgen.funcs.get(*id).name.as_ref().unwrap().clone()),
+        )
         .collect::<HashSet<_>>();
 
-    // tracing::info!("Already exported: {:#?}", already_exported);
-
-    for import in pre_bindgen.imports.iter() {
-        tracing::error!("Import: {}", import.name);
-        // let name = import.name
-        // if name.contains("_ZN59_") {
-        //     // if name.contains("dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt") {
-        //     tracing::error!("found?: {}", name);
-        // }
-    }
-    for func in pre_bindgen.funcs.iter() {
-        let name = func.name.as_ref().unwrap();
-        tracing::error!("Func [{}]: {}", func.id().index(), name);
-        // if name.contains("_ZN59_") {
-        // [2m2025-03-23T09:22:07.067150Z[0m [32m INFO[0m [2msubsecond_cli_support::wasm[0m[2m:[0m Func [28878]: _ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17haa1f6a0961c11078E
-        // if name.contains("dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt") {
-        //     tracing::error!("found?: {}", name);
-        // }
-    }
-
-    for func in funcs_to_export {
-        let func = pre_bindgen.funcs.get(func);
-        let name = func.name.as_ref().unwrap();
-        // if name.contains("a1f6a0961c1107") {
-        //     tracing::error!("Skipping function: {}", name);
-        // }
+    for (name, index) in all_funcs {
+        let func = index_to_func.get(&(index as usize)).unwrap();
+        let FunctionKind::Local(local) = &func.kind else {
+            continue;
+        };
 
         if !already_exported.contains(name) {
-            // tracing::info!("Exporting function: {}", name);
             pre_bindgen.exports.add(&name, func.id());
-            already_exported.insert(name.clone());
+            already_exported.insert(name.to_string());
         }
     }
+
+    // let func = pre_bindgen.funcs.get(func);
+    // let name = func.name.as_ref().unwrap();
+    // if name.contains("a1f6a0961c1107") {
+    //     tracing::error!("Skipping function: {}", name);
+    // }
+
+    // let funcs_to_export = pre_bindgen
+    //     .funcs
+    //     .iter()
+    //     .filter(|func| !bindgen_funcs.contains(&func.id()))
+    //     .filter(|func| matches!(func.kind, FunctionKind::Local(_)))
+    //     .map(|func| func.id())
+    //     .collect::<HashSet<_>>();
+
+    // // tracing::info!("Already exported: {:#?}", already_exported);
+
+    // for import in pre_bindgen.imports.iter() {
+    //     tracing::error!("Import: {}", import.name);
+    //     // let name = import.name
+    //     // if name.contains("_ZN59_") {
+    //     //     // if name.contains("dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt") {
+    //     //     tracing::error!("found?: {}", name);
+    //     // }
+    // }
+    // for func in pre_bindgen.funcs.iter() {
+    //     let name = func.name.as_ref().unwrap();
+    //     tracing::error!("Func [{}]: {}", func.id().index(), name);
+    //     // if name.contains("_ZN59_") {
+    //     // [2m2025-03-23T09:22:07.067150Z[0m [32m INFO[0m [2msubsecond_cli_support::wasm[0m[2m:[0m Func [28878]: _ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17haa1f6a0961c11078E
+    //     // if name.contains("dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt") {
+    //     //     tracing::error!("found?: {}", name);
+    //     // }
+    // }
 
     Ok(pre_bindgen.emit_wasm())
 }
@@ -325,13 +349,56 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
                 tracing::info!("original offset {:?}", offset);
                 match offset {
                     walrus::ConstExpr::Value(value) => {
-                        *value = walrus::ir::Value::I32(1549 + 1);
+                        *value = walrus::ir::Value::I32(1700 + 1);
                     }
                     walrus::ConstExpr::Global(id) => {}
                     walrus::ConstExpr::RefNull(ref_type) => {}
                     walrus::ConstExpr::RefFunc(id) => {}
                 }
             }
+        }
+    }
+
+    let bindgen_funcs = collect_all_wasm_bindgen_funcs(&module);
+
+    // Due to monomorphizations, functions will get merged and multiple names will point to the same function.
+    // Walrus loses this information, so we need to manually parse the names table to get the indices
+    // and names of these functions.
+    let raw_data = parse_bytes_to_data_segment(bytes)?;
+
+    // name -> index
+    // we want to export *all* these functions
+    let all_funcs = raw_data
+        .symbols
+        .iter()
+        .flat_map(|sym| match sym {
+            SymbolInfo::Func { flags, index, name } => Some((name.unwrap(), *index)),
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+
+    let index_to_func = module.funcs.iter().enumerate().collect::<HashMap<_, _>>();
+
+    let mut already_exported = module
+        .exports
+        .iter()
+        .map(|exp| exp.name.clone())
+        .chain(
+            bindgen_funcs
+                .iter()
+                .map(|id| module.funcs.get(*id).name.as_ref().unwrap().clone()),
+        )
+        .collect::<HashSet<_>>();
+
+    for (name, index) in all_funcs {
+        let func = index_to_func.get(&(index as usize)).unwrap();
+        let FunctionKind::Local(local) = &func.kind else {
+            continue;
+        };
+
+        if !already_exported.contains(name) {
+            module.exports.add(&name, func.id());
+            already_exported.insert(name.to_string());
         }
     }
 
@@ -391,7 +458,7 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
         match symbol {
             SymbolInfo::Func { flags, index, name } => {
                 if let Some(name) = name {
-                    tracing::info!("Func [{index}]: {}", name);
+                    // tracing::info!("Func [{index}]: {}", name);
                 }
             }
             SymbolInfo::Data {
@@ -399,7 +466,7 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
                 name,
                 symbol,
             } => {
-                tracing::info!("Data: {}", name);
+                // tracing::info!("Data: {}", name);
             }
             SymbolInfo::Global { flags, index, name } => {}
             SymbolInfo::Section { flags, section } => {}

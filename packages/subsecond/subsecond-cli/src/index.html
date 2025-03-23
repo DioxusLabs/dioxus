@@ -13,6 +13,8 @@
              * @throws {TypeError} If the export names cannot be parsed as integers.
              */
             function patchWasm(base, patch) {
+                window.patch = patch;
+                patch = patch.instance.exports;
                 const patchExports = Object.entries(patch);
 
                 // extract the export names from the patch table
@@ -21,14 +23,29 @@
                 // iterate through the patch exports and get the key and value
                 let idx = 0;
                 for (const [key, value] of patchExports) {
-                    patchVec[idx] = parseInt(base[key].name);
-                    patchVec[idx + 1] = parseInt(value.name);
+                    if (base[key] === undefined) {
+                        console.log("skipping", key);
+                        continue;
+                    }
+
+                    let old_ = base[key].name;
+                    let new_ = value.name;
+
+                    if (old_ === undefined || new_ === undefined) {
+                        console.log("skipping", key);
+                        continue;
+                    }
+
+                    console.log("patching", key, old_, new_);
+                    patchVec[idx] = parseInt(old_);
+                    patchVec[idx + 1] = parseInt(new_);
                     idx += 2;
                 }
 
                 // call the patch function
                 base["__patch_wasm"](patchVec);
             }
+
 
             /**
              * Loads a WebAssembly module from a given URL, instantiates it, and applies a patch
@@ -42,21 +59,23 @@
             fetch(url)
                 .then((response) => response.arrayBuffer())
                 .then((bytes) => {
+                    base.__indirect_function_table.grow(2000);
                     let imports = {
                         env: {
-                            __indirect_function_table: base.__wbindgen_export_7,
+                            __indirect_function_table: base.__indirect_function_table,
                             __stack_pointer: base.__stack_pointer,
                             __tls_base: base.__tls_base,
                             memory: base.memory,
                         },
+                        // env: base.env
                     };
-                    for (const key in Object.keys(base)) {
+                    for (const key of Object.keys(base)) {
                         imports.env[key] = base[key];
                     }
                     return WebAssembly.instantiate(bytes, imports);
                 })
                 .then((result) => {
-                    patchWasm(base, result.instance.exports);
+                    patchWasm(base, result);
                 });
             }
 

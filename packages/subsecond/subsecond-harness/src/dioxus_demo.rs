@@ -5,7 +5,7 @@ pub fn launch() {
 }
 
 fn app() -> Element {
-    let count = 123;
+    let count = 1234567;
 
     dioxus::logger::info!("Rendering component!");
 
@@ -29,16 +29,21 @@ fn app() -> Element {
     //
     // call patchJumpTable({ptr: ptr})
 
+    let current = subsecond::current(app as fn() -> Element);
+
     dioxus::logger::info!("fn ptr of app is {:?}", app as *const fn() -> Element);
     dioxus::logger::info!("fn ptr of child is {:?}", Child as *const fn() -> Element);
     dioxus::logger::info!("fn ptr of child2 is {:?}", Child2 as *const fn() -> Element);
     dioxus::logger::info!("fn ptr of child3 is {:?}", Child3 as *const fn() -> Element);
 
     rsx! {
-        "hi {count}"
-        div {
-            for x in 0..3 {
-                Child { id: x + 1, opt: "List entry" }
+        h1 { "Dioxus Hot-patch: {count}" }
+        div { style: "display: flex; flex-row: column; align-items: center; justify-content: center;",
+            img { src: "https://rustacean.net/assets/rustacean-flat-happy.png" }
+            div {
+                for x in 0..5 {
+                    Child { id: x + 1, opt: "List entry" }
+                }
             }
         }
     }
