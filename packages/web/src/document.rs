@@ -31,6 +31,16 @@ impl JSOwner {
         }
     }
 }
+#[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
+extern "C" {
+    pub type WeakDioxusChannel;
+
+    #[wasm_bindgen(method, js_name = "rustSend")]
+    pub fn rust_send(this: &WeakDioxusChannel, value: wasm_bindgen::JsValue);
+
+    #[wasm_bindgen(method, js_name = "rustRecv")]
+    pub async fn rust_recv(this: &WeakDioxusChannel) -> wasm_bindgen::JsValue;
+}
 
 #[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
 extern "C" {
@@ -54,13 +64,6 @@ extern "C" {
     #[wasm_bindgen(method)]
     pub fn weak(this: &WebDioxusChannel) -> WeakDioxusChannel;
 
-    pub type WeakDioxusChannel;
-
-    #[wasm_bindgen(method, js_name = "rustSend")]
-    pub fn rust_send(this: &WeakDioxusChannel, value: wasm_bindgen::JsValue);
-
-    #[wasm_bindgen(method, js_name = "rustRecv")]
-    pub async fn rust_recv(this: &WeakDioxusChannel) -> wasm_bindgen::JsValue;
 }
 
 /// Provides the Document through [`ScopeId::provide_context`].

@@ -18,3 +18,12 @@ subsecond-types = { workspace = true }
 libc = "0.2.155"
 target-lexicon = "0.13.2"
 tracing = { workspace = true }
+
+
+walrus = { workspace = true, features = ["parallel"]}
+wasmparser = { workspace = true }
+id-arena = { workspace = true }
+rayon = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
+clap = { workspace = true, features = ["derive"] }
+

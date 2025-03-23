@@ -8,6 +8,9 @@ serde = { version = "1.0.203", features = ["derive"] }
 subsecond-macro = { workspace = true }
 subsecond-types = { workspace = true }
 
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true}
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libloading = "0.8.6"
 libc = "0.2.170"

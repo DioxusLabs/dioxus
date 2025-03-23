@@ -10,7 +10,7 @@ use notify::{
 use object::{write::Object, Architecture};
 use serde::Deserialize;
 use std::{collections::HashMap, env, ffi::OsStr, path::PathBuf, process::Stdio, time::SystemTime};
-use subsecond_cli_support::create_jump_table;
+use subsecond_cli_support::{create_jump_table, wasm::move_func_initiailizers};
 use target_lexicon::{Environment, Triple};
 use tokio::{
     io::AsyncBufReadExt,
@@ -67,9 +67,9 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     // Perform the initial build
     let epoch = SystemTime::UNIX_EPOCH;
     let now = std::time::Instant::now();
-    println!("Starting build for target {target:?}...");
+    tracing::debug!("Starting build for target {target:?}...");
     let result = initial_build(&target).await?;
-    println!(
+    tracing::debug!(
         "Initial build: {:?} -> {}",
         now.elapsed(),
         &result.output_location,
@@ -89,9 +89,6 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     // Wait for the websocket to come up
     let mut client = wait_for_ws(9393, &target).await?;
 
-    // don't log if the screen has been taken over - important for tui apps
-    let should_log = rust_log_enabled();
-
     // Watch the source folder for changes
     let mut watcher = FsWatcher::watch(src_folder)?;
 
@@ -107,20 +104,19 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         tracing::info!("Fast reloading... ");
 
         let started = Instant::now();
-        let Ok(output_temp) =
-            fast_build(&result, &target, client.as_ref().map(|s| s.aslr_reference)).await
-        else {
-            continue;
-        };
+        let output_temp =
+            match fast_build(&result, &target, client.as_ref().map(|s| s.aslr_reference)).await {
+                Ok(output_temp) => output_temp,
+                Err(e) => {
+                    tracing::warn!("Fast build failed: {e}");
+                    continue;
+                }
+            };
 
         // Assemble the jump table of redirected addresses
         // todo: keep track of this and merge it over time
-        let jump_table = create_jump_table(
-            fat_exe.as_std_path(),
-            output_temp.as_std_path(),
-            &Triple::host(),
-        )
-        .unwrap();
+        let jump_table =
+            create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path(), &target).unwrap();
 
         if let Some(client) = client.as_mut() {
             client
@@ -129,6 +125,13 @@ async fn hotreload_loop() -> anyhow::Result<()> {
                     bincode::serialize(&jump_table).unwrap().into(),
                 ))
                 .await?;
+        }
+
+        if target.architecture == target_lexicon::Architecture::Wasm32 {
+            let _ = std::fs::copy(
+                output_temp.as_std_path(),
+                static_folder().join(output_temp.file_name().unwrap()),
+            );
         }
 
         tracing::info!("Patching complete in {}ms", started.elapsed().as_millis())
@@ -151,6 +154,8 @@ fn launch_app(fat_exe: &Utf8PathBuf, target: &Triple) -> Result<Child, anyhow::E
                 .arg("--directory")
                 .arg(".")
                 .kill_on_drop(true)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
                 .spawn()?
         }
         _ => Command::new(fat_exe).kill_on_drop(true).spawn()?,
@@ -242,6 +247,10 @@ async fn link(action: String) -> anyhow::Result<()> {
         // Actually link the object file. todo: figure out which linker we should be using
         "link" => {}
 
+        // // Run the wasm-link process
+        // // This involves finding all the non-describe functions and calling --export on them
+        // "wasm-link" => {}
+
         // Write a dummy object file to the output file to satisfy rust when it tries to strip the symbols
         "patch" => {
             let out = args.iter().position(|arg| arg == "-o").unwrap();
@@ -314,8 +323,9 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             build.arg("-Clink-arg=--no-gc-sections");
             build.arg("-Clink-arg=--growable-table");
             build.arg("-Clink-arg=--whole-archive");
-            // build.arg("-Clink-arg=--export-all");
-            // build.arg("-Clink-arg=--export-dynamic");
+            build.arg("-Clink-arg=--export-table");
+            build.arg("-Clink-arg=--export-memory");
+            build.arg("-Clink-arg=--emit-relocs");
         }
         _ => {}
     }
@@ -334,7 +344,20 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
     let out = run_cargo_output(build, rust_log_enabled()).await?;
 
     if target.architecture == target_lexicon::Architecture::Wasm32 {
-        std::fs::remove_dir_all(static_folder()).unwrap();
+        _ = std::fs::remove_dir_all(static_folder());
+
+        let test_data_folder = wasm_data_folder();
+        let _ = std::fs::create_dir_all(&test_data_folder);
+        let _ = std::fs::copy(
+            out.output_location.as_std_path(),
+            test_data_folder.join("pre-bindgen.wasm"),
+        );
+
+        let unprocessed = std::fs::read(out.output_location.as_std_path())?;
+        let all_exported_bytes =
+            subsecond_cli_support::wasm::prepare_base_module(&unprocessed).unwrap();
+        let processed = test_data_folder.join("processed.wasm");
+        std::fs::write(&processed, all_exported_bytes)?;
 
         let bind = Command::new("wasm-bindgen")
             .arg("--target")
@@ -345,7 +368,9 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             .arg("--out-name")
             .arg("main")
             .arg("--no-demangle")
-            .arg(out.output_location.as_std_path())
+            .arg("--keep-lld-exports")
+            .arg("--keep-debug")
+            .arg(&processed)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
@@ -353,11 +378,25 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             .output()
             .await?;
 
+        let err = String::from_utf8(bind.stderr).unwrap();
+        if !err.is_empty() {
+            tracing::error!("err: {err}");
+        }
+
+        let _ = std::fs::copy(
+            static_folder().join("main_bg.wasm"),
+            test_data_folder.join("post-bindgen.wasm"),
+        );
+
         let index = include_str!("./index.html");
         std::fs::write(static_folder().join("index.html"), index).unwrap();
     }
 
     Ok(out)
+}
+
+fn wasm_data_folder() -> PathBuf {
+    subsecond_folder().join("data").join("wasm")
 }
 
 fn static_folder() -> PathBuf {
@@ -401,8 +440,21 @@ async fn fast_build(
         .map(|arg| PathBuf::from(arg))
         .collect::<Vec<_>>();
 
-    tracing::info!("object_files: {object_files:#?}");
+    // copy incrementals to the data folder
+    if target.architecture == target_lexicon::Architecture::Wasm32 {
+        let test_data_folder = wasm_data_folder().join("incrementals");
+        let _ = std::fs::create_dir_all(&test_data_folder);
+        for object in object_files.iter() {
+            let dest = test_data_folder.join(object.file_name().unwrap());
+            std::fs::copy(object, dest)?;
+        }
+    }
 
+    // tracing::info!("object files: {object_files:#?}");
+
+    // on wasm we'll need to add in some symbols that resolve to the ifunc table
+    // unfortunately we can't quite call functions from main directly so we need to go through the ifunc system
+    // I *think* we can just import them
     let resolved = subsecond_cli_support::resolve::resolve_undefined(
         &original.output_location.as_std_path(),
         &object_files,
@@ -412,12 +464,20 @@ async fn fast_build(
     .unwrap();
     let syms = subsecond_folder().join("data").join("syms.o");
     std::fs::write(&syms, resolved).unwrap();
-    object_files.push(syms);
+    if target.architecture != target_lexicon::Architecture::Wasm32 {
+        object_files.push(syms);
+    }
 
-    let output_location = original.output_location.with_file_name(format!(
-        "patch-{}",
-        SystemTime::UNIX_EPOCH.elapsed().unwrap().as_millis()
-    ));
+    let output_location = original
+        .output_location
+        .with_file_name(format!(
+            "patch-{}",
+            SystemTime::UNIX_EPOCH.elapsed().unwrap().as_millis()
+        ))
+        .with_extension(match target.architecture {
+            target_lexicon::Architecture::Wasm32 => "wasm",
+            _ => "",
+        });
 
     let res = match target.architecture {
         // usually just ld64 - uses your `cc`
@@ -438,14 +498,27 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
-            let ld = wasm_ld().await?;
             // --import-memory         Import the module's memory from the default module of "env" with the name "memory".
             // --import-table          Import function table from the environment
-            Command::new(ld)
+            let base = subsecond_cli_support::wasm::get_ifunc_table_length(
+                &std::fs::read(&original.output_location).unwrap(),
+            );
+            tracing::info!("base: {base}");
+            Command::new(wasm_ld().await.unwrap())
                 .args(object_files)
-                .arg("-Wl,--import-memory")
-                .arg("-Wl,--import-table")
-                .arg("-Wl,--growable-table")
+                .arg("--import-memory")
+                .arg("--import-table")
+                .arg("--growable-table")
+                .arg("--export")
+                .arg("main")
+                .arg("--export=__heap_base")
+                .arg("--export=__data_end")
+                .arg("-z")
+                .arg("stack-size=1048576")
+                .arg("--stack-first")
+                .arg("--allow-undefined")
+                .arg("--no-demangle")
+                .arg("--no-entry")
                 .arg("-o")
                 .arg(&output_location)
                 .stdout(Stdio::piped())
@@ -461,6 +534,12 @@ async fn fast_build(
         tracing::error!("errs: {errs}");
     }
 
+    if target.architecture == target_lexicon::Architecture::Wasm32 {
+        let out_bytes = std::fs::read(&output_location).unwrap();
+        let res_ = move_func_initiailizers(&out_bytes).unwrap();
+        std::fs::write(&output_location, res_).unwrap();
+    }
+
     Ok(output_location)
 }
 
@@ -469,6 +548,7 @@ struct CargoOutputResult {
     output_location: Utf8PathBuf,
     direct_rustc: Vec<String>,
     link_args: Vec<String>,
+    table_size: usize,
 }
 
 async fn run_cargo_output(
@@ -500,7 +580,7 @@ async fn run_cargo_output(
                 Some(Ok(message)) => message,
                 None => break,
                 other => {
-                    // println!("other: {other:?}");
+                    tracing::trace!("other: {other:?}");
                     break;
                 }
             };
@@ -513,9 +593,7 @@ async fn run_cargo_output(
                 }
                 Message::CompilerMessage(compiler_message) => {
                     if let Some(rendered) = &compiler_message.message.rendered {
-                        // if should_render {
-                        //     println!("rendered: {rendered}");
-                        // }
+                        tracing::trace!("rendered: {rendered}");
                     }
                 }
                 Message::BuildScriptExecuted(_build_script) => {}
@@ -553,9 +631,7 @@ async fn run_cargo_output(
                         }
                     }
 
-                    // if should_render {
-                    //     println!("text: {word}")
-                    // }
+                    tracing::trace!("text: {word}")
                 }
                 _ => {}
             }
@@ -569,18 +645,20 @@ async fn run_cargo_output(
         output_location,
         link_args,
         direct_rustc,
+        table_size: 0,
     })
 }
 
 async fn wasm_ld() -> anyhow::Result<PathBuf> {
-    let root = Command::new("rustc")
-        .arg("--print")
-        .arg("--sysroot")
-        .output()
-        .await?;
-    let root = String::from_utf8(root.stdout)?;
-    let root = PathBuf::from(root.trim());
-    Ok(root.join("lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld"))
+    Ok("/Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld".into())
+    // let root = Command::new("rustc")
+    //     .arg("--print")
+    //     .arg("--sysroot")
+    //     .output()
+    //     .await?;
+    // let root = String::from_utf8(root.stdout)?;
+    // let root = PathBuf::from(root.trim());
+    // Ok(root.join("lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld"))
 }
 
 fn workspace_dir() -> PathBuf {

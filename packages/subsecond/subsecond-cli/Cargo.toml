@@ -39,3 +39,7 @@ crossterm = { workspace = true }
 subsecond-cli-support = { path = "../subsecond-cli-support" }
 target-lexicon = "0.13.2"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+axum = { workspace = true, features = ["ws"] }
+axum-server = { workspace = true, features = ["tls-rustls"] }
+axum-extra = { workspace = true, features = ["typed-header"] }
+tower-http = { workspace = true, features = ["full"] }

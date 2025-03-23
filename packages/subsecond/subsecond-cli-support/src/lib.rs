@@ -16,6 +16,7 @@ use tokio::process::Command;
 
 pub mod partial;
 pub mod resolve;
+pub mod wasm;
 
 pub fn create_jump_table(
     original: &Path,

@@ -12304,12 +12304,14 @@ dependencies = [
 name = "subsecond"
 version = "0.6.3"
 dependencies = [
+ "js-sys",
  "libc",
  "libloading 0.8.6",
  "memmap",
  "serde",
  "subsecond-macro",
  "subsecond-types",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -12317,6 +12319,9 @@ name = "subsecond-cli"
 version = "0.6.3"
 dependencies = [
  "anyhow",
+ "axum 0.7.9",
+ "axum-extra",
+ "axum-server",
  "bincode",
  "cargo_metadata 0.19.2",
  "clap",
@@ -12346,6 +12351,7 @@ dependencies = [
  "target-lexicon 0.13.2",
  "tokio",
  "tokio-tungstenite 0.23.1",
+ "tower-http",
  "tracing",
  "tracing-subscriber",
  "urlencoding",
@@ -12358,18 +12364,24 @@ version = "0.6.3"
 dependencies = [
  "anyhow",
  "bincode",
+ "clap",
+ "id-arena",
  "itertools 0.14.0",
  "libc",
  "memmap",
  "object 0.36.5",
  "pretty-hex",
  "pretty_assertions",
+ "rayon",
  "rustc-demangle",
  "serde",
  "subsecond-types",
  "target-lexicon 0.13.2",
  "tokio",
  "tracing",
+ "tracing-subscriber",
+ "walrus",
+ "wasmparser 0.225.0",
 ]
 
 [[package]]

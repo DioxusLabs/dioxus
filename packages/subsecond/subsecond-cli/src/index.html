@@ -4,9 +4,69 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Subsecond</title>
+        <script>
+            /**
+             * Patches a WebAssembly module by replacing its exports with those from another module.
+             *
+             * @param {WebAssembly.Exports} base - The base WebAssembly exports object to be patched.
+             * @param {WebAssembly.Exports} patch - The WebAssembly exports object containing the patch functions.
+             * @throws {TypeError} If the export names cannot be parsed as integers.
+             */
+            function patchWasm(base, patch) {
+                const patchExports = Object.entries(patch);
+
+                // extract the export names from the patch table
+                const patchVec = new Uint32Array(patchExports.length * 2);
+
+                // iterate through the patch exports and get the key and value
+                let idx = 0;
+                for (const [key, value] of patchExports) {
+                    patchVec[idx] = parseInt(base[key].name);
+                    patchVec[idx + 1] = parseInt(value.name);
+                    idx += 2;
+                }
+
+                // call the patch function
+                base["__patch_wasm"](patchVec);
+            }
+
+            /**
+             * Loads a WebAssembly module from a given URL, instantiates it, and applies a patch
+             * to the provided base object using the module's exported functions.
+             *
+             * @param {WebAssembly.Exports} base - The base object to be patched with the WebAssembly module's exports.
+             * @param {string} url - The URL of the WebAssembly module to fetch and instantiate.
+             * @returns {void} This function does not return a value.
+             */
+            function loadAndPatch(base, url) {
+            fetch(url)
+                .then((response) => response.arrayBuffer())
+                .then((bytes) => {
+                    let imports = {
+                        env: {
+                            __indirect_function_table: base.__wbindgen_export_7,
+                            __stack_pointer: base.__stack_pointer,
+                            __tls_base: base.__tls_base,
+                            memory: base.memory,
+                        },
+                    };
+                    for (const key in Object.keys(base)) {
+                        imports.env[key] = base[key];
+                    }
+                    return WebAssembly.instantiate(bytes, imports);
+                })
+                .then((result) => {
+                    patchWasm(base, result.instance.exports);
+                });
+            }
+
+            window.loadAndPatch = loadAndPatch;
+        </script>
         <script type="module">
             import init from "./main.js";
-            init();
+            init().then((wasmExports) => {
+                window.wasmExports = wasmExports;
+            });
         </script>
     </head>
     <body>

@@ -59,13 +59,15 @@ pub fn resolve_undefined(
         match triple.binary_format {
             target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
             target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
-            target_lexicon::BinaryFormat::Coff => todo!(),
-            target_lexicon::BinaryFormat::Wasm => todo!(),
-            target_lexicon::BinaryFormat::Xcoff => todo!(),
+            target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
+            target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
+            target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
             _ => todo!(),
         },
         match triple.architecture {
             target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            target_lexicon::Architecture::Wasm32 => object::Architecture::Wasm32,
+            target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
             _ => todo!(),
         },
         match triple.endianness() {
@@ -126,6 +128,10 @@ pub fn resolve_undefined(
                     .address()
         }
     };
+
+    if triple.architecture == target_lexicon::Architecture::Wasm32 {
+        return Ok(vec![]);
+    }
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry

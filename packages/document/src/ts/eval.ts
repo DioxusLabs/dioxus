@@ -1,6 +1,6 @@
 // Handle communication between rust and evaluating javascript
 
-export class Channel {
+class Channel {
   pending: any[];
   waiting: ((data: any) => void)[];
 
@@ -32,7 +32,7 @@ export class Channel {
   }
 }
 
-export class WeakDioxusChannel {
+class WeakDioxusChannel {
   inner: WeakRef<DioxusChannel>;
 
   constructor(channel: DioxusChannel) {
@@ -56,7 +56,7 @@ export class WeakDioxusChannel {
   }
 }
 
-export abstract class DioxusChannel {
+abstract class DioxusChannel {
   // Return a weak reference to this channel
   weak(): WeakDioxusChannel {
     return new WeakDioxusChannel(this);
@@ -68,3 +68,5 @@ export abstract class DioxusChannel {
   // Receive data sent from javascript in rust
   abstract rustRecv(): Promise<any>;
 }
+
+export { DioxusChannel, Channel, WeakDioxusChannel };

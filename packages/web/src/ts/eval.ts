@@ -4,6 +4,7 @@ import {
   WeakDioxusChannel,
 } from "../../../document/src/ts/eval";
 
+export { WeakDioxusChannel };
 export class WebDioxusChannel extends DioxusChannel {
   js_to_rust: Channel;
   rust_to_js: Channel;
