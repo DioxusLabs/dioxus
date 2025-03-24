@@ -5,46 +5,6 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Subsecond</title>
         <script>
-            /**
-             * Patches a WebAssembly module by replacing its exports with those from another module.
-             *
-             * @param {WebAssembly.Exports} base - The base WebAssembly exports object to be patched.
-             * @param {WebAssembly.Exports} patch - The WebAssembly exports object containing the patch functions.
-             * @throws {TypeError} If the export names cannot be parsed as integers.
-             */
-            function patchWasm(base, patch) {
-                window.patch = patch;
-                patch = patch.instance.exports;
-                const patchExports = Object.entries(patch);
-
-                // extract the export names from the patch table
-                const patchVec = new Uint32Array(patchExports.length * 2);
-
-                // iterate through the patch exports and get the key and value
-                let idx = 0;
-                for (const [key, value] of patchExports) {
-                    if (base[key] === undefined) {
-                        console.log("skipping", key);
-                        continue;
-                    }
-
-                    let old_ = base[key].name;
-                    let new_ = value.name;
-
-                    if (old_ === undefined || new_ === undefined) {
-                        console.log("skipping", key);
-                        continue;
-                    }
-
-                    console.log("patching", key, old_, new_);
-                    patchVec[idx] = parseInt(old_);
-                    patchVec[idx + 1] = parseInt(new_);
-                    idx += 2;
-                }
-
-                // call the patch function
-                base["__patch_wasm"](patchVec);
-            }
 
 
             /**
@@ -56,27 +16,77 @@
              * @returns {void} This function does not return a value.
              */
             function loadAndPatch(base, url) {
-            fetch(url)
-                .then((response) => response.arrayBuffer())
-                .then((bytes) => {
-                    base.__indirect_function_table.grow(2000);
-                    let imports = {
-                        env: {
-                            __indirect_function_table: base.__indirect_function_table,
-                            __stack_pointer: base.__stack_pointer,
-                            __tls_base: base.__tls_base,
-                            memory: base.memory,
-                        },
-                        // env: base.env
-                    };
-                    for (const key of Object.keys(base)) {
-                        imports.env[key] = base[key];
-                    }
-                    return WebAssembly.instantiate(bytes, imports);
-                })
-                .then((result) => {
-                    patchWasm(base, result);
-                });
+                fetch(url)
+                    .then((response) => response.arrayBuffer())
+                    .then((bytes) => {
+                        base.__indirect_function_table.grow(2000);
+                        let imports = {
+                            env: {
+                                __indirect_function_table: base.__indirect_function_table,
+                                __stack_pointer: base.__stack_pointer,
+                                __tls_base: base.__tls_base,
+                                memory: base.memory,
+                            },
+                        };
+                        for (const key of Object.keys(base)) {
+                            imports.env[key] = base[key];
+                        }
+                        return WebAssembly.instantiate(bytes, imports);
+                    })
+                    // function pointers correlate directly to exports.table.get(pointer!)
+                    //
+                    // object.keys(patch_exports) -> gives us names of functions
+                    //
+                    // we end up making a map of original ptr to... what??
+                    //
+                    // if we load the new module into the same table then its pointers should be valid too?
+                    //
+                    // the jump table can continue to be a map of ptr -> ptr
+                    //
+                    // but we somehow need to get the exports as pointers too
+                    //
+                    // the exported functions return a "pointer object" whose `name` field *is the pointer* (but as a string)
+                    //
+                    // so in theory we....
+                    //  object.values(patch.exports) => [name, ptr]
+                    //  source.exports[name].name => ptr
+                    //
+                    // call patchJumpTable({ptr: ptr})
+                    .then((patch) => {
+                        window.patch = patch;
+
+                        const patchExports = Object.entries(patch.instance.exports);
+
+                        // extract the export names from the patch table
+                        const patchVec = new Uint32Array(patchExports.length * 2);
+
+                        // iterate through the patch exports and get the key and value
+                        let idx = 0;
+                        for (const [key, value] of patchExports) {
+                            if (base[key] === undefined) {
+                                console.log("skipping", key);
+                                continue;
+                            }
+
+                            let old_ = base[key].name;
+                            let new_ = value.name;
+
+                            if (old_ === undefined || new_ === undefined) {
+                                console.log("skipping", key);
+                                continue;
+                            }
+
+                            console.log("patching", key, old_, new_);
+                            patchVec[idx] = parseInt(old_);
+                            patchVec[idx + 1] = parseInt(new_);
+                            idx += 2;
+                        }
+
+
+                        // call the patch function
+                        // base["__patch_wasm"](patchVec);
+                        base["__patch_wasm"]([14, 1714]);
+                    });
             }
 
             window.loadAndPatch = loadAndPatch;

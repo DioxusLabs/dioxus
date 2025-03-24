@@ -29,7 +29,7 @@ pub fn resolve_undefined(
     source: &Path,
     incrementals: &[PathBuf],
     triple: &Triple,
-    aslr_reference: Option<u64>,
+    aslr_reference: u64,
 ) -> Result<Vec<u8>> {
     let sorted: Vec<_> = incrementals.iter().sorted().collect();
 
@@ -116,7 +116,6 @@ pub fn resolve_undefined(
     let aslr_offset = match triple.architecture {
         target_lexicon::Architecture::Wasm32 => 0,
         _ => {
-            let aslr_reference = aslr_reference.unwrap();
             aslr_reference
                 - symbol_table
                     .get("_aslr_reference")

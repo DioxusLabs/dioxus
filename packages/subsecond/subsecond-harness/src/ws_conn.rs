@@ -27,7 +27,7 @@ pub fn initialize() {
         while let Ok(msg) = websocket.read() {
             if let tungstenite::Message::Binary(bytes) = msg {
                 if let Ok(msg) = bincode::deserialize::<JumpTable>(bytes.as_ref()) {
-                    unsafe { subsecond::run_patch(msg) };
+                    unsafe { subsecond::apply_patch(msg) };
                 }
             }
         }

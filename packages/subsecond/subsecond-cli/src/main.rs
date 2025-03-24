@@ -104,14 +104,22 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         tracing::info!("Fast reloading... ");
 
         let started = Instant::now();
-        let output_temp =
-            match fast_build(&result, &target, client.as_ref().map(|s| s.aslr_reference)).await {
-                Ok(output_temp) => output_temp,
-                Err(e) => {
-                    tracing::warn!("Fast build failed: {e}");
-                    continue;
-                }
-            };
+        let output_temp = match fast_build(
+            &result,
+            &target,
+            client
+                .as_ref()
+                .map(|s| s.aslr_reference)
+                .unwrap_or_default(),
+        )
+        .await
+        {
+            Ok(output_temp) => output_temp,
+            Err(e) => {
+                tracing::warn!("Fast build failed: {e}");
+                continue;
+            }
+        };
 
         // Assemble the jump table of redirected addresses
         // todo: keep track of this and merge it over time
@@ -413,7 +421,7 @@ fn rust_log_enabled() -> bool {
 async fn fast_build(
     original: &CargoOutputResult,
     target: &Triple,
-    aslr_reference: Option<u64>,
+    aslr_reference: u64,
 ) -> anyhow::Result<Utf8PathBuf> {
     let fast_build = Command::new(original.direct_rustc[0].clone())
         .args(original.direct_rustc[1..].iter())

@@ -9,39 +9,12 @@ fn app() -> Element {
 
     dioxus::logger::info!("Rendering component!");
 
-    // function pointers correlate directly to exports.table.get(pointer!)
-    //
-    // object.keys(patch_exports) -> gives us names of functions
-    //
-    // we end up making a map of original ptr to... what??
-    //
-    // if we load the new module into the same table then its pointers should be valid too?
-    //
-    // the jump table can continue to be a map of ptr -> ptr
-    //
-    // but we somehow need to get the exports as pointers too
-    //
-    // the exported functions return a "pointer object" whose `name` field *is the pointer* (but as a string)
-    //
-    // so in theory we....
-    //  object.values(patch.exports) => [name, ptr]
-    //  source.exports[name].name => ptr
-    //
-    // call patchJumpTable({ptr: ptr})
-
-    let current = subsecond::current(app as fn() -> Element);
-
-    dioxus::logger::info!("fn ptr of app is {:?}", app as *const fn() -> Element);
-    dioxus::logger::info!("fn ptr of child is {:?}", Child as *const fn() -> Element);
-    dioxus::logger::info!("fn ptr of child2 is {:?}", Child2 as *const fn() -> Element);
-    dioxus::logger::info!("fn ptr of child3 is {:?}", Child3 as *const fn() -> Element);
-
     rsx! {
         h1 { "Dioxus Hot-patch: {count}" }
         div { style: "display: flex; flex-row: column; align-items: center; justify-content: center;",
             img { src: "https://rustacean.net/assets/rustacean-flat-happy.png" }
             div {
-                for x in 0..5 {
+                for x in 0..1 {
                     Child { id: x + 1, opt: "List entry" }
                 }
             }

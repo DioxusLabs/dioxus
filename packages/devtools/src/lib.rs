@@ -30,9 +30,8 @@ impl Devtools {
 /// Assets need to be handled by the renderer.
 pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
     dom.runtime().on_scope(ScopeId::ROOT, || {
-        // Update signals...
+        // 1. Update signals...
         let ctx = dioxus_signals::get_global_context();
-
         for template in &msg.templates {
             let value = template.template.clone();
             let key = GlobalKey::File {
@@ -50,6 +49,7 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
             }
         }
 
+        // 2. Attempt to hotpatch
         if let Some(mut jump_table) = msg.jump_table.as_ref().cloned() {
             if cfg!(target_os = "android") {
                 // // copy the jump table to the libs directory to satisfy the namespace requirements
@@ -71,7 +71,8 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
                 println!("Patched jump table: {:#?}", jump_table);
             }
 
-            unsafe { subsecond::run_patch(jump_table) };
+            unsafe { subsecond::apply_patch(jump_table) };
+
             dioxus_core::prelude::force_all_dirty();
         }
     });

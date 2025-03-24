@@ -3318,6 +3318,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dbg_breakpoint"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb333c8dc699012c0694fe7c7eca7d625f2bceeeef44fd1de39008d6a6abf777"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "dbl"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12304,6 +12313,7 @@ dependencies = [
 name = "subsecond"
 version = "0.6.3"
 dependencies = [
+ "dbg_breakpoint",
  "js-sys",
  "libc",
  "libloading 0.8.6",
