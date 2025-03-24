@@ -75,13 +75,14 @@ async fn handle_ws_connection(
         tokio::select! {
             Some(server_msg) = server_ws.next() => {
                 closed = matches!(server_msg, Ok(ServerMessage::Close(..)));
-                if let Some(msg) = server_msg.map_err(WsError::FromServer)?.into_msg() {
-                    client_ws.send(msg).await.map_err(WsError::ToClient)?;
+                match server_msg.map_err(WsError::FromServer)?.into_msg() {
+                    Ok(msg) => client_ws.send(msg).await.map_err(WsError::ToClient)?,
+                    Err(UnexpectedRawFrame) => tracing::warn!(dx_src = ?TraceSrc::Dev, "Dropping unexpected raw websocket frame"),
                 }
             },
             Some(client_msg) = client_ws.next() => {
                 closed = matches!(client_msg, Ok(ClientMessage::Close(..)));
-                let msg = client_msg.map_err(WsError::FromClient)?.into_msg();
+                let Ok(msg) = client_msg.map_err(WsError::FromClient)?.into_msg();
                 server_ws.send(msg).await.map_err(WsError::ToServer)?;
             },
             else => break,
@@ -92,13 +93,15 @@ async fn handle_ws_connection(
 }
 
 trait IntoMsg<T> {
-    fn into_msg(self) -> T;
+    type Error;
+    fn into_msg(self) -> Result<T, Self::Error>;
 }
 
 impl IntoMsg<ServerMessage> for ClientMessage {
-    fn into_msg(self) -> ServerMessage {
+    type Error = std::convert::Infallible;
+    fn into_msg(self) -> Result<ServerMessage, Self::Error> {
         use ServerMessage as SM;
-        match self {
+        Ok(match self {
             Self::Text(v) => SM::Text(v.into()),
             Self::Binary(v) => SM::Binary(v.into()),
             Self::Ping(v) => SM::Ping(v.into()),
@@ -107,14 +110,16 @@ impl IntoMsg<ServerMessage> for ClientMessage {
                 code: cf.code.into(),
                 reason: cf.reason.into_owned().into(),
             })),
-        }
+        })
     }
 }
 
-impl IntoMsg<Option<ClientMessage>> for ServerMessage {
-    fn into_msg(self) -> Option<ClientMessage> {
+struct UnexpectedRawFrame;
+impl IntoMsg<ClientMessage> for ServerMessage {
+    type Error = UnexpectedRawFrame;
+    fn into_msg(self) -> Result<ClientMessage, Self::Error> {
         use ClientMessage as CM;
-        Some(match self {
+        Ok(match self {
             Self::Text(v) => CM::Text(v.to_string()),
             Self::Binary(v) => CM::Binary(v.into()),
             Self::Ping(v) => CM::Ping(v.into()),
@@ -126,8 +131,7 @@ impl IntoMsg<Option<ClientMessage>> for ServerMessage {
             Self::Frame(_) => {
                 // this variant should never be returned by next(), but handle it
                 // gracefully by dropping it instead of panicking out of an abundance of caution
-                tracing::warn!(dx_src = ?TraceSrc::Dev, "Dropping unexpected raw websocket frame");
-                return None;
+                return Err(UnexpectedRawFrame);
             }
         })
     }
