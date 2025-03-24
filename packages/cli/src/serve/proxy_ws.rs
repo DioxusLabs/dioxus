@@ -1,4 +1,6 @@
 use crate::logging::TraceSrc;
+use crate::serve::proxy::handle_proxy_error;
+use anyhow::Context;
 use axum::body::Body;
 use axum::extract::ws::{CloseFrame as ClientCloseFrame, Message as ClientMessage};
 use axum::extract::{FromRequestParts, WebSocketUpgrade};
@@ -14,34 +16,36 @@ pub(crate) async fn proxy_websocket(
     mut parts: Parts,
     req: Request<Body>,
     backend_url: &Uri,
-) -> Response<Body> {
-    let ws = match WebSocketUpgrade::from_request_parts(&mut parts, &()).await {
-        Ok(ws) => ws,
-        Err(e) => return e.into_response(),
-    };
+) -> Result<Response<Body>, Response<Body>> {
+    let ws = WebSocketUpgrade::from_request_parts(&mut parts, &())
+        .await
+        .map_err(IntoResponse::into_response)?;
 
-    let new_host = backend_url.host().unwrap_or("localhost");
-    let proxied_uri = format!(
-        "{scheme}://{host}:{port}{path_and_query}",
-        scheme = req.uri().scheme_str().unwrap_or("ws"),
-        port = backend_url.port().unwrap(),
-        host = new_host,
-        path_and_query = req
-            .uri()
-            .path_and_query()
-            .map(|f| f.to_string())
-            .unwrap_or_default()
-    );
+    tracing::info!(dx_src = ?TraceSrc::Dev, "Proxying websocket connection {req:?}");
+    let proxied_request = into_proxied_request(req, backend_url).map_err(handle_proxy_error)?;
+    tracing::info!(dx_src = ?TraceSrc::Dev, "Connection proxied to {proxied_uri}", proxied_uri = proxied_request.uri());
 
-    tracing::info!(dx_src = ?TraceSrc::Dev, "Proxying websocket connection {req:?} to {proxied_uri}");
-    ws.on_upgrade(move |client_ws| async move {
-        match handle_ws_connection(client_ws, &proxied_uri).await {
+    Ok(ws.on_upgrade(move |client_ws| async move {
+        match handle_ws_connection(client_ws, proxied_request).await {
             Ok(()) => tracing::info!(dx_src = ?TraceSrc::Dev, "Websocket connection closed"),
             Err(e) => {
                 tracing::error!(dx_src = ?TraceSrc::Dev, "Error proxying websocket connection: {e}")
             }
         }
-    })
+    }))
+}
+
+fn into_proxied_request(
+    req: Request<Body>,
+    backend_url: &Uri,
+) -> crate::Result<tokio_tungstenite::tungstenite::handshake::client::Request> {
+    // ensure headers from original request are preserved
+    let (mut request_parts, _) = req.into_parts();
+    let mut uri_parts = request_parts.uri.into_parts();
+    uri_parts.scheme = uri_parts.scheme.or("ws".parse().ok());
+    uri_parts.authority = backend_url.authority().cloned();
+    request_parts.uri = Uri::from_parts(uri_parts).context("Could not construct proxy URI")?;
+    Ok(Request::from_parts(request_parts, ()))
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -60,9 +64,9 @@ enum WsError {
 
 async fn handle_ws_connection(
     mut client_ws: axum::extract::ws::WebSocket,
-    proxied_url: &str,
+    proxied_request: tokio_tungstenite::tungstenite::handshake::client::Request,
 ) -> Result<(), WsError> {
-    let (mut server_ws, _) = tokio_tungstenite::connect_async(proxied_url)
+    let (mut server_ws, _) = tokio_tungstenite::connect_async(proxied_request)
         .await
         .map_err(WsError::Connect)?;
 

@@ -122,7 +122,7 @@ pub(crate) fn proxy_to(
             || req.uri().scheme().map(|f| f.as_str()) == Some("wss")
             || upgrade.is_some_and(|h| h.as_bytes().eq_ignore_ascii_case(b"websocket"))
         {
-            return Ok(super::proxy_ws::proxy_websocket(parts, req, &url).await);
+            return super::proxy_ws::proxy_websocket(parts, req, &url).await;
         }
 
         if nocache {
@@ -157,7 +157,7 @@ pub(crate) fn proxy_to(
     })
 }
 
-fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::Body> {
+pub(crate) fn handle_proxy_error(e: Error) -> axum::http::Response<axum::body::Body> {
     tracing::error!(dx_src = ?TraceSrc::Dev, "Proxy error: {}", e);
     axum::http::Response::builder()
         .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
