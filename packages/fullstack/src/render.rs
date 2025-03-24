@@ -202,7 +202,7 @@ impl SsrRendererPool {
             } else {
                 history = dioxus_history::MemoryHistory::with_initial_path(&route);
             }
-            let streaming_context = in_root_scope(&virtual_dom, || StreamingContext::new());
+            let streaming_context = in_root_scope(&virtual_dom, StreamingContext::new);
             virtual_dom.provide_root_context(Rc::new(history) as Rc<dyn dioxus_history::History>);
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
             virtual_dom.provide_root_context(streaming_context);
