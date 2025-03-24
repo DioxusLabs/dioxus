@@ -19,7 +19,7 @@ futures-channel = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
-dioxus-fullstack = { workspace = true, features = ["server"] }
+dioxus-fullstack = { workspace = true }
 
 [features]
 web = []
