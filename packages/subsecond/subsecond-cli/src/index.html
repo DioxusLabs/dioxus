@@ -5,11 +5,9 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Subsecond</title>
         <script>
-
-
             /**
              * @typedef {object} JumpTable
-             * @property {string} url - The URL of the WebAssembly module to fetch and instantiate.
+             * @property {string} lib - The URL of the WebAssembly module to fetch and instantiate.
              * @property {{[key: number]: number}} map - The exports of the WebAssembly module to patch.
              */
             /**
@@ -21,7 +19,7 @@
              * @returns {void} This function does not return a value.
              */
             function loadAndPatch(jump, base) {
-                fetch(jump.url)
+                fetch(jump.lib)
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
                         const ifunc_length = base.__indirect_function_table.length;
@@ -87,86 +85,57 @@
                             })
                         );
 
-                        console.log("nativeToIndex", nativeToIndex);
-                        console.log("nameToNativeMain", nameToNativeMain);
-                        console.log("nameToNativePatch", nameToNativePatch);
-
                         let jumpTable = Object.fromEntries(
-                            Object.entries(nameToNativePatch).map(([fnName, nativeName]) => {
-                                let oldIndex = nativeToIndex[nameToNativeMain[fnName]];
-                                let newIndex = nativeToIndex[nativeName];
-                                // let nativeName = nativeName;
-                                // if (nativeName === undefined) {
-                                //     return [null, null];
-                                // }
-                                // let oldIndex = nativeToIndex[nativeName];
-                                // let newIndex = nativeToIndex[nativeName];
-                                return [fnName, [oldIndex, newIndex]];
-                            }).filter(([name, [oldIndex, newIndex]]) => oldIndex !== undefined && newIndex !== undefined)
+                            Object.entries(nameToNativePatch)
+                                .map(([fnName, nativeName]) => {
+                                    let oldIndex = nativeToIndex[nameToNativeMain[fnName]];
+                                    let newIndex = nativeToIndex[nativeName];
+                                    return [fnName, [oldIndex, newIndex]];
+                                })
+                                .filter(([name, [oldIndex, newIndex]]) =>
+                                    oldIndex !== undefined && newIndex !== undefined
+                                )
                         );
 
                         window.jumpTable = jumpTable;
 
-
-                        let patchEntry = jumpTable["_ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE"];
-                        console.log("patchEntry", patchEntry);
+                        let app_name = Object.keys(patchExports).find(key => key.includes("subsecond_harness11dioxus_demo3app17"));
+                        let patchEntry = jumpTable[app_name];
+                        console.log("patchEntry", patchEntry, app_name);
                         base["__subsecond_wasm_patch"](patchEntry);
-
-
-                        // // extract the export names from the patch table
-                        // const patchVec = new Uint32Array(patchExports.length * 2);
-
-                        // // iterate through the patch exports and get the key and value
-                        // let idx = 0;
-                        // for (const [key, value] of patchExports) {
-                        //     if (base[key] === undefined) {
-                        //         console.log("skipping", key);
-                        //         continue;
-                        //     }
-
-                        //     let old_ = base[key].name;
-                        //     let new_ = value.name;
-
-                        //     if (old_ === undefined || new_ === undefined) {
-                        //         console.log("skipping", key);
-                        //         continue;
-                        //     }
-
-                        //     patchVec[idx] = parseInt(old_);
-                        //     patchVec[idx + 1] = parseInt(new_);
-                        //     idx += 2;
-                        // }
-
-
-                        // Object.keys(window.patch.instance.exports).forEach((key) => {
-                        //     if (key === "_ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE") {
-                        //         console.log("patched", window.patch.instance.exports[key].name);
-                        //         return;
-                        //     }
-                        // });
-
-
-                        // for (let i = 0; i < window.wasmExports.__indirect_function_table.length; i += 1) {
-                        //     let entry = window.wasmExports.__indirect_function_table.get(i);
-                        //     if (entry === null) {
-                        //         continue;
-                        //     }
-                        //     let name = entry.name;
-                        //     if (name == "2964") {
-                        //         console.log("found 2964 at", i);
-                        //     }
-                        // }
-
-                        // 254
-                        //  44 -> 1599
-                        // _ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE
-                        // call the patch function
-                        // base["__patch_wasm"](patchVec);
-                        // base["__subsecond_wasm_patch"]([14, 1714]);
                     });
             }
 
+
+            function main() {
+                const socket = new WebSocket("ws://localhost:9393");
+
+                socket.onmessage = (event) => {
+                    try {
+                        const jump = JSON.parse(event.data);
+                        console.log("Received jump table:", jump);
+                        if (window.wasmExports) {
+                            jump.lib = jump.lib.split('/').pop();
+                            console.log("Patching jump table with:", jump);
+                            loadAndPatch(jump, window.wasmExports);
+                        } else {
+                            console.error("wasmExports is not initialized yet.");
+                        }
+                    } catch (error) {
+                        console.error("Failed to process WebSocket message:", error);
+                    }
+                };
+
+                socket.onopen = () => {
+                    socket.send("123");
+                    console.log("WebSocket connection established.")
+                };
+                socket.onerror = (error) => console.error("WebSocket error:", error);
+                socket.onclose = () => console.log("WebSocket connection closed.");
+            }
+
             window.loadAndPatch = loadAndPatch;
+            main();
         </script>
         <script type="module">
             import init from "./main.js";

@@ -377,14 +377,21 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
         let new_offset = unsafe {
             // Leak the libary. dlopen is basically a no-op on many platforms and if we even try to drop it,
             // some code might be called (ie drop) that results in really bad crashes (restart your computer...)
-            Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()))
-                .get::<*const ()>(b"__rust_alloc")
-                .ok()
-                .unwrap()
-                .try_as_raw_ptr()
-                .unwrap()
-                .wrapping_byte_sub(jump_table.new_base_address as usize) as usize
+            Box::leak(Box::new(
+                libloading::os::unix::Library::new(&jump_table.lib).unwrap(),
+            ))
+            // Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()))
+            .get::<*const ()>(b"__rust_alloc")
+            .ok()
+            .unwrap()
+            .as_raw_ptr()
+            // .try_as_raw_ptr()
+            // .unwrap()
+            .wrapping_byte_sub(jump_table.new_base_address as usize) as usize
         };
+
+        println!("Old offset: {:#x}", old_offset);
+        println!("New offset: {:#x}", new_offset);
 
         // Modify the jump table to be relative to the base address of the loaded library
         jump_table.map = jump_table
@@ -518,15 +525,19 @@ macro_rules! impl_hot_function {
                             // If we leave the tag, then indexing our jump table will fail and patching won't work (or crash!)
                             // This is only implemented on 64-bit platforms since pointer tagging is not available on 32-bit platforms
                             // In dev, Dioxus disables MTE to work around this issue, but we still handle it anyways.
-                            #[cfg(target_pointer_width = "64")] let nibble  = real as u64 & 0x00FFFFFFFFFFFFFF;
+                            #[cfg(target_pointer_width = "64")] let nibble  = real as u64 & 0xFF00_0000_0000_0000;
                             #[cfg(target_pointer_width = "64")] let real    = real as u64 & 0x00FFF_FFF_FFFF_FFFF;
+
+                            #[cfg(target_pointer_width = "64")] let real  = real as u64;
 
                             // No nibble on 32-bit platforms, but we still need to assume u64 since the host always writes 64-bit pointers
                             #[cfg(target_pointer_width = "32")] let real = real as u64;
 
                             if let Some(ptr) = jump_table.map.get(&real).cloned() {
                                 // Re-apply the nibble - though this might not be required (we aren't calling malloc for a new pointer)
-                                #[cfg(target_pointer_width = "64")] let ptr: u64 = ptr | nibble;
+                                // #[cfg(target_pointer_width = "64")] let ptr: u64 = ptr | nibble;
+
+                                #[cfg(target_pointer_width = "64")] let ptr: u64 = ptr;
                                 #[cfg(target_pointer_width = "32")] let ptr: u32 = ptr as u32;
 
                                 // Macro-rules requires unpacking the tuple before we call it

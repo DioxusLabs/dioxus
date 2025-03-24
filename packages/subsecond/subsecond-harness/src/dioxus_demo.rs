@@ -5,9 +5,7 @@ pub fn launch() {
 }
 
 fn app() -> Element {
-    let count = 1234567;
-
-    dioxus::logger::info!("Rendering component!");
+    let count = 123456;
 
     rsx! {
         h1 { "Dioxus Hot-patch: {count}" }

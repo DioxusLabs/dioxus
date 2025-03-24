@@ -25,8 +25,8 @@ pub fn initialize() {
             .unwrap();
 
         while let Ok(msg) = websocket.read() {
-            if let tungstenite::Message::Binary(bytes) = msg {
-                if let Ok(msg) = bincode::deserialize::<JumpTable>(bytes.as_ref()) {
+            if let tungstenite::Message::Text(bytes) = msg {
+                if let Ok(msg) = serde_json::from_str::<JumpTable>(bytes.as_ref()) {
                     unsafe { subsecond::apply_patch(msg) };
                 }
             }

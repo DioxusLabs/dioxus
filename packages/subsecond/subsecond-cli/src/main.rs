@@ -88,6 +88,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
 
     // Wait for the websocket to come up
     let mut client = wait_for_ws(9393, &target).await?;
+    tracing::info!("Client connected");
 
     // Watch the source folder for changes
     let mut watcher = FsWatcher::watch(src_folder)?;
@@ -107,10 +108,9 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         let output_temp = match fast_build(
             &result,
             &target,
-            client
-                .as_ref()
-                .map(|s| s.aslr_reference)
-                .unwrap_or_default(),
+            client.aslr_reference, // .as_ref()
+                                   // .map(|s| s.aslr_reference)
+                                   // .unwrap_or_default(),
         )
         .await
         {
@@ -126,14 +126,15 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         let jump_table =
             create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path(), &target).unwrap();
 
-        if let Some(client) = client.as_mut() {
-            client
-                .socket
-                .send(tokio_tungstenite::tungstenite::Message::Binary(
-                    bincode::serialize(&jump_table).unwrap().into(),
-                ))
-                .await?;
-        }
+        // if let Some(client) = client.as_mut() {
+        client
+            .socket
+            .send(tokio_tungstenite::tungstenite::Message::Text(
+                serde_json::to_string(&jump_table).unwrap(),
+                // bincode::serialize(&jump_table).unwrap().into(),
+            ))
+            .await?;
+        // }
 
         if target.architecture == target_lexicon::Architecture::Wasm32 {
             let _ = std::fs::copy(
@@ -224,10 +225,10 @@ struct WsClient {
     socket: WebSocketStream<tokio::net::TcpStream>,
 }
 
-async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<Option<WsClient>> {
-    if target.architecture == target_lexicon::Architecture::Wasm32 {
-        return Ok(None);
-    }
+async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<WsClient> {
+    // if target.architecture == target_lexicon::Architecture::Wasm32 {
+    //     return Ok(None);
+    // }
 
     let addr = format!("127.0.0.1:{}", port);
     let try_socket = TcpListener::bind(&addr).await;
@@ -238,10 +239,10 @@ async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<Option<WsClie
     let msg = socket.next().await.unwrap()?;
     let aslr_reference = msg.into_text().unwrap().parse().unwrap();
 
-    Ok(Some(WsClient {
+    Ok(WsClient {
         aslr_reference,
         socket,
-    }))
+    })
 }
 
 /// Store the linker args in a file for the main process to read.
@@ -307,7 +308,9 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
         target_lexicon::Architecture::Wasm32 => {
             build.arg("--features").arg("web");
         }
-        _ => {}
+        _ => {
+            build.arg("--features").arg("desktop");
+        }
     }
 
     // these args are required to prevent DCE, save intermediates, and print the link args for future usage
