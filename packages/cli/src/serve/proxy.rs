@@ -117,11 +117,10 @@ pub(crate) fn proxy_to(
             "true".parse().expect("header value is valid"),
         );
 
-        // We have to throw a redirect for ws connections since the upgrade handler will not be called
-        // Our _dioxus handler will override this in the default case
+        let upgrade = req.headers().get(UPGRADE);
         if req.uri().scheme().map(|f| f.as_str()) == Some("ws")
             || req.uri().scheme().map(|f| f.as_str()) == Some("wss")
-            || req.headers().get(UPGRADE).and_then(|h| h.to_str().ok()) == Some("websocket")
+            || upgrade.is_some_and(|h| h.as_bytes().eq_ignore_ascii_case(b"websocket"))
         {
             return Ok(super::proxy_ws::proxy_websocket(parts, req, &url).await);
         }
