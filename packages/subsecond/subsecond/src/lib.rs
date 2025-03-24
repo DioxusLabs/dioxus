@@ -206,13 +206,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use js_sys::Uint32Array;
 pub use subsecond_macro::hot;
 pub use subsecond_types::JumpTable;
+use wasm_bindgen::JsValue;
 
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
+static HOTRELOAD_HANDLERS: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>> = Mutex::new(Vec::new());
 static mut APP_JUMP_TABLE: Option<JumpTable> = None;
-static mut HOTRELOAD_HANDLERS: Mutex<Vec<Arc<dyn Fn()>>> = Mutex::new(Vec::new());
 static mut CHANGED: bool = false;
 static mut SUBSECOND_ENABLED: bool = false;
 
@@ -253,7 +255,10 @@ pub fn call<O>(f: impl FnMut() -> O) -> O {
         // If subsecond is in the look, issue a breakpoint so they can try and issue a hot-patch.
         unsafe {
             if SUBSECOND_ENABLED {
-                dbg_breakpoint::breakpoint_if_debugging();
+                #[cfg(any(unix, windows))]
+                {
+                    dbg_breakpoint::breakpoint_if_debugging();
+                }
                 continue;
             }
         }
@@ -330,6 +335,122 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
             Ok(self.inner.call_it(args))
         }
     }
+}
+
+pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
+    unsafe {
+        HOTRELOAD_HANDLERS.lock().unwrap().push(handler);
+    }
+}
+
+#[inline(never)]
+#[no_mangle]
+pub extern "C" fn aslr_reference() -> usize {
+    aslr_reference as *const () as usize
+}
+
+/// Apply the patch using a given jump table.
+///
+/// # Safety
+///
+/// This function is unsafe because it detours existing functions in memory. This is *wildly* unsafe,
+/// especially if the JumpTable is malformed. Only run this if you know what you're doing.
+///
+/// If the pointers are incorrect, function type signatures will be incorrect and the program will crash,
+/// sometimes in a way that requires a restart of your entire computer. Be careful.
+///
+/// # Warning
+///
+/// This function will load the library and thus allocates. In cannot be used when the program is
+/// stopped (ie in a signal handler).
+pub unsafe fn apply_patch(mut jump_table: JumpTable) {
+    // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
+    #[cfg(any(unix, windows))]
+    {
+        // Use the `aslr_offset` symbol as a sentinel for the current executable. This is basically a
+        // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
+        // jump table.
+        let old_offset = aslr_reference() - jump_table.aslr_reference as usize;
+
+        // Use the `__rust_alloc` symbol as a sentinel for the loaded library. Might want to move away
+        // from this at some point, or make it configurable
+        let new_offset = unsafe {
+            // Leak the libary. dlopen is basically a no-op on many platforms and if we even try to drop it,
+            // some code might be called (ie drop) that results in really bad crashes (restart your computer...)
+            Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()))
+                .get::<*const ()>(b"__rust_alloc")
+                .ok()
+                .unwrap()
+                .try_as_raw_ptr()
+                .unwrap()
+                .wrapping_byte_sub(jump_table.new_base_address as usize) as usize
+        };
+
+        // Modify the jump table to be relative to the base address of the loaded library
+        jump_table.map = jump_table
+            .map
+            .iter()
+            .map(|(k, v)| {
+                (
+                    (*k as usize + old_offset) as u64,
+                    (*v as usize + new_offset) as u64,
+                )
+            })
+            .collect();
+    };
+
+    // Update runtime state
+    unsafe {
+        APP_JUMP_TABLE = Some(jump_table);
+        CHANGED = true;
+        HOTRELOAD_HANDLERS
+            .lock()
+            .unwrap()
+            .clone()
+            .iter()
+            .for_each(|handler| {
+                handler();
+            });
+    }
+}
+
+/// Apply the patch using a given jump table.
+///
+/// Used on WASM platforms where we need async integration to fetch the patch.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
+pub async unsafe fn __subsecond_wasm_patch(pointers: Uint32Array) {
+    // pub async unsafe fn __subsecond_wasm_patch(value: JsValue) {
+    use js_sys::Uint32Array;
+    use subsecond_types::AddressMap;
+    use wasm_bindgen::prelude::*;
+
+    let mut table: JumpTable = JumpTable {
+        aslr_reference: 0,
+        lib: PathBuf::from("patch.wasm"),
+        map: AddressMap::default(),
+        new_base_address: 0,
+        old_base_address: 0,
+    };
+
+    // [Log] skipping – "__dso_handle" (patch_console.js, line 1)
+    // [Log] skipping – "__data_end" (patch_console.js, line 1)
+    // [Log] skipping – "__stack_low" (patch_console.js, line 1)
+    // [Log] skipping – "__stack_high" (patch_console.js, line 1)
+    // [Log] skipping – "__global_base" (patch_console.js, line 1)
+    // [Log] skipping – "__heap_base" (patch_console.js, line 1)
+    // [Log] skipping – "__heap_end" (patch_console.js, line 1)
+    // [Log] skipping – "__memory_base" (patch_console.js, line 1)
+    // [Log] skipping – "__table_base" (patch_console.js, line 1)
+
+    let mut idx = 0;
+    for _ in 0..pointers.length() {
+        let left = pointers.get_index(idx);
+        let right = pointers.get_index(idx + 1);
+        table.map.insert(left as u64, right as u64);
+        idx += 2
+    }
+
+    unsafe { apply_patch(table) }
 }
 
 /// A trait that enables types to be hot-patched.
@@ -435,127 +556,3 @@ impl_hot_function!(
     (Fn8Marker, A, B, C, D, E, F, G, H),
     (Fn9Marker, A, B, C, D, E, F, G, H, I)
 );
-
-pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
-    unsafe {
-        HOTRELOAD_HANDLERS.lock().unwrap().push(handler);
-    }
-}
-
-/// Apply the patch using a given jump table.
-///
-/// # Safety
-///
-/// This function is unsafe because it detours existing functions in memory. This is *wildly* unsafe,
-/// especially if the JumpTable is malformed. Only run this if you know what you're doing.
-///
-/// If the pointers are incorrect, function type signatures will be incorrect and the program will crash,
-/// sometimes in a way that requires a restart of your entire computer. Be careful.
-pub unsafe fn apply_patch(mut jump_table: JumpTable) {
-    // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
-    #[cfg(any(unix, windows))]
-    {
-        // Use the `aslr_offset` symbol as a sentinel for the current executable. This is basically a
-        // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
-        // jump table.
-        let old_offset = aslr_reference() - jump_table.aslr_reference as usize;
-
-        // Use the `__rust_alloc` symbol as a sentinel for the loaded library. Might want to move away
-        // from this at some point, or make it configurable
-        let new_offset = unsafe {
-            // Leak the libary. dlopen is basically a no-op on many platforms and if we even try to drop it,
-            // some code might be called (ie drop) that results in really bad crashes (restart your computer...)
-            Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()))
-                .get::<*const ()>(b"__rust_alloc")
-                .ok()
-                .unwrap()
-                .try_as_raw_ptr()
-                .unwrap()
-                .wrapping_byte_sub(jump_table.new_base_address as usize) as usize
-        };
-
-        // Modify the jump table to be relative to the base address of the loaded library
-        jump_table.map = jump_table
-            .map
-            .iter()
-            .map(|(k, v)| {
-                (
-                    (*k as usize + old_offset) as u64,
-                    (*v as usize + new_offset) as u64,
-                )
-            })
-            .collect();
-    };
-
-    // On wasm we need to do a lot more work - merging our ifunc table, etc
-    if cfg!(target_arch = "wasm32") {}
-
-    // Update runtime state
-    unsafe {
-        APP_JUMP_TABLE = Some(jump_table);
-        CHANGED = true;
-        HOTRELOAD_HANDLERS
-            .lock()
-            .unwrap()
-            .clone()
-            .iter()
-            .for_each(|handler| {
-                handler();
-            });
-    }
-}
-
-#[inline(never)]
-#[no_mangle]
-pub extern "C" fn aslr_reference() -> usize {
-    aslr_reference as *const () as usize
-}
-
-// #[cfg(target_arch = "wasm32")]
-fn relocate_wasm_jump_table(jump_table: JumpTable) -> JumpTable {
-    use js_sys::Uint32Array;
-    use subsecond_types::AddressMap;
-    use wasm_bindgen::prelude::*;
-
-    #[wasm_bindgen]
-    pub fn __patch_wasm(pointers: Uint32Array) {
-        let mut table = JumpTable {
-            aslr_reference: 0,
-            lib: PathBuf::from("patch.wasm"),
-            map: AddressMap::default(),
-            new_base_address: 0,
-            old_base_address: 0,
-        };
-
-        tracing::info!("Patching wasm with {:?}", pointers);
-
-        let mut idx = 0;
-        for _ in 0..pointers.length() {
-            let left = pointers.get_index(idx);
-            let right = pointers.get_index(idx + 1);
-            tracing::info!("Adding pointer {:?} -> {:?}", left, right);
-            table.map.insert(left as u64, right as u64);
-            idx += 2
-        }
-
-        unsafe {
-            APP_JUMP_TABLE = Some(table);
-            CHANGED = true;
-            HOTRELOAD_HANDLERS
-                .lock()
-                .unwrap()
-                .clone()
-                .iter()
-                .for_each(|handler| {
-                    handler();
-                });
-        }
-    }
-
-    // On wasm, the jumptable is already correct!
-    // All we need to do is fetch + initialize the module. This could be done in javascript but for the
-    // sake of consistency we'll do it here.
-    let url = jump_table.lib.to_string_lossy();
-
-    jump_table
-}

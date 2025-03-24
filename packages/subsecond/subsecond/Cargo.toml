@@ -9,12 +9,16 @@ subsecond-macro = { workspace = true }
 subsecond-types = { workspace = true }
 
 
-tracing = { workspace = true }
 wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
 js-sys = { workspace = true}
-dbg_breakpoint = "0.1.1"
+# serde_wasm_bindgen
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libloading = "0.8.6"
 libc = "0.2.170"
 memmap = "0.7.0"
+dbg_breakpoint = "0.1.1"

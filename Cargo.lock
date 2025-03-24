@@ -12321,8 +12321,8 @@ dependencies = [
  "serde",
  "subsecond-macro",
  "subsecond-types",
- "tracing",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

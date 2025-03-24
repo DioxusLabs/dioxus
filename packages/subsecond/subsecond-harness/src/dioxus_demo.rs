@@ -14,7 +14,7 @@ fn app() -> Element {
         div { style: "display: flex; flex-row: column; align-items: center; justify-content: center;",
             img { src: "https://rustacean.net/assets/rustacean-flat-happy.png" }
             div {
-                for x in 0..1 {
+                for x in 0..3 {
                     Child { id: x + 1, opt: "List entry" }
                 }
             }

@@ -585,7 +585,7 @@ impl AppBundle {
             .map(|arg| PathBuf::from(arg))
             .collect::<Vec<_>>();
 
-        let resolved_patch_bytes = subsecond_cli_support::resolve::resolve_undefined(
+        let resolved_patch_bytes = subsecond_cli_support::resolve_undefined(
             &orig_exe,
             &object_files,
             &self.build.target,

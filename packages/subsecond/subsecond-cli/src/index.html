@@ -8,17 +8,23 @@
 
 
             /**
+             * @typedef {object} JumpTable
+             * @property {string} url - The URL of the WebAssembly module to fetch and instantiate.
+             * @property {{[key: number]: number}} map - The exports of the WebAssembly module to patch.
+             */
+            /**
              * Loads a WebAssembly module from a given URL, instantiates it, and applies a patch
              * to the provided base object using the module's exported functions.
              *
+             * @param {JumpTable} jump - The jump table to be patched with the WebAssembly module's exports.
              * @param {WebAssembly.Exports} base - The base object to be patched with the WebAssembly module's exports.
-             * @param {string} url - The URL of the WebAssembly module to fetch and instantiate.
              * @returns {void} This function does not return a value.
              */
-            function loadAndPatch(base, url) {
-                fetch(url)
+            function loadAndPatch(jump, base) {
+                fetch(jump.url)
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
+                        const ifunc_length = base.__indirect_function_table.length;
                         base.__indirect_function_table.grow(2000);
                         let imports = {
                             env: {
@@ -26,6 +32,7 @@
                                 __stack_pointer: base.__stack_pointer,
                                 __tls_base: base.__tls_base,
                                 memory: base.memory,
+                                __IFUNC_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ifunc_length + 1),
                             },
                         };
                         for (const key of Object.keys(base)) {
@@ -55,37 +62,107 @@
                     .then((patch) => {
                         window.patch = patch;
 
-                        const patchExports = Object.entries(patch.instance.exports);
+                        // We're going to match up export to export and then ifunc entry to ifunc entry
+                        // We're going to build a map of old -> new ifunc entries
+                        const patchExports = patch.instance.exports;
 
-                        // extract the export names from the patch table
-                        const patchVec = new Uint32Array(patchExports.length * 2);
+                        let nameToNativeMain = Object.fromEntries(
+                            Object.keys(wasmExports).map((key) => [key, wasmExports[key].name]).filter(([key, name]) => name !== undefined)
+                        );
 
-                        // iterate through the patch exports and get the key and value
-                        let idx = 0;
-                        for (const [key, value] of patchExports) {
-                            if (base[key] === undefined) {
-                                console.log("skipping", key);
-                                continue;
-                            }
+                        let nameToNativePatch = Object.fromEntries(
+                            Object.keys(patchExports).map((key) => [key, patchExports[key].name]).filter(([key, name]) => name !== undefined)
+                        );
 
-                            let old_ = base[key].name;
-                            let new_ = value.name;
+                        let nativeToIndex = Object.fromEntries(
+                            [...Array(wasmExports.__indirect_function_table.length).keys()].map((i) => {
+                                let entry = wasmExports.__indirect_function_table.get(i);
+                                if (entry === null) {
+                                    return ["abc", 0];
+                                }
+                                if (entry.name === undefined) {
+                                    return ["abc", 0];
+                                }
+                                return [entry.name, i];
+                            })
+                        );
 
-                            if (old_ === undefined || new_ === undefined) {
-                                console.log("skipping", key);
-                                continue;
-                            }
+                        console.log("nativeToIndex", nativeToIndex);
+                        console.log("nameToNativeMain", nameToNativeMain);
+                        console.log("nameToNativePatch", nameToNativePatch);
 
-                            console.log("patching", key, old_, new_);
-                            patchVec[idx] = parseInt(old_);
-                            patchVec[idx + 1] = parseInt(new_);
-                            idx += 2;
-                        }
+                        let jumpTable = Object.fromEntries(
+                            Object.entries(nameToNativePatch).map(([fnName, nativeName]) => {
+                                let oldIndex = nativeToIndex[nameToNativeMain[fnName]];
+                                let newIndex = nativeToIndex[nativeName];
+                                // let nativeName = nativeName;
+                                // if (nativeName === undefined) {
+                                //     return [null, null];
+                                // }
+                                // let oldIndex = nativeToIndex[nativeName];
+                                // let newIndex = nativeToIndex[nativeName];
+                                return [fnName, [oldIndex, newIndex]];
+                            }).filter(([name, [oldIndex, newIndex]]) => oldIndex !== undefined && newIndex !== undefined)
+                        );
+
+                        window.jumpTable = jumpTable;
 
 
+                        let patchEntry = jumpTable["_ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE"];
+                        console.log("patchEntry", patchEntry);
+                        base["__subsecond_wasm_patch"](patchEntry);
+
+
+                        // // extract the export names from the patch table
+                        // const patchVec = new Uint32Array(patchExports.length * 2);
+
+                        // // iterate through the patch exports and get the key and value
+                        // let idx = 0;
+                        // for (const [key, value] of patchExports) {
+                        //     if (base[key] === undefined) {
+                        //         console.log("skipping", key);
+                        //         continue;
+                        //     }
+
+                        //     let old_ = base[key].name;
+                        //     let new_ = value.name;
+
+                        //     if (old_ === undefined || new_ === undefined) {
+                        //         console.log("skipping", key);
+                        //         continue;
+                        //     }
+
+                        //     patchVec[idx] = parseInt(old_);
+                        //     patchVec[idx + 1] = parseInt(new_);
+                        //     idx += 2;
+                        // }
+
+
+                        // Object.keys(window.patch.instance.exports).forEach((key) => {
+                        //     if (key === "_ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE") {
+                        //         console.log("patched", window.patch.instance.exports[key].name);
+                        //         return;
+                        //     }
+                        // });
+
+
+                        // for (let i = 0; i < window.wasmExports.__indirect_function_table.length; i += 1) {
+                        //     let entry = window.wasmExports.__indirect_function_table.get(i);
+                        //     if (entry === null) {
+                        //         continue;
+                        //     }
+                        //     let name = entry.name;
+                        //     if (name == "2964") {
+                        //         console.log("found 2964 at", i);
+                        //     }
+                        // }
+
+                        // 254
+                        //  44 -> 1599
+                        // _ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE
                         // call the patch function
                         // base["__patch_wasm"](patchVec);
-                        base["__patch_wasm"]([14, 1714]);
+                        // base["__subsecond_wasm_patch"]([14, 1714]);
                     });
             }
 

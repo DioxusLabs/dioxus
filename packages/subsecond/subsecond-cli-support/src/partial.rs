@@ -14,7 +14,7 @@ pub use subsecond_types::*;
 use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
 
-pub async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, out_path: PathBuf) {
+async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, out_path: PathBuf) {
     let mut object = ObjectDiff::new().unwrap();
     object.load().unwrap();
     let diff = object.diff().unwrap();
@@ -23,26 +23,6 @@ pub async fn attempt_partial_link(proc_main_addr: u64, patch_target: PathBuf, ou
     let stub_data = make_stub_file(proc_main_addr, patch_target, diff.adrp_imports);
     let stub_file = workspace_dir().join("stub.o");
     std::fs::write(&stub_file, stub_data).unwrap();
-
-    let out = Command::new("cc")
-        .args(diff.modified_files.iter().map(|(f, _)| f))
-        .arg(stub_file)
-        .arg("-dylib")
-        .arg("-Wl,-undefined,dynamic_lookup")
-        .arg("-Wl,-unexported_symbol,_main")
-        .arg("-Wl,-keep_relocs")
-        .arg("-arch")
-        .arg("arm64")
-        .arg("-dead_strip")
-        .arg("-o")
-        .arg(out_path)
-        .output()
-        .await
-        .unwrap();
-
-    let err = String::from_utf8_lossy(&out.stderr);
-    println!("err: {err}");
-    std::fs::write(workspace_dir().join("link_errs_partial.txt"), &*err).unwrap();
 }
 
 struct ObjectDiffResult<'a> {

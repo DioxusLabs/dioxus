@@ -463,7 +463,7 @@ async fn fast_build(
     // on wasm we'll need to add in some symbols that resolve to the ifunc table
     // unfortunately we can't quite call functions from main directly so we need to go through the ifunc system
     // I *think* we can just import them
-    let resolved = subsecond_cli_support::resolve::resolve_undefined(
+    let resolved = subsecond_cli_support::resolve_undefined(
         &original.output_location.as_std_path(),
         &object_files,
         target,
@@ -506,12 +506,6 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
-            // --import-memory         Import the module's memory from the default module of "env" with the name "memory".
-            // --import-table          Import function table from the environment
-            let base = subsecond_cli_support::wasm::get_ifunc_table_length(
-                &std::fs::read(&original.output_location).unwrap(),
-            );
-            tracing::info!("base: {base}");
             Command::new(wasm_ld().await.unwrap())
                 .args(object_files)
                 .arg("--import-memory")

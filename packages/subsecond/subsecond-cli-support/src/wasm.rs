@@ -57,43 +57,8 @@ use anyhow::{Context, Result};
 use tokio::process::Command;
 use walrus::{
     ir::{dfs_in_order, Visitor},
-    FunctionId, FunctionKind, Module,
+    FunctionId, FunctionKind, ImportKind, Module,
 };
-
-#[test]
-fn test_ensure_matching() {
-    ensure_matching().unwrap();
-}
-
-fn ensure_matching() -> Result<()> {
-    let patch = include_bytes!("../../data/wasm-1/patch.wasm");
-    let post_bind = include_bytes!("../../data/wasm-1/post-bindgen.wasm");
-
-    let patch_module = walrus::Module::from_buffer(patch).unwrap();
-    let post_bindgen_module = walrus::Module::from_buffer(post_bind).unwrap();
-
-    for import in patch_module.imports.iter() {
-        println!("Import: {}", import.name);
-    }
-
-    Ok(())
-}
-
-pub fn get_ifunc_table_length(bytes: &[u8]) -> usize {
-    let module = walrus::Module::from_buffer(bytes).unwrap();
-    module
-        .tables
-        .iter()
-        .map(|table| table.elem_segments.iter())
-        .flatten()
-        .map(|segment| match &module.elements.get(*segment).items {
-            walrus::ElementItems::Functions(ids) => ids.len(),
-            walrus::ElementItems::Expressions(ref_type, const_exprs) => const_exprs.len(),
-        })
-        // .map(|table| table.elem_segments.len())
-        .max()
-        .unwrap_or(1)
-}
 
 /// Prepares the base module before running wasm-bindgen.
 ///
@@ -112,7 +77,6 @@ pub fn prepare_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     // name -> index
     // we want to export *all* these functions
     let all_funcs = raw_data
-        .symbols
         .iter()
         .flat_map(|sym| match sym {
             SymbolInfo::Func { flags, index, name } => Some((name.unwrap(), *index)),
@@ -149,39 +113,18 @@ pub fn prepare_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    // let func = pre_bindgen.funcs.get(func);
-    // let name = func.name.as_ref().unwrap();
-    // if name.contains("a1f6a0961c1107") {
-    //     tracing::error!("Skipping function: {}", name);
-    // }
-
-    // let funcs_to_export = pre_bindgen
-    //     .funcs
-    //     .iter()
-    //     .filter(|func| !bindgen_funcs.contains(&func.id()))
-    //     .filter(|func| matches!(func.kind, FunctionKind::Local(_)))
-    //     .map(|func| func.id())
-    //     .collect::<HashSet<_>>();
-
-    // // tracing::info!("Already exported: {:#?}", already_exported);
-
-    // for import in pre_bindgen.imports.iter() {
-    //     tracing::error!("Import: {}", import.name);
-    //     // let name = import.name
-    //     // if name.contains("_ZN59_") {
-    //     //     // if name.contains("dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt") {
-    //     //     tracing::error!("found?: {}", name);
-    //     // }
-    // }
-    // for func in pre_bindgen.funcs.iter() {
-    //     let name = func.name.as_ref().unwrap();
-    //     tracing::error!("Func [{}]: {}", func.id().index(), name);
-    //     // if name.contains("_ZN59_") {
-    //     // [2m2025-03-23T09:22:07.067150Z[0m [32m INFO[0m [2msubsecond_cli_support::wasm[0m[2m:[0m Func [28878]: _ZN59_$LT$dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt17haa1f6a0961c11078E
-    //     // if name.contains("dyn$u20$core..any..Any$u20$as$u20$core..fmt..Debug$GT$3fmt") {
-    //     //     tracing::error!("found?: {}", name);
-    //     // }
-    // }
+    // Add a mutable global called __IFUNC_OFFSET. When we load patches, they use this as their offset to perform relocations.
+    // This makes patches extremely flexible and allows them to be loaded at any time and in any order.
+    // When the user reloads the page, we can just give them the last patch and the relocation is automatic.
+    // pre_bindgen.exports.add(
+    //     "__IFUNC_OFFSET",
+    //     pre_bindgen.globals.add_local(
+    //         walrus::ValType::I32,
+    //         true,
+    //         false,
+    //         walrus::ConstExpr::Value(walrus::ir::Value::I32(0)),
+    //     ),
+    // );
 
     Ok(pre_bindgen.emit_wasm())
 }
@@ -189,14 +132,28 @@ pub fn prepare_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 /// Collect all the wasm-bindgen functions in the module. We are going to make *everything* exported
 /// but we don't want to make *these* exported.
 fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
-    const PREFIX: &str = "__wbindgen_describe_";
+    /// The __wbindgen_describe_ functions also reference funcs like:
+    /// _ZN86_$LT$dioxus_web..document..JSOwner$u20$as$u20$wasm_bindgen..describe..WasmDescribe$GT$8describe17ha9b39368d518c1f9E
+    ///
+    /// These can be found by walking the instructions, so we build a Visitor
+    /// ... todo: we might not need to do this since it seems that it's not reliable enough
+    #[derive(Default)]
+    struct AccAllDescribes {
+        funcs: HashSet<FunctionId>,
+    }
+
+    impl<'a> Visitor<'a> for AccAllDescribes {
+        fn visit_function_id(&mut self, function: &walrus::FunctionId) {
+            self.funcs.insert(*function);
+        }
+    }
 
     let mut acc = AccAllDescribes::default();
     for func in module.funcs.iter() {
         let name = func.name.as_ref().unwrap();
 
         // Only deal with the __wbindgen_describe_ functions
-        if !(name.starts_with(PREFIX)
+        if !(name.starts_with("__wbindgen_describe_")
             || name.contains("wasm_bindgen..describe..WasmDescribe")
             || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
             || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
@@ -214,121 +171,7 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
         acc.funcs.insert(func.id());
     }
 
-    /// The __wbindgen_describe_ functions also reference funcs like _ZN86_$LT$dioxus_web..document..JSOwner$u20$as$u20$wasm_bindgen..describe..WasmDescribe$GT$8describe17ha9b39368d518c1f9E
-    /// These can be found by walking the instructions.
-    #[derive(Default)]
-    struct AccAllDescribes {
-        funcs: HashSet<FunctionId>,
-    }
-    impl<'a> Visitor<'a> for AccAllDescribes {
-        fn visit_function_id(&mut self, function: &walrus::FunctionId) {
-            self.funcs.insert(*function);
-        }
-    }
-
-    tracing::info!("Found {} wasm-bindgen functions", acc.funcs.len());
-
     acc.funcs
-}
-
-#[test]
-fn test_prepare_patch_module() {
-    // --import-undefined
-    // --import-memory
-    // --unresolved-symbols=ignore-all
-    // --allow-undefined
-    //   --relocatable           Create relocatable object file
-    //   --table-base=<value>    Table offset at which to place address taken functions (Defaults to 1)
-    //
-    // seems like we can just use these - import undefined and adjusted table base - to do this all within the linker
-    // just requires massaging the base module a bit
-    // do we need to run wasm-bindgen on this??
-    prepare_patch_module(include_bytes!("../../data/wasm-1/patch.wasm"));
-}
-
-fn prepare_patch_module(bytes: &[u8]) -> Result<()> {
-    let mut patch = walrus::Module::from_buffer(bytes)?;
-
-    for func in patch.funcs.iter() {
-        let name = func.name.as_ref().unwrap();
-        // if name.contains("describe") {
-        println!(
-            "Function [{}]: {}",
-            matches!(func.kind, FunctionKind::Local(_)),
-            name
-        );
-        // }
-        // println!("Function: {}", name);
-    }
-
-    Ok(())
-}
-
-async fn link_incrementals() {
-    let incrs = include_str!("./wasm-incrs.txt")
-        .lines()
-        .filter(|line| line.ends_with(".rcgu.o"))
-        .collect::<Vec<_>>();
-
-    println!("{:?}", incrs);
-
-    let res = Command::new(wasm_ld().await)
-        .args(incrs)
-        .arg("--growable-table")
-        .arg("--export")
-        .arg("main")
-        .arg("--export=__heap_base")
-        .arg("--export=__data_end")
-        .arg("-z")
-        .arg("stack-size=1048576")
-        .arg("--stack-first")
-        .arg("--allow-undefined")
-        .arg("--no-demangle")
-        .arg("--no-entry")
-        // .arg("--no-gc-sections")
-        .arg("-o")
-        .arg(wasm_data_folder().join("patch.wasm"))
-        .output()
-        .await
-        .unwrap();
-
-    let err = String::from_utf8(res.stderr).unwrap();
-    let out = String::from_utf8(res.stdout).unwrap();
-    println!("{}", err);
-}
-
-async fn wasm_ld() -> PathBuf {
-    sysroot()
-        .await
-        .join("lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld")
-}
-
-async fn sysroot() -> PathBuf {
-    let res = Command::new("rustc")
-        .arg("--print")
-        .arg("sysroot")
-        .output()
-        .await
-        .unwrap();
-
-    let path = String::from_utf8(res.stdout).unwrap();
-    PathBuf::from(path.trim())
-}
-
-fn wasm_data_folder() -> PathBuf {
-    subsecond_folder().join("data").join("wasm")
-}
-
-fn static_folder() -> PathBuf {
-    subsecond_folder().join("subsecond-harness").join("static")
-}
-
-/// Folder representing dioxus/packages/subsecond
-fn subsecond_folder() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../")
-        .canonicalize()
-        .unwrap()
 }
 
 /// The incoming module is expecting to initialize its functions at address 1.
@@ -336,6 +179,9 @@ fn subsecond_folder() -> PathBuf {
 /// We need to move it to match the base module's ifunc table.
 pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
     let mut module = walrus::Module::from_buffer(bytes)?;
+
+    let (ifunc_global, _) =
+        module.add_import_global("env", "__IFUNC_OFFSET", walrus::ValType::I32, false, false);
 
     let table = module.tables.iter_mut().next().unwrap();
     table.initial = 1549;
@@ -347,14 +193,15 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
             walrus::ElementKind::Declared => todo!(),
             walrus::ElementKind::Active { table, offset } => {
                 tracing::info!("original offset {:?}", offset);
-                match offset {
-                    walrus::ConstExpr::Value(value) => {
-                        *value = walrus::ir::Value::I32(1700 + 1);
-                    }
-                    walrus::ConstExpr::Global(id) => {}
-                    walrus::ConstExpr::RefNull(ref_type) => {}
-                    walrus::ConstExpr::RefFunc(id) => {}
-                }
+                *offset = walrus::ConstExpr::Global(ifunc_global);
+                // match offset {
+                //     walrus::ConstExpr::Value(value) => {
+                //         *value = walrus::ir::Value::I32(1700 + 1);
+                //     }
+                //     walrus::ConstExpr::Global(id) => {}
+                //     walrus::ConstExpr::RefNull(ref_type) => {}
+                //     walrus::ConstExpr::RefFunc(id) => {}
+                // }
             }
         }
     }
@@ -369,7 +216,6 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
     // name -> index
     // we want to export *all* these functions
     let all_funcs = raw_data
-        .symbols
         .iter()
         .flat_map(|sym| match sym {
             SymbolInfo::Func { flags, index, name } => Some((name.unwrap(), *index)),
@@ -405,40 +251,19 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(module.emit_wasm())
 }
 
-struct RawDataSection<'a> {
-    data_range: Range<usize>,
-    symbols: Vec<SymbolInfo<'a>>,
-    data_symbols: BTreeMap<usize, DataSymbol>,
-}
-
-#[derive(Debug)]
-struct DataSymbol {
-    index: usize,
-    range: Range<usize>,
-    segment_offset: usize,
-    symbol_size: usize,
-    which_data_segment: usize,
-}
-
 /// Manually parse the data section from a wasm module
 ///
 /// We need to do this for data symbols because walrus doesn't provide the right range and offset
 /// information for data segments. Fortunately, it provides it for code sections, so we only need to
 /// do a small amount extra of parsing here.
-fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
+fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<Vec<SymbolInfo>> {
     let parser = wasmparser::Parser::new(0);
     let mut parser = parser.parse_all(bytes);
-    let mut segments = vec![];
-    let mut data_range = 0..0;
     let mut symbols = vec![];
 
     // Process the payloads in the raw wasm file so we can extract the specific sections we need
     while let Some(Ok(payload)) = parser.next() {
         match payload {
-            Payload::DataSection(section) => {
-                data_range = section.range();
-                segments = section.into_iter().collect::<Result<Vec<_>, _>>()?
-            }
             Payload::CustomSection(section) if section.name() == "linking" => {
                 let reader = BinaryReader::new(section.data(), 0);
                 let reader = LinkingSectionReader::new(reader)?;
@@ -452,72 +277,45 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
         }
     }
 
-    // Accumulate the data symbols into a btreemap for later use
-    let mut data_symbols = BTreeMap::new();
-    for (index, symbol) in symbols.iter().enumerate() {
-        match symbol {
-            SymbolInfo::Func { flags, index, name } => {
-                if let Some(name) = name {
-                    // tracing::info!("Func [{index}]: {}", name);
-                }
-            }
-            SymbolInfo::Data {
-                flags,
-                name,
-                symbol,
-            } => {
-                // tracing::info!("Data: {}", name);
-            }
-            SymbolInfo::Global { flags, index, name } => {}
-            SymbolInfo::Section { flags, section } => {}
-            SymbolInfo::Event { flags, index, name } => {}
-            SymbolInfo::Table { flags, index, name } => {}
-        }
-
-        let SymbolInfo::Data {
-            symbol: Some(symbol),
-            ..
-        } = symbol
-        else {
-            continue;
-        };
-
-        if symbol.size == 0 {
-            continue;
-        }
-
-        let data_segment = segments
-            .get(symbol.index as usize)
-            .context("Failed to find data segment")?;
-        let offset: usize =
-            data_segment.range.end - data_segment.data.len() + (symbol.offset as usize);
-        let range = offset..(offset + symbol.size as usize);
-
-        data_symbols.insert(
-            index,
-            DataSymbol {
-                index,
-                range,
-                segment_offset: symbol.offset as usize,
-                symbol_size: symbol.size as usize,
-                which_data_segment: symbol.index as usize,
-            },
-        );
-    }
-
-    Ok(RawDataSection {
-        data_range,
-        symbols,
-        data_symbols,
-    })
+    Ok(symbols)
 }
 
-#[tokio::test]
-async fn test_link_incrementals() {
-    link_incrementals().await;
+fn get_ifunc_table_length(bytes: &[u8]) -> usize {
+    let module = walrus::Module::from_buffer(bytes).unwrap();
+    module
+        .tables
+        .iter()
+        .map(|table| table.elem_segments.iter())
+        .flatten()
+        .map(|segment| match &module.elements.get(*segment).items {
+            walrus::ElementItems::Functions(ids) => ids.len(),
+            walrus::ElementItems::Expressions(ref_type, const_exprs) => const_exprs.len(),
+        })
+        // .map(|table| table.elem_segments.len())
+        .max()
+        .unwrap_or(1)
 }
 
 #[test]
 fn test_prepare_base_module() {
     prepare_base_module(include_bytes!("../../data/wasm-1/pre-bindgen.wasm"));
+}
+
+#[test]
+fn test_ensure_matching() {
+    ensure_matching().unwrap();
+}
+
+fn ensure_matching() -> Result<()> {
+    let patch = include_bytes!("../../data/wasm-1/patch.wasm");
+    let post_bind = include_bytes!("../../data/wasm-1/post-bindgen.wasm");
+
+    let patch_module = walrus::Module::from_buffer(patch).unwrap();
+    let post_bindgen_module = walrus::Module::from_buffer(post_bind).unwrap();
+
+    for import in patch_module.imports.iter() {
+        println!("Import: {}", import.name);
+    }
+
+    Ok(())
 }
