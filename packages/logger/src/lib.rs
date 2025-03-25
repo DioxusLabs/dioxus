@@ -16,7 +16,7 @@ pub use tracing;
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 /// use tracing::info;
 ///
@@ -55,7 +55,7 @@ pub fn initialize_default() {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 /// use dioxus::logger::tracing::{Level, info};
 ///

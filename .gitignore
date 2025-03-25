@@ -2,6 +2,7 @@
 /target
 /packages/playwright-tests/web/dist
 /packages/playwright-tests/fullstack/dist
+/packages/playwright-tests/test-results
 /dist
 .DS_Store
 /examples/assets/test_video.mp4
