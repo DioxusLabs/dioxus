@@ -16,6 +16,7 @@ use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
+use std::marker::PhantomData;
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
@@ -239,14 +240,7 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new(app: fn() -> Element) -> Self {
-        Self::new_with_props(
-            move || {
-                use warnings::Warning;
-                // The root props don't come from a vcomponent so we need to manually rerun them sometimes
-                crate::properties::component_called_as_function::allow(app)
-            },
-            (),
-        )
+        Self::new_with_props(app, ())
     }
 
     /// Create a new VirtualDom with the given properties for the root component.
@@ -295,7 +289,32 @@ impl VirtualDom {
         root_props: P,
     ) -> Self {
         let render_fn = root.id();
-        let props = VProps::new(root, |_, _| true, root_props, "Root");
+
+        struct RootWrapper<T, P, M>(T, PhantomData<(P, M)>);
+
+        impl<T: Clone, P, M> Clone for RootWrapper<T, P, M> {
+            fn clone(&self) -> Self {
+                Self(self.0.clone(), PhantomData)
+            }
+        }
+
+        impl<T: ComponentFunction<P, M>, P: 'static, M: 'static> ComponentFunction<P, M>
+            for RootWrapper<T, P, M>
+        {
+            fn rebuild(&self, props: P) -> Element {
+                use warnings::Warning;
+                // The root props don't come from a vcomponent so we need to manually rerun them sometimes
+                crate::properties::component_called_as_function::allow(|| self.0.rebuild(props))
+            }
+
+            fn id(&self) -> std::any::TypeId {
+                self.0.id()
+            }
+        }
+
+        let wrapper = RootWrapper(root, PhantomData);
+
+        let props = VProps::new(wrapper, |_, _| true, root_props, "Root");
         Self::new_with_component(VComponent {
             name: "root",
             render_fn,
