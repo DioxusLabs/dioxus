@@ -111,27 +111,29 @@
 
                         window.jumpTable = jumpTable;
 
-                        // let app_name = Object.keys(patchExports).find(key => key.includes("subsecond_harness11dioxus_demo3app17"));
-                        // let patchEntry = jumpTable[app_name];
-                        // console.log("patchEntry", patchEntry, app_name);
+                        let app_name = Object.keys(patchExports).find(key => key.includes("subsecond_harness11dioxus_demo3app17"));
+                        let patchEntry = jumpTable[app_name];
+                        console.log("patchEntry", patchEntry, app_name);
 
-                        let patchEntry = Object.keys(patchExports).flatMap((key) => {
-                            let entry = jumpTable[key];
-                            if (entry === undefined) {
-                                return [];
-                            }
-                            let a = entry[0];
-                            let b = entry[1];
+                        // let patchEntry = Object.keys(patchExports).flatMap((key) => {
+                        //     let entry = jumpTable[key];
+                        //     if (entry === undefined) {
+                        //         return [];
+                        //     }
+                        //     let a = entry[0];
+                        //     let b = entry[1];
 
-                            if (a === undefined || b === undefined) {
-                                return [];
-                            }
+                        //     if (a === undefined || b === undefined) {
+                        //         return [];
+                        //     }
 
-                            // console.log("Patching", key, "from", a, "to", b);
+                        //     // console.log("Patching", key, "from", a, "to", b);
 
-                            return [a, b];
-                        });
+                        //     return [a, b];
+                        // });
 
+                        // let patchEntry = jumpTable["_ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE"];
+                        // console.log("patchEntry", patchEntry);
                         base["__subsecond_wasm_patch"](patchEntry);
                     });
             }

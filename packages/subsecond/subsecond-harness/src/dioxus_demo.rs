@@ -17,7 +17,7 @@ fn app() -> Element {
             //     }
             // }
             div {
-                for x in 0..2 {
+                for x in 0..1 {
                     Child { id: x + 1, opt: "List entry" }
                 }
             }

@@ -113,16 +113,16 @@ pub fn prepare_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    for data in pre_bindgen.data.iter() {
-        tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
-        match data.kind {
-            walrus::DataKind::Active { memory, offset } => {
-                let memory = pre_bindgen.memories.get(memory);
-                tracing::info!("Memory: {:?}", memory);
-            }
-            walrus::DataKind::Passive => {}
-        }
-    }
+    // for data in pre_bindgen.data.iter() {
+    //     tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
+    //     match data.kind {
+    //         walrus::DataKind::Active { memory, offset } => {
+    //             let memory = pre_bindgen.memories.get(memory);
+    //             tracing::info!("Memory: {:?}", memory);
+    //         }
+    //         walrus::DataKind::Passive => {}
+    //     }
+    // }
 
     Ok(pre_bindgen.emit_wasm())
 }
@@ -218,7 +218,8 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
     let all_funcs = raw_data
         .iter()
         .flat_map(|sym| match sym {
-            SymbolInfo::Func { flags, index, name } => Some((name.as_deref()?, *index)),
+            SymbolInfo::Func { flags, index, name } => Some((name.unwrap(), *index)),
+            // SymbolInfo::Func { flags, index, name } => Some((name.as_deref()?, *index)),
             _ => None,
         })
         .collect::<HashMap<_, _>>();
