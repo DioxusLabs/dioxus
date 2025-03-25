@@ -3,5 +3,9 @@
     //     // "wasm32-unknown-unknown",
     //     // "aarch64-apple-darwin"
     // ],
-    "dioxus.formatOnSave": "disabled"
+    "dioxus.formatOnSave": "disabled",
+    "rust-analyzer.check.extraArgs": [
+        "--tests",
+        "--offline"
+    ]
 }

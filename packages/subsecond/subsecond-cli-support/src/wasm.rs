@@ -43,11 +43,14 @@
 //! new approach:
 //! - post-process the post bindgen module and export its functions
 
+use itertools::Itertools;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ops::Range,
     path::PathBuf,
 };
+use walkdir::WalkDir;
+use wasm_encoder::{CustomSection, DataSymbolDefinition, Encode, LinkingSection, SymbolTable};
 use wasmparser::{
     BinaryReader, Linking, LinkingSectionReader, Payload, RelocSectionReader, RelocationEntry,
     SymbolInfo,
@@ -57,7 +60,7 @@ use anyhow::{Context, Result};
 use tokio::process::Command;
 use walrus::{
     ir::{dfs_in_order, Visitor},
-    FunctionId, FunctionKind, ImportKind, Module,
+    FunctionId, FunctionKind, IdsToIndices, ImportKind, Module, ModuleConfig, RawCustomSection,
 };
 
 /// Prepares the base module before running wasm-bindgen.
@@ -113,16 +116,16 @@ pub fn prepare_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    // for data in pre_bindgen.data.iter() {
-    //     tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
-    //     match data.kind {
-    //         walrus::DataKind::Active { memory, offset } => {
-    //             let memory = pre_bindgen.memories.get(memory);
-    //             tracing::info!("Memory: {:?}", memory);
-    //         }
-    //         walrus::DataKind::Passive => {}
-    //     }
-    // }
+    for data in pre_bindgen.data.iter() {
+        tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
+        match data.kind {
+            walrus::DataKind::Active { memory, offset } => {
+                let memory = pre_bindgen.memories.get(memory);
+                tracing::info!("Memory: {:?}", memory);
+            }
+            walrus::DataKind::Passive => {}
+        }
+    }
 
     Ok(pre_bindgen.emit_wasm())
 }
@@ -175,16 +178,22 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
 /// The incoming module is expecting to initialize its functions at address 1.
 ///
 /// We need to move it to match the base module's ifunc table.
-pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
+///
+/// Building with --relocatable also defines data symbols for us but they zero-initialize to the wrong place and destroy our memory
+pub fn move_func_initiailizers(original: &[u8], bytes: &[u8], offset_idx: u64) -> Result<Vec<u8>> {
     let mut module = walrus::Module::from_buffer(bytes)?;
 
     let (ifunc_global, _) =
         module.add_import_global("env", "__IFUNC_OFFSET", walrus::ValType::I32, false, false);
 
+    let (data_global, _) =
+        module.add_import_global("env", "__DATA_OFFSET", walrus::ValType::I32, false, false);
+
     let table = module.tables.iter_mut().next().unwrap();
     // table.initial = 2;
     // table.initial = 1700;
-    table.initial = 1549;
+    table.initial = 28;
+    // table.initial = 1549;
     let segments = table.elem_segments.clone();
 
     for seg in segments {
@@ -194,17 +203,72 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
             walrus::ElementKind::Active { table, offset } => {
                 tracing::info!("original offset {:?}", offset);
                 *offset = walrus::ConstExpr::Global(ifunc_global);
-                // match offset {
-                //     walrus::ConstExpr::Value(value) => {
-                //         *value = walrus::ir::Value::I32(1700 + 1);
-                //     }
-                //     walrus::ConstExpr::Global(id) => {}
-                //     walrus::ConstExpr::RefNull(ref_type) => {}
-                //     walrus::ConstExpr::RefFunc(id) => {}
-                // }
             }
         }
     }
+
+    // // We want to accumulate the data from the various datas and write them to a new merged data with a specific initializer
+    // // this initializer will be set by our "dlopen" shim, making our patches entirely relocatable
+    // // This currently assumes the data sections are contiguous... which uhhh I sure hope they are!
+    // let datas = module.data.iter().map(|f| f.id()).collect_vec();
+    // let mut merged_data = vec![];
+
+    // for id in datas {
+    //     let data = module.data.get_mut(id);
+    //     merged_data.extend(data.value.split_off(0));
+    // }
+
+    // // create a new data initializer
+    // module.data.add(
+    //     walrus::DataKind::Active {
+    //         memory: module.memories.iter().next().unwrap().id(),
+    //         offset: walrus::ConstExpr::Global(data_global),
+    //     },
+    //     merged_data,
+    // );
+
+    // tracing::info!(
+    //     "data {:?} [{} bytes] -> kind {:?} ",
+    //     data.name,
+    //     data.value.len(),
+    //     data.kind
+    // );
+
+    // // this is our symbol, we need to initialize it at a new offset
+    // // maybe we could merge them together and then plop it somewhere?
+    // if data
+    //     .value
+    //     .iter()
+    //     .copied()
+    //     .map(|f| f as usize)
+    //     .sum::<usize>()
+    //     > 0
+    // {
+    // // this is our symbol, move its offset;
+    // match &mut data.kind {
+    //     walrus::DataKind::Active { memory, offset } => match offset {
+    //         walrus::ConstExpr::Value(value) => match value {
+    //             walrus::ir::Value::I32(idx) => {
+    //                 let old = *idx;
+    //                 *idx += (((offset_idx + 1) * 65536) + 2097152) as i32;
+    //                 tracing::warn!("Shifting data initializer from {} to {:?}", old, idx);
+    //             }
+    //             walrus::ir::Value::I64(_) => todo!(),
+    //             walrus::ir::Value::F32(_) => todo!(),
+    //             walrus::ir::Value::F64(_) => todo!(),
+    //             walrus::ir::Value::V128(_) => todo!(),
+    //         },
+    //         walrus::ConstExpr::Global(id) => todo!(),
+    //         walrus::ConstExpr::RefNull(ref_type) => todo!(),
+    //         walrus::ConstExpr::RefFunc(id) => todo!(),
+    //     },
+    //     walrus::DataKind::Passive => {}
+    // }
+    // } else {
+    //     // this isn't our symbol. we leave it at this offset but don't run the initializer
+    //     data.value = vec![];
+    //     data.kind = walrus::DataKind::Passive
+    // }
 
     let bindgen_funcs = collect_all_wasm_bindgen_funcs(&module);
 
@@ -218,37 +282,43 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
     let all_funcs = raw_data
         .iter()
         .flat_map(|sym| match sym {
-            SymbolInfo::Func { flags, index, name } => Some((name.unwrap(), *index)),
+            SymbolInfo::Func { flags, index, name } => Some((name.as_deref()?, *index)),
             // SymbolInfo::Func { flags, index, name } => Some((name.as_deref()?, *index)),
             _ => None,
         })
         .collect::<HashMap<_, _>>();
 
-    let index_to_func = module.funcs.iter().enumerate().collect::<HashMap<_, _>>();
+    // for func in all_funcs.iter() {
+    //     tracing::info!("Func: {:?}", func);
+    // }
 
-    let mut already_exported = module
-        .exports
-        .iter()
-        .map(|exp| exp.name.clone())
-        .chain(
-            bindgen_funcs
-                .iter()
-                .map(|id| module.funcs.get(*id).name.as_ref().unwrap().clone()),
-        )
-        .collect::<HashSet<_>>();
+    // let index_to_func = module.funcs.iter().enumerate().collect::<HashMap<_, _>>();
 
-    for (name, index) in all_funcs {
-        let func = index_to_func.get(&(index as usize)).unwrap();
-        let FunctionKind::Local(local) = &func.kind else {
-            continue;
-        };
+    // let mut already_exported = module
+    //     .exports
+    //     .iter()
+    //     .map(|exp| exp.name.clone())
+    //     .chain(
+    //         bindgen_funcs
+    //             .iter()
+    //             .map(|id| module.funcs.get(*id).name.as_ref().unwrap().clone()),
+    //     )
+    //     .collect::<HashSet<_>>();
 
-        if !already_exported.contains(name) {
-            module.exports.add(&name, func.id());
-            already_exported.insert(name.to_string());
-        }
-    }
+    // for (name, index) in all_funcs {
+    //     let func = index_to_func.get(&(index as usize)).unwrap();
+    //     let FunctionKind::Local(local) = &func.kind else {
+    //         continue;
+    //     };
 
+    //     if !already_exported.contains(name) {
+    //         module.exports.add(&name, func.id());
+    //         already_exported.insert(name.to_string());
+    //     }
+    // }
+
+    // let (data_start, _) =
+    //     module.add_import_global("env", "__DATA_START", walrus::ValType::I32, false, false);
     // // let (data_start, _) =
     // //     module.add_import_global("env", "__RO_DATA_START", walrus::ValType::I32, false, false);
     // // let (bss_start, _) = module.add_import_global(
@@ -258,6 +328,18 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
     // //     false,
     // //     false,
     // // );
+
+    // for element in module.elements.iter() {
+    //     tracing::info!("Element: {:?}", element);
+    // }
+
+    // for global in module.globals.iter() {
+    //     tracing::info!("Global: {:?}", global);
+    // }
+
+    // for import in module.imports.iter() {
+    //     tracing::info!("Import: {:?}", import);
+    // }
 
     // let datas = module.data.iter().map(|d| d.id()).collect::<Vec<_>>();
     // // let smallest_offset = module
@@ -323,9 +405,10 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
     //                 walrus::ConstExpr::RefFunc(id) => todo!(),
     //             };
 
-    //             // *orig_offset += 2097152;
-    //             // let memory = module.memories.get(memory);
-    //             // tracing::info!("Memory: {:?}", memory);
+    //             *orig_offset += (((offset_idx + 1) * 65536) + 2097152) as i32;
+    //             tracing::info!("New offset: {:?}", offset);
+    //             let memory = module.memories.get(*memory);
+    //             tracing::info!("Memory: {:?} {:?} ", memory.import, memory.name);
     //         }
     //         walrus::DataKind::Passive => {}
     //     }
@@ -389,10 +472,6 @@ fn test_prepare_base_module() {
 }
 
 #[test]
-fn test_ensure_matching() {
-    ensure_matching().unwrap();
-}
-
 fn ensure_matching() -> Result<()> {
     let patch = include_bytes!("../../data/wasm-1/patch.wasm");
     let post_bind = include_bytes!("../../data/wasm-1/post-bindgen.wasm");
@@ -405,4 +484,186 @@ fn ensure_matching() -> Result<()> {
     }
 
     Ok(())
+}
+
+pub fn resolve_data_syms_file(base_bytes: &[u8], objects: &[PathBuf]) -> Vec<u8> {
+    let mut defined = HashSet::new();
+    let mut undefined = HashSet::new();
+
+    for f in objects {
+        tracing::info!("Parsed module: {f:?}");
+        let bytes = std::fs::read(f).unwrap();
+        let m = Module::from_buffer(&bytes).unwrap();
+        let raw_data = parse_bytes_to_data_segment(&bytes).unwrap();
+
+        for f in raw_data {
+            if let SymbolInfo::Data {
+                flags,
+                name,
+                symbol,
+            } = f
+            {
+                match symbol.is_some() {
+                    true => defined.insert(name.to_string()),
+                    false => undefined.insert(name.to_string()),
+                };
+            }
+        }
+    }
+
+    undefined.retain(|f| !defined.contains(f));
+
+    tracing::info!("undef: {:#?}", undefined);
+
+    let base_module = Module::from_buffer(&base_bytes).unwrap();
+    let raw_data = parse_bytes_to_data_segment(&base_bytes).unwrap();
+    let mut resolved = HashMap::new();
+    for sym in raw_data {
+        match sym {
+            SymbolInfo::Data {
+                flags,
+                name,
+                symbol,
+            } => {
+                if symbol.is_some() {
+                    if undefined.contains(name) {
+                        tracing::info!("resolved {name} -> {symbol:?}");
+                        resolved.insert(name, symbol.unwrap());
+                    }
+                }
+            }
+            SymbolInfo::Func { flags, index, name } => {}
+            SymbolInfo::Global { flags, index, name } => {}
+            SymbolInfo::Section { flags, section } => {}
+            SymbolInfo::Event { flags, index, name } => {}
+            SymbolInfo::Table { flags, index, name } => {}
+        }
+    }
+
+    for mem in base_module.memories.iter() {
+        tracing::info!("Memory: {mem:?}")
+    }
+
+    let datas = base_module.data.iter().collect::<Vec<_>>();
+
+    let mut out_mod = Module::with_config({
+        let mut cfg = ModuleConfig::new();
+        // cfg.generate_dwarf(true);
+        // cfg.generate_synthetic_names_for_anonymous_items(true);
+        // cfg.preserve_code_transform(true);
+        cfg
+    });
+
+    // this will be a "dummy" module with a linking section that defines the data symbols
+    // simply copy over the data syms
+    let linking = LinkingSection::new();
+    let mut symbol_table = SymbolTable::new();
+    for (rname, r) in resolved {
+        let flags = SymbolTable::WASM_SYM_BINDING_WEAK | SymbolTable::WASM_SYM_NO_STRIP;
+        symbol_table.data(
+            flags,
+            rname,
+            Some(DataSymbolDefinition {
+                index: r.index,
+                offset: r.offset,
+                size: r.size,
+            }),
+        );
+    }
+
+    let mut linking_bytes = vec![];
+    linking.encode(&mut linking_bytes);
+    out_mod.customs.add(RawCustomSection {
+        name: "linking".to_string(),
+        data: linking_bytes,
+    });
+
+    let (target_feature_id, target_feature) = base_module
+        .customs
+        .iter()
+        .find(|f| f.1.name() == "target_features")
+        .unwrap();
+    let target_feature_data = target_feature.data(&IdsToIndices::default());
+
+    // \04+\0amultivalue+\0fmutable-globals+\0freference-types+\08sign-ext
+    out_mod.customs.add(RawCustomSection {
+        name: "target_features".to_string(),
+        data: target_feature_data.to_vec(),
+    });
+
+    out_mod.producers.add_sdk("subsecond", "9");
+
+    out_mod.emit_wasm()
+}
+
+#[test]
+fn combine_incrs() {
+    let incrs_folder =
+        "/Users/jonkelley/Development/dioxus/packages/subsecond/data/wasm/incrementals/";
+    let mut objects = vec![];
+    for object in std::fs::read_dir(incrs_folder).unwrap().flatten() {
+        objects.push(object.path());
+    }
+    objects.sort();
+    println!("Objects: {:?}", objects);
+
+    let base: PathBuf = "/Users/jonkelley/Development/dioxus/packages/subsecond/subsecond-harness/static/main_bg.wasm".into();
+    let base_bytes = std::fs::read(&base).unwrap();
+
+    resolve_data_syms_file(&base_bytes, &objects);
+}
+
+#[test]
+fn print_data_sections() {
+    let base: PathBuf = "/Users/jonkelley/Development/dioxus/packages/subsecond/subsecond-harness/static/main_bg.wasm".into();
+    let patch: PathBuf = "/Users/jonkelley/Development/dioxus/packages/subsecond/subsecond-harness/static/patch-1742923392809.wasm".into();
+    let base_bytes = std::fs::read(&base).unwrap();
+    let patch_bytes = std::fs::read(&patch).unwrap();
+
+    let base_module = Module::from_buffer(&base_bytes).unwrap();
+    let raw_data = parse_bytes_to_data_segment(&base_bytes).unwrap();
+
+    let base_data_syms: HashMap<&str, _> = raw_data
+        .iter()
+        .flat_map(|f| match f {
+            SymbolInfo::Data {
+                flags,
+                name,
+                symbol,
+            } => Some((*name, symbol)),
+            SymbolInfo::Func { flags, index, name } => None,
+            SymbolInfo::Global { flags, index, name } => None,
+            SymbolInfo::Section { flags, section } => None,
+            SymbolInfo::Event { flags, index, name } => None,
+            SymbolInfo::Table { flags, index, name } => None,
+        })
+        .collect();
+
+    let patch_data_syms: HashMap<&str, _> = raw_data
+        .iter()
+        .flat_map(|f| match f {
+            SymbolInfo::Data {
+                flags,
+                name,
+                symbol,
+            } => match symbol {
+                Some(sym) => Some((*name, symbol)),
+                None => Some((*name, symbol)),
+            },
+            SymbolInfo::Func { flags, index, name } => None,
+            SymbolInfo::Global { flags, index, name } => None,
+            SymbolInfo::Section { flags, section } => None,
+            SymbolInfo::Event { flags, index, name } => None,
+            SymbolInfo::Table { flags, index, name } => None,
+        })
+        .collect();
+
+    println!("undefined patch data: {:?}", patch_data_syms);
+    for (sym, _def) in patch_data_syms {
+        if base_data_syms.contains_key(sym) {
+            if sym.contains("signal") || sym.contains("Signal") {
+                println!("zero-init sym: {sym}");
+            }
+        }
+    }
 }

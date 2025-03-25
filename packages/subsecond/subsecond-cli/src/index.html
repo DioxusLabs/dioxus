@@ -23,8 +23,8 @@
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
                         const ifunc_length = base.__indirect_function_table.length;
-                        // const data_start = base.memory.buffer.byteLength;
-                        // base.memory.grow(15)// each page is 64kb, let's grow by 1 page
+                        const data_start = base.memory.buffer.byteLength;
+                        base.memory.grow(50)// each page is 64kb, let's grow by 1 page
                         // const bss_start = base.memory.buffer.byteLength;
                         // base.memory.grow(3)// each page is 64kb, let's grow by 1 page
                         base.__indirect_function_table.grow(2000);
@@ -42,6 +42,7 @@
                                 __stack_pointer: base.__stack_pointer,
                                 __tls_base: base.__tls_base,
                                 memory: base.memory,
+                                __DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
                                 __IFUNC_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ifunc_length + 1),
                             },
                         };
@@ -88,10 +89,10 @@
                             [...Array(wasmExports.__indirect_function_table.length).keys()].map((i) => {
                                 let entry = wasmExports.__indirect_function_table.get(i);
                                 if (entry === null) {
-                                    return ["abc", 0];
+                                    return ["abcbac", 0];
                                 }
                                 if (entry.name === undefined) {
-                                    return ["abc", 0];
+                                    return ["abcbac", 0];
                                 }
                                 return [entry.name, i];
                             })
@@ -111,29 +112,34 @@
 
                         window.jumpTable = jumpTable;
 
+
+
+                        let patchList = Object.keys(patchExports).flatMap((key) => {
+                            let entry = jumpTable[key];
+                            if (entry === undefined) {
+                                return [];
+                            }
+                            let a = entry[0];
+                            let b = entry[1];
+
+                            if (a === undefined || b === undefined) {
+                                return [];
+                            }
+
+                            // console.log("Patching", key, "from", a, "to", b);
+
+                            return [a, b];
+                        });
+                        console.log("Patching: ", patchList);
+
                         let app_name = Object.keys(patchExports).find(key => key.includes("subsecond_harness11dioxus_demo3app17"));
+                        console.log("app_name", app_name);
                         let patchEntry = jumpTable[app_name];
                         console.log("patchEntry", patchEntry, app_name);
 
-                        // let patchEntry = Object.keys(patchExports).flatMap((key) => {
-                        //     let entry = jumpTable[key];
-                        //     if (entry === undefined) {
-                        //         return [];
-                        //     }
-                        //     let a = entry[0];
-                        //     let b = entry[1];
-
-                        //     if (a === undefined || b === undefined) {
-                        //         return [];
-                        //     }
-
-                        //     // console.log("Patching", key, "from", a, "to", b);
-
-                        //     return [a, b];
-                        // });
-
                         // let patchEntry = jumpTable["_ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE"];
                         // console.log("patchEntry", patchEntry);
+                        // base["__subsecond_wasm_patch"](patchList);
                         base["__subsecond_wasm_patch"](patchEntry);
                     });
             }
@@ -159,7 +165,7 @@
                 };
 
                 socket.onopen = () => {
-                    socket.send("123");
+                    socket.send("0");
                     console.log("WebSocket connection established.")
                 };
                 socket.onerror = (error) => console.error("WebSocket error:", error);

@@ -110,7 +110,7 @@ pub fn create_jump_table(
 ///
 /// This is very similar to malware :) but it's not!
 pub fn resolve_undefined(
-    source: &Path,
+    source_path: &Path,
     incrementals: &[PathBuf],
     triple: &Triple,
     aslr_reference: u64,
@@ -189,7 +189,8 @@ pub fn resolve_undefined(
     }
 
     // Load the original binary
-    let bytes = std::fs::read(&source).with_context(|| format!("failed to read {:?}", source))?;
+    let bytes =
+        std::fs::read(&source_path).with_context(|| format!("failed to read {:?}", source_path))?;
     let source = File::parse(bytes.deref() as &[u8])?;
     let symbol_table = source
         .symbols()
@@ -213,6 +214,8 @@ pub fn resolve_undefined(
     };
 
     if triple.architecture == target_lexicon::Architecture::Wasm32 {
+        // let data = std::fs::read(source_path).unwrap();
+        // return Ok(crate::wasm::resolve_data_syms_file(&data, incrementals));
         return Ok(vec![]);
     }
 

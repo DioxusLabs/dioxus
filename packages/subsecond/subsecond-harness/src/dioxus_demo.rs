@@ -5,27 +5,22 @@ pub fn launch() {
 }
 
 fn app() -> Element {
-    let count = 1234512;
+    let count = 12345;
 
     rsx! {
         h1 { "Dioxus Hot-patch: {count}" }
         div { style: "display: flex; flex-row: column; align-items: center; justify-content: center;",
             img { src: "https://rustacean.net/assets/rustacean-flat-happy.png" }
-            // div {
-            //     for x in 0..1 {
-            //         Child { id: x + 1, opt: "List entry" }
-            //     }
-            // }
             div {
-                for x in 0..1 {
+                for x in 0..2 {
                     Child { id: x + 1, opt: "List entry" }
                 }
             }
-            // div {
-            //     for x in 0..2 {
-            //         Child { id: x + 1, opt: "List entry" }
-            //     }
-            // }
+            div {
+                for x in 0..2 {
+                    Child { id: x + 1, opt: "List entry" }
+                }
+            }
         }
     }
 }

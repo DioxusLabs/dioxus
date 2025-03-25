@@ -87,7 +87,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
     let app = launch_app(&fat_exe, &target)?;
 
     // Wait for the websocket to come up
-    let mut client = wait_for_ws(9393, &target).await?;
+    let mut client = wait_for_ws(9393, &target).await?.unwrap();
     tracing::info!("Client connected");
 
     // Watch the source folder for changes
@@ -141,6 +141,8 @@ async fn hotreload_loop() -> anyhow::Result<()> {
                 output_temp.as_std_path(),
                 static_folder().join(output_temp.file_name().unwrap()),
             );
+
+            client.aslr_reference += 1;
         }
 
         tracing::info!("Patching complete in {}ms", started.elapsed().as_millis())
@@ -225,7 +227,7 @@ struct WsClient {
     socket: WebSocketStream<tokio::net::TcpStream>,
 }
 
-async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<WsClient> {
+async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<Option<WsClient>> {
     // if target.architecture == target_lexicon::Architecture::Wasm32 {
     //     return Ok(None);
     // }
@@ -239,10 +241,10 @@ async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<WsClient> {
     let msg = socket.next().await.unwrap()?;
     let aslr_reference = msg.into_text().unwrap().parse().unwrap();
 
-    Ok(WsClient {
+    Ok(Some(WsClient {
         aslr_reference,
         socket,
-    })
+    }))
 }
 
 /// Store the linker args in a file for the main process to read.
@@ -337,9 +339,9 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             build.arg("-Clink-arg=--export-table");
             build.arg("-Clink-arg=--export-memory");
             build.arg("-Clink-arg=--emit-relocs");
-            // build.arg("-Clink-arg=--export=__stack_pointer");
-            // build.arg("-Clink-arg=--export=__heap_base");
-            // build.arg("-Clink-arg=--export=__data_end");
+            build.arg("-Clink-arg=--export=__stack_pointer");
+            build.arg("-Clink-arg=--export=__heap_base");
+            build.arg("-Clink-arg=--export=__data_end");
         }
         _ => {}
     }
@@ -519,15 +521,25 @@ async fn fast_build(
                 .arg("--growable-table")
                 .arg("--export")
                 .arg("main")
+                // .arg("--shared-memory")
+                // .arg("--shared")
                 .arg("--export-all")
                 // .arg("--export=__heap_base")
                 // .arg("--export=__data_end")
                 // .arg("-z")
                 // .arg("stack-size=1048576")
-                .arg("--stack-first")
+                // .arg("--stack-first")
+                // .arg("--allow-undefined")
+                // .arg("--unresolved-symbols=ignore-all")
                 .arg("--allow-undefined")
                 .arg("--no-demangle")
                 .arg("--no-entry")
+                .arg("--emit-relocs")
+                // .arg(format!("--table-base={}", 1700))
+                .arg(format!(
+                    "--global-base={}",
+                    (((aslr_reference + 1) * 65536) + 2097152) as i32
+                ))
                 // .arg("--relocatable")
                 .arg("-o")
                 .arg(&output_location)
@@ -546,7 +558,8 @@ async fn fast_build(
 
     if target.architecture == target_lexicon::Architecture::Wasm32 {
         let out_bytes = std::fs::read(&output_location).unwrap();
-        let res_ = move_func_initiailizers(&out_bytes).unwrap();
+        let original_butes = std::fs::read(&original.output_location).unwrap();
+        let res_ = move_func_initiailizers(&original_butes, &out_bytes, aslr_reference).unwrap();
         std::fs::write(&output_location, res_).unwrap();
     }
 

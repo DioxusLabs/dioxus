@@ -26,4 +26,6 @@ id-arena = { workspace = true }
 rayon = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
 clap = { workspace = true, features = ["derive"] }
+walkdir = "2.5.0"
+wasm-encoder = "0.227.1"
 

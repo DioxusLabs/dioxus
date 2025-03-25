@@ -7604,6 +7604,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
+name = "leb128fmt"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
+
+[[package]]
 name = "lebe"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12391,7 +12397,9 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "walkdir",
  "walrus",
+ "wasm-encoder 0.227.1",
  "wasmparser 0.225.0",
 ]
 
@@ -14401,7 +14409,7 @@ dependencies = [
  "log",
  "rayon",
  "walrus-macro",
- "wasm-encoder",
+ "wasm-encoder 0.214.0",
  "wasmparser 0.214.0",
 ]
 
@@ -14580,6 +14588,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-encoder"
+version = "0.227.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80bb72f02e7fbf07183443b27b0f3d4144abf8c114189f2e088ed95b696a7822"
+dependencies = [
+ "leb128fmt",
+ "wasmparser 0.227.1",
+]
+
+[[package]]
 name = "wasm-opt"
 version = "0.116.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14729,6 +14747,17 @@ dependencies = [
  "indexmap 2.7.0",
  "semver 1.0.23",
  "serde",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.227.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f51cad774fb3c9461ab9bccc9c62dfb7388397b5deda31bf40e8108ccd678b2"
+dependencies = [
+ "bitflags 2.9.0",
+ "indexmap 2.7.0",
+ "semver 1.0.23",
 ]
 
 [[package]]
