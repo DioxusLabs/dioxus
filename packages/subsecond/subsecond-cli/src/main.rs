@@ -337,6 +337,9 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             build.arg("-Clink-arg=--export-table");
             build.arg("-Clink-arg=--export-memory");
             build.arg("-Clink-arg=--emit-relocs");
+            // build.arg("-Clink-arg=--export=__stack_pointer");
+            // build.arg("-Clink-arg=--export=__heap_base");
+            // build.arg("-Clink-arg=--export=__data_end");
         }
         _ => {}
     }
@@ -519,12 +522,13 @@ async fn fast_build(
                 .arg("--export-all")
                 // .arg("--export=__heap_base")
                 // .arg("--export=__data_end")
-                // .arg("-z")
-                // .arg("stack-size=1048576")
+                .arg("-z")
+                .arg("stack-size=1048576")
                 .arg("--stack-first")
                 .arg("--allow-undefined")
                 .arg("--no-demangle")
                 .arg("--no-entry")
+                // .arg("--relocatable")
                 .arg("-o")
                 .arg(&output_location)
                 .stdout(Stdio::piped())

@@ -113,18 +113,16 @@ pub fn prepare_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
 
-    // Add a mutable global called __IFUNC_OFFSET. When we load patches, they use this as their offset to perform relocations.
-    // This makes patches extremely flexible and allows them to be loaded at any time and in any order.
-    // When the user reloads the page, we can just give them the last patch and the relocation is automatic.
-    // pre_bindgen.exports.add(
-    //     "__IFUNC_OFFSET",
-    //     pre_bindgen.globals.add_local(
-    //         walrus::ValType::I32,
-    //         true,
-    //         false,
-    //         walrus::ConstExpr::Value(walrus::ir::Value::I32(0)),
-    //     ),
-    // );
+    for data in pre_bindgen.data.iter() {
+        tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
+        match data.kind {
+            walrus::DataKind::Active { memory, offset } => {
+                let memory = pre_bindgen.memories.get(memory);
+                tracing::info!("Memory: {:?}", memory);
+            }
+            walrus::DataKind::Passive => {}
+        }
+    }
 
     Ok(pre_bindgen.emit_wasm())
 }
@@ -184,6 +182,8 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
         module.add_import_global("env", "__IFUNC_OFFSET", walrus::ValType::I32, false, false);
 
     let table = module.tables.iter_mut().next().unwrap();
+    // table.initial = 2;
+    // table.initial = 1700;
     table.initial = 1549;
     let segments = table.elem_segments.clone();
 
@@ -218,7 +218,7 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
     let all_funcs = raw_data
         .iter()
         .flat_map(|sym| match sym {
-            SymbolInfo::Func { flags, index, name } => Some((name.unwrap(), *index)),
+            SymbolInfo::Func { flags, index, name } => Some((name.as_deref()?, *index)),
             _ => None,
         })
         .collect::<HashMap<_, _>>();
@@ -247,6 +247,92 @@ pub fn move_func_initiailizers(bytes: &[u8]) -> Result<Vec<u8>> {
             already_exported.insert(name.to_string());
         }
     }
+
+    // // let (data_start, _) =
+    // //     module.add_import_global("env", "__RO_DATA_START", walrus::ValType::I32, false, false);
+    // // let (bss_start, _) = module.add_import_global(
+    // //     "env",
+    // //     "__BSS_DATA_START",
+    // //     walrus::ValType::I32,
+    // //     false,
+    // //     false,
+    // // );
+
+    // let datas = module.data.iter().map(|d| d.id()).collect::<Vec<_>>();
+    // // let smallest_offset = module
+    // //     .data
+    // //     .iter()
+    // //     .flat_map(|d| match d.kind {
+    // //         walrus::DataKind::Active { memory, offset } => match offset {
+    // //             walrus::ConstExpr::Value(value) => match value {
+    // //                 walrus::ir::Value::I32(t) => Some(t),
+    // //                 walrus::ir::Value::I64(t) => panic!(),
+    // //                 walrus::ir::Value::F32(_) => None,
+    // //                 walrus::ir::Value::F64(_) => None,
+    // //                 walrus::ir::Value::V128(_) => None,
+    // //             },
+    // //             walrus::ConstExpr::Global(id) => None,
+    // //             walrus::ConstExpr::RefNull(ref_type) => None,
+    // //             walrus::ConstExpr::RefFunc(id) => None,
+    // //         },
+    // //         walrus::DataKind::Passive => None,
+    // //     })
+    // //     .min()
+    // //     .unwrap();
+
+    // for data in datas {
+    //     let data = module.data.get_mut(data);
+    //     tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
+    //     match &mut data.kind {
+    //         walrus::DataKind::Active { memory, offset } => {
+    //             // match data.name.as_deref() {
+    //             //     Some(".rodata") => {
+    //             //         // Data start:  1900544 BSS start:  2097152
+
+    //             //         // *offset = walrus::ConstExpr::Value(walrus::ir::Value::I32(1900544));
+    //             //         // *offset = walrus::ConstExpr::Global(data_start);
+    //             //     }
+    //             //     Some(".bss") => {
+    //             //         // *offset = walrus::ConstExpr::Value(walrus::ir::Value::I32(2097152));
+    //             //         // *offset = walrus::ConstExpr::Global(bss_start);
+    //             //         // *offset = walrus::ConstExpr::Global(bss_start);
+    //             //     }
+    //             //     _ => {}
+    //             // }
+    //             // match data.name.as_deref() {
+    //             //     Some(".rodata") => {
+    //             //         *offset = walrus::ConstExpr::Global(data_start);
+    //             //     }
+    //             //     Some(".bss") => {
+    //             //         *offset = walrus::ConstExpr::Global(bss_start);
+    //             //     }
+    //             //     _ => {}
+    //             // }
+
+    //             let orig_offset = match offset {
+    //                 walrus::ConstExpr::Value(value) => match value {
+    //                     walrus::ir::Value::I32(t) => t,
+    //                     walrus::ir::Value::I64(_) => todo!(),
+    //                     walrus::ir::Value::F32(_) => todo!(),
+    //                     walrus::ir::Value::F64(_) => todo!(),
+    //                     walrus::ir::Value::V128(_) => todo!(),
+    //                 },
+    //                 walrus::ConstExpr::Global(id) => todo!(),
+    //                 walrus::ConstExpr::RefNull(ref_type) => todo!(),
+    //                 walrus::ConstExpr::RefFunc(id) => todo!(),
+    //             };
+
+    //             // *orig_offset += 2097152;
+    //             // let memory = module.memories.get(memory);
+    //             // tracing::info!("Memory: {:?}", memory);
+    //         }
+    //         walrus::DataKind::Passive => {}
+    //     }
+    // }
+
+    // for segment in module.elements.iter() {
+    //     tracing::info!("Segment: {:?}", segment);
+    // }
 
     Ok(module.emit_wasm())
 }

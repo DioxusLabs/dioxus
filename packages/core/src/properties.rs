@@ -116,7 +116,10 @@ where
 
 /// A warning that will trigger if a component is called as a function
 #[warnings::warning]
-pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P: 'static, M>(_: C) {
+pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: C)
+where
+    P: 'static,
+{
     // We trim WithOwner from the end of the type name for component with a builder that include a special owner which may not match the function name directly
     let type_name = std::any::type_name::<C>();
     let component_name = Runtime::with(|rt| {
@@ -139,9 +142,10 @@ pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P: 'stati
 /// Make sure that this component is currently running as a component, not a function call
 #[doc(hidden)]
 #[allow(clippy::no_effect)]
-pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P: 'static, M>(
-    component: C,
-) {
+pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(component: C)
+where
+    P: 'static,
+{
     component_called_as_function(component);
 }
 
@@ -174,6 +178,7 @@ where
 {
     /// Get the type id of the component.
     fn id(&self) -> TypeId {
+        // TypeId::of::<Self>()
         TypeId::of::<Props>()
     }
 
