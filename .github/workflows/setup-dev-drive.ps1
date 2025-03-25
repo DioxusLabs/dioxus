@@ -15,6 +15,10 @@ $Tmp = "$($Drive)/uv-tmp"
 # Create the directory ahead of time in an attempt to avoid race-conditions
 New-Item $Tmp -ItemType Directory
 
+if (Test-Path "C:/Users/runneradmin/.cargo") {
+    Copy-Item -Path "C:/Users/runneradmin/.cargo/*" -Destination "$($Drive)/.cargo/" -Recurse -Force
+}
+
 Write-Output `
 	"DEV_DRIVE=$($Drive)" `
 	"TMP=$($Tmp)" `
