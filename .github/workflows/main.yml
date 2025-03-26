@@ -311,13 +311,13 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
 
       - name: "Install Rust toolchain"
-        run: rustup component add clippy,rustfmt
+        run: rustup default stable && rustup component add clippy,rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.UV_WORKSPACE }}
           cache-all-crates: "true"
 
-      - name: "Install Rust toolchain"
+      - name: "Show Rust toolchain"
         working-directory: ${{ env.UV_WORKSPACE }}
         run: rustup show
 
