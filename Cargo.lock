@@ -3916,6 +3916,8 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-desktop",
  "dioxus-devtools",
+ "dioxus-fullstack-hooks",
+ "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-interpreter-js",
  "dioxus-isrg",
@@ -3947,6 +3949,30 @@ dependencies = [
  "tracing",
  "tracing-futures",
  "web-sys",
+]
+
+[[package]]
+name = "dioxus-fullstack-hooks"
+version = "0.6.3"
+dependencies = [
+ "dioxus-core",
+ "dioxus-fullstack",
+ "dioxus-fullstack-protocol",
+ "dioxus-hooks",
+ "dioxus-signals",
+ "futures-channel",
+ "serde",
+]
+
+[[package]]
+name = "dioxus-fullstack-protocol"
+version = "0.6.3"
+dependencies = [
+ "base64 0.22.1",
+ "ciborium",
+ "dioxus-core",
+ "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -4181,6 +4207,7 @@ dependencies = [
  "criterion",
  "dioxus",
  "dioxus-cli-config",
+ "dioxus-fullstack-hooks",
  "dioxus-history",
  "dioxus-lib",
  "dioxus-router-macro",
@@ -4295,13 +4322,13 @@ name = "dioxus-web"
 version = "0.6.3"
 dependencies = [
  "async-trait",
- "ciborium",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-devtools",
  "dioxus-document",
+ "dioxus-fullstack-protocol",
  "dioxus-history",
  "dioxus-html",
  "dioxus-interpreter-js",
@@ -5228,6 +5255,8 @@ version = "0.1.0"
 dependencies = [
  "axum 0.7.9",
  "dioxus",
+ "http 1.2.0",
+ "reqwest 0.12.9",
  "serde",
  "tokio",
 ]

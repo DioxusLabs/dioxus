@@ -95,3 +95,6 @@ pub use use_signal::*;
 
 mod use_set_compare;
 pub use use_set_compare::*;
+
+mod use_after_suspense_resolved;
+pub use use_after_suspense_resolved::*;

@@ -11,6 +11,9 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 pub fn app() -> Element {
+    // Start streaming immediately
+    use_hook(commit_initial_chunk);
+
     rsx! {
         SuspenseBoundary {
             fallback: move |_| rsx! {},

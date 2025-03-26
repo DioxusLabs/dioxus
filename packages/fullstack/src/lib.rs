@@ -6,13 +6,9 @@
 
 pub use once_cell;
 
-mod html_storage;
-
 #[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 pub mod server;
-
-mod hooks;
 
 pub mod document;
 #[cfg(feature = "server")]
@@ -30,8 +26,7 @@ mod server_context;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
-    use crate::hooks;
-    pub use hooks::{server_cached::use_server_cached, server_future::use_server_future};
+    pub use dioxus_fullstack_hooks::*;
 
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]

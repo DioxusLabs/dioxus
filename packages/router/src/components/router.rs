@@ -44,6 +44,11 @@ pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element {
         provide_router_context(RouterContext::new(props.config.call(())));
     });
 
+    #[cfg(feature = "streaming")]
+    use_after_suspense_resolved(|| {
+        dioxus_fullstack_hooks::commit_initial_chunk();
+    });
+
     use_hook(|| {
         provide_context(OutletContext::<R>::new());
     });

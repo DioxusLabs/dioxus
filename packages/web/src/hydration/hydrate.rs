@@ -4,11 +4,10 @@
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
 use crate::dom::WebsysDom;
-use crate::with_server_data;
-use crate::HTMLDataCursor;
 use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
 use dioxus_core::{DynamicNode, ElementId};
+use dioxus_fullstack_protocol::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use std::fmt::Write;
 use RehydrationError::*;
@@ -146,12 +145,12 @@ impl WebsysDom {
         #[cfg(not(debug_assertions))]
         let debug_locations = None;
 
-        let server_data = HTMLDataCursor::from_serialized(&data, debug_types, debug_locations);
+        let server_data = HydrationContext::from_serialized(&data, debug_types, debug_locations);
         // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
-        if let Some(error) = server_data.error() {
+        if let Some(error) = server_data.error_entry().get().ok().flatten() {
             dom.in_runtime(|| id.throw_error(error));
         }
-        with_server_data(server_data, || {
+        server_data.in_context(|| {
             // rerun the scope with the new data
             SuspenseBoundaryProps::resolve_suspense(
                 id,

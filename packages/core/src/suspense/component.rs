@@ -360,7 +360,7 @@ impl SuspenseBoundaryProps {
                     SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
                         .unwrap();
                 suspense_context.take_suspended_nodes();
-                mark_suspense_resolved(dom, scope_id);
+                mark_suspense_resolved(&suspense_context, dom, scope_id);
 
                 nodes_created
             };
@@ -437,6 +437,9 @@ impl SuspenseBoundaryProps {
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
             props.children.clone_from(&children);
             scope_state.last_rendered_node = Some(children);
+
+            // Run any closures that were waiting for the suspense to resolve
+            suspense_context.run_resolved_closures(&dom.runtime);
         })
     }
 
@@ -571,7 +574,7 @@ impl SuspenseBoundaryProps {
                     // Set the last rendered node to the new children
                     dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
 
-                    mark_suspense_resolved(dom, scope_id);
+                    mark_suspense_resolved(&suspense_context, dom, scope_id);
                 }
             }
         })
@@ -579,8 +582,14 @@ impl SuspenseBoundaryProps {
 }
 
 /// Move to a resolved suspense state
-fn mark_suspense_resolved(dom: &mut VirtualDom, scope_id: ScopeId) {
+fn mark_suspense_resolved(
+    suspense_context: &SuspenseContext,
+    dom: &mut VirtualDom,
+    scope_id: ScopeId,
+) {
     dom.resolved_scopes.push(scope_id);
+    // Run any closures that were waiting for the suspense to resolve
+    suspense_context.run_resolved_closures(&dom.runtime);
 }
 
 /// Move from a resolved suspense state to an suspended state
@@ -590,12 +599,12 @@ fn un_resolve_suspense(dom: &mut VirtualDom, scope_id: ScopeId) {
 
 impl SuspenseContext {
     /// Run a closure under a suspense boundary
-    pub fn under_suspense_boundary<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
+    pub(crate) fn under_suspense_boundary<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
         runtime.with_suspense_location(SuspenseLocation::UnderSuspense(self.clone()), f)
     }
 
     /// Run a closure under a suspense placeholder
-    pub fn in_suspense_placeholder<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
+    pub(crate) fn in_suspense_placeholder<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
         runtime.with_suspense_location(SuspenseLocation::InSuspensePlaceholder(self.clone()), f)
     }
 

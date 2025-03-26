@@ -26,14 +26,13 @@
 //! </script>
 //! ```
 
+use dioxus_fullstack_protocol::SerializedHydrationData;
 use futures_channel::mpsc::Sender;
 
 use std::{
     fmt::{Display, Write},
     sync::{Arc, RwLock},
 };
-
-use crate::html_storage::serialize::SerializedHydrationData;
 
 /// Sections are identified by a unique id based on the suspense path. We only track the path of suspense boundaries because the client may render different components than the server.
 #[derive(Clone, Debug, Default)]
@@ -127,10 +126,10 @@ impl<E> StreamingRenderer<E> {
         // 2. The serialized data required to hydrate those components
         // 3. (in debug mode) The type names of the serialized data
         // 4. (in debug mode) The locations of the serialized data
-        let raw_data = resolved_data.data;
         write!(
             into,
-            r#"</div><script>window.dx_hydrate([{id}], "{raw_data}""#
+            r#"</div><script>window.dx_hydrate([{id}], "{}""#,
+            resolved_data.data
         )?;
         #[cfg(debug_assertions)]
         {

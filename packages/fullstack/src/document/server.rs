@@ -64,8 +64,8 @@ impl ServerDocument {
         // We only serialize the head elements if the web document feature is enabled
         #[cfg(feature = "document")]
         {
-            let serialize = crate::html_storage::serialize_context();
-            serialize.push(&!self.0.borrow().streaming, std::panic::Location::caller());
+            super::head_element_hydration_entry()
+                .insert(&!self.0.borrow().streaming, std::panic::Location::caller());
         }
     }
 }
