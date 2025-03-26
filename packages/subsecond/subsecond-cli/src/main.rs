@@ -514,6 +514,13 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
+            let table_base = 1700 * (aslr_reference + 1);
+            let global_base = (((aslr_reference + 1) * 65536) + 2097152) as i32;
+            tracing::info!(
+                "using aslr of table: {} and global: {}",
+                table_base,
+                global_base
+            );
             Command::new(wasm_ld().await.unwrap())
                 .args(object_files)
                 .arg("--import-memory")
@@ -521,26 +528,21 @@ async fn fast_build(
                 .arg("--growable-table")
                 .arg("--export")
                 .arg("main")
-                // .arg("--shared-memory")
-                // .arg("--shared")
                 .arg("--export-all")
                 // .arg("--export=__heap_base")
                 // .arg("--export=__data_end")
-                // .arg("-z")
-                // .arg("stack-size=1048576")
-                // .arg("--stack-first")
                 // .arg("--allow-undefined")
                 // .arg("--unresolved-symbols=ignore-all")
+                // .arg("--relocatable")
+                .arg("-z")
+                .arg("stack-size=1048576")
+                .arg("--stack-first")
                 .arg("--allow-undefined")
                 .arg("--no-demangle")
                 .arg("--no-entry")
                 .arg("--emit-relocs")
-                // .arg(format!("--table-base={}", 1700))
-                .arg(format!(
-                    "--global-base={}",
-                    (((aslr_reference + 1) * 65536) + 2097152) as i32
-                ))
-                // .arg("--relocatable")
+                .arg(format!("--table-base={}", table_base))
+                .arg(format!("--global-base={}", global_base))
                 .arg("-o")
                 .arg(&output_location)
                 .stdout(Stdio::piped())
@@ -557,10 +559,10 @@ async fn fast_build(
     }
 
     if target.architecture == target_lexicon::Architecture::Wasm32 {
-        let out_bytes = std::fs::read(&output_location).unwrap();
-        let original_butes = std::fs::read(&original.output_location).unwrap();
-        let res_ = move_func_initiailizers(&original_butes, &out_bytes, aslr_reference).unwrap();
-        std::fs::write(&output_location, res_).unwrap();
+        // let out_bytes = std::fs::read(&output_location).unwrap();
+        // let original_butes = std::fs::read(&original.output_location).unwrap();
+        // let res_ = move_func_initiailizers(&original_butes, &out_bytes, aslr_reference).unwrap();
+        // std::fs::write(&output_location, res_).unwrap();
     }
 
     Ok(output_location)

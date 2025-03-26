@@ -5,20 +5,24 @@ pub fn launch() {
 }
 
 fn app() -> Element {
-    let count = 12345;
+    let mut count = use_signal(|| 0);
 
     rsx! {
-        h1 { "Dioxus Hot-patch: {count}" }
-        div { style: "display: flex; flex-row: column; align-items: center; justify-content: center;",
+        div { style: "display: flex; flex-direction: column; align-items: center; justify-content: center;",
+            h1 { "Apple: {count} ???" }
+            button { onclick: move |_| count += 1, "Incr" }
+            button { onclick: move |_| count -= 1, "Decr" }
             img { src: "https://rustacean.net/assets/rustacean-flat-happy.png" }
-            div {
-                for x in 0..2 {
-                    Child { id: x + 1, opt: "List entry" }
+        }
+        div { style: "display: flex; flex-direction: column; align-items: center; justify-content: center;",
+            div { style: "background-color: red",
+                for x in 0..3 {
+                    Child { id: x + 1, opt: "List entry", color: "gris" }
                 }
             }
-            div {
-                for x in 0..2 {
-                    Child { id: x + 1, opt: "List entry" }
+            div { style: "background-color: orange",
+                for x in 0..3 {
+                    Child { id: x + 1, opt: "List entry", color: "blue" }
                 }
             }
         }
@@ -26,12 +30,12 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(id: u32, opt: String) -> Element {
+fn Child(id: u32, opt: String, color: String) -> Element {
     let mut count = use_signal(|| 0);
 
     rsx! {
         div {
-            h3 { "Child: {id} - {opt}" }
+            h3 { "Chil???!!! {id} - {opt} - {color}" }
             p { "count: {count}" }
             button {
                 onclick: move |_| {

@@ -23,8 +23,8 @@
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
                         const ifunc_length = base.__indirect_function_table.length;
-                        const data_start = base.memory.buffer.byteLength;
-                        base.memory.grow(50)// each page is 64kb, let's grow by 1 page
+                        const data_start = Math.ceil(base.memory.buffer.byteLength / 64000 ) * 64000;
+                        base.memory.grow(10) // each page is 64kb, let's grow by 1 page
                         // const bss_start = base.memory.buffer.byteLength;
                         // base.memory.grow(3)// each page is 64kb, let's grow by 1 page
                         base.__indirect_function_table.grow(2000);
@@ -132,15 +132,15 @@
                         });
                         console.log("Patching: ", patchList);
 
-                        let app_name = Object.keys(patchExports).find(key => key.includes("subsecond_harness11dioxus_demo3app17"));
-                        console.log("app_name", app_name);
-                        let patchEntry = jumpTable[app_name];
-                        console.log("patchEntry", patchEntry, app_name);
+                        // let app_name = Object.keys(patchExports).find(key => key.includes("subsecond_harness11dioxus_demo3app17"));
+                        // console.log("app_name", app_name);
+                        // let patchEntry = jumpTable[app_name];
+                        // console.log("patchEntry", patchEntry, app_name);
 
                         // let patchEntry = jumpTable["_ZN17subsecond_harness11dioxus_demo3app17h95af666d5d14201eE"];
                         // console.log("patchEntry", patchEntry);
-                        // base["__subsecond_wasm_patch"](patchList);
-                        base["__subsecond_wasm_patch"](patchEntry);
+                        base["__subsecond_wasm_patch"](patchList);
+                        // base["__subsecond_wasm_patch"](patchEntry);
                     });
             }
 
