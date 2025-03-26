@@ -301,6 +301,7 @@ jobs:
       labels: "windows-latest"
     name: "cargo test | windows"
     steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.84.0
         with:
           components: rustfmt, clippy
