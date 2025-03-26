@@ -302,22 +302,23 @@ jobs:
     name: "cargo test | windows"
     steps:
       - uses: actions/checkout@v4
-      - name: Create Dev Drive using ReFS
-        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+      # - name: Create Dev Drive using ReFS
+      #   run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
 
-      # actions/checkout does not let us clone into anywhere outside ${{ github.workspace }}, so we have to copy the clone...
-      - name: Copy Git Repo to Dev Drive
-        run: |
-          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
+      # # actions/checkout does not let us clone into anywhere outside ${{ github.workspace }}, so we have to copy the clone...
+      # - name: Copy Git Repo to Dev Drive
+      #   run: |
+      #     Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
 
-      - name: "Install Rust toolchain"
-        run: rustup toolchain uninstall stable && rustup toolchain install stable && rustup default stable && rustup component add clippy,rustfmt
+      - uses: dtolnay/rust-toolchain@1.84.0
+        with:
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.UV_WORKSPACE }}
           cache-all-crates: "true"
 
-      - name: "Show Rust toolchain"
+      - name: "Install Rust toolchain"
         working-directory: ${{ env.UV_WORKSPACE }}
         run: rustup show
 
