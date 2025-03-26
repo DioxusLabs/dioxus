@@ -23,7 +23,6 @@
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::VirtualDom;
-use dioxus_fullstack_protocol::HydrationContext;
 use dom::WebsysDom;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
@@ -82,6 +81,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
+            use dioxus_fullstack_protocol::HydrationContext;
+
             websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
