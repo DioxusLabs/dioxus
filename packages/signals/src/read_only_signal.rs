@@ -26,6 +26,12 @@ impl<T: 'static> ReadOnlySignal<T> {
     pub fn new(signal: Signal<T>) -> Self {
         Self::new_maybe_sync(signal)
     }
+
+    /// Create a new read-only signal from a value.
+    #[track_caller]
+    pub fn create(value: T) -> Self {
+        Self::new(Signal::new(value))
+    }
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
