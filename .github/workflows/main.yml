@@ -310,9 +310,8 @@ jobs:
         run: |
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.UV_WORKSPACE }}" -Recurse
 
-      - uses: dtolnay/rust-toolchain@1.84.0
-        with:
-          components: rustfmt, clippy
+      - name: "Install Rust toolchain"
+        run: rustup component add clippy,rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.UV_WORKSPACE }}
