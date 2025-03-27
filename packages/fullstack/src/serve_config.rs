@@ -8,8 +8,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub(crate) type ContextProviders =
-    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
+use crate::ContextProviders;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
@@ -337,20 +336,24 @@ impl ServeConfigBuilder {
     }
 
     /// Build the ServeConfig. This may fail if the index.html file is not found.
+    ///
+    /// ## WASM compatibility
+    /// In the context of WASM the file system normally can't be read so this always requires
+    /// the `index_html` field to be set.
     pub fn build(self) -> Result<ServeConfig, UnableToLoadIndex> {
-        // The CLI always bundles static assets into the exe/public directory
-        let public_path = public_path();
-
-        let index_path = self
-            .index_path
-            .map(PathBuf::from)
-            .unwrap_or_else(|| public_path.join("index.html"));
-
         let root_id = self.root_id.unwrap_or("main");
 
         let index_html = match self.index_html {
             Some(index) => index,
-            None => load_index_path(index_path)?,
+            None => {
+                // The CLI always bundles static assets into the exe/public directory
+                let public_path = public_path();
+
+                let index_path = self
+                    .index_path
+                    .unwrap_or_else(|| public_path.join("index.html"));
+                load_index_path(index_path)?
+            }
         };
 
         let index = load_index_html(index_html, root_id);
@@ -491,6 +494,7 @@ impl LaunchConfig for ServeConfig {}
 
 impl ServeConfig {
     /// Create a new ServeConfig
+    #[cfg(not(target_family = "wasm"))]
     pub fn new() -> Result<Self, UnableToLoadIndex> {
         ServeConfigBuilder::new().build()
     }
