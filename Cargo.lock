@@ -4116,6 +4116,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-playwright-default-features-disabled-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "dioxus-playwright-fullstack-mounted-test"
 version = "0.1.0"
 dependencies = [
