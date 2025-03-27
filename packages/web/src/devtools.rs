@@ -67,6 +67,7 @@ fn make_ws(
 
             // The devserver messages have some &'static strs in them, so we need to leak the source string
             let string: String = text.into();
+            let string = Box::leak(string.into_boxed_str());
 
             match serde_json::from_str::<DevserverMsg>(&string) {
                 Ok(DevserverMsg::HotReload(hr)) => _ = tx_.unbounded_send(hr),

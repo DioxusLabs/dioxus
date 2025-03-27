@@ -514,8 +514,8 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
-            let table_base = 1700 * (aslr_reference + 1);
-            let global_base = (((aslr_reference + 1) * 65536) + 2097152) as i32;
+            let table_base = 2000 * (aslr_reference + 1);
+            let global_base = (((aslr_reference) * (65536 * 3)) + (2097152)) as i32;
             tracing::info!(
                 "using aslr of table: {} and global: {}",
                 table_base,
@@ -534,8 +534,8 @@ async fn fast_build(
                 // .arg("--allow-undefined")
                 // .arg("--unresolved-symbols=ignore-all")
                 // .arg("--relocatable")
-                .arg("-z")
-                .arg("stack-size=1048576")
+                // .arg("-z")
+                // .arg("stack-size=1048576")
                 .arg("--stack-first")
                 .arg("--allow-undefined")
                 .arg("--no-demangle")

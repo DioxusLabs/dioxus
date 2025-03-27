@@ -21,7 +21,7 @@ fn app() -> Element {
                 }
             }
             div { style: "background-color: orange",
-                for x in 0..3 {
+                for x in 0..1 {
                     Child { id: x + 1, opt: "List entry", color: "blue" }
                 }
             }
@@ -35,7 +35,7 @@ fn Child(id: u32, opt: String, color: String) -> Element {
 
     rsx! {
         div {
-            h3 { "Chil???!!! {id} - {opt} - {color}" }
+            h3 { "Chil!!!!!!!!!! {id} - {opt} - {color}" }
             p { "count: {count}" }
             button {
                 onclick: move |_| {

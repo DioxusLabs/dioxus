@@ -192,7 +192,7 @@ pub fn move_func_initiailizers(original: &[u8], bytes: &[u8], offset_idx: u64) -
     let table = module.tables.iter_mut().next().unwrap();
     // table.initial = 2;
     // table.initial = 1700;
-    table.initial = 28;
+    // table.initial = 0;
     // table.initial = 1549;
     let segments = table.elem_segments.clone();
 

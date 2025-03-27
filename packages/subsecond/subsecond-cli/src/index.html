@@ -23,8 +23,8 @@
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
                         const ifunc_length = base.__indirect_function_table.length;
-                        const data_start = Math.ceil(base.memory.buffer.byteLength / 64000 ) * 64000;
-                        base.memory.grow(10) // each page is 64kb, let's grow by 1 page
+                        const data_start = Math.ceil((base.memory.buffer.byteLength / 64000) + 1 ) * 64000;
+                        base.memory.grow(20) // each page is 64kb, let's grow by 1 page
                         // const bss_start = base.memory.buffer.byteLength;
                         // base.memory.grow(3)// each page is 64kb, let's grow by 1 page
                         base.__indirect_function_table.grow(2000);
