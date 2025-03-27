@@ -166,5 +166,14 @@ module.exports = defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
+    {
+      cwd: path.join(process.cwd(), "default-features-disabled"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --addr "127.0.0.1" --port 8002',
+      port: 8002,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
   ],
 });
