@@ -459,7 +459,7 @@ impl DioxusCrate {
             .map(|krate| krate.krate.version.to_string())
     }
 
-    pub(crate) fn default_platform(&self) -> Option<Platform> {
+    pub(crate) fn default_client_platform(&self) -> Option<Platform> {
         let default = self.package().features.get("default")?;
 
         // we only trace features 1 level deep..
@@ -468,8 +468,10 @@ impl DioxusCrate {
             if feature.starts_with("dioxus/") {
                 let dx_feature = feature.trim_start_matches("dioxus/");
                 let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-                if auto.is_some() {
-                    return auto;
+                if let Some(auto) = auto {
+                    if auto != Platform::Server {
+                        return Some(auto);
+                    }
                 }
             }
 
@@ -480,8 +482,10 @@ impl DioxusCrate {
                     if feature.starts_with("dioxus/") {
                         let dx_feature = feature.trim_start_matches("dioxus/");
                         let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-                        if auto.is_some() {
-                            return auto;
+                        if let Some(auto) = auto {
+                            if auto != Platform::Server {
+                                return Some(auto);
+                            }
                         }
                     }
                 }

@@ -1,6 +1,12 @@
 use super::*;
 use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
 
+// | platform flag | fullstack flag | fullstack default feature | client platform default feature | enable default features |
+// | ------------- | -------------- | ------------------------- | ------------------------------- | ----------------------- |
+//
+// fullstack enabled = fullstack flag || fullstack default feature
+// client platform enabled = client platform default feature || fullstack flag
+
 /// Build the Rust Dioxus app and all of its assets.
 ///
 /// Produces a final output bundle designed to be run on the target platform.
@@ -31,8 +37,8 @@ pub(crate) struct BuildArgs {
     /// Build the fullstack variant of this app, using that as the fileserver and backend
     ///
     /// This defaults to `false` but will be overridden to true if the `fullstack` feature is enabled.
-    #[clap(long)]
-    pub(crate) fullstack: bool,
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
+    pub(crate) fullstack: Option<bool>,
 
     /// Run the ssg config of the app and generate the files
     #[clap(long)]
@@ -91,12 +97,23 @@ impl BuildArgs {
     /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
     /// fullstack variant even if they omitted the `--fullstack` flag.
     pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
-        let default_platform = krate.default_platform();
+        tracing::info!("Resolving build arguments. Called with {:#?}", self);
+        let default_platform = krate.default_client_platform();
         let auto_platform = krate.autodetect_platform();
+
+        // Make sure we set the fullstack platform so we actually build the fullstack variant
+        // Users need to enable "fullstack" in their default feature set.
+        // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
+        self.fullstack = Some(
+            self.fullstack()
+                || default_platform.is_none()
+                    && self.platform.is_none()
+                    && krate.has_dioxus_feature("fullstack"),
+        );
 
         // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
         // We want to strip out the default platform and use the one they passed, setting no-default-features
-        if self.platform.is_some() && default_platform.is_some() {
+        if (self.platform.is_some() || self.fullstack()) && default_platform.is_some() {
             self.target_args.no_default_features = true;
             self.target_args
                 .features
@@ -126,16 +143,11 @@ impl BuildArgs {
             .server_features
             .push(krate.feature_for_platform(Platform::Server));
 
-        // Make sure we set the fullstack platform so we actually build the fullstack variant
-        // Users need to enable "fullstack" in their default feature set.
-        // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-        self.fullstack = self.fullstack || krate.has_dioxus_feature("fullstack");
-
         // Make sure we have a server feature if we're building a fullstack app
         //
         // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
         // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
-        if self.fullstack && self.target_args.server_features.is_empty() {
+        if self.fullstack() && self.target_args.server_features.is_empty() {
             return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
         }
 
@@ -184,11 +196,25 @@ impl BuildArgs {
             self.target_args.arch = Some(arch);
         }
 
+        tracing::info!("features: {:?}", self.target_args.features);
+        tracing::info!("client features: {:?}", self.target_args.client_features);
+        tracing::info!("server features: {:?}", self.target_args.server_features);
+        tracing::info!("target: {:?}", self.target_args.target);
+        tracing::info!(
+            "no default features: {:?}",
+            self.target_args.no_default_features
+        );
+
         Ok(())
     }
 
     /// Get the platform from the build arguments
     pub(crate) fn platform(&self) -> Platform {
         self.platform.expect("Platform was not set")
+    }
+
+    /// Check if this is a fullstack build
+    pub(crate) fn fullstack(&self) -> bool {
+        self.fullstack.unwrap_or(false)
     }
 }
