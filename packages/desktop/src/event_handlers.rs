@@ -56,7 +56,7 @@ impl WindowEventHandlers {
             // if this event does not apply to the window this listener cares about, return
             if let Event::WindowEvent { window_id, .. } = event {
                 if *window_id != handler.window_id {
-                    return;
+                    continue;
                 }
             }
             (handler.handler)(event, target)

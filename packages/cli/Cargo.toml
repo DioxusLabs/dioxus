@@ -53,7 +53,7 @@ krates = { version = "0.17.0" }
 cargo-config2 = { workspace = true, optional = true }
 regex = "1.10.6"
 
-axum = { workspace = true, features = ["ws"] }
+axum = { workspace = true, default-features = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
