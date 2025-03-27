@@ -10,7 +10,7 @@ fn main() {
 
 fn app() -> Element {
     let server_features = use_server_future(get_server_features)?.unwrap().unwrap();
-    let mut client_features = use_signal(|| Vec::new());
+    let mut client_features = use_signal(Vec::new);
     use_effect(move || {
         client_features.set(current_platform_features());
     });
