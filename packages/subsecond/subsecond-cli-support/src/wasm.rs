@@ -179,7 +179,8 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
 ///
 /// We need to move it to match the base module's ifunc table.
 ///
-/// Building with --relocatable also defines data symbols for us but they zero-initialize to the wrong place and destroy our memory
+/// Building with --relocatable also defines data symbols for but they end up at address 0 and need to be relocated when loading.
+/// todo - I think we can make relocations automatica by using the __DATA_OFFSET global
 pub fn move_func_initiailizers(original: &[u8], bytes: &[u8], offset_idx: u64) -> Result<Vec<u8>> {
     let mut module = walrus::Module::from_buffer(bytes)?;
 

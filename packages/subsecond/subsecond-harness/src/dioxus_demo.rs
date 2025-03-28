@@ -12,17 +12,37 @@ fn app() -> Element {
             h1 { "Apple: {count} ???" }
             button { onclick: move |_| count += 1, "Incr" }
             button { onclick: move |_| count -= 1, "Decr" }
-            img { src: "https://rustacean.net/assets/rustacean-flat-happy.png" }
+            img {  width: "300px", src: "https://rustacean.net/assets/rustacean-flat-happy.png" }
         }
         div { style: "display: flex; flex-direction: column; align-items: center; justify-content: center;",
             div { style: "background-color: red",
-                for x in 0..3 {
+                for x in 0..1 {
                     Child { id: x + 1, opt: "List entry", color: "gris" }
                 }
             }
             div { style: "background-color: orange",
                 for x in 0..1 {
                     Child { id: x + 1, opt: "List entry", color: "blue" }
+                }
+            }
+            div { style: "background-color: yellow",
+                for x in 0..1 {
+                    Child { id: x + 1, opt: "List entry", color: "yellow" }
+                }
+            }
+            div { style: "background-color: green",
+                for x in 0..1 {
+                    Child { id: x + 10, opt: "List entry", color: "orange" }
+                }
+            }
+            div { style: "background-color: blue",
+                for x in 0..1 {
+                    Child { id: x + 10, opt: "List entry", color: "bluebleu" }
+                }
+            }
+            div { style: "background-color: indigo",
+                for x in 0..1 {
+                    Child { id: x + 10, opt: "List entry", color: "bluebleu" }
                 }
             }
         }
@@ -35,7 +55,7 @@ fn Child(id: u32, opt: String, color: String) -> Element {
 
     rsx! {
         div {
-            h3 { "Chil!!!!!!!!!! {id} - {opt} - {color}" }
+            h3 { "Chil!!!!!!!!!! {id} - {opt} - {color} - {color} - {color}" }
             p { "count: {count}" }
             button {
                 onclick: move |_| {

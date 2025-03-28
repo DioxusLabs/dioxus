@@ -343,6 +343,7 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             build.arg("-Clink-arg=--export=__heap_base");
             build.arg("-Clink-arg=--export=__data_end");
         }
+
         _ => {}
     }
 
@@ -514,6 +515,15 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
+            // .arg("--export=__heap_base")
+            // .arg("--export=__data_end")
+            // .arg("--allow-undefined")
+            // .arg("--unresolved-symbols=ignore-all")
+            // .arg("--relocatable")
+            // let table_base = (aslr_reference + 1) * 2000;
+            // const WASM_PAGE_SIZE: u64 = 65536;
+            // const DEFAULT_MEM_PAGES: u64 = 32 * WASM_PAGE_SIZE;
+            // let global_base = ((aslr_reference * (WASM_PAGE_SIZE * 3)) + DEFAULT_MEM_PAGES) as i32;
             let table_base = 2000 * (aslr_reference + 1);
             let global_base = (((aslr_reference) * (65536 * 3)) + (2097152)) as i32;
             tracing::info!(
@@ -529,11 +539,6 @@ async fn fast_build(
                 .arg("--export")
                 .arg("main")
                 .arg("--export-all")
-                // .arg("--export=__heap_base")
-                // .arg("--export=__data_end")
-                // .arg("--allow-undefined")
-                // .arg("--unresolved-symbols=ignore-all")
-                // .arg("--relocatable")
                 // .arg("-z")
                 // .arg("stack-size=1048576")
                 .arg("--stack-first")
@@ -675,15 +680,22 @@ async fn run_cargo_output(
 }
 
 async fn wasm_ld() -> anyhow::Result<PathBuf> {
-    Ok("/Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld".into())
-    // let root = Command::new("rustc")
-    //     .arg("--print")
-    //     .arg("--sysroot")
-    //     .output()
-    //     .await?;
-    // let root = String::from_utf8(root.stdout)?;
-    // let root = PathBuf::from(root.trim());
-    // Ok(root.join("lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld"))
+    // Ok("/Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld".into())
+    let root = Command::new("rustc")
+        .arg("--print")
+        .arg("sysroot")
+        .output()
+        .await?;
+    let root = String::from_utf8(root.stdout)?;
+    let root = PathBuf::from(root.trim());
+    let host = Triple::host();
+    let root = root
+        .join("lib")
+        .join("rustlib")
+        .join(host.to_string())
+        .join("bin")
+        .join("gcc-ld");
+    Ok(root.join("wasm-ld"))
 }
 
 fn workspace_dir() -> PathBuf {
