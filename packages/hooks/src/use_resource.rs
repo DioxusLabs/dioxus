@@ -29,12 +29,15 @@ where
     });
 
     let cb = use_callback(move |_| {
+        // Set the state to Pending when the task is restarted
+        state.set(UseResourceState::Pending);
+
         // Create the user's task
         let fut = rc.reset_and_run_in(&mut future);
 
-        // Spawn a wrapper task that polls the inner future and watch its dependencies
+        // Spawn a wrapper task that polls the inner future and watches its dependencies
         spawn(async move {
-            // move the future here and pin it so we can poll it
+            // Move the future here and pin it so we can poll it
             let fut = fut;
             pin_mut!(fut);
 
