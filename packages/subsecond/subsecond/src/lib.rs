@@ -4,6 +4,9 @@
 //! the code of a running application without restarting it. This is useful for game engines, servers,
 //! and other long-running applications where the typical edit-compile-run cycle is too slow.
 //!
+//! Subsecond also implements a technique we call "ThinLinking" which makes compiling Rust code
+//! significantly faster in development mode, which can be used outside of hot-patching.
+//!
 //! # Usage
 //!
 //! Subsecond is designed to be as simple for both application developers and library authors.
@@ -21,13 +24,14 @@
 //! }
 //! ```
 //!
-//! To actually get patches into your application, a third-party tool that implements the Subsecond
+//! To actually load patches into your application, a third-party tool that implements the Subsecond
 //! compiler and protocol is required. Subsecond is built and maintained by the Dioxus team, so we
 //! suggest using the dioxus CLI tool to use subsecond.
 //!
 //! To install the Dioxus CLI, we recommend using [`cargo binstall`](https://crates.io/crates/cargo-binstall):
+//!
 //! ```sh
-//! cargo binstall dioxus
+//! cargo binstall dioxus-cli
 //! ```
 //!
 //! The Dioxus CLI provides several tools for development. To run your application with Subsecond enabled,
@@ -45,8 +49,7 @@
 //! the function in the jump table and call that instead.
 //!
 //! Unlike libraries like [detour](https://crates.io/crates/detour), Subsecond *does not* modify your
-//! process memory. Patching pointers is wildly unsafe and unsupported on platforms like iOS and WASM
-//! where "text" memory is read-only.
+//! process memory. Patching pointers is wildly unsafe and can lead to crashes and undefined behavior.
 //!
 //! Instead, an external tool compiles just the parts of your project that changed, links them together
 //! using the addresses of the functions in your running program, and then sends the new jump table to
@@ -55,27 +58,27 @@
 //!
 //! If the framework you're using doesn't integrate with subsecond, you can rely on the fact that calls
 //! to stale [`call`] instances will emit a safe panic that is automatically caught and retried
-//! by the next [`call`] instance.
+//! by the next [`call`] instance up the callstack.
 //!
 //! Subsecond is only enabled when debug_assertions are enabled so you can safely ship your application
 //! with Subsecond enabled without worrying about the performance overhead.
 //!
 //! ## Globals and statics
 //!
-//! Subsecond *does* support hot-reloading of globals and statics. However, there are several limitations:
+//! Subsecond *does* support hot-reloading of globals, statics, and thread locals. However, there are several limitations:
 //!
-//! - You may add new statics at runtime, but their destructors will never be called.
-//! - Statics are tracked across patches, but will be untracked if renamed.
+//! - You may add new globals at runtime, but their destructors will never be called.
+//! - Globals are tracked across patches, but will renames are considered to be *new* globals.
 //! - Changes to static initializers will not be observed.
 //!
-//! The fact that Subsecond handles statics makes it the entire patching system possible since many
-//! libraries rely on global runtimes.
+//! Subsecond purposefully handles statics this way since many libraries like Dioxus and Tokio rely
+//! on persistent global runtimes.
 //!
 //! ## Struct layout and alignment
 //!
 //! Subsecond currently does not support hot-reloading of structs. This is because the generated code
-//! assumes a particular layout and alignment of the struct. If these change and new functions are called,
-//! the program will crash.
+//! assumes a particular layout and alignment of the struct. If layout or alignment change and new
+//! functions are called referencing an old version of the struct, the program will crash.
 //!
 //! To mitigate this, framework authors can integrate with Subsecond to either dispose of the old struct
 //! or to re-allocate the struct in a way that is compatible with the new layout. This is called "re-instancing."
@@ -209,7 +212,6 @@ use std::{
 use js_sys::Uint32Array;
 pub use subsecond_macro::hot;
 pub use subsecond_types::JumpTable;
-use wasm_bindgen::JsValue;
 
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
@@ -274,7 +276,14 @@ pub struct HotFnPanic {
     _backtrace: backtrace::Backtrace,
 }
 
-pub struct HotFn<A, M, T: HotFunction<A, M>> {
+/// A hot-reloadable function.
+///
+/// To call this function, use the [`HotFn::call`] method. This will automatically use the latest
+/// version of the function from the JumpTable.
+pub struct HotFn<A, M, T>
+where
+    T: HotFunction<A, M>,
+{
     inner: T,
     _marker: std::marker::PhantomData<(A, M)>,
 }
@@ -343,12 +352,6 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
     }
 }
 
-#[inline(never)]
-#[no_mangle]
-pub extern "C" fn aslr_reference() -> usize {
-    aslr_reference as *const () as usize
-}
-
 /// Apply the patch using a given jump table.
 ///
 /// # Safety
@@ -377,21 +380,14 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
         let new_offset = unsafe {
             // Leak the libary. dlopen is basically a no-op on many platforms and if we even try to drop it,
             // some code might be called (ie drop) that results in really bad crashes (restart your computer...)
-            Box::leak(Box::new(
-                libloading::os::unix::Library::new(&jump_table.lib).unwrap(),
-            ))
-            // Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()))
-            .get::<*const ()>(b"__rust_alloc")
-            .ok()
-            .unwrap()
-            .as_raw_ptr()
-            // .try_as_raw_ptr()
-            // .unwrap()
-            .wrapping_byte_sub(jump_table.new_base_address as usize) as usize
+            Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()))
+                .get::<*const ()>(b"__rust_alloc")
+                .ok()
+                .unwrap()
+                .try_as_raw_ptr()
+                .unwrap()
+                .wrapping_byte_sub(jump_table.new_base_address as usize) as usize
         };
-
-        println!("Old offset: {:#x}", old_offset);
-        println!("New offset: {:#x}", new_offset);
 
         // Modify the jump table to be relative to the base address of the loaded library
         jump_table.map = jump_table
@@ -421,11 +417,18 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
     }
 }
 
+#[inline(never)]
+#[no_mangle]
+pub extern "C" fn aslr_reference() -> usize {
+    aslr_reference as *const () as usize
+}
+
 /// Apply the patch using a given jump table.
 ///
 /// Used on WASM platforms where we need async integration to fetch the patch.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 pub async unsafe fn __subsecond_wasm_patch(pointers: Uint32Array) {
+    use wasm_bindgen::JsValue;
     // pub async unsafe fn __subsecond_wasm_patch(value: JsValue) {
     use js_sys::Uint32Array;
     use subsecond_types::AddressMap;

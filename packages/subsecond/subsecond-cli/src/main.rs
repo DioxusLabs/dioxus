@@ -10,7 +10,7 @@ use notify::{
 use object::{write::Object, Architecture};
 use serde::Deserialize;
 use std::{collections::HashMap, env, ffi::OsStr, path::PathBuf, process::Stdio, time::SystemTime};
-use subsecond_cli_support::{create_jump_table, wasm::move_func_initiailizers};
+use subsecond_cli_support::{create_jump_table, move_func_initiailizers};
 use target_lexicon::{Environment, Triple};
 use tokio::{
     io::AsyncBufReadExt,
@@ -358,7 +358,7 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
 
     let build = build.spawn()?;
 
-    let out = run_cargo_output(build, rust_log_enabled()).await?;
+    let out = run_cargo_output(build).await?;
 
     if target.architecture == target_lexicon::Architecture::Wasm32 {
         _ = std::fs::remove_dir_all(static_folder());
@@ -372,7 +372,7 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
 
         let unprocessed = std::fs::read(out.output_location.as_std_path())?;
         let all_exported_bytes =
-            subsecond_cli_support::wasm::prepare_base_module(&unprocessed).unwrap();
+            subsecond_cli_support::prepare_wasm_base_module(&unprocessed).unwrap();
         let processed = test_data_folder.join("processed.wasm");
         std::fs::write(&processed, all_exported_bytes)?;
 
@@ -420,13 +420,6 @@ fn static_folder() -> PathBuf {
     subsecond_folder().join("subsecond-harness").join("static")
 }
 
-fn rust_log_enabled() -> bool {
-    match env::var("RUST_LOG").as_deref() {
-        Ok("debug") => true,
-        _ => false,
-    }
-}
-
 async fn fast_build(
     original: &CargoOutputResult,
     target: &Triple,
@@ -445,7 +438,7 @@ async fn fast_build(
         .current_dir(workspace_dir())
         .spawn()?;
 
-    let output = run_cargo_output(fast_build, rust_log_enabled()).await?;
+    let output = run_cargo_output(fast_build).await?;
 
     tracing::info!("fast_build output: {output:#?}");
 
@@ -581,10 +574,7 @@ struct CargoOutputResult {
     table_size: usize,
 }
 
-async fn run_cargo_output(
-    mut child: Child,
-    should_render: bool,
-) -> anyhow::Result<CargoOutputResult> {
+async fn run_cargo_output(mut child: Child) -> anyhow::Result<CargoOutputResult> {
     let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
     let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
     let mut output_location = None;
@@ -680,7 +670,7 @@ async fn run_cargo_output(
 }
 
 async fn wasm_ld() -> anyhow::Result<PathBuf> {
-    // Ok("/Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld".into())
+    // "/Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld"
     let root = Command::new("rustc")
         .arg("--print")
         .arg("sysroot")
