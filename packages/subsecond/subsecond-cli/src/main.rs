@@ -21,16 +21,6 @@ use tokio::{
 use tokio_tungstenite::WebSocketStream;
 use tracing::info;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Go through the linker if we need to
-    if let Ok(action) = std::env::var("HOTRELOAD_LINK") {
-        return link(action).await;
-    }
-
-    hotreload_loop().await
-}
-
 #[derive(Debug, Parser)]
 struct Args {
     #[clap(long)]
@@ -47,7 +37,13 @@ struct Args {
 /// 6. Create a minimal patch file to load into the process, including the changed symbol list
 /// 7. Pause the process with lldb, run the "hotfn_load_binary_patch" command and then continue
 /// 8. Repeat
-async fn hotreload_loop() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Go through the linker if we need to
+    if let Ok(action) = std::env::var("HOTRELOAD_LINK") {
+        return link(action).await;
+    }
+
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
@@ -105,15 +101,7 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         tracing::info!("Fast reloading... ");
 
         let started = Instant::now();
-        let output_temp = match fast_build(
-            &result,
-            &target,
-            client.aslr_reference, // .as_ref()
-                                   // .map(|s| s.aslr_reference)
-                                   // .unwrap_or_default(),
-        )
-        .await
-        {
+        let output_temp = match fast_build(&result, &target, client.aslr_reference).await {
             Ok(output_temp) => output_temp,
             Err(e) => {
                 tracing::warn!("Fast build failed: {e}");
@@ -126,15 +114,12 @@ async fn hotreload_loop() -> anyhow::Result<()> {
         let jump_table =
             create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path(), &target).unwrap();
 
-        // if let Some(client) = client.as_mut() {
         client
             .socket
             .send(tokio_tungstenite::tungstenite::Message::Text(
                 serde_json::to_string(&jump_table).unwrap(),
-                // bincode::serialize(&jump_table).unwrap().into(),
             ))
             .await?;
-        // }
 
         if target.architecture == target_lexicon::Architecture::Wasm32 {
             let _ = std::fs::copy(
@@ -174,117 +159,6 @@ fn launch_app(fat_exe: &Utf8PathBuf, target: &Triple) -> Result<Child, anyhow::E
 
     Ok(app)
 }
-
-struct FsWatcher {
-    _watcher: notify::RecommendedWatcher,
-    files: HashMap<PathBuf, String>,
-    rx: futures_channel::mpsc::UnboundedReceiver<Result<notify::Event, notify::Error>>,
-}
-
-impl FsWatcher {
-    fn watch(src_folder: PathBuf) -> anyhow::Result<Self> {
-        let (tx, rx) = futures_channel::mpsc::unbounded();
-        let mut watcher =
-            notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-                _ = tx.unbounded_send(res);
-            })?;
-
-        let mut files = HashMap::new();
-        for entry in walkdir::WalkDir::new(src_folder) {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() || path.extension() != Some(OsStr::new("rs")) {
-                continue;
-            }
-            files.insert(path.to_path_buf(), std::fs::read_to_string(&path).unwrap());
-            watcher.watch(&path, notify::RecursiveMode::NonRecursive)?;
-        }
-
-        Ok(FsWatcher {
-            files,
-            rx,
-            _watcher: watcher,
-        })
-    }
-
-    /// Check if the file has changed and update the internal state
-    fn file_changed(&mut self, path: &PathBuf) -> bool {
-        if let Some(contents) = self.files.get_mut(path) {
-            let new_contents = std::fs::read_to_string(&path).unwrap();
-            if new_contents == *contents {
-                return false;
-            }
-            *contents = new_contents;
-            return true;
-        }
-
-        false
-    }
-}
-
-struct WsClient {
-    aslr_reference: u64,
-    socket: WebSocketStream<tokio::net::TcpStream>,
-}
-
-async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<Option<WsClient>> {
-    // if target.architecture == target_lexicon::Architecture::Wasm32 {
-    //     return Ok(None);
-    // }
-
-    let addr = format!("127.0.0.1:{}", port);
-    let try_socket = TcpListener::bind(&addr).await;
-    let listener = try_socket.expect("Failed to bind");
-
-    let (conn, _sock) = listener.accept().await?;
-    let mut socket = tokio_tungstenite::accept_async(conn).await?;
-    let msg = socket.next().await.unwrap()?;
-    let aslr_reference = msg.into_text().unwrap().parse().unwrap();
-
-    Ok(Some(WsClient {
-        aslr_reference,
-        socket,
-    }))
-}
-
-/// Store the linker args in a file for the main process to read.
-async fn link(action: String) -> anyhow::Result<()> {
-    let args = std::env::args().collect::<Vec<String>>();
-
-    // Write the linker args to a file for the main process to read
-    std::fs::write(link_args_file(), args.join("\n"))?;
-
-    match action.as_str() {
-        // Actually link the object file. todo: figure out which linker we should be using
-        "link" => {}
-
-        // // Run the wasm-link process
-        // // This involves finding all the non-describe functions and calling --export on them
-        // "wasm-link" => {}
-
-        // Write a dummy object file to the output file to satisfy rust when it tries to strip the symbols
-        "patch" => {
-            let out = args.iter().position(|arg| arg == "-o").unwrap();
-            let out_file = args[out + 1].clone();
-            let dummy_object_file = Object::new(
-                object::BinaryFormat::MachO,
-                object::Architecture::Aarch64,
-                object::Endianness::Big,
-            );
-            let bytes = dummy_object_file.write().unwrap();
-            std::fs::write(out_file, bytes)?;
-        }
-
-        _ => anyhow::bail!("Unknown action: {}", action),
-    }
-
-    Ok(())
-}
-
-fn link_args_file() -> PathBuf {
-    subsecond_folder().join("data").join("link.txt")
-}
-
 async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
     // Perform the initial build and print out the link arguments. Don't strip dead code and preserve temp files.
     // This results in a "fat" executable that we can bind to
@@ -412,14 +286,6 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
     Ok(out)
 }
 
-fn wasm_data_folder() -> PathBuf {
-    subsecond_folder().join("data").join("wasm")
-}
-
-fn static_folder() -> PathBuf {
-    subsecond_folder().join("subsecond-harness").join("static")
-}
-
 async fn fast_build(
     original: &CargoOutputResult,
     target: &Triple,
@@ -460,21 +326,20 @@ async fn fast_build(
         }
     }
 
-    // tracing::info!("object files: {object_files:#?}");
-
     // on wasm we'll need to add in some symbols that resolve to the ifunc table
     // unfortunately we can't quite call functions from main directly so we need to go through the ifunc system
     // I *think* we can just import them
-    let resolved = subsecond_cli_support::resolve_undefined(
-        &original.output_location.as_std_path(),
-        &object_files,
-        target,
-        aslr_reference,
-    )
-    .unwrap();
-    let syms = subsecond_folder().join("data").join("syms.o");
-    std::fs::write(&syms, resolved).unwrap();
     if target.architecture != target_lexicon::Architecture::Wasm32 {
+        let resolved = subsecond_cli_support::resolve_undefined(
+            &original.output_location.as_std_path(),
+            &object_files,
+            target,
+            aslr_reference,
+        )
+        .unwrap();
+
+        let syms = subsecond_folder().join("data").join("syms.o");
+        std::fs::write(&syms, resolved).unwrap();
         object_files.push(syms);
     }
 
@@ -492,12 +357,9 @@ async fn fast_build(
     let res = match target.architecture {
         // usually just ld64 - uses your `cc`
         target_lexicon::Architecture::Aarch64(_) => {
-            // todo: we should throw out symbols that we don't need and/or assemble them manually
             Command::new("cc")
                 .args(object_files)
                 .arg("-Wl,-dylib")
-                // .arg("-Wl,-undefined,dynamic_lookup")
-                // .arg("-Wl,-export_dynamic")
                 .arg("-arch")
                 .arg("arm64")
                 .arg("-o")
@@ -508,17 +370,10 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
-            // .arg("--export=__heap_base")
-            // .arg("--export=__data_end")
-            // .arg("--allow-undefined")
-            // .arg("--unresolved-symbols=ignore-all")
-            // .arg("--relocatable")
-            // let table_base = (aslr_reference + 1) * 2000;
-            // const WASM_PAGE_SIZE: u64 = 65536;
-            // const DEFAULT_MEM_PAGES: u64 = 32 * WASM_PAGE_SIZE;
-            // let global_base = ((aslr_reference * (WASM_PAGE_SIZE * 3)) + DEFAULT_MEM_PAGES) as i32;
+            const WASM_PAGE_SIZE: u64 = 65536;
             let table_base = 2000 * (aslr_reference + 1);
-            let global_base = (((aslr_reference) * (65536 * 3)) + (2097152)) as i32;
+            let global_base =
+                ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
             tracing::info!(
                 "using aslr of table: {} and global: {}",
                 table_base,
@@ -566,12 +421,57 @@ async fn fast_build(
     Ok(output_location)
 }
 
+/// Store the linker args in a file for the main process to read.
+async fn link(action: String) -> anyhow::Result<()> {
+    let args = std::env::args().collect::<Vec<String>>();
+
+    // Write the linker args to a file for the main process to read
+    std::fs::write(link_args_file(), args.join("\n"))?;
+
+    match action.as_str() {
+        // Actually link the object file. todo: figure out which linker we should be using
+        "link" => {}
+
+        // Write a dummy object file to the output file to satisfy rust when it tries to strip the symbols
+        "patch" => {
+            let out = args.iter().position(|arg| arg == "-o").unwrap();
+            let out_file = args[out + 1].clone();
+            let host = Triple::host();
+            let dummy_object_file = Object::new(
+                match host.binary_format {
+                    target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
+                    target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
+                    target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
+                    target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
+                    target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
+                    _ => todo!(),
+                },
+                match host.architecture {
+                    target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
+                    target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+                    target_lexicon::Architecture::X86_32(_) => object::Architecture::X86_64_X32,
+                    target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
+                    _ => todo!(),
+                },
+                match host.endianness().unwrap() {
+                    target_lexicon::Endianness::Little => object::Endianness::Little,
+                    target_lexicon::Endianness::Big => object::Endianness::Big,
+                },
+            );
+            let bytes = dummy_object_file.write().unwrap();
+            std::fs::write(out_file, bytes)?;
+        }
+
+        _ => anyhow::bail!("Unknown action: {}", action),
+    }
+
+    Ok(())
+}
+
 #[derive(Debug)]
 struct CargoOutputResult {
     output_location: Utf8PathBuf,
     direct_rustc: Vec<String>,
-    link_args: Vec<String>,
-    table_size: usize,
 }
 
 async fn run_cargo_output(mut child: Child) -> anyhow::Result<CargoOutputResult> {
@@ -581,7 +481,6 @@ async fn run_cargo_output(mut child: Child) -> anyhow::Result<CargoOutputResult>
     let mut stdout = stdout.lines();
     let mut stderr = stderr.lines();
 
-    let mut link_args = vec![];
     let mut direct_rustc = vec![];
 
     loop {
@@ -618,24 +517,19 @@ async fn run_cargo_output(mut child: Child) -> anyhow::Result<CargoOutputResult>
                 }
                 Message::BuildScriptExecuted(_build_script) => {}
                 Message::BuildFinished(build_finished) => {
+                    // assuming we received a message from the compiler, so we can exit
                     if !build_finished.success {
-                        // assuming we received a message from the compiler, so we can exit
                         anyhow::bail!("Build failed");
                     }
                 }
                 Message::TextLine(word) => {
+                    // trim everyting but the contents between the quotes
                     if word.trim().starts_with("Running ") {
-                        // trim everyting but the contents between the quotes
                         let args = word
                             .trim()
                             .trim_start_matches("Running `")
                             .trim_end_matches('`');
-
                         direct_rustc = shell_words::split(args).unwrap();
-                    }
-
-                    if word.trim().starts_with("env") {
-                        link_args = shell_words::split(&word).unwrap();
                     }
 
                     #[derive(Debug, Deserialize)]
@@ -663,29 +557,101 @@ async fn run_cargo_output(mut child: Child) -> anyhow::Result<CargoOutputResult>
 
     Ok(CargoOutputResult {
         output_location,
-        link_args,
         direct_rustc,
-        table_size: 0,
     })
 }
 
+struct FsWatcher {
+    _watcher: notify::RecommendedWatcher,
+    files: HashMap<PathBuf, String>,
+    rx: futures_channel::mpsc::UnboundedReceiver<Result<notify::Event, notify::Error>>,
+}
+
+impl FsWatcher {
+    fn watch(src_folder: PathBuf) -> anyhow::Result<Self> {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        let mut watcher =
+            notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                _ = tx.unbounded_send(res);
+            })?;
+
+        let mut files = HashMap::new();
+        for entry in walkdir::WalkDir::new(src_folder) {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() || path.extension() != Some(OsStr::new("rs")) {
+                continue;
+            }
+            files.insert(path.to_path_buf(), std::fs::read_to_string(&path).unwrap());
+            watcher.watch(&path, notify::RecursiveMode::NonRecursive)?;
+        }
+
+        Ok(FsWatcher {
+            files,
+            rx,
+            _watcher: watcher,
+        })
+    }
+
+    /// Check if the file has changed and update the internal state
+    fn file_changed(&mut self, path: &PathBuf) -> bool {
+        if let Some(contents) = self.files.get_mut(path) {
+            let new_contents = std::fs::read_to_string(&path).unwrap();
+            if new_contents == *contents {
+                return false;
+            }
+            *contents = new_contents;
+            return true;
+        }
+
+        false
+    }
+}
+
+struct WsClient {
+    aslr_reference: u64,
+    socket: WebSocketStream<tokio::net::TcpStream>,
+}
+
+async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<Option<WsClient>> {
+    // if target.architecture == target_lexicon::Architecture::Wasm32 {
+    //     return Ok(None);
+    // }
+
+    let addr = format!("127.0.0.1:{}", port);
+    let try_socket = TcpListener::bind(&addr).await;
+    let listener = try_socket.expect("Failed to bind");
+
+    let (conn, _sock) = listener.accept().await?;
+    let mut socket = tokio_tungstenite::accept_async(conn).await?;
+    let msg = socket.next().await.unwrap()?;
+    let aslr_reference = msg.into_text().unwrap().parse().unwrap();
+
+    Ok(Some(WsClient {
+        aslr_reference,
+        socket,
+    }))
+}
+
 async fn wasm_ld() -> anyhow::Result<PathBuf> {
-    // "/Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld"
+    // eg. /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
+    //     |_________________________sysroot_____________________________|
+    //
+    // we should opt to use rust-lld since that's the default on linux and will eventually be the default on windows
+    // I think mac will keep ld
     let root = Command::new("rustc")
         .arg("--print")
         .arg("sysroot")
         .output()
         .await?;
-    let root = String::from_utf8(root.stdout)?;
-    let root = PathBuf::from(root.trim());
-    let host = Triple::host();
-    let root = root
+    let root = PathBuf::from(String::from_utf8(root.stdout)?.trim())
         .join("lib")
         .join("rustlib")
-        .join(host.to_string())
+        .join(Triple::host().to_string())
         .join("bin")
-        .join("gcc-ld");
-    Ok(root.join("wasm-ld"))
+        .join("gcc-ld")
+        .join("wasm-ld");
+    Ok(root)
 }
 
 fn workspace_dir() -> PathBuf {
@@ -695,10 +661,18 @@ fn workspace_dir() -> PathBuf {
         .unwrap()
 }
 
-/// Folder representing dioxus/packages/subsecond
 fn subsecond_folder() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../")
-        .canonicalize()
-        .unwrap()
+    workspace_dir().join("packages").join("subsecond")
+}
+
+fn wasm_data_folder() -> PathBuf {
+    subsecond_folder().join("data").join("wasm")
+}
+
+fn static_folder() -> PathBuf {
+    subsecond_folder().join("subsecond-harness").join("static")
+}
+
+fn link_args_file() -> PathBuf {
+    subsecond_folder().join("data").join("link.txt")
 }

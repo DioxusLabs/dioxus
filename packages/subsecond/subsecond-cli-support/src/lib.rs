@@ -27,7 +27,8 @@ use wasmparser::{
 
 use walrus::{
     ir::{dfs_in_order, Visitor},
-    FunctionId, FunctionKind, IdsToIndices, ImportKind, Module, ModuleConfig, RawCustomSection,
+    ElementKind, FunctionId, FunctionKind, IdsToIndices, ImportKind, Module, ModuleConfig,
+    RawCustomSection,
 };
 
 pub mod partial;
@@ -37,8 +38,8 @@ pub fn create_jump_table(
     patch: &Path,
     triple: &Triple,
 ) -> anyhow::Result<JumpTable> {
-    let obj1_bytes = std::fs::read(original).context("Could not read original file")?;
-    let obj2_bytes = std::fs::read(patch).context("Could not read patch file")?;
+    let obj1_bytes = fs::read(original).context("Could not read original file")?;
+    let obj2_bytes = fs::read(patch).context("Could not read patch file")?;
     let obj1 = File::parse(&obj1_bytes as &[u8]).unwrap();
     let obj2 = File::parse(&obj2_bytes as &[u8]).unwrap();
 
@@ -58,9 +59,6 @@ pub fn create_jump_table(
         .iter()
         .map(|s| (s.name(), s.address()))
         .collect::<HashMap<_, _>>();
-
-    // tracing::debug!("old_name_to_addr: {:#?}", old_name_to_addr);
-    // tracing::debug!("new_name_to_addr: {:#?}", new_name_to_addr);
 
     // on windows there is no symbol so we leave the old address as 0
     // on wasm there is no ASLR so we leave the old address as 0
@@ -99,10 +97,6 @@ pub fn create_jump_table(
         })
         .clone();
 
-    // if new_base_address == 0 {
-    //     panic!("new_base_address is 0");
-    // }
-
     Ok(JumpTable {
         lib: patch.to_path_buf(),
         map,
@@ -131,7 +125,7 @@ pub fn resolve_undefined(
     let mut undefined_symbols = HashSet::new();
     let mut defined_symbols = HashSet::new();
     for path in sorted {
-        let bytes = std::fs::read(&path).with_context(|| format!("failed to read {:?}", path))?;
+        let bytes = fs::read(&path).with_context(|| format!("failed to read {:?}", path))?;
         let file = File::parse(bytes.deref() as &[u8])?;
         for symbol in file.symbols() {
             if symbol.is_undefined() {
@@ -200,7 +194,7 @@ pub fn resolve_undefined(
 
     // Load the original binary
     let bytes =
-        std::fs::read(&source_path).with_context(|| format!("failed to read {:?}", source_path))?;
+        fs::read(&source_path).with_context(|| format!("failed to read {:?}", source_path))?;
     let source = File::parse(bytes.deref() as &[u8])?;
     let symbol_table = source
         .symbols()
@@ -326,7 +320,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     let all_funcs = raw_data
         .iter()
         .flat_map(|sym| match sym {
-            SymbolInfo::Func { flags, index, name } => Some((name.unwrap(), *index)),
+            SymbolInfo::Func { index, name, .. } => Some((name.unwrap(), *index)),
             _ => None,
         })
         .collect::<HashMap<_, _>>();
@@ -350,24 +344,11 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
     for (name, index) in all_funcs {
         let func = index_to_func.get(&(index as usize)).unwrap();
-        let FunctionKind::Local(local) = &func.kind else {
-            continue;
-        };
-
-        if !already_exported.contains(name) {
-            pre_bindgen.exports.add(&name, func.id());
-            already_exported.insert(name.to_string());
-        }
-    }
-
-    for data in pre_bindgen.data.iter() {
-        tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
-        match data.kind {
-            walrus::DataKind::Active { memory, offset } => {
-                let memory = pre_bindgen.memories.get(memory);
-                tracing::info!("Memory: {:?}", memory);
+        if let FunctionKind::Local(_local) = &func.kind {
+            if !already_exported.contains(name) {
+                pre_bindgen.exports.add(&name, func.id());
+                already_exported.insert(name.to_string());
             }
-            walrus::DataKind::Passive => {}
         }
     }
 
@@ -442,13 +423,8 @@ pub fn move_func_initiailizers(original: &[u8], bytes: &[u8], offset_idx: u64) -
     let segments = table.elem_segments.clone();
 
     for seg in segments {
-        match &mut module.elements.get_mut(seg).kind {
-            walrus::ElementKind::Passive => todo!(),
-            walrus::ElementKind::Declared => todo!(),
-            walrus::ElementKind::Active { table, offset } => {
-                tracing::info!("original offset {:?}", offset);
-                *offset = walrus::ConstExpr::Global(ifunc_global);
-            }
+        if let ElementKind::Active { table, offset } = &mut module.elements.get_mut(seg).kind {
+            *offset = walrus::ConstExpr::Global(ifunc_global);
         }
     }
 
@@ -735,8 +711,8 @@ fn ensure_matching() -> Result<()> {
 fn print_data_sections() {
     let base: PathBuf = "/Users/jonkelley/Development/dioxus/packages/subsecond/subsecond-harness/static/main_bg.wasm".into();
     let patch: PathBuf = "/Users/jonkelley/Development/dioxus/packages/subsecond/subsecond-harness/static/patch-1742923392809.wasm".into();
-    let base_bytes = std::fs::read(&base).unwrap();
-    let patch_bytes = std::fs::read(&patch).unwrap();
+    let base_bytes = fs::read(&base).unwrap();
+    let patch_bytes = fs::read(&patch).unwrap();
 
     let base_module = Module::from_buffer(&base_bytes).unwrap();
     let raw_data = parse_bytes_to_data_segment(&base_bytes).unwrap();
