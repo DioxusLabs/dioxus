@@ -393,6 +393,11 @@ pub(crate) fn public_path() -> PathBuf {
         .join("public")
 }
 
+/// Get the path to the assets directory in the public directory
+pub(crate) fn assets_path() -> PathBuf {
+    public_path().join("assets")
+}
+
 /// An error that can occur when loading the index.html file
 #[derive(Debug)]
 pub struct UnableToLoadIndex(PathBuf);

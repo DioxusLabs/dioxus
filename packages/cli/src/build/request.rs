@@ -3,7 +3,7 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::{link::LinkAction, BuildArgs};
 use crate::{AppBundle, Platform, Result, TraceSrc};
 use anyhow::Context;
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_config::{ServerConfig, APP_TITLE_ENV, ASSET_ROOT_ENV, SERVE_CONFIG_FILE};
 use dioxus_cli_opt::AssetManifest;
 use serde::Deserialize;
 use std::{
@@ -81,6 +81,9 @@ impl BuildRequest {
         self.prepare_build_dir()?;
         let exe = self.build_cargo().await?;
         let assets = self.collect_assets(&exe).await?;
+        if self.is_server() {
+            self.write_server_config(&assets)?;
+        }
 
         Ok(BuildArtifacts {
             exe,
@@ -257,6 +260,27 @@ impl BuildRequest {
         _ = manifest.add_from_object_path(exe);
 
         Ok(manifest)
+    }
+
+    /// Write the server config file to the output directory. This file tells the server what assets are immutable
+    /// and can be cached forever.
+    pub(crate) fn write_server_config(&self, asset_manifest: &AssetManifest) -> Result<()> {
+        let assets = asset_manifest
+            .assets
+            .values()
+            .map(|a| a.bundled_path().to_string())
+            .collect::<Vec<_>>();
+
+        let config = ServerConfig::new().with_immutable_assets(assets);
+
+        let config_json =
+            serde_json::to_string_pretty(&config).context("Failed to serialize server config")?;
+
+        let path = self.root_dir().join(SERVE_CONFIG_FILE);
+
+        std::fs::write(&path, config_json).context("Failed to write server config")?;
+
+        Ok(())
     }
 
     /// Create a list of arguments for cargo builds

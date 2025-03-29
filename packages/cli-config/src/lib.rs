@@ -63,6 +63,7 @@ pub const DEVSERVER_IP_ENV: &str = "DIOXUS_DEVSERVER_IP";
 pub const DEVSERVER_PORT_ENV: &str = "DIOXUS_DEVSERVER_PORT";
 pub const ALWAYS_ON_TOP_ENV: &str = "DIOXUS_ALWAYS_ON_TOP";
 pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
+pub const SERVE_CONFIG_FILE: &str = ".serve_config.json";
 pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 
 #[deprecated(since = "0.6.0", note = "The CLI currently does not set this.")]
@@ -227,6 +228,57 @@ pub fn base_path() -> Option<String> {
     }
 
     read_env_config!("DIOXUS_ASSET_ROOT")
+}
+
+/// The settings the CLI passes to the fullstack server with information about how to serve
+/// the app.
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+pub struct ServerConfig {
+    immutable_assets: Vec<String>,
+}
+
+impl ServerConfig {
+    /// Create a new `ServeConfig` with the default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the list of immutable assets that can be cached forever.
+    ///
+    /// This is used by fullstack to set a longer cache time for assets that have a hash
+    /// for cache busting. Any asset that is bundled with manganis will be included in this list.
+    pub fn with_immutable_assets(self, immutable_assets: Vec<String>) -> Self {
+        Self {
+            immutable_assets,
+            ..self
+        }
+    }
+
+    /// Get the list of immutable assets that can be cached forever. Each asset path is relative
+    /// to the asset folder.
+    ///
+    /// Any immutable assets can be cached forever by the client. If the asset changes, the hash
+    /// will change and the client will be forced to download the new asset.
+    pub fn immutable_assets(&self) -> &[String] {
+        &self.immutable_assets
+    }
+}
+
+/// Get the configuration for the server with information about how to serve the app.
+///
+/// This is used by the fullstack server to get information about what assets are immutable and
+/// can be cached forever.
+pub fn server_config() -> ServerConfig {
+    let Ok(current_exe) = std::env::current_exe() else {
+        return Default::default();
+    };
+    let Some(parent) = current_exe.parent() else {
+        return Default::default();
+    };
+    std::fs::read_to_string(parent.join(SERVE_CONFIG_FILE))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 #[cfg(feature = "web")]
