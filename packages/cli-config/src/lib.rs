@@ -248,10 +248,7 @@ impl ServerConfig {
     /// This is used by fullstack to set a longer cache time for assets that have a hash
     /// for cache busting. Any asset that is bundled with manganis will be included in this list.
     pub fn with_immutable_assets(self, immutable_assets: Vec<String>) -> Self {
-        Self {
-            immutable_assets,
-            ..self
-        }
+        Self { immutable_assets }
     }
 
     /// Get the list of immutable assets that can be cached forever. Each asset path is relative
