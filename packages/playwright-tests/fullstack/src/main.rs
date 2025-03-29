@@ -43,6 +43,7 @@ fn app() -> Element {
         OnMounted {}
         DefaultServerFnCodec {}
         DocumentElements {}
+        Assets {}
     }
 }
 
@@ -151,5 +152,21 @@ fn DocumentElements() -> Element {
         document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
         document::Script { id: "script-head", async: true, "console.log('hello world');" }
         document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
+    }
+}
+
+/// Make sure assets in the assets folder are served correctly and hashed assets are cached forever
+#[component]
+fn Assets() -> Element {
+    rsx! {
+        img {
+            src: asset!("/assets/image.png"),
+        }
+        img {
+            src: "/assets/image.png",
+        }
+        img {
+            src: "/assets/nested/image.png",
+        }
     }
 }
