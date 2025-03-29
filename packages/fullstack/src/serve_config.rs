@@ -393,6 +393,7 @@ pub(crate) fn public_path() -> PathBuf {
         .join("public")
 }
 
+#[cfg(feature = "axum")]
 /// Get the path to the assets directory in the public directory
 pub(crate) fn assets_path() -> PathBuf {
     public_path().join("assets")

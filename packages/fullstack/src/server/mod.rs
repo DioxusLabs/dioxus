@@ -197,7 +197,7 @@ where
 {
     use tower_http::services::ServeFile;
 
-    let dir = std::fs::read_dir(&directory)
+    let dir = std::fs::read_dir(directory)
         .unwrap_or_else(|e| panic!("Couldn't read public directory at {:?}: {}", &directory, e));
 
     for entry in dir.flatten() {
@@ -206,7 +206,7 @@ where
         if path == public_path.join("index.html") {
             continue;
         }
-        let route = path.strip_prefix(&public_path).unwrap();
+        let route = path.strip_prefix(public_path).unwrap();
         let route = path_components_to_route_lossy(route);
 
         if path.is_dir() {
@@ -217,7 +217,7 @@ where
             // is hashed for cache busting, we can cache the response on the client side forever. If
             // the asset changes, the hash in the path will also change and the client will refetch it.
             let file_relative_to_asset_dir = path
-                .strip_prefix(&assets_dir)
+                .strip_prefix(assets_dir)
                 .map(path_components_to_route_lossy)
                 .unwrap_or_default();
             let file_relative_to_asset_dir = file_relative_to_asset_dir.trim_start_matches("/");
