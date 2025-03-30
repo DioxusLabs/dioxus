@@ -1,8 +1,7 @@
 use super::prerender::pre_render_static_routes;
-use super::templates::InfoPlistData;
 use crate::{BuildMode, BuildRequest, Platform, WasmOptConfig};
 use crate::{Result, TraceSrc};
-use anyhow::Context;
+use anyhow::{bail, Context};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use manganis::{AssetOptions, JsAssetOptions};
@@ -597,21 +596,26 @@ impl AppBundle {
         std::fs::write(&patch_file, resolved_patch_bytes)?;
 
         let linker = match self.build.platform {
+            Platform::Web => self.build.krate.workspace.wasm_ld(),
             Platform::Android => {
                 let tools =
                     crate::build::android_tools().context("Could not determine android tools")?;
                 tools.android_cc(&self.build.target)
             }
-            Platform::Web => PathBuf::from("wasm-ld"),
-            Platform::MacOS => PathBuf::from("cc"),
-            Platform::Ios => PathBuf::from("cc"),
-            Platform::Windows => todo!(),
-            Platform::Linux => todo!(),
-            Platform::Server => todo!(),
-            Platform::Liveview => todo!(),
+
+            // Note that I think rust uses rust-lld
+            // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
+            Platform::MacOS
+            | Platform::Ios
+            | Platform::Linux
+            | Platform::Server
+            | Platform::Liveview => PathBuf::from("cc"),
+
+            // I think this is right?? does windows use cc?
+            Platform::Windows => PathBuf::from("cc"),
         };
 
-        let thin_args = self.thin_link_args(&args);
+        let thin_args = self.thin_link_args(&args, aslr_reference)?;
 
         // let mut env_vars = vec![];
         // self.build.build_android_env(&mut env_vars, false)?;
@@ -639,9 +643,11 @@ impl AppBundle {
             if !self.patch_exe().exists() {
                 tracing::error!("Failed to generate patch: {}", errs.trim());
             } else {
-                tracing::debug!("Warnigns during linking: {}", errs.trim());
+                tracing::debug!("Warnings during thin linking: {}", errs.trim());
             }
         }
+
+        if self.build.platform == Platform::Web {}
 
         // // Clean up the temps manually
         // // todo: we might want to keep them around for debugging purposes
@@ -661,7 +667,7 @@ impl AppBundle {
         Ok(())
     }
 
-    fn thin_link_args(&self, original_args: &[&str]) -> Vec<String> {
+    fn thin_link_args(&self, original_args: &[&str], aslr_reference: u64) -> Result<Vec<String>> {
         use target_lexicon::OperatingSystem;
 
         let triple = self.build.target.clone();
@@ -670,7 +676,42 @@ impl AppBundle {
         tracing::debug!("original args:\n{}", original_args.join("\n"));
 
         match triple.operating_system {
+            // wasm32-unknown-unknown
+            // use wasm-ld (gnu-lld)
+            OperatingSystem::Unknown if self.build.platform == Platform::Web => {
+                const WASM_PAGE_SIZE: u64 = 65536;
+                let table_base = 2000 * (aslr_reference + 1);
+                let global_base =
+                    ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
+                tracing::info!(
+                    "using aslr of table: {} and global: {}",
+                    table_base,
+                    global_base
+                );
+
+                args.extend([
+                    // .arg("-z")
+                    // .arg("stack-size=1048576")
+                    "--import-memory".to_string(),
+                    "--import-table".to_string(),
+                    "--growable-table".to_string(),
+                    "--export".to_string(),
+                    "main".to_string(),
+                    "--export-all".to_string(),
+                    "--stack-first".to_string(),
+                    "--allow-undefined".to_string(),
+                    "--no-demangle".to_string(),
+                    "--no-entry".to_string(),
+                    "--emit-relocs".to_string(),
+                    // todo: we need to modify the post-processing code
+                    format!("--table-base={}", table_base).to_string(),
+                    format!("--global-base={}", global_base).to_string(),
+                ]);
+            }
+
             // this uses "cc" and these args need to be ld compatible
+            // aarch64-apple-ios
+            // aarch64-apple-darwin
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
                 args.extend([
                     "-Wl,-dylib".to_string(),
@@ -694,7 +735,7 @@ impl AppBundle {
 
             // android/linux
             // need to be compatible with lld
-            OperatingSystem::Linux => {
+            OperatingSystem::Linux if triple.environment == Environment::Android => {
                 args.extend(
                     [
                         "-shared".to_string(),
@@ -714,49 +755,10 @@ impl AppBundle {
                         "-Wl,-z,relro,-z,now".to_string(),
                         "-nodefaultlibs".to_string(),
                         "-Wl,-Bdynamic".to_string(),
-                        // "-Wl,-z,relro,-z,now".to_string(),
-                        // "-nodefaultlibs".to_string(),
-                        // dynamically link against libdioxusmain.so
-                        // format!("-L{}", self.main_exe().parent().unwrap().display()),
-                        // "-ldioxusmain".to_string(),
-                        // "-Wl,-"
-                        // "-Wl,--unresolved-symbols=ignore-all",
-                        // "-Wl,--eh-frame-hdr".to_string(),
-                        // "-Wl,-z,noexecstack".to_string(),
-                        // "-Wl,-u,__rdl_alloc".to_string(),
-                        // "-Wl,-u,__rdl_dealloc".to_string(),
-                        // "-Wl,-u,__rdl_realloc".to_string(),
-                        // "-Wl,-u,__rdl_alloc_zeroed".to_string(),
-                        // "-Wl,-u,__rg_oom".to_string(),
-                        // "-Wl,--allow-shlib-undefined".to_string(),
-                        // "-Wl,--defsym,__rdl_alloc=0".to_string(),
-                        // "-Wl,--defsym,__rdl_dealloc=0".to_string(),
-                        // "-Wl,--defsym,__rdl_realloc=0".to_string(),
-                        // "-Wl,--defsym,__rdl_alloc_zeroed=0".to_string(),
-                        // "-Wl,--defsym,__rg_oom=0".to_string(),
                     ]
                     .iter()
                     .map(|s| s.to_string()),
                 );
-
-                // args.extend([
-                //     "-fno-pie".to_string(),
-                //     "-landroid".to_string(),
-                //     "-llog".to_string(),
-                //     "-lOpenSLES".to_string(),
-                //     "-Wl,--export-dynamic".to_string(),
-                //     "-Wl,-shared".to_string(),
-                //     // "-Wl,--shared".to_string(),
-                //     "-Wl,--export-dynamic".to_string(),
-                //     "-Wl,--allow-shlib-undefined".to_string(),
-                //     // "-Wl,--unresolved-symbols=ignore-in-object-files".to_string(),
-                //     // "-Wl,-unexported_symbol,_main".to_string(),
-                //     // "-Wl,-undefined,dynamic_lookup".to_string(),
-                //     // "-Wl,--unexported-symbol,_main".to_string(),
-                //     // "-Wl,--export-dynamic".to_string(),
-                //     // "-Wl,-undefined,dynamic_lookup".to_string(),
-                //     // "-Wl,--unresolved-symbols=ignore-all".to_string(),
-                // ]);
 
                 match triple.architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
@@ -769,15 +771,19 @@ impl AppBundle {
                 }
             }
 
-            OperatingSystem::Windows => todo!(),
+            OperatingSystem::Linux => {
+                args.extend([
+                    "-Wl,--eh-frame-hdr".to_string(),
+                    "-Wl,-z,noexecstack".to_string(),
+                    "-Wl,-z,relro,-z,now".to_string(),
+                    "-nodefaultlibs".to_string(),
+                    "-Wl,-Bdynamic".to_string(),
+                ]);
+            }
 
-            // use wasm-ld (gnu-lld)
-            OperatingSystem::Unknown if self.build.platform == Platform::Web => todo!(),
+            OperatingSystem::Windows => {}
 
-            OperatingSystem::Unknown => todo!(),
-
-            // Lots of other OSes we don't support yet - tvos, watchos, etc
-            _ => todo!(),
+            _ => return Err(anyhow::anyhow!("Unsupported platform for thin linking").into()),
         }
 
         let extract_value = |arg: &str| -> Option<String> {
@@ -799,7 +805,7 @@ impl AppBundle {
 
         tracing::info!("final args:{:#?}", args);
 
-        args
+        Ok(args)
     }
 
     /// The item that we'll try to run directly if we need to.
@@ -1250,4 +1256,12 @@ impl AppBundle {
         std::fs::copy(source, destination)?;
         Ok(())
     }
+}
+
+#[derive(serde::Serialize)]
+pub struct InfoPlistData {
+    pub display_name: String,
+    pub bundle_name: String,
+    pub bundle_identifier: String,
+    pub executable_name: String,
 }

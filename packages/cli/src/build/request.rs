@@ -173,15 +173,15 @@ impl BuildRequest {
         let target = match args.args.target {
             Some(target) => target,
             None => match platform {
-                // Generally just use the host's triple for native executables
-                Platform::MacOS => target_lexicon::HOST,
-                Platform::Windows => target_lexicon::HOST,
-                Platform::Linux => target_lexicon::HOST,
-                Platform::Server => target_lexicon::HOST,
-                Platform::Liveview => target_lexicon::HOST,
+                // Generally just use the host's triple for native executables unless specified otherwisea
+                Platform::MacOS
+                | Platform::Windows
+                | Platform::Linux
+                | Platform::Server
+                | Platform::Liveview => target_lexicon::HOST,
                 Platform::Web => "wasm32-unknown-unknown".parse().unwrap(),
 
-                // For iOS we should prefer the architecture for the simulator, but in lieu of actually
+                // For iOS we should prefer the actual architecture for the simulator, but in lieu of actually
                 // figuring that out, we'll assume aarch64 on m-series and x86_64 otherwise
                 Platform::Ios => {
                     // use the host's architecture and sim if --device is passed
@@ -197,18 +197,6 @@ impl BuildRequest {
                 // Same idea with android but we figure out the connected device using adb
                 // for now we use
                 Platform::Android => {
-                    // use the host's architecture and sim if --device is passed
-                    // use target_lexicon::{Architecture, HOST};
-                    // match HOST.architecture {
-                    //     Architecture::Aarch64(_) if device => {
-                    //         "aarch64-linux-android".parse().unwrap()
-                    //     }
-                    //     Architecture::Aarch64(_) => "aarch64-linux-android".parse().unwrap(),
-                    //     _ if device => "x86_64-linux-android".parse().unwrap(),
-                    //     _ => "x86_64-linux-android".parse().unwrap(),
-                    // }
-                    //
-                    // ... for known we don't know the architecture and we'll discover it during compilation
                     "aarch64-linux-android".parse().unwrap()
                     // "unknown-linux-android".parse().unwrap()
                 }
@@ -540,12 +528,6 @@ impl BuildRequest {
                     "-Clink-dead-code".to_string(),
                 ]);
 
-                // args.extend([
-                //     "-Wl,--whole-archive".to_string(),
-                //     "-Wl,--no-gc-sections".to_string(),
-                //     "-Wl,--export-all".to_string(),
-                // ]);
-
                 match self.platform {
                     // if macos/ios, -Wl,-all_load is required for the linker to work correctly
                     // macos uses ld64 but through the `cc` interface.a
@@ -565,27 +547,34 @@ impl BuildRequest {
                     // if windows -Wl,--whole-archive is required for the linker to work correctly
                     // https://learn.microsoft.com/en-us/cpp/build/reference/wholearchive-include-all-library-object-files?view=msvc-170
                     Platform::Windows => {
-                        // --export-dynamic
-                        cargo_args.push(
-                            "-Clink-args=-Wl,--whole-archive".to_string(),
-                            // "-Clink-args=-Wl,--whole-archive,-Wl,--export-dynamic".to_string(),
-                        );
+                        cargo_args.push("-Clink-args=-Wl,--whole-archive".to_string());
                     }
 
                     // if web, -Wl,--whole-archive is required for the linker to work correctly.
-                    // We also use --no-gc-sections and --export-all to push every symbol into the export table.
+                    // We also use --no-gc-sections and --export-table and --export-memory  to push
+                    // said symbols into the export table.
                     //
-                    // rust uses its own wasm-ld linker which can be found here (it's just gcc-ld):
+                    // We use --emit-relocs but scrub those before they make it into the final output.
+                    // This is designed for us to build a solid call graph.
+                    //
+                    // rust uses its own wasm-ld linker which can be found here (it's just gcc-ld with a -target):
                     // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld
+                    // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
                     //
                     // export all should place things like env.memory into the export table so we can access them
                     // when loading the patches
                     Platform::Web => {
-                        cargo_args.push(
-                            "-Clink-args=-Wl,--whole-archive,-Wl,--no-gc-sections,-Wl,--export-all"
-                                .to_string(),
-                        );
+                        cargo_args.push("-Clink-arg=--no-gc-sections".into());
+                        cargo_args.push("-Clink-arg=--growable-table".into());
+                        cargo_args.push("-Clink-arg=--whole-archive".into());
+                        cargo_args.push("-Clink-arg=--export-table".into());
+                        cargo_args.push("-Clink-arg=--export-memory".into());
+                        cargo_args.push("-Clink-arg=--emit-relocs".into());
+                        cargo_args.push("-Clink-arg=--export=__stack_pointer".into());
+                        cargo_args.push("-Clink-arg=--export=__heap_base".into());
+                        cargo_args.push("-Clink-arg=--export=__data_end".into());
                     }
+
                     _ => {}
                 }
             }
@@ -750,7 +739,7 @@ impl BuildRequest {
         &self,
         env_vars: &mut Vec<(&str, String)>,
         rustf_flags: bool,
-    ) -> Result<PathBuf, crate::Error> {
+    ) -> Result<PathBuf> {
         let tools = crate::build::android_tools().context("Could not determine android tools")?;
         let linker = tools.android_cc(&self.target);
         let min_sdk_version = tools.min_sdk_version();
@@ -1023,8 +1012,7 @@ impl BuildRequest {
         tracing::debug!("Initialized app/src/assets: {:?}", app_assets);
         tracing::debug!("Initialized app/src/kotlin/main: {:?}", app_kotlin_out);
 
-        // handlerbars
-        let hbs = handlebars::Handlebars::new();
+        // handlebars
         #[derive(serde::Serialize)]
         struct HbsTypes {
             application_id: String,
@@ -1034,6 +1022,7 @@ impl BuildRequest {
             application_id: self.krate.full_mobile_app_name(),
             app_name: self.krate.bundled_app_name(),
         };
+        let hbs = handlebars::Handlebars::new();
 
         // Top-level gradle config
         write(
@@ -1197,21 +1186,21 @@ impl BuildRequest {
     pub(crate) fn is_patch(&self) -> bool {
         matches!(&self.mode, BuildMode::Thin { .. })
     }
-
-    // pub(crate) fn triple(&self) -> Triple {
-    //     match self.platform {
-    //         Platform::MacOS => Triple::from_str("aarc64-apple-darwin").unwrap(),
-    //         Platform::Windows => Triple::from_str("x86_64-pc-windows-msvc").unwrap(),
-    //         Platform::Linux => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
-    //         Platform::Web => Triple::from_str("wasm32-unknown-unknown").unwrap(),
-    //         Platform::Ios => Triple::from_str("aarch64-apple-ios-sim").unwrap(),
-    //         Platform::Android => Triple::from_str("aarch64-linux-android").unwrap(),
-    //         Platform::Server => Triple::from_str("aarc64-apple-darwin").unwrap(),
-    //         // Platform::Server => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
-    //         Platform::Liveview => Triple::from_str("aarc64-apple-darwin").unwrap(),
-    //     }
-    // }
 }
+
+// pub(crate) fn triple(&self) -> Triple {
+//     match self.platform {
+//         Platform::MacOS => Triple::from_str("aarc64-apple-darwin").unwrap(),
+//         Platform::Windows => Triple::from_str("x86_64-pc-windows-msvc").unwrap(),
+//         Platform::Linux => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
+//         Platform::Web => Triple::from_str("wasm32-unknown-unknown").unwrap(),
+//         Platform::Ios => Triple::from_str("aarch64-apple-ios-sim").unwrap(),
+//         Platform::Android => Triple::from_str("aarch64-linux-android").unwrap(),
+//         Platform::Server => Triple::from_str("aarc64-apple-darwin").unwrap(),
+//         // Platform::Server => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
+//         Platform::Liveview => Triple::from_str("aarc64-apple-darwin").unwrap(),
+//     }
+// }
 
 // pub(crate) async fn autodetect_android_arch() -> Option<Triple> {
 //     // Try auto detecting arch through adb.

@@ -12325,10 +12325,12 @@ dependencies = [
  "libloading 0.8.6",
  "memmap",
  "serde",
+ "serde-wasm-bindgen",
  "subsecond-macro",
  "subsecond-types",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::AppBundle;
 
-const DEFAULT_HTML: &str = include_str!("../../assets/web/index.html");
-const TOAST_HTML: &str = include_str!("../../assets/web/toast.html");
+const DEFAULT_HTML: &str = include_str!("../../assets/web/dev.index.html");
 
 impl AppBundle {
     pub(crate) fn prepare_html(&self) -> Result<String> {
@@ -155,15 +154,8 @@ r#" <script>
     }
   );
   </script>
-  {DX_TOAST_UTILITIES}
             </body"#,
         );
-
-        // Trim out the toasts if we're in release, or add them if we're serving
-        *html = match self.is_dev_build() {
-            true => html.replace("{DX_TOAST_UTILITIES}", TOAST_HTML),
-            false => html.replace("{DX_TOAST_UTILITIES}", ""),
-        };
     }
 
     /// Replace any special placeholders in the HTML with resolved values

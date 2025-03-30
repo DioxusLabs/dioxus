@@ -1,9 +1,4 @@
-use std::{path::Path, str::FromStr};
-
-use target_lexicon::Triple;
-
-use super::{chained_command::ChainedCommand, *};
-use crate::{Builder, DioxusCrate, Platform, PROFILE_SERVER};
+use crate::{cli::*, Builder, DioxusCrate};
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -72,7 +67,9 @@ impl BuildArgs {
     pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
-        let krate = DioxusCrate::new(&self.args).context("Failed to load Dioxus workspace")?;
+        let krate = DioxusCrate::new(&self.args)
+            .await
+            .context("Failed to load Dioxus workspace")?;
 
         let bundle = Builder::start(&krate, &self)?.finish().await?;
 

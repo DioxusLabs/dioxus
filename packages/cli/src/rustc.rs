@@ -3,7 +3,7 @@ use anyhow::Context;
 use std::path::PathBuf;
 use tokio::process::Command;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct RustcDetails {
     pub sysroot: PathBuf,
     pub version: String,

@@ -17,7 +17,7 @@ fn app() -> Element {
         div { style: "display: flex; flex-direction: column; align-items: center; justify-content: center;",
             div { style: "background-color: red",
                 for x in 0..1 {
-                    Child { id: x + 1, opt: "List entry", color: "gris" }
+                    Child { id: x + 1, opt: "List entry", color: "gri" }
                 }
             }
             div { style: "background-color: orange",
@@ -42,7 +42,7 @@ fn app() -> Element {
             }
             div { style: "background-color: indigo",
                 for x in 0..1 {
-                    Child { id: x + 10, opt: "List entry", color: "bluebleu" }
+                    Child { id: x + 10, opt: "List entry", color: "magentaaa" }
                 }
             }
         }

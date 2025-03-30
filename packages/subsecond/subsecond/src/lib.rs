@@ -209,9 +209,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use js_sys::Uint32Array;
+use js_sys::{
+    ArrayBuffer, Object, Reflect, Uint32Array, Uint8Array,
+    WebAssembly::{self, Module},
+};
 pub use subsecond_macro::hot;
 pub use subsecond_types::JumpTable;
+use wasm_bindgen::UnwrapThrowExt;
 
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
@@ -461,6 +465,138 @@ pub async unsafe fn __subsecond_wasm_patch(pointers: Uint32Array) {
     }
 
     unsafe { apply_patch(table) }
+
+    // let table = serde_wasm_bindgen::from_value::<JumpTable>(table).unwrap_throw();
+    // run_wasm_patch(table).await.unwrap_throw();
+}
+// #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
+// pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
+//     let table = serde_wasm_bindgen::from_value::<JumpTable>(table).unwrap_throw();
+//     run_wasm_patch(table).await.unwrap_throw();
+// }
+
+pub async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {
+    use js_sys::Reflect;
+    use js_sys::Uint32Array;
+    use subsecond_types::AddressMap;
+    use wasm_bindgen::prelude::*;
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_futures::JsFuture;
+
+    const WASM_PAGE_LENGTH: u32 = 65536;
+
+    let funcs: WebAssembly::Table = wasm_bindgen::function_table().unchecked_into();
+    let memory: WebAssembly::Memory = wasm_bindgen::memory().unchecked_into();
+    let m: WebAssembly::Module = wasm_bindgen::module().unchecked_into();
+    let exports: Object = wasm_bindgen::exports().unchecked_into();
+    let buffer: Uint8Array = memory.buffer().unchecked_into();
+
+    let data_start = memory.grow(3) * WASM_PAGE_LENGTH;
+    let func_start = funcs.grow(2000)?;
+    let bss_start = memory.grow(3) * WASM_PAGE_LENGTH;
+
+    let imports = Object::new();
+    let download = web_sys::window()
+        .unwrap_throw()
+        .fetch_with_str(&table.lib.to_str().unwrap_throw());
+
+    let env = Object::new();
+
+    // Move exports over
+    for key in Object::keys(&exports) {
+        Reflect::set(&env, &key, &Reflect::get(&exports, &key)?)?;
+    }
+
+    // Set the memory and table in the imports
+    for (name, value) in [
+        ("__BSS_DATA_START", 0),
+        ("__RO_DATA_START", 0),
+        ("__DATA_OFFSET", 0),
+        ("__IFUNC_OFFSET", 0),
+    ] {
+        let descripor = Object::new();
+        Reflect::set(&descripor, &"value".into(), &"i32".into())?;
+        Reflect::set(&descripor, &"mutable".into(), &false.into())?;
+        let value = WebAssembly::Global::new(&descripor, &0.into())?;
+        Reflect::set(&env, &name.into(), &value)?;
+    }
+
+    // Set the memory and table in the imports
+    let imports = Object::new();
+    Reflect::set(&imports, &"env".into(), &env)?;
+
+    let module = JsFuture::from(WebAssembly::instantiate_streaming(&download, &imports)).await?;
+
+    // let mut idx = 0;
+    // for _ in 0..pointers.length() {
+    //     let left = pointers.get_index(idx);
+    //     let right = pointers.get_index(idx + 1);
+    //     table.map.insert(left as u64, right as u64);
+    //     idx += 2
+    // }
+
+    //     window.patch = patch;
+
+    // // We're going to match up export to export and then ifunc entry to ifunc entry
+    // // We're going to build a map of old -> new ifunc entries
+    // const patchExports = patch.instance.exports;
+
+    // let nameToNativeMain = Object.fromEntries(
+    //     Object.keys(wasmExports).map((key) => [key, wasmExports[key].name]).filter(([key, name]) => name !== undefined)
+    // );
+
+    // let nameToNativePatch = Object.fromEntries(
+    //     Object.keys(patchExports).map((key) => [key, patchExports[key].name]).filter(([key, name]) => name !== undefined)
+    // );
+
+    // let nativeToIndex = Object.fromEntries(
+    //     [...Array(wasmExports.__indirect_function_table.length).keys()].map((i) => {
+    //         let entry = wasmExports.__indirect_function_table.get(i);
+    //         if (entry === null) {
+    //             return ["abcbac", 0];
+    //         }
+    //         if (entry.name === undefined) {
+    //             return ["abcbac", 0];
+    //         }
+    //         return [entry.name, i];
+    //     })
+    // );
+
+    // let jumpTable = Object.fromEntries(
+    //     Object.entries(nameToNativePatch)
+    //         .map(([fnName, nativeName]) => {
+    //             let oldIndex = nativeToIndex[nameToNativeMain[fnName]];
+    //             let newIndex = nativeToIndex[nativeName];
+    //             return [fnName, [oldIndex, newIndex]];
+    //         })
+    //         .filter(([name, [oldIndex, newIndex]]) =>
+    //             oldIndex !== undefined && newIndex !== undefined
+    //         )
+    // );
+
+    // window.jumpTable = jumpTable;
+
+    // let patchList = Object.keys(patchExports).flatMap((key) => {
+    //     let entry = jumpTable[key];
+    //     if (entry === undefined) {
+    //         return [];
+    //     }
+    //     let a = entry[0];
+    //     let b = entry[1];
+
+    //     if (a === undefined || b === undefined) {
+    //         return [];
+    //     }
+
+    //     // console.log("Patching", key, "from", a, "to", b);
+
+    //     return [a, b];
+    // });
+    // console.log("Patching: ", patchList);
+    // base["__subsecond_wasm_patch"](patchList);
+
+    // unsafe { apply_patch(table) }
+    todo!()
 }
 
 /// A trait that enables types to be hot-patched.

@@ -29,21 +29,17 @@
                         // base.memory.grow(3)// each page is 64kb, let's grow by 1 page
                         base.__indirect_function_table.grow(2000);
 
-                        // console.log("Data start: ", data_start, "BSS start: ", bss_start);
-                        // console.log("BSS Start: ", ifunc_length);
-                        // console.log("Memory Width: ", base.memory.buffer.byteLength);
-                        // console.log("ifunc length: ", ifunc_length);
 
                         let imports = {
                             env: {
                                 // __BSS_DATA_START: new WebAssembly.Global({value: "i32", mutable: false }, bss_start),
                                 // __RO_DATA_START: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
+                                __DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
+                                __IFUNC_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ifunc_length + 1),
                                 __indirect_function_table: base.__indirect_function_table,
                                 __stack_pointer: base.__stack_pointer,
                                 __tls_base: base.__tls_base,
                                 memory: base.memory,
-                                __DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
-                                __IFUNC_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ifunc_length + 1),
                             },
                         };
                         for (const key of Object.keys(base)) {

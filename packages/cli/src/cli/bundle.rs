@@ -36,7 +36,9 @@ impl Bundle {
         // todo - maybe not? what if you want a devmode bundle?
         self.args.args.release = true;
 
-        let krate = DioxusCrate::new(&self.args.args).context("Failed to load Dioxus workspace")?;
+        let krate = DioxusCrate::new(&self.args.args)
+            .await
+            .context("Failed to load Dioxus workspace")?;
 
         tracing::info!("Building app...");
 

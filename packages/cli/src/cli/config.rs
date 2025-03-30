@@ -75,7 +75,7 @@ impl From<BoolValue> for bool {
 }
 
 impl Config {
-    pub(crate) fn config(self) -> Result<StructuredOutput> {
+    pub(crate) async fn config(self) -> Result<StructuredOutput> {
         let crate_root = crate_root()?;
         match self {
             Config::Init {
@@ -100,13 +100,15 @@ impl Config {
             Config::FormatPrint {} => {
                 tracing::info!(
                     "{:#?}",
-                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())?.config
+                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())
+                        .await?
+                        .config
                 );
             }
             Config::CustomHtml {} => {
                 let html_path = crate_root.join("index.html");
                 let mut file = File::create(html_path)?;
-                let content = include_str!("../../assets/web/index.html");
+                let content = include_str!("../../assets/web/dev.index.html");
                 file.write_all(content.as_bytes())?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Create custom html file done.");
             }

@@ -1,5 +1,5 @@
-use crate::CliSettings;
 use crate::{config::DioxusConfig, TargetArgs};
+use crate::{CliSettings, RustcDetails};
 use crate::{Platform, Result};
 use anyhow::Context;
 use itertools::Itertools;
@@ -20,10 +20,11 @@ pub(crate) static PROFILE_SERVER: &str = "server-dev";
 pub struct Workspace {
     pub(crate) krates: Krates,
     pub(crate) settings: CliSettings,
+    pub(crate) rustc: RustcDetails,
 }
 
 impl Workspace {
-    pub fn load() -> Result<Arc<Workspace>> {
+    pub async fn load() -> Result<Arc<Workspace>> {
         tracing::debug!("Loading workspace");
         let cmd = Cmd::new();
         let builder = krates::Builder::new();
@@ -32,8 +33,24 @@ impl Workspace {
             .context("Failed to run cargo metadata")?;
 
         let settings = CliSettings::global_or_default();
+        let rustc = RustcDetails::from_cli().await?;
 
-        Ok(Arc::new(Self { krates, settings }))
+        Ok(Arc::new(Self {
+            krates,
+            settings,
+            rustc,
+        }))
+    }
+
+    pub fn wasm_ld(&self) -> PathBuf {
+        self.rustc
+            .sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(Triple::host().to_string())
+            .join("bin")
+            .join("gcc-ld")
+            .join("wasm-ld")
     }
 }
 
@@ -59,25 +76,25 @@ pub(crate) struct DioxusCrate {
 }
 
 impl DioxusCrate {
-    pub(crate) fn new(target: &TargetArgs) -> Result<Self> {
-        let workspace = Workspace::load()?;
+    pub(crate) async fn new(args: &TargetArgs) -> Result<Self> {
+        let workspace = Workspace::load().await?;
 
-        let package = Self::find_main_package(&workspace.krates, target.package.clone())?;
+        let package = Self::find_main_package(&workspace.krates, args.package.clone())?;
         tracing::debug!("Found package {package:?}");
 
         let dioxus_config = DioxusConfig::load(&workspace.krates, package)?.unwrap_or_default();
 
-        let target_kind = match target.example.is_some() {
+        let target_kind = match args.example.is_some() {
             true => TargetKind::Example,
             false => TargetKind::Bin,
         };
 
         let main_package = &workspace.krates[package];
 
-        let target_name = target
+        let target_name = args
             .example
             .clone()
-            .or(target.bin.clone())
+            .or(args.bin.clone())
             .or_else(|| {
                 if let Some(default_run) = &main_package.default_run {
                     return Some(default_run.to_string());
@@ -118,10 +135,10 @@ impl DioxusCrate {
                     target.kind.contains(kind).then_some(target.name.as_str())
                 }).collect::<Vec<_>>();
                 filtered_packages.join(", ")};
-                if let Some(example) = &target.example {
+                if let Some(example) = &args.example {
                     let examples = target_of_kind(&TargetKind::Example);
                     format!("Failed to find example {example}. \nAvailable examples are:\n{}", examples)
-                } else if let Some(bin) = &target.bin {
+                } else if let Some(bin) = &args.bin {
                     let binaries = target_of_kind(&TargetKind::Bin);
                     format!("Failed to find binary {bin}. \nAvailable binaries are:\n{}", binaries)
                 } else {

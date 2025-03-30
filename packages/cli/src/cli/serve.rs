@@ -110,7 +110,7 @@ impl ServeArgs {
     }
 
     pub(crate) async fn load_krate(&mut self) -> Result<DioxusCrate> {
-        let krate = DioxusCrate::new(&self.build_arguments.args)?;
+        let krate = DioxusCrate::new(&self.build_arguments.args).await?;
 
         // Enable hot reload.
         if self.hot_reload.is_none() {

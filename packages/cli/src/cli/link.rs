@@ -110,28 +110,6 @@ impl LinkAction {
     }
 }
 
-/// Move all previous object files to "incremental-old" and all new object files to "incremental-new"
-fn cache_incrementals(old: &PathBuf, new: &PathBuf, object_files: &[&String]) {
-    // Remove the old incremental-old directory if it exists
-    _ = std::fs::remove_dir_all(&old);
-
-    // Rename incremental-new to incremental-old if it exists. Faster than moving all the files
-    _ = std::fs::rename(&new, &old);
-
-    // Create the new incremental-new directory to place the outputs in
-    std::fs::create_dir_all(&new).unwrap();
-
-    // Now drop in all the new object files
-    for o in object_files.iter() {
-        if !o.ends_with(".rcgu.o") {
-            continue;
-        }
-
-        let path = PathBuf::from(o);
-        std::fs::copy(&path, new.join(path.file_name().unwrap())).unwrap();
-    }
-}
-
 /// This creates an object file that satisfies rust's use of llvm-objcopy
 ///
 /// I'd rather we *not* do this and instead generate a truly linked file (and then delete it) but
@@ -146,7 +124,7 @@ fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
         target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
         target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
         target_lexicon::BinaryFormat::Unknown => todo!(),
-        _ => todo!(),
+        _ => todo!("Binary format not supported"),
     };
 
     let arch = match triple.architecture {
@@ -157,21 +135,16 @@ fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
         target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
         target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
         target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
-        _ => todo!(),
+        _ => todo!("Architecture not supported"),
     };
 
     let endian = match triple.endianness() {
         Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
         Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
-        Err(_) => todo!(),
+        Err(_) => todo!("Endianness not supported"),
     };
 
     object::write::Object::new(format, arch, endian)
         .write()
         .unwrap()
-}
-
-#[test]
-fn creates_dummy_object_file_ios() {
-    let dummy_object_file = make_dummy_object_file(Platform::Ios);
 }

@@ -699,7 +699,7 @@ async fn build_status_middleware(
     if let Some(true) = accepts_html {
         let status = state.get();
         if status != Status::Ready {
-            let html = include_str!("../../assets/web/loading.html");
+            let html = include_str!("../../assets/web/dev.loading.html");
             return axum::response::Response::builder()
                 .status(StatusCode::OK)
                 // Load the html loader then keep loading forever

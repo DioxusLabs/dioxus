@@ -27,7 +27,7 @@ impl Check {
         match self.file {
             // Default to checking the project
             None => {
-                let dioxus_crate = DioxusCrate::new(&self.target_args)?;
+                let dioxus_crate = DioxusCrate::new(&self.target_args).await?;
                 check_project_and_report(dioxus_crate)
                     .await
                     .context("error checking project")?;

@@ -38,7 +38,7 @@ pub(crate) struct Autoformat {
 }
 
 impl Autoformat {
-    pub(crate) fn autoformat(self) -> Result<StructuredOutput> {
+    pub(crate) async fn autoformat(self) -> Result<StructuredOutput> {
         let Autoformat {
             check,
             raw,
@@ -67,8 +67,9 @@ impl Autoformat {
                     package: Some(package),
                     ..Default::default()
                 };
-                let dx_crate =
-                    DioxusCrate::new(&target_args).context("failed to parse crate graph")?;
+                let dx_crate = DioxusCrate::new(&target_args)
+                    .await
+                    .context("failed to parse crate graph")?;
 
                 Cow::Owned(dx_crate.crate_dir())
             } else {
