@@ -289,11 +289,11 @@ impl AppBundle {
                     .write_main_executable()
                     .await
                     .context("Failed to write main executable")?;
-                // bundle.write_server_executable().await?;
-                // bundle
-                //     .write_assets()
-                //     .await
-                //     .context("Failed to write assets")?;
+                bundle.write_server_executable().await?;
+                bundle
+                    .write_assets()
+                    .await
+                    .context("Failed to write assets")?;
                 bundle.write_metadata().await?;
                 bundle.optimize().await?;
                 bundle.pre_render_ssg_routes().await?;

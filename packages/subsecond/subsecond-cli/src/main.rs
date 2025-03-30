@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
     let mut watcher = FsWatcher::watch(src_folder)?;
 
     while let Some(Ok(event)) = watcher.rx.next().await {
-        if event.kind != notify::EventKind::Modify(ModifyKind::Data(DataChange::Content)) {
+        if event.kind != notify::EventKind::Modify(ModifyKind::Any) {
             continue;
         }
 
