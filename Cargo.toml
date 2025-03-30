@@ -191,12 +191,12 @@ tauri-utils = { version = "=2.1.1" }
 tauri-bundler = { version = "=2.2.3" }
 lru = "0.12.2"
 async-trait = "0.1.77"
-axum = { version = "0.7.0", default-features = false }
+axum = { version = "0.8", default-features = false }
 axum-server = { version = "0.7.1", default-features = false }
-tower = "0.4.13"
+tower = "0.5"
 http = "1.0.0"
 notify = { version = "6.1.1" }
-tower-http = "0.5.2"
+tower-http = "0.6"
 hyper = "1.0.0"
 hyper-rustls = { version= "0.27.2", default-features = false , features=["native-tokio","http1","http2","tls12","logging","ring"]}
 rustls = { version="0.23.12", default-features=false, features =["logging","std","tls12","ring"] }
