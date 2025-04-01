@@ -1,24 +1,19 @@
 use crate::{
-    BuildMode, BuildRequest, BuildUpdate, Builder, Error, Platform, Result, ServeArgs,
-    TraceController, TraceSrc,
+    BuildMode, BuildRequest, BuildUpdate, Builder, Error, HandleUpdate, Platform, Result,
+    ServeArgs, TraceController, TraceSrc,
 };
 
 mod ansi_buffer;
-mod detect;
-mod handle;
 mod output;
 mod proxy;
 mod runner;
 mod server;
-mod state;
 mod update;
 mod watcher;
 
-pub(crate) use handle::*;
 pub(crate) use output::*;
 pub(crate) use runner::*;
 pub(crate) use server::*;
-pub(crate) use state::*;
 pub(crate) use update::*;
 pub(crate) use watcher::*;
 
@@ -47,13 +42,9 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
     let mut tracer = TraceController::redirect(args.is_interactive_tty());
 
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
-    let builder = Serve::new(args).await?;
-
-    // Note that starting the builder will queue up a build immediately
+    let mut builder = AppRunner::start(args);
     let mut screen = Output::start(&builder).await?;
     let mut devserver = WebServer::start(&builder)?;
-    let mut watcher = Watcher::start(&builder);
-    let mut runner = AppRunner::start(&builder);
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
@@ -72,15 +63,13 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
 
     let err: Result<(), Error> = loop {
         // Draw the state of the server to the screen
-        screen.render(&builder, &devserver, &watcher);
+        screen.render(&builder, &devserver);
 
         // And then wait for any updates before redrawing
         let msg = tokio::select! {
             msg = builder.wait() => msg,
-            msg = watcher.wait() => msg,
             msg = devserver.wait() => msg,
             msg = screen.wait() => msg,
-            msg = runner.wait() => msg,
             msg = tracer.wait() => msg,
         };
 
@@ -95,7 +84,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                match runner.hotreload(files.clone()).await {
+                match builder.hotreload(files.clone()).await {
                     HotReloadKind::Rsx(hr) => {
                         // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                         //
@@ -109,16 +98,16 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                         devserver.send_hotreload(hr).await;
                     }
                     HotReloadKind::Patch => {
-                        if let Some(handle) = runner.running.as_ref() {
+                        if let Some(handle) = builder.running.as_ref() {
                             builder.patch_rebuild(
                                 args.build_arguments.clone(),
                                 handle.app.app.direct_rustc.clone(),
                                 files,
-                                runner.aslr_reference.unwrap(),
+                                builder.aslr_reference.unwrap(),
                             );
 
-                            runner.clear_hot_reload_changes();
-                            runner.clear_cached_rsx();
+                            builder.clear_hot_reload_changes();
+                            builder.clear_cached_rsx();
 
                             devserver.start_patch().await
                         }
@@ -136,8 +125,8 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
 
                 builder.rebuild(args.build_arguments.clone());
 
-                runner.clear_hot_reload_changes();
-                runner.clear_cached_rsx();
+                builder.clear_hot_reload_changes();
+                builder.clear_cached_rsx();
 
                 devserver.send_reload_start().await;
                 devserver.start_build().await
@@ -147,17 +136,17 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
             // Waiting for updates here lets us tap into when clients are added/removed
             ServeUpdate::NewConnection => {
                 devserver
-                    .send_hotreload(runner.applied_hot_reload_changes())
+                    .send_hotreload(builder.applied_hot_reload_changes())
                     .await;
 
-                runner.client_connected().await;
+                builder.client_connected().await;
             }
 
             // Received a message from the devtools server - currently we only use this for
             // logging, so we just forward it the tui
             ServeUpdate::WsMessage(msg) => {
                 screen.push_ws_message(Platform::Web, &msg);
-                runner.handle_ws_message(&msg).await;
+                builder.handle_ws_message(&msg).await;
             }
 
             // Wait for logs from the build engine
@@ -183,12 +172,12 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                     }
 
                     BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
-                        let jump_table = runner.patch(&bundle).await?;
+                        let jump_table = builder.patch(&bundle).await?;
                         devserver.send_patch(jump_table).await;
                     }
 
                     BuildUpdate::BuildReady { bundle } => {
-                        let handle = runner
+                        let handle = builder
                             .open(
                                 bundle,
                                 devserver.devserver_address(),
@@ -232,7 +221,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
             }
 
             ServeUpdate::OpenApp => {
-                if let Err(err) = runner.open_existing(&devserver).await {
+                if let Err(err) = builder.open_existing(&devserver).await {
                     tracing::error!("Failed to open app: {err}")
                 }
             }
@@ -242,10 +231,10 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
             }
 
             ServeUpdate::ToggleShouldRebuild => {
-                runner.automatic_rebuilds = !runner.automatic_rebuilds;
+                builder.automatic_rebuilds = !builder.automatic_rebuilds;
                 tracing::info!(
                     "Automatic rebuilds are currently: {}",
-                    if runner.automatic_rebuilds {
+                    if builder.automatic_rebuilds {
                         "enabled"
                     } else {
                         "disabled"
@@ -260,9 +249,8 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
         }
     };
 
-    _ = runner.cleanup().await;
+    _ = builder.cleanup().await;
     _ = devserver.shutdown().await;
-    builder.abort_all();
     _ = screen.shutdown();
 
     if let Err(err) = err {

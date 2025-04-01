@@ -156,27 +156,6 @@
 //!     web -> /assets/
 //! root().join(bundled)
 //! ```
-
-use super::prerender::pre_render_static_routes;
-use crate::{BuildMode, BuildRequest, Platform, WasmOptConfig};
-use crate::{Result, TraceSrc};
-use anyhow::{bail, Context};
-use dioxus_cli_opt::{process_file_to, AssetManifest};
-use itertools::Itertools;
-use manganis::{AssetOptions, JsAssetOptions};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::{collections::HashSet, io::Write};
-use std::{future::Future, time::Instant};
-use std::{
-    path::{Path, PathBuf},
-    time::UNIX_EPOCH,
-};
-use std::{pin::Pin, time::SystemTime};
-use std::{process::Stdio, sync::atomic::Ordering};
-use std::{sync::atomic::AtomicUsize, time::Duration};
-use target_lexicon::{Environment, OperatingSystem};
-use tokio::process::Command;
-
 // / The end result of a build.
 // /
 // / Contains the final asset manifest, the executables, and the workdir.
@@ -259,3 +238,23 @@ use tokio::process::Command;
 // }
 
 // impl AppBundle {}
+
+use super::prerender::pre_render_static_routes;
+use crate::{BuildMode, BuildRequest, Platform, WasmOptConfig};
+use crate::{Result, TraceSrc};
+use anyhow::{bail, Context};
+use dioxus_cli_opt::{process_file_to, AssetManifest};
+use itertools::Itertools;
+use manganis::{AssetOptions, JsAssetOptions};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use std::{collections::HashSet, io::Write};
+use std::{future::Future, time::Instant};
+use std::{
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
+use std::{pin::Pin, time::SystemTime};
+use std::{process::Stdio, sync::atomic::Ordering};
+use std::{sync::atomic::AtomicUsize, time::Duration};
+use target_lexicon::{Environment, OperatingSystem};
+use tokio::process::Command;

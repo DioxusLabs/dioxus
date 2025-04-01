@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    serve::{AppHandle, HandleUpdate},
-    BuildArgs, BuildRequest, Builder, Platform, Result,
-};
+use crate::{BuildArgs, BuildRequest, Builder, Platform, Result};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -17,7 +14,9 @@ impl RunArgs {
         let build = BuildRequest::new(&self.build_args)
             .await
             .context("error building project")?;
-        let bundle = Builder::start(&build)?.finish().await?;
+
+        let mut builder = Builder::start(&build)?;
+        let artifacts = builder.finish().await?;
 
         let devserver_ip = "127.0.0.1:8081".parse().unwrap();
         let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
@@ -26,26 +25,26 @@ impl RunArgs {
             tracing::info!("Serving at: {}", fullstack_ip);
         }
 
-        let mut handle = AppHandle::new(bundle).await?;
-        handle.open(devserver_ip, Some(fullstack_ip), true).await?;
+        builder.open(devserver_ip, Some(fullstack_ip), true).await?;
 
-        // Run the app, but mostly ignore all the other messages
-        // They won't generally be emitted
-        loop {
-            match handle.wait().await {
-                HandleUpdate::StderrReceived { platform, msg } => {
-                    tracing::info!("[{platform}]: {msg}")
-                }
-                HandleUpdate::StdoutReceived { platform, msg } => {
-                    tracing::info!("[{platform}]: {msg}")
-                }
-                HandleUpdate::ProcessExited { platform, status } => {
-                    handle.cleanup().await;
-                    tracing::info!("[{platform}]: process exited with status: {status:?}");
-                    break;
-                }
-            }
-        }
+        todo!();
+        // // Run the app, but mostly ignore all the other messages
+        // // They won't generally be emitted
+        // loop {
+        //     match builder.wait().await {
+        //         HandleUpdate::StderrReceived { platform, msg } => {
+        //             tracing::info!("[{platform}]: {msg}")
+        //         }
+        //         HandleUpdate::StdoutReceived { platform, msg } => {
+        //             tracing::info!("[{platform}]: {msg}")
+        //         }
+        //         HandleUpdate::ProcessExited { platform, status } => {
+        //             builder.cleanup().await;
+        //             tracing::info!("[{platform}]: process exited with status: {status:?}");
+        //             break;
+        //         }
+        //     }
+        // }
 
         Ok(StructuredOutput::Success)
     }

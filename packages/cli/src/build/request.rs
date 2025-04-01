@@ -1,21 +1,29 @@
-use super::{progress::ProgressTx, AndroidTools, PatchData};
-use crate::{link::LinkAction, BuildArgs};
+use super::{prerender::pre_render_static_routes, progress::ProgressTx, AndroidTools, PatchData};
+use crate::{link::LinkAction, BuildArgs, WasmOptConfig};
 use crate::{DioxusConfig, Workspace};
 use crate::{Platform, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use dioxus_cli_opt::AssetManifest;
+use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, KrateDetails, Krates, NodeId, Utf8PathBuf};
+use manganis::{AssetOptions, JsAssetOptions};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
 use std::{
     collections::HashSet,
+    future::Future,
+    io::Write,
     path::{Path, PathBuf},
+    pin::Pin,
     process::Stdio,
-    sync::Arc,
-    time::{Instant, SystemTime},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{Environment, Triple};
+use target_lexicon::{Environment, OperatingSystem, Triple};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
 use uuid::Uuid;
@@ -403,7 +411,7 @@ impl BuildRequest {
 
         // Run the cargo build to produce our artifacts
         let exe = PathBuf::new();
-        let assets = AssetManifest::default();
+        let mut assets = AssetManifest::default();
 
         // Now handle
         match bundle.mode {
@@ -412,7 +420,7 @@ impl BuildRequest {
 
                 bundle.status_start_bundle();
                 bundle
-                    .write_executable(&exe)
+                    .write_executable(&exe, &mut assets)
                     .await
                     .context("Failed to write main executable")?;
                 bundle
@@ -421,7 +429,7 @@ impl BuildRequest {
                     .context("Failed to write assets")?;
                 bundle.write_metadata().await?;
                 bundle.optimize().await?;
-                bundle.pre_render_ssg_routes().await?;
+                // bundle.pre_render_ssg_routes().await?;
                 bundle
                     .assemble()
                     .await
@@ -464,7 +472,7 @@ impl BuildRequest {
     /// For wasm, we'll want to run `wasm-bindgen` to make it a wasm binary along with some other optimizations
     /// Other platforms we might do some stripping or other optimizations
     /// Move the executable to the workdir
-    async fn write_executable(&self, exe: &Path) -> Result<()> {
+    async fn write_executable(&self, exe: &Path, assets: &mut AssetManifest) -> Result<()> {
         match self.platform {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
             // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
@@ -489,7 +497,7 @@ impl BuildRequest {
             //                        logo.png
             // ```
             Platform::Web => {
-                self.bundle_web().await?;
+                self.bundle_web(exe, assets).await?;
             }
 
             // this will require some extra oomf to get the multi architecture builds...
@@ -537,6 +545,7 @@ impl BuildRequest {
 
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = assets
+            .assets
             .values()
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
@@ -595,7 +604,7 @@ impl BuildRequest {
         let mut assets_to_transfer = vec![];
 
         // Queue the bundled assets
-        for (asset, bundled) in &self.assets.assets {
+        for (asset, bundled) in &assets.assets {
             let from = asset.clone();
             let to = asset_dir.join(bundled.bundled_path());
 
@@ -667,26 +676,27 @@ impl BuildRequest {
 
     /// libpatch-{time}.(so/dll/dylib) (next to the main exe)
     pub fn patch_exe(&self) -> PathBuf {
-        let path = self.main_exe().with_file_name(format!(
-            "libpatch-{}",
-            self.time_start
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis(),
-        ));
+        todo!()
+        // let path = self.main_exe().with_file_name(format!(
+        //     "libpatch-{}",
+        //     self.time_start
+        //         .duration_since(UNIX_EPOCH)
+        //         .unwrap()
+        //         .as_millis(),
+        // ));
 
-        let extension = match self.target.operating_system {
-            OperatingSystem::Darwin(_) => "dylib",
-            OperatingSystem::MacOSX(_) => "dylib",
-            OperatingSystem::IOS(_) => "dylib",
-            OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
-            OperatingSystem::Windows => "dll",
-            OperatingSystem::Linux => "so",
-            OperatingSystem::Wasi => "wasm",
-            _ => "",
-        };
+        // let extension = match self.target.operating_system {
+        //     OperatingSystem::Darwin(_) => "dylib",
+        //     OperatingSystem::MacOSX(_) => "dylib",
+        //     OperatingSystem::IOS(_) => "dylib",
+        //     OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
+        //     OperatingSystem::Windows => "dll",
+        //     OperatingSystem::Linux => "so",
+        //     OperatingSystem::Wasi => "wasm",
+        //     _ => "",
+        // };
 
-        path.with_extension(extension)
+        // path.with_extension(extension)
     }
 
     /// Run our custom linker setup to generate a patch file in the right location
@@ -937,26 +947,26 @@ impl BuildRequest {
         self.exe_dir().join(self.platform_exe_name())
     }
 
-    /// We always put the server in the `web` folder!
-    /// Only the `web` target will generate a `public` folder though
-    async fn write_server_executable(&self) -> Result<()> {
-        if let Some(server) = &self.server {
-            let to = self
-                .server_exe()
-                .expect("server should be set if we're building a server");
+    // /// We always put the server in the `web` folder!
+    // /// Only the `web` target will generate a `public` folder though
+    // async fn write_server_executable(&self) -> Result<()> {
+    //     if let Some(server) = &self.server {
+    //         let to = self
+    //             .server_exe()
+    //             .expect("server should be set if we're building a server");
 
-            std::fs::create_dir_all(self.server_exe().unwrap().parent().unwrap())?;
+    //         std::fs::create_dir_all(self.server_exe().unwrap().parent().unwrap())?;
 
-            tracing::debug!("Copying server executable to: {to:?} {server:#?}");
+    //         tracing::debug!("Copying server executable to: {to:?} {server:#?}");
 
-            // Remove the old server executable if it exists, since copying might corrupt it :(
-            // todo(jon): do this in more places, I think
-            _ = std::fs::remove_file(&to);
-            std::fs::copy(&server.exe, to)?;
-        }
+    //         // Remove the old server executable if it exists, since copying might corrupt it :(
+    //         // todo(jon): do this in more places, I think
+    //         _ = std::fs::remove_file(&to);
+    //         std::fs::copy(&server.exe, to)?;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     /// todo(jon): use handlebars templates instead of these prebaked templates
     async fn write_metadata(&self) -> Result<()> {
@@ -1024,40 +1034,39 @@ impl BuildRequest {
         Ok(())
     }
 
-    pub(crate) fn server_exe(&self) -> Option<PathBuf> {
-        if let Some(_server) = &self.server {
-            let mut path = self.build_dir(Platform::Server, self.release);
+    // pub(crate) fn server_exe(&self) -> Option<PathBuf> {
+    //     if let Some(_server) = &self.server {
+    //         let mut path = self.build_dir(Platform::Server, self.release);
 
-            if cfg!(windows) {
-                path.push("server.exe");
-            } else {
-                path.push("server");
-            }
+    //         if cfg!(windows) {
+    //             path.push("server.exe");
+    //         } else {
+    //             path.push("server");
+    //         }
 
-            return Some(path);
-        }
+    //         return Some(path);
+    //     }
 
-        None
-    }
+    //     None
+    // }
 
     /// Bundle the web app
     /// - Run wasm-bindgen
     /// - Bundle split
     /// - Run wasm-opt
     /// - Register the .wasm and .js files with the asset system
-    async fn bundle_web(&self) -> Result<()> {
+    async fn bundle_web(&self, exe: &Path, assets: &mut AssetManifest) -> Result<()> {
         use crate::{wasm_bindgen::WasmBindgen, wasm_opt};
         use std::fmt::Write;
 
         // Locate the output of the build files and the bindgen output
         // We'll fill these in a second if they don't already exist
         let bindgen_outdir = self.wasm_bindgen_out_dir();
-        let prebindgen = self.exe.clone();
+        let prebindgen = exe.clone();
         let post_bindgen_wasm = self.wasm_bindgen_wasm_output_file();
-        let should_bundle_split = self.wasm_split;
-        let rustc_exe = self.exe.with_extension("wasm");
+        let should_bundle_split: bool = self.wasm_split;
+        let rustc_exe = exe.with_extension("wasm");
         let bindgen_version = self
-            .build
             .wasm_bindgen_version()
             .expect("this should have been checked by tool verification");
 
@@ -1143,8 +1152,7 @@ impl BuildRequest {
                 wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
                 writeln!(
                     glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
-                    url = self
-                        .assets
+                    url = assets
                         .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
                 )?;
             }
@@ -1169,8 +1177,7 @@ impl BuildRequest {
 
 
                     // Again, register this wasm with the asset system
-                    url = self
-                        .assets
+                    url = assets
                         .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
 
                     // This time, make sure to write the dependencies of this chunk
@@ -1211,33 +1218,20 @@ impl BuildRequest {
         }
 
         // Make sure to register the main wasm file with the asset system
-        self.assets
-            .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+        assets.register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
 
         // Register the main.js with the asset system so it bundles in the snippets and optimizes
-        self.assets.register_asset(
+        assets.register_asset(
             &self.wasm_bindgen_js_output_file(),
             AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
         )?;
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
-        std::fs::write(self.root_dir().join("index.html"), self.prepare_html()?)?;
+        std::fs::write(
+            self.root_dir().join("index.html"),
+            self.prepare_html(&assets)?,
+        )?;
 
-        Ok(())
-    }
-
-    async fn pre_render_ssg_routes(&self) -> Result<()> {
-        // Run SSG and cache static routes
-        if !self.ssg {
-            return Ok(());
-        }
-        self.status_prerendering_routes();
-        pre_render_static_routes(
-            &self
-                .server_exe()
-                .context("Failed to find server executable")?,
-        )
-        .await?;
         Ok(())
     }
 

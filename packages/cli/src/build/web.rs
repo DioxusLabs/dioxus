@@ -1,32 +1,51 @@
 use dioxus_cli_config::format_base_path_meta_element;
+use dioxus_cli_opt::AssetManifest;
 use manganis::AssetOptions;
 
 use crate::error::Result;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-use super::BuildArtifacts;
+use super::BuildRequest;
 
 const DEFAULT_HTML: &str = include_str!("../../assets/web/dev.index.html");
 
-impl BuildArtifacts {
-    pub(crate) fn prepare_html(&self) -> Result<String> {
+impl BuildRequest {
+    /// Users create an index.html for their SPA if they want it
+    ///
+    /// We always write our wasm as main.js and main_bg.wasm
+    ///
+    /// In prod we run the optimizer which bundles everything together properly
+    ///
+    /// So their index.html needs to include main.js in the scripts otherwise nothing happens?
+    ///
+    /// Seems like every platform has a weird file that declares a bunch of stuff
+    /// - web: index.html
+    /// - ios: info.plist
+    /// - macos: info.plist
+    /// - linux: appimage root thing?
+    /// - android: androidmanifest.xml
+    ///
+    /// You also might different variants of these files (staging / prod) and different flavors (eu/us)
+    ///
+    /// web's index.html is weird since it's not just a bundle format but also a *content* format
+    pub(crate) fn prepare_html(&self, assets: &AssetManifest) -> Result<String> {
         let mut html = {
-            let crate_root: &Path = &self.build.crate_dir();
+            let crate_root: &Path = &self.crate_dir();
             let custom_html_file = crate_root.join("index.html");
             std::fs::read_to_string(custom_html_file).unwrap_or_else(|_| String::from(DEFAULT_HTML))
         };
 
         // Inject any resources from the config into the html
-        self.inject_resources(&mut html)?;
+        self.inject_resources(&assets, &mut html)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
 
         // Replace any special placeholders in the HTML with resolved values
-        self.replace_template_placeholders(&mut html);
+        self.replace_template_placeholders(&assets, &mut html);
 
-        let title = self.build.config.web.app.title.clone();
+        let title = self.config.web.app.title.clone();
 
         replace_or_insert_before("{app_title}", "</title", &title, &mut html);
 
@@ -34,13 +53,13 @@ impl BuildArtifacts {
     }
 
     fn is_dev_build(&self) -> bool {
-        !self.build.release
+        !self.release
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(&self, html: &mut String) -> Result<()> {
+    fn inject_resources(&self, assets: &AssetManifest, html: &mut String) -> Result<()> {
         // Collect all resources into a list of styles and scripts
-        let resources = &self.build.config.web.resource;
+        let resources = &self.config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
         let mut script_list = resources.script.clone().unwrap_or_default();
 
@@ -71,7 +90,7 @@ impl BuildArtifacts {
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.build.config.web.app.base_path {
+            if let Some(base_path) = &self.config.web.app.base_path {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -84,7 +103,7 @@ impl BuildArtifacts {
         }
 
         // Inject any resources from manganis into the head
-        for asset in self.assets.assets.values() {
+        for asset in assets.assets.values() {
             let asset_path = asset.bundled_path();
             match asset.options() {
                 AssetOptions::Css(css_options) => {
@@ -112,9 +131,8 @@ impl BuildArtifacts {
             }
         }
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
-        let wasm_source_path = self.build.wasm_bindgen_wasm_output_file();
-        let wasm_path = self
-            .assets
+        let wasm_source_path = self.wasm_bindgen_wasm_output_file();
+        let wasm_path = assets
             .assets
             .get(&wasm_source_path)
             .expect("WASM asset should exist in web bundles")
@@ -131,7 +149,7 @@ impl BuildArtifacts {
     /// Inject loading scripts if they are not already present
     fn inject_loading_scripts(&self, html: &mut String) {
         // If it looks like we are already loading wasm or the current build opted out of injecting loading scripts, don't inject anything
-        if !self.build.inject_loading_scripts || html.contains("__wbindgen_start") {
+        if !self.inject_loading_scripts || html.contains("__wbindgen_start") {
             return;
         }
 
@@ -159,22 +177,20 @@ r#" <script>
     }
 
     /// Replace any special placeholders in the HTML with resolved values
-    fn replace_template_placeholders(&self, html: &mut String) {
-        let base_path = self.build.config.web.app.base_path();
+    fn replace_template_placeholders(&self, assets: &AssetManifest, html: &mut String) {
+        let base_path = self.config.web.app.base_path();
         *html = html.replace("{base_path}", base_path);
 
-        let app_name = &self.build.executable_name();
-        let wasm_source_path = self.build.wasm_bindgen_wasm_output_file();
-        let wasm_path = self
-            .assets
+        let app_name = &self.executable_name();
+        let wasm_source_path = self.wasm_bindgen_wasm_output_file();
+        let wasm_path = assets
             .assets
             .get(&wasm_source_path)
             .expect("WASM asset should exist in web bundles")
             .bundled_path();
         let wasm_path = format!("assets/{wasm_path}");
-        let js_source_path = self.build.wasm_bindgen_js_output_file();
-        let js_path = self
-            .assets
+        let js_source_path = self.wasm_bindgen_js_output_file();
+        let js_path = assets
             .assets
             .get(&js_source_path)
             .expect("JS asset should exist in web bundles")
@@ -205,12 +221,11 @@ r#" <script>
                     // The path is actually a web path which is relative to the root of the website
                     let path = path.strip_prefix("/").unwrap_or(path);
                     let asset_dir_path = self
-                        .build
                         .legacy_asset_dir()
                         .map(|dir| dir.join(path).canonicalize());
 
                     if let Some(Ok(absolute_path)) = asset_dir_path {
-                        let absolute_crate_root = self.build.crate_dir().canonicalize().unwrap();
+                        let absolute_crate_root = self.crate_dir().canonicalize().unwrap();
                         PathBuf::from("./")
                             .join(absolute_path.strip_prefix(absolute_crate_root).unwrap())
                     } else {

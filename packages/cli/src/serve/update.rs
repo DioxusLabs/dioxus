@@ -1,8 +1,6 @@
-use crate::{BuildUpdate, Platform, TraceMsg};
+use crate::{BuildUpdate, HandleUpdate, Platform, TraceMsg};
 use axum::extract::ws::Message as WsMessage;
 use std::{path::PathBuf, process::ExitStatus};
-
-use super::HandleUpdate;
 
 /// One fat enum to rule them all....
 ///

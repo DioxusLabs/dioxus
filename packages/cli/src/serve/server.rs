@@ -70,7 +70,7 @@ impl WebServer {
     ///
     /// This will also start the websocket server that powers the devtools. If you want to communicate
     /// with connected devtools clients, this is the place to do it.
-    pub(crate) fn start(serve: &ServeState) -> Result<Self> {
+    pub(crate) fn start(runner: &AppRunner) -> Result<Self> {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 

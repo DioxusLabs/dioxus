@@ -76,17 +76,17 @@ impl Bundle {
 
         let mut bundles = vec![];
 
-        // Copy the server over if it exists
-        if build.fullstack {
-            bundles.push(bundle.server_exe().unwrap());
-        }
+        // // Copy the server over if it exists
+        // if build.fullstack {
+        //     bundles.push(build.server_exe().unwrap());
+        // }
 
         // Create a list of bundles that we might need to copy
         match build.platform {
             // By default, mac/win/linux work with tauri bundle
             Platform::MacOS | Platform::Linux | Platform::Windows => {
                 tracing::info!("Running desktop bundler...");
-                for bundle in Self::bundle_desktop(&bundle, &self.package_types)? {
+                for bundle in Self::bundle_desktop(&build, &self.package_types)? {
                     bundles.extend(bundle.bundle_paths);
                 }
             }
@@ -158,6 +158,7 @@ impl Bundle {
         package_types: &Option<Vec<crate::PackageType>>,
     ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
         let krate = &build;
+        let exe = build.main_exe();
 
         _ = std::fs::remove_dir_all(krate.bundle_dir(build.platform));
 
@@ -168,13 +169,13 @@ impl Bundle {
         }
         std::fs::create_dir_all(krate.bundle_dir(build.platform))
             .context("Failed to create bundle directory")?;
-        std::fs::copy(&build.exe, krate.bundle_dir(build.platform).join(&name))
+        std::fs::copy(&exe, krate.bundle_dir(build.platform).join(&name))
             .with_context(|| "Failed to copy the output executable into the bundle directory")?;
 
         let binaries = vec![
             // We use the name of the exe but it has to be in the same directory
             BundleBinary::new(krate.executable_name().to_string(), true)
-                .set_src_path(Some(build.exe.display().to_string())),
+                .set_src_path(Some(exe.display().to_string())),
         ];
 
         let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
@@ -271,3 +272,18 @@ impl Bundle {
         Ok(bundles)
     }
 }
+
+// async fn pre_render_ssg_routes(&self) -> Result<()> {
+//     // Run SSG and cache static routes
+//     if !self.ssg {
+//         return Ok(());
+//     }
+//     self.status_prerendering_routes();
+//     pre_render_static_routes(
+//         &self
+//             .server_exe()
+//             .context("Failed to find server executable")?,
+//     )
+//     .await?;
+//     Ok(())
+// }

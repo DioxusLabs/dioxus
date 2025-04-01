@@ -7,6 +7,9 @@ use std::path::PathBuf;
 pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
 pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuildId(u64);
+
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum BuildUpdate {
     Progress { stage: BuildStage },
@@ -60,7 +63,6 @@ impl BuildRequest {
                 current: count,
                 total,
                 krate: name,
-                is_server: self.is_server(),
             },
         });
     }
@@ -68,7 +70,6 @@ impl BuildRequest {
     pub(crate) fn status_starting_build(&self, crate_count: usize) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Starting {
-                is_server: self.platform == Platform::Server,
                 patch: self.is_patch(),
                 crate_count,
             },

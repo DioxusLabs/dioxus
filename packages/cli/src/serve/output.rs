@@ -1,5 +1,5 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringLine, Builder, Serve, ServeUpdate, Watcher, WebServer},
+    serve::{ansi_buffer::AnsiStringLine, Builder, ServeUpdate, WebServer},
     BuildRequest, BuildStage, BuildUpdate, Platform, RustcDetails, ServeArgs, TraceContent,
     TraceMsg, TraceSrc,
 };
@@ -25,6 +25,8 @@ use std::{
     time::Duration,
 };
 use tracing::Level;
+
+use super::AppRunner;
 
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 100;
@@ -70,16 +72,15 @@ pub struct Output {
 #[allow(unused)]
 #[derive(Clone, Copy)]
 struct RenderState<'a> {
-    serve: &'a Serve,
+    runner: &'a AppRunner,
     server: &'a WebServer,
-    watcher: &'a Watcher,
 }
 
 impl Output {
-    pub(crate) async fn start(plan: &Serve) -> crate::Result<Self> {
+    pub(crate) async fn start(runner: &AppRunner) -> crate::Result<Self> {
         let mut output = Self {
             term: Rc::new(RefCell::new(None)),
-            interactive: plan.args.is_interactive_tty(),
+            interactive: runner.args.is_interactive_tty(),
             dx_version: format!(
                 "{}-{}",
                 env!("CARGO_PKG_VERSION"),
@@ -385,7 +386,7 @@ impl Output {
     }
 
     /// Render the current state of everything to the console screen
-    pub fn render(&mut self, state: &Serve, server: &WebServer, watcher: &Watcher) {
+    pub fn render(&mut self, runner: &AppRunner, server: &WebServer) {
         if !self.interactive {
             return;
         }
@@ -402,14 +403,7 @@ impl Output {
 
         // Then, draw the frame, passing along all the state of the TUI so we can render it properly
         _ = term.draw(|frame| {
-            self.render_frame(
-                frame,
-                RenderState {
-                    serve: state,
-                    server,
-                    watcher,
-                },
-            );
+            self.render_frame(frame, RenderState { runner, server });
         });
     }
 
@@ -482,34 +476,34 @@ impl Output {
         self.render_single_gauge(
             frame,
             app_progress,
-            state.build_engine.compile_progress(),
+            state.runner.compile_progress(),
             "App:    ",
             state,
-            state.build_engine.compile_duration(),
+            state.runner.compile_duration(),
         );
 
-        if state.build_engine.request.fullstack {
+        if state.runner.request.fullstack {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                state.build_engine.server_compile_progress(),
+                state.runner.server_compile_progress(),
                 "Server: ",
                 state,
-                state.build_engine.compile_duration(),
+                state.runner.compile_duration(),
             );
         } else {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                state.build_engine.bundle_progress(),
+                state.runner.bundle_progress(),
                 "Bundle: ",
                 state,
-                state.build_engine.bundle_duration(),
+                state.runner.bundle_duration(),
             );
         }
 
         let mut lines = vec!["Status:  ".white()];
-        match &state.build_engine.stage {
+        match &state.runner.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
             BuildStage::Starting { patch, .. } => {
                 if *patch {
@@ -549,9 +543,9 @@ impl Output {
             }
             BuildStage::Success => {
                 lines.push("Serving ".yellow());
-                lines.push(state.serve.app_name().white());
+                lines.push(state.runner.app_name().white());
                 lines.push(" 🚀 ".green());
-                if let Some(comp_time) = state.build_engine.total_build_time() {
+                if let Some(comp_time) = state.runner.total_build_time() {
                     lines.push(format!("{:.1}s", comp_time.as_secs_f32()).dark_gray());
                 }
             }
@@ -573,7 +567,7 @@ impl Output {
         state: RenderState,
         time_taken: Option<Duration>,
     ) {
-        let failed = state.build_engine.stage == BuildStage::Failed;
+        let failed = state.runner.stage == BuildStage::Failed;
         let value = if failed { 1.0 } else { value.clamp(0.0, 1.0) };
 
         let [gauge_row, _, icon] = Layout::horizontal([
@@ -647,7 +641,7 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
-                self.platform.expected_name().yellow(),
+                state.runner.platform.expected_name().yellow(),
                 if state.build.build_arguments.fullstack {
                     " + fullstack".yellow()
                 } else {
@@ -685,7 +679,7 @@ impl Output {
             Paragraph::new(Line::from({
                 let mut lines = vec!["App features: ".gray(), "[".yellow()];
 
-                let feature_list: Vec<String> = state.build_engine.request.all_target_features();
+                let feature_list: Vec<String> = state.runner.request.all_target_features();
                 let num_features = feature_list.len();
 
                 for (idx, feature) in feature_list.into_iter().enumerate() {
