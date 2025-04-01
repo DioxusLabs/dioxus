@@ -1,5 +1,5 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-use crate::{AppBundle, BuildRequest, BuildStage, Platform, TraceSrc};
+use crate::{BuildArtifacts, BuildRequest, BuildStage, Platform, TraceSrc};
 use cargo_metadata::CompilerMessage;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::path::PathBuf;
@@ -11,7 +11,7 @@ pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 pub(crate) enum BuildUpdate {
     Progress { stage: BuildStage },
     CompilerMessage { message: CompilerMessage },
-    BuildReady { bundle: AppBundle },
+    BuildReady { bundle: BuildArtifacts },
     BuildFailed { err: crate::Error },
 }
 

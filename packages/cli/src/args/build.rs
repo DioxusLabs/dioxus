@@ -112,12 +112,12 @@ impl BuildArgs {
             .await
             .context("Failed to load Dioxus workspace")?;
 
-        let bundle = Builder::start(&build)?.finish().await?;
+        Builder::start(&build)?.finish().await?;
 
-        tracing::info!(path = ?bundle.build.root_dir(), "Build completed successfully! 🚀");
+        tracing::info!(path = ?build.root_dir(), "Build completed successfully! 🚀");
 
         Ok(StructuredOutput::BuildFinished {
-            path: bundle.build.root_dir(),
+            path: build.root_dir(),
         })
     }
 }

@@ -5,11 +5,11 @@ use crate::error::Result;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
-use super::AppBundle;
+use super::BuildArtifacts;
 
 const DEFAULT_HTML: &str = include_str!("../../assets/web/dev.index.html");
 
-impl AppBundle {
+impl BuildArtifacts {
     pub(crate) fn prepare_html(&self) -> Result<String> {
         let mut html = {
             let crate_root: &Path = &self.build.crate_dir();

@@ -1,5 +1,5 @@
 use super::{AppHandle, ServeUpdate, WebServer};
-use crate::{AppBundle, BuildMode, BuildRequest, Platform, ReloadKind, Result, TraceSrc};
+use crate::{BuildArtifacts, BuildMode, BuildRequest, Platform, ReloadKind, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
@@ -82,7 +82,7 @@ impl AppRunner {
     /// Finally "bundle" this app and return a handle to it
     pub(crate) async fn open(
         &mut self,
-        app: AppBundle,
+        app: BuildArtifacts,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
         should_open_web: bool,
@@ -464,7 +464,10 @@ impl AppRunner {
     //     _ = std::fs::create_dir_all(&cache_dir);
     // }
 
-    pub async fn patch(&mut self, bundle: &AppBundle) -> Result<subsecond_cli_support::JumpTable> {
+    pub async fn patch(
+        &mut self,
+        bundle: &BuildArtifacts,
+    ) -> Result<subsecond_cli_support::JumpTable> {
         let original = self.running.as_ref().unwrap().app.main_exe();
         let new = bundle.patch_exe();
 

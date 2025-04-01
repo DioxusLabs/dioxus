@@ -1,4 +1,4 @@
-use crate::{AppBundle, BuildArgs, BuildRequest, Builder, Platform};
+use crate::{BuildArgs, BuildRequest, Builder, Platform};
 use anyhow::{anyhow, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -70,19 +70,19 @@ impl Bundle {
         let bundle = Builder::start(&build)?.finish().await?;
 
         // If we're building for iOS, we need to bundle the iOS bundle
-        if bundle.build.platform == Platform::Ios && self.package_types.is_none() {
+        if build.platform == Platform::Ios && self.package_types.is_none() {
             self.package_types = Some(vec![crate::PackageType::IosBundle]);
         }
 
         let mut bundles = vec![];
 
         // Copy the server over if it exists
-        if bundle.build.fullstack {
+        if build.fullstack {
             bundles.push(bundle.server_exe().unwrap());
         }
 
         // Create a list of bundles that we might need to copy
-        match bundle.build.platform {
+        match build.platform {
             // By default, mac/win/linux work with tauri bundle
             Platform::MacOS | Platform::Linux | Platform::Windows => {
                 tracing::info!("Running desktop bundler...");
@@ -92,16 +92,16 @@ impl Bundle {
             }
 
             // Web/ios can just use their root_dir
-            Platform::Web => bundles.push(bundle.build.root_dir()),
+            Platform::Web => bundles.push(build.root_dir()),
             Platform::Ios => {
                 tracing::warn!("iOS bundles are not currently codesigned! You will need to codesign the app before distributing.");
-                bundles.push(bundle.build.root_dir())
+                bundles.push(build.root_dir())
             }
-            Platform::Server => bundles.push(bundle.build.root_dir()),
-            Platform::Liveview => bundles.push(bundle.build.root_dir()),
+            Platform::Server => bundles.push(build.root_dir()),
+            Platform::Liveview => bundles.push(build.root_dir()),
 
             Platform::Android => {
-                let aab = bundle
+                let aab = build
                     .android_gradle_bundle()
                     .await
                     .context("Failed to run gradle bundleRelease")?;
@@ -110,7 +110,7 @@ impl Bundle {
         };
 
         // Copy the bundles to the output directory if one was specified
-        let crate_outdir = bundle.build.crate_out_dir();
+        let crate_outdir = build.crate_out_dir();
         if let Some(outdir) = self.out_dir.clone().or(crate_outdir) {
             let outdir = outdir
                 .absolutize()
@@ -154,30 +154,27 @@ impl Bundle {
     }
 
     fn bundle_desktop(
-        bundle: &AppBundle,
+        build: &BuildRequest,
         package_types: &Option<Vec<crate::PackageType>>,
     ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
-        let krate = &bundle.build;
+        let krate = &build;
 
-        _ = std::fs::remove_dir_all(krate.bundle_dir(bundle.build.platform));
+        _ = std::fs::remove_dir_all(krate.bundle_dir(build.platform));
 
         let package = krate.package();
         let mut name: PathBuf = krate.executable_name().into();
         if cfg!(windows) {
             name.set_extension("exe");
         }
-        std::fs::create_dir_all(krate.bundle_dir(bundle.build.platform))
+        std::fs::create_dir_all(krate.bundle_dir(build.platform))
             .context("Failed to create bundle directory")?;
-        std::fs::copy(
-            &bundle.app.exe,
-            krate.bundle_dir(bundle.build.platform).join(&name),
-        )
-        .with_context(|| "Failed to copy the output executable into the bundle directory")?;
+        std::fs::copy(&build.exe, krate.bundle_dir(build.platform).join(&name))
+            .with_context(|| "Failed to copy the output executable into the bundle directory")?;
 
         let binaries = vec![
             // We use the name of the exe but it has to be in the same directory
             BundleBinary::new(krate.executable_name().to_string(), true)
-                .set_src_path(Some(bundle.app.exe.display().to_string())),
+                .set_src_path(Some(build.exe.display().to_string())),
         ];
 
         let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
@@ -208,7 +205,7 @@ impl Bundle {
             bundle_settings.resources_map = Some(HashMap::new());
         }
 
-        let asset_dir = bundle.build.asset_dir();
+        let asset_dir = build.asset_dir();
         if asset_dir.exists() {
             let asset_dir_entries = std::fs::read_dir(&asset_dir)
                 .with_context(|| format!("failed to read asset directory {:?}", asset_dir))?;
@@ -237,7 +234,7 @@ impl Bundle {
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(krate.bundle_dir(bundle.build.platform))
+            .project_out_directory(krate.bundle_dir(build.platform))
             .package_settings(PackageSettings {
                 product_name: krate.bundled_app_name(),
                 version: package.version.to_string(),
@@ -254,7 +251,7 @@ impl Bundle {
             settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
         }
 
-        settings = settings.target(bundle.build.target.to_string());
+        settings = settings.target(build.target.to_string());
 
         let settings = settings
             .build()

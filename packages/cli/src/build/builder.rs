@@ -1,6 +1,6 @@
 use crate::{
-    AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, ProgressRx, ProgressTx, Result,
-    StructuredOutput,
+    BuildArgs, BuildArtifacts, BuildRequest, BuildStage, BuildUpdate, ProgressRx, ProgressTx,
+    Result, StructuredOutput,
 };
 use std::{
     path::PathBuf,
@@ -19,7 +19,7 @@ use super::BuildMode;
 /// other metadata that gives us useful indicators for the UI.
 pub(crate) struct Builder {
     pub request: BuildRequest,
-    pub build: tokio::task::JoinHandle<Result<AppBundle>>,
+    pub build: tokio::task::JoinHandle<Result<BuildArtifacts>>,
     pub tx: ProgressTx,
     pub rx: ProgressRx,
 
@@ -246,7 +246,7 @@ impl Builder {
     ///
     /// todo(jon): maybe we want to do some logging here? The build/bundle/run screens could be made to
     /// use the TUI output for prettier outputs.
-    pub(crate) async fn finish(&mut self) -> Result<AppBundle> {
+    pub(crate) async fn finish(&mut self) -> Result<BuildArtifacts> {
         loop {
             match self.wait().await {
                 BuildUpdate::Progress { stage } => {

@@ -47,7 +47,7 @@ impl Serve {
     ///
     /// This will also run the fullstack build. Note that fullstack is handled separately within this
     /// code flow rather than outside of it.
-    pub(crate) async fn build_all(self) -> Result<AppBundle> {
+    pub(crate) async fn build_all(self) -> Result<BuildArtifacts> {
         tracing::debug!(
             "Running build command... {}",
             if self.force_sequential {

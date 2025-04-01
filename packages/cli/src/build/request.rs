@@ -1,7 +1,7 @@
-use super::{progress::ProgressTx, AndroidTools, BuildArtifacts, PatchData};
+use super::{progress::ProgressTx, AndroidTools, PatchData};
 use crate::{link::LinkAction, BuildArgs};
-use crate::{AppBundle, Platform, Result, TraceSrc};
 use crate::{DioxusConfig, Workspace};
+use crate::{Platform, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::AssetManifest;
@@ -9,12 +9,13 @@ use itertools::Itertools;
 use krates::{cm::TargetKind, KrateDetails, Krates, NodeId, Utf8PathBuf};
 use serde::Deserialize;
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     process::Stdio,
     sync::Arc,
     time::{Instant, SystemTime},
 };
-use target_lexicon::Triple;
+use target_lexicon::{Environment, Triple};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
 use uuid::Uuid;
@@ -108,6 +109,15 @@ pub enum BuildMode {
         changed_files: Vec<PathBuf>,
         aslr_reference: u64,
     },
+}
+
+/// The results of the build from cargo
+pub struct BuildArtifacts {
+    pub(crate) exe: PathBuf,
+    pub(crate) direct_rustc: Vec<String>,
+    pub(crate) time_start: SystemTime,
+    pub(crate) time_end: SystemTime,
+    pub(crate) assets: AssetManifest,
 }
 
 pub(crate) static PROFILE_WASM: &str = "wasm-dev";
@@ -376,9 +386,1109 @@ impl BuildRequest {
         // })
     }
 
+    pub(crate) async fn build(&self) -> Result<BuildArtifacts> {
+        // // Create the bundle in an incomplete state and fill it in
+        // let mut bundle = Self {
+        //     // server_assets: Default::default(),
+        //     // server,
+        //     build,
+        //     // exe: todo!(),
+        //     // app,
+        //     // direct_rustc: todo!(),
+        //     // time_start: todo!(),
+        //     // time_end: todo!(),
+        // };
+
+        let bundle = self;
+
+        // Run the cargo build to produce our artifacts
+        let exe = PathBuf::new();
+        let assets = AssetManifest::default();
+
+        // Now handle
+        match bundle.mode {
+            BuildMode::Base | BuildMode::Fat => {
+                tracing::debug!("Assembling app bundle");
+
+                bundle.status_start_bundle();
+                bundle
+                    .write_executable(&exe)
+                    .await
+                    .context("Failed to write main executable")?;
+                bundle
+                    .write_assets(&assets)
+                    .await
+                    .context("Failed to write assets")?;
+                bundle.write_metadata().await?;
+                bundle.optimize().await?;
+                bundle.pre_render_ssg_routes().await?;
+                bundle
+                    .assemble()
+                    .await
+                    .context("Failed to assemble app bundle")?;
+
+                tracing::debug!("Bundle created at {}", bundle.root_dir().display());
+            }
+
+            BuildMode::Thin { aslr_reference, .. } => {
+                tracing::debug!("Patching existing bundle");
+                bundle.write_patch(aslr_reference).await?;
+            }
+        }
+
+        todo!()
+    }
+
+    /// Traverse the target directory and collect all assets from the incremental cache
+    ///
+    /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
+    /// One day this system might break and we might need to go back to using the linker approach.
+    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
+        tracing::debug!("Collecting assets ...");
+
+        if self.skip_assets {
+            return Ok(AssetManifest::default());
+        }
+
+        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
+        let mut manifest = AssetManifest::default();
+
+        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
+        _ = manifest.add_from_object_path(exe);
+
+        Ok(manifest)
+    }
+
+    /// Take the output of rustc and make it into the main exe of the bundle
+    ///
+    /// For wasm, we'll want to run `wasm-bindgen` to make it a wasm binary along with some other optimizations
+    /// Other platforms we might do some stripping or other optimizations
+    /// Move the executable to the workdir
+    async fn write_executable(&self, exe: &Path) -> Result<()> {
+        match self.platform {
+            // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
+            // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
+            //
+            // The wasm stuff will be in a folder called "wasm" in the workdir.
+            //
+            // Final output format:
+            // ```
+            // dx/
+            //     app/
+            //         web/
+            //             bundle/
+            //             build/
+            //                 public/
+            //                     index.html
+            //                     wasm/
+            //                        app.wasm
+            //                        glue.js
+            //                        snippets/
+            //                            ...
+            //                     assets/
+            //                        logo.png
+            // ```
+            Platform::Web => {
+                self.bundle_web().await?;
+            }
+
+            // this will require some extra oomf to get the multi architecture builds...
+            // for now, we just copy the exe into the current arch (which, sorry, is hardcoded for my m1)
+            // we'll want to do multi-arch builds in the future, so there won't be *one* exe dir to worry about
+            // eventually `exe_dir` and `main_exe` will need to take in an arch and return the right exe path
+            //
+            // todo(jon): maybe just symlink this rather than copy it?
+            // we might want to eventually use the objcopy logic to handle this
+            //
+            // https://github.com/rust-mobile/xbuild/blob/master/xbuild/template/lib.rs
+            // https://github.com/rust-mobile/xbuild/blob/master/apk/src/lib.rs#L19
+            Platform::Android |
+
+            // These are all super simple, just copy the exe into the folder
+            // eventually, perhaps, maybe strip + encrypt the exe?
+            Platform::MacOS
+            | Platform::Windows
+            | Platform::Linux
+            | Platform::Ios
+            | Platform::Liveview
+            | Platform::Server => {
+                _ = std::fs::remove_dir_all(self.exe_dir());
+                std::fs::create_dir_all(self.exe_dir())?;
+                std::fs::copy(&exe, self.main_exe())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Copy the assets out of the manifest and into the target location
+    ///
+    /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
+    async fn write_assets(&self, assets: &AssetManifest) -> Result<()> {
+        // Server doesn't need assets - web will provide them
+        if self.platform == Platform::Server {
+            return Ok(());
+        }
+
+        let asset_dir = self.asset_dir();
+
+        // First, clear the asset dir of any files that don't exist in the new manifest
+        _ = tokio::fs::create_dir_all(&asset_dir).await;
+
+        // Create a set of all the paths that new files will be bundled to
+        let mut keep_bundled_output_paths: HashSet<_> = assets
+            .values()
+            .map(|a| asset_dir.join(a.bundled_path()))
+            .collect();
+
+        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
+        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
+        // all assets.
+        let version_file = self.asset_optimizer_version_file();
+        let clear_cache = std::fs::read_to_string(&version_file)
+            .ok()
+            .filter(|s| s == crate::VERSION.as_str())
+            .is_none();
+        if clear_cache {
+            keep_bundled_output_paths.clear();
+        }
+
+        // one possible implementation of walking a directory only visiting files
+        fn remove_old_assets<'a>(
+            path: &'a Path,
+            keep_bundled_output_paths: &'a HashSet<PathBuf>,
+        ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + 'a>> {
+            Box::pin(async move {
+                // If this asset is in the manifest, we don't need to remove it
+                let canon_path = dunce::canonicalize(path)?;
+                if keep_bundled_output_paths.contains(canon_path.as_path()) {
+                    return Ok(());
+                }
+
+                // Otherwise, if it is a directory, we need to walk it and remove child files
+                if path.is_dir() {
+                    for entry in std::fs::read_dir(path)?.flatten() {
+                        let path = entry.path();
+                        remove_old_assets(&path, keep_bundled_output_paths).await?;
+                    }
+                    if path.read_dir()?.next().is_none() {
+                        // If the directory is empty, remove it
+                        tokio::fs::remove_dir(path).await?;
+                    }
+                } else {
+                    // If it is a file, remove it
+                    tokio::fs::remove_file(path).await?;
+                }
+
+                Ok(())
+            })
+        }
+
+        tracing::debug!("Removing old assets");
+        tracing::trace!(
+            "Keeping bundled output paths: {:#?}",
+            keep_bundled_output_paths
+        );
+        remove_old_assets(&asset_dir, &keep_bundled_output_paths).await?;
+
+        // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
+        let mut assets_to_transfer = vec![];
+
+        // Queue the bundled assets
+        for (asset, bundled) in &self.assets.assets {
+            let from = asset.clone();
+            let to = asset_dir.join(bundled.bundled_path());
+
+            // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
+            let from_ = from
+                .strip_prefix(self.workspace_dir())
+                .unwrap_or(from.as_path());
+            let to_ = from
+                .strip_prefix(self.workspace_dir())
+                .unwrap_or(to.as_path());
+
+            tracing::debug!("Copying asset {from_:?} to {to_:?}");
+            assets_to_transfer.push((from, to, *bundled.options()));
+        }
+
+        // And then queue the legacy assets
+        // ideally, one day, we can just check the rsx!{} calls for references to assets
+        for from in self.legacy_asset_dir_files() {
+            let to = asset_dir.join(from.file_name().unwrap());
+            tracing::debug!("Copying legacy asset {from:?} to {to:?}");
+            assets_to_transfer.push((from, to, AssetOptions::Unknown));
+        }
+
+        let asset_count = assets_to_transfer.len();
+        let started_processing = AtomicUsize::new(0);
+        let copied = AtomicUsize::new(0);
+
+        // Parallel Copy over the assets and keep track of progress with an atomic counter
+        let progress = self.progress.clone();
+        let ws_dir = self.workspace_dir();
+        // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
+        tokio::task::spawn_blocking(move || {
+            assets_to_transfer
+                .par_iter()
+                .try_for_each(|(from, to, options)| {
+                    let processing = started_processing.fetch_add(1, Ordering::SeqCst);
+                    let from_ = from.strip_prefix(&ws_dir).unwrap_or(from);
+                    tracing::trace!(
+                        "Starting asset copy {processing}/{asset_count} from {from_:?}"
+                    );
+
+                    let res = process_file_to(options, from, to);
+                    if let Err(err) = res.as_ref() {
+                        tracing::error!("Failed to copy asset {from:?}: {err}");
+                    }
+
+                    let finished = copied.fetch_add(1, Ordering::SeqCst);
+                    BuildRequest::status_copied_asset(
+                        &progress,
+                        finished,
+                        asset_count,
+                        from.to_path_buf(),
+                    );
+
+                    res.map(|_| ())
+                })
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("A task failed while trying to copy assets: {e}"))??;
+
+        // // Remove the wasm bindgen output directory if it exists
+        // _ = std::fs::remove_dir_all(self.wasm_bindgen_out_dir());
+
+        // Write the version file so we know what version of the optimizer we used
+        std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
+
+        Ok(())
+    }
+
+    /// libpatch-{time}.(so/dll/dylib) (next to the main exe)
+    pub fn patch_exe(&self) -> PathBuf {
+        let path = self.main_exe().with_file_name(format!(
+            "libpatch-{}",
+            self.time_start
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis(),
+        ));
+
+        let extension = match self.target.operating_system {
+            OperatingSystem::Darwin(_) => "dylib",
+            OperatingSystem::MacOSX(_) => "dylib",
+            OperatingSystem::IOS(_) => "dylib",
+            OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
+            OperatingSystem::Windows => "dll",
+            OperatingSystem::Linux => "so",
+            OperatingSystem::Wasi => "wasm",
+            _ => "",
+        };
+
+        path.with_extension(extension)
+    }
+
+    /// Run our custom linker setup to generate a patch file in the right location
+    async fn write_patch(&self, aslr_reference: u64) -> Result<()> {
+        let raw_args = std::fs::read_to_string(&self.link_args_file())
+            .context("Failed to read link args from file")?;
+
+        let args = raw_args.lines().collect::<Vec<_>>();
+
+        let orig_exe = self.main_exe();
+        tracing::debug!("writing patch - orig_exe: {:?}", orig_exe);
+
+        let object_files = args
+            .iter()
+            .filter(|arg| arg.ends_with(".rcgu.o"))
+            .sorted()
+            .map(|arg| PathBuf::from(arg))
+            .collect::<Vec<_>>();
+
+        let resolved_patch_bytes = subsecond_cli_support::resolve_undefined(
+            &orig_exe,
+            &object_files,
+            &self.target,
+            aslr_reference,
+        )
+        .expect("failed to resolve patch symbols");
+
+        let patch_file = self.main_exe().with_file_name("patch-syms.o");
+        std::fs::write(&patch_file, resolved_patch_bytes)?;
+
+        let linker = match self.platform {
+            Platform::Web => self.workspace.wasm_ld(),
+            Platform::Android => {
+                let tools =
+                    crate::build::android_tools().context("Could not determine android tools")?;
+                tools.android_cc(&self.target)
+            }
+
+            // Note that I think rust uses rust-lld
+            // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
+            Platform::MacOS
+            | Platform::Ios
+            | Platform::Linux
+            | Platform::Server
+            | Platform::Liveview => PathBuf::from("cc"),
+
+            // I think this is right?? does windows use cc?
+            Platform::Windows => PathBuf::from("cc"),
+        };
+
+        let thin_args = self.thin_link_args(&args, aslr_reference)?;
+
+        // let mut env_vars = vec![];
+        // self.build_android_env(&mut env_vars, false)?;
+
+        // todo: we should throw out symbols that we don't need and/or assemble them manually
+        // also we should make sure to propagate the right arguments (target, sysroot, etc)
+        //
+        // also, https://developer.apple.com/forums/thread/773907
+        //       -undefined,dynamic_lookup is deprecated for ios but supposedly cpython is using it
+        //       we might need to link a new patch file that implements the lookups
+        let res = Command::new(linker)
+            .args(object_files.iter())
+            .arg(patch_file)
+            .args(thin_args)
+            .arg("-v")
+            .arg("-o") // is it "-o" everywhere?
+            .arg(&self.patch_exe())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+
+        let errs = String::from_utf8_lossy(&res.stderr);
+        if !errs.is_empty() {
+            if !self.patch_exe().exists() {
+                tracing::error!("Failed to generate patch: {}", errs.trim());
+            } else {
+                tracing::debug!("Warnings during thin linking: {}", errs.trim());
+            }
+        }
+
+        if self.platform == Platform::Web {}
+
+        // // Clean up the temps manually
+        // // todo: we might want to keep them around for debugging purposes
+        // for file in object_files {
+        //     _ = std::fs::remove_file(file);
+        // }
+
+        // Also clean up the original fat file since that's causing issues with rtld_global
+        // todo: this might not be platform portable
+        let link_orig = args
+            .iter()
+            .position(|arg| *arg == "-o")
+            .expect("failed to find -o");
+        let link_file: PathBuf = args[link_orig + 1].clone().into();
+        _ = std::fs::remove_file(&link_file);
+
+        Ok(())
+    }
+
+    fn thin_link_args(&self, original_args: &[&str], aslr_reference: u64) -> Result<Vec<String>> {
+        use target_lexicon::OperatingSystem;
+
+        let triple = self.target.clone();
+        let mut args = vec![];
+
+        tracing::debug!("original args:\n{}", original_args.join("\n"));
+
+        match triple.operating_system {
+            // wasm32-unknown-unknown
+            // use wasm-ld (gnu-lld)
+            OperatingSystem::Unknown if self.platform == Platform::Web => {
+                const WASM_PAGE_SIZE: u64 = 65536;
+                let table_base = 2000 * (aslr_reference + 1);
+                let global_base =
+                    ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
+                tracing::info!(
+                    "using aslr of table: {} and global: {}",
+                    table_base,
+                    global_base
+                );
+
+                args.extend([
+                    // .arg("-z")
+                    // .arg("stack-size=1048576")
+                    "--import-memory".to_string(),
+                    "--import-table".to_string(),
+                    "--growable-table".to_string(),
+                    "--export".to_string(),
+                    "main".to_string(),
+                    "--export-all".to_string(),
+                    "--stack-first".to_string(),
+                    "--allow-undefined".to_string(),
+                    "--no-demangle".to_string(),
+                    "--no-entry".to_string(),
+                    "--emit-relocs".to_string(),
+                    // todo: we need to modify the post-processing code
+                    format!("--table-base={}", table_base).to_string(),
+                    format!("--global-base={}", global_base).to_string(),
+                ]);
+            }
+
+            // this uses "cc" and these args need to be ld compatible
+            // aarch64-apple-ios
+            // aarch64-apple-darwin
+            OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
+                args.extend([
+                    "-Wl,-dylib".to_string(),
+                    // "-Wl,-export_dynamic".to_string(),
+                    // "-Wl,-unexported_symbol,_main".to_string(),
+                    // "-Wl,-undefined,dynamic_lookup".to_string(),
+                ]);
+
+                match triple.architecture {
+                    target_lexicon::Architecture::Aarch64(_) => {
+                        args.push("-arch".to_string());
+                        args.push("arm64".to_string());
+                    }
+                    target_lexicon::Architecture::X86_64 => {
+                        args.push("-arch".to_string());
+                        args.push("x86_64".to_string());
+                    }
+                    _ => {}
+                }
+            }
+
+            // android/linux
+            // need to be compatible with lld
+            OperatingSystem::Linux if triple.environment == Environment::Android => {
+                args.extend(
+                    [
+                        "-shared".to_string(),
+                        "-Wl,--eh-frame-hdr".to_string(),
+                        "-Wl,-z,noexecstack".to_string(),
+                        "-landroid".to_string(),
+                        "-llog".to_string(),
+                        "-lOpenSLES".to_string(),
+                        "-landroid".to_string(),
+                        "-ldl".to_string(),
+                        "-ldl".to_string(),
+                        "-llog".to_string(),
+                        "-lunwind".to_string(),
+                        "-ldl".to_string(),
+                        "-lm".to_string(),
+                        "-lc".to_string(),
+                        "-Wl,-z,relro,-z,now".to_string(),
+                        "-nodefaultlibs".to_string(),
+                        "-Wl,-Bdynamic".to_string(),
+                    ]
+                    .iter()
+                    .map(|s| s.to_string()),
+                );
+
+                match triple.architecture {
+                    target_lexicon::Architecture::Aarch64(_) => {
+                        // args.push("-Wl,--target=aarch64-linux-android".to_string());
+                    }
+                    target_lexicon::Architecture::X86_64 => {
+                        // args.push("-Wl,--target=x86_64-linux-android".to_string());
+                    }
+                    _ => {}
+                }
+            }
+
+            OperatingSystem::Linux => {
+                args.extend([
+                    "-Wl,--eh-frame-hdr".to_string(),
+                    "-Wl,-z,noexecstack".to_string(),
+                    "-Wl,-z,relro,-z,now".to_string(),
+                    "-nodefaultlibs".to_string(),
+                    "-Wl,-Bdynamic".to_string(),
+                ]);
+            }
+
+            OperatingSystem::Windows => {}
+
+            _ => return Err(anyhow::anyhow!("Unsupported platform for thin linking").into()),
+        }
+
+        let extract_value = |arg: &str| -> Option<String> {
+            original_args
+                .iter()
+                .position(|a| *a == arg)
+                .map(|i| original_args[i + 1].to_string())
+        };
+
+        if let Some(vale) = extract_value("-target") {
+            args.push("-target".to_string());
+            args.push(vale);
+        }
+
+        if let Some(vale) = extract_value("-isysroot") {
+            args.push("-isysroot".to_string());
+            args.push(vale);
+        }
+
+        tracing::info!("final args:{:#?}", args);
+
+        Ok(args)
+    }
+
+    /// The item that we'll try to run directly if we need to.
+    ///
+    /// todo(jon): we should name the app properly instead of making up the exe name. It's kinda okay for dev mode, but def not okay for prod
+    pub fn main_exe(&self) -> PathBuf {
+        self.exe_dir().join(self.platform_exe_name())
+    }
+
+    /// We always put the server in the `web` folder!
+    /// Only the `web` target will generate a `public` folder though
+    async fn write_server_executable(&self) -> Result<()> {
+        if let Some(server) = &self.server {
+            let to = self
+                .server_exe()
+                .expect("server should be set if we're building a server");
+
+            std::fs::create_dir_all(self.server_exe().unwrap().parent().unwrap())?;
+
+            tracing::debug!("Copying server executable to: {to:?} {server:#?}");
+
+            // Remove the old server executable if it exists, since copying might corrupt it :(
+            // todo(jon): do this in more places, I think
+            _ = std::fs::remove_file(&to);
+            std::fs::copy(&server.exe, to)?;
+        }
+
+        Ok(())
+    }
+
+    /// todo(jon): use handlebars templates instead of these prebaked templates
+    async fn write_metadata(&self) -> Result<()> {
+        // write the Info.plist file
+        match self.platform {
+            Platform::MacOS => {
+                let dest = self.root_dir().join("Contents").join("Info.plist");
+                let plist = self.macos_plist_contents()?;
+                std::fs::write(dest, plist)?;
+            }
+
+            Platform::Ios => {
+                let dest = self.root_dir().join("Info.plist");
+                let plist = self.ios_plist_contents()?;
+                std::fs::write(dest, plist)?;
+            }
+
+            // AndroidManifest.xml
+            // er.... maybe even all the kotlin/java/gradle stuff?
+            Platform::Android => {}
+
+            // Probably some custom format or a plist file (haha)
+            // When we do the proper bundle, we'll need to do something with wix templates, I think?
+            Platform::Windows => {}
+
+            // eventually we'll create the .appimage file, I guess?
+            Platform::Linux => {}
+
+            // These are served as folders, not appimages, so we don't need to do anything special (I think?)
+            // Eventually maybe write some secrets/.env files for the server?
+            // We could also distribute them as a deb/rpm for linux and msi for windows
+            Platform::Web => {}
+            Platform::Server => {}
+            Platform::Liveview => {}
+        }
+
+        Ok(())
+    }
+
+    /// Run the optimizers, obfuscators, minimizers, signers, etc
+    pub(crate) async fn optimize(&self) -> Result<()> {
+        match self.platform {
+            Platform::Web => {
+                // Compress the asset dir
+                // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
+                let pre_compress = self.should_pre_compress_web_assets(self.release);
+
+                self.status_compressing_assets();
+                let asset_dir = self.asset_dir();
+                tokio::task::spawn_blocking(move || {
+                    crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
+                })
+                .await
+                .unwrap()?;
+            }
+            Platform::MacOS => {}
+            Platform::Windows => {}
+            Platform::Linux => {}
+            Platform::Ios => {}
+            Platform::Android => {}
+            Platform::Server => {}
+            Platform::Liveview => {}
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn server_exe(&self) -> Option<PathBuf> {
+        if let Some(_server) = &self.server {
+            let mut path = self.build_dir(Platform::Server, self.release);
+
+            if cfg!(windows) {
+                path.push("server.exe");
+            } else {
+                path.push("server");
+            }
+
+            return Some(path);
+        }
+
+        None
+    }
+
+    /// Bundle the web app
+    /// - Run wasm-bindgen
+    /// - Bundle split
+    /// - Run wasm-opt
+    /// - Register the .wasm and .js files with the asset system
+    async fn bundle_web(&self) -> Result<()> {
+        use crate::{wasm_bindgen::WasmBindgen, wasm_opt};
+        use std::fmt::Write;
+
+        // Locate the output of the build files and the bindgen output
+        // We'll fill these in a second if they don't already exist
+        let bindgen_outdir = self.wasm_bindgen_out_dir();
+        let prebindgen = self.exe.clone();
+        let post_bindgen_wasm = self.wasm_bindgen_wasm_output_file();
+        let should_bundle_split = self.wasm_split;
+        let rustc_exe = self.exe.with_extension("wasm");
+        let bindgen_version = self
+            .build
+            .wasm_bindgen_version()
+            .expect("this should have been checked by tool verification");
+
+        // Prepare any work dirs
+        std::fs::create_dir_all(&bindgen_outdir)?;
+
+        // Prepare our configuration
+        //
+        // we turn off debug symbols in dev mode but leave them on in release mode (weird!) since
+        // wasm-opt and wasm-split need them to do better optimizations.
+        //
+        // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
+        // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
+        let will_wasm_opt =
+            (self.release || self.wasm_split) && crate::wasm_opt::wasm_opt_available();
+        let keep_debug = self.config.web.wasm_opt.debug
+            || self.debug_symbols
+            || self.wasm_split
+            || !self.release
+            || will_wasm_opt;
+        let demangle = false;
+        let wasm_opt_options = WasmOptConfig {
+            memory_packing: self.wasm_split,
+            debug: self.debug_symbols,
+            ..self.config.web.wasm_opt.clone()
+        };
+
+        // Run wasm-bindgen. Some of the options are not "optimal" but will be fixed up by wasm-opt
+        //
+        // There's performance implications here. Running with --debug is slower than without
+        // We're keeping around lld sections and names but wasm-opt will fix them
+        // todo(jon): investigate a good balance of wiping debug symbols during dev (or doing a double build?)
+        self.status_wasm_bindgen_start();
+        tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
+        let start = std::time::Instant::now();
+        WasmBindgen::new(&bindgen_version)
+            .input_path(&rustc_exe)
+            .target("web")
+            .debug(keep_debug)
+            .demangle(demangle)
+            .keep_debug(keep_debug)
+            .keep_lld_sections(true)
+            .out_name(self.executable_name())
+            .out_dir(&bindgen_outdir)
+            .remove_name_section(!will_wasm_opt)
+            .remove_producers_section(!will_wasm_opt)
+            .run()
+            .await
+            .context("Failed to generate wasm-bindgen bindings")?;
+        tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
+
+        // Run bundle splitting if the user has requested it
+        // It's pretty expensive but because of rayon should be running separate threads, hopefully
+        // not blocking this thread. Dunno if that's true
+        if should_bundle_split {
+            self.status_splitting_bundle();
+
+            if !will_wasm_opt {
+                return Err(anyhow::anyhow!(
+                    "Bundle splitting requires wasm-opt to be installed or the CLI to be built with `--features optimizations`. Please install wasm-opt and try again."
+                )
+                .into());
+            }
+
+            // Load the contents of these binaries since we need both of them
+            // We're going to use the default makeLoad glue from wasm-split
+            let original = std::fs::read(&prebindgen)?;
+            let bindgened = std::fs::read(&post_bindgen_wasm)?;
+            let mut glue = wasm_split_cli::MAKE_LOAD_JS.to_string();
+
+            // Run the emitter
+            let splitter = wasm_split_cli::Splitter::new(&original, &bindgened);
+            let modules = splitter
+                .context("Failed to parse wasm for splitter")?
+                .emit()
+                .context("Failed to emit wasm split modules")?;
+
+            // Write the chunks that contain shared imports
+            // These will be in the format of chunk_0_modulename.wasm - this is hardcoded in wasm-split
+            tracing::debug!("Writing split chunks to disk");
+            for (idx, chunk) in modules.chunks.iter().enumerate() {
+                let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
+                wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
+                writeln!(
+                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
+                    url = self
+                        .assets
+                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+                )?;
+            }
+
+            // Write the modules that contain the entrypoints
+            tracing::debug!("Writing split modules to disk");
+            for (idx, module) in modules.modules.iter().enumerate() {
+                let comp_name = module
+                    .component_name
+                    .as_ref()
+                    .context("generated bindgen module has no name?")?;
+
+                let path = bindgen_outdir.join(format!("module_{}_{}.wasm", idx, comp_name));
+                wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options).await?;
+
+                let hash_id = module.hash_id.as_ref().unwrap();
+
+                writeln!(
+                    glue,
+                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    module = module.module_name,
+
+
+                    // Again, register this wasm with the asset system
+                    url = self
+                        .assets
+                        .register_asset(&path, AssetOptions::Unknown)?.bundled_path(),
+
+                    // This time, make sure to write the dependencies of this chunk
+                    // The names here are again, hardcoded in wasm-split - fix this eventually.
+                    deps = module
+                        .relies_on_chunks
+                        .iter()
+                        .map(|idx| format!("__wasm_split_load_chunk_{idx}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )?;
+            }
+
+            // Write the js binding
+            // It's not registered as an asset since it will get included in the main.js file
+            let js_output_path = bindgen_outdir.join("__wasm_split.js");
+            std::fs::write(&js_output_path, &glue)?;
+
+            // Make sure to write some entropy to the main.js file so it gets a new hash
+            // If we don't do this, the main.js file will be cached and never pick up the chunk names
+            let uuid = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, glue.as_bytes());
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(self.wasm_bindgen_js_output_file())
+                .context("Failed to open main.js file")?
+                .write_all(format!("/*{uuid}*/").as_bytes())?;
+
+            // Write the main wasm_bindgen file and register it with the asset system
+            // This will overwrite the file in place
+            // We will wasm-opt it in just a second...
+            std::fs::write(&post_bindgen_wasm, modules.main.bytes)?;
+        }
+
+        // Make sure to optimize the main wasm file if requested or if bundle splitting
+        if should_bundle_split || self.release {
+            self.status_optimizing_wasm();
+            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
+        }
+
+        // Make sure to register the main wasm file with the asset system
+        self.assets
+            .register_asset(&post_bindgen_wasm, AssetOptions::Unknown)?;
+
+        // Register the main.js with the asset system so it bundles in the snippets and optimizes
+        self.assets.register_asset(
+            &self.wasm_bindgen_js_output_file(),
+            AssetOptions::Js(JsAssetOptions::new().with_minify(true).with_preload(true)),
+        )?;
+
+        // Write the index.html file with the pre-configured contents we got from pre-rendering
+        std::fs::write(self.root_dir().join("index.html"), self.prepare_html()?)?;
+
+        Ok(())
+    }
+
+    async fn pre_render_ssg_routes(&self) -> Result<()> {
+        // Run SSG and cache static routes
+        if !self.ssg {
+            return Ok(());
+        }
+        self.status_prerendering_routes();
+        pre_render_static_routes(
+            &self
+                .server_exe()
+                .context("Failed to find server executable")?,
+        )
+        .await?;
+        Ok(())
+    }
+
+    fn macos_plist_contents(&self) -> Result<String> {
+        handlebars::Handlebars::new()
+            .render_template(
+                include_str!("../../assets/macos/mac.plist.hbs"),
+                &InfoPlistData {
+                    display_name: self.bundled_app_name(),
+                    bundle_name: self.bundled_app_name(),
+                    executable_name: self.platform_exe_name(),
+                    bundle_identifier: self.bundle_identifier(),
+                },
+            )
+            .map_err(|e| e.into())
+    }
+
+    fn ios_plist_contents(&self) -> Result<String> {
+        handlebars::Handlebars::new()
+            .render_template(
+                include_str!("../../assets/ios/ios.plist.hbs"),
+                &InfoPlistData {
+                    display_name: self.bundled_app_name(),
+                    bundle_name: self.bundled_app_name(),
+                    executable_name: self.platform_exe_name(),
+                    bundle_identifier: self.bundle_identifier(),
+                },
+            )
+            .map_err(|e| e.into())
+    }
+
+    /// Run any final tools to produce apks or other artifacts we might need.
+    ///
+    /// This might include codesigning, zipping, creating an appimage, etc
+    async fn assemble(&self) -> Result<()> {
+        if let Platform::Android = self.platform {
+            self.status_running_gradle();
+
+            let output = Command::new(self.gradle_exe()?)
+                .arg("assembleDebug")
+                .current_dir(self.root_dir())
+                .stderr(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .output()
+                .await?;
+
+            if !output.status.success() {
+                return Err(anyhow::anyhow!("Failed to assemble apk: {output:?}").into());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Run bundleRelease and return the path to the `.aab` file
+    ///
+    /// https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and
+    pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
+        let output = Command::new(self.gradle_exe()?)
+            .arg("bundleRelease")
+            .current_dir(self.root_dir())
+            .output()
+            .await
+            .context("Failed to run gradle bundleRelease")?;
+
+        if !output.status.success() {
+            return Err(anyhow::anyhow!("Failed to bundleRelease: {output:?}").into());
+        }
+
+        let app_release = self
+            .root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("bundle")
+            .join("release");
+
+        // Rename it to Name-arch.aab
+        let from = app_release.join("app-release.aab");
+        let to = app_release.join(format!("{}-{}.aab", self.bundled_app_name(), self.target));
+
+        std::fs::rename(from, &to).context("Failed to rename aab")?;
+
+        Ok(to)
+    }
+
+    fn gradle_exe(&self) -> Result<PathBuf> {
+        // make sure we can execute the gradlew script
+        #[cfg(unix)]
+        {
+            use std::os::unix::prelude::PermissionsExt;
+            std::fs::set_permissions(
+                self.root_dir().join("gradlew"),
+                std::fs::Permissions::from_mode(0o755),
+            )?;
+        }
+
+        let gradle_exec_name = match cfg!(windows) {
+            true => "gradlew.bat",
+            false => "gradlew",
+        };
+
+        Ok(self.root_dir().join(gradle_exec_name))
+    }
+
+    pub(crate) fn apk_path(&self) -> PathBuf {
+        self.root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("apk")
+            .join("debug")
+            .join("app-debug.apk")
+    }
+
+    /// We only really currently care about:
+    ///
+    /// - app dir (.app, .exe, .apk, etc)
+    /// - assetas dir
+    /// - exe dir (.exe, .app, .apk, etc)
+    /// - extra scaffolding
+    ///
+    /// It's not guaranteed that they're different from any other folder
+    fn prepare_build_dir(&self) -> Result<()> {
+        // self.prepare_build_dir()?;
+
+        use once_cell::sync::OnceCell;
+        use std::fs::{create_dir_all, remove_dir_all};
+
+        static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
+
+        let success = INITIALIZED.get_or_init(|| {
+            _ = remove_dir_all(self.exe_dir());
+
+            create_dir_all(self.root_dir())?;
+            create_dir_all(self.exe_dir())?;
+            create_dir_all(self.asset_dir())?;
+
+            tracing::debug!("Initialized Root dir: {:?}", self.root_dir());
+            tracing::debug!("Initialized Exe dir: {:?}", self.exe_dir());
+            tracing::debug!("Initialized Asset dir: {:?}", self.asset_dir());
+
+            // we could download the templates from somewhere (github?) but after having banged my head against
+            // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
+            // by writing them here.
+            if let Platform::Android = self.platform {
+                self.build_android_app_dir()?;
+            }
+
+            Ok(())
+        });
+
+        if let Err(e) = success.as_ref() {
+            return Err(format!("Failed to initialize build directory: {e}").into());
+        }
+
+        Ok(())
+    }
+
+    pub fn asset_dir(&self) -> PathBuf {
+        match self.platform {
+            Platform::MacOS => self
+                .root_dir()
+                .join("Contents")
+                .join("Resources")
+                .join("assets"),
+
+            Platform::Android => self
+                .root_dir()
+                .join("app")
+                .join("src")
+                .join("main")
+                .join("assets"),
+
+            // everyone else is soooo normal, just app/assets :)
+            Platform::Web
+            | Platform::Ios
+            | Platform::Windows
+            | Platform::Linux
+            | Platform::Server
+            | Platform::Liveview => self.root_dir().join("assets"),
+        }
+    }
+
+    pub fn incremental_cache_dir(&self) -> PathBuf {
+        self.platform_dir().join("incremental-cache")
+    }
+
+    pub fn link_args_file(&self) -> PathBuf {
+        self.incremental_cache_dir().join("link_args.txt")
+    }
+
+    /// The directory in which we'll put the main exe
+    ///
+    /// Mac, Android, Web are a little weird
+    /// - mac wants to be in Contents/MacOS
+    /// - android wants to be in jniLibs/arm64-v8a (or others, depending on the platform / architecture)
+    /// - web wants to be in wasm (which... we don't really need to, we could just drop the wasm into public and it would work)
+    ///
+    /// I think all others are just in the root folder
+    ///
+    /// todo(jon): investigate if we need to put .wasm in `wasm`. It kinda leaks implementation details, which ideally we don't want to do.
+    pub fn exe_dir(&self) -> PathBuf {
+        match self.platform {
+            Platform::MacOS => self.root_dir().join("Contents").join("MacOS"),
+            Platform::Web => self.root_dir().join("wasm"),
+
+            // Android has a whole build structure to it
+            Platform::Android => self
+                .root_dir()
+                .join("app")
+                .join("src")
+                .join("main")
+                .join("jniLibs")
+                .join(AndroidTools::android_jnilib(&self.target)),
+
+            // these are all the same, I think?
+            Platform::Windows
+            | Platform::Linux
+            | Platform::Ios
+            | Platform::Server
+            | Platform::Liveview => self.root_dir(),
+        }
+    }
+
+    /// Get the path to the wasm bindgen temporary output folder
+    pub fn wasm_bindgen_out_dir(&self) -> PathBuf {
+        self.root_dir().join("wasm")
+    }
+
+    /// Get the path to the wasm bindgen javascript output file
+    pub fn wasm_bindgen_js_output_file(&self) -> PathBuf {
+        self.wasm_bindgen_out_dir()
+            .join(self.executable_name())
+            .with_extension("js")
+    }
+
+    /// Get the path to the wasm bindgen wasm output file
+    pub fn wasm_bindgen_wasm_output_file(&self) -> PathBuf {
+        self.wasm_bindgen_out_dir()
+            .join(format!("{}_bg", self.executable_name()))
+            .with_extension("wasm")
+    }
+
+    /// Get the path to the asset optimizer version file
+    pub fn asset_optimizer_version_file(&self) -> PathBuf {
+        self.platform_dir().join(".cli-version")
+    }
+
     pub(crate) async fn cargo_build(&self) -> Result<BuildArtifacts> {
         let start = SystemTime::now();
-        self.prepare_build_dir()?;
 
         tracing::debug!("Executing cargo...");
 
@@ -502,6 +1612,7 @@ impl BuildRequest {
             direct_rustc,
             time_start: start,
             time_end: SystemTime::now(),
+            assets: Default::default(),
         })
     }
 
@@ -878,108 +1989,6 @@ impl BuildRequest {
         Ok(linker)
     }
 
-    /// We only really currently care about:
-    ///
-    /// - app dir (.app, .exe, .apk, etc)
-    /// - assetas dir
-    /// - exe dir (.exe, .app, .apk, etc)
-    /// - extra scaffolding
-    ///
-    /// It's not guaranteed that they're different from any other folder
-    fn prepare_build_dir(&self) -> Result<()> {
-        use once_cell::sync::OnceCell;
-        use std::fs::{create_dir_all, remove_dir_all};
-
-        static INITIALIZED: OnceCell<Result<()>> = OnceCell::new();
-
-        let success = INITIALIZED.get_or_init(|| {
-            _ = remove_dir_all(self.exe_dir());
-
-            create_dir_all(self.root_dir())?;
-            create_dir_all(self.exe_dir())?;
-            create_dir_all(self.asset_dir())?;
-
-            tracing::debug!("Initialized Root dir: {:?}", self.root_dir());
-            tracing::debug!("Initialized Exe dir: {:?}", self.exe_dir());
-            tracing::debug!("Initialized Asset dir: {:?}", self.asset_dir());
-
-            // we could download the templates from somewhere (github?) but after having banged my head against
-            // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
-            // by writing them here.
-            if let Platform::Android = self.platform {
-                self.build_android_app_dir()?;
-            }
-
-            Ok(())
-        });
-
-        if let Err(e) = success.as_ref() {
-            return Err(format!("Failed to initialize build directory: {e}").into());
-        }
-
-        Ok(())
-    }
-
-    pub fn incremental_cache_dir(&self) -> PathBuf {
-        self.platform_dir().join("incremental-cache")
-    }
-
-    pub fn link_args_file(&self) -> PathBuf {
-        self.incremental_cache_dir().join("link_args.txt")
-    }
-
-    /// The directory in which we'll put the main exe
-    ///
-    /// Mac, Android, Web are a little weird
-    /// - mac wants to be in Contents/MacOS
-    /// - android wants to be in jniLibs/arm64-v8a (or others, depending on the platform / architecture)
-    /// - web wants to be in wasm (which... we don't really need to, we could just drop the wasm into public and it would work)
-    ///
-    /// I think all others are just in the root folder
-    ///
-    /// todo(jon): investigate if we need to put .wasm in `wasm`. It kinda leaks implementation details, which ideally we don't want to do.
-    pub fn exe_dir(&self) -> PathBuf {
-        match self.platform {
-            Platform::MacOS => self.root_dir().join("Contents").join("MacOS"),
-            Platform::Web => self.root_dir().join("wasm"),
-
-            // Android has a whole build structure to it
-            Platform::Android => self
-                .root_dir()
-                .join("app")
-                .join("src")
-                .join("main")
-                .join("jniLibs")
-                .join(AndroidTools::android_jnilib(&self.target)),
-
-            // these are all the same, I think?
-            Platform::Windows
-            | Platform::Linux
-            | Platform::Ios
-            | Platform::Server
-            | Platform::Liveview => self.root_dir(),
-        }
-    }
-
-    /// Get the path to the wasm bindgen temporary output folder
-    pub fn wasm_bindgen_out_dir(&self) -> PathBuf {
-        self.root_dir().join("wasm")
-    }
-
-    /// Get the path to the wasm bindgen javascript output file
-    pub fn wasm_bindgen_js_output_file(&self) -> PathBuf {
-        self.wasm_bindgen_out_dir()
-            .join(self.executable_name())
-            .with_extension("js")
-    }
-
-    /// Get the path to the wasm bindgen wasm output file
-    pub fn wasm_bindgen_wasm_output_file(&self) -> PathBuf {
-        self.wasm_bindgen_out_dir()
-            .join(format!("{}_bg", self.executable_name()))
-            .with_extension("wasm")
-    }
-
     /// returns the path to root build folder. This will be our working directory for the build.
     ///
     /// we only add an extension to the folders where it sorta matters that it's named with the extension.
@@ -1014,36 +2023,6 @@ impl BuildRequest {
 
     pub(crate) fn platform_dir(&self) -> PathBuf {
         self.build_dir(self.platform, self.release)
-    }
-
-    pub fn asset_dir(&self) -> PathBuf {
-        match self.platform {
-            Platform::MacOS => self
-                .root_dir()
-                .join("Contents")
-                .join("Resources")
-                .join("assets"),
-
-            Platform::Android => self
-                .root_dir()
-                .join("app")
-                .join("src")
-                .join("main")
-                .join("assets"),
-
-            // everyone else is soooo normal, just app/assets :)
-            Platform::Web
-            | Platform::Ios
-            | Platform::Windows
-            | Platform::Linux
-            | Platform::Server
-            | Platform::Liveview => self.root_dir().join("assets"),
-        }
-    }
-
-    /// Get the path to the asset optimizer version file
-    pub fn asset_optimizer_version_file(&self) -> PathBuf {
-        self.platform_dir().join(".cli-version")
     }
 
     pub fn platform_exe_name(&self) -> String {
@@ -1899,6 +2878,14 @@ impl BuildRequest {
         let package = krates.nid_for_kid(kid).unwrap();
         Ok(package)
     }
+}
+
+#[derive(serde::Serialize)]
+pub struct InfoPlistData {
+    pub display_name: String,
+    pub bundle_name: String,
+    pub bundle_identifier: String,
+    pub executable_name: String,
 }
 
 // pub(crate) fn triple(&self) -> Triple {

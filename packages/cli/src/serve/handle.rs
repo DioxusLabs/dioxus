@@ -1,4 +1,4 @@
-use crate::{AppBundle, Platform, Result};
+use crate::{BuildArtifacts, BuildRequest, Platform, Result};
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use futures_util::future::OptionFuture;
@@ -26,23 +26,19 @@ use tokio::{
 ///
 /// todo: restructure this such that "open" is a running task instead of blocking the main thread
 pub(crate) struct AppHandle {
-    pub(crate) app: AppBundle,
+    pub(crate) app: BuildRequest,
 
     // These might be None if the app died or the user did not specify a server
     pub(crate) app_child: Option<Child>,
-    pub(crate) server_child: Option<Child>,
 
     // stdio for the app so we can read its stdout/stderr
     // we don't map stdin today (todo) but most apps don't need it
     pub(crate) app_stdout: Option<Lines<BufReader<ChildStdout>>>,
     pub(crate) app_stderr: Option<Lines<BufReader<ChildStderr>>>,
-    pub(crate) server_stdout: Option<Lines<BufReader<ChildStdout>>>,
-    pub(crate) server_stderr: Option<Lines<BufReader<ChildStderr>>>,
 
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
     pub(crate) entropy_app_exe: Option<PathBuf>,
-    pub(crate) entropy_server_exe: Option<PathBuf>,
 
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
@@ -69,23 +65,23 @@ pub enum HandleUpdate {
 }
 
 impl AppHandle {
-    pub async fn new(app: AppBundle) -> Result<Self> {
+    pub async fn new(app: BuildRequest) -> Result<Self> {
         Ok(AppHandle {
             app,
             runtime_asst_dir: None,
             app_child: None,
             app_stderr: None,
             app_stdout: None,
-            server_child: None,
-            server_stdout: None,
-            server_stderr: None,
             entropy_app_exe: None,
-            entropy_server_exe: None,
+            // server_child: None,
+            // server_stdout: None,
+            // server_stderr: None,
+            // entropy_server_exe: None,
         })
     }
 
     pub(crate) async fn wait(&mut self) -> HandleUpdate {
-        let platform = self.app.build.platform;
+        let platform = self.app.platform;
         use HandleUpdate::*;
         tokio::select! {
             Some(Ok(Some(msg))) = OptionFuture::from(self.app_stdout.as_mut().map(|f| f.next_line())) => {
@@ -128,7 +124,7 @@ impl AppHandle {
         start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
     ) -> Result<()> {
-        let krate = &self.app.build;
+        let krate = &self.app;
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
@@ -161,7 +157,7 @@ impl AppHandle {
             ("CARGO_MANIFEST_DIR", "".to_string()),
             (
                 dioxus_cli_config::SESSION_CACHE_DIR,
-                self.app.build.session_cache_dir().display().to_string(),
+                self.app.session_cache_dir().display().to_string(),
             ),
         ];
 
@@ -190,7 +186,7 @@ impl AppHandle {
         }
 
         // We try to use stdin/stdout to communicate with the app
-        let running_process = match self.app.build.platform {
+        let running_process = match self.app.platform {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
             // use use the websocket to communicate with it. I wish we could merge the concepts here,
             // like say, opening the socket as a subprocess, but alas, it's simpler to do that somewhere else.
@@ -312,13 +308,13 @@ impl AppHandle {
         // we won't actually be using the build dir.
         let asset_dir = match self.runtime_asst_dir.as_ref() {
             Some(dir) => dir.to_path_buf().join("assets/"),
-            None => self.app.build.asset_dir(),
+            None => self.app.asset_dir(),
         };
 
         tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
         // If the asset shares the same name in the bundle, reload that
-        if let Some(legacy_asset_dir) = self.app.build.legacy_asset_dir() {
+        if let Some(legacy_asset_dir) = self.app.legacy_asset_dir() {
             if changed_file.starts_with(&legacy_asset_dir) {
                 tracing::debug!("Hotreloading legacy asset {changed_file:?}");
                 let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
@@ -352,7 +348,7 @@ impl AppHandle {
         }
 
         // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-        if self.app.build.platform == Platform::Android {
+        if self.app.platform == Platform::Android {
             if let Some(bundled_name) = bundled_name.as_ref() {
                 _ = self
                     .copy_file_to_android_tmp(&changed_file, &bundled_name)
@@ -412,8 +408,8 @@ impl AppHandle {
     /// Check if we need to use https or not, and if so, add the protocol.
     /// Go to the basepath if that's set too.
     fn open_web(&self, address: SocketAddr) {
-        let base_path = self.app.build.config.web.app.base_path.clone();
-        let https = self.app.build.config.web.https.enabled.unwrap_or_default();
+        let base_path = self.app.config.web.app.base_path.clone();
+        let https = self.app.config.web.https.enabled.unwrap_or_default();
         let protocol = if https { "https" } else { "http" };
         let base_path = match base_path.as_deref() {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
@@ -431,16 +427,13 @@ impl AppHandle {
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
     async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        tracing::debug!(
-            "Installing app to simulator {:?}",
-            self.app.build.root_dir()
-        );
+        tracing::debug!("Installing app to simulator {:?}", self.app.root_dir());
 
         let res = Command::new("xcrun")
             .arg("simctl")
             .arg("install")
             .arg("booted")
-            .arg(self.app.build.root_dir())
+            .arg(self.app.root_dir())
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .output()
@@ -459,7 +452,7 @@ impl AppHandle {
             .arg("launch")
             .arg("--console")
             .arg("booted")
-            .arg(self.app.build.bundle_identifier())
+            .arg(self.app.bundle_identifier())
             .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
@@ -479,7 +472,7 @@ impl AppHandle {
     #[allow(unused)]
     async fn open_ios_device(&self) -> Result<()> {
         use serde_json::Value;
-        let app_path = self.app.build.root_dir();
+        let app_path = self.app.root_dir();
 
         install_app(&app_path).await?;
 
@@ -752,7 +745,7 @@ We checked the folder: {}
                 "--sign",
                 app_dev_name,
             ])
-            .arg(self.app.build.root_dir())
+            .arg(self.app.root_dir())
             .output()
             .await
             .context("Failed to codesign the app")?;
@@ -771,8 +764,8 @@ We checked the folder: {}
         envs: Vec<(&'static str, String)>,
     ) {
         let apk_path = self.app.apk_path();
-        let session_cache = self.app.build.session_cache_dir();
-        let full_mobile_app_name = self.app.build.full_mobile_app_name();
+        let session_cache = self.app.session_cache_dir();
+        let full_mobile_app_name = self.app.full_mobile_app_name();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
         tokio::task::spawn(async move {
@@ -886,7 +879,7 @@ We checked the folder: {}
         let mut main_exe = self.app.main_exe();
 
         // The requirement here is based on the platform, not necessarily our current architecture.
-        let requires_entropy = match self.app.build.platform {
+        let requires_entropy = match self.app.platform {
             // When running "bundled", we don't need entropy
             Platform::Web => false,
             Platform::MacOS => false,

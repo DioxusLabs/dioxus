@@ -70,7 +70,7 @@ pub struct Output {
 #[allow(unused)]
 #[derive(Clone, Copy)]
 struct RenderState<'a> {
-    state: &'a Serve,
+    serve: &'a Serve,
     server: &'a WebServer,
     watcher: &'a Watcher,
 }
@@ -405,7 +405,7 @@ impl Output {
             self.render_frame(
                 frame,
                 RenderState {
-                    state,
+                    serve: state,
                     server,
                     watcher,
                 },
@@ -549,7 +549,7 @@ impl Output {
             }
             BuildStage::Success => {
                 lines.push("Serving ".yellow());
-                lines.push(state.krate.executable_name().white());
+                lines.push(state.serve.app_name().white());
                 lines.push(" 🚀 ".green());
                 if let Some(comp_time) = state.build_engine.total_build_time() {
                     lines.push(format!("{:.1}s", comp_time.as_secs_f32()).dark_gray());
