@@ -7,7 +7,6 @@ use std::path::PathBuf;
 pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
 pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 
-#[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum BuildUpdate {
     Progress { stage: BuildStage },

@@ -12,7 +12,7 @@ const DEFAULT_HTML: &str = include_str!("../../assets/web/dev.index.html");
 impl AppBundle {
     pub(crate) fn prepare_html(&self) -> Result<String> {
         let mut html = {
-            let crate_root: &Path = &self.build.krate.crate_dir();
+            let crate_root: &Path = &self.build.crate_dir();
             let custom_html_file = crate_root.join("index.html");
             std::fs::read_to_string(custom_html_file).unwrap_or_else(|_| String::from(DEFAULT_HTML))
         };
@@ -26,7 +26,7 @@ impl AppBundle {
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html);
 
-        let title = self.build.krate.config.web.app.title.clone();
+        let title = self.build.config.web.app.title.clone();
 
         replace_or_insert_before("{app_title}", "</title", &title, &mut html);
 
@@ -40,7 +40,7 @@ impl AppBundle {
     // Inject any resources from the config into the html
     fn inject_resources(&self, html: &mut String) -> Result<()> {
         // Collect all resources into a list of styles and scripts
-        let resources = &self.build.krate.config.web.resource;
+        let resources = &self.build.config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
         let mut script_list = resources.script.clone().unwrap_or_default();
 
@@ -71,7 +71,7 @@ impl AppBundle {
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.build.krate.config.web.app.base_path {
+            if let Some(base_path) = &self.build.config.web.app.base_path {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -160,10 +160,10 @@ r#" <script>
 
     /// Replace any special placeholders in the HTML with resolved values
     fn replace_template_placeholders(&self, html: &mut String) {
-        let base_path = self.build.krate.config.web.app.base_path();
+        let base_path = self.build.config.web.app.base_path();
         *html = html.replace("{base_path}", base_path);
 
-        let app_name = &self.build.krate.executable_name();
+        let app_name = &self.build.executable_name();
         let wasm_source_path = self.build.wasm_bindgen_wasm_output_file();
         let wasm_path = self
             .assets
@@ -206,13 +206,11 @@ r#" <script>
                     let path = path.strip_prefix("/").unwrap_or(path);
                     let asset_dir_path = self
                         .build
-                        .krate
                         .legacy_asset_dir()
                         .map(|dir| dir.join(path).canonicalize());
 
                     if let Some(Ok(absolute_path)) = asset_dir_path {
-                        let absolute_crate_root =
-                            self.build.krate.crate_dir().canonicalize().unwrap();
+                        let absolute_crate_root = self.build.crate_dir().canonicalize().unwrap();
                         PathBuf::from("./")
                             .join(absolute_path.strip_prefix(absolute_crate_root).unwrap())
                     } else {

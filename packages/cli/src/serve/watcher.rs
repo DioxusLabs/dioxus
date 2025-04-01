@@ -1,6 +1,6 @@
-use super::detect::is_wsl;
 use super::update::ServeUpdate;
-use crate::{cli::serve::ServeArgs, dioxus_crate::DioxusCrate};
+use super::{detect::is_wsl, Serve};
+use crate::{args::serve::ServeArgs, BuildRequest};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use notify::{
@@ -15,13 +15,12 @@ use std::{path::PathBuf, time::Duration};
 /// directories.
 pub(crate) struct Watcher {
     rx: UnboundedReceiver<notify::Event>,
-    krate: DioxusCrate,
     _tx: UnboundedSender<notify::Event>,
     watcher: Box<dyn notify::Watcher>,
 }
 
 impl Watcher {
-    pub(crate) fn start(krate: &DioxusCrate, serve: &ServeArgs) -> Self {
+    pub(crate) fn start(plan: &Serve) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut watcher = Self {

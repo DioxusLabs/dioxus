@@ -10,7 +10,7 @@ impl BuildRequest {
         tracing::debug!("Verifying tooling...");
         self.status_installing_tooling();
 
-        self.krate
+        self
             .initialize_profiles()
             .context("Failed to initialize profiles - dioxus can't build without them. You might need to initialize them yourself.")?;
 
@@ -58,7 +58,7 @@ impl BuildRequest {
         }
 
         // Wasm bindgen
-        let krate_bindgen_version = self.krate.wasm_bindgen_version().ok_or(anyhow!(
+        let krate_bindgen_version = self.wasm_bindgen_version().ok_or(anyhow!(
             "failed to detect wasm-bindgen version, unable to proceed"
         ))?;
 

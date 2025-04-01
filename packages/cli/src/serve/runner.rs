@@ -1,5 +1,5 @@
 use super::{AppHandle, ServeUpdate, WebServer};
-use crate::{AppBundle, BuildMode, DioxusCrate, Platform, ReloadKind, Result, TraceSrc};
+use crate::{AppBundle, BuildMode, BuildRequest, Platform, ReloadKind, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
@@ -24,7 +24,6 @@ use tokio::process::Command;
 
 pub(crate) struct AppRunner {
     pub(crate) running: Option<AppHandle>,
-    pub(crate) krate: DioxusCrate,
     pub(crate) ignore: Gitignore,
     pub(crate) applied_hot_reload_message: HotReloadMsg,
     pub(crate) builds_opened: usize,
@@ -47,13 +46,12 @@ pub(crate) struct CachedFile {
 
 impl AppRunner {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
-    pub(crate) fn start(krate: &DioxusCrate) -> Self {
+    pub(crate) fn start(plan: &ServePlan) -> Self {
         let mut runner = Self {
             running: Default::default(),
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
-            ignore: krate.workspace_gitignore(),
-            krate: krate.clone(),
+            ignore: build.workspace_gitignore(),
             builds_opened: 0,
             automatic_rebuilds: true,
             aslr_reference: None,
@@ -62,12 +60,12 @@ impl AppRunner {
         // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
         // we could spawn a thread to search the FS and then when it returns we can fill the filemap
         // in testing, if this hits a massive directory, it might take several seconds with no feedback.
-        for krate in krate.all_watched_crates() {
+        for krate in build.all_watched_crates() {
             runner.fill_filemap(krate);
         }
 
         // Ensure the session cache dir exists and is empty
-        runner.flush_session_cache();
+        // runner.flush_session_cache();
 
         runner
     }
@@ -267,7 +265,7 @@ impl AppRunner {
                 .arg("simctl")
                 .arg("get_app_container")
                 .arg("booted")
-                .arg(handle.app.build.krate.bundle_identifier())
+                .arg(handle.app.build.bundle_identifier())
                 .output()
                 .await;
 
@@ -460,11 +458,11 @@ impl AppRunner {
         }
     }
 
-    fn flush_session_cache(&self) {
-        let cache_dir = self.krate.session_cache_dir();
-        _ = std::fs::remove_dir_all(&cache_dir);
-        _ = std::fs::create_dir_all(&cache_dir);
-    }
+    // fn flush_session_cache(&self) {
+    //     let cache_dir = self.krate.session_cache_dir();
+    //     _ = std::fs::remove_dir_all(&cache_dir);
+    //     _ = std::fs::create_dir_all(&cache_dir);
+    // }
 
     pub async fn patch(&mut self, bundle: &AppBundle) -> Result<subsecond_cli_support::JumpTable> {
         let original = self.running.as_ref().unwrap().app.main_exe();

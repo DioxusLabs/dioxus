@@ -4,6 +4,13 @@
 //!
 //! Uses a request -> response architecture that allows you to monitor the progress with an optional message
 //! receiver.
+//!
+//!
+//! Targets
+//! - Request
+//! - State
+//! - Bundle
+//! - Handle
 
 mod builder;
 mod bundle;

@@ -1,7 +1,7 @@
 pub(crate) mod autoformat;
 pub(crate) mod build;
 pub(crate) mod bundle;
-pub(crate) mod chained_command;
+pub(crate) mod chained;
 pub(crate) mod check;
 pub(crate) mod clean;
 pub(crate) mod config;
@@ -10,13 +10,11 @@ pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod run;
 pub(crate) mod serve;
-pub(crate) mod target;
 pub(crate) mod translate;
 pub(crate) mod verbosity;
 
 pub(crate) use build::*;
 pub(crate) use serve::*;
-pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::{error::Result, Error, StructuredOutput};

@@ -90,7 +90,6 @@ use tokio::process::Command;
 ///
 /// ## Extra links
 /// - xbuild: https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs
-#[derive(Debug)]
 pub(crate) struct AppBundle {
     pub(crate) build: BuildRequest,
     pub(crate) app: BuildArtifacts,
@@ -475,10 +474,10 @@ impl AppBundle {
 
             // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
             let from_ = from
-                .strip_prefix(self.build.krate.workspace_dir())
+                .strip_prefix(self.build.workspace_dir())
                 .unwrap_or(from.as_path());
             let to_ = from
-                .strip_prefix(self.build.krate.workspace_dir())
+                .strip_prefix(self.build.workspace_dir())
                 .unwrap_or(to.as_path());
 
             tracing::debug!("Copying asset {from_:?} to {to_:?}");
@@ -487,7 +486,7 @@ impl AppBundle {
 
         // And then queue the legacy assets
         // ideally, one day, we can just check the rsx!{} calls for references to assets
-        for from in self.build.krate.legacy_asset_dir_files() {
+        for from in self.build.legacy_asset_dir_files() {
             let to = asset_dir.join(from.file_name().unwrap());
             tracing::debug!("Copying legacy asset {from:?} to {to:?}");
             assets_to_transfer.push((from, to, AssetOptions::Unknown));
@@ -499,7 +498,7 @@ impl AppBundle {
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = self.build.progress.clone();
-        let ws_dir = self.build.krate.workspace_dir();
+        let ws_dir = self.build.workspace_dir();
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
             assets_to_transfer
@@ -596,7 +595,7 @@ impl AppBundle {
         std::fs::write(&patch_file, resolved_patch_bytes)?;
 
         let linker = match self.build.platform {
-            Platform::Web => self.build.krate.workspace.wasm_ld(),
+            Platform::Web => self.build.workspace.wasm_ld(),
             Platform::Android => {
                 let tools =
                     crate::build::android_tools().context("Could not determine android tools")?;
@@ -882,7 +881,6 @@ impl AppBundle {
                 // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
                 let pre_compress = self
                     .build
-                    .krate
                     .should_pre_compress_web_assets(self.build.release);
 
                 self.build.status_compressing_assets();
@@ -907,10 +905,7 @@ impl AppBundle {
 
     pub(crate) fn server_exe(&self) -> Option<PathBuf> {
         if let Some(_server) = &self.server {
-            let mut path = self
-                .build
-                .krate
-                .build_dir(Platform::Server, self.build.release);
+            let mut path = self.build.build_dir(Platform::Server, self.build.release);
 
             if cfg!(windows) {
                 path.push("server.exe");
@@ -942,7 +937,6 @@ impl AppBundle {
         let rustc_exe = self.app.exe.with_extension("wasm");
         let bindgen_version = self
             .build
-            .krate
             .wasm_bindgen_version()
             .expect("this should have been checked by tool verification");
 
@@ -958,7 +952,7 @@ impl AppBundle {
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
         let will_wasm_opt =
             (self.build.release || self.build.wasm_split) && crate::wasm_opt::wasm_opt_available();
-        let keep_debug = self.build.krate.config.web.wasm_opt.debug
+        let keep_debug = self.build.config.web.wasm_opt.debug
             || self.build.debug_symbols
             || self.build.wasm_split
             || !self.build.release
@@ -967,7 +961,7 @@ impl AppBundle {
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.build.wasm_split,
             debug: self.build.debug_symbols,
-            ..self.build.krate.config.web.wasm_opt.clone()
+            ..self.build.config.web.wasm_opt.clone()
         };
 
         // Run wasm-bindgen. Some of the options are not "optimal" but will be fixed up by wasm-opt
@@ -985,7 +979,7 @@ impl AppBundle {
             .demangle(demangle)
             .keep_debug(keep_debug)
             .keep_lld_sections(true)
-            .out_name(self.build.krate.executable_name())
+            .out_name(self.build.executable_name())
             .out_dir(&bindgen_outdir)
             .remove_name_section(!will_wasm_opt)
             .remove_producers_section(!will_wasm_opt)
@@ -1134,10 +1128,10 @@ impl AppBundle {
             .render_template(
                 include_str!("../../assets/macos/mac.plist.hbs"),
                 &InfoPlistData {
-                    display_name: self.build.krate.bundled_app_name(),
-                    bundle_name: self.build.krate.bundled_app_name(),
+                    display_name: self.build.bundled_app_name(),
+                    bundle_name: self.build.bundled_app_name(),
                     executable_name: self.build.platform_exe_name(),
-                    bundle_identifier: self.build.krate.bundle_identifier(),
+                    bundle_identifier: self.build.bundle_identifier(),
                 },
             )
             .map_err(|e| e.into())
@@ -1148,10 +1142,10 @@ impl AppBundle {
             .render_template(
                 include_str!("../../assets/ios/ios.plist.hbs"),
                 &InfoPlistData {
-                    display_name: self.build.krate.bundled_app_name(),
-                    bundle_name: self.build.krate.bundled_app_name(),
+                    display_name: self.build.bundled_app_name(),
+                    bundle_name: self.build.bundled_app_name(),
                     executable_name: self.build.platform_exe_name(),
-                    bundle_identifier: self.build.krate.bundle_identifier(),
+                    bundle_identifier: self.build.bundle_identifier(),
                 },
             )
             .map_err(|e| e.into())
@@ -1206,7 +1200,7 @@ impl AppBundle {
         let from = app_release.join("app-release.aab");
         let to = app_release.join(format!(
             "{}-{}.aab",
-            self.build.krate.bundled_app_name(),
+            self.build.bundled_app_name(),
             self.build.target
         ));
 

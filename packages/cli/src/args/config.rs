@@ -98,12 +98,13 @@ impl Config {
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 Init config file completed.");
             }
             Config::FormatPrint {} => {
-                tracing::info!(
-                    "{:#?}",
-                    crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())
-                        .await?
-                        .config
-                );
+                todo!("Load workspace and print its config?")
+                // tracing::info!(
+                //     "{:#?}",
+                //     crate::dioxus_crate::DioxusCrate::new(&TargetArgs::default())
+                //         .await?
+                //         .config
+                // );
             }
             Config::CustomHtml {} => {
                 let html_path = crate_root.join("index.html");

@@ -1,8 +1,24 @@
-use super::{chained_command::ChainedCommand, *};
-use crate::{AddressArguments, BuildArgs, DioxusCrate, Platform, PROFILE_SERVER};
+use super::{chained::ChainedCommand, *};
+use crate::{AddressArguments, BuildArgs, Platform, PROFILE_SERVER};
 use target_lexicon::Triple;
 
 /// Serve the project
+///
+/// `dx serve` takes cargo args by default, except with a required `--platform` arg:
+///
+/// ```
+/// dx serve --example blah --target blah --platform android
+/// ```
+///
+/// As of dioxus 0.7, `dx serve` allows multiple builds at the same type by chaining the `crate` subcommand:
+/// ```
+/// dx serve
+///     @crate --blah
+///     @crate --blah
+///     @crate --blah
+///     @crate --blah
+/// ```
+///
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub(crate) struct ServeArgs {
@@ -75,8 +91,8 @@ pub(crate) struct ServeArgs {
     /// dx serve \
     ///     client --target aarch64-apple-darwin \
     ///     server --target wasm32-unknown-unknown \
-    ///     target --target aarch64-unknown-linux-gnu
-    ///     target --target x86_64-unknown-linux-gnu
+    ///     crate --target aarch64-unknown-linux-gnu
+    ///     crate --target x86_64-unknown-linux-gnu
     /// ```
     #[command(subcommand)]
     pub(crate) targets: Option<TargetCmd>,
@@ -88,15 +104,15 @@ pub(crate) struct ServeArgs {
 pub(crate) enum TargetCmd {
     /// Specify the arguments for the client build
     #[clap(name = "client")]
-    Client(ChainedCommand<TargetArgs, Self>),
+    Client(ChainedCommand<BuildArgs, Self>),
 
     /// Specify the arguments for the server build
     #[clap(name = "server")]
-    Server(ChainedCommand<TargetArgs, Self>),
+    Server(ChainedCommand<BuildArgs, Self>),
 
     /// Specify the arguments for any number of additional targets
-    #[clap(name = "target")]
-    Target(ChainedCommand<TargetArgs, Self>),
+    #[clap(name = "crate")]
+    Target(ChainedCommand<BuildArgs, Self>),
 }
 
 impl ServeArgs {
@@ -107,39 +123,6 @@ impl ServeArgs {
     pub(crate) async fn serve(self) -> Result<StructuredOutput> {
         crate::serve::serve_all(self).await?;
         Ok(StructuredOutput::Success)
-    }
-
-    pub(crate) async fn load_krate(&mut self) -> Result<DioxusCrate> {
-        let krate = DioxusCrate::new(&self.build_arguments.args).await?;
-
-        // Enable hot reload.
-        if self.hot_reload.is_none() {
-            self.hot_reload = Some(krate.workspace.settings.always_hot_reload.unwrap_or(true));
-        }
-
-        // Open browser.
-        if self.open.is_none() {
-            self.open = Some(
-                krate
-                    .workspace
-                    .settings
-                    .always_open_browser
-                    .unwrap_or_default(),
-            );
-        }
-
-        // Set WSL file poll interval.
-        if self.wsl_file_poll_interval.is_none() {
-            self.wsl_file_poll_interval =
-                Some(krate.workspace.settings.wsl_file_poll_interval.unwrap_or(2));
-        }
-
-        // Set always-on-top for desktop.
-        if self.always_on_top.is_none() {
-            self.always_on_top = Some(krate.workspace.settings.always_on_top.unwrap_or(true))
-        }
-
-        Ok(krate)
     }
 
     pub(crate) fn should_hotreload(&self) -> bool {

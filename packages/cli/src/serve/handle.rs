@@ -1,4 +1,4 @@
-use crate::{AppBundle, DioxusCrate, Platform, Result};
+use crate::{AppBundle, Platform, Result};
 use anyhow::Context;
 use dioxus_cli_opt::process_file_to;
 use futures_util::future::OptionFuture;
@@ -128,7 +128,7 @@ impl AppHandle {
         start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
     ) -> Result<()> {
-        let krate = &self.app.build.krate;
+        let krate = &self.app.build;
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
@@ -161,12 +161,7 @@ impl AppHandle {
             ("CARGO_MANIFEST_DIR", "".to_string()),
             (
                 dioxus_cli_config::SESSION_CACHE_DIR,
-                self.app
-                    .build
-                    .krate
-                    .session_cache_dir()
-                    .display()
-                    .to_string(),
+                self.app.build.session_cache_dir().display().to_string(),
             ),
         ];
 
@@ -323,7 +318,7 @@ impl AppHandle {
         tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
         // If the asset shares the same name in the bundle, reload that
-        if let Some(legacy_asset_dir) = self.app.build.krate.legacy_asset_dir() {
+        if let Some(legacy_asset_dir) = self.app.build.legacy_asset_dir() {
             if changed_file.starts_with(&legacy_asset_dir) {
                 tracing::debug!("Hotreloading legacy asset {changed_file:?}");
                 let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
@@ -417,16 +412,8 @@ impl AppHandle {
     /// Check if we need to use https or not, and if so, add the protocol.
     /// Go to the basepath if that's set too.
     fn open_web(&self, address: SocketAddr) {
-        let base_path = self.app.build.krate.config.web.app.base_path.clone();
-        let https = self
-            .app
-            .build
-            .krate
-            .config
-            .web
-            .https
-            .enabled
-            .unwrap_or_default();
+        let base_path = self.app.build.config.web.app.base_path.clone();
+        let https = self.app.build.config.web.https.enabled.unwrap_or_default();
         let protocol = if https { "https" } else { "http" };
         let base_path = match base_path.as_deref() {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
@@ -472,7 +459,7 @@ impl AppHandle {
             .arg("launch")
             .arg("--console")
             .arg("booted")
-            .arg(self.app.build.krate.bundle_identifier())
+            .arg(self.app.build.bundle_identifier())
             .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
@@ -784,8 +771,8 @@ We checked the folder: {}
         envs: Vec<(&'static str, String)>,
     ) {
         let apk_path = self.app.apk_path();
-        let session_cache = self.app.build.krate.session_cache_dir();
-        let full_mobile_app_name = self.app.build.krate.full_mobile_app_name();
+        let session_cache = self.app.build.session_cache_dir();
+        let full_mobile_app_name = self.app.build.full_mobile_app_name();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
         tokio::task::spawn(async move {

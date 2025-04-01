@@ -117,6 +117,8 @@ impl LinkAction {
 ///
 /// This is because our host compiler is a stateful server and not a stateless linker.
 fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
+    let triple = Triple::host();
+
     let format = match triple.binary_format {
         target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
         target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
@@ -147,4 +149,11 @@ fn make_dummy_object_file(triple: Triple) -> Vec<u8> {
     object::write::Object::new(format, arch, endian)
         .write()
         .unwrap()
+}
+
+#[test]
+fn test_make_dummy_object_file() {
+    let triple: Triple = "wasm32-unknown-unknown".parse().unwrap();
+    let obj = make_dummy_object_file(triple);
+    assert!(!obj.is_empty());
 }

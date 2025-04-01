@@ -1,5 +1,8 @@
 use super::*;
-use crate::{serve::HandleUpdate, BuildArgs, BuildRequest, Builder, DioxusCrate, Platform, Result};
+use crate::{
+    serve::{AppHandle, HandleUpdate},
+    BuildArgs, BuildRequest, Builder, Platform, Result,
+};
 
 /// Run the project with the given arguments
 #[derive(Clone, Debug, Parser)]
@@ -11,14 +14,10 @@ pub(crate) struct RunArgs {
 
 impl RunArgs {
     pub(crate) async fn run(self) -> Result<StructuredOutput> {
-        let krate = DioxusCrate::new(&self.build_args.args)
+        let build = BuildRequest::new(&self.build_args)
             .await
-            .context("Failed to load Dioxus workspace")?;
-
-        tracing::trace!("Building crate krate data: {:#?}", krate);
-        tracing::trace!("Build args: {:#?}", self.build_args);
-
-        let bundle = Builder::start(&krate, &self.build_args)?.finish().await?;
+            .context("error building project")?;
+        let bundle = Builder::start(&build)?.finish().await?;
 
         let devserver_ip = "127.0.0.1:8081".parse().unwrap();
         let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
@@ -27,15 +26,13 @@ impl RunArgs {
             tracing::info!("Serving at: {}", fullstack_ip);
         }
 
-        let mut runner = crate::serve::AppRunner::start(&krate);
-        runner
-            .open(bundle, devserver_ip, Some(fullstack_ip), true)
-            .await?;
+        let mut handle = AppHandle::new(bundle).await?;
+        handle.open(devserver_ip, Some(fullstack_ip), true).await?;
 
         // Run the app, but mostly ignore all the other messages
         // They won't generally be emitted
         loop {
-            match runner.running.as_mut().unwrap().wait().await {
+            match handle.wait().await {
                 HandleUpdate::StderrReceived { platform, msg } => {
                     tracing::info!("[{platform}]: {msg}")
                 }
@@ -43,7 +40,7 @@ impl RunArgs {
                     tracing::info!("[{platform}]: {msg}")
                 }
                 HandleUpdate::ProcessExited { platform, status } => {
-                    runner.cleanup().await;
+                    handle.cleanup().await;
                     tracing::info!("[{platform}]: process exited with status: {status:?}");
                     break;
                 }

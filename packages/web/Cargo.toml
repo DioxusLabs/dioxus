@@ -41,6 +41,7 @@ serde-wasm-bindgen = { version = "0.5.0", optional = true }
 
 ciborium = { workspace = true, optional = true }
 async-trait = { version = "0.1.58", optional = true }
+subsecond = { workspace = true }
 
 [dependencies.web-sys]
 version = "0.3.70"

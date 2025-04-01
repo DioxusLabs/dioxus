@@ -1,4 +1,7 @@
-use crate::{BuildUpdate, Builder, Error, Platform, Result, ServeArgs, TraceController, TraceSrc};
+use crate::{
+    BuildMode, BuildRequest, BuildUpdate, Builder, Error, Platform, Result, ServeArgs,
+    TraceController, TraceSrc,
+};
 
 mod ansi_buffer;
 mod detect;
@@ -7,6 +10,7 @@ mod output;
 mod proxy;
 mod runner;
 mod server;
+mod state;
 mod update;
 mod watcher;
 
@@ -14,6 +18,7 @@ pub(crate) use handle::*;
 pub(crate) use output::*;
 pub(crate) use runner::*;
 pub(crate) use server::*;
+pub(crate) use state::*;
 pub(crate) use update::*;
 pub(crate) use watcher::*;
 
@@ -37,19 +42,18 @@ pub(crate) use watcher::*;
 /// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
+pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
     // Redirect all logging the cli logger
     let mut tracer = TraceController::redirect(args.is_interactive_tty());
 
-    // Load the krate and resolve the server args against it - this might log so do it after we turn on the tracer first
-    let krate = args.load_krate().await?;
+    // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
+    let builder = Serve::new(args).await?;
 
     // Note that starting the builder will queue up a build immediately
-    let mut builder = Builder::start(&krate, &args.build_arguments)?;
-    let mut screen = Output::start(&args, builder.request.platform).await?;
-    let mut devserver = WebServer::start(&krate, &args)?;
-    let mut watcher = Watcher::start(&krate, &args);
-    let mut runner = AppRunner::start(&krate);
+    let mut screen = Output::start(&builder).await?;
+    let mut devserver = WebServer::start(&builder)?;
+    let mut watcher = Watcher::start(&builder);
+    let mut runner = AppRunner::start(&builder);
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future
     // Also, these commands might not be the most important, but it's all we've got enabled right now
@@ -63,16 +67,16 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 • Press `/` for more commands and shortcuts
                 Learn more at https://dioxuslabs.com/learn/0.6/getting_started
                ----------------------------------------------------------------"#,
-        krate.executable_name()
+        builder.app_name()
     );
 
     let err: Result<(), Error> = loop {
         // Draw the state of the server to the screen
-        screen.render(&args, &krate, &builder, &devserver, &watcher);
+        screen.render(&builder, &devserver, &watcher);
 
         // And then wait for any updates before redrawing
         let msg = tokio::select! {
-            msg = builder.wait() => ServeUpdate::BuildUpdate(msg),
+            msg = builder.wait() => msg,
             msg = watcher.wait() => msg,
             msg = devserver.wait() => msg,
             msg = screen.wait() => msg,
@@ -87,7 +91,7 @@ pub(crate) async fn serve_all(mut args: ServeArgs) -> Result<()> {
                 }
 
                 let file = files[0].display().to_string();
-                let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
+                // let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients

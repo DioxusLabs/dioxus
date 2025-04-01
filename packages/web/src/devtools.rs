@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use dioxus_core::prelude::RuntimeGuard;
 use dioxus_core::{Runtime, ScopeId};
-use dioxus_devtools::{DevserverMsg, HotReloadMsg};
+use dioxus_devtools::{ClientMsg, DevserverMsg, HotReloadMsg};
 use dioxus_document::eval;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
@@ -59,6 +59,7 @@ fn make_ws(
     // Set the onmessage handler to bounce messages off to the main dioxus loop
     let tx_ = tx.clone();
     let runtime_ = runtime.clone();
+    let ws_tx = ws.clone();
     ws.set_onmessage(Some(
         Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
             let Ok(text) = e.data().dyn_into::<JsString>() else {
@@ -162,7 +163,14 @@ fn make_ws(
     ws.set_onopen(Some(
         Closure::<dyn FnMut(MessageEvent)>::new(move |_evt| {
             if reload {
-                window().unwrap().location().reload().unwrap()
+                window().unwrap().location().reload().unwrap();
+            } else {
+                ws_tx.send_with_str(
+                    &serde_json::to_string(&ClientMsg::Initialize {
+                        aslr_reference: subsecond::aslr_reference() as _,
+                    })
+                    .unwrap(),
+                );
             }
         })
         .into_js_value()

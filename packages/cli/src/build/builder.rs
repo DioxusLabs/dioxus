@@ -1,6 +1,6 @@
 use crate::{
-    AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, DioxusCrate, ProgressRx,
-    ProgressTx, Result, StructuredOutput,
+    AppBundle, BuildArgs, BuildRequest, BuildStage, BuildUpdate, ProgressRx, ProgressTx, Result,
+    StructuredOutput,
 };
 use std::{
     path::PathBuf,
@@ -18,8 +18,6 @@ use super::BuildMode;
 /// Here, we track the number of crates being compiled, assets copied, the times of these events, and
 /// other metadata that gives us useful indicators for the UI.
 pub(crate) struct Builder {
-    // Components of the build
-    pub krate: DioxusCrate,
     pub request: BuildRequest,
     pub build: tokio::task::JoinHandle<Result<AppBundle>>,
     pub tx: ProgressTx,
@@ -42,18 +40,16 @@ pub(crate) struct Builder {
 
 impl Builder {
     /// Create a new builder and immediately start a build
-    pub(crate) fn start(krate: &DioxusCrate, args: &BuildArgs) -> Result<Self> {
+    pub(crate) fn start(request: &BuildRequest) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let request = BuildRequest::new(args.clone(), krate.clone(), tx.clone(), BuildMode::Fat)?;
+        // let request = BuildRequest::new(args.clone(), krate.clone(), tx.clone(), BuildMode::Fat)?;
 
         Ok(Self {
-            krate: krate.clone(),
             request: request.clone(),
             stage: BuildStage::Initializing,
             build: tokio::spawn(async move {
-                // On the first build, we want to verify the tooling... don't bother on subsequent builds
-                request.verify_tooling().await?;
-                request.build_all().await
+                // request.build_all().await
+                todo!()
             }),
             tx,
             rx,
@@ -188,43 +184,45 @@ impl Builder {
         changed_files: Vec<PathBuf>,
         aslr_offset: u64,
     ) -> Result<()> {
-        // Initialize a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        let request = BuildRequest::new(
-            args,
-            self.krate.clone(),
-            self.tx.clone(),
-            BuildMode::Thin {
-                direct_rustc,
-                changed_files,
-                aslr_reference: aslr_offset,
-            },
-        )?;
+        todo!()
+        // // Initialize a new build, resetting our progress/stage to the beginning and replacing the old tokio task
+        // let request = BuildRequest::new(
+        //     args,
+        //     self.krate.clone(),
+        //     self.tx.clone(),
+        //     BuildMode::Thin {
+        //         direct_rustc,
+        //         changed_files,
+        //         aslr_reference: aslr_offset,
+        //     },
+        // )?;
 
-        // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
-        self.abort_all();
-        self.request = request.clone();
-        self.stage = BuildStage::Restarting;
+        // // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
+        // self.abort_all();
+        // self.request = request.clone();
+        // self.stage = BuildStage::Restarting;
 
-        // This build doesn't have any extra special logging - rebuilds would get pretty noisy
-        self.build = tokio::spawn(async move { request.build_all().await });
+        // // This build doesn't have any extra special logging - rebuilds would get pretty noisy
+        // self.build = tokio::spawn(async move { request.build_all().await });
 
-        Ok(())
+        // Ok(())
     }
 
     /// Restart this builder with new build arguments.
     pub(crate) fn rebuild(&mut self, args: BuildArgs) -> Result<()> {
-        let request = BuildRequest::new(args, self.krate.clone(), self.tx.clone(), BuildMode::Fat)?;
+        todo!()
+        // let request = BuildRequest::new(args, self.krate.clone(), self.tx.clone(), BuildMode::Fat)?;
 
-        // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
-        // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        self.abort_all();
-        self.request = request.clone();
-        self.stage = BuildStage::Restarting;
+        // // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
+        // // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
+        // self.abort_all();
+        // self.request = request.clone();
+        // self.stage = BuildStage::Restarting;
 
-        // This build doesn't have any extra special logging - rebuilds would get pretty noisy
-        self.build = tokio::spawn(async move { request.build_all().await });
+        // // This build doesn't have any extra special logging - rebuilds would get pretty noisy
+        // self.build = tokio::spawn(async move { request.build_all().await });
 
-        Ok(())
+        // Ok(())
     }
 
     /// Shutdown the current build process

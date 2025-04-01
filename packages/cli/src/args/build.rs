@@ -1,4 +1,6 @@
-use crate::{cli::*, Builder, DioxusCrate};
+use crate::Platform;
+use crate::{args::*, BuildRequest, Builder};
+use target_lexicon::Triple;
 
 /// Build the Rust Dioxus app and all of its assets.
 ///
@@ -10,20 +12,65 @@ use crate::{cli::*, Builder, DioxusCrate};
 /// ```
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct BuildArgs {
+    #[clap(long)]
+    pub(crate) name: Option<String>,
+
+    /// Build for nightly [default: false]
+    #[clap(long)]
+    pub(crate) nightly: bool,
+
+    /// Build platform: support Web & Desktop [default: "default_platform"]
+    #[clap(long, value_enum)]
+    pub(crate) platform: Option<Platform>,
+
+    /// Build in release mode [default: false]
+    #[clap(long, short)]
+    #[serde(default)]
+    pub(crate) release: bool,
+
+    /// The package to build
+    #[clap(short, long)]
+    pub(crate) package: Option<String>,
+
+    /// Build a specific binary [default: ""]
+    #[clap(long)]
+    pub(crate) bin: Option<String>,
+
+    /// Build a specific example [default: ""]
+    #[clap(long)]
+    pub(crate) example: Option<String>,
+
+    /// Build the app with custom a profile
+    #[clap(long)]
+    pub(crate) profile: Option<String>,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub(crate) features: Vec<String>,
+
+    /// Don't include the default features in the build
+    #[clap(long)]
+    pub(crate) no_default_features: bool,
+
+    /// Include all features in the build
+    #[clap(long)]
+    pub(crate) all_features: bool,
+
+    /// Rustc platform triple
+    #[clap(long)]
+    pub(crate) target: Option<Triple>,
+
+    // todo -- make a subcommand called "--" that takes all the remaining args
+    /// Extra arguments passed to `rustc`
+    ///
+    /// cargo rustc -- -Clinker
+    #[clap(value_delimiter = ',')]
+    pub(crate) cargo_args: Vec<String>,
+
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     #[clap(long)]
     #[serde(default)]
     pub(crate) force_sequential: bool,
-
-    /// Build the fullstack variant of this app, using that as the fileserver and backend
-    ///
-    /// This defaults to `false` but will be overridden to true if the `fullstack` feature is enabled.
-    #[clap(long)]
-    pub(crate) fullstack: bool,
-
-    /// Run the ssg config of the app and generate the files
-    #[clap(long)]
-    pub(crate) ssg: bool,
 
     /// Skip collecting assets from dependencies [default: false]
     #[clap(long)]
@@ -55,23 +102,17 @@ pub(crate) struct BuildArgs {
     /// If device is false, then we'll build for the simulator
     #[clap(long)]
     pub(crate) device: Option<bool>,
-
-    /// Information about the target to build
-    ///
-    /// These are the same args as `targets``
-    #[clap(flatten)]
-    pub(crate) args: TargetArgs,
 }
 
 impl BuildArgs {
     pub async fn build(self) -> Result<StructuredOutput> {
         tracing::info!("Building project...");
 
-        let krate = DioxusCrate::new(&self.args)
+        let build = BuildRequest::new(&self)
             .await
             .context("Failed to load Dioxus workspace")?;
 
-        let bundle = Builder::start(&krate, &self)?.finish().await?;
+        let bundle = Builder::start(&build)?.finish().await?;
 
         tracing::info!(path = ?bundle.build.root_dir(), "Build completed successfully! 🚀");
 

@@ -1,4 +1,4 @@
-use crate::{AppBundle, BuildArgs, Builder, DioxusCrate, Platform};
+use crate::{AppBundle, BuildArgs, BuildRequest, Builder, Platform};
 use anyhow::{anyhow, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -6,7 +6,22 @@ use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuild
 
 use super::*;
 
-/// Bundle the Rust desktop app and all of its assets
+/// Bundle an app and its assets.
+///
+/// This only takes a single build into account. To build multiple targets, use multiple calls to bundle.
+///
+/// ```
+/// dioxus bundle --target <target>
+/// dioxus bundle --target <target>
+/// ```
+///
+/// Note that building the server will perform a client build as well:
+///
+/// ```
+/// dioxus bundle --platform server
+/// ```
+///
+/// This will produce a client `public` folder and the associated server executable in the output folder.
 #[derive(Clone, Debug, Parser)]
 pub struct Bundle {
     /// The package types to bundle
@@ -23,6 +38,16 @@ pub struct Bundle {
     #[clap(long)]
     pub out_dir: Option<PathBuf>,
 
+    /// Build the fullstack variant of this app, using that as the fileserver and backend
+    ///
+    /// This defaults to `false` but will be overridden to true if the `fullstack` feature is enabled.
+    #[clap(long)]
+    pub(crate) fullstack: bool,
+
+    /// Run the ssg config of the app and generate the files
+    #[clap(long)]
+    pub(crate) ssg: bool,
+
     /// The arguments for the dioxus build
     #[clap(flatten)]
     pub(crate) args: BuildArgs,
@@ -34,15 +59,15 @@ impl Bundle {
 
         // We always use `release` mode for bundling
         // todo - maybe not? what if you want a devmode bundle?
-        self.args.args.release = true;
+        self.args.release = true;
 
-        let krate = DioxusCrate::new(&self.args.args)
+        let build = BuildRequest::new(&self.args)
             .await
             .context("Failed to load Dioxus workspace")?;
 
         tracing::info!("Building app...");
 
-        let bundle = Builder::start(&krate, &self.args)?.finish().await?;
+        let bundle = Builder::start(&build)?.finish().await?;
 
         // If we're building for iOS, we need to bundle the iOS bundle
         if bundle.build.platform == Platform::Ios && self.package_types.is_none() {
@@ -61,7 +86,7 @@ impl Bundle {
             // By default, mac/win/linux work with tauri bundle
             Platform::MacOS | Platform::Linux | Platform::Windows => {
                 tracing::info!("Running desktop bundler...");
-                for bundle in Self::bundle_desktop(&krate, &bundle, &self.package_types)? {
+                for bundle in Self::bundle_desktop(&bundle, &self.package_types)? {
                     bundles.extend(bundle.bundle_paths);
                 }
             }
@@ -85,7 +110,7 @@ impl Bundle {
         };
 
         // Copy the bundles to the output directory if one was specified
-        let crate_outdir = bundle.build.krate.crate_out_dir();
+        let crate_outdir = bundle.build.crate_out_dir();
         if let Some(outdir) = self.out_dir.clone().or(crate_outdir) {
             let outdir = outdir
                 .absolutize()
@@ -129,10 +154,11 @@ impl Bundle {
     }
 
     fn bundle_desktop(
-        krate: &DioxusCrate,
         bundle: &AppBundle,
         package_types: &Option<Vec<crate::PackageType>>,
     ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
+        let krate = &bundle.build;
+
         _ = std::fs::remove_dir_all(krate.bundle_dir(bundle.build.platform));
 
         let package = krate.package();

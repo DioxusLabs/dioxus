@@ -1,6 +1,6 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringLine, Builder, ServeUpdate, Watcher, WebServer},
-    BuildStage, BuildUpdate, DioxusCrate, Platform, RustcDetails, ServeArgs, TraceContent,
+    serve::{ansi_buffer::AnsiStringLine, Builder, Serve, ServeUpdate, Watcher, WebServer},
+    BuildRequest, BuildStage, BuildUpdate, Platform, RustcDetails, ServeArgs, TraceContent,
     TraceMsg, TraceSrc,
 };
 use crossterm::{
@@ -46,7 +46,6 @@ pub struct Output {
     // A list of all messages from build, dev, app, and more.
     more_modal_open: bool,
     interactive: bool,
-    platform: Platform,
 
     // Whether to show verbose logs or not
     // We automatically hide "debug" logs if verbose is false (only showing "info" / "warn" / "error")
@@ -71,24 +70,21 @@ pub struct Output {
 #[allow(unused)]
 #[derive(Clone, Copy)]
 struct RenderState<'a> {
-    opts: &'a ServeArgs,
-    krate: &'a DioxusCrate,
-    build_engine: &'a Builder,
+    state: &'a Serve,
     server: &'a WebServer,
     watcher: &'a Watcher,
 }
 
 impl Output {
-    pub(crate) async fn start(cfg: &ServeArgs, platform: Platform) -> crate::Result<Self> {
+    pub(crate) async fn start(plan: &Serve) -> crate::Result<Self> {
         let mut output = Self {
             term: Rc::new(RefCell::new(None)),
-            interactive: cfg.is_interactive_tty(),
+            interactive: plan.args.is_interactive_tty(),
             dx_version: format!(
                 "{}-{}",
                 env!("CARGO_PKG_VERSION"),
                 crate::dx_build_info::GIT_COMMIT_HASH_SHORT.unwrap_or("main")
             ),
-            platform,
             events: None,
             more_modal_open: false,
             pending_logs: VecDeque::new(),
@@ -389,14 +385,7 @@ impl Output {
     }
 
     /// Render the current state of everything to the console screen
-    pub fn render(
-        &mut self,
-        opts: &ServeArgs,
-        config: &DioxusCrate,
-        build_engine: &Builder,
-        server: &WebServer,
-        watcher: &Watcher,
-    ) {
+    pub fn render(&mut self, state: &Serve, server: &WebServer, watcher: &Watcher) {
         if !self.interactive {
             return;
         }
@@ -416,9 +405,7 @@ impl Output {
             self.render_frame(
                 frame,
                 RenderState {
-                    opts,
-                    krate: config,
-                    build_engine,
+                    state,
                     server,
                     watcher,
                 },
@@ -661,7 +648,7 @@ impl Output {
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
                 self.platform.expected_name().yellow(),
-                if state.opts.build_arguments.fullstack {
+                if state.build.build_arguments.fullstack {
                     " + fullstack".yellow()
                 } else {
                     " ".dark_gray()

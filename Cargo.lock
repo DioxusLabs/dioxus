@@ -4329,6 +4329,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "subsecond",
  "tracing",
  "tracing-wasm",
  "wasm-bindgen",

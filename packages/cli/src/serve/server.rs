@@ -1,7 +1,7 @@
 use crate::{
     config::WebHttpsConfig,
     serve::{ServeArgs, ServeUpdate},
-    BuildStage, BuildUpdate, DioxusCrate, Platform, Result, TraceSrc,
+    BuildRequest, BuildStage, BuildUpdate, Platform, Result, ServeState, TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -43,6 +43,8 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
+use super::Serve;
+
 /// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
 /// communication layer that we use to send status updates and hotreloads to the client.
 ///
@@ -68,7 +70,7 @@ impl WebServer {
     ///
     /// This will also start the websocket server that powers the devtools. If you want to communicate
     /// with connected devtools clients, this is the place to do it.
-    pub(crate) fn start(krate: &DioxusCrate, args: &ServeArgs) -> Result<Self> {
+    pub(crate) fn start(serve: &ServeState) -> Result<Self> {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
@@ -418,8 +420,7 @@ async fn devserver_mainloop(
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
 fn build_devserver_router(
-    args: &ServeArgs,
-    krate: &DioxusCrate,
+    serve: &Serve,
     hot_reload_sockets: UnboundedSender<WebSocket>,
     build_status_sockets: UnboundedSender<WebSocket>,
     fullstack_address: Option<SocketAddr>,
