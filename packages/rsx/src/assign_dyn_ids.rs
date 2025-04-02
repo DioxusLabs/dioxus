@@ -110,7 +110,7 @@ impl<'a> DynIdVisitor<'a> {
 
         // Finally, save the expression in the expression pool and store the binding
         // for later use
-        let expr = parse_quote!(#node);
+        let expr = parse_quote!({#node});
         let node_binding = self.body.expression_pool.add(expr);
         self.body.node_bindings.push(node_binding);
     }
@@ -127,7 +127,7 @@ impl<'a> DynIdVisitor<'a> {
 
         // get the value of the attribute
         let value = &attribute.rendered_as_dynamic_attr();
-        let expr = parse_quote!(#value);
+        let expr = parse_quote!({#value});
         // add the expression to the pool
         let binding = self.body.expression_pool.add(expr);
         attribute.set_value_expression_binding(binding);

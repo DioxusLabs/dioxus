@@ -191,7 +191,7 @@ impl Attribute {
             let AttributeValue::AttrExpr(expr) = &self.value else {
                 unreachable!("Spread attributes should always be expressions")
             };
-            return quote! { {(#expr).into_boxed_slice()} };
+            return quote! { {#expr}.into_boxed_slice() };
         }
 
         let el_name = self
