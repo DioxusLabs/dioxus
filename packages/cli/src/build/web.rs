@@ -72,7 +72,7 @@ impl AppBundle {
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.build.krate.config.web.app.base_path {
+            if let Some(base_path) = self.build.base_path() {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -169,7 +169,7 @@ r#" <script>
 
     /// Replace any special placeholders in the HTML with resolved values
     fn replace_template_placeholders(&self, html: &mut String) {
-        let base_path = self.build.krate.config.web.app.base_path();
+        let base_path = self.build.base_path_or_default();
         *html = html.replace("{base_path}", base_path);
 
         let app_name = &self.build.krate.executable_name();
