@@ -123,7 +123,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                 // `Hot-patching:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
 
-                builder.rebuild(args.build_arguments.clone());
+                builder.rebuild_all();
 
                 builder.clear_hot_reload_changes();
                 builder.clear_cached_rsx();

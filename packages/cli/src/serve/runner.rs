@@ -553,6 +553,10 @@ impl AppRunner {
 
         Ok(())
     }
+
+    pub fn rebuild_all(&mut self) -> Result<()> {
+        todo!()
+    }
 }
 
 // /// This handles ongoing builds, bundles, and handles to running apps

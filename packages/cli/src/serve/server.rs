@@ -43,7 +43,7 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-use super::AppRunner;
+use super::{AppBuilder, AppRunner};
 
 /// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
 /// communication layer that we use to send status updates and hotreloads to the client.
@@ -78,17 +78,18 @@ impl WebServer {
 
         // Use 0.0.0.0 as the default address if none is specified - this will let us expose the
         // devserver to the network (for other devices like phones/embedded)
-        let devserver_bind_ip = args.address.addr.unwrap_or(SELF_IP);
+        let devserver_bind_ip = runner.args.address.addr.unwrap_or(SELF_IP);
 
         // If the user specified a port, use that, otherwise use any available port, preferring 8080
-        let devserver_port = args
-            .address
-            .port
-            .unwrap_or_else(|| get_available_port(devserver_bind_ip, Some(8080)).unwrap_or(8080));
+        let devserver_port =
+            runner.args.address.port.unwrap_or_else(|| {
+                get_available_port(devserver_bind_ip, Some(8080)).unwrap_or(8080)
+            });
 
         // All servers will end up behind us (the devserver) but on a different port
         // This is so we can serve a loading screen as well as devtools without anything particularly fancy
-        let proxied_port = args
+        let proxied_port = runner
+            .args
             .should_proxy_build()
             .then(|| get_available_port(devserver_bind_ip, None))
             .flatten();
@@ -233,11 +234,7 @@ impl WebServer {
     }
 
     /// Sends an updated build status to all clients.
-    pub(crate) async fn new_build_update(
-        &mut self,
-        update: &BuildUpdate,
-        builder: &super::AppBuilder,
-    ) {
+    pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate, builder: &AppBuilder) {
         match update {
             BuildUpdate::Progress { stage } => {
                 // Todo(miles): wire up more messages into the splash screen UI
@@ -420,20 +417,21 @@ async fn devserver_mainloop(
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
 fn build_devserver_router(
-    serve: &Serve,
+    runner: &AppRunner,
     hot_reload_sockets: UnboundedSender<WebSocket>,
     build_status_sockets: UnboundedSender<WebSocket>,
     fullstack_address: Option<SocketAddr>,
     build_status: SharedStatus,
 ) -> Result<Router> {
     let mut router = Router::new();
+    let build = &runner.builds[0];
 
     // Setup proxy for the endpoint specified in the config
-    for proxy_config in krate.config.web.proxy.iter() {
+    for proxy_config in build.app.config.web.proxy.iter() {
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
-    if args.should_proxy_build() {
+    if runner.args.should_proxy_build() {
         // For fullstack, liveview, and server, forward all requests to the inner server
         let address = fullstack_address.unwrap();
         tracing::debug!("Proxying requests to fullstack server at {address}");
@@ -512,7 +510,7 @@ fn build_devserver_router(
     Ok(router)
 }
 
-fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
+fn build_serve_dir(runner: &AppRunner) -> axum::routing::MethodRouter {
     use tower::ServiceBuilder;
 
     static CORS_UNSAFE: (HeaderValue, HeaderValue) = (
@@ -525,7 +523,7 @@ fn build_serve_dir(args: &ServeArgs, cfg: &DioxusCrate) -> axum::routing::Method
         HeaderValue::from_static("same-origin"),
     );
 
-    let (coep, coop) = match args.cross_origin_policy {
+    let (coep, coop) = match runner.args.cross_origin_policy {
         true => CORS_REQUIRE.clone(),
         false => CORS_UNSAFE.clone(),
     };
