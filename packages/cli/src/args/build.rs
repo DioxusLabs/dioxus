@@ -1,5 +1,5 @@
 use crate::Platform;
-use crate::{args::*, BuildRequest, Builder};
+use crate::{args::*, BuildRequest, AppBuilder};
 use target_lexicon::Triple;
 
 /// Build the Rust Dioxus app and all of its assets.
@@ -112,7 +112,7 @@ impl BuildArgs {
             .await
             .context("Failed to load Dioxus workspace")?;
 
-        Builder::start(&build)?.finish().await?;
+        AppBuilder::start(&build)?.finish().await?;
 
         tracing::info!(path = ?build.root_dir(), "Build completed successfully! 🚀");
 

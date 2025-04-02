@@ -1,7 +1,7 @@
 use crate::{
     config::WebHttpsConfig,
     serve::{ServeArgs, ServeUpdate},
-    BuildRequest, BuildStage, BuildUpdate, Platform, Result, ServeState, TraceSrc,
+    BuildRequest, BuildStage, BuildUpdate, Platform, Result, TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -43,7 +43,7 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-use super::Serve;
+use super::AppRunner;
 
 /// The webserver that serves statics assets (if fullstack isn't already doing that) and the websocket
 /// communication layer that we use to send status updates and hotreloads to the client.
@@ -236,7 +236,7 @@ impl WebServer {
     pub(crate) async fn new_build_update(
         &mut self,
         update: &BuildUpdate,
-        builder: &super::Builder,
+        builder: &super::AppBuilder,
     ) {
         match update {
             BuildUpdate::Progress { stage } => {

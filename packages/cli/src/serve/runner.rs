@@ -1,4 +1,4 @@
-use super::{AppHandle, ServeUpdate, WebServer};
+use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     BuildArtifacts, BuildMode, BuildRequest, Platform, ReloadKind, Result, ServeArgs, TraceSrc,
 };
@@ -28,17 +28,16 @@ use tokio::process::Command;
 ///
 /// It holds the resolved state from the ServeArgs, providing a source of truth for the rest of the app
 pub(crate) struct AppRunner {
-    pub(crate) args: ServeArgs,
     /// the platform of the "primary" crate (ie the first)
     pub(crate) primary_platform: Platform,
-    pub(crate) builds: Vec<BuildRequest>,
+    pub(crate) builds: Vec<AppBuilder>,
+    pub(crate) args: ServeArgs,
     pub(crate) interactive: bool,
     pub(crate) force_sequential: bool,
     pub(crate) hotreload: bool,
     pub(crate) open_browser: bool,
     pub(crate) wsl_file_poll_interval: bool,
     pub(crate) always_on_top: bool,
-    pub(crate) running: Option<AppHandle>,
     pub(crate) ignore: Gitignore,
     pub(crate) applied_hot_reload_message: HotReloadMsg,
     pub(crate) builds_opened: usize,
@@ -63,7 +62,6 @@ impl AppRunner {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
     pub(crate) fn start(args: ServeArgs) -> Self {
         let mut runner = Self {
-            running: Default::default(),
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
             ignore: build.workspace_gitignore(),
@@ -102,33 +100,34 @@ impl AppRunner {
         fullstack_address: Option<SocketAddr>,
         should_open_web: bool,
     ) -> Result<()> {
-        // Drop the old handle
-        // This is a more forceful kill than soft_kill since the app entropy will be wiped
-        self.cleanup().await;
+        todo!();
+        // // Drop the old handle
+        // // This is a more forceful kill than soft_kill since the app entropy will be wiped
+        // self.cleanup().await;
 
-        // Add some cute logging
-        let time_taken = app.app.time_end.duration_since(app.app.time_start).unwrap();
-        if self.builds_opened == 0 {
-            tracing::info!(
-                "Build completed successfully in {:?}ms, launching app! 💫",
-                time_taken.as_millis()
-            );
-        } else {
-            tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
-        }
+        // // Add some cute logging
+        // let time_taken = app.app.time_end.duration_since(app.app.time_start).unwrap();
+        // if self.builds_opened == 0 {
+        //     tracing::info!(
+        //         "Build completed successfully in {:?}ms, launching app! 💫",
+        //         time_taken.as_millis()
+        //     );
+        // } else {
+        //     tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
+        // }
 
-        // Start the new app before we kill the old one to give it a little bit of time
-        let mut handle = AppHandle::new(app).await?;
-        handle
-            .open(
-                devserver_ip,
-                fullstack_address,
-                self.builds_opened == 0 && should_open_web,
-            )
-            .await?;
+        // // Start the new app before we kill the old one to give it a little bit of time
+        // // let mut handle = AppHandle::new(app).await?;
+        // handle
+        //     .open(
+        //         devserver_ip,
+        //         fullstack_address,
+        //         self.builds_opened == 0 && should_open_web,
+        //     )
+        //     .await?;
 
-        self.builds_opened += 1;
-        self.running = Some(handle);
+        // self.builds_opened += 1;
+        // self.running = Some(handle);
 
         Ok(())
     }
@@ -517,7 +516,7 @@ impl AppRunner {
                 .unwrap_or_else(|_| changed_file.as_path())
                 .display(),
             SystemTime::now()
-                .duration_since(bundle.app.time_start)
+                .duration_since(bundle.time_start)
                 .unwrap()
                 .as_millis()
         );

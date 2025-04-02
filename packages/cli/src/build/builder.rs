@@ -19,7 +19,7 @@ use tokio::{
 
 use super::BuildMode;
 
-/// The component of the serve engine that watches ongoing builds and manages their state, handle,
+/// The component of the serve engine that watches ongoing builds and manages their state, open handle,
 /// and progress.
 ///
 /// Previously, the builder allowed multiple apps to be built simultaneously, but this newer design
@@ -41,10 +41,12 @@ use super::BuildMode;
 /// duper useful.
 ///
 /// todo: restructure this such that "open" is a running task instead of blocking the main thread
-pub(crate) struct Builder {
-    pub app: BuildRequest,
+pub(crate) struct AppBuilder {
     pub tx: ProgressTx,
     pub rx: ProgressRx,
+
+    // The original request with access to its build directory
+    pub app: BuildRequest,
 
     // Ongoing build task, if any
     pub build: JoinHandle<Result<BuildArtifacts>>,
@@ -102,7 +104,7 @@ pub enum HandleUpdate {
     },
 }
 
-impl Builder {
+impl AppBuilder {
     /// Create a new builder and immediately start a build
     pub(crate) fn start(request: &BuildRequest) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();

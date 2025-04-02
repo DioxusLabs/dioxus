@@ -1,5 +1,5 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringLine, Builder, ServeUpdate, WebServer},
+    serve::{ansi_buffer::AnsiStringLine, AppBuilder, ServeUpdate, WebServer},
     BuildRequest, BuildStage, BuildUpdate, Platform, RustcDetails, ServeArgs, TraceContent,
     TraceMsg, TraceSrc,
 };
@@ -473,37 +473,39 @@ impl Output {
         ])
         .areas(gauge_area);
 
+        let build = &state.runner.builds[0];
+
         self.render_single_gauge(
             frame,
             app_progress,
-            state.runner.compile_progress(),
+            build.compile_progress(),
             "App:    ",
             state,
-            state.runner.compile_duration(),
+            build.compile_duration(),
         );
 
-        if state.runner.request.fullstack {
+        if build.app.fullstack {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                state.runner.server_compile_progress(),
+                build.server_compile_progress(),
                 "Server: ",
                 state,
-                state.runner.compile_duration(),
+                build.compile_duration(),
             );
         } else {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                state.runner.bundle_progress(),
+                build.bundle_progress(),
                 "Bundle: ",
                 state,
-                state.runner.bundle_duration(),
+                build.bundle_duration(),
             );
         }
 
         let mut lines = vec!["Status:  ".white()];
-        match &state.runner.stage {
+        match &build.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
             BuildStage::Starting { patch, .. } => {
                 if *patch {
@@ -543,9 +545,9 @@ impl Output {
             }
             BuildStage::Success => {
                 lines.push("Serving ".yellow());
-                lines.push(state.runner.app_name().white());
+                lines.push(build.app.executable_name().white());
                 lines.push(" 🚀 ".green());
-                if let Some(comp_time) = state.runner.total_build_time() {
+                if let Some(comp_time) = build.total_build_time() {
                     lines.push(format!("{:.1}s", comp_time.as_secs_f32()).dark_gray());
                 }
             }
@@ -567,7 +569,9 @@ impl Output {
         state: RenderState,
         time_taken: Option<Duration>,
     ) {
-        let failed = state.runner.stage == BuildStage::Failed;
+        let build = &state.runner.builds[0];
+
+        let failed = build.stage == BuildStage::Failed;
         let value = if failed { 1.0 } else { value.clamp(0.0, 1.0) };
 
         let [gauge_row, _, icon] = Layout::horizontal([
@@ -638,11 +642,13 @@ impl Output {
         ])
         .areas(area);
 
+        let build = &state.runner.builds[0];
+
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
-                state.runner.platform.expected_name().yellow(),
-                if state.build.build_arguments.fullstack {
+                build.app.platform.expected_name().yellow(),
+                if build.app.fullstack {
                     " + fullstack".yellow()
                 } else {
                     " ".dark_gray()
@@ -662,7 +668,7 @@ impl Output {
 
         frame.render_widget_ref(
             Paragraph::new(Line::from(vec![
-                if self.platform == Platform::Web {
+                if build.app.platform == Platform::Web {
                     "Serving at: ".gray()
                 } else {
                     "ServerFns at: ".gray()
@@ -679,7 +685,7 @@ impl Output {
             Paragraph::new(Line::from({
                 let mut lines = vec!["App features: ".gray(), "[".yellow()];
 
-                let feature_list: Vec<String> = state.runner.request.all_target_features();
+                let feature_list: Vec<String> = state.runner.builds[0].app.all_target_features();
                 let num_features = feature_list.len();
 
                 for (idx, feature) in feature_list.into_iter().enumerate() {

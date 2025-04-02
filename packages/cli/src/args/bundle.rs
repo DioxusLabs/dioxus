@@ -1,4 +1,4 @@
-use crate::{BuildArgs, BuildRequest, Builder, Platform};
+use crate::{BuildArgs, BuildRequest, AppBuilder, Platform};
 use anyhow::{anyhow, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -67,7 +67,7 @@ impl Bundle {
 
         tracing::info!("Building app...");
 
-        let bundle = Builder::start(&build)?.finish().await?;
+        let bundle = AppBuilder::start(&build)?.finish().await?;
 
         // If we're building for iOS, we need to bundle the iOS bundle
         if build.platform == Platform::Ios && self.package_types.is_none() {

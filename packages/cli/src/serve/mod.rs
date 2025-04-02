@@ -1,5 +1,5 @@
 use crate::{
-    BuildMode, BuildRequest, BuildUpdate, Builder, Error, HandleUpdate, Platform, Result,
+    AppBuilder, BuildMode, BuildRequest, BuildUpdate, Error, HandleUpdate, Platform, Result,
     ServeArgs, TraceController, TraceSrc,
 };
 
