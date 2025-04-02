@@ -669,18 +669,19 @@ impl Output {
             None => "no server address".dark_gray(),
         };
 
-        frame.render_widget_ref(
-            Paragraph::new(Line::from(vec![
-                if self.platform == Platform::Web {
-                    "Serving at: ".gray()
-                } else {
-                    "ServerFns at: ".gray()
-                },
-                address,
-            ]))
-            .wrap(Wrap { trim: false }),
-            serve_address,
-        );
+        let widget = Paragraph::new(Line::from(vec![
+            if self.platform == Platform::Web {
+                "Serving at: ".gray()
+            } else {
+                "ServerFns at: ".gray()
+            },
+            address,
+        ]))
+        .wrap(Wrap { trim: false });
+        // Only show the address if there is enough space
+        if widget.line_width() <= serve_address.width as _ {
+            frame.render_widget_ref(widget, serve_address);
+        }
     }
 
     fn render_feature_list(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
