@@ -1,3 +1,5 @@
+use syn::parse_quote;
+
 use crate::attribute::Attribute;
 use crate::{
     AttributeValue, BodyNode, HotLiteral, HotReloadFormattedSegment, Segment, TemplateBody,
@@ -35,10 +37,10 @@ impl<'a> DynIdVisitor<'a> {
             BodyNode::Element(el) => {
                 for (idx, attr) in el.merged_attributes.iter().enumerate() {
                     if !attr.is_static_str_literal() {
-                        self.assign_path_to_attribute(attr, idx);
                         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
                             self.assign_formatted_segment(lit);
                         }
+                        self.assign_path_to_attribute(attr, idx);
                     }
                 }
                 // Assign formatted segments to the key which is not included in the merged_attributes
@@ -105,6 +107,12 @@ impl<'a> DynIdVisitor<'a> {
 
         // And then save the current path as the corresponding path
         self.body.node_paths.push(self.current_path.clone());
+
+        // Finally, save the expression in the expression pool and store the binding
+        // for later use
+        let expr = parse_quote!(#node);
+        let node_binding = self.body.expression_pool.add(expr);
+        self.body.node_bindings.push(node_binding);
     }
 
     /// Assign a path to a attribute and give it its dynamic index
@@ -116,6 +124,13 @@ impl<'a> DynIdVisitor<'a> {
     ) {
         // Assign the dynamic index to the attribute
         attribute.set_dyn_idx(self.body.attr_paths.len());
+
+        // get the value of the attribute
+        let value = &attribute.rendered_as_dynamic_attr();
+        let expr = parse_quote!(#value);
+        // add the expression to the pool
+        let binding = self.body.expression_pool.add(expr);
+        attribute.set_value_expression_binding(binding);
 
         // And then save the current path as the corresponding path
         self.body
