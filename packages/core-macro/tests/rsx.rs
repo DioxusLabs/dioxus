@@ -110,6 +110,7 @@ mod test_optional_signals {
 /// These are compile-time tests.
 /// See https://github.com/DioxusLabs/dioxus/issues/3737
 #[cfg(test)]
+#[allow(unused)]
 mod rsx_ordering {
     mod attribute_then_component {
         use dioxus::prelude::*;
@@ -130,6 +131,7 @@ mod rsx_ordering {
             }
         }
 
+        #[component]
         fn Parent() -> Element {
             let outer = TestOuter;
 
@@ -165,6 +167,7 @@ mod rsx_ordering {
             }
         }
 
+        #[component]
         fn Parent() -> Element {
             let outer = "hello".to_string();
 
