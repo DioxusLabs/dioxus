@@ -39,7 +39,11 @@ fn app() -> Element {
 
         rsx! {
             for cur_breed in breeds.message.keys().take(20).cloned() {
-                button { onclick: move |_| breed.set(cur_breed.clone()),
+                button {
+                    onclick: {
+                        to_owned![cur_breed];
+                        move |_| breed.set(cur_breed.clone())
+                    },
                     "{cur_breed}"
                 }
             }
