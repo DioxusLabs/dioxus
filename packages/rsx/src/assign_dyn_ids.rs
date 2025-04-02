@@ -54,8 +54,8 @@ impl<'a> DynIdVisitor<'a> {
             // Text nodes are dynamic if they contain dynamic segments
             BodyNode::Text(txt) => {
                 if !txt.is_static() {
-                    self.assign_path_to_node(node);
                     self.assign_formatted_segment(&txt.input);
+                    self.assign_path_to_node(node);
                 }
             }
 
@@ -64,7 +64,6 @@ impl<'a> DynIdVisitor<'a> {
                 self.assign_path_to_node(node)
             }
             BodyNode::Component(component) => {
-                self.assign_path_to_node(node);
                 let mut index = 0;
                 for property in &component.fields {
                     if let AttributeValue::AttrLiteral(literal) = &property.value {
@@ -80,6 +79,7 @@ impl<'a> DynIdVisitor<'a> {
                         }
                     }
                 }
+                self.assign_path_to_node(node);
             }
         };
     }
