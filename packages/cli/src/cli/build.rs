@@ -1,5 +1,5 @@
 use crate::Platform;
-use crate::{args::*, BuildRequest, AppBuilder};
+use crate::{cli::*, AppBuilder, BuildRequest};
 use target_lexicon::Triple;
 
 /// Build the Rust Dioxus app and all of its assets.

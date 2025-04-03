@@ -13,21 +13,11 @@ use target_lexicon::Triple;
 use tokio::process::Command;
 use toml_edit::Item;
 
-// pub struct Workspace {
-//     pub(crate) krates: Krates,
-//     pub(crate) settings: CliSettings,
-// }
-
-// impl Workspace {
-//     fn new() -> Result<Self> {}
-
-//     fn get_target() {}
-// }
-
 pub struct Workspace {
     pub(crate) krates: Krates,
     pub(crate) settings: CliSettings,
     pub(crate) rustc: RustcDetails,
+    pub(crate) wasm_opt: Option<PathBuf>,
 }
 
 static WS: OnceCell<Arc<Workspace>> = OnceCell::new();
@@ -44,10 +34,13 @@ impl Workspace {
         let settings = CliSettings::global_or_default();
         let rustc = RustcDetails::from_cli().await?;
 
+        let wasm_opt = which::which("wasm-opt").ok();
+
         Ok(Arc::new(Self {
             krates,
             settings,
             rustc,
+            wasm_opt,
         }))
     }
 
@@ -62,33 +55,6 @@ impl Workspace {
             .join("wasm-ld")
     }
 }
-
-// pub struct Workspace {
-//     pub(crate) krates: Krates,
-//     pub(crate) settings: CliSettings,
-//     pub(crate) rustc: RustcDetails,
-// }
-
-// impl Workspace {
-//     pub async fn load() -> Result<Arc<Workspace>> {
-//         tracing::debug!("Loading workspace");
-//         let cmd = Cmd::new();
-//         let builder = krates::Builder::new();
-//         let krates = builder
-//             .build(cmd, |_| {})
-//             .context("Failed to run cargo metadata")?;
-
-//         let settings = CliSettings::global_or_default();
-//         let rustc = RustcDetails::from_cli().await?;
-
-//         Ok(Arc::new(Self {
-//             krates,
-//             settings,
-//             rustc,
-//         }))
-//     }
-
-// }
 
 impl std::fmt::Debug for Workspace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

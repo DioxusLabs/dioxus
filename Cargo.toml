@@ -303,6 +303,11 @@ opt-level = 'z'
 lto = true
 debug=true
 
+# when dev-ing on dioxus you need to opt into more debug info
+[profile.dev]
+debug = 1
+strip = "debuginfo"
+
 [profile.subsecond-dev]
 inherits = "dev"
 debug = 0

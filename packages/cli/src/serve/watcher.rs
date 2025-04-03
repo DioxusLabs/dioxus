@@ -1,5 +1,5 @@
 use super::update::ServeUpdate;
-use crate::{args::serve::ServeArgs, BuildRequest};
+use crate::{cli::serve::ServeArgs, BuildRequest};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use notify::{
