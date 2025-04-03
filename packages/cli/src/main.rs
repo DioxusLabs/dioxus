@@ -13,7 +13,6 @@ mod fastfs;
 mod logging;
 mod metadata;
 mod platform;
-mod rustc;
 mod serve;
 mod settings;
 mod wasm_bindgen;
@@ -27,7 +26,6 @@ pub(crate) use dioxus_dx_wire_format::*;
 pub(crate) use error::*;
 pub(crate) use logging::*;
 pub(crate) use platform::*;
-pub(crate) use rustc::*;
 pub(crate) use settings::*;
 pub(crate) use workspace::*;
 

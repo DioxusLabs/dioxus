@@ -1,7 +1,6 @@
 use crate::{
     serve::{ansi_buffer::AnsiStringLine, AppBuilder, ServeUpdate, WebServer},
-    BuildRequest, BuildStage, BuildUpdate, Platform, RustcDetails, ServeArgs, TraceContent,
-    TraceMsg, TraceSrc,
+    BuildRequest, BuildStage, BuildUpdate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
@@ -65,8 +64,6 @@ pub struct Output {
     // ! needs to be wrapped in an &mut since `render stateful widget` requires &mut... but our
     // "render" method only borrows &self (for no particular reason at all...)
     throbber: RefCell<throbber_widgets_tui::ThrobberState>,
-
-    rustc_details: RustcDetails,
 }
 
 #[allow(unused)]
@@ -98,7 +95,6 @@ impl Output {
                 interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                 interval
             },
-            rustc_details: RustcDetails::from_cli().await?,
         };
 
         output.startup()?;
@@ -734,7 +730,7 @@ impl Output {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "rustc: ".gray(),
-                self.rustc_details.version.as_str().yellow(),
+                state.runner.workspace.rustc_version.as_str().yellow(),
             ])),
             meta_list[2],
         );

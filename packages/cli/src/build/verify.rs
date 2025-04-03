@@ -1,4 +1,4 @@
-use crate::{wasm_bindgen::WasmBindgen, BuildRequest, Error, Platform, Result, RustcDetails};
+use crate::{wasm_bindgen::WasmBindgen, BuildRequest, Error, Platform, Result};
 use anyhow::{anyhow, Context};
 
 impl BuildRequest {
@@ -14,19 +14,11 @@ impl BuildRequest {
             .initialize_profiles()
             .context("Failed to initialize profiles - dioxus can't build without them. You might need to initialize them yourself.")?;
 
-        let rustc = match RustcDetails::from_cli().await {
-            Ok(out) => out,
-            Err(err) => {
-                tracing::error!("Failed to verify tooling: {err}\ndx will proceed, but you might run into errors later.");
-                return Ok(());
-            }
-        };
-
         match self.platform {
-            Platform::Web => self.verify_web_tooling(rustc).await?,
-            Platform::Ios => self.verify_ios_tooling(rustc).await?,
-            Platform::Android => self.verify_android_tooling(rustc).await?,
-            Platform::Linux => self.verify_linux_tooling(rustc).await?,
+            Platform::Web => self.verify_web_tooling().await?,
+            Platform::Ios => self.verify_ios_tooling().await?,
+            Platform::Android => self.verify_android_tooling().await?,
+            Platform::Linux => self.verify_linux_tooling().await?,
             Platform::MacOS => {}
             Platform::Windows => {}
             Platform::Server => {}
@@ -36,10 +28,10 @@ impl BuildRequest {
         Ok(())
     }
 
-    pub(crate) async fn verify_web_tooling(&self, rustc: RustcDetails) -> Result<()> {
+    pub(crate) async fn verify_web_tooling(&self) -> Result<()> {
         // Install target using rustup.
         #[cfg(not(feature = "no-downloads"))]
-        if !rustc.has_wasm32_unknown_unknown() {
+        if !self.workspace.has_wasm32_unknown_unknown() {
             tracing::info!(
                 "Web platform requires wasm32-unknown-unknown to be installed. Installing..."
             );
@@ -51,7 +43,7 @@ impl BuildRequest {
         }
 
         // Ensure target is installed.
-        if !rustc.has_wasm32_unknown_unknown() {
+        if !self.workspace.has_wasm32_unknown_unknown() {
             return Err(Error::Other(anyhow!(
                 "Missing target wasm32-unknown-unknown."
             )));
@@ -74,7 +66,7 @@ impl BuildRequest {
     /// We don't auto-install these yet since we're not doing an architecture check. We assume most users
     /// are running on an Apple Silicon Mac, but it would be confusing if we installed these when we actually
     /// should be installing the x86 versions.
-    pub(crate) async fn verify_ios_tooling(&self, _rustc: RustcDetails) -> Result<()> {
+    pub(crate) async fn verify_ios_tooling(&self) -> Result<()> {
         // open the simulator
         // _ = tokio::process::Command::new("open")
         //     .arg("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app")
@@ -115,7 +107,7 @@ impl BuildRequest {
     ///
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
-    pub(crate) async fn verify_android_tooling(&self, _rustc: RustcDetails) -> Result<()> {
+    pub(crate) async fn verify_android_tooling(&self) -> Result<()> {
         let android = crate::build::android_tools().context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?;
 
         let linker = android.android_cc(&self.target);
@@ -136,7 +128,7 @@ impl BuildRequest {
     ///
     /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
     ///     https://tauri.app/start/prerequisites/
-    pub(crate) async fn verify_linux_tooling(&self, _rustc: RustcDetails) -> Result<()> {
+    pub(crate) async fn verify_linux_tooling(&self) -> Result<()> {
         Ok(())
     }
 }

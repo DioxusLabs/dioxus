@@ -1,6 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
     BuildArtifacts, BuildMode, BuildRequest, Platform, ReloadKind, Result, ServeArgs, TraceSrc,
+    Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -18,6 +19,7 @@ use std::{
     net::SocketAddr,
     path::PathBuf,
     str::FromStr,
+    sync::Arc,
 };
 use std::{path::Path, time::SystemTime};
 use subsecond_cli_support::JumpTable;
@@ -31,6 +33,7 @@ use tokio::process::Command;
 pub(crate) struct AppRunner {
     /// the platform of the "primary" crate (ie the first)
     pub(crate) primary_platform: Platform,
+    pub(crate) workspace: Arc<crate::Workspace>,
     pub(crate) builds: Vec<AppBuilder>,
     pub(crate) args: ServeArgs,
     pub(crate) interactive: bool,
@@ -67,6 +70,7 @@ impl AppRunner {
             builds_opened: 0,
             automatic_rebuilds: true,
             // ignore: build.workspace_gitignore(),
+            workspace: todo!(),
             ignore: todo!(),
             primary_platform: todo!(),
             builds: todo!(),
