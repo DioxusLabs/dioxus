@@ -20,6 +20,7 @@ use std::{
     str::FromStr,
 };
 use std::{path::Path, time::SystemTime};
+use subsecond_cli_support::JumpTable;
 use syn::spanned::Spanned;
 use target_lexicon::Triple;
 use tokio::process::Command;
@@ -43,7 +44,6 @@ pub(crate) struct AppRunner {
     pub(crate) builds_opened: usize,
     pub(crate) automatic_rebuilds: bool,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
-    pub(crate) aslr_reference: Option<u64>,
 }
 
 pub enum HotReloadKind {
@@ -64,18 +64,27 @@ impl AppRunner {
         let mut runner = Self {
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
-            ignore: build.workspace_gitignore(),
             builds_opened: 0,
             automatic_rebuilds: true,
-            aslr_reference: None,
+            // ignore: build.workspace_gitignore(),
+            ignore: todo!(),
+            primary_platform: todo!(),
+            builds: todo!(),
+            args,
+            interactive: todo!(),
+            force_sequential: todo!(),
+            hotreload: todo!(),
+            open_browser: todo!(),
+            wsl_file_poll_interval: todo!(),
+            always_on_top: todo!(),
         };
 
-        // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
-        // we could spawn a thread to search the FS and then when it returns we can fill the filemap
-        // in testing, if this hits a massive directory, it might take several seconds with no feedback.
-        for krate in build.all_watched_crates() {
-            runner.fill_filemap(krate);
-        }
+        // // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
+        // // we could spawn a thread to search the FS and then when it returns we can fill the filemap
+        // // in testing, if this hits a massive directory, it might take several seconds with no feedback.
+        // for krate in build.all_watched_crates() {
+        //     runner.fill_filemap(krate);
+        // }
 
         // Ensure the session cache dir exists and is empty
         // runner.flush_session_cache();
@@ -83,13 +92,18 @@ impl AppRunner {
         runner
     }
 
-    pub(crate) async fn wait(&mut self) -> ServeUpdate {
-        // If there are no running apps, we can just return pending to avoid deadlocking
-        let Some(handle) = self.running.as_mut() else {
-            return futures_util::future::pending().await;
-        };
+    pub(crate) fn main(&self) -> &AppBuilder {
+        self.builds.get(0).unwrap()
+    }
 
-        ServeUpdate::HandleUpdate(handle.wait().await)
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
+        // // If there are no running apps, we can just return pending to avoid deadlocking
+        // let Some(handle) = self.running.as_mut() else {
+        //     return futures_util::future::pending().await;
+        // };
+
+        // ServeUpdate::HandleUpdate(handle.wait().await)
+        todo!()
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -98,7 +112,7 @@ impl AppRunner {
         app: BuildArtifacts,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
-        should_open_web: bool,
+        // should_open_web: bool,
     ) -> Result<()> {
         todo!();
         // // Drop the old handle
@@ -136,21 +150,23 @@ impl AppRunner {
     pub(crate) async fn open_existing(&mut self, devserver: &WebServer) -> Result<()> {
         let fullstack_address = devserver.proxied_server_address();
 
-        if let Some(runner) = self.running.as_mut() {
-            runner.soft_kill().await;
-            runner
-                .open(devserver.devserver_address(), fullstack_address, true)
-                .await?;
-        }
+        todo!();
+        // if let Some(runner) = self.running.as_mut() {
+        //     runner.soft_kill().await;
+        //     runner
+        //         .open(devserver.devserver_address(), fullstack_address, true)
+        //         .await?;
+        // }
 
         Ok(())
     }
 
     /// Shutdown all the running processes
     pub(crate) async fn cleanup(&mut self) {
-        if let Some(mut process) = self.running.take() {
-            process.cleanup().await;
-        }
+        todo!()
+        // if let Some(mut process) = self.running.take() {
+        //     process.cleanup().await;
+        // }
 
         // if matches!(self.platform, Platform::Android) {
         //     use std::process::{Command, Stdio};
@@ -175,72 +191,72 @@ impl AppRunner {
         todo!()
     }
 
-    /// Attempt to hotreload the given files
-    pub(crate) async fn hotreload(&mut self, modified_files: Vec<PathBuf>) -> HotReloadKind {
-        // If we have any changes to the rust files, we need to update the file map
-        let mut templates = vec![];
+    // /// Attempt to hotreload the given files
+    // pub(crate) async fn hotreload(&mut self, modified_files: Vec<PathBuf>) -> HotReloadKind {
+    //     // If we have any changes to the rust files, we need to update the file map
+    //     let mut templates = vec![];
 
-        // Prepare the hotreload message we need to send
-        let mut assets = Vec::new();
-        let mut needs_full_rebuild = false;
+    //     // Prepare the hotreload message we need to send
+    //     let mut assets = Vec::new();
+    //     let mut needs_full_rebuild = false;
 
-        // We attempt to hotreload rsx blocks without a full rebuild
-        for path in modified_files {
-            // for various assets that might be linked in, we just try to hotreloading them forcefully
-            // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
-                continue;
-            };
+    //     // We attempt to hotreload rsx blocks without a full rebuild
+    //     for path in modified_files {
+    //         // for various assets that might be linked in, we just try to hotreloading them forcefully
+    //         // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
+    //         let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+    //             continue;
+    //         };
 
-            // If it's a rust file, we want to hotreload it using the filemap
-            if ext == "rs" {
-                // Strip the prefix before sending it to the filemap
-                if path.strip_prefix(self.krate.workspace_dir()).is_err() {
-                    tracing::error!(
-                        "Hotreloading file outside of the crate directory: {:?}",
-                        path
-                    );
-                    continue;
-                };
+    //         // If it's a rust file, we want to hotreload it using the filemap
+    //         if ext == "rs" {
+    //             // Strip the prefix before sending it to the filemap
+    //             if path.strip_prefix(self.krate.workspace_dir()).is_err() {
+    //                 tracing::error!(
+    //                     "Hotreloading file outside of the crate directory: {:?}",
+    //                     path
+    //                 );
+    //                 continue;
+    //             };
 
-                // And grabout the contents
-                let Ok(contents) = std::fs::read_to_string(&path) else {
-                    tracing::debug!("Failed to read rust file while hotreloading: {:?}", path);
-                    continue;
-                };
+    //             // And grabout the contents
+    //             let Ok(contents) = std::fs::read_to_string(&path) else {
+    //                 tracing::debug!("Failed to read rust file while hotreloading: {:?}", path);
+    //                 continue;
+    //             };
 
-                match self.rsx_changed::<HtmlCtx>(&path, contents) {
-                    Some(new) => templates.extend(new),
-                    None => needs_full_rebuild = true,
-                }
+    //             match self.rsx_changed::<HtmlCtx>(&path, contents) {
+    //                 Some(new) => templates.extend(new),
+    //                 None => needs_full_rebuild = true,
+    //             }
 
-                continue;
-            }
+    //             continue;
+    //         }
 
-            // Otherwise, it might be an asset and we should look for it in all the running apps
-            if let Some(runner) = self.running.as_mut() {
-                if let Some(bundled_name) = runner.hotreload_bundled_asset(&path).await {
-                    // todo(jon): don't hardcode this here
-                    assets.push(PathBuf::from("/assets/").join(bundled_name));
-                }
-            }
-        }
+    //         // Otherwise, it might be an asset and we should look for it in all the running apps
+    //         if let Some(runner) = self.running.as_mut() {
+    //             if let Some(bundled_name) = runner.hotreload_bundled_asset(&path).await {
+    //                 // todo(jon): don't hardcode this here
+    //                 assets.push(PathBuf::from("/assets/").join(bundled_name));
+    //             }
+    //         }
+    //     }
 
-        match needs_full_rebuild {
-            true => HotReloadKind::Patch,
-            false => {
-                let msg = HotReloadMsg {
-                    templates,
-                    assets,
-                    ..Default::default()
-                };
+    //     match needs_full_rebuild {
+    //         true => HotReloadKind::Patch,
+    //         false => {
+    //             let msg = HotReloadMsg {
+    //                 templates,
+    //                 assets,
+    //                 ..Default::default()
+    //             };
 
-                self.add_hot_reload_message(&msg);
+    //             self.add_hot_reload_message(&msg);
 
-                HotReloadKind::Rsx(msg)
-            }
-        }
-    }
+    //             HotReloadKind::Rsx(msg)
+    //         }
+    //     }
+    // }
 
     /// Get any hot reload changes that have been applied since the last full rebuild
     pub(crate) fn applied_hot_reload_changes(&mut self) -> HotReloadMsg {
@@ -273,29 +289,27 @@ impl AppRunner {
     }
 
     pub(crate) async fn client_connected(&mut self) {
-        let Some(handle) = self.running.as_mut() else {
-            return;
-        };
+        for app in self.builds.iter_mut() {
+            // Assign the runtime asset dir to the runner
+            if app.app.platform == Platform::Ios {
+                // xcrun simctl get_app_container booted com.dioxuslabs
+                let res = Command::new("xcrun")
+                    .arg("simctl")
+                    .arg("get_app_container")
+                    .arg("booted")
+                    .arg(app.app.bundle_identifier())
+                    .output()
+                    .await;
 
-        // Assign the runtime asset dir to the runner
-        if handle.app.build.platform == Platform::Ios {
-            // xcrun simctl get_app_container booted com.dioxuslabs
-            let res = Command::new("xcrun")
-                .arg("simctl")
-                .arg("get_app_container")
-                .arg("booted")
-                .arg(handle.app.build.bundle_identifier())
-                .output()
-                .await;
+                if let Ok(res) = res {
+                    tracing::trace!("Using runtime asset dir: {:?}", res);
 
-            if let Ok(res) = res {
-                tracing::trace!("Using runtime asset dir: {:?}", res);
+                    if let Ok(out) = String::from_utf8(res.stdout) {
+                        let out = out.trim();
 
-                if let Ok(out) = String::from_utf8(res.stdout) {
-                    let out = out.trim();
-
-                    tracing::trace!("Setting Runtime asset dir: {out:?}");
-                    handle.runtime_asst_dir = Some(PathBuf::from(out));
+                        tracing::trace!("Setting Runtime asset dir: {out:?}");
+                        app.runtime_asst_dir = Some(PathBuf::from(out));
+                    }
                 }
             }
         }
@@ -483,45 +497,43 @@ impl AppRunner {
     //     _ = std::fs::create_dir_all(&cache_dir);
     // }
 
-    pub async fn patch(
-        &mut self,
-        bundle: &BuildArtifacts,
-    ) -> Result<subsecond_cli_support::JumpTable> {
-        let original = self.running.as_ref().unwrap().app.main_exe();
-        let new = bundle.patch_exe();
+    pub async fn patch(&mut self, bundle: &BuildArtifacts) -> Result<JumpTable> {
+        todo!()
+        // let original = self.running.as_ref().unwrap().app.main_exe();
+        // let new = bundle.patch_exe();
 
-        let mut jump_table =
-            subsecond_cli_support::create_jump_table(&original, &new, &bundle.build.target)
-                .unwrap();
+        // let mut jump_table =
+        //     subsecond_cli_support::create_jump_table(&original, &new, &bundle.build.target)
+        //         .unwrap();
 
-        // If it's android, we need to copy the assets to the device and then change the location of the patch
-        if let Some(handle) = self.running.as_mut() {
-            if handle.app.build.platform == Platform::Android {
-                jump_table.lib = handle
-                    .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
-                    .await?;
-            }
-        }
+        // // If it's android, we need to copy the assets to the device and then change the location of the patch
+        // if let Some(handle) = self.running.as_mut() {
+        //     if handle.app.build.platform == Platform::Android {
+        //         jump_table.lib = handle
+        //             .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
+        //             .await?;
+        //     }
+        // }
 
-        let changed_files = match &bundle.build.mode {
-            BuildMode::Thin { changed_files, .. } => changed_files.clone(),
-            _ => vec![],
-        };
+        // let changed_files = match &bundle.build.mode {
+        //     BuildMode::Thin { changed_files, .. } => changed_files.clone(),
+        //     _ => vec![],
+        // };
 
-        let changed_file = changed_files.first().unwrap();
-        tracing::info!(
-            "Hot-patching: {} in {:?}ms",
-            changed_file
-                .strip_prefix(std::env::current_dir().unwrap())
-                .unwrap_or_else(|_| changed_file.as_path())
-                .display(),
-            SystemTime::now()
-                .duration_since(bundle.time_start)
-                .unwrap()
-                .as_millis()
-        );
+        // let changed_file = changed_files.first().unwrap();
+        // tracing::info!(
+        //     "Hot-patching: {} in {:?}ms",
+        //     changed_file
+        //         .strip_prefix(std::env::current_dir().unwrap())
+        //         .unwrap_or_else(|_| changed_file.as_path())
+        //         .display(),
+        //     SystemTime::now()
+        //         .duration_since(bundle.time_start)
+        //         .unwrap()
+        //         .as_millis()
+        // );
 
-        Ok(jump_table)
+        // Ok(jump_table)
     }
 
     pub(crate) async fn handle_ws_message(
@@ -548,8 +560,9 @@ impl AppRunner {
             return Ok(());
         };
 
-        tracing::debug!("Setting aslr_reference: {aslr_reference}");
-        self.aslr_reference = Some(aslr_reference);
+        // tracing::debug!("Setting aslr_reference: {aslr_reference}");
+        // self.aslr_reference = Some(aslr_reference);
+        todo!("aslr reference");
 
         Ok(())
     }

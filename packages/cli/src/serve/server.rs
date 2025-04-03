@@ -116,8 +116,7 @@ impl WebServer {
         // Set up the router with some shared state that we'll update later to reflect the current state of the build
         let build_status = SharedStatus::new_with_starting_build();
         let router = build_devserver_router(
-            args,
-            krate,
+            &runner,
             hot_reload_sockets_tx,
             build_status_sockets_tx,
             proxied_address,
@@ -126,7 +125,7 @@ impl WebServer {
 
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
-            krate.config.web.https.clone(),
+            runner.main().app.config.web.https.clone(),
             listener,
             router,
         ));
@@ -141,7 +140,7 @@ impl WebServer {
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
-            application_name: krate.executable_name().to_string(),
+            application_name: runner.app_name().to_string(),
         })
     }
 
@@ -234,7 +233,7 @@ impl WebServer {
     }
 
     /// Sends an updated build status to all clients.
-    pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate, builder: &AppBuilder) {
+    pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate) {
         match update {
             BuildUpdate::Progress { stage } => {
                 // Todo(miles): wire up more messages into the splash screen UI
@@ -250,13 +249,13 @@ impl WebServer {
                         krate,
                         ..
                     } => {
-                        if !builder.is_finished() {
-                            self.build_status.set(Status::Building {
-                                progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
-                                build_message: format!("{krate} compiling"),
-                            });
-                            self.send_build_status().await;
-                        }
+                        // if !builder.is_finished() {
+                        self.build_status.set(Status::Building {
+                            progress: (*current as f64 / *total as f64).clamp(0.0, 1.0),
+                            build_message: format!("{krate} compiling"),
+                        });
+                        self.send_build_status().await;
+                        // }
                     }
                     BuildStage::OptimizingWasm {} => {}
                     BuildStage::Aborted => {}
@@ -453,7 +452,9 @@ fn build_devserver_router(
         // Route file service to output the .wasm and assets if this is a web build
         let base_path = format!(
             "/{}",
-            krate
+            runner
+                .main()
+                .app
                 .config
                 .web
                 .app
@@ -463,7 +464,7 @@ fn build_devserver_router(
                 .trim_matches('/')
         );
 
-        router = router.nest_service(&base_path, build_serve_dir(args, krate));
+        router = router.nest_service(&base_path, build_serve_dir(runner));
     }
 
     // Setup middleware to intercept html requests if the build status is "Building"
@@ -528,10 +529,14 @@ fn build_serve_dir(runner: &AppRunner) -> axum::routing::MethodRouter {
         false => CORS_UNSAFE.clone(),
     };
 
-    let out_dir = cfg
-        .build_dir(Platform::Web, args.build_arguments.args.release)
+    let app = runner.main();
+    let cfg = &runner.main().app.config;
+
+    let out_dir = app
+        .app
+        .build_dir(Platform::Web, app.app.release)
         .join("public");
-    let index_on_404 = cfg.config.web.watcher.index_on_404;
+    let index_on_404: bool = cfg.web.watcher.index_on_404;
 
     get_service(
         ServiceBuilder::new()

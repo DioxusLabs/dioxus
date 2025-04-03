@@ -66,6 +66,9 @@ pub(crate) struct AppBuilder {
     /// same app without causing collisions on the filesystem.
     pub entropy_app_exe: Option<PathBuf>,
 
+    /// The aslr offset of this running app
+    pub aslr_reference: Option<u64>,
+
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
     pub runtime_asst_dir: Option<PathBuf>,
@@ -87,20 +90,17 @@ pub enum HandleUpdate {
     /// May or may not be a complete line - do not treat it as a line. It will include a line if it is a complete line.
     ///
     /// We will poll lines and any content in a 50ms interval
-    StdoutReceived {
-        msg: String,
-    },
+    StdoutReceived { msg: String, platform: Platform },
 
     /// A running process has received a stderr.
     /// May or may not be a complete line - do not treat it as a line. It will include a line if it is a complete line.
     ///
     /// We will poll lines and any content in a 50ms interval
-    StderrReceived {
-        msg: String,
-    },
+    StderrReceived { msg: String, platform: Platform },
 
     ProcessExited {
         status: ExitStatus,
+        platform: Platform,
     },
 }
 
@@ -123,6 +123,7 @@ impl AppBuilder {
             expected_crates: 1,
             bundling_progress: 0.0,
             compile_start: Some(Instant::now()),
+            aslr_reference: None,
             compile_end: None,
             bundle_start: None,
             bundle_end: None,

@@ -75,45 +75,45 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
 
         match msg {
             ServeUpdate::FilesChanged { files } => {
-                if files.is_empty() || !args.should_hotreload() {
-                    continue;
-                }
+                // if files.is_empty() || !args.should_hotreload() {
+                //     continue;
+                // }
 
-                let file = files[0].display().to_string();
+                // let file = files[0].display().to_string();
                 // let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
 
-                // if change is hotreloadable, hotreload it
-                // and then send that update to all connected clients
-                match builder.hotreload(files.clone()).await {
-                    HotReloadKind::Rsx(hr) => {
-                        // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                        //
-                        // Also make sure the builder isn't busy since that might cause issues with hotreloads
-                        // https://github.com/DioxusLabs/dioxus/issues/3361
-                        if hr.is_empty() || !builder.can_receive_hotreloads() {
-                            tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
-                            continue;
-                        }
-                        tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
-                        devserver.send_hotreload(hr).await;
-                    }
-                    HotReloadKind::Patch => {
-                        if let Some(handle) = builder.running.as_ref() {
-                            builder.patch_rebuild(
-                                args.build_arguments.clone(),
-                                handle.app.app.direct_rustc.clone(),
-                                files,
-                                builder.aslr_reference.unwrap(),
-                            );
+                // // if change is hotreloadable, hotreload it
+                // // and then send that update to all connected clients
+                // match builder.hotreload(files.clone()).await {
+                //     HotReloadKind::Rsx(hr) => {
+                //         // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+                //         //
+                //         // Also make sure the builder isn't busy since that might cause issues with hotreloads
+                //         // https://github.com/DioxusLabs/dioxus/issues/3361
+                //         if hr.is_empty() || !builder.can_receive_hotreloads() {
+                //             tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+                //             continue;
+                //         }
+                //         tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+                //         devserver.send_hotreload(hr).await;
+                //     }
+                //     HotReloadKind::Patch => {
+                //         if let Some(handle) = builder.running.as_ref() {
+                //             builder.patch_rebuild(
+                //                 args.build_arguments.clone(),
+                //                 handle.app.app.direct_rustc.clone(),
+                //                 files,
+                //                 builder.aslr_reference.unwrap(),
+                //             );
 
-                            builder.clear_hot_reload_changes();
-                            builder.clear_cached_rsx();
+                //             builder.clear_hot_reload_changes();
+                //             builder.clear_cached_rsx();
 
-                            devserver.start_patch().await
-                        }
-                    }
-                    HotReloadKind::Full {} => todo!(),
-                }
+                //             devserver.start_patch().await
+                //         }
+                //     }
+                //     HotReloadKind::Full {} => todo!(),
+                // }
             }
 
             ServeUpdate::RequestRebuild => {
@@ -157,7 +157,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                 screen.new_build_update(&update);
 
                 // And then update the websocketed clients with the new build status in case they want it
-                devserver.new_build_update(&update, &builder).await;
+                devserver.new_build_update(&update).await;
 
                 // And then open the app if it's ready
                 // todo: there might be more things to do here that require coordination with other pieces of the CLI
@@ -171,18 +171,16 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                         tracing::error!("Build failed: {:?}", err);
                     }
 
-                    BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
-                        let jump_table = builder.patch(&bundle).await?;
-                        devserver.send_patch(jump_table).await;
-                    }
-
+                    // BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
+                    //     let jump_table = builder.patch(&bundle).await?;
+                    //     devserver.send_patch(jump_table).await;
+                    // }
                     BuildUpdate::BuildReady { bundle } => {
                         let handle = builder
                             .open(
                                 bundle,
                                 devserver.devserver_address(),
                                 devserver.proxied_server_address(),
-                                args.open.unwrap_or(false),
                             )
                             .await
                             .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
