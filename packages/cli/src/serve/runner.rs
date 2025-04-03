@@ -34,7 +34,8 @@ pub(crate) struct AppRunner {
     /// the platform of the "primary" crate (ie the first)
     pub(crate) primary_platform: Platform,
     pub(crate) workspace: Arc<crate::Workspace>,
-    pub(crate) builds: Vec<AppBuilder>,
+    pub(crate) client: AppBuilder,
+    pub(crate) server: AppBuilder,
     pub(crate) args: ServeArgs,
     pub(crate) interactive: bool,
     pub(crate) force_sequential: bool,
@@ -63,7 +64,7 @@ pub(crate) struct CachedFile {
 
 impl AppRunner {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
-    pub(crate) fn start(args: ServeArgs) -> Self {
+    pub(crate) async fn start(args: ServeArgs) -> Result<Self> {
         let mut runner = Self {
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
@@ -73,7 +74,8 @@ impl AppRunner {
             workspace: todo!(),
             ignore: todo!(),
             primary_platform: todo!(),
-            builds: todo!(),
+            client: todo!(),
+            server: todo!(),
             args,
             interactive: todo!(),
             force_sequential: todo!(),
@@ -93,7 +95,7 @@ impl AppRunner {
         // Ensure the session cache dir exists and is empty
         // runner.flush_session_cache();
 
-        runner
+        Ok(runner)
     }
 
     pub(crate) fn main(&self) -> &AppBuilder {
@@ -293,27 +295,25 @@ impl AppRunner {
     }
 
     pub(crate) async fn client_connected(&mut self) {
-        for app in self.builds.iter_mut() {
-            // Assign the runtime asset dir to the runner
-            if app.app.platform == Platform::Ios {
-                // xcrun simctl get_app_container booted com.dioxuslabs
-                let res = Command::new("xcrun")
-                    .arg("simctl")
-                    .arg("get_app_container")
-                    .arg("booted")
-                    .arg(app.app.bundle_identifier())
-                    .output()
-                    .await;
+        // Assign the runtime asset dir to the runner
+        if self.client.build.platform == Platform::Ios {
+            // xcrun simctl get_app_container booted com.dioxuslabs
+            let res = Command::new("xcrun")
+                .arg("simctl")
+                .arg("get_app_container")
+                .arg("booted")
+                .arg(self.client.build.bundle_identifier())
+                .output()
+                .await;
 
-                if let Ok(res) = res {
-                    tracing::trace!("Using runtime asset dir: {:?}", res);
+            if let Ok(res) = res {
+                tracing::trace!("Using runtime asset dir: {:?}", res);
 
-                    if let Ok(out) = String::from_utf8(res.stdout) {
-                        let out = out.trim();
+                if let Ok(out) = String::from_utf8(res.stdout) {
+                    let out = out.trim();
 
-                        tracing::trace!("Setting Runtime asset dir: {out:?}");
-                        app.runtime_asst_dir = Some(PathBuf::from(out));
-                    }
+                    tracing::trace!("Setting Runtime asset dir: {out:?}");
+                    self.client.runtime_asset_dir = Some(PathBuf::from(out));
                 }
             }
         }

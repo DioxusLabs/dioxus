@@ -1,4 +1,4 @@
-use crate::{BuildUpdate, HandleUpdate, Platform, TraceMsg};
+use crate::{BuildId, BuildUpdate, HandleUpdate, Platform, TraceMsg};
 use axum::extract::ws::Message as WsMessage;
 use std::{path::PathBuf, process::ExitStatus};
 
@@ -11,7 +11,10 @@ pub(crate) enum ServeUpdate {
     WsMessage(WsMessage),
 
     /// A build update from the build engine
-    BuildUpdate(BuildUpdate),
+    BuildUpdate {
+        id: BuildId,
+        update: BuildUpdate,
+    },
 
     /// An update from handle to a running app,
     HandleUpdate(HandleUpdate),
@@ -20,7 +23,6 @@ pub(crate) enum ServeUpdate {
         files: Vec<PathBuf>,
     },
 
-    /// Open an existing app bundle, if it exists
     OpenApp,
 
     RequestRebuild,

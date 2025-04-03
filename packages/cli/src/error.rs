@@ -1,4 +1,3 @@
-use crate::metadata::CargoError;
 use thiserror::Error as ThisError;
 
 pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
@@ -22,7 +21,7 @@ pub(crate) enum Error {
     Runtime(String),
 
     #[error("Cargo Error: {0}")]
-    Cargo(#[from] CargoError),
+    Cargo(String),
 
     #[error("Invalid proxy URL: {0}")]
     InvalidProxy(#[from] hyper::http::uri::InvalidUri),

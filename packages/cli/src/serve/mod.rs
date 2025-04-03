@@ -42,7 +42,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
     let mut tracer = TraceController::redirect(args.is_interactive_tty());
 
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
-    let mut builder = AppRunner::start(args);
+    let mut builder = AppRunner::start(args).await?;
     let mut screen = Output::start(&builder).await?;
     let mut devserver = WebServer::start(&builder)?;
 
@@ -152,7 +152,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
             // Wait for logs from the build engine
             // These will cause us to update the screen
             // We also can check the status of the builds here in case we have multiple ongoing builds
-            ServeUpdate::BuildUpdate(update) => {
+            ServeUpdate::BuildUpdate { id, update } => {
                 // Queue any logs to be printed if need be
                 screen.new_build_update(&update);
 

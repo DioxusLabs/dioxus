@@ -46,10 +46,10 @@ pub(crate) struct AppBuilder {
     pub rx: ProgressRx,
 
     // The original request with access to its build directory
-    pub app: BuildRequest,
+    pub build: BuildRequest,
 
     // Ongoing build task, if any
-    pub build: JoinHandle<Result<BuildArtifacts>>,
+    pub build_task: JoinHandle<Result<BuildArtifacts>>,
 
     // If a build has already finished, we'll have its artifacts (rustc, link args, etc) to work witha
     pub artifacts: Option<BuildArtifacts>,
@@ -71,7 +71,7 @@ pub(crate) struct AppBuilder {
 
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
-    pub runtime_asst_dir: Option<PathBuf>,
+    pub runtime_asset_dir: Option<PathBuf>,
 
     // Metadata about the build that needs to be managed by watching build updates
     // used to render the TUI
@@ -111,9 +111,9 @@ impl AppBuilder {
         // let request = BuildRequest::new(args.clone(), krate.clone(), tx.clone(), BuildMode::Fat)?;
 
         Ok(Self {
-            app: request.clone(),
+            build: request.clone(),
             stage: BuildStage::Initializing,
-            build: tokio::spawn(async move {
+            build_task: tokio::spawn(async move {
                 // request.build_all().await
                 todo!()
             }),
@@ -127,7 +127,7 @@ impl AppBuilder {
             compile_end: None,
             bundle_start: None,
             bundle_end: None,
-            runtime_asst_dir: None,
+            runtime_asset_dir: None,
             app_child: None,
             app_stderr: None,
             app_stdout: None,
@@ -143,9 +143,9 @@ impl AppBuilder {
         // Wait for the build to finish or for it to emit a status message
         let update = tokio::select! {
             Some(progress) = self.rx.next() => progress,
-            bundle = (&mut self.build) => {
+            bundle = (&mut self.build_task) => {
                 // Replace the build with an infinitely pending task so we can select it again without worrying about deadlocks/spins
-                self.build = tokio::task::spawn(std::future::pending());
+                self.build_task = tokio::task::spawn(std::future::pending());
                 match bundle {
                     Ok(Ok(bundle)) => BuildUpdate::BuildReady { bundle },
                     Ok(Err(err)) => BuildUpdate::BuildFailed { err },
@@ -324,7 +324,7 @@ impl AppBuilder {
     ///
     /// todo: might want to use a cancellation token here to allow cleaner shutdowns
     pub(crate) fn abort_all(&mut self) {
-        self.build.abort();
+        self.build_task.abort();
         self.stage = BuildStage::Aborted;
         self.compiled_crates = 0;
         self.expected_crates = 1;
@@ -372,7 +372,7 @@ impl AppBuilder {
                 }
                 BuildUpdate::BuildReady { bundle } => {
                     tracing::debug!(json = ?StructuredOutput::BuildFinished {
-                        path: self.app.root_dir(),
+                        path: self.build.root_dir(),
                     });
                     return Ok(bundle);
                 }
@@ -397,7 +397,7 @@ impl AppBuilder {
         start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
     ) -> Result<()> {
-        let krate = &self.app;
+        let krate = &self.build;
 
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
@@ -430,7 +430,7 @@ impl AppBuilder {
             ("CARGO_MANIFEST_DIR", "".to_string()),
             (
                 dioxus_cli_config::SESSION_CACHE_DIR,
-                self.app.session_cache_dir().display().to_string(),
+                self.build.session_cache_dir().display().to_string(),
             ),
         ];
 
@@ -459,7 +459,7 @@ impl AppBuilder {
         // }
 
         // We try to use stdin/stdout to communicate with the app
-        let running_process = match self.app.platform {
+        let running_process = match self.build.platform {
             // Unfortunately web won't let us get a proc handle to it (to read its stdout/stderr) so instead
             // use use the websocket to communicate with it. I wish we could merge the concepts here,
             // like say, opening the socket as a subprocess, but alas, it's simpler to do that somewhere else.
@@ -579,15 +579,15 @@ impl AppBuilder {
 
         // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
         // we won't actually be using the build dir.
-        let asset_dir = match self.runtime_asst_dir.as_ref() {
+        let asset_dir = match self.runtime_asset_dir.as_ref() {
             Some(dir) => dir.to_path_buf().join("assets/"),
-            None => self.app.asset_dir(),
+            None => self.build.asset_dir(),
         };
 
         tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
 
         // If the asset shares the same name in the bundle, reload that
-        if let Some(legacy_asset_dir) = self.app.legacy_asset_dir() {
+        if let Some(legacy_asset_dir) = self.build.legacy_asset_dir() {
             if changed_file.starts_with(&legacy_asset_dir) {
                 tracing::debug!("Hotreloading legacy asset {changed_file:?}");
                 let trimmed = changed_file.strip_prefix(legacy_asset_dir).unwrap();
@@ -621,7 +621,7 @@ impl AppBuilder {
         }
 
         // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-        if self.app.platform == Platform::Android {
+        if self.build.platform == Platform::Android {
             if let Some(bundled_name) = bundled_name.as_ref() {
                 _ = self
                     .copy_file_to_android_tmp(&changed_file, &bundled_name)
@@ -681,8 +681,8 @@ impl AppBuilder {
     /// Check if we need to use https or not, and if so, add the protocol.
     /// Go to the basepath if that's set too.
     fn open_web(&self, address: SocketAddr) {
-        let base_path = self.app.config.web.app.base_path.clone();
-        let https = self.app.config.web.https.enabled.unwrap_or_default();
+        let base_path = self.build.config.web.app.base_path.clone();
+        let https = self.build.config.web.https.enabled.unwrap_or_default();
         let protocol = if https { "https" } else { "http" };
         let base_path = match base_path.as_deref() {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
@@ -700,13 +700,13 @@ impl AppBuilder {
     /// TODO(jon): we should probably check if there's a simulator running before trying to install,
     /// and open the simulator if we have to.
     async fn open_ios_sim(&mut self, envs: Vec<(&str, String)>) -> Result<Child> {
-        tracing::debug!("Installing app to simulator {:?}", self.app.root_dir());
+        tracing::debug!("Installing app to simulator {:?}", self.build.root_dir());
 
         let res = Command::new("xcrun")
             .arg("simctl")
             .arg("install")
             .arg("booted")
-            .arg(self.app.root_dir())
+            .arg(self.build.root_dir())
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
             .output()
@@ -725,7 +725,7 @@ impl AppBuilder {
             .arg("launch")
             .arg("--console")
             .arg("booted")
-            .arg(self.app.bundle_identifier())
+            .arg(self.build.bundle_identifier())
             .envs(ios_envs)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
@@ -745,7 +745,7 @@ impl AppBuilder {
     #[allow(unused)]
     async fn open_ios_device(&self) -> Result<()> {
         use serde_json::Value;
-        let app_path = self.app.root_dir();
+        let app_path = self.build.root_dir();
 
         install_app(&app_path).await?;
 
@@ -1018,7 +1018,7 @@ We checked the folder: {}
                 "--sign",
                 app_dev_name,
             ])
-            .arg(self.app.root_dir())
+            .arg(self.build.root_dir())
             .output()
             .await
             .context("Failed to codesign the app")?;
@@ -1036,9 +1036,9 @@ We checked the folder: {}
         devserver_socket: SocketAddr,
         envs: Vec<(&'static str, String)>,
     ) {
-        let apk_path = self.app.apk_path();
-        let session_cache = self.app.session_cache_dir();
-        let full_mobile_app_name = self.app.full_mobile_app_name();
+        let apk_path = self.build.apk_path();
+        let session_cache = self.build.session_cache_dir();
+        let full_mobile_app_name = self.build.full_mobile_app_name();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
         tokio::task::spawn(async move {
@@ -1150,10 +1150,10 @@ We checked the folder: {}
     }
 
     fn app_exe(&mut self) -> PathBuf {
-        let mut main_exe = self.app.main_exe();
+        let mut main_exe = self.build.main_exe();
 
         // The requirement here is based on the platform, not necessarily our current architecture.
-        let requires_entropy = match self.app.platform {
+        let requires_entropy = match self.build.platform {
             // When running "bundled", we don't need entropy
             Platform::Web => false,
             Platform::MacOS => false,

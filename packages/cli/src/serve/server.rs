@@ -125,7 +125,7 @@ impl WebServer {
 
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
-            runner.main().app.config.web.https.clone(),
+            runner.main().build.config.web.https.clone(),
             listener,
             router,
         ));
@@ -454,7 +454,7 @@ fn build_devserver_router(
             "/{}",
             runner
                 .main()
-                .app
+                .build
                 .config
                 .web
                 .app
@@ -530,11 +530,11 @@ fn build_serve_dir(runner: &AppRunner) -> axum::routing::MethodRouter {
     };
 
     let app = runner.main();
-    let cfg = &runner.main().app.config;
+    let cfg = &runner.main().build.config;
 
     let out_dir = app
-        .app
-        .build_dir(Platform::Web, app.app.release)
+        .build
+        .build_dir(Platform::Web, app.build.release)
         .join("public");
     let index_on_404: bool = cfg.web.watcher.index_on_404;
 
