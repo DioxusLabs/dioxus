@@ -155,3 +155,13 @@ test("document elements", async ({ page }) => {
   const main = page.locator("#main");
   await expect(main).toHaveCSS("font-family", "Roboto");
 });
+
+test("merge styles", async ({ page }) => {
+  await page.goto("http://localhost:9999");
+  // wait until the div is mounted
+  const div = page.locator("div#merge-styles-div");
+  await div.waitFor({ state: "attached" });
+  await expect(div).toHaveCSS("background-color", "red");
+  await expect(div).toHaveCSS("width", "100px");
+  await expect(div).toHaveCSS("height", "100px");
+});

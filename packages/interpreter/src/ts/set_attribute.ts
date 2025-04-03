@@ -1,7 +1,12 @@
 // A unified interface for setting attributes on a node
 
 // this function should try and stay fast, if possible
-export function setAttributeInner(node: HTMLElement, field: string, value: string, ns: string) {
+export function setAttributeInner(
+  node: HTMLElement,
+  field: string,
+  value: string,
+  ns: string
+) {
   // we support a single namespace by default: style
   if (ns === "style") {
     node.style.setProperty(field, value);
@@ -11,7 +16,7 @@ export function setAttributeInner(node: HTMLElement, field: string, value: strin
   // If there's a namespace, use setAttributeNS (svg, mathml, etc.)
   if (!!ns) {
     node.setAttributeNS(ns, field, value);
-    return
+    return;
   }
 
   // A few attributes are need to be set with either boolean values or require some sort of translation
@@ -53,8 +58,26 @@ export function setAttributeInner(node: HTMLElement, field: string, value: strin
       node.innerHTML = value;
       break;
 
+    case "style":
+      // Save the existing styles
+      const existingStyles: Record<string, string> = {};
+      for (let i = 0; i < node.style.length; i++) {
+        const prop = node.style[i];
+        existingStyles[prop] = node.style.getPropertyValue(prop);
+      }
+      // Override all styles
+      node.setAttribute(field, value);
+      // Restore the old styles
+      for (const prop in existingStyles) {
+        // If it wasn't overridden, restore it
+        if (!node.style.getPropertyValue(prop)) {
+          node.style.setProperty(prop, existingStyles[prop]);
+        }
+      }
+      break;
+
     // The presence of a an attribute is enough to set it to true, provided the value is being set to a truthy value
-    // Again, kinda ugly and would prefer this logic to be baked into dioxus-html at compiile time
+    // Again, kinda ugly and would prefer this logic to be baked into dioxus-html at compile time
     default:
       // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
       if (!truthy(value) && isBoolAttr(field)) {
@@ -64,7 +87,6 @@ export function setAttributeInner(node: HTMLElement, field: string, value: strin
       }
   }
 }
-
 
 function truthy(val: string | boolean) {
   return val === "true" || val === true;
