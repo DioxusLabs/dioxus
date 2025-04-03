@@ -161,7 +161,7 @@ test("merge styles", async ({ page }) => {
   // wait until the div is mounted
   const div = page.locator("div#merge-styles-div");
   await div.waitFor({ state: "attached" });
-  await expect(div).toHaveCSS("background-color", "red");
+  await expect(div).toHaveCSS("background-color", "rgb(255, 0, 0)");
   await expect(div).toHaveCSS("width", "100px");
   await expect(div).toHaveCSS("height", "100px");
 });
