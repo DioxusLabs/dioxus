@@ -125,7 +125,7 @@ impl WebServer {
 
         // And finally, start the server mainloop
         tokio::spawn(devserver_mainloop(
-            runner.main().build.config.web.https.clone(),
+            runner.client().build.config.web.https.clone(),
             listener,
             router,
         ));
@@ -423,10 +423,10 @@ fn build_devserver_router(
     build_status: SharedStatus,
 ) -> Result<Router> {
     let mut router = Router::new();
-    let build = &runner.builds[0];
+    let build = &runner.client;
 
     // Setup proxy for the endpoint specified in the config
-    for proxy_config in build.app.config.web.proxy.iter() {
+    for proxy_config in build.build.config.web.proxy.iter() {
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
@@ -453,7 +453,7 @@ fn build_devserver_router(
         let base_path = format!(
             "/{}",
             runner
-                .main()
+                .client()
                 .build
                 .config
                 .web
@@ -529,8 +529,8 @@ fn build_serve_dir(runner: &AppRunner) -> axum::routing::MethodRouter {
         false => CORS_UNSAFE.clone(),
     };
 
-    let app = runner.main();
-    let cfg = &runner.main().build.config;
+    let app = runner.client();
+    let cfg = &runner.client().build.config;
 
     let out_dir = app
         .build

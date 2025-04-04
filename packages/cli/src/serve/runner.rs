@@ -98,8 +98,12 @@ impl AppRunner {
         Ok(runner)
     }
 
-    pub(crate) fn main(&self) -> &AppBuilder {
-        self.builds.get(0).unwrap()
+    pub(crate) fn client(&self) -> &AppBuilder {
+        &self.client
+    }
+
+    pub(crate) fn server(&self) -> &AppBuilder {
+        &self.server
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {

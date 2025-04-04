@@ -469,39 +469,39 @@ impl Output {
         ])
         .areas(gauge_area);
 
-        let build = &state.runner.builds[0];
+        let client = &state.runner.client;
 
         self.render_single_gauge(
             frame,
             app_progress,
-            build.compile_progress(),
+            client.compile_progress(),
             "App:    ",
             state,
-            build.compile_duration(),
+            client.compile_duration(),
         );
 
-        if build.app.fullstack {
+        if client.build.fullstack {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                build.server_compile_progress(),
+                client.server_compile_progress(),
                 "Server: ",
                 state,
-                build.compile_duration(),
+                client.compile_duration(),
             );
         } else {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                build.bundle_progress(),
+                client.bundle_progress(),
                 "Bundle: ",
                 state,
-                build.bundle_duration(),
+                client.bundle_duration(),
             );
         }
 
         let mut lines = vec!["Status:  ".white()];
-        match &build.stage {
+        match &client.stage {
             BuildStage::Initializing => lines.push("Initializing".yellow()),
             BuildStage::Starting { patch, .. } => {
                 if *patch {
@@ -541,9 +541,9 @@ impl Output {
             }
             BuildStage::Success => {
                 lines.push("Serving ".yellow());
-                lines.push(build.app.executable_name().white());
+                lines.push(client.build.executable_name().white());
                 lines.push(" 🚀 ".green());
-                if let Some(comp_time) = build.total_build_time() {
+                if let Some(comp_time) = client.total_build_time() {
                     lines.push(format!("{:.1}s", comp_time.as_secs_f32()).dark_gray());
                 }
             }
@@ -565,9 +565,9 @@ impl Output {
         state: RenderState,
         time_taken: Option<Duration>,
     ) {
-        let build = &state.runner.builds[0];
+        let client = &state.runner.client;
 
-        let failed = build.stage == BuildStage::Failed;
+        let failed = client.stage == BuildStage::Failed;
         let value = if failed { 1.0 } else { value.clamp(0.0, 1.0) };
 
         let [gauge_row, _, icon] = Layout::horizontal([
@@ -638,13 +638,13 @@ impl Output {
         ])
         .areas(area);
 
-        let build = &state.runner.builds[0];
+        let client = &state.runner.client;
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
-                build.app.platform.expected_name().yellow(),
-                if build.app.fullstack {
+                client.build.platform.expected_name().yellow(),
+                if client.build.fullstack {
                     " + fullstack".yellow()
                 } else {
                     " ".dark_gray()
@@ -664,7 +664,7 @@ impl Output {
 
         frame.render_widget_ref(
             Paragraph::new(Line::from(vec![
-                if build.app.platform == Platform::Web {
+                if client.build.platform == Platform::Web {
                     "Serving at: ".gray()
                 } else {
                     "ServerFns at: ".gray()
@@ -681,7 +681,7 @@ impl Output {
             Paragraph::new(Line::from({
                 let mut lines = vec!["App features: ".gray(), "[".yellow()];
 
-                let feature_list: Vec<String> = state.runner.builds[0].app.all_target_features();
+                let feature_list: Vec<String> = state.runner.client.build.all_target_features();
                 let num_features = feature_list.len();
 
                 for (idx, feature) in feature_list.into_iter().enumerate() {
