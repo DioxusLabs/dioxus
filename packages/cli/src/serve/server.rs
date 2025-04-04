@@ -49,6 +49,7 @@ use tower_http::{
 /// and better tooling on the pages that we serve.
 pub(crate) struct WebServer {
     devserver_exposed_ip: IpAddr,
+    devserver_ip_from_args: bool,
     devserver_bind_ip: IpAddr,
     devserver_port: u16,
     proxied_port: Option<u16>,
@@ -76,6 +77,9 @@ impl WebServer {
         // Use 0.0.0.0 as the default address if none is specified - this will let us expose the
         // devserver to the network (for other devices like phones/embedded)
         let devserver_bind_ip = args.address.addr.unwrap_or(SELF_IP);
+
+        // We always show the actual port if it is passed by the user in the args
+        let devserver_ip_from_args = args.address.addr.is_some();
 
         // If the user specified a port, use that, otherwise use any available port, preferring 8080
         let devserver_port = args
@@ -131,6 +135,7 @@ impl WebServer {
             build_status,
             proxied_port,
             devserver_bind_ip,
+            devserver_ip_from_args,
             devserver_exposed_ip,
             devserver_port,
             hot_reload_sockets: Default::default(),
@@ -375,7 +380,10 @@ impl WebServer {
         // Set the port to the devserver port since that's usually what people expect
         address.set_port(self.devserver_port);
 
-        if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+        // If the user passed in the ip in the args manually, always show that
+        if self.devserver_ip_from_args {
+            address = SocketAddr::new(self.devserver_bind_ip, address.port());
+        } else if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
             address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), address.port());
         }
 

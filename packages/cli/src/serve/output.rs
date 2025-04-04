@@ -647,19 +647,19 @@ impl Output {
         ])
         .areas(area);
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Platform: ".gray(),
-                self.platform.expected_name().yellow(),
-                if state.opts.build_arguments.fullstack {
-                    " + fullstack".yellow()
-                } else {
-                    " ".dark_gray()
-                },
-            ]))
-            .wrap(Wrap { trim: false }),
-            current_platform,
-        );
+        let platform_widget = Paragraph::new(Line::from(vec![
+            "Platform: ".gray(),
+            self.platform.expected_name().yellow(),
+            if state.opts.build_arguments.fullstack {
+                " + fullstack".yellow()
+            } else {
+                " ".dark_gray()
+            },
+        ]))
+        .wrap(Wrap { trim: false });
+        if platform_widget.line_width() <= current_platform.width as _ {
+            frame.render_widget(platform_widget, current_platform);
+        }
 
         self.render_feature_list(frame, app_features, state);
 
@@ -669,44 +669,45 @@ impl Output {
             None => "no server address".dark_gray(),
         };
 
-        frame.render_widget_ref(
-            Paragraph::new(Line::from(vec![
-                if self.platform == Platform::Web {
-                    "Serving at: ".gray()
-                } else {
-                    "ServerFns at: ".gray()
-                },
-                address,
-            ]))
-            .wrap(Wrap { trim: false }),
-            serve_address,
-        );
+        let serve_widget = Paragraph::new(Line::from(vec![
+            if self.platform == Platform::Web {
+                "Serving at: ".gray()
+            } else {
+                "ServerFns at: ".gray()
+            },
+            address,
+        ]))
+        .wrap(Wrap { trim: false });
+        // Only show the address if there is enough space
+        if serve_widget.line_width() <= serve_address.width as _ {
+            frame.render_widget_ref(serve_widget, serve_address);
+        }
     }
 
     fn render_feature_list(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
-        frame.render_widget(
-            Paragraph::new(Line::from({
-                let mut lines = vec!["App features: ".gray(), "[".yellow()];
+        let widget = Paragraph::new(Line::from({
+            let mut lines = vec!["App features: ".gray(), "[".yellow()];
 
-                let feature_list: Vec<String> = state.build_engine.request.all_target_features();
-                let num_features = feature_list.len();
+            let feature_list: Vec<String> = state.build_engine.request.all_target_features();
+            let num_features = feature_list.len();
 
-                for (idx, feature) in feature_list.into_iter().enumerate() {
-                    lines.push("\"".yellow());
-                    lines.push(feature.yellow());
-                    lines.push("\"".yellow());
-                    if idx != num_features - 1 {
-                        lines.push(", ".dark_gray());
-                    }
+            for (idx, feature) in feature_list.into_iter().enumerate() {
+                lines.push("\"".yellow());
+                lines.push(feature.yellow());
+                lines.push("\"".yellow());
+                if idx != num_features - 1 {
+                    lines.push(", ".dark_gray());
                 }
+            }
 
-                lines.push("]".yellow());
+            lines.push("]".yellow());
 
-                lines
-            }))
-            .wrap(Wrap { trim: false }),
-            area,
-        );
+            lines
+        }))
+        .wrap(Wrap { trim: false });
+        if widget.line_width() <= area.width as _ {
+            frame.render_widget(widget, area);
+        }
     }
 
     fn render_more_modal(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
