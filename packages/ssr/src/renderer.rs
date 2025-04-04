@@ -95,7 +95,7 @@ impl Renderer {
         scope: ScopeId,
     ) -> std::fmt::Result {
         let node = dom.get_scope(scope).unwrap().root_node();
-        self.render_template(buf, dom, node)?;
+        self.render_template(buf, dom, node, true)?;
 
         Ok(())
     }
@@ -105,6 +105,7 @@ impl Renderer {
         mut buf: &mut W,
         dom: &VirtualDom,
         template: &VNode,
+        parent_escaped: bool,
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
@@ -158,50 +159,66 @@ impl Renderer {
                         }
                     }
                 }
-                Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
-                    DynamicNode::Component(node) => {
-                        if let Some(render_components) = self.render_components.clone() {
-                            let scope_id = node.mounted_scope_id(*idx, template, dom).unwrap();
+                Segment::Node { index, escape_text } => {
+                    let escaped = escape_text.should_escape(parent_escaped);
+                    match &template.dynamic_nodes[*index] {
+                        DynamicNode::Component(node) => {
+                            if let Some(render_components) = self.render_components.clone() {
+                                let scope_id =
+                                    node.mounted_scope_id(*index, template, dom).unwrap();
 
-                            render_components(self, &mut buf, dom, scope_id)?;
-                        } else {
-                            let scope = node.mounted_scope(*idx, template, dom).unwrap();
-                            let node = scope.root_node();
-                            self.render_template(buf, dom, node)?
+                                render_components(self, &mut buf, dom, scope_id)?;
+                            } else {
+                                let scope = node.mounted_scope(*index, template, dom).unwrap();
+                                let node = scope.root_node();
+                                self.render_template(buf, dom, node, escaped)?
+                            }
+                        }
+                        DynamicNode::Text(text) => {
+                            // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
+                            if self.pre_render {
+                                write!(buf, "<!--node-id{}-->", self.dynamic_node_id)?;
+                                self.dynamic_node_id += 1;
+                            }
+
+                            if escaped {
+                                write!(
+                                    buf,
+                                    "{}",
+                                    askama_escape::escape(&text.value, askama_escape::Html)
+                                )?;
+                            } else {
+                                write!(buf, "{}", text.value)?;
+                            }
+
+                            if self.pre_render {
+                                write!(buf, "<!--#-->")?;
+                            }
+                        }
+                        DynamicNode::Fragment(nodes) => {
+                            for child in nodes {
+                                self.render_template(buf, dom, child, escaped)?;
+                            }
+                        }
+
+                        DynamicNode::Placeholder(_) => {
+                            if self.pre_render {
+                                write!(buf, "<!--placeholder{}-->", self.dynamic_node_id)?;
+                                self.dynamic_node_id += 1;
+                            }
                         }
                     }
-                    DynamicNode::Text(text) => {
-                        // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
-                        if self.pre_render {
-                            write!(buf, "<!--node-id{}-->", self.dynamic_node_id)?;
-                            self.dynamic_node_id += 1;
-                        }
-
-                        write!(
-                            buf,
-                            "{}",
-                            askama_escape::escape(&text.value, askama_escape::Html)
-                        )?;
-
-                        if self.pre_render {
-                            write!(buf, "<!--#-->")?;
-                        }
-                    }
-                    DynamicNode::Fragment(nodes) => {
-                        for child in nodes {
-                            self.render_template(buf, dom, child)?;
-                        }
-                    }
-
-                    DynamicNode::Placeholder(_) => {
-                        if self.pre_render {
-                            write!(buf, "<!--placeholder{}-->", self.dynamic_node_id)?;
-                            self.dynamic_node_id += 1;
-                        }
-                    }
-                },
+                }
 
                 Segment::PreRendered(contents) => write!(buf, "{contents}")?,
+                Segment::PreRenderedMaybeEscaped {
+                    value,
+                    renderer_if_escaped,
+                } => {
+                    if *renderer_if_escaped == parent_escaped {
+                        write!(buf, "{value}")?;
+                    }
+                }
 
                 Segment::StyleMarker { inside_style_tag } => {
                     if !accumulated_dynamic_styles.is_empty() {
@@ -266,6 +283,7 @@ impl Renderer {
 
 #[test]
 fn to_string_works() {
+    use crate::cache::EscapeText;
     use dioxus::prelude::*;
 
     fn app() -> Element {
@@ -311,13 +329,22 @@ fn to_string_works() {
                     PreRendered(">".to_string()),
                     InnerHtmlMarker,
                     PreRendered("Hello world 1 --&gt;".to_string()),
-                    Node(0),
+                    Node {
+                        index: 0,
+                        escape_text: EscapeText::Escape
+                    },
                     PreRendered(
                         "&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>"
                             .to_string()
                     ),
-                    Node(1),
-                    Node(2),
+                    Node {
+                        index: 1,
+                        escape_text: EscapeText::Escape
+                    },
+                    Node {
+                        index: 2,
+                        escape_text: EscapeText::Escape
+                    },
                     PreRendered("</div>".to_string())
                 ]
             );
@@ -331,6 +358,7 @@ fn to_string_works() {
 
 #[test]
 fn empty_for_loop_works() {
+    use crate::cache::EscapeText;
     use dioxus::prelude::*;
 
     fn app() -> Element {
@@ -360,7 +388,10 @@ fn empty_for_loop_works() {
                     RootNodeMarker,
                     PreRendered("\"".to_string()),
                     PreRendered(">".to_string()),
-                    Node(0),
+                    Node {
+                        index: 0,
+                        escape_text: EscapeText::Escape
+                    },
                     PreRendered("</div>".to_string())
                 ]
             );
@@ -444,7 +475,11 @@ pub(crate) fn write_attribute<W: Write + ?Sized>(
 ) -> std::fmt::Result {
     let name = &attr.name;
     match &attr.value {
-        AttributeValue::Text(value) => write!(buf, " {name}=\"{value}\""),
+        AttributeValue::Text(value) => write!(
+            buf,
+            " {name}=\"{}\"",
+            askama_escape::escape(value, askama_escape::Html)
+        ),
         AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
         AttributeValue::Int(value) => write!(buf, " {name}={value}"),
         AttributeValue::Float(value) => write!(buf, " {name}={value}"),
@@ -457,7 +492,9 @@ pub(crate) fn write_value_unquoted<W: Write + ?Sized>(
     value: &AttributeValue,
 ) -> std::fmt::Result {
     match value {
-        AttributeValue::Text(value) => write!(buf, "{}", value),
+        AttributeValue::Text(value) => {
+            write!(buf, "{}", askama_escape::escape(value, askama_escape::Html))
+        }
         AttributeValue::Bool(value) => write!(buf, "{}", value),
         AttributeValue::Int(value) => write!(buf, "{}", value),
         AttributeValue::Float(value) => write!(buf, "{}", value),

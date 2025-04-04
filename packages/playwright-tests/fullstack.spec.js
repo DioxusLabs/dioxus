@@ -39,7 +39,7 @@ test("hydration", async ({ page }) => {
 });
 
 test("document elements", async ({ page }) => {
-  await page.goto("http://localhost:9999");
+  await page.goto("http://localhost:3333");
   // wait until the meta element is mounted
   const meta = page.locator("meta#meta-head[name='testing']");
   await meta.waitFor({ state: "attached" });
