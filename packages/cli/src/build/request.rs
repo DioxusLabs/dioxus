@@ -445,67 +445,69 @@ impl BuildRequest {
                 // Same idea with android but we figure out the connected device using adb
                 // for now we use
                 Platform::Android => {
-                    "aarch64-linux-android".parse().unwrap()
+                    // Determine arch if android
+
+                    // if platform == Platform::Android && args.target_args.target.is_none() {
+                    //     tracing::debug!("No android arch provided, attempting to auto detect.");
+
+                    //     let arch = DioxusCrate::autodetect_android_arch().await;
+
+                    //     // Some extra logs
+                    //     let arch = match arch {
+                    //         Some(a) => {
+                    //             tracing::debug!(
+                    //                 "Autodetected `{}` Android arch.",
+                    //                 a.android_target_triplet()
+                    //             );
+                    //             a.to_owned()
+                    //         }
+                    //         None => {
+                    //             let a = Arch::default();
+                    //             tracing::debug!(
+                    //                 "Could not detect Android arch, defaulting to `{}`",
+                    //                 a.android_target_triplet()
+                    //             );
+                    //             a
+                    //         }
+                    //     };
+
+                    //     self.arch = Some(arch);
+                    // }
+
                     // "unknown-linux-android".parse().unwrap()
+                    "aarch64-linux-android".parse().unwrap()
                 }
             },
         };
 
-        // Determine arch if android
+        // Determine the --package we'll pass to cargo.
+        // todo: I think this might be wrong - we don't want to use main_package necessarily...a
+        let package = args
+            .package
+            .clone()
+            .unwrap_or_else(|| main_package.name.clone());
 
-        // if platform == Platform::Android && args.target_args.target.is_none() {
-        //     tracing::debug!("No android arch provided, attempting to auto detect.");
-
-        //     let arch = DioxusCrate::autodetect_android_arch().await;
-
-        //     // Some extra logs
-        //     let arch = match arch {
-        //         Some(a) => {
-        //             tracing::debug!(
-        //                 "Autodetected `{}` Android arch.",
-        //                 a.android_target_triplet()
-        //             );
-        //             a.to_owned()
-        //         }
-        //         None => {
-        //             let a = Arch::default();
-        //             tracing::debug!(
-        //                 "Could not detect Android arch, defaulting to `{}`",
-        //                 a.android_target_triplet()
-        //             );
-        //             a
-        //         }
-        //     };
-
-        //     self.arch = Some(arch);
-        // }
-
-        let package = todo!();
-
-        // mode: todo!(),
-        // ssg: args.ssg,
-        // fullstack: todo!(),
         Ok(Self {
             platform,
             features,
             no_default_features,
             crate_package,
             crate_target,
-            custom_target_dir: None,
             profile,
             target,
             device,
+            workspace,
+            config,
+            custom_target_dir: None,
+            cargo_args: args.cargo_args.clone(),
             nightly: args.nightly,
             cargo_package: package,
             release: args.release,
             skip_assets: args.skip_assets,
             cranelift: args.cranelift,
-            cargo_args: args.cargo_args,
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
             inject_loading_scripts: args.inject_loading_scripts,
-            workspace,
-            config,
         })
     }
 
