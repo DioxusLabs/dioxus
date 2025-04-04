@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use dioxus::prelude::*;
 
 // This test just checks that props compile with generics
@@ -15,6 +17,9 @@ fn generic_props_compile() {
                 value: "hello world"
             }
             TakesCloneManualWhere {
+                value: "hello world"
+            }
+            GenericFnWhereClause {
                 value: "hello world"
             }
         }
@@ -60,5 +65,15 @@ fn generic_props_compile() {
         props: TakesCloneManualWhereWithOwnerProps<T>,
     ) -> Element {
         rsx! {}
+    }
+
+    #[component]
+    fn GenericFnWhereClause<T>(value: T) -> Element
+    where
+        T: Clone + PartialEq + Display + 'static,
+    {
+        rsx! {
+            p { "{value}" }
+        }
     }
 }
