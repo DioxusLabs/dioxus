@@ -1,7 +1,7 @@
-use super::{AppBuilder, ServeUpdate, WebServer};
+use super::{AppBuilder, ServeUpdate, WebServer, SELF_IP};
 use crate::{
-    BuildArtifacts, BuildMode, BuildRequest, Platform, ReloadKind, Result, ServeArgs, TraceSrc,
-    Workspace,
+    AddressArguments, BuildArtifacts, BuildMode, BuildRequest, Platform, ReloadKind, Result,
+    ServeArgs, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -18,7 +18,7 @@ use futures_util::StreamExt;
 use ignore::gitignore::Gitignore;
 use std::{
     collections::{HashMap, HashSet},
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
     path::PathBuf,
     str::FromStr,
     sync::Arc,
@@ -37,24 +37,34 @@ use tokio::process::Command;
 /// hotreloads, asset updates, etc.
 pub(crate) struct AppRunner {
     /// the platform of the "primary" crate (ie the first)
-    pub(crate) primary_platform: Platform,
-    pub(crate) workspace: Arc<crate::Workspace>,
+    pub(crate) workspace: Arc<Workspace>,
     pub(crate) builds: Vec<AppBuilder>,
-    pub(crate) args: ServeArgs,
-    pub(crate) interactive: bool,
-    pub(crate) force_sequential: bool,
-    pub(crate) hotreload: bool,
-    pub(crate) open_browser: bool,
-    pub(crate) wsl_file_poll_interval: bool,
-    pub(crate) always_on_top: bool,
-    pub(crate) ignore: Gitignore,
+
+    // Related to to the filesystem watcher
+    pub(crate) ws_ignore: Gitignore,
+    pub(crate) watcher: Box<dyn notify::Watcher>,
+    pub(crate) watcher_tx: UnboundedSender<notify::Event>,
+    pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
+
+    // Tracked state related to open builds and hot reloading
     pub(crate) applied_hot_reload_message: HotReloadMsg,
     pub(crate) builds_opened: usize,
-    pub(crate) automatic_rebuilds: bool,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
-    pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
-    pub(crate) watcher_tx: UnboundedSender<notify::Event>,
-    pub(crate) watcher: Box<dyn notify::Watcher>,
+
+    // Resolved args related to how we go about processing the rebuilds and logging
+    pub(crate) automatic_rebuilds: bool,
+    pub(crate) interactive: bool,
+    pub(crate) force_sequential: bool,
+    pub(crate) hot_reload: bool,
+    pub(crate) open_browser: bool,
+    pub(crate) wsl_file_poll_interval: u16,
+    pub(crate) always_on_top: bool,
+
+    // resolve args related to the webserver
+    pub(crate) devserver_port: u16,
+    pub(crate) devserver_bind_ip: IpAddr,
+    pub(crate) proxied_port: Option<u16>,
+    pub(crate) cross_origin_policy: bool,
 }
 
 pub enum HotReloadKind {
@@ -72,22 +82,60 @@ pub(crate) struct CachedFile {
 impl AppRunner {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
     pub(crate) async fn start(args: ServeArgs) -> Result<Self> {
+        let workspace = Workspace::current().await?;
+
+        let hot_reload = args
+            .hot_reload
+            .unwrap_or_else(|| workspace.settings.always_hot_reload.unwrap_or(true));
+
+        let open_browser = args
+            .open
+            .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or_default());
+
+        let wsl_file_poll_interval = args
+            .wsl_file_poll_interval
+            .unwrap_or_else(|| workspace.settings.wsl_file_poll_interval.unwrap_or(2));
+
+        let always_on_top = args
+            .always_on_top
+            .unwrap_or_else(|| workspace.settings.always_on_top.unwrap_or(true));
+
+        // Use 0.0.0.0 as the default address if none is specified - this will let us expose the
+        // devserver to the network (for other devices like phones/embedded)
+        let devserver_bind_ip = args.address.addr.unwrap_or(SELF_IP);
+
+        // If the user specified a port, use that, otherwise use any available port, preferring 8080
+        let devserver_port = args
+            .address
+            .port
+            .unwrap_or_else(|| get_available_port(devserver_bind_ip, Some(8080)).unwrap_or(8080));
+
+        // All servers will end up behind us (the devserver) but on a different port
+        // This is so we can serve a loading screen as well as devtools without anything particularly fancy
+        let proxied_port = args
+            .should_proxy_build()
+            .then(|| get_available_port(devserver_bind_ip, None))
+            .flatten();
+
         let mut runner = Self {
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
             builds_opened: 0,
             automatic_rebuilds: true,
-            args,
+            hot_reload,
+            open_browser,
+            wsl_file_poll_interval,
+            always_on_top,
             builds: vec![],
-            workspace: todo!(),
-            ignore: todo!(),
-            primary_platform: todo!(),
-            interactive: todo!(),
-            force_sequential: todo!(),
-            hotreload: todo!(),
-            open_browser: todo!(),
-            wsl_file_poll_interval: todo!(),
-            always_on_top: todo!(),
+            workspace,
+            force_sequential: args.force_sequential,
+            cross_origin_policy: args.cross_origin_policy,
+            interactive: args.is_interactive_tty(),
+            devserver_port,
+            devserver_bind_ip,
+            proxied_port,
+
+            ws_ignore: todo!(),
             watcher: todo!(),
             watcher_rx: todo!(),
             watcher_tx: todo!(),
@@ -350,7 +398,7 @@ impl AppRunner {
     pub fn fill_filemap(&mut self, path: PathBuf) {
         for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
             if self
-                .ignore
+                .ws_ignore
                 .matched(&entry.path(), entry.file_type().is_dir())
                 .is_ignore()
             {
@@ -593,6 +641,26 @@ impl AppRunner {
     pub fn rebuild_all(&mut self) -> Result<()> {
         todo!()
     }
+}
+
+/// Bind a listener to any point and return it
+/// When the listener is dropped, the socket will be closed, but we'll still have a port that we
+/// can bind our proxy to.
+///
+/// Todo: we might want to do this on every new build in case the OS tries to bind things to this port
+/// and we don't already have something bound to it. There's no great way of "reserving" a port.
+fn get_available_port(address: IpAddr, prefer: Option<u16>) -> Option<u16> {
+    // First, try to bind to the preferred port
+    if let Some(port) = prefer {
+        if let Ok(_listener) = TcpListener::bind((address, port)) {
+            return Some(port);
+        }
+    }
+
+    // Otherwise, try to bind to any port and return the first one we can
+    TcpListener::bind((address, 0))
+        .map(|listener| listener.local_addr().unwrap().port())
+        .ok()
 }
 
 // /// This handles ongoing builds, bundles, and handles to running apps

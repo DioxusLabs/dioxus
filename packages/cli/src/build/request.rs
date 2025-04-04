@@ -462,33 +462,6 @@ impl BuildRequest {
         //     },
         // };
 
-        // // Enable hot reload.
-        // if self.hot_reload.is_none() {
-        //     self.hot_reload = Some(krate.workspace.settings.always_hot_reload.unwrap_or(true));
-        // }
-
-        // // Open browser.
-        // if self.open.is_none() {
-        //     self.open = Some(
-        //         krate
-        //             .workspace
-        //             .settings
-        //             .always_open_browser
-        //             .unwrap_or_default(),
-        //     );
-        // }
-
-        // // Set WSL file poll interval.
-        // if self.wsl_file_poll_interval.is_none() {
-        //     self.wsl_file_poll_interval =
-        //         Some(krate.workspace.settings.wsl_file_poll_interval.unwrap_or(2));
-        // }
-
-        // // Set always-on-top for desktop.
-        // if self.always_on_top.is_none() {
-        //     self.always_on_top = Some(krate.workspace.settings.always_on_top.unwrap_or(true))
-        // }
-
         // Determine arch if android
 
         // if platform == Platform::Android && args.target_args.target.is_none() {
@@ -893,7 +866,7 @@ impl BuildRequest {
                 tools.android_cc(&self.target)
             }
 
-            // Note that I think rust uses rust-lld
+            // Note that I think rust uses rust-lld now, so we need to respect its argument profile
             // https://blog.rust-lang.org/2024/05/17/enabling-rust-lld-on-linux.html
             Platform::MacOS
             | Platform::Ios

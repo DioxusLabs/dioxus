@@ -55,8 +55,10 @@ pub(crate) struct ServeArgs {
     #[arg(long, default_missing_value="true", num_args=0..=1, short = 'i')]
     pub(crate) interactive: Option<bool>,
 
-    /// Build this binary using binary patching instead of a full rebuild [default: false]
-    #[arg(long, default_value_t = false)]
+    /// Enable Rust hot-patching instead of full rebuilds [default: false]
+    ///
+    /// This is quite experimental and may lead to unexpected segfaults or crashes in development.
+    #[arg(long, default_value_t = true)]
     pub(crate) hot_patch: bool,
 
     /// The feature to use for the client in a fullstack app [default: "web"]

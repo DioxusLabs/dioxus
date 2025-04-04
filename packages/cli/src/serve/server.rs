@@ -64,6 +64,8 @@ pub(crate) struct WebServer {
     application_name: String,
 }
 
+pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+
 impl WebServer {
     /// Start the development server.
     /// This will set up the default http server if there's no server specified (usually via fullstack).
@@ -74,28 +76,12 @@ impl WebServer {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
 
-        const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-
-        // Use 0.0.0.0 as the default address if none is specified - this will let us expose the
-        // devserver to the network (for other devices like phones/embedded)
-        let devserver_bind_ip = runner.args.address.addr.unwrap_or(SELF_IP);
-
-        // If the user specified a port, use that, otherwise use any available port, preferring 8080
-        let devserver_port =
-            runner.args.address.port.unwrap_or_else(|| {
-                get_available_port(devserver_bind_ip, Some(8080)).unwrap_or(8080)
-            });
-
-        // All servers will end up behind us (the devserver) but on a different port
-        // This is so we can serve a loading screen as well as devtools without anything particularly fancy
-        let proxied_port = runner
-            .args
-            .should_proxy_build()
-            .then(|| get_available_port(devserver_bind_ip, None))
-            .flatten();
-
         // Create the listener that we'll pass into the devserver, but save its IP here so
         // we can display it to the user in the tui
+        let devserver_bind_ip = runner.devserver_bind_ip;
+        let devserver_port = runner.devserver_port;
+        let proxied_port = runner.proxied_port;
+
         let devserver_bind_address = SocketAddr::new(devserver_bind_ip, devserver_port);
         let listener = std::net::TcpListener::bind(devserver_bind_address).with_context(|| {
             anyhow::anyhow!(
@@ -433,7 +419,8 @@ fn build_devserver_router(
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
-    if runner.args.should_proxy_build() {
+    if runner.proxied_port.is_some() {
+        // if runner.args.should_proxy_build() {
         // For fullstack, liveview, and server, forward all requests to the inner server
         let address = fullstack_address.unwrap();
         tracing::debug!("Proxying requests to fullstack server at {address}");
@@ -527,7 +514,7 @@ fn build_serve_dir(runner: &AppRunner) -> axum::routing::MethodRouter {
         HeaderValue::from_static("same-origin"),
     );
 
-    let (coep, coop) = match runner.args.cross_origin_policy {
+    let (coep, coop) = match runner.cross_origin_policy {
         true => CORS_REQUIRE.clone(),
         false => CORS_UNSAFE.clone(),
     };
@@ -670,25 +657,6 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
     }
 
     Ok((cert_path, key_path))
-}
-/// Bind a listener to any point and return it
-/// When the listener is dropped, the socket will be closed, but we'll still have a port that we
-/// can bind our proxy to.
-///
-/// Todo: we might want to do this on every new build in case the OS tries to bind things to this port
-/// and we don't already have something bound to it. There's no great way of "reserving" a port.
-fn get_available_port(address: IpAddr, prefer: Option<u16>) -> Option<u16> {
-    // First, try to bind to the preferred port
-    if let Some(port) = prefer {
-        if let Ok(_listener) = TcpListener::bind((address, port)) {
-            return Some(port);
-        }
-    }
-
-    // Otherwise, try to bind to any port and return the first one we can
-    TcpListener::bind((address, 0))
-        .map(|listener| listener.local_addr().unwrap().port())
-        .ok()
 }
 
 /// Middleware that intercepts html requests if the status is "Building" and returns a loading page instead

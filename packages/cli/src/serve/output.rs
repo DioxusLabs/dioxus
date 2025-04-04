@@ -77,7 +77,7 @@ impl Output {
     pub(crate) async fn start(runner: &AppRunner) -> crate::Result<Self> {
         let mut output = Self {
             term: Rc::new(RefCell::new(None)),
-            interactive: runner.args.is_interactive_tty(),
+            interactive: runner.interactive,
             dx_version: format!(
                 "{}-{}",
                 env!("CARGO_PKG_VERSION"),
