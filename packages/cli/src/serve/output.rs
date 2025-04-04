@@ -497,7 +497,7 @@ impl Output {
             state.build_engine.compile_duration(),
         );
 
-        if state.build_engine.request.build.fullstack {
+        if state.build_engine.request.build.fullstack() {
             self.render_single_gauge(
                 frame,
                 second_progress,
@@ -651,7 +651,7 @@ impl Output {
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
                 self.platform.expected_name().yellow(),
-                if state.opts.build_arguments.fullstack {
+                if state.opts.build_arguments.fullstack() {
                     " + fullstack".yellow()
                 } else {
                     " ".dark_gray()

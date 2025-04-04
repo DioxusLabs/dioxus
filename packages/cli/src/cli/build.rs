@@ -31,8 +31,8 @@ pub(crate) struct BuildArgs {
     /// Build the fullstack variant of this app, using that as the fileserver and backend
     ///
     /// This defaults to `false` but will be overridden to true if the `fullstack` feature is enabled.
-    #[clap(long)]
-    pub(crate) fullstack: bool,
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
+    pub(crate) fullstack: Option<bool>,
 
     /// Run the ssg config of the app and generate the files
     #[clap(long)]
@@ -91,12 +91,25 @@ impl BuildArgs {
     /// IE if they've specified "fullstack" as a feature on `dioxus`, then we want to build the
     /// fullstack variant even if they omitted the `--fullstack` flag.
     pub(crate) async fn resolve(&mut self, krate: &DioxusCrate) -> Result<()> {
-        let default_platform = krate.default_platform();
+        let default_platforms = krate.default_platforms();
+        let default_platform = default_platforms.iter().find(|p| **p != Platform::Server);
+        let default_server = default_platforms.iter().any(|p| *p == Platform::Server);
         let auto_platform = krate.autodetect_platform();
 
-        // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
-        // We want to strip out the default platform and use the one they passed, setting no-default-features
-        if self.platform.is_some() && default_platform.is_some() {
+        // Make sure we set the fullstack platform so we actually build the fullstack variant
+        // Users need to enable "fullstack" in their default feature set or explicitly pass the flag
+        self.fullstack = Some(
+            self.fullstack()
+                || self.fullstack.is_none()
+                    && (default_server || krate.has_dioxus_feature("fullstack")),
+        );
+
+        // If the current build is a fullstack build which includes either the client or the server in the default features,
+        // remove that default feature and just add it back into the client or server args. If they passed in an explicit platform
+        // but they also have a default feature platform, strip out the default features and add back in the platform they passed in.
+        if self.fullstack() && (default_server || default_platform.is_some())
+            || self.platform.is_some() && default_platform.is_some()
+        {
             self.target_args.no_default_features = true;
             self.target_args
                 .features
@@ -126,16 +139,11 @@ impl BuildArgs {
             .server_features
             .push(krate.feature_for_platform(Platform::Server));
 
-        // Make sure we set the fullstack platform so we actually build the fullstack variant
-        // Users need to enable "fullstack" in their default feature set.
-        // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-        self.fullstack = self.fullstack || krate.has_dioxus_feature("fullstack");
-
         // Make sure we have a server feature if we're building a fullstack app
         //
         // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
         // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
-        if self.fullstack && self.target_args.server_features.is_empty() {
+        if self.fullstack() && self.target_args.server_features.is_empty() {
             return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
         }
 
@@ -190,5 +198,10 @@ impl BuildArgs {
     /// Get the platform from the build arguments
     pub(crate) fn platform(&self) -> Platform {
         self.platform.expect("Platform was not set")
+    }
+
+    /// Check if this is a fullstack build
+    pub(crate) fn fullstack(&self) -> bool {
+        self.fullstack.unwrap_or(false)
     }
 }
