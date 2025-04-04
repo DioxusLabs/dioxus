@@ -374,6 +374,8 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {
+        let lib = Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()));
+
         // Use the `aslr_offset` symbol as a sentinel for the current executable. This is basically a
         // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
         // jump table.
@@ -384,8 +386,10 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
         let new_offset = unsafe {
             // Leak the libary. dlopen is basically a no-op on many platforms and if we even try to drop it,
             // some code might be called (ie drop) that results in really bad crashes (restart your computer...)
-            Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()))
-                .get::<*const ()>(b"__rust_alloc")
+            //
+            // todo - we should define a symbol instead of __rust_alloc since it's going to be removed
+            //      see https://github.com/rust-lang/rust/issues/139265
+            lib.get::<*const ()>(b"__rust_alloc")
                 .ok()
                 .unwrap()
                 .try_as_raw_ptr()

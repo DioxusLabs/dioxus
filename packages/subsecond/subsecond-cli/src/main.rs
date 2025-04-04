@@ -90,10 +90,6 @@ async fn main() -> anyhow::Result<()> {
     let mut watcher = FsWatcher::watch(src_folder)?;
 
     while let Some(Ok(event)) = watcher.rx.next().await {
-        if event.kind != notify::EventKind::Modify(ModifyKind::Any) {
-            continue;
-        }
-
         if !watcher.file_changed(event.paths.first().unwrap()) {
             continue;
         }
@@ -202,6 +198,10 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
         // usually just ld64 - uses your `cc`
         target_lexicon::Architecture::Aarch64(_) => {
             build.arg("-Clink-arg=-Wl,-all_load");
+
+            // todo: explore using dynamic linker instead of known addresses
+            //
+            // build.arg("-Clink-arg=-Wl,-export_dynamic");
         }
 
         // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
@@ -360,6 +360,7 @@ async fn fast_build(
             Command::new("cc")
                 .args(object_files)
                 .arg("-Wl,-dylib")
+                // .arg("-Wl,-undefined,dynamic_lookup")
                 .arg("-arch")
                 .arg("arm64")
                 .arg("-o")

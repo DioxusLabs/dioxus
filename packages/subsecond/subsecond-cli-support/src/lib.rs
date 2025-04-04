@@ -31,6 +31,7 @@ use walrus::{
     RawCustomSection,
 };
 
+pub mod lift;
 pub mod partial;
 
 pub fn create_jump_table(
@@ -233,13 +234,37 @@ pub fn resolve_undefined(
                 continue;
             }
 
-            let abs_addr = sym.address() + aslr_offset;
-
             let name_offset = match triple.operating_system {
                 target_lexicon::OperatingSystem::Darwin(_) => 1,
                 target_lexicon::OperatingSystem::IOS(_) => 1,
                 _ => 0,
             };
+
+            let abs_addr = sym.address() + aslr_offset;
+
+            tracing::debug!("Defining: {:?}", name);
+
+            // todo - explore using the dynamic linker instead of known addresses
+            //
+            // obj.add_symbol(Symbol {
+            //     // name: name.as_bytes()[name_offset..].to_vec(),
+            //     name: name.as_bytes().to_vec(),
+            //     value: 0,
+            //     size: 0,
+            //     kind: sym.kind(),
+            //     scope: object::SymbolScope::Dynamic,
+            //     weak: false,
+            //     section: object::write::SymbolSection::Undefined,
+            //     flags: object::SymbolFlags::None,
+            //     // name: name.as_bytes()[name_offset..].to_vec(),
+            //     // value: offset,
+            //     // size: jump_code.len() as u64,
+            //     // scope: SymbolScope::Dynamic,
+            //     // kind: sym.kind(),
+            //     // weak: false,
+            //     // section: SymbolSection::Undefined,
+            //     // flags: object::SymbolFlags::None,
+            // });
 
             if sym.kind() == SymbolKind::Text {
                 let jump_code = match triple.architecture {
