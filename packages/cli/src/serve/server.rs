@@ -423,7 +423,7 @@ fn build_devserver_router(
     build_status: SharedStatus,
 ) -> Result<Router> {
     let mut router = Router::new();
-    let build = &runner.client;
+    let build = runner.client();
 
     // Setup proxy for the endpoint specified in the config
     for proxy_config in build.build.config.web.proxy.iter() {

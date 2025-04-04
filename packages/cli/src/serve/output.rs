@@ -469,7 +469,7 @@ impl Output {
         ])
         .areas(gauge_area);
 
-        let client = &state.runner.client;
+        let client = &state.runner.client();
 
         self.render_single_gauge(
             frame,
@@ -565,7 +565,7 @@ impl Output {
         state: RenderState,
         time_taken: Option<Duration>,
     ) {
-        let client = &state.runner.client;
+        let client = &state.runner.client();
 
         let failed = client.stage == BuildStage::Failed;
         let value = if failed { 1.0 } else { value.clamp(0.0, 1.0) };
@@ -638,7 +638,7 @@ impl Output {
         ])
         .areas(area);
 
-        let client = &state.runner.client;
+        let client = &state.runner.client();
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
@@ -681,7 +681,7 @@ impl Output {
             Paragraph::new(Line::from({
                 let mut lines = vec!["App features: ".gray(), "[".yellow()];
 
-                let feature_list: Vec<String> = state.runner.client.build.all_target_features();
+                let feature_list: Vec<String> = state.runner.client().build.all_target_features();
                 let num_features = feature_list.len();
 
                 for (idx, feature) in feature_list.into_iter().enumerate() {

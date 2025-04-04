@@ -42,6 +42,8 @@ use uuid::Uuid;
 /// Since we resolve the build request before initializing the CLI, it also serves as a place to store
 /// resolved "serve" arguments, which is why it takes ServeArgs instead of BuildArgs. Simply wrap the
 /// BuildArgs in a default ServeArgs and pass it in.
+///
+/// All updates from the build will be sent on a global "BuildProgress" channel.
 #[derive(Clone)]
 pub(crate) struct BuildRequest {
     pub(crate) workspace: Arc<crate::workspace::Workspace>,
@@ -49,7 +51,6 @@ pub(crate) struct BuildRequest {
     pub(crate) config: DioxusConfig,
     pub(crate) crate_target: Arc<krates::cm::Target>,
 
-    // /
     pub(crate) fullstack: bool,
 
     pub(crate) profile: String,

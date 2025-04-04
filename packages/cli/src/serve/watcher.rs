@@ -1,5 +1,5 @@
-use super::update::ServeUpdate;
-use crate::{cli::serve::ServeArgs, BuildRequest};
+use super::{update::ServeUpdate, AppRunner};
+use crate::{cli::serve::ServeArgs, BuildRequest, Result};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use notify::{
@@ -12,112 +12,120 @@ use std::{path::PathBuf, time::Duration};
 ///
 /// This is where we do workspace discovery and recursively listen for changes in Rust files and asset
 /// directories.
+///
+/// The watcher is not tightly integrated with the runner since each build likely brings in a similar
+/// set of paths to watch and there is quite a large overhead to setting up the watcher.
+///
+/// Previously we manually walked the workspace and added all the paths to the watcher, but now
+/// we use depinfo directly once the build is complete.
 pub(crate) struct Watcher {
     rx: UnboundedReceiver<notify::Event>,
     _tx: UnboundedSender<notify::Event>,
     watcher: Box<dyn notify::Watcher>,
 }
 
-// impl Watcher {
-//     pub(crate) fn start(runner: &AppRunner) -> Self {
-//         let (tx, rx) = futures_channel::mpsc::unbounded();
+impl Watcher {
+    pub(crate) async fn start(runner: &AppRunner) -> Result<Self> {
+        todo!()
+        // let (tx, rx) = futures_channel::mpsc::unbounded();
 
-//         let mut watcher = Self {
-//             watcher: create_notify_watcher(serve, tx.clone()),
-//             _tx: tx,
-//             krate: krate.clone(),
-//             rx,
-//         };
+        // let mut watcher = Self {
+        //     watcher: create_notify_watcher(serve, tx.clone()),
+        //     _tx: tx,
+        //     // krate: krate.clone(),
+        //     rx,
+        // };
 
-//         watcher.watch_filesystem();
+        // watcher.watch_filesystem();
 
-//         watcher
-//     }
+        // watcher
+    }
 
-//     /// Wait for changed files to be detected
-//     pub(crate) async fn wait(&mut self) -> ServeUpdate {
-//         // Wait for the next file to change
-//         let mut changes: Vec<_> = self.rx.next().await.into_iter().collect();
+    /// Wait for changed files to be detected
+    pub(crate) async fn wait(&mut self) -> ServeUpdate {
+        // Wait for the next file to change
+        let mut changes: Vec<_> = self.rx.next().await.into_iter().collect();
 
-//         // Dequeue in bulk if we can, we might've received a lot of events in one go
-//         while let Some(event) = self.rx.try_next().ok().flatten() {
-//             changes.push(event);
-//         }
+        // Dequeue in bulk if we can, we might've received a lot of events in one go
+        while let Some(event) = self.rx.try_next().ok().flatten() {
+            changes.push(event);
+        }
 
-//         // Filter the changes
-//         let mut files: Vec<PathBuf> = vec![];
+        // Filter the changes
+        let mut files: Vec<PathBuf> = vec![];
 
-//         // Decompose the events into a list of all the files that have changed
-//         for event in changes.drain(..) {
-//             // Make sure we add new folders to the watch list, provided they're not matched by the ignore list
-//             // We'll only watch new folders that are found under the crate, and then update our watcher to watch them
-//             // This unfortunately won't pick up new krates added "at a distance" - IE krates not within the workspace.
-//             if let EventKind::Create(_create_kind) = event.kind {
-//                 // If it's a new folder, watch it
-//                 // If it's a new cargo.toml (ie dep on the fly),
-//                 // todo(jon) support new folders on the fly
-//             }
+        // Decompose the events into a list of all the files that have changed
+        for event in changes.drain(..) {
+            // Make sure we add new folders to the watch list, provided they're not matched by the ignore list
+            // We'll only watch new folders that are found under the crate, and then update our watcher to watch them
+            // This unfortunately won't pick up new krates added "at a distance" - IE krates not within the workspace.
+            if let EventKind::Create(_create_kind) = event.kind {
+                // If it's a new folder, watch it
+                // If it's a new cargo.toml (ie dep on the fly),
+                // todo(jon) support new folders on the fly
+            }
 
-//             for path in event.paths {
-//                 // Workaround for notify and vscode-like editor:
-//                 // when edit & save a file in vscode, there will be two notifications,
-//                 // the first one is a file with empty content.
-//                 // filter the empty file notification to avoid false rebuild during hot-reload
-//                 if let Ok(metadata) = std::fs::metadata(&path) {
-//                     if metadata.len() == 0 {
-//                         continue;
-//                     }
-//                 }
+            for path in event.paths {
+                // Workaround for notify and vscode-like editor:
+                // when edit & save a file in vscode, there will be two notifications,
+                // the first one is a file with empty content.
+                // filter the empty file notification to avoid false rebuild during hot-reload
+                if let Ok(metadata) = std::fs::metadata(&path) {
+                    if metadata.len() == 0 {
+                        continue;
+                    }
+                }
 
-//                 files.push(path);
-//             }
-//         }
+                files.push(path);
+            }
+        }
 
-//         tracing::debug!("Files changed: {files:?}");
+        tracing::debug!("Files changed: {files:?}");
 
-//         ServeUpdate::FilesChanged { files }
-//     }
+        ServeUpdate::FilesChanged { files }
+    }
 
-//     fn watch_filesystem(&mut self) {
-//         // Watch the folders of the crates that we're interested in
-//         for path in self.krate.watch_paths() {
-//             tracing::debug!("Watching path {path:?}");
+    fn watch_filesystem(&mut self) {
+        todo!()
+        // // Watch the folders of the crates that we're interested in
+        // for path in self.krate.watch_paths() {
+        //     tracing::debug!("Watching path {path:?}");
 
-//             if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
-//                 handle_notify_error(err);
-//             }
-//         }
+        //     if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
+        //         handle_notify_error(err);
+        //     }
+        // }
 
-//         // Also watch the crates themselves, but not recursively, such that we can pick up new folders
-//         for krate in self.krate.all_watched_crates() {
-//             tracing::debug!("Watching path {krate:?}");
-//             if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
-//                 handle_notify_error(err);
-//             }
-//         }
+        // // Also watch the crates themselves, but not recursively, such that we can pick up new folders
+        // for krate in self.krate.all_watched_crates() {
+        //     tracing::debug!("Watching path {krate:?}");
+        //     if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
+        //         handle_notify_error(err);
+        //     }
+        // }
 
-//         // Also watch the workspace dir, non recursively, such that we can pick up new folders there too
-//         if let Err(err) = self
-//             .watcher
-//             .watch(&self.krate.workspace_dir(), RecursiveMode::NonRecursive)
-//         {
-//             handle_notify_error(err);
-//         }
-//     }
-// }
+        // // Also watch the workspace dir, non recursively, such that we can pick up new folders there too
+        // if let Err(err) = self
+        //     .watcher
+        //     .watch(&self.krate.workspace_dir(), RecursiveMode::NonRecursive)
+        // {
+        //     handle_notify_error(err);
+        // }
+    }
+}
 
-// fn handle_notify_error(err: notify::Error) {
-//     tracing::debug!("Failed to watch path: {}", err);
-//     match err.kind {
-//         notify::ErrorKind::Io(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
-//             tracing::error!("Failed to watch path: permission denied. {:?}", err.paths)
-//         }
-//         notify::ErrorKind::MaxFilesWatch => {
-//             tracing::error!("Failed to set up file watcher: too many files to watch")
-//         }
-//         _ => {}
-//     }
-// }
+fn handle_notify_error(err: notify::Error) {
+    tracing::debug!("Failed to watch path: {}", err);
+    match err.kind {
+        notify::ErrorKind::Io(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            tracing::error!("Failed to watch path: permission denied. {:?}", err.paths)
+        }
+        notify::ErrorKind::MaxFilesWatch => {
+            tracing::error!("Failed to set up file watcher: too many files to watch")
+        }
+        _ => {}
+    }
+}
 
 // fn create_notify_watcher(
 //     serve: &ServeArgs,

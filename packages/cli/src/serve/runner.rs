@@ -12,7 +12,9 @@ use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::future::OptionFuture;
+use futures_util::StreamExt;
 use ignore::gitignore::Gitignore;
 use std::{
     collections::{HashMap, HashSet},
@@ -30,12 +32,14 @@ use tokio::process::Command;
 /// This is the primary "state" object that holds the builds and handles for the running apps.
 ///
 /// It holds the resolved state from the ServeArgs, providing a source of truth for the rest of the app
+///
+/// It also holds the watcher which is used to watch for changes in the filesystem and trigger rebuilds,
+/// hotreloads, asset updates, etc.
 pub(crate) struct AppRunner {
     /// the platform of the "primary" crate (ie the first)
     pub(crate) primary_platform: Platform,
     pub(crate) workspace: Arc<crate::Workspace>,
-    pub(crate) client: AppBuilder,
-    pub(crate) server: AppBuilder,
+    pub(crate) builds: Vec<AppBuilder>,
     pub(crate) args: ServeArgs,
     pub(crate) interactive: bool,
     pub(crate) force_sequential: bool,
@@ -48,6 +52,9 @@ pub(crate) struct AppRunner {
     pub(crate) builds_opened: usize,
     pub(crate) automatic_rebuilds: bool,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
+    pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
+    pub(crate) watcher_tx: UnboundedSender<notify::Event>,
+    pub(crate) watcher: Box<dyn notify::Watcher>,
 }
 
 pub enum HotReloadKind {
@@ -74,8 +81,7 @@ impl AppRunner {
             workspace: todo!(),
             ignore: todo!(),
             primary_platform: todo!(),
-            client: todo!(),
-            server: todo!(),
+            builds: vec![],
             args,
             interactive: todo!(),
             force_sequential: todo!(),
@@ -83,6 +89,9 @@ impl AppRunner {
             open_browser: todo!(),
             wsl_file_poll_interval: todo!(),
             always_on_top: todo!(),
+            watcher: todo!(),
+            watcher_rx: todo!(),
+            watcher_tx: todo!(),
         };
 
         // // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
@@ -99,11 +108,18 @@ impl AppRunner {
     }
 
     pub(crate) fn client(&self) -> &AppBuilder {
-        &self.client
+        // the client is always the first build
+        &self.builds[0]
+    }
+
+    pub(crate) fn client_mut(&mut self) -> &mut AppBuilder {
+        // the client is always the first build
+        &mut self.builds[0]
     }
 
     pub(crate) fn server(&self) -> &AppBuilder {
-        &self.server
+        // the server is always the second build, if it exists
+        &self.builds.get(1).unwrap()
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
@@ -300,13 +316,13 @@ impl AppRunner {
 
     pub(crate) async fn client_connected(&mut self) {
         // Assign the runtime asset dir to the runner
-        if self.client.build.platform == Platform::Ios {
+        if self.client().build.platform == Platform::Ios {
             // xcrun simctl get_app_container booted com.dioxuslabs
             let res = Command::new("xcrun")
                 .arg("simctl")
                 .arg("get_app_container")
                 .arg("booted")
-                .arg(self.client.build.bundle_identifier())
+                .arg(self.client().build.bundle_identifier())
                 .output()
                 .await;
 
@@ -317,7 +333,7 @@ impl AppRunner {
                     let out = out.trim();
 
                     tracing::trace!("Setting Runtime asset dir: {out:?}");
-                    self.client.runtime_asset_dir = Some(PathBuf::from(out));
+                    self.client_mut().runtime_asset_dir = Some(PathBuf::from(out));
                 }
             }
         }
