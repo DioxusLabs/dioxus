@@ -236,10 +236,12 @@ impl TemplateBody {
 
         // Assign paths to all nodes in the template
         body.assign_paths_inner(&nodes);
-        body.validate_key();
 
         // And then save the roots
         body.roots = nodes;
+
+        // Finally, validate the key
+        body.validate_key();
 
         body
     }

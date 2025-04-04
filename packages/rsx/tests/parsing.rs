@@ -141,3 +141,29 @@ fn complex_kitchen_sink() {
 
     let _cb: CallBody = syn::parse2(item).unwrap();
 }
+
+#[test]
+fn key_must_be_formatted() {
+    let item = quote::quote! {
+        div {
+            key: value
+        }
+    };
+
+    let parsed = syn::parse2::<CallBody>(item).unwrap();
+    println!("{:?}", parsed.body.diagnostics);
+    assert!(!parsed.body.diagnostics.is_empty());
+}
+
+#[test]
+fn key_cannot_be_static() {
+    let item = quote::quote! {
+        div {
+            key: "hello world"
+        }
+    };
+
+    let parsed = syn::parse2::<CallBody>(item).unwrap();
+    println!("{:?}", parsed.body.diagnostics);
+    assert!(!parsed.body.diagnostics.is_empty());
+}
