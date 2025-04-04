@@ -487,13 +487,20 @@ impl BuildRequest {
             },
         };
 
+        // Determine the --package we'll pass to cargo.
+        // todo: I think this might be wrong - we don't want to use main_package necessarily...a
+        let package = args
+            .package
+            .clone()
+            .unwrap_or_else(|| main_package.name.clone());
+
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
         // Tools like xcrun/adb can detect devices
         let device = args.device.unwrap_or(false);
 
         // We want a real triple to build with, so we'll autodetect it if it's not provided
-        // The triple ends up being a source of truth for us later hence this work to figure it out
+        // The triple ends up being a source of truth for us later hence all this work to figure it out
         let target = match args.target.clone() {
             Some(target) => target,
             None => match platform {
@@ -503,6 +510,9 @@ impl BuildRequest {
                 | Platform::Linux
                 | Platform::Server
                 | Platform::Liveview => target_lexicon::HOST,
+
+                // We currently assume unknown-unknown for web, but we might want to eventually
+                // support emscripten
                 Platform::Web => "wasm32-unknown-unknown".parse().unwrap(),
 
                 // For iOS we should prefer the actual architecture for the simulator, but in lieu of actually
@@ -520,64 +530,13 @@ impl BuildRequest {
 
                 // Same idea with android but we figure out the connected device using adb
                 Platform::Android => {
-                    // Use the host's triple and then convert field by field
-                    // ie, the "best" emulator for an m1 mac would be: "aarch64-linux-android"
-                    //  - We assume android is always "linux"
-                    //  - We try to match the architecture unless otherwise specified. This is because
-                    //    emulators that match the host arch are usually faster.
-                    let mut triple = target_lexicon::HOST.clone();
-                    triple.operating_system = OperatingSystem::Linux;
-                    triple.environment = Environment::Android;
-                    triple.vendor = Vendor::Unknown;
-                    triple.binary_format = BinaryFormat::Unknown;
-
-                    // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
-                    let output = Command::new("adb")
-                        .arg("shell")
-                        .arg("uname")
-                        .arg("-m")
-                        .output()
+                    super::android_tools()
+                        .unwrap()
+                        .autodetect_android_triple()
                         .await
-                        .map(|out| String::from_utf8(out.stdout));
-
-                    match output {
-                        Ok(Ok(out)) => match out.trim() {
-                            "armv7l" => {
-                                triple.architecture = Architecture::Arm(ArmArchitecture::Arm)
-                            }
-                            "aarch64" => {
-                                triple.architecture =
-                                    Architecture::Aarch64(Aarch64Architecture::Aarch64)
-                            }
-                            "i386" => {
-                                triple.architecture = Architecture::X86_32(X86_32Architecture::I386)
-                            }
-                            "x86_64" => {
-                                triple.architecture = Architecture::X86_64;
-                            }
-                            other => {
-                                tracing::warn!("Unknown architecture from adb: {other}");
-                            }
-                        },
-                        Ok(Err(err)) => {
-                            tracing::debug!("Failed to parse adb output: {err}");
-                        }
-                        Err(err) => {
-                            tracing::debug!("ADB command failed: {:?}", err);
-                        }
-                    };
-
-                    triple
                 }
             },
         };
-
-        // Determine the --package we'll pass to cargo.
-        // todo: I think this might be wrong - we don't want to use main_package necessarily...a
-        let package = args
-            .package
-            .clone()
-            .unwrap_or_else(|| main_package.name.clone());
 
         Ok(Self {
             platform,

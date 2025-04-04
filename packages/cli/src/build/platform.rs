@@ -2,7 +2,11 @@ use crate::Result;
 use anyhow::Context;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
-use target_lexicon::Triple;
+use target_lexicon::{
+    Aarch64Architecture, Architecture, ArmArchitecture, BinaryFormat, Environment, OperatingSystem,
+    Triple, Vendor, X86_32Architecture,
+};
+use tokio::process::Command;
 
 /// The tools for Android (ndk, sdk, etc)
 ///
@@ -232,6 +236,52 @@ impl AndroidTools {
     //         Arch::X64 => "x86_64-linux-android",
     //     }
     // }
+
+    pub async fn autodetect_android_triple(&self) -> Triple {
+        // Use the host's triple and then convert field by field
+        // ie, the "best" emulator for an m1 mac would be: "aarch64-linux-android"
+        //  - We assume android is always "linux"
+        //  - We try to match the architecture unless otherwise specified. This is because
+        //    emulators that match the host arch are usually faster.
+        let mut triple = target_lexicon::HOST.clone();
+        triple.operating_system = OperatingSystem::Linux;
+        triple.environment = Environment::Android;
+        triple.vendor = Vendor::Unknown;
+        triple.binary_format = BinaryFormat::Unknown;
+
+        // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
+        let output = Command::new(&self.adb)
+            .arg("shell")
+            .arg("uname")
+            .arg("-m")
+            .output()
+            .await
+            .map(|out| String::from_utf8(out.stdout));
+
+        match output {
+            Ok(Ok(out)) => match out.trim() {
+                "armv7l" => triple.architecture = Architecture::Arm(ArmArchitecture::Arm),
+                "aarch64" => {
+                    triple.architecture = Architecture::Aarch64(Aarch64Architecture::Aarch64)
+                }
+                "i386" => triple.architecture = Architecture::X86_32(X86_32Architecture::I386),
+                "x86_64" => {
+                    triple.architecture = Architecture::X86_64;
+                }
+                other => {
+                    tracing::warn!("Unknown architecture from adb: {other}");
+                }
+            },
+            Ok(Err(err)) => {
+                tracing::debug!("Failed to parse adb output: {err}");
+            }
+            Err(err) => {
+                tracing::debug!("ADB command failed: {:?}", err);
+            }
+        };
+
+        triple
+    }
 }
 
 fn var_or_debug(name: &str) -> Option<PathBuf> {
