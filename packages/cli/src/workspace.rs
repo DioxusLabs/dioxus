@@ -20,6 +20,7 @@ pub struct Workspace {
     pub(crate) wasm_opt: Option<PathBuf>,
     pub(crate) sysroot: PathBuf,
     pub(crate) rustc_version: String,
+    pub(crate) ignore: Gitignore,
 }
 
 static WS: OnceCell<Arc<Workspace>> = OnceCell::new();
@@ -50,12 +51,15 @@ impl Workspace {
 
         let wasm_opt = which::which("wasm-opt").ok();
 
+        let ignore = todo!();
+
         Ok(Arc::new(Self {
             krates,
             settings,
             wasm_opt,
             sysroot: sysroot.trim().into(),
             rustc_version: rustc_version.trim().into(),
+            ignore,
         }))
     }
 

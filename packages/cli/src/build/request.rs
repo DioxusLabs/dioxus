@@ -212,8 +212,6 @@ pub(crate) struct BuildRequest {
     pub(crate) config: DioxusConfig,
     pub(crate) crate_target: Arc<krates::cm::Target>,
 
-    pub(crate) fullstack: bool,
-
     pub(crate) profile: String,
 
     pub(crate) release: bool,
@@ -500,7 +498,7 @@ impl BuildRequest {
             no_default_features: todo!(),
             custom_target_dir: None,
             profile: todo!(),
-            fullstack: todo!(),
+            // fullstack: todo!(),
             target: todo!(),
             device: todo!(),
             nightly: args.nightly,

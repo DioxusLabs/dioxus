@@ -480,7 +480,7 @@ impl Output {
             client.compile_duration(),
         );
 
-        if client.build.fullstack {
+        if state.runner.is_fullstack() {
             self.render_single_gauge(
                 frame,
                 second_progress,
@@ -644,7 +644,7 @@ impl Output {
             Paragraph::new(Line::from(vec![
                 "Platform: ".gray(),
                 client.build.platform.expected_name().yellow(),
-                if client.build.fullstack {
+                if state.runner.is_fullstack() {
                     " + fullstack".yellow()
                 } else {
                     " ".dark_gray()

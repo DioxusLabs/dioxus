@@ -21,9 +21,10 @@ impl RunArgs {
         let devserver_ip = "127.0.0.1:8081".parse().unwrap();
         let fullstack_ip = "127.0.0.1:8080".parse().unwrap();
 
-        if build.platform == Platform::Web || build.fullstack {
-            tracing::info!("Serving at: {}", fullstack_ip);
-        }
+        todo!();
+        // if build.platform == Platform::Web || build.fullstack {
+        //     tracing::info!("Serving at: {}", fullstack_ip);
+        // }
 
         builder.open(devserver_ip, Some(fullstack_ip), true).await?;
 

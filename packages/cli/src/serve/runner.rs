@@ -17,12 +17,17 @@ use futures_util::future::OptionFuture;
 use futures_util::StreamExt;
 use ignore::gitignore::Gitignore;
 use krates::NodeId;
+use notify::{
+    event::{MetadataKind, ModifyKind},
+    Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
+};
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
     path::PathBuf,
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 use std::{path::Path, time::SystemTime};
 use subsecond_cli_support::JumpTable;
@@ -42,7 +47,6 @@ pub(crate) struct AppRunner {
     pub(crate) builds: Vec<AppBuilder>,
 
     // Related to to the filesystem watcher
-    pub(crate) ws_ignore: Gitignore,
     pub(crate) watcher: Box<dyn notify::Watcher>,
     pub(crate) watcher_tx: UnboundedSender<notify::Event>,
     pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
@@ -85,6 +89,13 @@ impl AppRunner {
     pub(crate) async fn start(args: ServeArgs) -> Result<Self> {
         let workspace = Workspace::current().await?;
 
+        // Resolve the simpler args
+        let interactive = args.is_interactive_tty();
+        let force_sequential = args.force_sequential;
+        let cross_origin_policy = args.cross_origin_policy;
+
+        // These come from the args but also might come from the workspace settings
+        // We opt to use the manually specified args over the workspace settings
         let hot_reload = args
             .hot_reload
             .unwrap_or_else(|| workspace.settings.always_hot_reload.unwrap_or(true));
@@ -118,7 +129,17 @@ impl AppRunner {
             .then(|| get_available_port(devserver_bind_ip, None))
             .flatten();
 
+        // Spin up the file watcher
+        let (watcher_tx, watcher_rx) = futures_channel::mpsc::unbounded();
+        let watcher = create_notify_watcher(watcher_tx.clone(), wsl_file_poll_interval as u64);
+
+        // Now resolve the builds that we need to.
+        // These come from the args, but we'd like them to come from the `TargetCmd` chained object
+        let mut app = args.build_arguments;
+
+        // Create the runner
         let mut runner = Self {
+            builds: vec![],
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
             builds_opened: 0,
@@ -127,19 +148,16 @@ impl AppRunner {
             open_browser,
             wsl_file_poll_interval,
             always_on_top,
-            builds: vec![],
             workspace,
-            force_sequential: args.force_sequential,
-            cross_origin_policy: args.cross_origin_policy,
-            interactive: args.is_interactive_tty(),
             devserver_port,
             devserver_bind_ip,
             proxied_port,
-
-            ws_ignore: todo!(),
-            watcher: todo!(),
-            watcher_rx: todo!(),
-            watcher_tx: todo!(),
+            watcher,
+            watcher_rx,
+            watcher_tx,
+            interactive,
+            force_sequential,
+            cross_origin_policy,
         };
 
         // // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
@@ -399,7 +417,8 @@ impl AppRunner {
     pub fn fill_filemap(&mut self, path: PathBuf) {
         for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
             if self
-                .ws_ignore
+                .workspace
+                .ignore
                 .matched(&entry.path(), entry.file_type().is_dir())
                 .is_ignore()
             {
@@ -740,6 +759,11 @@ impl AppRunner {
 
         krates
     }
+
+    /// Check if this is a fullstack build. This means that there is an additional build with the `server` platform.
+    pub(crate) fn is_fullstack(&self) -> bool {
+        todo!()
+    }
 }
 
 /// Bind a listener to any point and return it
@@ -828,4 +852,169 @@ fn get_available_port(address: IpAddr, prefer: Option<u16>) -> Option<u16> {
 //     pub(crate) async fn wait(&mut self) -> ServeUpdate {
 //         todo!()
 //     }
+// }
+
+fn create_notify_watcher(
+    tx: UnboundedSender<notify::Event>,
+    wsl_file_poll_interval: u64,
+) -> Box<dyn NotifyWatcher> {
+    // Build the event handler for notify.
+    // This has been known to be a source of many problems, unfortunately, since notify handling seems to be flakey across platforms
+    let handler = move |info: notify::Result<notify::Event>| {
+        let Ok(event) = info else {
+            return;
+        };
+
+        let is_allowed_notify_event = match event.kind {
+            EventKind::Modify(ModifyKind::Data(_)) => true,
+            EventKind::Modify(ModifyKind::Name(_)) => true,
+            // The primary modification event on WSL's poll watcher.
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)) => true,
+            // Catch-all for unknown event types (windows)
+            EventKind::Modify(ModifyKind::Any) => true,
+            EventKind::Modify(ModifyKind::Metadata(_)) => false,
+            // Don't care about anything else.
+            EventKind::Create(_) => true,
+            EventKind::Remove(_) => true,
+            _ => false,
+        };
+
+        if is_allowed_notify_event {
+            _ = tx.unbounded_send(event);
+        }
+    };
+
+    const NOTIFY_ERROR_MSG: &str = "Failed to create file watcher.\nEnsure you have the required permissions to watch the specified directories.";
+
+    // On wsl, we need to poll the filesystem for changes
+    if is_wsl() {
+        return Box::new(
+            notify::PollWatcher::new(
+                handler,
+                Config::default().with_poll_interval(Duration::from_secs(wsl_file_poll_interval)),
+            )
+            .expect(NOTIFY_ERROR_MSG),
+        );
+    }
+
+    // Otherwise we can use the recommended watcher
+    Box::new(notify::recommended_watcher(handler).expect(NOTIFY_ERROR_MSG))
+}
+
+fn handle_notify_error(err: notify::Error) {
+    tracing::debug!("Failed to watch path: {}", err);
+    match err.kind {
+        notify::ErrorKind::Io(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            tracing::error!("Failed to watch path: permission denied. {:?}", err.paths)
+        }
+        notify::ErrorKind::MaxFilesWatch => {
+            tracing::error!("Failed to set up file watcher: too many files to watch")
+        }
+        _ => {}
+    }
+}
+
+/// Detects if `dx` is being ran in a WSL environment.
+///
+/// We determine this based on whether the keyword `microsoft` or `wsl` is contained within the [`WSL_1`] or [`WSL_2`] files.
+/// This may fail in the future as it isn't guaranteed by Microsoft.
+/// See https://github.com/microsoft/WSL/issues/423#issuecomment-221627364
+fn is_wsl() -> bool {
+    const WSL_1: &str = "/proc/sys/kernel/osrelease";
+    const WSL_2: &str = "/proc/version";
+    const WSL_KEYWORDS: [&str; 2] = ["microsoft", "wsl"];
+
+    // Test 1st File
+    if let Ok(content) = std::fs::read_to_string(WSL_1) {
+        let lowercase = content.to_lowercase();
+        for keyword in WSL_KEYWORDS {
+            if lowercase.contains(keyword) {
+                return true;
+            }
+        }
+    }
+
+    // Test 2nd File
+    if let Ok(content) = std::fs::read_to_string(WSL_2) {
+        let lowercase = content.to_lowercase();
+        for keyword in WSL_KEYWORDS {
+            if lowercase.contains(keyword) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+// /// Wait for changed files to be detected
+// pub(crate) async fn wait(&mut self) -> ServeUpdate {
+//     // Wait for the next file to change
+//     let mut changes: Vec<_> = self.rx.next().await.into_iter().collect();
+
+//     // Dequeue in bulk if we can, we might've received a lot of events in one go
+//     while let Some(event) = self.rx.try_next().ok().flatten() {
+//         changes.push(event);
+//     }
+
+//     // Filter the changes
+//     let mut files: Vec<PathBuf> = vec![];
+
+//     // Decompose the events into a list of all the files that have changed
+//     for event in changes.drain(..) {
+//         // Make sure we add new folders to the watch list, provided they're not matched by the ignore list
+//         // We'll only watch new folders that are found under the crate, and then update our watcher to watch them
+//         // This unfortunately won't pick up new krates added "at a distance" - IE krates not within the workspace.
+//         if let EventKind::Create(_create_kind) = event.kind {
+//             // If it's a new folder, watch it
+//             // If it's a new cargo.toml (ie dep on the fly),
+//             // todo(jon) support new folders on the fly
+//         }
+
+//         for path in event.paths {
+//             // Workaround for notify and vscode-like editor:
+//             // when edit & save a file in vscode, there will be two notifications,
+//             // the first one is a file with empty content.
+//             // filter the empty file notification to avoid false rebuild during hot-reload
+//             if let Ok(metadata) = std::fs::metadata(&path) {
+//                 if metadata.len() == 0 {
+//                     continue;
+//                 }
+//             }
+
+//             files.push(path);
+//         }
+//     }
+
+//     tracing::debug!("Files changed: {files:?}");
+
+//     ServeUpdate::FilesChanged { files }
+// }
+
+// fn watch_filesystem(&mut self) {
+//     todo!()
+//     // // Watch the folders of the crates that we're interested in
+//     // for path in self.krate.watch_paths() {
+//     //     tracing::debug!("Watching path {path:?}");
+
+//     //     if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
+//     //         handle_notify_error(err);
+//     //     }
+//     // }
+
+//     // // Also watch the crates themselves, but not recursively, such that we can pick up new folders
+//     // for krate in self.krate.all_watched_crates() {
+//     //     tracing::debug!("Watching path {krate:?}");
+//     //     if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
+//     //         handle_notify_error(err);
+//     //     }
+//     // }
+
+//     // // Also watch the workspace dir, non recursively, such that we can pick up new folders there too
+//     // if let Err(err) = self
+//     //     .watcher
+//     //     .watch(&self.krate.workspace_dir(), RecursiveMode::NonRecursive)
+//     // {
+//     //     handle_notify_error(err);
+//     // }
 // }

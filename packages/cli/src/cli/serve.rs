@@ -61,6 +61,11 @@ pub(crate) struct ServeArgs {
     #[arg(long, default_value_t = true)]
     pub(crate) hot_patch: bool,
 
+    /// Enable fullstack mode [default: false]
+    ///
+    /// This is automatically detected from `dx serve` if the "fullstack" feature is enabled by default.
+    pub(crate) fullstack: Option<bool>,
+
     /// The feature to use for the client in a fullstack app [default: "web"]
     #[clap(long)]
     pub(crate) client_features: Vec<String>,
