@@ -416,25 +416,12 @@ impl AppBuilder {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
         }
 
-        // // Launch the server if we were given an address to start it on, and the build includes a server. After we
-        // // start the server, consume its stdout/stderr.
-        // if let (Some(addr), Some(server)) = (start_fullstack_on_address, self.server_exe()) {
-        //     tracing::debug!("Proxying fullstack server from port {:?}", addr);
-        //     envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
-        //     envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
-        //     tracing::debug!("Launching server from path: {server:?}");
-        //     let mut child = Command::new(server)
-        //         .envs(envs.clone())
-        //         .stderr(Stdio::piped())
-        //         .stdout(Stdio::piped())
-        //         .kill_on_drop(true)
-        //         .spawn()?;
-        //     let stdout = BufReader::new(child.stdout.take().unwrap());
-        //     let stderr = BufReader::new(child.stderr.take().unwrap());
-        //     self.server_stdout = Some(stdout.lines());
-        //     self.server_stderr = Some(stderr.lines());
-        //     self.server_child = Some(child);
-        // }
+        // Launch the server if we were given an address to start it on, and the build includes a server. After we
+        // start the server, consume its stdout/stderr.
+        if let Some(addr) = start_fullstack_on_address {
+            envs.push((dioxus_cli_config::SERVER_IP_ENV, addr.ip().to_string()));
+            envs.push((dioxus_cli_config::SERVER_PORT_ENV, addr.port().to_string()));
+        }
 
         // We try to use stdin/stdout to communicate with the app
         let running_process = match self.build.platform {
@@ -493,8 +480,21 @@ impl AppBuilder {
             _ = std::fs::remove_file(entropy_app_exe);
         }
 
-        // if let Some(entropy_server_exe) = self.entropy_server_exe.take() {
-        //     _ = std::fs::remove_file(entropy_server_exe);
+        // if matches!(self.platform, Platform::Android) {
+        //     use std::process::{Command, Stdio};
+        //     if let Err(err) = Command::new("adb")
+        //         .arg("reverse")
+        //         .arg("--remove")
+        //         .arg(format!("tcp:{}", self.devserver_port))
+        //         .stderr(Stdio::piped())
+        //         .stdout(Stdio::piped())
+        //         .output()
+        //     {
+        //         tracing::error!(
+        //             "failed to remove forwarded port {}: {err}",
+        //             self.devserver_port
+        //         );
+        //     }
         // }
     }
 

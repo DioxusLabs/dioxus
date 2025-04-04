@@ -21,7 +21,7 @@ pub(crate) use update::*;
 ///
 /// Platform specifics:
 /// -------------------
-/// - Web:         we need to attach a filesystem server to our devtools webserver to serve the project. We
+/// - Web:         We need to attach a filesystem server to our devtools webserver to serve the project. We
 ///                want to emulate GithubPages here since most folks are deploying there and expect things like
 ///                basepath to match.
 /// - Desktop:     We spin up the dev server but without a filesystem server.
@@ -151,7 +151,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
             // These will cause us to update the screen
             // We also can check the status of the builds here in case we have multiple ongoing builds
             ServeUpdate::BuilderUpdate { id, update } => {
-                let platform = builder.builds.get(id.0).unwrap().build.platform;
+                let platform = builder.get_build(id).unwrap().build.platform;
 
                 // Queue any logs to be printed if need be
                 screen.new_build_update(&update);

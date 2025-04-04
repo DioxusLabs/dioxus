@@ -1,7 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer, SELF_IP};
 use crate::{
-    AddressArguments, BuildArtifacts, BuildMode, BuildRequest, Platform, ReloadKind, Result,
-    ServeArgs, TraceSrc, Workspace,
+    AddressArguments, BuildArtifacts, BuildId, BuildMode, BuildRequest, Platform, ReloadKind,
+    Result, ServeArgs, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use dioxus_core::internal::{
@@ -44,7 +44,9 @@ use tokio::process::Command;
 pub(crate) struct AppRunner {
     /// the platform of the "primary" crate (ie the first)
     pub(crate) workspace: Arc<Workspace>,
-    pub(crate) builds: Vec<AppBuilder>,
+
+    pub(crate) client: AppBuilder,
+    pub(crate) server: Option<AppBuilder>,
 
     // Related to to the filesystem watcher
     pub(crate) watcher: Box<dyn notify::Watcher>,
@@ -161,15 +163,9 @@ impl AppRunner {
             server = Some(_server);
         }
 
-        // Assemble the build list
-        let mut builds = vec![client];
-        if let Some(server) = server {
-            builds.push(server);
-        }
-
         // All servers will end up behind us (the devserver) but on a different port
         // This is so we can serve a loading screen as well as devtools without anything particularly fancy
-        let should_proxy_port = match builds[0].platform {
+        let should_proxy_port = match client.platform {
             Platform::Server => true,
             _ => fullstack,
             // During SSG, just serve the static files instead of running the server
@@ -180,13 +176,17 @@ impl AppRunner {
             .then(|| get_available_port(devserver_bind_ip, None))
             .flatten();
 
+        let client = AppBuilder::start(&client).unwrap();
+        let server = server.map(|server| AppBuilder::start(&server).unwrap());
+
         // Create the runner
         let mut runner = Self {
-            builds: vec![],
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),
             builds_opened: 0,
             automatic_rebuilds: true,
+            client,
+            server,
             hot_reload,
             open_browser,
             wsl_file_poll_interval,
@@ -228,29 +228,60 @@ impl AppRunner {
         Ok(runner)
     }
 
+    pub fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
+        match id.0 {
+            0 => Some(&self.client),
+            1 => self.server.as_ref(),
+            _ => None,
+        }
+    }
+
     pub(crate) fn client(&self) -> &AppBuilder {
         // the client is always the first build
-        &self.builds[0]
+        // &self.builds[0]
+        &self.client
     }
 
     pub(crate) fn client_mut(&mut self) -> &mut AppBuilder {
         // the client is always the first build. This should never fail since we always initialize it
-        &mut self.builds[0]
+        // &mut self.builds[0]
+        &mut self.client
     }
 
     pub(crate) fn server(&self) -> Option<&AppBuilder> {
         // the server is always the second build, if it exists. We might not always have a "server"
-        self.builds.get(1)
+        // self.builds.get(1)
+        self.server.as_ref()
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
+        let client = &mut self.client;
+        // let server = &mut self.server;
+
+        let update = client.wait().await;
+        ServeUpdate::BuilderUpdate {
+            id: BuildId(0),
+            update,
+        }
+
+        // let res = tokio::select! {
+        //     // Wait for the client to finish
+        //     client_update = client.wait() => {
+        //         ServeUpdate::BuilderUpdate { id: (), update: () }
+        //     }
+
+        //     // Wait for the watcher to send us an event
+        //     event = self.watcher_rx.next() => {
+        //         ServeUpdate::FilesChanged { files: () }
+        //     }
+        // };
+
         // // If there are no running apps, we can just return pending to avoid deadlocking
         // let Some(handle) = self.running.as_mut() else {
         //     return futures_util::future::pending().await;
         // };
 
         // ServeUpdate::HandleUpdate(handle.wait().await)
-        todo!()
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -259,36 +290,28 @@ impl AppRunner {
         app: BuildArtifacts,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
-        // should_open_web: bool,
     ) -> Result<()> {
-        todo!();
-        // // Drop the old handle
-        // // This is a more forceful kill than soft_kill since the app entropy will be wiped
-        // self.cleanup().await;
+        // Drop the old handle
+        // This is a more forceful kill than soft_kill since the app entropy will be wiped
+        self.cleanup().await;
 
-        // // Add some cute logging
-        // let time_taken = app.app.time_end.duration_since(app.app.time_start).unwrap();
-        // if self.builds_opened == 0 {
-        //     tracing::info!(
-        //         "Build completed successfully in {:?}ms, launching app! 💫",
-        //         time_taken.as_millis()
-        //     );
-        // } else {
-        //     tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
-        // }
+        // Add some cute logging
+        let time_taken = app.time_end.duration_since(app.time_start).unwrap();
+        if self.builds_opened == 0 {
+            tracing::info!(
+                "Build completed successfully in {:?}ms, launching app! 💫",
+                time_taken.as_millis()
+            );
+        } else {
+            tracing::info!("Build completed in {:?}ms", time_taken.as_millis());
+        }
 
-        // // Start the new app before we kill the old one to give it a little bit of time
-        // // let mut handle = AppHandle::new(app).await?;
-        // handle
-        //     .open(
-        //         devserver_ip,
-        //         fullstack_address,
-        //         self.builds_opened == 0 && should_open_web,
-        //     )
-        //     .await?;
-
-        // self.builds_opened += 1;
-        // self.running = Some(handle);
+        // Start the new app before we kill the old one to give it a little bit of time
+        let open_browser = self.builds_opened == 0 && self.open_browser;
+        self.client
+            .open(devserver_ip, fullstack_address, open_browser)
+            .await?;
+        self.builds_opened += 1;
 
         Ok(())
     }
@@ -310,32 +333,16 @@ impl AppRunner {
 
     /// Shutdown all the running processes
     pub(crate) async fn cleanup(&mut self) {
-        todo!()
-        // if let Some(mut process) = self.running.take() {
-        //     process.cleanup().await;
-        // }
+        self.client.cleanup().await;
 
-        // if matches!(self.platform, Platform::Android) {
-        //     use std::process::{Command, Stdio};
-        //     if let Err(err) = Command::new("adb")
-        //         .arg("reverse")
-        //         .arg("--remove")
-        //         .arg(format!("tcp:{}", self.devserver_port))
-        //         .stderr(Stdio::piped())
-        //         .stdout(Stdio::piped())
-        //         .output()
-        //     {
-        //         tracing::error!(
-        //             "failed to remove forwarded port {}: {err}",
-        //             self.devserver_port
-        //         );
-        //     }
-        // }
+        if let Some(server) = self.server.as_mut() {
+            server.cleanup().await;
+        }
     }
 
     /// The name of the app being served, to display
     pub(crate) fn app_name(&self) -> &str {
-        todo!()
+        self.client.build.executable_name()
     }
 
     // /// Attempt to hotreload the given files
@@ -817,13 +824,16 @@ impl AppRunner {
 
     /// Check if this is a fullstack build. This means that there is an additional build with the `server` platform.
     pub(crate) fn is_fullstack(&self) -> bool {
-        todo!()
+        self.fullstack
     }
 
     /// Return a number between 0 and 1 representing the progress of the server build
     pub(crate) fn server_compile_progress(&self) -> f64 {
-        todo!()
-        // self.compiled_crates_server as f64 / self.expected_crates_server as f64
+        let Some(server) = self.server.as_ref() else {
+            return 0.0;
+        };
+
+        server.compiled_crates as f64 / server.expected_crates as f64
     }
 }
 
