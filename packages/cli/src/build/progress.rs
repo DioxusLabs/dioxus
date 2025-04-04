@@ -4,6 +4,8 @@ use cargo_metadata::CompilerMessage;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::path::PathBuf;
 
+use super::BuildMode;
+
 pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
 pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 
@@ -67,10 +69,10 @@ impl BuildRequest {
         });
     }
 
-    pub(crate) fn status_starting_build(&self, crate_count: usize) {
+    pub(crate) fn status_starting_build(&self, crate_count: usize, mode: &BuildMode) {
         _ = self.progress.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Starting {
-                patch: self.is_patch(),
+                patch: matches!(mode, BuildMode::Thin { .. }),
                 crate_count,
             },
         });

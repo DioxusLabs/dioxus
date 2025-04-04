@@ -108,7 +108,6 @@ impl AppBuilder {
     /// Create a new builder and immediately start a build
     pub(crate) fn start(request: &BuildRequest) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        // let request = BuildRequest::new(args.clone(), krate.clone(), tx.clone(), BuildMode::Fat)?;
 
         Ok(Self {
             build: request.clone(),

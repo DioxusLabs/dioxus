@@ -242,9 +242,8 @@ pub(crate) struct BuildRequest {
     /// The target directory for the build
     pub(crate) custom_target_dir: Option<PathBuf>,
 
-    /// How we'll go about building
-    pub(crate) mode: BuildMode,
-
+    // /// How we'll go about building
+    // pub(crate) mode: BuildMode,
     /// Status channel to send our progress updates to
     pub(crate) progress: ProgressTx,
 
@@ -252,8 +251,7 @@ pub(crate) struct BuildRequest {
 
     pub(crate) skip_assets: bool,
 
-    pub(crate) ssg: bool,
-
+    // pub(crate) ssg: bool,
     pub(crate) wasm_split: bool,
 
     pub(crate) debug_symbols: bool,
@@ -316,7 +314,7 @@ impl BuildRequest {
 
         let package = workspace.find_main_package(args.package.clone())?;
 
-        let dioxus_config = workspace.load_dioxus_config(package)?.unwrap_or_default();
+        let config = workspace.load_dioxus_config(package)?.unwrap_or_default();
 
         let target_kind = match args.example.is_some() {
             true => TargetKind::Example,
@@ -390,8 +388,6 @@ impl BuildRequest {
         // if self.fullstack && self.server_features.is_empty() {
         //     return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
         // }
-
-        todo!();
 
         // let default_platform = krate.default_platform();
         // let mut features = vec![];
@@ -526,38 +522,37 @@ impl BuildRequest {
         //     self.arch = Some(arch);
         // }
 
-        todo!()
-        // Ok(Self {
-        //     hotreload: todo!(),
-        //     open_browser: todo!(),
-        //     wsl_file_poll_interval: todo!(),
-        //     always_on_top: todo!(),
-        //     progress,
-        //     mode,
-        //     platform,
-        //     features,
-        //     no_default_features,
-        //     krate,
-        //     custom_target_dir: None,
-        //     profile,
-        //     fullstack,
-        //     target,
-        //     device,
-        //     nightly: args.nightly,
-        //     package: args.package,
-        //     release: args.release,
-        //     skip_assets: args.skip_assets,
-        //     ssg: args.ssg,
-        //     cranelift: args.cranelift,
-        //     cargo_args: args.args.cargo_args,
-        //     wasm_split: args.wasm_split,
-        //     debug_symbols: args.debug_symbols,
-        //     inject_loading_scripts: args.inject_loading_scripts,
-        //     force_sequential: args.force_sequential,
-        // })
+        let package = todo!();
+
+        Ok(Self {
+            progress: todo!(),
+            // mode: todo!(),
+            platform: todo!(),
+            features: todo!(),
+            no_default_features: todo!(),
+            custom_target_dir: None,
+            profile: todo!(),
+            fullstack: todo!(),
+            target: todo!(),
+            device: todo!(),
+            nightly: args.nightly,
+            package,
+            release: args.release,
+            skip_assets: args.skip_assets,
+            // ssg: args.ssg,
+            cranelift: args.cranelift,
+            cargo_args: args.cargo_args,
+            wasm_split: args.wasm_split,
+            debug_symbols: args.debug_symbols,
+            inject_loading_scripts: args.inject_loading_scripts,
+            workspace,
+            crate_package: todo!(),
+            config,
+            crate_target: todo!(),
+        })
     }
 
-    pub(crate) async fn build(&self) -> Result<BuildArtifacts> {
+    pub(crate) async fn build(&self, mode: BuildMode) -> Result<BuildArtifacts> {
         // // Create the bundle in an incomplete state and fill it in
         // let mut bundle = Self {
         //     // server_assets: Default::default(),
@@ -577,7 +572,7 @@ impl BuildRequest {
         let mut assets = AssetManifest::default();
 
         // Now handle
-        match bundle.mode {
+        match mode {
             BuildMode::Base | BuildMode::Fat => {
                 tracing::debug!("Assembling app bundle");
 
@@ -1643,24 +1638,24 @@ impl BuildRequest {
         self.platform_dir().join(".cli-version")
     }
 
-    pub(crate) async fn cargo_build(&self) -> Result<BuildArtifacts> {
+    pub(crate) async fn cargo_build(&self, mode: &BuildMode) -> Result<BuildArtifacts> {
         let start = SystemTime::now();
 
         tracing::debug!("Executing cargo...");
 
-        let mut cmd = self.build_command()?;
+        let mut cmd = self.build_command(mode)?;
 
         tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
-        let crate_count = match self.mode {
+        let crate_count = match mode {
             BuildMode::Thin { .. } => 1,
-            _ => self.get_unit_count_estimate().await,
+            _ => self.get_unit_count_estimate(mode).await,
         };
 
         // Update the status to show that we're starting the build and how many crates we expect to build
-        self.status_starting_build(crate_count);
+        self.status_starting_build(crate_count, mode);
 
         let mut child = cmd
             .stdout(Stdio::piped())
@@ -1777,14 +1772,14 @@ impl BuildRequest {
         level = "trace",
         fields(dx_src = ?TraceSrc::Build)
     )]
-    fn build_command(&self) -> Result<Command> {
+    fn build_command(&self, mode: &BuildMode) -> Result<Command> {
         // Prefer using the direct rustc if we have it
-        if let BuildMode::Thin { direct_rustc, .. } = &self.mode {
+        if let BuildMode::Thin { direct_rustc, .. } = &mode {
             tracing::debug!("Using direct rustc: {:?}", direct_rustc);
             if !direct_rustc.is_empty() {
                 let mut cmd = Command::new(direct_rustc[0].clone());
                 cmd.args(direct_rustc[1..].iter());
-                cmd.envs(self.env_vars()?);
+                cmd.envs(self.env_vars(mode)?);
                 cmd.current_dir(self.workspace_dir());
                 cmd.arg(format!(
                     "-Clinker={}",
@@ -1802,13 +1797,14 @@ impl BuildRequest {
             .current_dir(self.crate_dir())
             .arg("--message-format")
             .arg("json-diagnostic-rendered-ansi")
-            .args(self.build_arguments())
-            .envs(self.env_vars()?);
+            .args(self.build_arguments(mode))
+            .envs(self.env_vars(mode)?);
+
         Ok(cmd)
     }
 
     /// Create a list of arguments for cargo builds
-    pub(crate) fn build_arguments(&self) -> Vec<String> {
+    pub(crate) fn build_arguments(&self, mode: &BuildMode) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
         // Add required profile flags. --release overrides any custom profiles.
@@ -1856,7 +1852,7 @@ impl BuildRequest {
         }
 
         // dx *always* links android and thin builds
-        if self.platform == Platform::Android || matches!(self.mode, BuildMode::Thin { .. }) {
+        if self.platform == Platform::Android || matches!(mode, BuildMode::Thin { .. }) {
             cargo_args.push(format!(
                 "-Clinker={}",
                 dunce::canonicalize(std::env::current_exe().unwrap())
@@ -1865,7 +1861,7 @@ impl BuildRequest {
             ));
         }
 
-        match self.mode {
+        match mode {
             BuildMode::Base => {}
             BuildMode::Thin { .. } => {}
             BuildMode::Fat => {
@@ -1952,7 +1948,7 @@ impl BuildRequest {
     }
 
     /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
-    pub(crate) async fn get_unit_count(&self) -> crate::Result<usize> {
+    pub(crate) async fn get_unit_count(&self, mode: &BuildMode) -> crate::Result<usize> {
         #[derive(Debug, Deserialize)]
         struct UnitGraph {
             units: Vec<serde_json::Value>,
@@ -1964,8 +1960,8 @@ impl BuildRequest {
             .arg("--unit-graph")
             .arg("-Z")
             .arg("unstable-options")
-            .args(self.build_arguments())
-            .envs(self.env_vars()?)
+            .args(self.build_arguments(mode))
+            .envs(self.env_vars(mode)?)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -1984,9 +1980,9 @@ impl BuildRequest {
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
     /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-    pub(crate) async fn get_unit_count_estimate(&self) -> usize {
+    pub(crate) async fn get_unit_count_estimate(&self, mode: &BuildMode) -> usize {
         // Try to get it from nightly
-        if let Ok(count) = self.get_unit_count().await {
+        if let Ok(count) = self.get_unit_count(mode).await {
             return count;
         }
 
@@ -2002,7 +1998,7 @@ impl BuildRequest {
         (units as f64 / 3.5) as usize
     }
 
-    fn env_vars(&self) -> Result<Vec<(&str, String)>> {
+    fn env_vars(&self, mode: &BuildMode) -> Result<Vec<(&str, String)>> {
         let mut env_vars = vec![];
 
         let mut custom_linker = None;
@@ -2035,7 +2031,7 @@ impl BuildRequest {
             custom_linker = Some(linker);
         };
 
-        match &self.mode {
+        match &mode {
             // We don't usually employ a custom linker for fat/base builds unless it's android
             // This might change in the future for "zero-linking"
             BuildMode::Base | BuildMode::Fat => {
@@ -2396,10 +2392,6 @@ impl BuildRequest {
         tracing::debug!("app_kotlin_out: {:?}", kotlin_dir);
 
         kotlin_dir
-    }
-
-    pub(crate) fn is_patch(&self) -> bool {
-        matches!(&self.mode, BuildMode::Thin { .. })
     }
 
     // pub(crate) async fn new(args: &TargetArgs) -> Result<Self> {
