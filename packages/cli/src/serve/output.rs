@@ -74,10 +74,10 @@ struct RenderState<'a> {
 }
 
 impl Output {
-    pub(crate) async fn start(runner: &AppRunner) -> crate::Result<Self> {
+    pub(crate) async fn start(interactive: bool) -> crate::Result<Self> {
         let mut output = Self {
+            interactive,
             term: Rc::new(RefCell::new(None)),
-            interactive: runner.interactive,
             dx_version: format!(
                 "{}-{}",
                 env!("CARGO_PKG_VERSION"),

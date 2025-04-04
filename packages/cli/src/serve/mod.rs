@@ -40,8 +40,8 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
     let mut tracer = TraceController::redirect(args.is_interactive_tty());
 
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
+    let mut screen = Output::start(args.is_interactive_tty()).await?;
     let mut builder = AppRunner::start(args).await?;
-    let mut screen = Output::start(&builder).await?;
     let mut devserver = WebServer::start(&builder)?;
 
     // This is our default splash screen. We might want to make this a fancier splash screen in the future

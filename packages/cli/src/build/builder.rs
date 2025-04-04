@@ -100,12 +100,12 @@ impl AppBuilder {
                 let request = request.clone();
                 let tx = tx.clone();
                 async move {
-                    request
-                        .build(&BuildContext {
-                            tx: tx.clone(),
-                            mode: BuildMode::Fat,
-                        })
-                        .await
+                    let ctx = BuildContext {
+                        tx: tx.clone(),
+                        mode: BuildMode::Fat,
+                    };
+                    request.verify_tooling(&ctx).await?;
+                    request.build(&ctx).await
                 }
             }),
             tx,

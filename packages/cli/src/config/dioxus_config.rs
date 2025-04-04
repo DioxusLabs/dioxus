@@ -1,7 +1,4 @@
 use super::*;
-use crate::Result;
-use anyhow::Context;
-use krates::{Krates, NodeId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

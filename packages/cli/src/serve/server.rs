@@ -209,6 +209,7 @@ impl WebServer {
         });
         self.send_build_status().await;
     }
+
     /// Sends a start build message to all clients.
     pub(crate) async fn start_patch(&mut self) {
         self.build_status.set(Status::Building {
