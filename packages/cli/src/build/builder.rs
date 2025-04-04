@@ -51,7 +51,7 @@ pub(crate) struct AppBuilder {
     // Ongoing build task, if any
     pub build_task: JoinHandle<Result<BuildArtifacts>>,
 
-    // If a build has already finished, we'll have its artifacts (rustc, link args, etc) to work witha
+    // If a build has already finished, we'll have its artifacts (rustc, link args, etc) to work with
     pub artifacts: Option<BuildArtifacts>,
 
     // These might be None if the app died or the user did not specify a server

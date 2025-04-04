@@ -1,3 +1,162 @@
+//! ## Web:
+//! Create a folder that is somewhat similar to an app-image (exe + asset)
+//! The server is dropped into the `web` folder, even if there's no `public` folder.
+//! If there's no server (SPA), we still use the `web` folder, but it only contains the
+//! public folder.
+//! ```
+//! web/
+//!     server
+//!     assets/
+//!     public/
+//!         index.html
+//!         wasm/
+//!            app.wasm
+//!            glue.js
+//!            snippets/
+//!                ...
+//!         assets/
+//!            logo.png
+//! ```
+//!
+//! ## Linux:
+//! https://docs.appimage.org/reference/appdir.html#ref-appdir
+//! current_exe.join("Assets")
+//! ```
+//! app.appimage/
+//!     AppRun
+//!     app.desktop
+//!     package.json
+//!     assets/
+//!         logo.png
+//! ```
+//!
+//! ## Macos
+//! We simply use the macos format where binaries are in `Contents/MacOS` and assets are in `Contents/Resources`
+//! We put assets in an assets dir such that it generally matches every other platform and we can
+//! output `/assets/blah` from manganis.
+//! ```
+//! App.app/
+//!     Contents/
+//!         Info.plist
+//!         MacOS/
+//!             Frameworks/
+//!         Resources/
+//!             assets/
+//!                 blah.icns
+//!                 blah.png
+//!         CodeResources
+//!         _CodeSignature/
+//! ```
+//!
+//! ## iOS
+//! Not the same as mac! ios apps are a bit "flattened" in comparison. simpler format, presumably
+//! since most ios apps don't ship frameworks/plugins and such.
+//!
+//! todo(jon): include the signing and entitlements in this format diagram.
+//! ```
+//! App.app/
+//!     main
+//!     assets/
+//! ```
+//!
+//! ## Android:
+//!
+//! Currently we need to generate a `src` type structure, not a pre-packaged apk structure, since
+//! we need to compile kotlin and java. This pushes us into using gradle and following a structure
+//! similar to that of cargo mobile2. Eventually I'd like to slim this down (drop buildSrc) and
+//! drive the kotlin build ourselves. This would let us drop gradle (yay! no plugins!) but requires
+//! us to manage dependencies (like kotlinc) ourselves (yuck!).
+//!
+//! https://github.com/WanghongLin/miscellaneous/blob/master/tools/build-apk-manually.sh
+//!
+//! Unfortunately, it seems that while we can drop the `android` build plugin, we still will need
+//! gradle since kotlin is basically gradle-only.
+//!
+//! Pre-build:
+//! ```
+//! app.apk/
+//!     .gradle
+//!     app/
+//!         src/
+//!             main/
+//!                 assets/
+//!                 jniLibs/
+//!                 java/
+//!                 kotlin/
+//!                 res/
+//!                 AndroidManifest.xml
+//!             build.gradle.kts
+//!             proguard-rules.pro
+//!         buildSrc/
+//!             build.gradle.kts
+//!             src/
+//!                 main/
+//!                     kotlin/
+//!                          BuildTask.kt
+//!     build.gradle.kts
+//!     gradle.properties
+//!     gradlew
+//!     gradlew.bat
+//!     settings.gradle
+//! ```
+//!
+//! Final build:
+//! ```
+//! app.apk/
+//!   AndroidManifest.xml
+//!   classes.dex
+//!   assets/
+//!       logo.png
+//!   lib/
+//!       armeabi-v7a/
+//!           libmyapp.so
+//!       arm64-v8a/
+//!           libmyapp.so
+//! ```
+//! Notice that we *could* feasibly build this ourselves :)
+//!
+//! ## Windows:
+//! https://superuser.com/questions/749447/creating-a-single-file-executable-from-a-directory-in-windows
+//! Windows does not provide an AppImage format, so instead we're going build the same folder
+//! structure as an AppImage, but when distributing, we'll create a .exe that embeds the resources
+//! as an embedded .zip file. When the app runs, it will implicitly unzip its resources into the
+//! Program Files folder. Any subsequent launches of the parent .exe will simply call the AppRun.exe
+//! entrypoint in the associated Program Files folder.
+//!
+//! This is, in essence, the same as an installer, so we might eventually just support something like msi/msix
+//! which functionally do the same thing but with a sleeker UI.
+//!
+//! This means no installers are required and we can bake an updater into the host exe.
+//!
+//! ## Handling asset lookups:
+//! current_exe.join("assets")
+//! ```
+//! app.appimage/
+//!     main.exe
+//!     main.desktop
+//!     package.json
+//!     assets/
+//!         logo.png
+//! ```
+//!
+//! Since we support just a few locations, we could just search for the first that exists
+//! - usr
+//! - ../Resources
+//! - assets
+//! - Assets
+//! - $cwd/assets
+//!
+//! ```
+//! assets::root() ->
+//!     mac -> ../Resources/
+//!     ios -> ../Resources/
+//!     android -> assets/
+//!     server -> assets/
+//!     liveview -> assets/
+//!     web -> /assets/
+//! root().join(bundled)
+//! ```
+
 use super::{prerender::pre_render_static_routes, progress::ProgressTx, AndroidTools, PatchData};
 use crate::{link::LinkAction, BuildArgs, WasmOptConfig};
 use crate::{DioxusConfig, Workspace};
@@ -69,7 +228,7 @@ pub(crate) struct BuildRequest {
     pub(crate) nightly: bool,
 
     /// The package to build
-    pub(crate) package: Option<String>,
+    pub(crate) package: String,
 
     /// Space separated list of features to activate
     pub(crate) features: Vec<String>,
@@ -149,12 +308,15 @@ impl BuildRequest {
     /// - The intended platform
     ///
     /// We will attempt to autodetect a number of things if not provided.
+    ///
+    /// We intend to not create new BuildRequests very often. Only when the CLI is invoked and then again
+    /// if the Cargo.toml's change so such an extent that features are added or removed.
     pub async fn new(args: &BuildArgs) -> Result<Self> {
         let workspace = Workspace::current().await?;
 
-        let package = Self::find_main_package(&workspace.krates, args.package.clone())?;
+        let package = workspace.find_main_package(args.package.clone())?;
 
-        let dioxus_config = DioxusConfig::load(&workspace.krates, package)?.unwrap_or_default();
+        let dioxus_config = workspace.load_dioxus_config(package)?.unwrap_or_default();
 
         let target_kind = match args.example.is_some() {
             true => TargetKind::Example,
@@ -1669,11 +1831,9 @@ impl BuildRequest {
             cargo_args.push(self.features.join(" "));
         }
 
-        // todo: maybe always set a package to reduce ambiguity?
-        if let Some(package) = &self.package {
-            cargo_args.push(String::from("-p"));
-            cargo_args.push(package.clone());
-        }
+        // We *always* set the package since that's discovered from cargo metadata
+        cargo_args.push(String::from("-p"));
+        cargo_args.push(self.package.clone());
 
         match self.executable_type() {
             krates::cm::TargetKind::Bin => cargo_args.push("--bin".to_string()),
@@ -2803,75 +2963,6 @@ impl BuildRequest {
 
         format!("com.example.{}", self.bundled_app_name())
     }
-
-    /// Find the main package in the workspace
-    fn find_main_package(krates: &Krates, package: Option<String>) -> Result<NodeId> {
-        if let Some(package) = package {
-            let mut workspace_members = krates.workspace_members();
-            let found = workspace_members.find_map(|node| {
-                if let krates::Node::Krate { id, krate, .. } = node {
-                    if krate.name == package {
-                        return Some(id);
-                    }
-                }
-                None
-            });
-
-            if found.is_none() {
-                tracing::error!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
-                tracing::error!("Packages in the workspace:");
-                for package in krates.workspace_members() {
-                    if let krates::Node::Krate { krate, .. } = package {
-                        tracing::error!("{}", krate.name());
-                    }
-                }
-            }
-
-            let kid = found.ok_or_else(|| anyhow::anyhow!("Failed to find package {package}"))?;
-
-            return Ok(krates.nid_for_kid(kid).unwrap());
-        };
-
-        // Otherwise find the package that is the closest parent of the current directory
-        let current_dir = std::env::current_dir()?;
-        let current_dir = current_dir.as_path();
-
-        // Go through each member and find the path that is a parent of the current directory
-        let mut closest_parent = None;
-        for member in krates.workspace_members() {
-            if let krates::Node::Krate { id, krate, .. } = member {
-                let member_path = krate.manifest_path.parent().unwrap();
-                if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
-                    let len = path.components().count();
-                    match closest_parent {
-                        Some((_, closest_parent_len)) => {
-                            if len < closest_parent_len {
-                                closest_parent = Some((id, len));
-                            }
-                        }
-                        None => {
-                            closest_parent = Some((id, len));
-                        }
-                    }
-                }
-            }
-        }
-
-        let kid = closest_parent
-        .map(|(id, _)| id)
-        .with_context(|| {
-            let bin_targets = krates.workspace_members().filter_map(|krate|match krate {
-                krates::Node::Krate { krate, .. } if krate.targets.iter().any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))=> {
-                    Some(format!("- {}", krate.name))
-                }
-                _ => None
-            }).collect::<Vec<_>>();
-            format!("Failed to find binary package to build.\nYou need to either run dx from inside a binary crate or specify a binary package to build with the `--package` flag. Try building again with one of the binary packages in the workspace:\n{}", bin_targets.join("\n"))
-        })?;
-
-        let package = krates.nid_for_kid(kid).unwrap();
-        Ok(package)
-    }
 }
 
 #[derive(serde::Serialize)]
@@ -2955,3 +3046,86 @@ pub struct InfoPlistData {
 //         .fmt(f)
 //     }
 // }
+
+// / The end result of a build.
+// /
+// / Contains the final asset manifest, the executables, and the workdir.
+// /
+// / Every dioxus app can have an optional server executable which will influence the final bundle.
+// / This is built in parallel with the app executable during the `build` phase and the progres/status
+// / of the build is aggregated.
+// /
+// / The server will *always* be dropped into the `web` folder since it is considered "web" in nature,
+// / and will likely need to be combined with the public dir to be useful.
+// /
+// / We do our best to assemble read-to-go bundles here, such that the "bundle" step for each platform
+// / can just use the build dir
+// /
+// / When we write the AppBundle to a folder, it'll contain each bundle for each platform under the app's name:
+// / ```
+// / dog-app/
+// /   build/
+// /       web/
+// /         server.exe
+// /         assets/
+// /           some-secret-asset.txt (a server-side asset)
+// /         public/
+// /           index.html
+// /           assets/
+// /             logo.png
+// /       desktop/
+// /          App.app
+// /          App.appimage
+// /          App.exe
+// /          server/
+// /              server
+// /              assets/
+// /                some-secret-asset.txt (a server-side asset)
+// /       ios/
+// /          App.app
+// /          App.ipa
+// /       android/
+// /          App.apk
+// /   bundle/
+// /       build.json
+// /       Desktop.app
+// /       Mobile_x64.ipa
+// /       Mobile_arm64.ipa
+// /       Mobile_rosetta.ipa
+// /       web.appimage
+// /       web/
+// /         server.exe
+// /         assets/
+// /             some-secret-asset.txt
+// /         public/
+// /             index.html
+// /             assets/
+// /                 logo.png
+// /                 style.css
+// / ```
+// /
+// / When deploying, the build.json file will provide all the metadata that dx-deploy will use to
+// / push the app to stores, set up infra, manage versions, etc.
+// /
+// / The format of each build will follow the name plus some metadata such that when distributing you
+// / can easily trim off the metadata.
+// /
+// / The idea here is that we can run any of the programs in the same way that they're deployed.
+// /
+// /
+// / ## Bundle structure links
+// / - apple: https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle
+// / - appimage: https://docs.appimage.org/packaging-guide/manual.html#ref-manual
+// /
+// / ## Extra links
+// / - xbuild: https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs
+// pub(crate) struct BuildArtifacts {
+//     pub(crate) build: BuildRequest,
+//     pub(crate) exe: PathBuf,
+//     pub(crate) direct_rustc: Vec<String>,
+//     pub(crate) time_start: SystemTime,
+//     pub(crate) time_end: SystemTime,
+//     pub(crate) assets: AssetManifest,
+// }
+
+// impl AppBundle {}
