@@ -16,6 +16,7 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::future::OptionFuture;
 use futures_util::StreamExt;
 use ignore::gitignore::Gitignore;
+use krates::NodeId;
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
@@ -160,13 +161,13 @@ impl AppRunner {
     }
 
     pub(crate) fn client_mut(&mut self) -> &mut AppBuilder {
-        // the client is always the first build
+        // the client is always the first build. This should never fail since we always initialize it
         &mut self.builds[0]
     }
 
-    pub(crate) fn server(&self) -> &AppBuilder {
-        // the server is always the second build, if it exists
-        &self.builds.get(1).unwrap()
+    pub(crate) fn server(&self) -> Option<&AppBuilder> {
+        // the server is always the second build, if it exists. We might not always have a "server"
+        self.builds.get(1)
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
@@ -640,6 +641,104 @@ impl AppRunner {
 
     pub fn rebuild_all(&mut self) -> Result<()> {
         todo!()
+    }
+
+    /// Return the list of paths that we should watch for changes.
+    pub(crate) fn watch_paths(&self, crate_dir: PathBuf, crate_package: NodeId) -> Vec<PathBuf> {
+        let mut watched_paths = vec![];
+
+        // Get a list of *all* the crates with Rust code that we need to watch.
+        // This will end up being dependencies in the workspace and non-workspace dependencies on the user's computer.
+        let mut watched_crates = self.local_dependencies(crate_package);
+        watched_crates.push(crate_dir);
+
+        // Now, watch all the folders in the crates, but respecting their respective ignore files
+        for krate_root in watched_crates {
+            // Build the ignore builder for this crate, but with our default ignore list as well
+            let ignore = self.workspace.ignore_for_krate(&krate_root);
+
+            for entry in krate_root.read_dir().unwrap() {
+                let Ok(entry) = entry else {
+                    continue;
+                };
+
+                if ignore
+                    .matched(entry.path(), entry.path().is_dir())
+                    .is_ignore()
+                {
+                    continue;
+                }
+
+                watched_paths.push(entry.path().to_path_buf());
+            }
+        }
+
+        watched_paths.dedup();
+
+        watched_paths
+    }
+
+    /// Get all the Manifest paths for dependencies that we should watch. Will not return anything
+    /// in the `.cargo` folder - only local dependencies will be watched.
+    ///
+    /// This returns a list of manifest paths
+    ///
+    /// Extend the watch path to include:
+    ///
+    /// - the assets directory - this is so we can hotreload CSS and other assets by default
+    /// - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
+    /// - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
+    pub(crate) fn local_dependencies(&self, crate_package: NodeId) -> Vec<PathBuf> {
+        let mut paths = vec![];
+
+        for (dependency, _edge) in self.workspace.krates.get_deps(crate_package) {
+            let krate = match dependency {
+                krates::Node::Krate { krate, .. } => krate,
+                krates::Node::Feature { krate_index, .. } => {
+                    &self.workspace.krates[krate_index.index()]
+                }
+            };
+
+            if krate
+                .manifest_path
+                .components()
+                .any(|c| c.as_str() == ".cargo")
+            {
+                continue;
+            }
+
+            paths.push(
+                krate
+                    .manifest_path
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+                    .into_std_path_buf(),
+            );
+        }
+
+        paths
+    }
+
+    // todo: we need to make sure we merge this for all the running packages
+    pub(crate) fn all_watched_crates(&self) -> Vec<PathBuf> {
+        let crate_package = self.client().build.crate_package;
+        let crate_dir = self.client().build.crate_dir();
+
+        let mut krates: Vec<PathBuf> = self
+            .local_dependencies(crate_package)
+            .into_iter()
+            .map(|p| {
+                p.parent()
+                    .expect("Local manifest to exist and have a parent")
+                    .to_path_buf()
+            })
+            .chain(Some(crate_dir))
+            .collect();
+
+        krates.dedup();
+
+        krates
     }
 }
 

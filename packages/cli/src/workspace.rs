@@ -2,6 +2,7 @@ use crate::config::DioxusConfig;
 use crate::CliSettings;
 use crate::{Platform, Result};
 use anyhow::Context;
+use ignore::gitignore::Gitignore;
 use itertools::Itertools;
 use krates::{cm::Target, KrateDetails};
 use krates::{cm::TargetKind, Cmd, Krates, NodeId};
@@ -188,6 +189,51 @@ impl Workspace {
                 anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}").into()
             })
             .map(Some)
+    }
+
+    /// Create a new gitignore map for this target crate
+    ///
+    /// todo(jon): this is a bit expensive to build, so maybe we should cache it?
+    pub fn workspace_gitignore(&self) -> Gitignore {
+        todo!()
+        // let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(&crate_dir);
+        // ignore_builder.add(crate_dir.join(".gitignore"));
+
+        // let workspace_dir = self.workspace_dir();
+        // ignore_builder.add(workspace_dir.join(".gitignore"));
+
+        // for path in Self::default_ignore_list() {
+        //     ignore_builder
+        //         .add_line(None, path)
+        //         .expect("failed to add path to file excluded");
+        // }
+
+        // ignore_builder.build().unwrap()
+    }
+
+    pub fn ignore_for_krate(&self, path: &Path) -> ignore::gitignore::Gitignore {
+        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(path);
+        for path in Self::default_ignore_list() {
+            ignore_builder
+                .add_line(None, path)
+                .expect("failed to add path to file excluded");
+        }
+        ignore_builder.build().unwrap()
+    }
+
+    pub fn default_ignore_list() -> Vec<&'static str> {
+        vec![
+            ".git",
+            ".github",
+            ".vscode",
+            "target",
+            "node_modules",
+            "dist",
+            "*~",
+            ".*",
+            "*.lock",
+            "*.log",
+        ]
     }
 }
 
