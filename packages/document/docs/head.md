@@ -16,6 +16,7 @@ Components that render into the head of the page do have a few key limitations:
 
 - With the exception of the `Title` component, all components that render into the head cannot be modified after the first time they are rendered.
 - Components that render into the head will not be removed even after the component is removed from the tree.
+- Components that render into the head do not have a guaranteed ordering; thus, components should ideally not be order dependent, since they may not appear in the head in the order they are defined.
 
 ## Example
 
@@ -28,6 +29,36 @@ fn RedirectToDioxusHomepageWithoutJS() -> Element {
         document::Meta {
             http_equiv: "refresh",
             content: "10;url=https://dioxuslabs.com",
+        }
+    }
+}
+```
+
+## Overcoming Ordering Issues
+
+Since Dioxus does not guarantee head element ordering, one can use es6 imports as a more predictable way to handle dependencies.
+
+```rust
+# use dioxus::prelude::*;
+static HIGHLIGHT: Asset = asset!("/assets/highlight/es/highlight.min.js");
+static RUST: Asset = asset!("/assets/highlight/es/languages/rust.min.js");
+static STYLE: Asset = asset!("/assets/highlight/styles/atom-one-dark.css");
+
+fn App() -> Element {
+    rsx! {
+        document::Link { rel: "stylesheet", href: STYLE }
+        document::Script {
+            type: "module",
+            r#"import hljs from "{HIGHLIGHT}";
+            import rust from "{RUST}";
+            hljs.registerLanguage('rust', rust);
+            hljs.highlightAll();"#
+        }
+        pre {
+            code {
+                class: "language-rust",
+                "fn main() {{\nprintln!(\"Hello, world!\");\n}}"
+            }
         }
     }
 }
