@@ -24,6 +24,7 @@ pub(crate) use cli::*;
 pub(crate) use config::*;
 pub(crate) use dioxus_dx_wire_format::*;
 pub(crate) use error::*;
+pub(crate) use link::*;
 pub(crate) use logging::*;
 pub(crate) use platform::*;
 pub(crate) use settings::*;

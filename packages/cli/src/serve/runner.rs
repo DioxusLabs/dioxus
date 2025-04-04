@@ -137,6 +137,19 @@ impl AppRunner {
         // These come from the args, but we'd like them to come from the `TargetCmd` chained object
         let mut app = args.build_arguments;
 
+        // // Make sure we have a server feature if we're building a fullstack app
+        // //
+        // // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
+        // // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
+        // if self.fullstack && self.server_features.is_empty() {
+        //     return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
+        // }
+
+        // // Make sure we set the fullstack platform so we actually build the fullstack variant
+        // // Users need to enable "fullstack" in their default feature set.
+        // // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
+        // let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
+
         // Create the runner
         let mut runner = Self {
             builds: vec![],

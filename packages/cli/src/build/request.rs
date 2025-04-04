@@ -157,12 +157,11 @@
 //! root().join(bundled)
 //! ```
 
-use super::{
-    context::ProgressTx, prerender::pre_render_static_routes, AndroidTools, BuildContext, PatchData,
+use super::{prerender::pre_render_static_routes, AndroidTools, BuildContext, PatchData};
+use crate::{
+    BuildArgs, DioxusConfig, LinkAction, Platform, ProgressTx, Result, TraceSrc, WasmOptConfig,
+    Workspace,
 };
-use crate::{link::LinkAction, BuildArgs, WasmOptConfig};
-use crate::{DioxusConfig, Workspace};
-use crate::{Platform, Result, TraceSrc};
 use anyhow::Context;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
@@ -207,10 +206,10 @@ use uuid::Uuid;
 /// All updates from the build will be sent on a global "BuildProgress" channel.
 #[derive(Clone)]
 pub(crate) struct BuildRequest {
-    pub(crate) workspace: Arc<crate::workspace::Workspace>,
-    pub(crate) crate_package: NodeId,
+    pub(crate) workspace: Arc<Workspace>,
     pub(crate) config: DioxusConfig,
-    pub(crate) crate_target: Arc<krates::cm::Target>,
+    pub(crate) crate_package: NodeId,
+    pub(crate) crate_target: krates::cm::Target,
 
     pub(crate) profile: String,
 
@@ -228,7 +227,7 @@ pub(crate) struct BuildRequest {
     pub(crate) nightly: bool,
 
     /// The package to build
-    pub(crate) package: String,
+    pub(crate) cargo_package: String,
 
     /// Space separated list of features to activate
     pub(crate) features: Vec<String>,
@@ -306,16 +305,18 @@ impl BuildRequest {
     pub async fn new(args: &BuildArgs) -> Result<Self> {
         let workspace = Workspace::current().await?;
 
-        let package = workspace.find_main_package(args.package.clone())?;
+        let crate_package = workspace.find_main_package(args.package.clone())?;
 
-        let config = workspace.load_dioxus_config(package)?.unwrap_or_default();
+        let config = workspace
+            .load_dioxus_config(crate_package)?
+            .unwrap_or_default();
 
         let target_kind = match args.example.is_some() {
             true => TargetKind::Example,
             false => TargetKind::Bin,
         };
 
-        let main_package = &workspace.krates[package];
+        let main_package = &workspace.krates[crate_package];
 
         let target_name = args
             .example
@@ -344,9 +345,9 @@ impl BuildRequest {
                     }
                 })
             })
-            .unwrap_or(workspace.krates[package].name.clone());
+            .unwrap_or(workspace.krates[crate_package].name.clone());
 
-        let target = main_package
+        let crate_target = main_package
             .targets
             .iter()
             .find(|target| {
@@ -375,90 +376,80 @@ impl BuildRequest {
             })?
             .clone();
 
-        // // Make sure we have a server feature if we're building a fullstack app
-        // //
-        // // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
-        // // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
-        // if self.fullstack && self.server_features.is_empty() {
-        //     return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
-        // }
+        let default_platform = Self::default_platform(&main_package);
+        let mut features = vec![];
+        let mut no_default_features = false;
 
-        // let default_platform = krate.default_platform();
-        // let mut features = vec![];
-        // let mut no_default_features = false;
+        // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
+        // We want to strip out the default platform and use the one they passed, setting no-default-features
+        if args.platform.is_some() && default_platform.is_some() {
+            no_default_features = true;
+            features.extend(Self::platformless_features(&main_package));
+        }
 
-        // // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml
-        // // We want to strip out the default platform and use the one they passed, setting no-default-features
-        // if args.platform.is_some() && default_platform.is_some() {
-        //     no_default_features = true;
-        //     features.extend(krate.platformless_features());
-        // }
+        // Inherit the platform from the args, or auto-detect it
+        let platform = args
+            .platform
+            .map(|p| Some(p))
+            .unwrap_or_else(|| Self::autodetect_platform(&workspace, &main_package).map(|a| a.0))
+            .context("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>` or set a default platform using a cargo feature.")?;
 
-        // // Inherit the platform from the args, or auto-detect it
-        // let platform = args
-        //     .platform
-        //     .map(|p| Some(p))
-        //     .unwrap_or_else(|| krate.autodetect_platform().map(|a| a.0))
-        //     .context("No platform was specified and could not be auto-detected. Please specify a platform with `--platform <platform>` or set a default platform using a cargo feature.")?;
+        // Add any features required to turn on the client
+        features.push(Self::feature_for_platform(&main_package, platform));
 
-        // // Add any features required to turn on the client
-        // features.push(krate.feature_for_platform(platform));
+        // Set the profile of the build if it's not already set
+        // This is mostly used for isolation of builds (preventing thrashing) but also useful to have multiple performance profiles
+        // We might want to move some of these profiles into dioxus.toml and make them "virtual".
+        let profile = match args.profile.clone() {
+            Some(profile) => profile,
+            None if args.release => "release".to_string(),
+            None => match platform {
+                Platform::Android => PROFILE_ANDROID.to_string(),
+                Platform::Web => PROFILE_WASM.to_string(),
+                Platform::Server => PROFILE_SERVER.to_string(),
+                _ => "dev".to_string(),
+            },
+        };
 
-        // // Make sure we set the fullstack platform so we actually build the fullstack variant
-        // // Users need to enable "fullstack" in their default feature set.
-        // // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-        // let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
+        // We usually use the simulator unless --device is passed *or* a device is detected by probing.
+        // For now, though, since we don't have probing, it just defaults to false
+        // Tools like xcrun/adb can detect devices
+        let device = args.device.unwrap_or(false);
 
-        // // Set the profile of the build if it's not already set
-        // // This is mostly used for isolation of builds (preventing thrashing) but also useful to have multiple performance profiles
-        // // We might want to move some of these profiles into dioxus.toml and make them "virtual".
-        // let profile = match args.args.profile {
-        //     Some(profile) => profile,
-        //     None if args.args.release => "release".to_string(),
-        //     None => match platform {
-        //         Platform::Android => PROFILE_ANDROID.to_string(),
-        //         Platform::Web => PROFILE_WASM.to_string(),
-        //         Platform::Server => PROFILE_SERVER.to_string(),
-        //         _ => "dev".to_string(),
-        //     },
-        // };
+        // We want a real triple to build with, so we'll autodetect it if it's not provided
+        // The triple ends up being a source of truth for us later hence this work to figure it out
+        let target = match args.target.clone() {
+            Some(target) => target,
+            None => match platform {
+                // Generally just use the host's triple for native executables unless specified otherwisea
+                Platform::MacOS
+                | Platform::Windows
+                | Platform::Linux
+                | Platform::Server
+                | Platform::Liveview => target_lexicon::HOST,
+                Platform::Web => "wasm32-unknown-unknown".parse().unwrap(),
 
-        // let device = args.device.unwrap_or(false);
+                // For iOS we should prefer the actual architecture for the simulator, but in lieu of actually
+                // figuring that out, we'll assume aarch64 on m-series and x86_64 otherwise
+                Platform::Ios => {
+                    // use the host's architecture and sim if --device is passed
+                    use target_lexicon::{Architecture, HOST};
+                    match HOST.architecture {
+                        Architecture::Aarch64(_) if device => "aarch64-apple-ios".parse().unwrap(),
+                        Architecture::Aarch64(_) => "aarch64-apple-ios-sim".parse().unwrap(),
+                        _ if device => "x86_64-apple-ios".parse().unwrap(),
+                        _ => "x86_64-apple-ios-sim".parse().unwrap(),
+                    }
+                }
 
-        // // We want a real triple to build with, so we'll autodetect it if it's not provided
-        // // The triple ends up being a source of truth for us later hence this work to figure it out
-        // let target = match args.target {
-        //     Some(target) => target,
-        //     None => match platform {
-        //         // Generally just use the host's triple for native executables unless specified otherwisea
-        //         Platform::MacOS
-        //         | Platform::Windows
-        //         | Platform::Linux
-        //         | Platform::Server
-        //         | Platform::Liveview => target_lexicon::HOST,
-        //         Platform::Web => "wasm32-unknown-unknown".parse().unwrap(),
-
-        //         // For iOS we should prefer the actual architecture for the simulator, but in lieu of actually
-        //         // figuring that out, we'll assume aarch64 on m-series and x86_64 otherwise
-        //         Platform::Ios => {
-        //             // use the host's architecture and sim if --device is passed
-        //             use target_lexicon::{Architecture, HOST};
-        //             match HOST.architecture {
-        //                 Architecture::Aarch64(_) if device => "aarch64-apple-ios".parse().unwrap(),
-        //                 Architecture::Aarch64(_) => "aarch64-apple-ios-sim".parse().unwrap(),
-        //                 _ if device => "x86_64-apple-ios".parse().unwrap(),
-        //                 _ => "x86_64-apple-ios-sim".parse().unwrap(),
-        //             }
-        //         }
-
-        //         // Same idea with android but we figure out the connected device using adb
-        //         // for now we use
-        //         Platform::Android => {
-        //             "aarch64-linux-android".parse().unwrap()
-        //             // "unknown-linux-android".parse().unwrap()
-        //         }
-        //     },
-        // };
+                // Same idea with android but we figure out the connected device using adb
+                // for now we use
+                Platform::Android => {
+                    "aarch64-linux-android".parse().unwrap()
+                    // "unknown-linux-android".parse().unwrap()
+                }
+            },
+        };
 
         // Determine arch if android
 
@@ -491,30 +482,30 @@ impl BuildRequest {
 
         let package = todo!();
 
+        // mode: todo!(),
+        // ssg: args.ssg,
+        // fullstack: todo!(),
         Ok(Self {
-            // mode: todo!(),
-            platform: todo!(),
-            features: todo!(),
-            no_default_features: todo!(),
+            platform,
+            features,
+            no_default_features,
+            crate_package,
+            crate_target,
             custom_target_dir: None,
-            profile: todo!(),
-            // fullstack: todo!(),
-            target: todo!(),
-            device: todo!(),
+            profile,
+            target,
+            device,
             nightly: args.nightly,
-            package,
+            cargo_package: package,
             release: args.release,
             skip_assets: args.skip_assets,
-            // ssg: args.ssg,
             cranelift: args.cranelift,
             cargo_args: args.cargo_args,
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
             inject_loading_scripts: args.inject_loading_scripts,
             workspace,
-            crate_package: todo!(),
             config,
-            crate_target: todo!(),
         })
     }
 
@@ -1260,7 +1251,7 @@ impl BuildRequest {
 
         // We *always* set the package since that's discovered from cargo metadata
         cargo_args.push(String::from("-p"));
-        cargo_args.push(self.package.clone());
+        cargo_args.push(self.cargo_package.clone());
 
         match self.executable_type() {
             krates::cm::TargetKind::Bin => cargo_args.push("--bin".to_string()),
@@ -1963,13 +1954,15 @@ impl BuildRequest {
     /// Try to autodetect the platform from the package by reading its features
     ///
     /// Read the default-features list and/or the features list on dioxus to see if we can autodetect the platform
-    pub(crate) fn autodetect_platform(&self) -> Option<(Platform, String)> {
-        let krate = self.workspace.krates.krates_by_name("dioxus").next()?;
+    fn autodetect_platform(
+        ws: &Workspace,
+        package: &krates::cm::Package,
+    ) -> Option<(Platform, String)> {
+        let krate = ws.krates.krates_by_name("dioxus").next()?;
 
         // We're going to accumulate the platforms that are enabled
         // This will let us create a better warning if multiple platforms are enabled
-        let manually_enabled_platforms = self
-            .workspace
+        let manually_enabled_platforms = ws
             .krates
             .get_enabled_features(krate.kid)?
             .iter()
@@ -1994,8 +1987,7 @@ impl BuildRequest {
         // Let's try and find the list of platforms from the feature list
         // This lets apps that specify web + server to work without specifying the platform.
         // This is because we treat `server` as a binary thing rather than a dedicated platform, so at least we can disambiguate it
-        let possible_platforms = self
-            .package()
+        let possible_platforms = package
             .features
             .iter()
             .filter_map(|(feature, _features)| {
@@ -2050,9 +2042,7 @@ impl BuildRequest {
     }
 
     /// Get the features required to build for the given platform
-    pub(crate) fn feature_for_platform(&self, platform: Platform) -> String {
-        let package = self.package();
-
+    fn feature_for_platform(package: &krates::cm::Package, platform: Platform) -> String {
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = platform.feature_name();
 
@@ -2151,8 +2141,8 @@ impl BuildRequest {
             .map(|krate| krate.krate.version.to_string())
     }
 
-    pub(crate) fn default_platform(&self) -> Option<Platform> {
-        let default = self.package().features.get("default")?;
+    pub(crate) fn default_platform(package: &krates::cm::Package) -> Option<Platform> {
+        let default = package.features.get("default")?;
 
         // we only trace features 1 level deep..
         for feature in default.iter() {
@@ -2166,7 +2156,7 @@ impl BuildRequest {
             }
 
             // If the user is specifying an internal feature that points to a platform, we can use that
-            let internal_feature = self.package().features.get(feature);
+            let internal_feature = package.features.get(feature);
             if let Some(internal_feature) = internal_feature {
                 for feature in internal_feature {
                     if feature.starts_with("dioxus/") {
@@ -2184,8 +2174,8 @@ impl BuildRequest {
     }
 
     /// Gather the features that are enabled for the package
-    pub(crate) fn platformless_features(&self) -> Vec<String> {
-        let default = self.package().features.get("default").unwrap();
+    fn platformless_features(package: &krates::cm::Package) -> Vec<String> {
+        let default = package.features.get("default").unwrap();
         let mut kept_features = vec![];
 
         // Only keep the top-level features in the default list that don't point to a platform directly
@@ -2200,7 +2190,7 @@ impl BuildRequest {
             }
 
             // Don't keep features that point to a platform via an internal feature
-            if let Some(internal_feature) = self.package().features.get(feature) {
+            if let Some(internal_feature) = package.features.get(feature) {
                 for feature in internal_feature {
                     if feature.starts_with("dioxus/") {
                         let dx_feature = feature.trim_start_matches("dioxus/");
