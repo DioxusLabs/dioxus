@@ -1,6 +1,6 @@
 use crate::{
-    AppBuilder, BuildMode, BuildRequest, BuildUpdate, Error, HandleUpdate, Platform, Result,
-    ServeArgs, TraceController, TraceSrc,
+    AppBuilder, BuildMode, BuildRequest, BuilderUpdate, Error, Platform, Result, ServeArgs,
+    TraceController, TraceSrc,
 };
 
 mod ansi_buffer;
@@ -152,7 +152,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
             // Wait for logs from the build engine
             // These will cause us to update the screen
             // We also can check the status of the builds here in case we have multiple ongoing builds
-            ServeUpdate::BuildUpdate { id, update } => {
+            ServeUpdate::BuilderUpdate { id, update } => {
                 // Queue any logs to be printed if need be
                 screen.new_build_update(&update);
 
@@ -163,19 +163,14 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                 // todo: there might be more things to do here that require coordination with other pieces of the CLI
                 // todo: maybe we want to shuffle the runner around to send an "open" command instead of doing that
                 match update {
-                    BuildUpdate::Progress { .. } => {}
-                    BuildUpdate::CompilerMessage { message } => {
+                    BuilderUpdate::Progress { .. } => {}
+                    BuilderUpdate::CompilerMessage { message } => {
                         screen.push_cargo_log(message);
                     }
-                    BuildUpdate::BuildFailed { err } => {
+                    BuilderUpdate::BuildFailed { err } => {
                         tracing::error!("Build failed: {:?}", err);
                     }
-
-                    // BuildUpdate::BuildReady { bundle } if bundle.build.is_patch() => {
-                    //     let jump_table = builder.patch(&bundle).await?;
-                    //     devserver.send_patch(jump_table).await;
-                    // }
-                    BuildUpdate::BuildReady { bundle } => {
+                    BuilderUpdate::BuildReady { bundle } => {
                         let handle = builder
                             .open(
                                 bundle,
@@ -190,28 +185,28 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                             devserver.send_reload_command().await
                         }
                     }
+                    BuilderUpdate::StdoutReceived { msg } => {
+                        // ServeUpdate::HandleUpdate(HandleUpdate::StdoutReceived { platform, msg }) => {
+                        //     screen.push_stdio(platform, msg, tracing::Level::INFO);
+                        // }
+                    }
+                    BuilderUpdate::StderrReceived { msg } => {
+                        // ServeUpdate::HandleUpdate(HandleUpdate::StderrReceived { platform, msg }) => {
+                        //     screen.push_stdio(platform, msg, tracing::Level::ERROR);
+                        // }
+                    }
+                    BuilderUpdate::ProcessExited { status } => {
+                        // if !status.success() {
+                        //     tracing::error!("Application [{platform}] exited with error: {status}");
+                        // } else {
+                        //     tracing::info!(
+                        //         r#"Application [{platform}] exited gracefully.
+                        // - To restart the app, press `r` to rebuild or `o` to open
+                        // - To exit the server, press `ctrl+c`"#
+                        //     );
+                        // }
+                    }
                 }
-            }
-
-            // If the process exited *cleanly*, we can exit
-            ServeUpdate::HandleUpdate(HandleUpdate::ProcessExited { status, platform }) => {
-                if !status.success() {
-                    tracing::error!("Application [{platform}] exited with error: {status}");
-                } else {
-                    tracing::info!(
-                        r#"Application [{platform}] exited gracefully.
-               - To restart the app, press `r` to rebuild or `o` to open
-               - To exit the server, press `ctrl+c`"#
-                    );
-                }
-            }
-
-            ServeUpdate::HandleUpdate(HandleUpdate::StdoutReceived { platform, msg }) => {
-                screen.push_stdio(platform, msg, tracing::Level::INFO);
-            }
-
-            ServeUpdate::HandleUpdate(HandleUpdate::StderrReceived { platform, msg }) => {
-                screen.push_stdio(platform, msg, tracing::Level::ERROR);
             }
 
             ServeUpdate::TracingLog { log } => {

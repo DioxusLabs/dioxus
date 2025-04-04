@@ -1,5 +1,5 @@
 use crate::{
-    BuildArgs, BuildArtifacts, BuildRequest, BuildStage, BuildUpdate, Platform, ProgressRx,
+    BuildArgs, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, Platform, ProgressRx,
     ProgressTx, Result, StructuredOutput,
 };
 use anyhow::Context;
@@ -30,7 +30,6 @@ use super::BuildMode;
 ///
 /// A handle to a running app.
 ///
-/// Also includes a handle to its server if it exists.
 /// The actual child processes might not be present (web) or running (died/killed).
 ///
 /// The purpose of this struct is to accumulate state about the running app and its server, like
@@ -55,12 +54,12 @@ pub(crate) struct AppBuilder {
     pub artifacts: Option<BuildArtifacts>,
 
     // These might be None if the app died or the user did not specify a server
-    pub app_child: Option<Child>,
+    pub child: Option<Child>,
 
     // stdio for the app so we can read its stdout/stderr
     // we don't map stdin today (todo) but most apps don't need it
-    pub app_stdout: Option<Lines<BufReader<ChildStdout>>>,
-    pub app_stderr: Option<Lines<BufReader<ChildStderr>>>,
+    pub stdout: Option<Lines<BufReader<ChildStdout>>>,
+    pub stderr: Option<Lines<BufReader<ChildStderr>>>,
 
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
@@ -83,25 +82,6 @@ pub(crate) struct AppBuilder {
     pub compile_end: Option<Instant>,
     pub bundle_start: Option<Instant>,
     pub bundle_end: Option<Instant>,
-}
-
-pub enum HandleUpdate {
-    /// A running process has received a stdout.
-    /// May or may not be a complete line - do not treat it as a line. It will include a line if it is a complete line.
-    ///
-    /// We will poll lines and any content in a 50ms interval
-    StdoutReceived { msg: String, platform: Platform },
-
-    /// A running process has received a stderr.
-    /// May or may not be a complete line - do not treat it as a line. It will include a line if it is a complete line.
-    ///
-    /// We will poll lines and any content in a 50ms interval
-    StderrReceived { msg: String, platform: Platform },
-
-    ProcessExited {
-        status: ExitStatus,
-        platform: Platform,
-    },
 }
 
 impl AppBuilder {
@@ -127,17 +107,18 @@ impl AppBuilder {
             bundle_start: None,
             bundle_end: None,
             runtime_asset_dir: None,
-            app_child: None,
-            app_stderr: None,
-            app_stdout: None,
+            child: None,
+            stderr: None,
+            stdout: None,
             entropy_app_exe: None,
             artifacts: None,
         })
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
-    pub(crate) async fn wait(&mut self) -> BuildUpdate {
+    pub(crate) async fn wait(&mut self) -> BuilderUpdate {
         use futures_util::StreamExt;
+        use BuilderUpdate::*;
 
         // Wait for the build to finish or for it to emit a status message
         let update = tokio::select! {
@@ -146,52 +127,31 @@ impl AppBuilder {
                 // Replace the build with an infinitely pending task so we can select it again without worrying about deadlocks/spins
                 self.build_task = tokio::task::spawn(std::future::pending());
                 match bundle {
-                    Ok(Ok(bundle)) => BuildUpdate::BuildReady { bundle },
-                    Ok(Err(err)) => BuildUpdate::BuildFailed { err },
-                    Err(err) => BuildUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:?}", err)) },
+                    Ok(Ok(bundle)) => BuilderUpdate::BuildReady { bundle },
+                    Ok(Err(err)) => BuilderUpdate::BuildFailed { err },
+                    Err(err) => BuilderUpdate::BuildFailed { err: crate::Error::Runtime(format!("Build panicked! {:?}", err)) },
                 }
             },
+            Some(Ok(Some(msg))) = OptionFuture::from(self.stdout.as_mut().map(|f| f.next_line())) => {
+                StdoutReceived {  msg }
+            },
+            Some(Ok(Some(msg))) = OptionFuture::from(self.stderr.as_mut().map(|f| f.next_line())) => {
+                StderrReceived {  msg }
+            },
+            Some(status) = OptionFuture::from(self.child.as_mut().map(|f| f.wait())) => {
+                match status {
+                    Ok(status) => {
+                        self.child = None;
+                        ProcessExited { status }
+                    },
+                    Err(_err) => todo!("handle error in process joining?"),
+                }
+            }
         };
-
-        // let platform = self.app.platform;
-        //         use HandleUpdate::*;
-        //         tokio::select! {
-        //             Some(Ok(Some(msg))) = OptionFuture::from(self.app_stdout.as_mut().map(|f| f.next_line())) => {
-        //                 StdoutReceived { platform, msg }
-        //             },
-        //             Some(Ok(Some(msg))) = OptionFuture::from(self.app_stderr.as_mut().map(|f| f.next_line())) => {
-        //                 StderrReceived { platform, msg }
-        //             },
-        //             Some(status) = OptionFuture::from(self.app_child.as_mut().map(|f| f.wait())) => {
-        //                 match status {
-        //                     Ok(status) => {
-        //                         self.app_child = None;
-        //                         ProcessExited { status, platform }
-        //                     },
-        //                     Err(_err) => todo!("handle error in process joining?"),
-        //                 }
-        //             }
-        //             Some(Ok(Some(msg))) = OptionFuture::from(self.server_stdout.as_mut().map(|f| f.next_line())) => {
-        //                 StdoutReceived { platform: Platform::Server, msg }
-        //             },
-        //             Some(Ok(Some(msg))) = OptionFuture::from(self.server_stderr.as_mut().map(|f| f.next_line())) => {
-        //                 StderrReceived { platform: Platform::Server, msg }
-        //             },
-        //             Some(status) = OptionFuture::from(self.server_child.as_mut().map(|f| f.wait())) => {
-        //                 match status {
-        //                     Ok(status) => {
-        //                         self.server_child = None;
-        //                         ProcessExited { status, platform }
-        //                     },
-        //                     Err(_err) => todo!("handle error in process joining?"),
-        //                 }
-        //             }
-        //             else => futures_util::future::pending().await
-        //         }
 
         // Update the internal stage of the build so the UI can render it
         match &update {
-            BuildUpdate::Progress { stage } => {
+            BuilderUpdate::Progress { stage } => {
                 // Prevent updates from flowing in after the build has already finished
                 if !self.is_finished() {
                     self.stage = stage.clone();
@@ -253,8 +213,8 @@ impl AppBuilder {
                     }
                 }
             }
-            BuildUpdate::CompilerMessage { .. } => {}
-            BuildUpdate::BuildReady { .. } => {
+            BuilderUpdate::CompilerMessage { .. } => {}
+            BuilderUpdate::BuildReady { .. } => {
                 self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
@@ -262,10 +222,13 @@ impl AppBuilder {
                 self.complete_compile();
                 self.bundle_end = Some(Instant::now());
             }
-            BuildUpdate::BuildFailed { .. } => {
+            BuilderUpdate::BuildFailed { .. } => {
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
+            StdoutReceived { msg } => {}
+            StderrReceived { msg } => {}
+            ProcessExited { status } => {}
         }
 
         update
@@ -339,10 +302,10 @@ impl AppBuilder {
     ///
     /// todo(jon): maybe we want to do some logging here? The build/bundle/run screens could be made to
     /// use the TUI output for prettier outputs.
-    pub(crate) async fn finish(&mut self) -> Result<BuildArtifacts> {
+    pub(crate) async fn finish_build(&mut self) -> Result<BuildArtifacts> {
         loop {
             match self.wait().await {
-                BuildUpdate::Progress { stage } => {
+                BuilderUpdate::Progress { stage } => {
                     match &stage {
                         BuildStage::Compiling {
                             current,
@@ -366,19 +329,19 @@ impl AppBuilder {
 
                     tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
-                BuildUpdate::CompilerMessage { message } => {
+                BuilderUpdate::CompilerMessage { message } => {
                     tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
                 }
-                BuildUpdate::BuildReady { bundle } => {
+                BuilderUpdate::BuildReady { bundle } => {
                     tracing::debug!(json = ?StructuredOutput::BuildFinished {
                         path: self.build.root_dir(),
                     });
                     return Ok(bundle);
                 }
-                BuildUpdate::BuildFailed { err } => {
+                BuilderUpdate::BuildFailed { err } => {
                     // Flush remaining compiler messages
                     while let Ok(Some(msg)) = self.rx.try_next() {
-                        if let BuildUpdate::CompilerMessage { message } = msg {
+                        if let BuilderUpdate::CompilerMessage { message } = msg {
                             tracing::info!(json = ?StructuredOutput::CargoOutput { message: message.clone() }, %message);
                         }
                     }
@@ -386,6 +349,9 @@ impl AppBuilder {
                     tracing::error!(?err, json = ?StructuredOutput::Error { message: err.to_string() });
                     return Err(err);
                 }
+                BuilderUpdate::StdoutReceived { msg } => {}
+                BuilderUpdate::StderrReceived { msg } => {}
+                BuilderUpdate::ProcessExited { status } => {}
             }
         }
     }
@@ -491,9 +457,9 @@ impl AppBuilder {
         if let Some(mut child) = running_process {
             let stdout = BufReader::new(child.stdout.take().unwrap());
             let stderr = BufReader::new(child.stderr.take().unwrap());
-            self.app_stdout = Some(stdout.lines());
-            self.app_stderr = Some(stderr.lines());
-            self.app_child = Some(child);
+            self.stdout = Some(stdout.lines());
+            self.stderr = Some(stderr.lines());
+            self.child = Some(child);
         }
 
         Ok(())
@@ -524,7 +490,7 @@ impl AppBuilder {
         use futures_util::FutureExt;
 
         // Kill any running executables on Windows
-        let Some(mut process) = self.app_child.take() else {
+        let Some(mut process) = self.child.take() else {
             return;
         };
 

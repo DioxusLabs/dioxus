@@ -72,12 +72,6 @@ pub(crate) struct CachedFile {
 impl AppRunner {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
     pub(crate) async fn start(args: ServeArgs) -> Result<Self> {
-        // force_sequential: args.force_sequential,
-        // hotreload: todo!(),
-        // open_browser: todo!(),
-        // wsl_file_poll_interval: todo!(),
-        // always_on_top: todo!(),
-
         let mut runner = Self {
             file_map: Default::default(),
             applied_hot_reload_message: Default::default(),

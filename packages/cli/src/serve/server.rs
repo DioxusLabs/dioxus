@@ -1,7 +1,7 @@
 use crate::{
     config::WebHttpsConfig,
     serve::{ServeArgs, ServeUpdate},
-    BuildRequest, BuildStage, BuildUpdate, Platform, Result, TraceSrc,
+    BuildRequest, BuildStage, BuilderUpdate, Platform, Result, TraceSrc,
 };
 use anyhow::Context;
 use axum::{
@@ -233,9 +233,9 @@ impl WebServer {
     }
 
     /// Sends an updated build status to all clients.
-    pub(crate) async fn new_build_update(&mut self, update: &BuildUpdate) {
+    pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate) {
         match update {
-            BuildUpdate::Progress { stage } => {
+            BuilderUpdate::Progress { stage } => {
                 // Todo(miles): wire up more messages into the splash screen UI
                 match stage {
                     BuildStage::Success => {}
@@ -263,9 +263,9 @@ impl WebServer {
                     _ => {}
                 }
             }
-            BuildUpdate::CompilerMessage { .. } => {}
-            BuildUpdate::BuildReady { .. } => {}
-            BuildUpdate::BuildFailed { err } => {
+            BuilderUpdate::CompilerMessage { .. } => {}
+            BuilderUpdate::BuildReady { .. } => {}
+            BuilderUpdate::BuildFailed { err } => {
                 let error = err.to_string();
                 self.build_status.set(Status::BuildError {
                     error: ansi_to_html::convert(&error).unwrap_or(error),
@@ -273,6 +273,9 @@ impl WebServer {
                 self.send_reload_failed().await;
                 self.send_build_status().await;
             }
+            BuilderUpdate::StdoutReceived { msg } => {}
+            BuilderUpdate::StderrReceived { msg } => {}
+            BuilderUpdate::ProcessExited { status } => {}
         }
     }
 

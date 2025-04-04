@@ -67,7 +67,7 @@ impl Bundle {
 
         tracing::info!("Building app...");
 
-        let bundle = AppBuilder::start(&build)?.finish().await?;
+        let bundle = AppBuilder::start(&build)?.finish_build().await?;
 
         // If we're building for iOS, we need to bundle the iOS bundle
         if build.platform == Platform::Ios && self.package_types.is_none() {

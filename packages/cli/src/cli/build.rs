@@ -112,7 +112,7 @@ impl BuildArgs {
             .await
             .context("Failed to load Dioxus workspace")?;
 
-        AppBuilder::start(&build)?.finish().await?;
+        AppBuilder::start(&build)?.finish_build().await?;
 
         tracing::info!(path = ?build.root_dir(), "Build completed successfully! 🚀");
 

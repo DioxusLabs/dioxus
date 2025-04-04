@@ -1,6 +1,6 @@
 use crate::{
-    serve::{ansi_buffer::AnsiStringLine, AppBuilder, ServeUpdate, WebServer},
-    BuildRequest, BuildStage, BuildUpdate, Platform, ServeArgs, TraceContent, TraceMsg, TraceSrc,
+    serve::{ansi_buffer::AnsiStringLine, ServeUpdate, WebServer},
+    BuildStage, BuilderUpdate, Platform, TraceContent, TraceMsg, TraceSrc,
 };
 use crossterm::{
     cursor::{Hide, Show},
@@ -370,13 +370,13 @@ impl Output {
     /// approach, but then we'd need to do that *everywhere* instead of simply performing a react-like
     /// re-render when external state changes. Ratatui will diff the intermediate buffer, so we at least
     /// we won't be drawing it.
-    pub(crate) fn new_build_update(&mut self, update: &BuildUpdate) {
+    pub(crate) fn new_build_update(&mut self, update: &BuilderUpdate) {
         match update {
-            BuildUpdate::Progress {
+            BuilderUpdate::Progress {
                 stage: BuildStage::Starting { .. },
             } => self.tick_animation = true,
-            BuildUpdate::BuildReady { .. } => self.tick_animation = false,
-            BuildUpdate::BuildFailed { .. } => self.tick_animation = false,
+            BuilderUpdate::BuildReady { .. } => self.tick_animation = false,
+            BuilderUpdate::BuildFailed { .. } => self.tick_animation = false,
             _ => {}
         }
     }
