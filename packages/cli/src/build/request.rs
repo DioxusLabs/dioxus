@@ -156,8 +156,78 @@
 //!     web -> /assets/
 //! root().join(bundled)
 //! ```
+//!
+//!
+//! Every dioxus app can have an optional server executable which will influence the final bundle.
+//! This is built in parallel with the app executable during the `build` phase and the progres/status
+//! of the build is aggregated.
+//!
+//! The server will *always* be dropped into the `web` folder since it is considered "web" in nature,
+//! and will likely need to be combined with the public dir to be useful.
+//!
+//! We do our best to assemble read-to-go bundles here, such that the "bundle" step for each platform
+//! can just use the build dir
+//!
+//! When we write the AppBundle to a folder, it'll contain each bundle for each platform under the app's name:
+//! ```
+//! dog-app/
+//!   build/
+//!       web/
+//!         server.exe
+//!         assets/
+//!           some-secret-asset.txt (a server-side asset)
+//!         public/
+//!           index.html
+//!           assets/
+//!             logo.png
+//!       desktop/
+//!          App.app
+//!          App.appimage
+//!          App.exe
+//!          server/
+//!              server
+//!              assets/
+//!                some-secret-asset.txt (a server-side asset)
+//!       ios/
+//!          App.app
+//!          App.ipa
+//!       android/
+//!          App.apk
+//!   bundle/
+//!       build.json
+//!       Desktop.app
+//!       Mobile_x64.ipa
+//!       Mobile_arm64.ipa
+//!       Mobile_rosetta.ipa
+//!       web.appimage
+//!       web/
+//!         server.exe
+//!         assets/
+//!             some-secret-asset.txt
+//!         public/
+//!             index.html
+//!             assets/
+//!                 logo.png
+//!                 style.css
+//! ```
+//!
+//! When deploying, the build.json file will provide all the metadata that dx-deploy will use to
+//! push the app to stores, set up infra, manage versions, etc.
+//!
+//! The format of each build will follow the name plus some metadata such that when distributing you
+//! can easily trim off the metadata.
+//!
+//! The idea here is that we can run any of the programs in the same way that they're deployed.
+//!
+//!
+//! ## Bundle structure links
+//! - apple: https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle
+//! - appimage: https://docs.appimage.org/packaging-guide/manual.html#ref-manual
+//!
+//! ## Extra links
+//! - xbuild: https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs
 
-use super::{prerender::pre_render_static_routes, AndroidTools, BuildContext, PatchData};
+use super::{AndroidTools, BuildContext, PatchData};
 use crate::{
     BuildArgs, DioxusConfig, LinkAction, Platform, ProgressTx, Result, TraceSrc, WasmOptConfig,
     Workspace,
@@ -183,7 +253,10 @@ use std::{
     },
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{Environment, OperatingSystem, Triple};
+use target_lexicon::{
+    Aarch64Architecture, Architecture, ArmArchitecture, BinaryFormat, Environment, OperatingSystem,
+    Triple, Vendor, X86_32Architecture,
+};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use toml_edit::Item;
 use uuid::Uuid;
@@ -270,7 +343,10 @@ pub enum BuildMode {
     },
 }
 
-/// The results of the build from cargo
+/// The end result of a build.
+///
+/// Contains the final asset manifest, the executable, and metadata about the build.
+/// Note that the `exe` might be stale and/or overwritten by the time you read it!
 pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: Vec<String>,
@@ -443,39 +519,55 @@ impl BuildRequest {
                 }
 
                 // Same idea with android but we figure out the connected device using adb
-                // for now we use
                 Platform::Android => {
-                    // Determine arch if android
+                    // Use the host's triple and then convert field by field
+                    // ie, the "best" emulator for an m1 mac would be: "aarch64-linux-android"
+                    //  - We assume android is always "linux"
+                    //  - We try to match the architecture unless otherwise specified. This is because
+                    //    emulators that match the host arch are usually faster.
+                    let mut triple = target_lexicon::HOST.clone();
+                    triple.operating_system = OperatingSystem::Linux;
+                    triple.environment = Environment::Android;
+                    triple.vendor = Vendor::Unknown;
+                    triple.binary_format = BinaryFormat::Unknown;
 
-                    // if platform == Platform::Android && args.target_args.target.is_none() {
-                    //     tracing::debug!("No android arch provided, attempting to auto detect.");
+                    // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
+                    let output = Command::new("adb")
+                        .arg("shell")
+                        .arg("uname")
+                        .arg("-m")
+                        .output()
+                        .await
+                        .map(|out| String::from_utf8(out.stdout));
 
-                    //     let arch = DioxusCrate::autodetect_android_arch().await;
+                    match output {
+                        Ok(Ok(out)) => match out.trim() {
+                            "armv7l" => {
+                                triple.architecture = Architecture::Arm(ArmArchitecture::Arm)
+                            }
+                            "aarch64" => {
+                                triple.architecture =
+                                    Architecture::Aarch64(Aarch64Architecture::Aarch64)
+                            }
+                            "i386" => {
+                                triple.architecture = Architecture::X86_32(X86_32Architecture::I386)
+                            }
+                            "x86_64" => {
+                                triple.architecture = Architecture::X86_64;
+                            }
+                            other => {
+                                tracing::warn!("Unknown architecture from adb: {other}");
+                            }
+                        },
+                        Ok(Err(err)) => {
+                            tracing::debug!("Failed to parse adb output: {err}");
+                        }
+                        Err(err) => {
+                            tracing::debug!("ADB command failed: {:?}", err);
+                        }
+                    };
 
-                    //     // Some extra logs
-                    //     let arch = match arch {
-                    //         Some(a) => {
-                    //             tracing::debug!(
-                    //                 "Autodetected `{}` Android arch.",
-                    //                 a.android_target_triplet()
-                    //             );
-                    //             a.to_owned()
-                    //         }
-                    //         None => {
-                    //             let a = Arch::default();
-                    //             tracing::debug!(
-                    //                 "Could not detect Android arch, defaulting to `{}`",
-                    //                 a.android_target_triplet()
-                    //             );
-                    //             a
-                    //         }
-                    //     };
-
-                    //     self.arch = Some(arch);
-                    // }
-
-                    // "unknown-linux-android".parse().unwrap()
-                    "aarch64-linux-android".parse().unwrap()
+                    triple
                 }
             },
         };
@@ -2810,68 +2902,6 @@ pub struct InfoPlistData {
     pub executable_name: String,
 }
 
-// pub(crate) fn triple(&self) -> Triple {
-//     match self.platform {
-//         Platform::MacOS => Triple::from_str("aarc64-apple-darwin").unwrap(),
-//         Platform::Windows => Triple::from_str("x86_64-pc-windows-msvc").unwrap(),
-//         Platform::Linux => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
-//         Platform::Web => Triple::from_str("wasm32-unknown-unknown").unwrap(),
-//         Platform::Ios => Triple::from_str("aarch64-apple-ios-sim").unwrap(),
-//         Platform::Android => Triple::from_str("aarch64-linux-android").unwrap(),
-//         Platform::Server => Triple::from_str("aarc64-apple-darwin").unwrap(),
-//         // Platform::Server => Triple::from_str("x86_64-unknown-linux-gnu").unwrap(),
-//         Platform::Liveview => Triple::from_str("aarc64-apple-darwin").unwrap(),
-//     }
-// }
-
-// pub(crate) async fn autodetect_android_arch() -> Option<Triple> {
-//     // Try auto detecting arch through adb.
-//     static AUTO_ARCH: OnceCell<Option<Triple>> = OnceCell::new();
-
-//     match AUTO_ARCH.get() {
-//         Some(a) => *a,
-//         None => {
-//             // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
-//             let output = Command::new("adb")
-//                 .arg("shell")
-//                 .arg("uname")
-//                 .arg("-m")
-//                 .output()
-//                 .await;
-
-//             let out = match output {
-//                 Ok(o) => o,
-//                 Err(e) => {
-//                     tracing::debug!("ADB command failed: {:?}", e);
-//                     return None;
-//                 }
-//             };
-
-//             // Parse ADB output
-//             let Ok(out) = String::from_utf8(out.stdout) else {
-//                 tracing::debug!("ADB returned unexpected data.");
-//                 return None;
-//             };
-//             let trimmed = out.trim().to_string();
-//             tracing::trace!("ADB Returned: `{trimmed:?}`");
-
-//             // Set the cell
-//             let arch = match trimmed.as_str() {
-//                 "armv7l" => Ok(Self::Arm),
-//                 "aarch64" => Ok(Self::Arm64),
-//                 "i386" => Ok(Self::X86),
-//                 "x86_64" => Ok(Self::X64),
-//                 _ => Err(()),
-//             };
-//             AUTO_ARCH
-//                 .set(arch)
-//                 .expect("the cell should have been checked empty by the match condition");
-
-//             arch
-//         }
-//     }
-// }
-
 // impl std::fmt::Display for Arch {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //         match self {
@@ -2883,86 +2913,3 @@ pub struct InfoPlistData {
 //         .fmt(f)
 //     }
 // }
-
-// / The end result of a build.
-// /
-// / Contains the final asset manifest, the executables, and the workdir.
-// /
-// / Every dioxus app can have an optional server executable which will influence the final bundle.
-// / This is built in parallel with the app executable during the `build` phase and the progres/status
-// / of the build is aggregated.
-// /
-// / The server will *always* be dropped into the `web` folder since it is considered "web" in nature,
-// / and will likely need to be combined with the public dir to be useful.
-// /
-// / We do our best to assemble read-to-go bundles here, such that the "bundle" step for each platform
-// / can just use the build dir
-// /
-// / When we write the AppBundle to a folder, it'll contain each bundle for each platform under the app's name:
-// / ```
-// / dog-app/
-// /   build/
-// /       web/
-// /         server.exe
-// /         assets/
-// /           some-secret-asset.txt (a server-side asset)
-// /         public/
-// /           index.html
-// /           assets/
-// /             logo.png
-// /       desktop/
-// /          App.app
-// /          App.appimage
-// /          App.exe
-// /          server/
-// /              server
-// /              assets/
-// /                some-secret-asset.txt (a server-side asset)
-// /       ios/
-// /          App.app
-// /          App.ipa
-// /       android/
-// /          App.apk
-// /   bundle/
-// /       build.json
-// /       Desktop.app
-// /       Mobile_x64.ipa
-// /       Mobile_arm64.ipa
-// /       Mobile_rosetta.ipa
-// /       web.appimage
-// /       web/
-// /         server.exe
-// /         assets/
-// /             some-secret-asset.txt
-// /         public/
-// /             index.html
-// /             assets/
-// /                 logo.png
-// /                 style.css
-// / ```
-// /
-// / When deploying, the build.json file will provide all the metadata that dx-deploy will use to
-// / push the app to stores, set up infra, manage versions, etc.
-// /
-// / The format of each build will follow the name plus some metadata such that when distributing you
-// / can easily trim off the metadata.
-// /
-// / The idea here is that we can run any of the programs in the same way that they're deployed.
-// /
-// /
-// / ## Bundle structure links
-// / - apple: https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle
-// / - appimage: https://docs.appimage.org/packaging-guide/manual.html#ref-manual
-// /
-// / ## Extra links
-// / - xbuild: https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs
-// pub(crate) struct BuildArtifacts {
-//     pub(crate) build: BuildRequest,
-//     pub(crate) exe: PathBuf,
-//     pub(crate) direct_rustc: Vec<String>,
-//     pub(crate) time_start: SystemTime,
-//     pub(crate) time_end: SystemTime,
-//     pub(crate) assets: AssetManifest,
-// }
-
-// impl AppBundle {}

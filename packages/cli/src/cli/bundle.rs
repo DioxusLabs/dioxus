@@ -1,4 +1,4 @@
-use crate::{BuildArgs, BuildRequest, AppBuilder, Platform};
+use crate::{AppBuilder, BuildArgs, BuildRequest, Platform};
 use anyhow::{anyhow, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -54,6 +54,7 @@ pub struct Bundle {
 }
 
 impl Bundle {
+    // todo: make sure to run pre-render static routes! we removed this from the other bundling step
     pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
         tracing::info!("Bundling project...");
 

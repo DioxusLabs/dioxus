@@ -5,16 +5,12 @@ use target_lexicon::Triple;
 /// Build the Rust Dioxus app and all of its assets.
 ///
 /// Produces a final output build. For fullstack builds you need to build the server and client separately.
-///
 /// ```
 /// dx build --platform web
 /// dx build --platform server
 /// ```
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub(crate) struct BuildArgs {
-    #[clap(long)]
-    pub(crate) name: Option<String>,
-
     /// Build for nightly [default: false]
     #[clap(long)]
     pub(crate) nightly: bool,
