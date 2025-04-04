@@ -10,15 +10,25 @@ use target_lexicon::Triple;
 /// dx serve --example blah --target blah --platform android
 /// ```
 ///
-/// As of dioxus 0.7, `dx serve` allows multiple builds at the same type by chaining the `crate` subcommand:
+/// A simple serve:
 /// ```
-/// dx serve
-///     @crate --blah
-///     @crate --blah
-///     @crate --blah
-///     @crate --blah
+/// dx serve --platform web
 /// ```
 ///
+/// A serve with customized arguments:
+///
+/// ```
+/// ```
+///
+/// As of dioxus 0.7, `dx serve` allows independent customization of the client and server builds,
+/// allowing workspaces and removing any "magic" done to support ergonomic fullstack serving with
+/// an plain `dx serve`. These require specifying more arguments like features since they won't be autodetected.
+///
+/// ```
+/// dx serve \
+///     client --package frontend \
+///     server --package backend
+/// ```
 #[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub(crate) struct ServeArgs {
@@ -91,15 +101,14 @@ pub(crate) struct ServeArgs {
 
     /// A list of additional targets to build.
     ///
-    /// Server and Client are special targets that receive features from the top-level command.
-    ///
+    /// Server and Client are special targets that integrate with `dx serve`, while `crate` is a generic.
     ///
     /// ```
     /// dx serve \
     ///     client --target aarch64-apple-darwin \
     ///     server --target wasm32-unknown-unknown \
-    ///     crate --target aarch64-unknown-linux-gnu
-    ///     crate --target x86_64-unknown-linux-gnu
+    ///     crate --target aarch64-unknown-linux-gnu --package foo \
+    ///     crate --target x86_64-unknown-linux-gnu --package bar
     /// ```
     #[command(subcommand)]
     pub(crate) targets: Option<TargetCmd>,

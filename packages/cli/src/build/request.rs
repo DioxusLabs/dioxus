@@ -2029,20 +2029,6 @@ impl BuildRequest {
         None
     }
 
-    /// Check if dioxus is being built with a particular feature
-    pub(crate) fn has_dioxus_feature(&self, filter: &str) -> bool {
-        self.workspace
-            .krates
-            .krates_by_name("dioxus")
-            .any(|dioxus| {
-                self.workspace
-                    .krates
-                    .get_enabled_features(dioxus.kid)
-                    .map(|features| features.contains(filter))
-                    .unwrap_or_default()
-            })
-    }
-
     /// Get the features required to build for the given platform
     fn feature_for_platform(package: &krates::cm::Package, platform: Platform) -> String {
         // Try to find the feature that activates the dioxus feature for the given platform
@@ -2244,6 +2230,57 @@ impl BuildRequest {
     /// todo(jon): we should name the app properly instead of making up the exe name. It's kinda okay for dev mode, but def not okay for prod
     pub fn main_exe(&self) -> PathBuf {
         self.exe_dir().join(self.platform_exe_name())
+    }
+
+    /// Does the app specify:
+    ///
+    /// - Dioxus with "fullstack" enabled? (access to serverfns, etc)
+    /// - An explicit "fullstack" feature that enables said feature?
+    ///
+    /// Note that we don't detect if dependencies enable it transitively since we want to be explicit about it.
+    ///
+    /// The intention here is to detect if "fullstack" is enabled in the target's features list:
+    /// ```toml
+    /// [dependencies]
+    /// dioxus = { version = "0.4", features = ["fullstack"] }
+    /// ```
+    ///
+    /// or as an explicit feature in default:
+    /// ```toml
+    /// [features]
+    /// default = ["dioxus/fullstack"]
+    /// ```
+    ///
+    /// or as a default feature that enables the dioxus feature:
+    /// ```toml
+    /// [features]
+    /// default = ["fullstack"]
+    /// fullstack = ["dioxus/fullstack"]
+    /// ```
+    ///
+    /// or as an explicit feature (that enables the dioxus feature):
+    /// ```
+    /// dx serve app --features "fullstack"
+    /// ```
+    pub fn fullstack_feature_enabled(&self) -> bool {
+        let dioxus_dep = self
+            .package()
+            .dependencies
+            .iter()
+            .find(|dep| dep.name == "dioxus");
+
+        // If we don't have a dioxus dependency, we can't be fullstack. This shouldn't impact non-dioxus projects
+        let Some(dioxus_dep) = dioxus_dep else {
+            return false;
+        };
+
+        // Check if the dioxus dependency has the "fullstack" feature enabled
+        if dioxus_dep.features.iter().any(|f| f == "fullstack") {
+            return true;
+        }
+
+        // Check if any of the features enables the "fullstack" feature
+        todo!("check if any of the features enables the fullstack feature");
     }
 
     // /// We always put the server in the `web` folder!

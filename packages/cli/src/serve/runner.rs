@@ -64,6 +64,7 @@ pub(crate) struct AppRunner {
     pub(crate) open_browser: bool,
     pub(crate) wsl_file_poll_interval: u16,
     pub(crate) always_on_top: bool,
+    pub(crate) fullstack: bool,
 
     // resolve args related to the webserver
     pub(crate) devserver_port: u16,
@@ -135,12 +136,36 @@ impl AppRunner {
 
         // Now resolve the builds that we need to.
         // These come from the args, but we'd like them to come from the `TargetCmd` chained object
-        let mut app = args.build_arguments;
+        //
+        // The process here is as follows:
+        //
+        // - Create the BuildRequest for the primary target
+        // - If that BuildRequest is "fullstack", then add the client features
+        // - If that BuildRequest is "fullstack", then also create a BuildRequest for the server
+        //   with the server features
+        //
+        // This involves modifying the BuildRequest to add the client features and server features
+        // only if we can properly detect that it's a fullstack build. Careful with this, since
+        // we didn't build BuildRequest to be generally mutable.
+        let mut client = BuildRequest::new(&args.build_arguments).await?;
+        let mut server = None;
+
+        // Now we need to resolve the client features
+        let fullstack = client.fullstack_feature_enabled() || args.fullstack.unwrap_or(false);
+        if fullstack {
+            let _server = BuildRequest::new(&args.build_arguments).await?;
+            // ... todo: add the server features to the server build
+            // ... todo: add the client features to the client build
+            server = Some(_server);
+        }
+
+        // Assemble the build list
+        let mut builds = vec![client];
+        if let Some(server) = server {
+            builds.push(server);
+        }
 
         // // Make sure we have a server feature if we're building a fullstack app
-        // //
-        // // todo(jon): eventually we want to let users pass a `--server <crate>` flag to specify a package to use as the server
-        // // however, it'll take some time to support that and we don't have a great RPC binding layer between the two yet
         // if self.fullstack && self.server_features.is_empty() {
         //     return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
         // }
@@ -171,6 +196,7 @@ impl AppRunner {
             interactive,
             force_sequential,
             cross_origin_policy,
+            fullstack,
         };
 
         // // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
