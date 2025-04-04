@@ -74,6 +74,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_start_bundle(&self) {
+        tracing::debug!("Assembling app bundle");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Bundling {},
         });

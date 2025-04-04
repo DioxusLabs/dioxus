@@ -11,13 +11,14 @@ use std::{
     path::{Path, PathBuf},
     process::{ExitStatus, Stdio},
 };
+use subsecond_cli_support::JumpTable;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::{Child, ChildStderr, ChildStdout, Command},
     task::JoinHandle,
 };
 
-use super::BuildMode;
+use super::{BuildContext, BuildMode};
 
 /// The component of the serve engine that watches ongoing builds and manages their state, open handle,
 /// and progress.
@@ -53,6 +54,16 @@ pub(crate) struct AppBuilder {
     // If a build has already finished, we'll have its artifacts (rustc, link args, etc) to work with
     pub artifacts: Option<BuildArtifacts>,
 
+    /// The aslr offset of this running app
+    pub aslr_reference: Option<u64>,
+
+    /// The list of patches applied to the app, used to know which ones to reapply and/or iterate from.
+    pub patches: Vec<JumpTable>,
+
+    /// The virtual directory that assets will be served from
+    /// Used mostly for apk/ipa builds since they live in simulator
+    pub runtime_asset_dir: Option<PathBuf>,
+
     // These might be None if the app died or the user did not specify a server
     pub child: Option<Child>,
 
@@ -64,13 +75,6 @@ pub(crate) struct AppBuilder {
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
     pub entropy_app_exe: Option<PathBuf>,
-
-    /// The aslr offset of this running app
-    pub aslr_reference: Option<u64>,
-
-    /// The virtual directory that assets will be served from
-    /// Used mostly for apk/ipa builds since they live in simulator
-    pub runtime_asset_dir: Option<PathBuf>,
 
     // Metadata about the build that needs to be managed by watching build updates
     // used to render the TUI
@@ -92,12 +96,21 @@ impl AppBuilder {
         Ok(Self {
             build: request.clone(),
             stage: BuildStage::Initializing,
-            build_task: tokio::spawn(async move {
-                // request.build_all().await
-                todo!()
+            build_task: tokio::spawn({
+                let request = request.clone();
+                let tx = tx.clone();
+                async move {
+                    request
+                        .build(&BuildContext {
+                            tx: tx.clone(),
+                            mode: BuildMode::Fat,
+                        })
+                        .await
+                }
             }),
             tx,
             rx,
+            patches: vec![],
             compiled_crates: 0,
             expected_crates: 1,
             bundling_progress: 0.0,

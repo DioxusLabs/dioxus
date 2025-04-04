@@ -511,64 +511,171 @@ impl BuildRequest {
         })
     }
 
-    pub(crate) async fn build(&self, ctx: BuildContext) -> Result<BuildArtifacts> {
-        // // Create the bundle in an incomplete state and fill it in
-        // let mut bundle = Self {
-        //     // server_assets: Default::default(),
-        //     // server,
-        //     build,
-        //     // exe: todo!(),
-        //     // app,
-        //     // direct_rustc: todo!(),
-        //     // time_start: todo!(),
-        //     // time_end: todo!(),
-        // };
-
-        let bundle = self;
-
+    pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         // Run the cargo build to produce our artifacts
-        let exe = PathBuf::new();
-        let mut assets = AssetManifest::default();
+        let mut artifacts = self.cargo_build(&ctx).await?;
 
-        // Now handle
+        // Write the build artifacts to the bundle on the disk
         match ctx.mode {
-            BuildMode::Base | BuildMode::Fat => {
-                tracing::debug!("Assembling app bundle");
+            BuildMode::Thin { aslr_reference, .. } => {
+                self.write_patch(aslr_reference).await?;
+            }
 
+            BuildMode::Base | BuildMode::Fat => {
                 ctx.status_start_bundle();
-                bundle
-                    .write_executable(&ctx, &exe, &mut assets)
+
+                self.write_executable(&ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write main executable")?;
-                bundle
-                    .write_assets(&ctx, &assets)
+                self.write_assets(&ctx, &artifacts.assets)
                     .await
                     .context("Failed to write assets")?;
-                bundle.write_metadata().await?;
-                bundle.optimize(&ctx).await?;
-                // bundle.pre_render_ssg_routes().await?;
-                bundle
-                    .assemble(&ctx)
+                self.write_metadata().await?;
+                self.optimize(&ctx).await?;
+                self.assemble(&ctx)
                     .await
                     .context("Failed to assemble app bundle")?;
 
-                tracing::debug!("Bundle created at {}", bundle.root_dir().display());
-            }
-
-            BuildMode::Thin { aslr_reference, .. } => {
-                tracing::debug!("Patching existing bundle");
-                bundle.write_patch(aslr_reference).await?;
+                tracing::debug!("Bundle created at {}", self.root_dir().display());
             }
         }
 
         todo!()
     }
 
+    async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
+        let start = SystemTime::now();
+
+        let mut cmd = self.build_command(ctx)?;
+
+        tracing::debug!("Executing cargo...");
+        tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
+
+        // Extract the unit count of the crate graph so build_cargo has more accurate data
+        // "Thin" builds only build the final exe, so we only need to build one crate
+        let crate_count = match ctx.mode {
+            BuildMode::Thin { .. } => 1,
+            _ => self.get_unit_count_estimate(ctx).await,
+        };
+
+        // Update the status to show that we're starting the build and how many crates we expect to build
+        ctx.status_starting_build(crate_count);
+
+        let mut child = cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Failed to spawn cargo build")?;
+
+        let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
+        let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
+        let mut output_location: Option<PathBuf> = None;
+        let mut stdout = stdout.lines();
+        let mut stderr = stderr.lines();
+        let mut units_compiled = 0;
+        let mut emitting_error = false;
+        let mut direct_rustc = Vec::new();
+
+        loop {
+            use cargo_metadata::Message;
+
+            let line = tokio::select! {
+                Ok(Some(line)) = stdout.next_line() => line,
+                Ok(Some(line)) = stderr.next_line() => line,
+                else => break,
+            };
+
+            let Some(Ok(message)) = Message::parse_stream(std::io::Cursor::new(line)).next() else {
+                continue;
+            };
+
+            match message {
+                Message::BuildScriptExecuted(_) => units_compiled += 1,
+                Message::TextLine(line) => {
+                    // Try to extract the direct rustc args from the output
+                    if line.trim().starts_with("Running ") {
+                        // trim everyting but the contents between the quotes
+                        let args = line
+                            .trim()
+                            .trim_start_matches("Running `")
+                            .trim_end_matches('`');
+
+                        // Parse these as shell words so we can get the direct rustc args
+                        direct_rustc = shell_words::split(args).unwrap();
+                    }
+
+                    #[derive(Deserialize)]
+                    struct RustcArtifact {
+                        artifact: PathBuf,
+                        emit: String,
+                    }
+
+                    if let Ok(artifact) = serde_json::from_str::<RustcArtifact>(&line) {
+                        if artifact.emit == "link" {
+                            output_location = Some(artifact.artifact);
+                        }
+                    }
+
+                    // For whatever reason, if there's an error while building, we still receive the TextLine
+                    // instead of an "error" message. However, the following messages *also* tend to
+                    // be the error message, and don't start with "error:". So we'll check if we've already
+                    // emitted an error message and if so, we'll emit all following messages as errors too.
+                    if line.trim_start().starts_with("error:") {
+                        emitting_error = true;
+                    }
+
+                    if emitting_error {
+                        ctx.status_build_error(line);
+                    } else {
+                        ctx.status_build_message(line)
+                    }
+                }
+                Message::CompilerMessage(msg) => ctx.status_build_diagnostic(msg),
+                Message::CompilerArtifact(artifact) => {
+                    units_compiled += 1;
+                    match artifact.executable {
+                        Some(executable) => output_location = Some(executable.into()),
+                        None => ctx.status_build_progress(
+                            units_compiled,
+                            crate_count,
+                            artifact.target.name,
+                        ),
+                    }
+                }
+                Message::BuildFinished(finished) => {
+                    if !finished.success {
+                        return Err(anyhow::anyhow!(
+                            "Cargo build failed, signaled by the compiler. Toggle tracing mode (press `t`) for more information."
+                        )
+                        .into());
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if output_location.is_none() {
+            tracing::error!("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.");
+        }
+
+        let exe = output_location.context("Build did not return an executable")?;
+
+        tracing::debug!("Build completed successfully - output location: {:?}", exe);
+
+        Ok(BuildArtifacts {
+            exe,
+            direct_rustc,
+            time_start: start,
+            time_end: SystemTime::now(),
+            assets: Default::default(),
+        })
+    }
+
     /// Traverse the target directory and collect all assets from the incremental cache
     ///
     /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
     /// One day this system might break and we might need to go back to using the linker approach.
-    pub(crate) async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
+    async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
         if self.skip_assets {
@@ -823,6 +930,8 @@ impl BuildRequest {
 
     /// Run our custom linker setup to generate a patch file in the right location
     async fn write_patch(&self, aslr_reference: u64) -> Result<()> {
+        tracing::debug!("Patching existing bundle");
+
         let raw_args = std::fs::read_to_string(&self.link_args_file())
             .context("Failed to read link args from file")?;
 
@@ -1062,135 +1171,6 @@ impl BuildRequest {
         Ok(args)
     }
 
-    pub(crate) async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
-        let start = SystemTime::now();
-
-        tracing::debug!("Executing cargo...");
-
-        let mut cmd = self.build_command(ctx)?;
-
-        tracing::trace!(dx_src = ?TraceSrc::Build, "Rust cargo args: {:#?}", cmd);
-
-        // Extract the unit count of the crate graph so build_cargo has more accurate data
-        // "Thin" builds only build the final exe, so we only need to build one crate
-        let crate_count = match ctx.mode {
-            BuildMode::Thin { .. } => 1,
-            _ => self.get_unit_count_estimate(ctx).await,
-        };
-
-        // Update the status to show that we're starting the build and how many crates we expect to build
-        ctx.status_starting_build(crate_count);
-
-        let mut child = cmd
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("Failed to spawn cargo build")?;
-
-        let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
-        let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
-        let mut output_location: Option<PathBuf> = None;
-        let mut stdout = stdout.lines();
-        let mut stderr = stderr.lines();
-        let mut units_compiled = 0;
-        let mut emitting_error = false;
-        let mut direct_rustc = Vec::new();
-
-        loop {
-            use cargo_metadata::Message;
-
-            let line = tokio::select! {
-                Ok(Some(line)) = stdout.next_line() => line,
-                Ok(Some(line)) = stderr.next_line() => line,
-                else => break,
-            };
-
-            let Some(Ok(message)) = Message::parse_stream(std::io::Cursor::new(line)).next() else {
-                continue;
-            };
-
-            match message {
-                Message::BuildScriptExecuted(_) => units_compiled += 1,
-                Message::TextLine(line) => {
-                    // Try to extract the direct rustc args from the output
-                    if line.trim().starts_with("Running ") {
-                        // trim everyting but the contents between the quotes
-                        let args = line
-                            .trim()
-                            .trim_start_matches("Running `")
-                            .trim_end_matches('`');
-
-                        // Parse these as shell words so we can get the direct rustc args
-                        direct_rustc = shell_words::split(args).unwrap();
-                    }
-
-                    #[derive(Debug, Deserialize)]
-                    struct RustcArtifact {
-                        artifact: PathBuf,
-                        emit: String,
-                    }
-
-                    if let Ok(artifact) = serde_json::from_str::<RustcArtifact>(&line) {
-                        if artifact.emit == "link" {
-                            output_location = Some(artifact.artifact);
-                        }
-                    }
-
-                    // For whatever reason, if there's an error while building, we still receive the TextLine
-                    // instead of an "error" message. However, the following messages *also* tend to
-                    // be the error message, and don't start with "error:". So we'll check if we've already
-                    // emitted an error message and if so, we'll emit all following messages as errors too.
-                    if line.trim_start().starts_with("error:") {
-                        emitting_error = true;
-                    }
-
-                    if emitting_error {
-                        ctx.status_build_error(line);
-                    } else {
-                        ctx.status_build_message(line)
-                    }
-                }
-                Message::CompilerMessage(msg) => ctx.status_build_diagnostic(msg),
-                Message::CompilerArtifact(artifact) => {
-                    units_compiled += 1;
-                    match artifact.executable {
-                        Some(executable) => output_location = Some(executable.into()),
-                        None => ctx.status_build_progress(
-                            units_compiled,
-                            crate_count,
-                            artifact.target.name,
-                        ),
-                    }
-                }
-                Message::BuildFinished(finished) => {
-                    if !finished.success {
-                        return Err(anyhow::anyhow!(
-                            "Cargo build failed, signaled by the compiler. Toggle tracing mode (press `t`) for more information."
-                        )
-                        .into());
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        if output_location.is_none() {
-            tracing::error!("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.");
-        }
-
-        let exe = output_location.context("Build did not return an executable")?;
-
-        tracing::debug!("Build completed successfully - output location: {:?}", exe);
-
-        Ok(BuildArtifacts {
-            exe,
-            direct_rustc,
-            time_start: start,
-            time_end: SystemTime::now(),
-            assets: Default::default(),
-        })
-    }
-
     #[tracing::instrument(
         skip(self),
         level = "trace",
@@ -1228,7 +1208,7 @@ impl BuildRequest {
     }
 
     /// Create a list of arguments for cargo builds
-    pub(crate) fn build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
+    fn build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
         let mut cargo_args = Vec::new();
 
         // Add required profile flags. --release overrides any custom profiles.
@@ -1372,7 +1352,7 @@ impl BuildRequest {
     }
 
     /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
-    pub(crate) async fn get_unit_count(&self, ctx: &BuildContext) -> crate::Result<usize> {
+    async fn get_unit_count(&self, ctx: &BuildContext) -> crate::Result<usize> {
         #[derive(Debug, Deserialize)]
         struct UnitGraph {
             units: Vec<serde_json::Value>,
@@ -1404,7 +1384,7 @@ impl BuildRequest {
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
     /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-    pub(crate) async fn get_unit_count_estimate(&self, ctx: &BuildContext) -> usize {
+    async fn get_unit_count_estimate(&self, ctx: &BuildContext) -> usize {
         // Try to get it from nightly
         if let Ok(count) = self.get_unit_count(ctx).await {
             return count;
