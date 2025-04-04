@@ -1,5 +1,5 @@
 use super::{chained::ChainedCommand, *};
-use crate::{AddressArguments, BuildArgs, Platform, PROFILE_SERVER};
+use crate::{AddressArguments, BuildArgs, PROFILE_SERVER};
 use target_lexicon::Triple;
 
 /// Serve the project
@@ -141,35 +141,9 @@ impl ServeArgs {
         Ok(StructuredOutput::Success)
     }
 
-    pub(crate) fn should_hotreload(&self) -> bool {
-        self.hot_reload.unwrap_or(true)
-    }
-
-    pub(crate) fn build_args(&self) -> &BuildArgs {
-        &self.build_arguments
-    }
-
+    /// Check if the server is running in interactive mode. This involves checking the terminal as well
     pub(crate) fn is_interactive_tty(&self) -> bool {
         use std::io::IsTerminal;
         std::io::stdout().is_terminal() && self.interactive.unwrap_or(true)
-    }
-
-    pub(crate) fn should_proxy_build(&self) -> bool {
-        tracing::error!("todo: should_proxy_build is not implemented");
-        false
-
-        // match self.build_arguments.platform() {
-        //     Platform::Server => true,
-        //     // During SSG, just serve the static files instead of running the server
-        //     _ => self.build_arguments.fullstack && !self.build_arguments.ssg,
-        // }
-    }
-}
-
-impl std::ops::Deref for ServeArgs {
-    type Target = BuildArgs;
-
-    fn deref(&self) -> &Self::Target {
-        &self.build_arguments
     }
 }

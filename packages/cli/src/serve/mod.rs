@@ -9,13 +9,11 @@ mod proxy;
 mod runner;
 mod server;
 mod update;
-mod watcher;
 
 pub(crate) use output::*;
 pub(crate) use runner::*;
 pub(crate) use server::*;
 pub(crate) use update::*;
-pub(crate) use watcher::*;
 
 /// For *all* builds, the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
 ///
@@ -153,6 +151,8 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
             // These will cause us to update the screen
             // We also can check the status of the builds here in case we have multiple ongoing builds
             ServeUpdate::BuilderUpdate { id, update } => {
+                let platform = builder.builds.get(id.0).unwrap().build.platform;
+
                 // Queue any logs to be printed if need be
                 screen.new_build_update(&update);
 
@@ -186,25 +186,21 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                         }
                     }
                     BuilderUpdate::StdoutReceived { msg } => {
-                        // ServeUpdate::HandleUpdate(HandleUpdate::StdoutReceived { platform, msg }) => {
-                        //     screen.push_stdio(platform, msg, tracing::Level::INFO);
-                        // }
+                        screen.push_stdio(platform, msg, tracing::Level::INFO);
                     }
                     BuilderUpdate::StderrReceived { msg } => {
-                        // ServeUpdate::HandleUpdate(HandleUpdate::StderrReceived { platform, msg }) => {
-                        //     screen.push_stdio(platform, msg, tracing::Level::ERROR);
-                        // }
+                        screen.push_stdio(platform, msg, tracing::Level::ERROR);
                     }
                     BuilderUpdate::ProcessExited { status } => {
-                        // if !status.success() {
-                        //     tracing::error!("Application [{platform}] exited with error: {status}");
-                        // } else {
-                        //     tracing::info!(
-                        //         r#"Application [{platform}] exited gracefully.
-                        // - To restart the app, press `r` to rebuild or `o` to open
-                        // - To exit the server, press `ctrl+c`"#
-                        //     );
-                        // }
+                        if !status.success() {
+                            tracing::error!("Application [{platform}] exited with error: {status}");
+                        } else {
+                            tracing::info!(
+                                r#"Application [{platform}] exited gracefully.
+                        - To restart the app, press `r` to rebuild or `o` to open
+                        - To exit the server, press `ctrl+c`"#
+                            );
+                        }
                     }
                 }
             }

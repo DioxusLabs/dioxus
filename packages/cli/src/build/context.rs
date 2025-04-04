@@ -19,7 +19,7 @@ pub(crate) type ProgressTx = UnboundedSender<BuilderUpdate>;
 pub(crate) type ProgressRx = UnboundedReceiver<BuilderUpdate>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BuildId(u64);
+pub struct BuildId(pub usize);
 
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum BuilderUpdate {

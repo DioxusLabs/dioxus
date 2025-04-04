@@ -1193,12 +1193,6 @@ We checked the folder: {}
         self.compiled_crates as f64 / self.expected_crates as f64
     }
 
-    /// Return a number between 0 and 1 representing the progress of the server build
-    pub(crate) fn server_compile_progress(&self) -> f64 {
-        todo!()
-        // self.compiled_crates_server as f64 / self.expected_crates_server as f64
-    }
-
     pub(crate) fn bundle_progress(&self) -> f64 {
         self.bundling_progress
     }

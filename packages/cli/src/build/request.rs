@@ -591,7 +591,7 @@ impl BuildRequest {
             }
         }
 
-        todo!()
+        Ok(artifacts)
     }
 
     async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {

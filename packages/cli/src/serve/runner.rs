@@ -92,7 +92,7 @@ impl AppRunner {
 
         // Resolve the simpler args
         let interactive = args.is_interactive_tty();
-        let force_sequential = args.force_sequential;
+        let force_sequential = args.build_arguments.force_sequential;
         let cross_origin_policy = args.cross_origin_policy;
 
         // These come from the args but also might come from the workspace settings
@@ -123,13 +123,6 @@ impl AppRunner {
             .port
             .unwrap_or_else(|| get_available_port(devserver_bind_ip, Some(8080)).unwrap_or(8080));
 
-        // All servers will end up behind us (the devserver) but on a different port
-        // This is so we can serve a loading screen as well as devtools without anything particularly fancy
-        let proxied_port = args
-            .should_proxy_build()
-            .then(|| get_available_port(devserver_bind_ip, None))
-            .flatten();
-
         // Spin up the file watcher
         let (watcher_tx, watcher_rx) = futures_channel::mpsc::unbounded();
         let watcher = create_notify_watcher(watcher_tx.clone(), wsl_file_poll_interval as u64);
@@ -156,6 +149,15 @@ impl AppRunner {
             let _server = BuildRequest::new(&args.build_arguments).await?;
             // ... todo: add the server features to the server build
             // ... todo: add the client features to the client build
+            // // Make sure we have a server feature if we're building a fullstack app
+            // if self.fullstack && self.server_features.is_empty() {
+            //     return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
+            // }
+
+            // // Make sure we set the fullstack platform so we actually build the fullstack variant
+            // // Users need to enable "fullstack" in their default feature set.
+            // // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
+            // let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
             server = Some(_server);
         }
 
@@ -165,15 +167,18 @@ impl AppRunner {
             builds.push(server);
         }
 
-        // // Make sure we have a server feature if we're building a fullstack app
-        // if self.fullstack && self.server_features.is_empty() {
-        //     return Err(anyhow::anyhow!("Fullstack builds require a server feature on the target crate. Add a `server` feature to the crate and try again.").into());
-        // }
+        // All servers will end up behind us (the devserver) but on a different port
+        // This is so we can serve a loading screen as well as devtools without anything particularly fancy
+        let should_proxy_port = match builds[0].platform {
+            Platform::Server => true,
+            _ => fullstack,
+            // During SSG, just serve the static files instead of running the server
+            // _ => builds[0].fullstack && !self.build_arguments.ssg,
+        };
 
-        // // Make sure we set the fullstack platform so we actually build the fullstack variant
-        // // Users need to enable "fullstack" in their default feature set.
-        // // todo(jon): fullstack *could* be a feature of the app, but right now we're assuming it's always enabled
-        // let fullstack = args.fullstack || krate.has_dioxus_feature("fullstack");
+        let proxied_port = should_proxy_port
+            .then(|| get_available_port(devserver_bind_ip, None))
+            .flatten();
 
         // Create the runner
         let mut runner = Self {
@@ -198,6 +203,17 @@ impl AppRunner {
             cross_origin_policy,
             fullstack,
         };
+
+        // let mut watcher = Self {
+        //     watcher: create_notify_watcher(serve, tx.clone()),
+        //     _tx: tx,
+        //     // krate: krate.clone(),
+        //     rx,
+        // };
+
+        // watcher.watch_filesystem();
+
+        // watcher
 
         // // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
         // // we could spawn a thread to search the FS and then when it returns we can fill the filemap
@@ -802,6 +818,12 @@ impl AppRunner {
     /// Check if this is a fullstack build. This means that there is an additional build with the `server` platform.
     pub(crate) fn is_fullstack(&self) -> bool {
         todo!()
+    }
+
+    /// Return a number between 0 and 1 representing the progress of the server build
+    pub(crate) fn server_compile_progress(&self) -> f64 {
+        todo!()
+        // self.compiled_crates_server as f64 / self.expected_crates_server as f64
     }
 }
 

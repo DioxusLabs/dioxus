@@ -484,7 +484,7 @@ impl Output {
             self.render_single_gauge(
                 frame,
                 second_progress,
-                client.server_compile_progress(),
+                state.runner.server_compile_progress(),
                 "Server: ",
                 state,
                 client.compile_duration(),
