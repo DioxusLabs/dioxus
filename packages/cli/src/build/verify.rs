@@ -1,14 +1,16 @@
 use crate::{wasm_bindgen::WasmBindgen, BuildRequest, Error, Platform, Result};
 use anyhow::{anyhow, Context};
 
+use super::BuildContext;
+
 impl BuildRequest {
     /// Check for tooling that might be required for this build.
     ///
     /// This should generally be only called on the first build since it takes time to verify the tooling
     /// is in place, and we don't want to slow down subsequent builds.
-    pub(crate) async fn verify_tooling(&self) -> Result<()> {
+    pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
         tracing::debug!("Verifying tooling...");
-        self.status_installing_tooling();
+        ctx.status_installing_tooling();
 
         self
             .initialize_profiles()

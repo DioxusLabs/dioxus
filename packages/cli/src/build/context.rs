@@ -6,6 +6,15 @@ use std::path::PathBuf;
 
 use super::BuildMode;
 
+/// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
+/// provides some dynamic configuration that is only known at runtime. For example, the Progress channel
+/// and the BuildMode can change while serving.
+#[derive(Debug, Clone)]
+pub struct BuildContext {
+    pub tx: ProgressTx,
+    pub mode: BuildMode,
+}
+
 pub(crate) type ProgressTx = UnboundedSender<BuildUpdate>;
 pub(crate) type ProgressRx = UnboundedReceiver<BuildUpdate>;
 
@@ -20,34 +29,34 @@ pub(crate) enum BuildUpdate {
     BuildFailed { err: crate::Error },
 }
 
-impl BuildRequest {
+impl BuildContext {
     pub(crate) fn status_wasm_bindgen_start(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::RunningBindgen {},
         });
     }
 
     pub(crate) fn status_splitting_bundle(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::SplittingBundle,
         });
     }
 
     pub(crate) fn status_start_bundle(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Bundling {},
         });
     }
 
     pub(crate) fn status_running_gradle(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::RunningGradle,
         })
     }
 
     pub(crate) fn status_build_diagnostic(&self, message: CompilerMessage) {
         _ = self
-            .progress
+            .tx
             .unbounded_send(BuildUpdate::CompilerMessage { message });
     }
 
@@ -60,7 +69,7 @@ impl BuildRequest {
     }
 
     pub(crate) fn status_build_progress(&self, count: usize, total: usize, name: String) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
                 total,
@@ -69,10 +78,10 @@ impl BuildRequest {
         });
     }
 
-    pub(crate) fn status_starting_build(&self, crate_count: usize, mode: &BuildMode) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+    pub(crate) fn status_starting_build(&self, crate_count: usize) {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::Starting {
-                patch: matches!(mode, BuildMode::Thin { .. }),
+                patch: matches!(self.mode, BuildMode::Thin { .. }),
                 crate_count,
             },
         });
@@ -94,30 +103,26 @@ impl BuildRequest {
     }
 
     pub(crate) fn status_optimizing_wasm(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::OptimizingWasm {},
         });
     }
 
     pub(crate) fn status_prerendering_routes(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::PrerenderingRoutes {},
         });
     }
 
     pub(crate) fn status_installing_tooling(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::InstallingTooling {},
         });
     }
 
     pub(crate) fn status_compressing_assets(&self) {
-        _ = self.progress.unbounded_send(BuildUpdate::Progress {
+        _ = self.tx.unbounded_send(BuildUpdate::Progress {
             stage: BuildStage::CompressingAssets,
         });
-    }
-
-    pub(crate) fn is_server(&self) -> bool {
-        self.platform == Platform::Server
     }
 }
