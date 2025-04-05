@@ -821,6 +821,7 @@ impl AppBundle {
             &self
                 .server_exe()
                 .context("Failed to find server executable")?,
+            self.build.krate.config.web.app.base_path.as_ref(),
         )
         .await?;
         Ok(())
