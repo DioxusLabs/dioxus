@@ -105,6 +105,7 @@ pub fn create_jump_table(
     Ok(JumpTable {
         lib: patch.to_path_buf(),
         map,
+        got: vec![],
         old_base_address,
         new_base_address,
         aslr_reference,
@@ -131,7 +132,6 @@ fn create_wasm_jump_table(
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new {
         if let Some(old_idx) = name_to_ifunc_old.get(name) {
-            tracing::info!("Mapping {} from {} to {}", name, old_idx, idx);
             map.insert(*old_idx as u64, idx as u64);
         }
     }
@@ -140,6 +140,7 @@ fn create_wasm_jump_table(
 
     Ok(JumpTable {
         map,
+        got: vec![],
         lib: patch.to_path_buf(),
         aslr_reference: 0,
         old_base_address: 0,
@@ -148,6 +149,7 @@ fn create_wasm_jump_table(
 }
 
 fn collect_func_ifuncs(mod_new: &Module) -> HashMap<&str, i32> {
+    tracing::info!("Collecting ifuncs from module");
     let mut name_to_ifunc_index = HashMap::new();
 
     for el in mod_new.elements.iter() {
@@ -179,6 +181,10 @@ fn collect_func_ifuncs(mod_new: &Module) -> HashMap<&str, i32> {
                 panic!("Unsupported element kind: {:?}", ref_type);
             }
         }
+    }
+
+    for data in mod_new.data.iter() {
+        tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
     }
 
     name_to_ifunc_index

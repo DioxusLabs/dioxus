@@ -22,14 +22,13 @@
                 fetch(jump.lib)
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
-                        const pageSize = 64 * 1024; // 64KB
+
+                        // const bss_start = base.memory.buffer.byteLength;
+                        const pageSize = 64 * 1024;
                         const ifunc_length = base.__indirect_function_table.length;
                         const data_start = Math.ceil((base.memory.buffer.byteLength / pageSize) + 1 ) * pageSize;
-                        base.memory.grow(20) // each page is 64kb, let's grow by 1 page
-                        // const bss_start = base.memory.buffer.byteLength;
-                        // base.memory.grow(3)// each page is 64kb, let's grow by 1 page
+                        base.memory.grow(20)
                         base.__indirect_function_table.grow(2000);
-
 
                         let imports = {
                             env: {
@@ -47,88 +46,12 @@
                             imports.env[key] = base[key];
                         }
                         return WebAssembly.instantiate(bytes, imports);
-                    })
-
-                    // function pointers correlate directly to exports.table.get(pointer!)
-                    //
-                    // object.keys(patch_exports) -> gives us names of functions
-                    //
-                    // we end up making a map of original ptr to... what??
-                    //
-                    // if we load the new module into the same table then its pointers should be valid too?
-                    //
-                    // the jump table can continue to be a map of ptr -> ptr
-                    //
-                    // but we somehow need to get the exports as pointers too
-                    //
-                    // the exported functions return a "pointer object" whose `name` field *is the pointer* (but as a string)
-                    //
-                    // so in theory we....
-                    //  object.values(patch.exports) => [name, ptr]
-                    //  source.exports[name].name => ptr
-                    //
-                    // call patchJumpTable({ptr: ptr})
-                    .then((patch) => {
+                    }).then((patch) => {
                         window.patch = patch;
                         window.jump = jump;
-
-                        console.log("jump ttable:", jump);
                         base["__subsecond_wasm_patch"](jump.map);
-
-                        // // We're going to match up export to export and then ifunc entry to ifunc entry
-                        // // We're going to build a map of old -> new ifunc entries
-                        // const patchExports = patch.instance.exports;
-
-                        // let nameToNativeMain = Object.fromEntries(
-                        //     Object.keys(wasmExports).map((key) => [key, wasmExports[key].name]).filter(([key, name]) => name !== undefined)
-                        // );
-
-                        // let nameToNativePatch = Object.fromEntries(
-                        //     Object.keys(patchExports).map((key) => [key, patchExports[key].name]).filter(([key, name]) => name !== undefined)
-                        // );
-
-                        // let nativeToIndex = Object.fromEntries(
-                        //     [...Array(wasmExports.__indirect_function_table.length).keys()].map((i) => {
-                        //         let entry = wasmExports.__indirect_function_table.get(i);
-                        //         if (entry === null) {
-                        //             return ["__", 0];
-                        //         }
-                        //         if (entry.name === undefined) {
-                        //             return ["__", 0];
-                        //         }
-                        //         return [entry.name, i];
-                        //     })
-                        // );
-
-                        // let jumpTable = Object.fromEntries(
-                        //     Object.entries(nameToNativePatch)
-                        //         .map(([fnName, nativeName]) => {
-                        //             let oldIndex = nativeToIndex[nameToNativeMain[fnName]];
-                        //             let newIndex = nativeToIndex[nativeName];
-                        //             return [fnName, [oldIndex, newIndex]];
-                        //         })
-                        //         .filter(([name, [oldIndex, newIndex]]) =>
-                        //             oldIndex !== undefined && newIndex !== undefined
-                        //         )
-                        // );
-
-                        // let patchList = Object.keys(patchExports).flatMap((key) => {
-                        //     let entry = jumpTable[key];
-                        //     if (entry === undefined) {
-                        //         return [];
-                        //     }
-                        //     let a = entry[0];
-                        //     let b = entry[1];
-
-                        //     if (a === undefined || b === undefined) {
-                        //         return [];
-                        //     }
-
-                        //     return [a, b];
-                        // });
-
-                        // base["__subsecond_wasm_patch"](patchList);
                     });
+
             }
 
 
@@ -173,3 +96,85 @@
         <div id="main"></div>
     </body>
 </html>
+<!--
+
+// function pointers correlate directly to exports.table.get(pointer!)
+//
+// object.keys(patch_exports) -> gives us names of functions
+//
+// we end up making a map of original ptr to... what??
+//
+// if we load the new module into the same table then its pointers should be valid too?
+//
+// the jump table can continue to be a map of ptr -> ptr
+//
+// but we somehow need to get the exports as pointers too
+//
+// the exported functions return a "pointer object" whose `name` field *is the pointer* (but as a string)
+//
+// so in theory we....
+//  object.values(patch.exports) => [name, ptr]
+//  source.exports[name].name => ptr
+//
+// call patchJumpTable({ptr: ptr})
+.then((patch) => {
+    window.patch = patch;
+    window.jump = jump;
+
+    console.log("jump ttable:", jump);
+    base["__subsecond_wasm_patch"](jump.map);
+
+    // // We're going to match up export to export and then ifunc entry to ifunc entry
+    // // We're going to build a map of old -> new ifunc entries
+    // const patchExports = patch.instance.exports;
+
+    // let nameToNativeMain = Object.fromEntries(
+    //     Object.keys(wasmExports).map((key) => [key, wasmExports[key].name]).filter(([key, name]) => name !== undefined)
+    // );
+
+    // let nameToNativePatch = Object.fromEntries(
+    //     Object.keys(patchExports).map((key) => [key, patchExports[key].name]).filter(([key, name]) => name !== undefined)
+    // );
+
+    // let nativeToIndex = Object.fromEntries(
+    //     [...Array(wasmExports.__indirect_function_table.length).keys()].map((i) => {
+    //         let entry = wasmExports.__indirect_function_table.get(i);
+    //         if (entry === null) {
+    //             return ["__", 0];
+    //         }
+    //         if (entry.name === undefined) {
+    //             return ["__", 0];
+    //         }
+    //         return [entry.name, i];
+    //     })
+    // );
+
+    // let jumpTable = Object.fromEntries(
+    //     Object.entries(nameToNativePatch)
+    //         .map(([fnName, nativeName]) => {
+    //             let oldIndex = nativeToIndex[nameToNativeMain[fnName]];
+    //             let newIndex = nativeToIndex[nativeName];
+    //             return [fnName, [oldIndex, newIndex]];
+    //         })
+    //         .filter(([name, [oldIndex, newIndex]]) =>
+    //             oldIndex !== undefined && newIndex !== undefined
+    //         )
+    // );
+
+    // let patchList = Object.keys(patchExports).flatMap((key) => {
+    //     let entry = jumpTable[key];
+    //     if (entry === undefined) {
+    //         return [];
+    //     }
+    //     let a = entry[0];
+    //     let b = entry[1];
+
+    //     if (a === undefined || b === undefined) {
+    //         return [];
+    //     }
+
+    //     return [a, b];
+    // });
+
+    // base["__subsecond_wasm_patch"](patchList);
+}); -->

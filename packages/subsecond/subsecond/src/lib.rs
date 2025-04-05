@@ -538,7 +538,6 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
     let mut map = AddressMap::default();
     for entry in entries.iter() {
         let entry = entry.unchecked_into::<js_sys::Array>();
-        web_sys::console::log_1(&format!("e: {:#?}", entry).into());
 
         let key = entry.get(0);
         let value = entry.get(1);
@@ -556,49 +555,17 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
     }
 
     web_sys::console::log_1(&format!("Map: {:#?}", map).into());
-    // let keys = Object::keys(&as_obj);
-    // let values = Object::values(&as_obj);
-    // let keys: Vec<u64> = keys
-    //     .iter()
-    //     .map(|f| f.as_string().unwrap().parse().unwrap())
-    //     .collect();
-
-    // let values: Vec<u64> = values.iter().map(|f| f.as_f64().unwrap() as u64).collect();
-
-    // let map = Reflect::get(&as_obj, &"map".into()).unwrap_throw();
-
-    // let mut table = serde_wasm_bindgen::from_value::<JumpTable>(value).unwrap_throw();
-
-    // tracing::info!("Applying patch: {:#?}", table);
 
     let mut table: JumpTable = JumpTable {
         aslr_reference: 0,
         lib: PathBuf::from("patch.wasm"),
         map,
+        got: vec![],
         new_base_address: 0,
         old_base_address: 0,
     };
 
     unsafe { apply_patch(table) }
-
-    // [Log] skipping – "__dso_handle" (patch_console.js, line 1)
-    // [Log] skipping – "__data_end" (patch_console.js, line 1)
-    // [Log] skipping – "__stack_low" (patch_console.js, line 1)
-    // [Log] skipping – "__stack_high" (patch_console.js, line 1)
-    // [Log] skipping – "__global_base" (patch_console.js, line 1)
-    // [Log] skipping – "__heap_base" (patch_console.js, line 1)
-    // [Log] skipping – "__heap_end" (patch_console.js, line 1)
-    // [Log] skipping – "__memory_base" (patch_console.js, line 1)
-    // [Log] skipping – "__table_base" (patch_console.js, line 1)
-
-    // let mut idx = 0;
-    // for _ in 0..pointers.length() {
-    //     let left = pointers.get_index(idx);
-    //     let right = pointers.get_index(idx + 1);
-    //     table.map.insert(left as u64, right as u64);
-    //     idx += 2
-    // }
-    // run_wasm_patch(table).await.unwrap_throw();
 }
 
 pub async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {

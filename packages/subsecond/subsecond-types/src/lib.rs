@@ -18,6 +18,11 @@ pub struct JumpTable {
     /// you will need to cast to `usize` before using them.
     pub map: AddressMap,
 
+    /// Global offset table required to relocate the data segment
+    ///
+    /// This is used mainly for WASM to relocate the data segment to the correct address
+    pub got: Vec<(String, u64)>,
+
     /// The location of the aslr reference in the binary, used to calcualte offsets for the jump table
     pub aslr_reference: u64,
 
