@@ -106,10 +106,10 @@ export class NativeInterpreter extends JSChannel_ {
     return JSON.stringify({ method, params });
   }
 
-  scrollTo(id: NodeId, behavior: ScrollBehavior): boolean {
+  scrollTo(id: NodeId, options: ScrollIntoViewOptions): boolean {
     const node = this.nodes[id];
     if (node instanceof HTMLElement) {
-      node.scrollIntoView({ behavior });
+      node.scrollIntoView(options);
       return true;
     }
     return false;
