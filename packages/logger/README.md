@@ -65,7 +65,7 @@ fn App() -> Element {
   }
 }
 ```
-For non-wasm targets, the `env-filter` feature enables runtime filtering based on the `RUST_LOG` environment variable. e.g. `RUST_LOG=none,myAppName=trace`, see [here](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives) for syntax.
+For non-wasm targets, runtime filtering is based on the `RUST_LOG` environment variable. e.g. for `RUST_LOG=none,crateName=trace` only logs trace and above for `crateName` with be captured. See [here](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives) for syntax. For crates with `-` in the name, these need to be changed to `_`.
 
 ## Platform Support
 Dioxus logger will eventually support every target that Dioxus does. Currently mobile and TUI are not supported.
