@@ -331,6 +331,9 @@ impl AppRunner {
             .await?;
         self.builds_opened += 1;
 
+        // Save the artifacts and clear the patches(?)
+        self.client.artifacts = Some(app);
+
         Ok(())
     }
 
