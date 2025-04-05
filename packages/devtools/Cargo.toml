@@ -25,6 +25,7 @@ warnings.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tungstenite = { version = "0.23.0" }
+memmap2 = { version = "0.9.5" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

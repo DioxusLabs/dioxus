@@ -205,7 +205,7 @@ use std::{
     ops::Deref,
     os::raw::c_void,
     panic::{panic_any, AssertUnwindSafe, UnwindSafe},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -374,6 +374,11 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {
+        // on android we try to cirumvent permissions issues by copying the library to a memmap and then libloading that
+        #[cfg(target_os = "android")]
+        let lib = { Box::leak(Box::new(android_memmap_dlopen(&jump_table.lib))) };
+
+        #[cfg(not(target_os = "android"))]
         let lib = Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()));
 
         // Use the `aslr_offset` symbol as a sentinel for the current executable. This is basically a
@@ -423,6 +428,78 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
                 handler();
             });
     }
+}
+
+#[cfg(target_os = "android")]
+unsafe fn android_memmap_dlopen(file: &Path) -> libloading::Library {
+    use std::ffi::{c_void, CStr, CString};
+    use std::os::fd::{AsRawFd, BorrowedFd};
+    use std::ptr;
+
+    #[repr(C)]
+    struct ExtInfo {
+        flags: u64,
+        reserved_addr: *const c_void,
+        reserved_size: libc::size_t,
+        relro_fd: libc::c_int,
+        library_fd: libc::c_int,
+        library_fd_offset: libc::off64_t,
+        library_namespace: *const c_void,
+    }
+
+    extern "C" {
+        fn android_dlopen_ext(
+            filename: *const libc::c_char,
+            flags: libc::c_int,
+            ext_info: *const ExtInfo,
+        ) -> *const c_void;
+    }
+
+    use memmap2::MmapAsRawDesc;
+    use std::os::unix::prelude::FromRawFd;
+    use std::os::unix::prelude::IntoRawFd;
+
+    let contents = std::fs::read(file).unwrap();
+    let mut mfd = memfd::MemfdOptions::default()
+        .create("subsecond-patch")
+        .unwrap();
+    mfd.as_file().set_len(contents.len() as u64).unwrap();
+
+    let raw_fd = mfd.into_raw_fd();
+
+    let mut map = memmap2::MmapMut::map_mut(raw_fd).unwrap();
+    map.copy_from_slice(&contents);
+    let map = map.make_exec().unwrap();
+
+    let filename = c"/subsecond-patch";
+    let info = ExtInfo {
+        flags: 0x10, // ANDROID_DLEXT_USE_LIBRARY_FD
+        reserved_addr: ptr::null(),
+        reserved_size: 0,
+        relro_fd: 0,
+        library_fd: raw_fd,
+        library_fd_offset: 0,
+        library_namespace: ptr::null(),
+    };
+
+    let flags = libloading::os::unix::RTLD_LAZY | libloading::os::unix::RTLD_LOCAL;
+
+    let handle = libloading::os::unix::with_dlerror(
+        || {
+            let ptr = android_dlopen_ext(filename.as_ptr() as _, flags, &info);
+            if ptr.is_null() {
+                return None;
+            } else {
+                return Some(ptr);
+            }
+        },
+        |err| err.to_str().unwrap().to_string(),
+    )
+    .unwrap();
+
+    let lib = unsafe { libloading::os::unix::Library::from_raw(handle as *mut c_void) };
+    let lib: libloading::Library = lib.into();
+    lib
 }
 
 #[inline(never)]

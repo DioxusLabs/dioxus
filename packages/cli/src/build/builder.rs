@@ -592,12 +592,12 @@ impl AppBuilder {
     ) -> Result<PathBuf> {
         // ie - "/data/data/com.example.SubsecondHarness/lib/"
         // you must be root to do this. `adb root`
-        let target = PathBuf::from("/data/data/")
-            .join(self.build.bundle_identifier())
-            .join("files")
-            .join("lib")
-            .join(bundled_name);
-
+        // let target = PathBuf::from("/data/data/")
+        //     .join(self.build.bundle_identifier())
+        //     .join("files")
+        //     .join("lib")
+        //     .join(bundled_name);
+        let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
 
         let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
@@ -1023,10 +1023,10 @@ We checked the folder: {}
         tokio::task::spawn(async move {
             let adb = crate::build::android_tools().unwrap().adb;
 
-            // call `adb root` so we can push patches to the device
-            if let Err(e) = Command::new(&adb).arg("root").output().await {
-                tracing::error!("Failed to run `adb root`: {e}");
-            }
+            // // call `adb root` so we can push patches to the device
+            // if let Err(e) = Command::new(&adb).arg("root").output().await {
+            //     tracing::error!("Failed to run `adb root`: {e}");
+            // }
 
             let port = devserver_socket.port();
             if let Err(e) = Command::new(&adb)

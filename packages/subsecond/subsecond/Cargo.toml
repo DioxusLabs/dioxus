@@ -21,5 +21,8 @@ web-sys = { version = "*", features = ["FetchEvent", "Request", "Window", "Respo
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libloading = "0.8.6"
 libc = "0.2.170"
-memmap = "0.7.0"
+memmap2 = "0.9.5"
 dbg_breakpoint = "0.1.1"
+
+[target.'cfg(target_os = "android")'.dependencies]
+memfd = { version = "0.6.4" }

@@ -2340,13 +2340,13 @@ impl BuildRequest {
         match self.platform {
             Platform::MacOS => {
                 let dest = self.root_dir().join("Contents").join("Info.plist");
-                let plist = self.macos_plist_contents()?;
+                let plist = self.info_plist_contents(self.platform)?;
                 std::fs::write(dest, plist)?;
             }
 
             Platform::Ios => {
                 let dest = self.root_dir().join("Info.plist");
-                let plist = self.ios_plist_contents()?;
+                let plist = self.info_plist_contents(self.platform)?;
                 std::fs::write(dest, plist)?;
             }
 
@@ -2605,32 +2605,40 @@ impl BuildRequest {
         Ok(())
     }
 
-    fn macos_plist_contents(&self) -> Result<String> {
-        handlebars::Handlebars::new()
-            .render_template(
-                include_str!("../../assets/macos/mac.plist.hbs"),
-                &InfoPlistData {
-                    display_name: self.bundled_app_name(),
-                    bundle_name: self.bundled_app_name(),
-                    executable_name: self.platform_exe_name(),
-                    bundle_identifier: self.bundle_identifier(),
-                },
-            )
-            .map_err(|e| e.into())
-    }
+    fn info_plist_contents(&self, platform: Platform) -> Result<String> {
+        #[derive(serde::Serialize)]
+        pub struct InfoPlistData {
+            pub display_name: String,
+            pub bundle_name: String,
+            pub bundle_identifier: String,
+            pub executable_name: String,
+        }
 
-    fn ios_plist_contents(&self) -> Result<String> {
-        handlebars::Handlebars::new()
-            .render_template(
-                include_str!("../../assets/ios/ios.plist.hbs"),
-                &InfoPlistData {
-                    display_name: self.bundled_app_name(),
-                    bundle_name: self.bundled_app_name(),
-                    executable_name: self.platform_exe_name(),
-                    bundle_identifier: self.bundle_identifier(),
-                },
-            )
-            .map_err(|e| e.into())
+        match platform {
+            Platform::MacOS => handlebars::Handlebars::new()
+                .render_template(
+                    include_str!("../../assets/macos/mac.plist.hbs"),
+                    &InfoPlistData {
+                        display_name: self.bundled_app_name(),
+                        bundle_name: self.bundled_app_name(),
+                        executable_name: self.platform_exe_name(),
+                        bundle_identifier: self.bundle_identifier(),
+                    },
+                )
+                .map_err(|e| e.into()),
+            Platform::Ios => handlebars::Handlebars::new()
+                .render_template(
+                    include_str!("../../assets/ios/ios.plist.hbs"),
+                    &InfoPlistData {
+                        display_name: self.bundled_app_name(),
+                        bundle_name: self.bundled_app_name(),
+                        executable_name: self.platform_exe_name(),
+                        bundle_identifier: self.bundle_identifier(),
+                    },
+                )
+                .map_err(|e| e.into()),
+            _ => Err(anyhow::anyhow!("Unsupported platform for Info.plist").into()),
+        }
     }
 
     /// Run any final tools to produce apks or other artifacts we might need.
@@ -2854,14 +2862,6 @@ impl BuildRequest {
         _ = std::fs::remove_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(&cache_dir);
     }
-}
-
-#[derive(serde::Serialize)]
-pub struct InfoPlistData {
-    pub display_name: String,
-    pub bundle_name: String,
-    pub bundle_identifier: String,
-    pub executable_name: String,
 }
 
 // impl std::fmt::Display for Arch {

@@ -1,8 +1,9 @@
 {
-    // "rust-analyzer.cargo.target": [
-    //     // "wasm32-unknown-unknown",
-    //     // "aarch64-apple-darwin"
-    // ],
+    "rust-analyzer.cargo.target": [
+        "aarch64-apple-darwin",
+        "aarch64-linux-android",
+        // "wasm32-unknown-unknown",
+    ],
     "dioxus.formatOnSave": "disabled",
     "rust-analyzer.check.extraArgs": [
         "--tests",
