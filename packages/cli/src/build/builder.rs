@@ -688,8 +688,6 @@ impl AppBuilder {
             .arg("install")
             .arg("booted")
             .arg(self.build.root_dir())
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
             .output()
             .await?;
 

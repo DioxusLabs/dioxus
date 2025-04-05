@@ -211,7 +211,9 @@ impl AppRunner {
         // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
         // we could spawn a thread to search the FS and then when it returns we can fill the filemap
         // in testing, if this hits a massive directory, it might take several seconds with no feedback.
-        runner.load_filemap_rsx();
+        // really, we should be using depinfo to get the files that are actually used, but the depinfo file might not be around yet
+        // todo(jon): see if we can just guess the depinfo file before it generates. might be stale but at least it catches most of the files
+        runner.load_rsx_filemap();
 
         Ok(runner)
     }
@@ -488,7 +490,9 @@ impl AppRunner {
         }
     }
 
-    fn load_filemap_rsx(&mut self) {
+    fn load_rsx_filemap(&mut self) {
+        // https://doc.rust-lang.org/stable/nightly-rustc/cargo/core/compiler/fingerprint/index.html#dep-info-files
+        // todo: use depinfo instead
         self.fill_filemap(self.client.build.crate_dir());
 
         for krate in self.all_watched_crates() {

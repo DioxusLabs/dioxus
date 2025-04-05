@@ -1048,8 +1048,6 @@ impl BuildRequest {
             .arg("-v")
             .arg("-o") // is it "-o" everywhere?
             .arg(&self.patch_exe(time_start))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
             .output()
             .await?;
 
@@ -1418,8 +1416,6 @@ impl BuildRequest {
             .arg("unstable-options")
             .args(self.build_arguments(ctx))
             .envs(self.env_vars(ctx)?)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
             .output()
             .await?;
 
@@ -2647,8 +2643,6 @@ impl BuildRequest {
             let output = Command::new(self.gradle_exe()?)
                 .arg("assembleDebug")
                 .current_dir(self.root_dir())
-                .stderr(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
                 .output()
                 .await?;
 

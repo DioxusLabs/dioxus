@@ -48,11 +48,7 @@ impl LinkAction {
                 let mut cmd = std::process::Command::new(linker);
                 cmd.args(args.iter().skip(1));
                 cmd.args(extra_flags);
-                let res = cmd
-                    .stderr(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .output()
-                    .expect("Failed to run android linker");
+                let res = cmd.output().expect("Failed to run android linker");
 
                 let err = String::from_utf8_lossy(&res.stderr);
                 std::fs::write(
