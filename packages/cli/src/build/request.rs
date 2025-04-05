@@ -595,7 +595,7 @@ impl BuildRequest {
     }
 
     async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
-        let start = SystemTime::now();
+        let time_start = SystemTime::now();
 
         let mut cmd = self.build_command(ctx)?;
 
@@ -710,15 +710,16 @@ impl BuildRequest {
         }
 
         let exe = output_location.context("Build did not return an executable")?;
-
+        let assets = self.collect_assets(&exe)?;
+        let time_end = SystemTime::now();
         tracing::debug!("Build completed successfully - output location: {:?}", exe);
 
         Ok(BuildArtifacts {
             exe,
             direct_rustc,
-            time_start: start,
-            time_end: SystemTime::now(),
-            assets: Default::default(),
+            time_start,
+            time_end,
+            assets,
         })
     }
 
@@ -726,7 +727,7 @@ impl BuildRequest {
     ///
     /// This uses "known paths" that have stayed relatively stable during cargo's lifetime.
     /// One day this system might break and we might need to go back to using the linker approach.
-    async fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
+    fn collect_assets(&self, exe: &Path) -> Result<AssetManifest> {
         tracing::debug!("Collecting assets ...");
 
         if self.skip_assets {
@@ -2311,7 +2312,9 @@ impl BuildRequest {
         }
 
         // Check if any of the features enables the "fullstack" feature
-        todo!("check if any of the features enables the fullstack feature");
+        // todo!("check if any of the features enables the fullstack feature");
+
+        false
     }
 
     // /// We always put the server in the `web` folder!

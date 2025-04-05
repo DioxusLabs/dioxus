@@ -51,7 +51,7 @@ impl Workspace {
 
         let wasm_opt = which::which("wasm-opt").ok();
 
-        let ignore = todo!();
+        let ignore = Self::workspace_gitignore(krates.workspace_root().as_std_path());
 
         Ok(Arc::new(Self {
             krates,
@@ -198,21 +198,21 @@ impl Workspace {
     /// Create a new gitignore map for this target crate
     ///
     /// todo(jon): this is a bit expensive to build, so maybe we should cache it?
-    pub fn workspace_gitignore(&self) -> Gitignore {
-        todo!()
-        // let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(&crate_dir);
-        // ignore_builder.add(crate_dir.join(".gitignore"));
+    pub fn workspace_gitignore(workspace_dir: &Path) -> Gitignore {
+        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(&workspace_dir);
+        ignore_builder.add(workspace_dir.join(".gitignore"));
 
+        // todo!()
         // let workspace_dir = self.workspace_dir();
         // ignore_builder.add(workspace_dir.join(".gitignore"));
 
-        // for path in Self::default_ignore_list() {
-        //     ignore_builder
-        //         .add_line(None, path)
-        //         .expect("failed to add path to file excluded");
-        // }
+        for path in Self::default_ignore_list() {
+            ignore_builder
+                .add_line(None, path)
+                .expect("failed to add path to file excluded");
+        }
 
-        // ignore_builder.build().unwrap()
+        ignore_builder.build().unwrap()
     }
 
     pub fn ignore_for_krate(&self, path: &Path) -> ignore::gitignore::Gitignore {

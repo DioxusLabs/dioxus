@@ -192,14 +192,14 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                         screen.push_stdio(platform, msg, tracing::Level::ERROR);
                     }
                     BuilderUpdate::ProcessExited { status } => {
-                        if !status.success() {
-                            tracing::error!("Application [{platform}] exited with error: {status}");
-                        } else {
+                        if status.success() {
                             tracing::info!(
                                 r#"Application [{platform}] exited gracefully.
-                        - To restart the app, press `r` to rebuild or `o` to open
-                        - To exit the server, press `ctrl+c`"#
+               • To restart the app, press `r` to rebuild or `o` to open
+               • To exit the server, press `ctrl+c`"#
                             );
+                        } else {
+                            tracing::error!("Application [{platform}] exited with error: {status}");
                         }
                     }
                 }

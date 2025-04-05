@@ -134,6 +134,7 @@ memoize = "0.5.1"
 
 memmap = "0.7.0"
 async-once-cell.workspace = true
+depinfo = { workspace = true }
 
 [build-dependencies]
 built = { version = "=0.7.4", features = ["git2"] }
