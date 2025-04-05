@@ -253,7 +253,7 @@ impl Bundle {
             settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
         }
 
-        settings = settings.target(build.target.to_string());
+        settings = settings.target(build.triple.to_string());
 
         let settings = settings
             .build()

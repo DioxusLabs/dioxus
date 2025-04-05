@@ -292,7 +292,7 @@ pub(crate) struct BuildRequest {
     pub(crate) platform: Platform,
 
     ///
-    pub(crate) target: Triple,
+    pub(crate) triple: Triple,
 
     pub(crate) device: bool,
 
@@ -353,6 +353,7 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
+    pub(crate) mode: BuildMode,
 }
 
 pub(crate) static PROFILE_WASM: &str = "wasm-dev";
@@ -545,7 +546,7 @@ impl BuildRequest {
             crate_package,
             crate_target,
             profile,
-            target,
+            triple: target,
             device,
             workspace,
             config,
@@ -569,7 +570,8 @@ impl BuildRequest {
         // Write the build artifacts to the bundle on the disk
         match ctx.mode {
             BuildMode::Thin { aslr_reference, .. } => {
-                self.write_patch(aslr_reference).await?;
+                self.write_patch(aslr_reference, artifacts.time_start)
+                    .await?;
             }
 
             BuildMode::Base | BuildMode::Fat => {
@@ -712,6 +714,7 @@ impl BuildRequest {
         let exe = output_location.context("Build did not return an executable")?;
         let assets = self.collect_assets(&exe)?;
         let time_end = SystemTime::now();
+        let mode = ctx.mode.clone();
         tracing::debug!("Build completed successfully - output location: {:?}", exe);
 
         Ok(BuildArtifacts {
@@ -720,6 +723,7 @@ impl BuildRequest {
             time_start,
             time_end,
             assets,
+            mode,
         })
     }
 
@@ -956,32 +960,28 @@ impl BuildRequest {
     }
 
     /// libpatch-{time}.(so/dll/dylib) (next to the main exe)
-    pub fn patch_exe(&self) -> PathBuf {
-        todo!()
-        // let path = self.main_exe().with_file_name(format!(
-        //     "libpatch-{}",
-        //     self.time_start
-        //         .duration_since(UNIX_EPOCH)
-        //         .unwrap()
-        //         .as_millis(),
-        // ));
+    pub fn patch_exe(&self, time_start: SystemTime) -> PathBuf {
+        let path = self.main_exe().with_file_name(format!(
+            "libpatch-{}",
+            time_start.duration_since(UNIX_EPOCH).unwrap().as_millis(),
+        ));
 
-        // let extension = match self.target.operating_system {
-        //     OperatingSystem::Darwin(_) => "dylib",
-        //     OperatingSystem::MacOSX(_) => "dylib",
-        //     OperatingSystem::IOS(_) => "dylib",
-        //     OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
-        //     OperatingSystem::Windows => "dll",
-        //     OperatingSystem::Linux => "so",
-        //     OperatingSystem::Wasi => "wasm",
-        //     _ => "",
-        // };
+        let extension = match self.triple.operating_system {
+            OperatingSystem::Darwin(_) => "dylib",
+            OperatingSystem::MacOSX(_) => "dylib",
+            OperatingSystem::IOS(_) => "dylib",
+            OperatingSystem::Unknown if self.platform == Platform::Web => "wasm",
+            OperatingSystem::Windows => "dll",
+            OperatingSystem::Linux => "so",
+            OperatingSystem::Wasi => "wasm",
+            _ => "",
+        };
 
-        // path.with_extension(extension)
+        path.with_extension(extension)
     }
 
     /// Run our custom linker setup to generate a patch file in the right location
-    async fn write_patch(&self, aslr_reference: u64) -> Result<()> {
+    async fn write_patch(&self, aslr_reference: u64, time_start: SystemTime) -> Result<()> {
         tracing::debug!("Patching existing bundle");
 
         let raw_args = std::fs::read_to_string(&self.link_args_file())
@@ -1002,7 +1002,7 @@ impl BuildRequest {
         let resolved_patch_bytes = subsecond_cli_support::resolve_undefined(
             &orig_exe,
             &object_files,
-            &self.target,
+            &self.triple,
             aslr_reference,
         )
         .expect("failed to resolve patch symbols");
@@ -1015,7 +1015,7 @@ impl BuildRequest {
             Platform::Android => {
                 let tools =
                     crate::build::android_tools().context("Could not determine android tools")?;
-                tools.android_cc(&self.target)
+                tools.android_cc(&self.triple)
             }
 
             // Note that I think rust uses rust-lld now, so we need to respect its argument profile
@@ -1047,7 +1047,7 @@ impl BuildRequest {
             .args(thin_args)
             .arg("-v")
             .arg("-o") // is it "-o" everywhere?
-            .arg(&self.patch_exe())
+            .arg(&self.patch_exe(time_start))
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
@@ -1055,7 +1055,7 @@ impl BuildRequest {
 
         let errs = String::from_utf8_lossy(&res.stderr);
         if !errs.is_empty() {
-            if !self.patch_exe().exists() {
+            if !self.patch_exe(time_start).exists() {
                 tracing::error!("Failed to generate patch: {}", errs.trim());
             } else {
                 tracing::debug!("Warnings during thin linking: {}", errs.trim());
@@ -1085,7 +1085,7 @@ impl BuildRequest {
     fn thin_link_args(&self, original_args: &[&str], aslr_reference: u64) -> Result<Vec<String>> {
         use target_lexicon::OperatingSystem;
 
-        let triple = self.target.clone();
+        let triple = self.triple.clone();
         let mut args = vec![];
 
         tracing::debug!("original args:\n{}", original_args.join("\n"));
@@ -1269,7 +1269,7 @@ impl BuildRequest {
 
         // Pass the appropriate target to cargo. We *always* specify a target which is somewhat helpful for preventing thrashing
         cargo_args.push("--target".to_string());
-        cargo_args.push(self.target.to_string());
+        cargo_args.push(self.triple.to_string());
 
         // We always run in verbose since the CLI itself is the one doing the presentation
         cargo_args.push("--verbose".to_string());
@@ -1510,7 +1510,7 @@ impl BuildRequest {
                 env_vars.push((
                     LinkAction::ENV_VAR_NAME,
                     LinkAction::ThinLink {
-                        triple: self.target.clone(),
+                        triple: self.triple.clone(),
                         save_link_args: self.link_args_file(),
                     }
                     .to_json(),
@@ -1540,7 +1540,7 @@ impl BuildRequest {
         rustf_flags: bool,
     ) -> Result<PathBuf> {
         let tools = crate::build::android_tools().context("Could not determine android tools")?;
-        let linker = tools.android_cc(&self.target);
+        let linker = tools.android_cc(&self.triple);
         let min_sdk_version = tools.min_sdk_version();
         let ar_path = tools.ar_path();
         let target_cc = tools.target_cc();
@@ -2685,7 +2685,7 @@ impl BuildRequest {
 
         // Rename it to Name-arch.aab
         let from = app_release.join("app-release.aab");
-        let to = app_release.join(format!("{}-{}.aab", self.bundled_app_name(), self.target));
+        let to = app_release.join(format!("{}-{}.aab", self.bundled_app_name(), self.triple));
 
         std::fs::rename(from, &to).context("Failed to rename aab")?;
 
@@ -2820,7 +2820,7 @@ impl BuildRequest {
                 .join("src")
                 .join("main")
                 .join("jniLibs")
-                .join(AndroidTools::android_jnilib(&self.target)),
+                .join(AndroidTools::android_jnilib(&self.triple)),
 
             // these are all the same, I think?
             Platform::Windows
@@ -2869,3 +2869,15 @@ pub struct InfoPlistData {
     pub bundle_identifier: String,
     pub executable_name: String,
 }
+
+// impl std::fmt::Display for Arch {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Arch::Arm => "armv7l",
+//             Arch::Arm64 => "aarch64",
+//             Arch::X86 => "i386",
+//             Arch::X64 => "x86_64",
+//         }
+//         .fmt(f)
+//     }
+// }

@@ -112,7 +112,7 @@ impl BuildRequest {
     pub(crate) async fn verify_android_tooling(&self) -> Result<()> {
         let android = crate::build::android_tools().context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?;
 
-        let linker = android.android_cc(&self.target);
+        let linker = android.android_cc(&self.triple);
 
         tracing::debug!("Verifying android linker: {linker:?}");
 

@@ -73,9 +73,15 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
 
         match msg {
             ServeUpdate::FilesChanged { files } => {
-                // if files.is_empty() || !args.should_hotreload() {
-                //     continue;
-                // }
+                if files.is_empty() || !builder.hot_reload {
+                    continue;
+                }
+
+                // For now, always run a patch instead of rsx hot-reload
+                builder.client.patch_rebuild(files);
+                builder.clear_hot_reload_changes();
+                builder.clear_cached_rsx();
+                devserver.start_patch().await
 
                 // let file = files[0].display().to_string();
                 // let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
@@ -170,18 +176,29 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                         tracing::error!("Build failed: {:?}", err);
                     }
                     BuilderUpdate::BuildReady { bundle } => {
-                        let handle = builder
-                            .open(
-                                bundle,
-                                devserver.devserver_address(),
-                                devserver.proxied_server_address(),
-                            )
-                            .await
-                            .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+                        match bundle.mode {
+                            BuildMode::Thin { .. } => {
+                                // We need to patch the app with the new bundle
+                                match builder.patch(&bundle).await {
+                                    Ok(jumptable) => devserver.send_patch(jumptable).await,
+                                    Err(_) => {}
+                                }
+                            }
+                            BuildMode::Base | BuildMode::Fat => {
+                                let handle = builder
+                                    .open(
+                                        bundle,
+                                        devserver.devserver_address(),
+                                        devserver.proxied_server_address(),
+                                    )
+                                    .await
+                                    .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
 
-                        // Update the screen + devserver with the new handle info
-                        if handle.is_ok() {
-                            devserver.send_reload_command().await
+                                // Update the screen + devserver with the new handle info
+                                if handle.is_ok() {
+                                    devserver.send_reload_command().await
+                                }
+                            }
                         }
                     }
                     BuilderUpdate::StdoutReceived { msg } => {

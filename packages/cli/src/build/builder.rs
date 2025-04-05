@@ -239,38 +239,26 @@ impl AppBuilder {
         update
     }
 
-    pub(crate) fn patch_rebuild(
-        &mut self,
-        direct_rustc: Vec<String>,
-        changed_files: Vec<PathBuf>,
-        aslr_offset: u64,
-    ) -> Result<()> {
-        todo!()
-        // // Initialize a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        // let request = BuildRequest::new(
-        //     args,
-        //     self.krate.clone(),
-        //     self.tx.clone(),
-        //     BuildMode::Thin {
-        //         direct_rustc,
-        //         changed_files,
-        //         aslr_reference: aslr_offset,
-        //     },
-        // )?;
+    pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>) {
+        // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
+        self.abort_all();
+        self.stage = BuildStage::Restarting;
 
-        // // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
-        // self.abort_all();
-        // self.request = request.clone();
-        // self.stage = BuildStage::Restarting;
-
-        // // This build doesn't have any extra special logging - rebuilds would get pretty noisy
-        // self.build = tokio::spawn(async move { request.build_all().await });
-
-        // Ok(())
+        // This build doesn't have any extra special logging - rebuilds would get pretty noisy
+        let request = self.build.clone();
+        let ctx = BuildContext {
+            tx: self.tx.clone(),
+            mode: BuildMode::Thin {
+                changed_files,
+                direct_rustc: self.artifacts.as_ref().unwrap().direct_rustc.clone(),
+                aslr_reference: self.aslr_reference.unwrap(),
+            },
+        };
+        self.build_task = tokio::spawn(async move { request.build(&ctx).await });
     }
 
     /// Restart this builder with new build arguments.
-    pub(crate) fn rebuild(&mut self) -> Result<()> {
+    pub(crate) fn rebuild(&mut self) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all();
@@ -283,8 +271,6 @@ impl AppBuilder {
             mode: BuildMode::Fat,
         };
         self.build_task = tokio::spawn(async move { request.build(&ctx).await });
-
-        Ok(())
     }
 
     /// Shutdown the current build process

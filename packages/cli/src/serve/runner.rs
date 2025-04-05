@@ -260,41 +260,41 @@ impl AppRunner {
             event = watcher_wait => {
                 let mut changes: Vec<_> = event.into_iter().collect();
 
-                    // Dequeue in bulk if we can, we might've received a lot of events in one go
-                    while let Some(event) = self.watcher_rx.try_next().ok().flatten() {
-                        changes.push(event);
+                // Dequeue in bulk if we can, we might've received a lot of events in one go
+                while let Some(event) = self.watcher_rx.try_next().ok().flatten() {
+                    changes.push(event);
+                }
+
+                // Filter the changes
+                let mut files: Vec<PathBuf> = vec![];
+
+                // Decompose the events into a list of all the files that have changed
+                for event in changes.drain(..) {
+                    // Make sure we add new folders to the watch list, provided they're not matched by the ignore list
+                    // We'll only watch new folders that are found under the crate, and then update our watcher to watch them
+                    // This unfortunately won't pick up new krates added "at a distance" - IE krates not within the workspace.
+                    if let EventKind::Create(_create_kind) = event.kind {
+                        // If it's a new folder, watch it
+                        // If it's a new cargo.toml (ie dep on the fly),
+                        // todo(jon) support new folders on the fly
                     }
 
-                    // Filter the changes
-                    let mut files: Vec<PathBuf> = vec![];
-
-                    // Decompose the events into a list of all the files that have changed
-                    for event in changes.drain(..) {
-                        // Make sure we add new folders to the watch list, provided they're not matched by the ignore list
-                        // We'll only watch new folders that are found under the crate, and then update our watcher to watch them
-                        // This unfortunately won't pick up new krates added "at a distance" - IE krates not within the workspace.
-                        if let EventKind::Create(_create_kind) = event.kind {
-                            // If it's a new folder, watch it
-                            // If it's a new cargo.toml (ie dep on the fly),
-                            // todo(jon) support new folders on the fly
-                        }
-
-                        for path in event.paths {
-                            // Workaround for notify and vscode-like editor:
-                            // when edit & save a file in vscode, there will be two notifications,
-                            // the first one is a file with empty content.
-                            // filter the empty file notification to avoid false rebuild during hot-reload
-                            if let Ok(metadata) = std::fs::metadata(&path) {
-                                if metadata.len() == 0 {
-                                    continue;
-                                }
+                    for path in event.paths {
+                        // Workaround for notify and vscode-like editor:
+                        // - when edit & save a file in vscode, there will be two notifications,
+                        // - the first one is a file with empty content.
+                        // - filter the empty file notification to avoid false rebuild during hot-reload
+                        if let Ok(metadata) = std::fs::metadata(&path) {
+                            if metadata.len() == 0 {
+                                continue;
                             }
-
-                            files.push(path);
                         }
-                    }
 
-                    tracing::debug!("Files changed: {files:?}");
+                        files.push(path);
+                    }
+                }
+
+                tracing::debug!("Files changed: {files:?}");
 
                 ServeUpdate::FilesChanged { files }
             }
@@ -670,43 +670,44 @@ impl AppRunner {
         }
     }
 
-    pub async fn patch(&mut self, bundle: &BuildArtifacts) -> Result<JumpTable> {
-        todo!()
-        // let original = self.running.as_ref().unwrap().app.main_exe();
-        // let new = bundle.patch_exe();
+    pub async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
+        let client = &self.client;
+        let original = client.build.main_exe();
+        let new = client.build.patch_exe(res.time_start);
+        let triple = client.build.triple.clone();
 
-        // let mut jump_table =
-        //     subsecond_cli_support::create_jump_table(&original, &new, &bundle.build.target)
-        //         .unwrap();
+        let mut jump_table =
+            subsecond_cli_support::create_jump_table(&original, &new, &triple).unwrap();
 
-        // // If it's android, we need to copy the assets to the device and then change the location of the patch
-        // if let Some(handle) = self.running.as_mut() {
-        //     if handle.app.build.platform == Platform::Android {
-        //         jump_table.lib = handle
-        //             .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
-        //             .await?;
-        //     }
-        // }
+        // If it's android, we need to copy the assets to the device and then change the location of the patch
+        if client.build.platform == Platform::Android {
+            jump_table.lib = client
+                .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
+                .await?;
+        }
 
-        // let changed_files = match &bundle.build.mode {
-        //     BuildMode::Thin { changed_files, .. } => changed_files.clone(),
-        //     _ => vec![],
-        // };
+        let changed_files = match &res.mode {
+            BuildMode::Thin { changed_files, .. } => changed_files.clone(),
+            _ => vec![],
+        };
 
-        // let changed_file = changed_files.first().unwrap();
-        // tracing::info!(
-        //     "Hot-patching: {} in {:?}ms",
-        //     changed_file
-        //         .strip_prefix(std::env::current_dir().unwrap())
-        //         .unwrap_or_else(|_| changed_file.as_path())
-        //         .display(),
-        //     SystemTime::now()
-        //         .duration_since(bundle.time_start)
-        //         .unwrap()
-        //         .as_millis()
-        // );
+        let changed_file = changed_files.first().unwrap();
+        tracing::info!(
+            "Hot-patching: {} in {:?}ms",
+            changed_file
+                .strip_prefix(std::env::current_dir().unwrap())
+                .unwrap_or_else(|_| changed_file.as_path())
+                .display(),
+            SystemTime::now()
+                .duration_since(res.time_start)
+                .unwrap()
+                .as_millis()
+        );
 
-        // Ok(jump_table)
+        // Save this patch
+        self.client.patches.push(jump_table.clone());
+
+        Ok(jump_table)
     }
 
     pub(crate) async fn handle_ws_message(
@@ -733,14 +734,13 @@ impl AppRunner {
             return Ok(());
         };
 
-        // tracing::debug!("Setting aslr_reference: {aslr_reference}");
-        // self.aslr_reference = Some(aslr_reference);
-        todo!("aslr reference");
+        tracing::debug!("Setting aslr_reference: {aslr_reference}");
+        self.client.aslr_reference = Some(aslr_reference);
 
         Ok(())
     }
 
-    pub fn rebuild_all(&mut self) -> Result<()> {
+    pub fn rebuild_all(&mut self) {
         self.client.rebuild()
     }
 
