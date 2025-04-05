@@ -1,19 +1,13 @@
 use dioxus::prelude::*;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_router::components::HistoryProvider;
-use std::{rc::Rc, str::FromStr};
+use std::rc::Rc;
 
-fn prepare<R: Routable>() -> String
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
+fn prepare<R: Routable>() -> String {
     prepare_at::<R>("/")
 }
 
-fn prepare_at<R: Routable>(at: impl ToString) -> String
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
+fn prepare_at<R: Routable>(at: impl ToString) -> String {
     let mut vdom = VirtualDom::new_with_props(
         App,
         AppProps::<R> {
@@ -46,10 +40,7 @@ where
     }
 
     #[allow(non_snake_case)]
-    fn App<R: Routable>(props: AppProps<R>) -> Element
-    where
-        <R as FromStr>::Err: std::fmt::Display,
-    {
+    fn App<R: Routable>(props: AppProps<R>) -> Element {
         rsx! {
             h1 { "App" }
             HistoryProvider {
@@ -429,5 +420,33 @@ fn with_child_route() {
     assert_eq!(
         prepare_at::<Route>("/child"),
         "<h1>App</h1><a href=\"/test\">Parent Link</a><a href=\"/child/this-is-a-child-route\">Child Link 1</a><a href=\"/child/this-is-a-child-route\">Child Link 2</a>"
+    );
+}
+
+#[test]
+fn with_hash_segment() {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/#:data")]
+        Root { data: String },
+    }
+
+    #[component]
+    fn Root(data: String) -> Element {
+        rsx! {
+            Link {
+                to: Route::Root { data: "test".to_string() },
+                "Link"
+            }
+            Link {
+                to: Route::Root { data: "".to_string() },
+                "Empty"
+            }
+        }
+    }
+
+    assert_eq!(
+        prepare_at::<Route>("/#test"),
+        "<h1>App</h1><a href=\"/#test\" aria-current=\"page\">Link</a><a href=\"/\">Empty</a>"
     );
 }

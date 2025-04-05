@@ -33,7 +33,7 @@ dioxus-cli-config = { workspace = true }
 generational-box = { workspace = true }
 
 # axum
-axum = { workspace = true, optional = true, features = ["ws"] }
+axum = { workspace = true, optional = true, default-features = true, features = ["ws"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

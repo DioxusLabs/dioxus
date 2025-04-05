@@ -21,6 +21,7 @@ rustversion = "1.0.17"
 
 [features]
 default = []
+wasm-split = []
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }

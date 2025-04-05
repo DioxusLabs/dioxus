@@ -5,7 +5,6 @@ pub(crate) mod check;
 pub(crate) mod clean;
 pub(crate) mod config;
 pub(crate) mod create;
-pub(crate) mod doctor;
 pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod run;
@@ -87,10 +86,6 @@ pub(crate) enum Commands {
     #[clap(name = "run")]
     Run(run::RunArgs),
 
-    /// Ensure all the tooling is installed and configured correctly
-    #[clap(name = "doctor")]
-    Doctor(doctor::Doctor),
-
     /// Dioxus config file controls.
     #[clap(subcommand)]
     #[clap(name = "config")]
@@ -111,12 +106,11 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Run(_) => write!(f, "run"),
-            Commands::Doctor(_) => write!(f, "doctor"),
         }
     }
 }
 
-static VERSION: Lazy<String> = Lazy::new(|| {
+pub(crate) static VERSION: Lazy<String> = Lazy::new(|| {
     format!(
         "{} ({})",
         crate::dx_build_info::PKG_VERSION,

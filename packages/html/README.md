@@ -21,7 +21,7 @@
 
 ## Overview
 
-The Dioxus `rsx!` and `html!` macros can accept any compile-time correct namespace on top of NodeFactory. This crate provides the HTML (and SVG) namespaces which get imported in the Dioxus prelude.
+The Dioxus `rsx!` macro can accept any compile-time correct namespace on top of NodeFactory. This crate provides the HTML (and SVG) namespaces which get imported in the Dioxus prelude.
 
 However, this abstraction enables you to add any namespace of elements, provided they're in scope when rsx! is called. For an example, a UI that is designed for Augmented Reality might use different primitives than HTML:
 

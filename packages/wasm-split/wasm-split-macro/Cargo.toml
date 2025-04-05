@@ -1,0 +1,15 @@
+[package]
+name = "wasm-split-macro"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+syn = { workspace = true, features = ["full"] }
+base16 = { workspace = true }
+digest = { workspace = true }
+quote = { workspace = true }
+sha2 = { workspace = true }
+proc-macro2 = { workspace = true }
+
+[lib]
+proc-macro = true

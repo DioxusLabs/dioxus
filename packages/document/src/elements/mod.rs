@@ -124,3 +124,26 @@ impl DeduplicationContext {
         }
     }
 }
+
+/// Extend a list of string attributes with a list of dioxus attribute
+pub(crate) fn extend_attributes(
+    attributes: &mut Vec<(&'static str, String)>,
+    additional_attributes: &[Attribute],
+) {
+    for additional_attribute in additional_attributes {
+        let attribute_value_as_string = match &additional_attribute.value {
+            dioxus_core::AttributeValue::Text(v) => v.to_string(),
+            dioxus_core::AttributeValue::Float(v) => v.to_string(),
+            dioxus_core::AttributeValue::Int(v) => v.to_string(),
+            dioxus_core::AttributeValue::Bool(v) => v.to_string(),
+            dioxus_core::AttributeValue::Listener(_) | dioxus_core::AttributeValue::Any(_) => {
+                tracing::error!("document::* elements do not support event listeners or any value attributes. Expected displayable attribute, found {:?}", additional_attribute.value);
+                continue;
+            }
+            dioxus_core::AttributeValue::None => {
+                continue;
+            }
+        };
+        attributes.push((additional_attribute.name, attribute_value_as_string));
+    }
+}

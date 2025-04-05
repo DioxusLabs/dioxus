@@ -5,14 +5,17 @@ use dioxus_document::{
     ScriptProps, StyleProps,
 };
 use dioxus_history::History;
+use futures_util::FutureExt;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde::Serialize;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
+use std::result;
 use std::{rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
 
 use crate::history::WebHistory;
 
@@ -131,10 +134,9 @@ impl Document for WebDocument {
 
 /// Required to avoid blocking the Rust WASM thread.
 const PROMISE_WRAPPER: &str = r#"
-    return new Promise(async (resolve, _reject) => {
+    return (async function(){
         {JS_CODE}
-        resolve(null);
-    });
+    })();
 "#;
 
 type NextPoll = Pin<Box<dyn Future<Output = Result<serde_json::Value, EvalError>>>>;
@@ -143,7 +145,7 @@ type NextPoll = Pin<Box<dyn Future<Output = Result<serde_json::Value, EvalError>
 struct WebEvaluator {
     channels: WeakDioxusChannel,
     next_future: Option<NextPoll>,
-    result: Option<Result<serde_json::Value, EvalError>>,
+    result: Pin<Box<dyn Future<Output = result::Result<Value, EvalError>>>>,
 }
 
 impl WebEvaluator {
@@ -163,7 +165,15 @@ impl WebEvaluator {
         let result = match Function::new_with_args("dioxus", &code).call1(&JsValue::NULL, &channels)
         {
             Ok(result) => {
-                if let Ok(stringified) = js_sys::JSON::stringify(&result) {
+                let future = js_sys::Promise::resolve(&result);
+                let js_future = JsFuture::from(future);
+                Box::pin(async move {
+                    let result = js_future.await.map_err(|e| {
+                        EvalError::Communication(format!("Failed to await result - {:?}", e))
+                    })?;
+                    let stringified = js_sys::JSON::stringify(&result).map_err(|e| {
+                        EvalError::Communication(format!("Failed to stringify result - {:?}", e))
+                    })?;
                     if !stringified.is_undefined() && stringified.is_valid_utf16() {
                         let string: String = stringified.into();
                         Value::from_str(&string).map_err(|e| {
@@ -171,23 +181,20 @@ impl WebEvaluator {
                         })
                     } else {
                         Err(EvalError::Communication(
-                            "Failed to stringify result".into(),
+                            "Failed to stringify result - undefined or not valid utf16".to_string(),
                         ))
                     }
-                } else {
-                    Err(EvalError::Communication(
-                        "Failed to stringify result".into(),
-                    ))
-                }
+                })
+                    as Pin<Box<dyn Future<Output = result::Result<Value, EvalError>>>>
             }
-            Err(err) => Err(EvalError::InvalidJs(
+            Err(err) => Box::pin(futures_util::future::ready(Err(EvalError::InvalidJs(
                 err.as_string().unwrap_or("unknown".to_string()),
-            )),
+            )))),
         };
 
         owner.insert(Box::new(Self {
             channels: weak_channels,
-            result: Some(result),
+            result,
             next_future: None,
         }) as Box<dyn Evaluator>)
     }
@@ -197,13 +204,9 @@ impl Evaluator for WebEvaluator {
     /// Runs the evaluated JavaScript.
     fn poll_join(
         &mut self,
-        _cx: &mut std::task::Context<'_>,
+        cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
-        if let Some(result) = self.result.take() {
-            std::task::Poll::Ready(result)
-        } else {
-            std::task::Poll::Ready(Err(EvalError::Finished))
-        }
+        self.result.poll_unpin(cx)
     }
 
     /// Sends a message to the evaluated JavaScript.

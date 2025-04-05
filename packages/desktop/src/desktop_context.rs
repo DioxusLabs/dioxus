@@ -35,6 +35,11 @@ pub fn window() -> DesktopContext {
 /// A handle to the [`DesktopService`] that can be passed around.
 pub type DesktopContext = Rc<DesktopService>;
 
+/// A weak handle to the [`DesktopService`] to ensure safe passing.
+/// The problem without this is that the tao window is never dropped and therefore cannot be closed.
+/// This was due to the Rc that had still references because of multiple copies when creating a webview.
+pub type WeakDesktopContext = Weak<DesktopService>;
+
 /// An imperative interface to the current window.
 ///
 /// To get a handle to the current window, use the [`use_window`] hook.
@@ -101,7 +106,7 @@ impl DesktopService {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> WeakDesktopContext {
         let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
         let cx = window.dom.in_runtime(|| {
