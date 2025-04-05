@@ -67,6 +67,7 @@ impl AppHandle {
     pub(crate) async fn open(
         &mut self,
         devserver_ip: SocketAddr,
+        open_address: Option<SocketAddr>,
         start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
     ) -> Result<()> {
@@ -139,7 +140,7 @@ impl AppHandle {
             Platform::Web => {
                 // Only the first build we open the web app, after that the user knows it's running
                 if open_browser {
-                    self.open_web(devserver_ip);
+                    self.open_web(open_address.unwrap_or(devserver_ip));
                 }
 
                 None
@@ -355,7 +356,7 @@ impl AppHandle {
             Some(base_path) => format!("/{}", base_path.trim_matches('/')),
             None => "".to_owned(),
         };
-        _ = open::that(format!("{protocol}://{address}{base_path}"));
+        _ = open::that_detached(format!("{protocol}://{address}{base_path}"));
     }
 
     /// Use `xcrun` to install the app to the simulator

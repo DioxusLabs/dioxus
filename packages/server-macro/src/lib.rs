@@ -6,8 +6,12 @@
 //! See the [server_fn_macro] crate for more information.
 
 use proc_macro::TokenStream;
+use quote::quote;
 use server_fn_macro::server_macro_impl;
-use syn::__private::ToTokens;
+use syn::{
+    __private::ToTokens,
+    parse::{Parse, ParseStream},
+};
 
 /// Declares that a function is a [server function](https://docs.rs/server_fn/).
 /// This means that its body will only run on the server, i.e., when the `ssr`
@@ -143,6 +147,9 @@ use syn::__private::ToTokens;
 /// ```
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
+    // If there is no input codec, use json as the default
+    let args = default_json_codec(args);
+
     match server_macro_impl(
         args.into(),
         s.into(),
@@ -153,5 +160,93 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
     ) {
         Err(e) => e.to_compile_error().into(),
         Ok(s) => s.to_token_stream().into(),
+    }
+}
+
+fn default_json_codec(args: TokenStream) -> TokenStream {
+    // Try to parse the args
+    if let Err(err) = syn::parse::<ServerFnArgsMetadata>(args.clone()) {
+        return err.to_compile_error().into();
+    }
+    let Ok(args_metadata) = syn::parse::<ServerFnArgsMetadata>(args.clone()) else {
+        // If we fail to parse the args, forward them directly to the macro for diagnostics
+        return args;
+    };
+    let mut new_tokens = args;
+
+    // Make sure the args always end with a comma
+    if args_metadata.requires_trailing_comma {
+        let default_comma: TokenStream = quote! {,}.into();
+        new_tokens.extend(default_comma);
+    }
+
+    // If the user didn't override the input codec, default to Json
+    if !args_metadata.manual_input {
+        let default_input: TokenStream = quote! {
+            input = server_fn::codec::Json,
+        }
+        .into();
+        new_tokens.extend(default_input);
+    }
+
+    // If the user didn't override the output codec, default to Json
+    if !args_metadata.manual_output {
+        let default_output: TokenStream = quote! {
+            output = server_fn::codec::Json,
+        }
+        .into();
+        new_tokens.extend(default_output);
+    }
+
+    new_tokens
+}
+
+struct ServerFnArgsMetadata {
+    manual_input: bool,
+    manual_output: bool,
+    requires_trailing_comma: bool,
+}
+
+impl Parse for ServerFnArgsMetadata {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut manual_input = false;
+        let mut manual_output = false;
+        let mut requires_trailing_comma = false;
+        let mut take_comma = |input: &ParseStream| {
+            let comma: Option<syn::Token![,]> = input.parse().ok();
+            requires_trailing_comma = comma.is_none();
+        };
+
+        while !input.is_empty() {
+            // Ignore legacy ident and string args
+            if input.peek(syn::Ident) && !input.peek2(syn::Token![=]) {
+                input.parse::<syn::Ident>()?;
+                take_comma(&input);
+                continue;
+            }
+            if input.peek(syn::LitStr) && !input.peek2(syn::Token![=]) {
+                input.parse::<syn::LitStr>()?;
+                take_comma(&input);
+                continue;
+            }
+
+            let ident: syn::Ident = input.parse()?;
+            let _: syn::Token![=] = input.parse()?;
+            let _: syn::Expr = input.parse()?;
+
+            if ident == "input" {
+                manual_input = true;
+            } else if ident == "output" {
+                manual_output = true;
+            }
+
+            take_comma(&input);
+        }
+
+        Ok(Self {
+            manual_input,
+            manual_output,
+            requires_trailing_comma,
+        })
     }
 }
