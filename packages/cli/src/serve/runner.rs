@@ -721,7 +721,7 @@ impl AppRunner {
     }
 
     pub fn rebuild_all(&mut self) -> Result<()> {
-        todo!()
+        self.client.rebuild()
     }
 
     /// Return the list of paths that we should watch for changes.

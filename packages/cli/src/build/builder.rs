@@ -176,21 +176,12 @@ impl AppBuilder {
                             self.bundling_progress = 0.0;
                         }
                         BuildStage::Starting { crate_count, .. } => {
-                            // if *is_server {
-                            //     self.expected_crates_server = *crate_count;
-                            // } else {
                             self.expected_crates = *crate_count;
-                            // }
                         }
                         BuildStage::InstallingTooling {} => {}
                         BuildStage::Compiling { current, total, .. } => {
-                            // if *is_server {
-                            //     self.compiled_crates_server = *current;
-                            //     self.expected_crates_server = *total;
-                            // } else {
                             self.compiled_crates = *current;
                             self.expected_crates = *total;
-                            // }
 
                             if self.compile_start.is_none() {
                                 self.compile_start = Some(Instant::now());
@@ -207,18 +198,15 @@ impl AppBuilder {
                         }
                         BuildStage::Success => {
                             self.compiled_crates = self.expected_crates;
-                            // self.compiled_crates_server = self.expected_crates_server;
                             self.bundling_progress = 1.0;
                         }
                         BuildStage::Failed => {
                             self.compiled_crates = self.expected_crates;
-                            // self.compiled_crates_server = self.expected_crates_server;
                             self.bundling_progress = 1.0;
                         }
                         BuildStage::Aborted => {}
                         BuildStage::Restarting => {
                             self.compiled_crates = 0;
-                            // self.compiled_crates_server = 0;
                             self.expected_crates = 1;
                             self.bundling_progress = 0.0;
                         }
@@ -280,20 +268,21 @@ impl AppBuilder {
     }
 
     /// Restart this builder with new build arguments.
-    pub(crate) fn rebuild(&mut self, args: BuildArgs) -> Result<()> {
-        todo!()
-        // let request = BuildRequest::new(args, self.krate.clone(), self.tx.clone(), BuildMode::Fat)?;
+    pub(crate) fn rebuild(&mut self) -> Result<()> {
+        // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
+        // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
+        self.abort_all();
+        self.stage = BuildStage::Restarting;
 
-        // // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
-        // // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        // self.abort_all();
-        // self.request = request.clone();
-        // self.stage = BuildStage::Restarting;
+        // This build doesn't have any extra special logging - rebuilds would get pretty noisy
+        let request = self.build.clone();
+        let ctx = BuildContext {
+            tx: self.tx.clone(),
+            mode: BuildMode::Fat,
+        };
+        self.build_task = tokio::spawn(async move { request.build(&ctx).await });
 
-        // // This build doesn't have any extra special logging - rebuilds would get pretty noisy
-        // self.build = tokio::spawn(async move { request.build_all().await });
-
-        // Ok(())
+        Ok(())
     }
 
     /// Shutdown the current build process
