@@ -859,8 +859,16 @@ impl AppBundle {
         if let Platform::Android = self.build.build.platform() {
             self.build.status_running_gradle();
 
+            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+            let build_type =
+                if self.build.build.release && self.build.krate.config.bundle.android.is_some() {
+                    "assembleRelease"
+                } else {
+                    "assembleDebug"
+                };
+
             let output = Command::new(self.gradle_exe()?)
-                .arg("assembleDebug")
+                .arg(build_type)
                 .current_dir(self.build.root_dir())
                 .stderr(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
