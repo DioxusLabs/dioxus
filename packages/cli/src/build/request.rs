@@ -2738,6 +2738,8 @@ impl BuildRequest {
         let success = INITIALIZED.get_or_init(|| {
             _ = remove_dir_all(self.exe_dir());
 
+            self.flush_session_cache();
+
             create_dir_all(self.root_dir())?;
             create_dir_all(self.exe_dir())?;
             create_dir_all(self.asset_dir())?;
@@ -2852,6 +2854,12 @@ impl BuildRequest {
     pub fn asset_optimizer_version_file(&self) -> PathBuf {
         self.platform_dir().join(".cli-version")
     }
+
+    pub fn flush_session_cache(&self) {
+        let cache_dir = self.session_cache_dir();
+        _ = std::fs::remove_dir_all(&cache_dir);
+        _ = std::fs::create_dir_all(&cache_dir);
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -2861,15 +2869,3 @@ pub struct InfoPlistData {
     pub bundle_identifier: String,
     pub executable_name: String,
 }
-
-// impl std::fmt::Display for Arch {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Arch::Arm => "armv7l",
-//             Arch::Arm64 => "aarch64",
-//             Arch::X86 => "i386",
-//             Arch::X64 => "x86_64",
-//         }
-//         .fmt(f)
-//     }
-// }

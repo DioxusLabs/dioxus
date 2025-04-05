@@ -164,6 +164,9 @@ impl AppBuilder {
         };
 
         // Update the internal stage of the build so the UI can render it
+        // *VERY IMPORTANT* - DO NOT AWAIT HERE
+        // doing so will cause the changes to be lost since this wait call is called under a cancellable task
+        // todo - move this handling to a separate function that won't be cancelled
         match &update {
             BuilderUpdate::Progress { stage } => {
                 // Prevent updates from flowing in after the build has already finished
@@ -228,9 +231,9 @@ impl AppBuilder {
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
-            StdoutReceived { msg } => {}
-            StderrReceived { msg } => {}
-            ProcessExited { status } => {}
+            StdoutReceived { .. } => {}
+            StderrReceived { .. } => {}
+            ProcessExited { .. } => {}
         }
 
         update
@@ -238,7 +241,6 @@ impl AppBuilder {
 
     pub(crate) fn patch_rebuild(
         &mut self,
-        args: BuildArgs,
         direct_rustc: Vec<String>,
         changed_files: Vec<PathBuf>,
         aslr_offset: u64,
@@ -364,6 +366,7 @@ impl AppBuilder {
         devserver_ip: SocketAddr,
         start_fullstack_on_address: Option<SocketAddr>,
         open_browser: bool,
+        always_on_top: bool,
     ) -> Result<()> {
         let krate = &self.build;
 
@@ -373,12 +376,7 @@ impl AppBuilder {
             (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
             (
                 dioxus_cli_config::ALWAYS_ON_TOP_ENV,
-                krate
-                    .workspace
-                    .settings
-                    .always_on_top
-                    .unwrap_or(true)
-                    .to_string(),
+                always_on_top.to_string(),
             ),
             (
                 dioxus_cli_config::APP_TITLE_ENV,

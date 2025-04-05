@@ -26,7 +26,9 @@ impl RunArgs {
         //     tracing::info!("Serving at: {}", fullstack_ip);
         // }
 
-        builder.open(devserver_ip, Some(fullstack_ip), true).await?;
+        builder
+            .open(devserver_ip, Some(fullstack_ip), true, false)
+            .await?;
 
         todo!();
         // // Run the app, but mostly ignore all the other messages

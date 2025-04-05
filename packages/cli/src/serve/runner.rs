@@ -13,8 +13,8 @@ use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::future::OptionFuture;
 use futures_util::StreamExt;
+use futures_util::{future::OptionFuture, pin_mut};
 use ignore::gitignore::Gitignore;
 use krates::NodeId;
 use notify::{
@@ -204,26 +204,14 @@ impl AppRunner {
             fullstack,
         };
 
-        // let mut watcher = Self {
-        //     watcher: create_notify_watcher(serve, tx.clone()),
-        //     _tx: tx,
-        //     // krate: krate.clone(),
-        //     rx,
-        // };
+        // Spin up the notify watcher
+        // When builds load though, we're going to parse their depinfo and add the paths to the watcher
+        runner.watch_filesystem();
 
-        // watcher.watch_filesystem();
-
-        // watcher
-
-        // // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
-        // // we could spawn a thread to search the FS and then when it returns we can fill the filemap
-        // // in testing, if this hits a massive directory, it might take several seconds with no feedback.
-        // for krate in build.all_watched_crates() {
-        //     runner.fill_filemap(krate);
-        // }
-
-        // Ensure the session cache dir exists and is empty
-        // runner.flush_session_cache();
+        // todo(jon): this might take a while so we should try and background it, or make it lazy somehow
+        // we could spawn a thread to search the FS and then when it returns we can fill the filemap
+        // in testing, if this hits a massive directory, it might take several seconds with no feedback.
+        runner.load_filemap_rsx();
 
         Ok(runner)
     }
@@ -242,12 +230,6 @@ impl AppRunner {
         &self.client
     }
 
-    pub(crate) fn client_mut(&mut self) -> &mut AppBuilder {
-        // the client is always the first build. This should never fail since we always initialize it
-        // &mut self.builds[0]
-        &mut self.client
-    }
-
     pub(crate) fn server(&self) -> Option<&AppBuilder> {
         // the server is always the second build, if it exists. We might not always have a "server"
         // self.builds.get(1)
@@ -256,32 +238,67 @@ impl AppRunner {
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         let client = &mut self.client;
-        // let server = &mut self.server;
 
-        let update = client.wait().await;
-        ServeUpdate::BuilderUpdate {
-            id: BuildId(0),
-            update,
-        }
-
-        // let res = tokio::select! {
-        //     // Wait for the client to finish
-        //     client_update = client.wait() => {
-        //         ServeUpdate::BuilderUpdate { id: (), update: () }
-        //     }
-
-        //     // Wait for the watcher to send us an event
-        //     event = self.watcher_rx.next() => {
-        //         ServeUpdate::FilesChanged { files: () }
-        //     }
-        // };
+        let client_wait = client.wait();
+        let watcher_wait = self.watcher_rx.next();
 
         // // If there are no running apps, we can just return pending to avoid deadlocking
         // let Some(handle) = self.running.as_mut() else {
         //     return futures_util::future::pending().await;
         // };
 
-        // ServeUpdate::HandleUpdate(handle.wait().await)
+        tokio::select! {
+            // Wait for the client to finish
+            client_update = client_wait => {
+                ServeUpdate::BuilderUpdate {
+                    id: BuildId(0),
+                    update: client_update,
+                }
+            }
+
+            // Wait for the watcher to send us an event
+            event = watcher_wait => {
+                let mut changes: Vec<_> = event.into_iter().collect();
+
+                    // Dequeue in bulk if we can, we might've received a lot of events in one go
+                    while let Some(event) = self.watcher_rx.try_next().ok().flatten() {
+                        changes.push(event);
+                    }
+
+                    // Filter the changes
+                    let mut files: Vec<PathBuf> = vec![];
+
+                    // Decompose the events into a list of all the files that have changed
+                    for event in changes.drain(..) {
+                        // Make sure we add new folders to the watch list, provided they're not matched by the ignore list
+                        // We'll only watch new folders that are found under the crate, and then update our watcher to watch them
+                        // This unfortunately won't pick up new krates added "at a distance" - IE krates not within the workspace.
+                        if let EventKind::Create(_create_kind) = event.kind {
+                            // If it's a new folder, watch it
+                            // If it's a new cargo.toml (ie dep on the fly),
+                            // todo(jon) support new folders on the fly
+                        }
+
+                        for path in event.paths {
+                            // Workaround for notify and vscode-like editor:
+                            // when edit & save a file in vscode, there will be two notifications,
+                            // the first one is a file with empty content.
+                            // filter the empty file notification to avoid false rebuild during hot-reload
+                            if let Ok(metadata) = std::fs::metadata(&path) {
+                                if metadata.len() == 0 {
+                                    continue;
+                                }
+                            }
+
+                            files.push(path);
+                        }
+                    }
+
+                    tracing::debug!("Files changed: {files:?}");
+
+                ServeUpdate::FilesChanged { files }
+            }
+        }
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -308,8 +325,9 @@ impl AppRunner {
 
         // Start the new app before we kill the old one to give it a little bit of time
         let open_browser = self.builds_opened == 0 && self.open_browser;
+        let always_on_top = self.always_on_top;
         self.client
-            .open(devserver_ip, fullstack_address, open_browser)
+            .open(devserver_ip, fullstack_address, open_browser, always_on_top)
             .await?;
         self.builds_opened += 1;
 
@@ -444,13 +462,13 @@ impl AppRunner {
 
     pub(crate) async fn client_connected(&mut self) {
         // Assign the runtime asset dir to the runner
-        if self.client().build.platform == Platform::Ios {
+        if self.client.build.platform == Platform::Ios {
             // xcrun simctl get_app_container booted com.dioxuslabs
             let res = Command::new("xcrun")
                 .arg("simctl")
                 .arg("get_app_container")
                 .arg("booted")
-                .arg(self.client().build.bundle_identifier())
+                .arg(self.client.build.bundle_identifier())
                 .output()
                 .await;
 
@@ -461,9 +479,17 @@ impl AppRunner {
                     let out = out.trim();
 
                     tracing::trace!("Setting Runtime asset dir: {out:?}");
-                    self.client_mut().runtime_asset_dir = Some(PathBuf::from(out));
+                    self.client.runtime_asset_dir = Some(PathBuf::from(out));
                 }
             }
+        }
+    }
+
+    fn load_filemap_rsx(&mut self) {
+        self.fill_filemap(self.client.build.crate_dir());
+
+        for krate in self.all_watched_crates() {
+            self.fill_filemap(krate);
         }
     }
 
@@ -476,7 +502,7 @@ impl AppRunner {
     /// Generally this will only be .rs files
     ///
     /// If a file couldn't be parsed, we don't fail. Instead, we save the error.
-    pub fn fill_filemap(&mut self, path: PathBuf) {
+    fn fill_filemap(&mut self, path: PathBuf) {
         for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
             if self
                 .workspace
@@ -643,12 +669,6 @@ impl AppRunner {
             cached_file.templates.clear();
         }
     }
-
-    // fn flush_session_cache(&self) {
-    //     let cache_dir = self.krate.session_cache_dir();
-    //     _ = std::fs::remove_dir_all(&cache_dir);
-    //     _ = std::fs::create_dir_all(&cache_dir);
-    // }
 
     pub async fn patch(&mut self, bundle: &BuildArtifacts) -> Result<JumpTable> {
         todo!()
@@ -835,6 +855,36 @@ impl AppRunner {
 
         server.compiled_crates as f64 / server.expected_crates as f64
     }
+
+    fn watch_filesystem(&mut self) {
+        // Watch the folders of the crates that we're interested in
+        for path in self.watch_paths(
+            self.client.build.crate_dir(),
+            self.client.build.crate_package,
+        ) {
+            tracing::debug!("Watching path {path:?}");
+
+            if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
+                handle_notify_error(err);
+            }
+        }
+
+        // Also watch the crates themselves, but not recursively, such that we can pick up new folders
+        for krate in self.all_watched_crates() {
+            tracing::debug!("Watching path {krate:?}");
+            if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
+                handle_notify_error(err);
+            }
+        }
+
+        // Also watch the workspace dir, non recursively, such that we can pick up new folders there too
+        if let Err(err) = self.watcher.watch(
+            &self.workspace.krates.workspace_root().as_std_path(),
+            RecursiveMode::NonRecursive,
+        ) {
+            handle_notify_error(err);
+        }
+    }
 }
 
 /// Bind a listener to any point and return it
@@ -857,77 +907,9 @@ fn get_available_port(address: IpAddr, prefer: Option<u16>) -> Option<u16> {
         .ok()
 }
 
-// /// This handles ongoing builds, bundles, and handles to running apps
-// ///
-// /// Previously we separate these concepts, however with patching integration, we need to store significantly
-// /// more ongoing state about apps and their builds.
-// pub struct Serve {
-//     pub(crate) args: ServeArgs,
-
-// }
-
-// impl Serve {
-//     pub async fn new(args: ServeArgs) -> Result<Self> {
-//         // let mut builder = Builder::start(&state)?;
-
-//         // todo: verify the tooling...?
-//         // maybe do this in the build request build, acquiring tools on the fly?
-//         //
-//         // or.... on buildrequest::new() where we pass off the args
-//         // or... on Workspace::new() where we collect the tools from the FS
-//         // ... yeah probably there where it should be "low impact" and only done at startup
-//         // orrrrrr on the config loading where it *should* be once
-//         //
-//         // we should only have the one build request for the whole serve
-
-//         todo!()
-//     }
-
-//     /// Run the build command with a pretty loader, returning the executable output location
-//     ///
-//     /// This will also run the fullstack build. Note that fullstack is handled separately within this
-//     /// code flow rather than outside of it.
-//     pub(crate) async fn build_all(self) -> Result<BuildArtifacts> {
-//         tracing::debug!(
-//             "Running build command... {}",
-//             if self.force_sequential {
-//                 "(sequentially)"
-//             } else {
-//                 ""
-//             }
-//         );
-
-//         todo!()
-//         // let (app, server) = match self.force_sequential {
-//         //     true => futures_util::future::try_join(self.cargo_build(), self.build_server()).await?,
-//         //     false => (self.cargo_build().await?, self.build_server().await?),
-//         // };
-
-//         // AppBundle::new(self, app, server).await
-//     }
-
-//     pub(crate) async fn build_server(&self) -> Result<Option<BuildArtifacts>> {
-//         tracing::debug!("Building server...");
-
-//         todo!()
-//         // if !self.fullstack {
-//         //     return Ok(None);
-//         // }
-
-//         // let mut cloned = self.clone();
-//         // cloned.platform = Platform::Server;
-
-//         // Ok(Some(cloned.cargo_build().await?))
-//     }
-
-//     pub(crate) async fn wait(&mut self) -> ServeUpdate {
-//         todo!()
-//     }
-// }
-
 fn create_notify_watcher(
     tx: UnboundedSender<notify::Event>,
-    wsl_file_poll_interval: u64,
+    wsl_poll_interval: u64,
 ) -> Box<dyn NotifyWatcher> {
     // Build the event handler for notify.
     // This has been known to be a source of many problems, unfortunately, since notify handling seems to be flakey across platforms
@@ -962,7 +944,7 @@ fn create_notify_watcher(
         return Box::new(
             notify::PollWatcher::new(
                 handler,
-                Config::default().with_poll_interval(Duration::from_secs(wsl_file_poll_interval)),
+                Config::default().with_poll_interval(Duration::from_secs(wsl_poll_interval)),
             )
             .expect(NOTIFY_ERROR_MSG),
         );
@@ -1017,75 +999,3 @@ fn is_wsl() -> bool {
 
     false
 }
-
-// /// Wait for changed files to be detected
-// pub(crate) async fn wait(&mut self) -> ServeUpdate {
-//     // Wait for the next file to change
-//     let mut changes: Vec<_> = self.rx.next().await.into_iter().collect();
-
-//     // Dequeue in bulk if we can, we might've received a lot of events in one go
-//     while let Some(event) = self.rx.try_next().ok().flatten() {
-//         changes.push(event);
-//     }
-
-//     // Filter the changes
-//     let mut files: Vec<PathBuf> = vec![];
-
-//     // Decompose the events into a list of all the files that have changed
-//     for event in changes.drain(..) {
-//         // Make sure we add new folders to the watch list, provided they're not matched by the ignore list
-//         // We'll only watch new folders that are found under the crate, and then update our watcher to watch them
-//         // This unfortunately won't pick up new krates added "at a distance" - IE krates not within the workspace.
-//         if let EventKind::Create(_create_kind) = event.kind {
-//             // If it's a new folder, watch it
-//             // If it's a new cargo.toml (ie dep on the fly),
-//             // todo(jon) support new folders on the fly
-//         }
-
-//         for path in event.paths {
-//             // Workaround for notify and vscode-like editor:
-//             // when edit & save a file in vscode, there will be two notifications,
-//             // the first one is a file with empty content.
-//             // filter the empty file notification to avoid false rebuild during hot-reload
-//             if let Ok(metadata) = std::fs::metadata(&path) {
-//                 if metadata.len() == 0 {
-//                     continue;
-//                 }
-//             }
-
-//             files.push(path);
-//         }
-//     }
-
-//     tracing::debug!("Files changed: {files:?}");
-
-//     ServeUpdate::FilesChanged { files }
-// }
-
-// fn watch_filesystem(&mut self) {
-//     todo!()
-//     // // Watch the folders of the crates that we're interested in
-//     // for path in self.krate.watch_paths() {
-//     //     tracing::debug!("Watching path {path:?}");
-
-//     //     if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
-//     //         handle_notify_error(err);
-//     //     }
-//     // }
-
-//     // // Also watch the crates themselves, but not recursively, such that we can pick up new folders
-//     // for krate in self.krate.all_watched_crates() {
-//     //     tracing::debug!("Watching path {krate:?}");
-//     //     if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
-//     //         handle_notify_error(err);
-//     //     }
-//     // }
-
-//     // // Also watch the workspace dir, non recursively, such that we can pick up new folders there too
-//     // if let Err(err) = self
-//     //     .watcher
-//     //     .watch(&self.krate.workspace_dir(), RecursiveMode::NonRecursive)
-//     // {
-//     //     handle_notify_error(err);
-//     // }
-// }

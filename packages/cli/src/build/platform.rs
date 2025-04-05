@@ -292,3 +292,15 @@ fn var_or_debug(name: &str) -> Option<PathBuf> {
         .ok()
         .map(PathBuf::from)
 }
+
+// impl std::fmt::Display for Arch {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Arch::Arm => "armv7l",
+//             Arch::Arm64 => "aarch64",
+//             Arch::X86 => "i386",
+//             Arch::X64 => "x86_64",
+//         }
+//         .fmt(f)
+//     }
+// }
