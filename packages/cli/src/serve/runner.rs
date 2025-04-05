@@ -685,7 +685,7 @@ impl AppRunner {
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if client.build.platform == Platform::Android {
             jump_table.lib = client
-                .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
+                .push_native_library_to_android(&new, &(PathBuf::from(new.file_name().unwrap())))
                 .await?;
         }
 

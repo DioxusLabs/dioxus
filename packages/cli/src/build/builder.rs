@@ -585,14 +585,43 @@ impl AppBuilder {
         bundled_name
     }
 
+    pub(crate) async fn push_native_library_to_android(
+        &self,
+        changed_file: &Path,
+        bundled_name: &Path,
+    ) -> Result<PathBuf> {
+        // ie - "/data/data/com.example.SubsecondHarness/lib/"
+        // you must be root to do this. `adb root`
+        let target = PathBuf::from("/data/data/")
+            .join(self.build.bundle_identifier())
+            .join("files")
+            .join("lib")
+            .join(bundled_name);
+
+        tracing::debug!("Pushing asset to device: {target:?}");
+
+        let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
+            .arg("push")
+            .arg(&changed_file)
+            .arg(&target)
+            .output()
+            .await
+            .context("Failed to push asset to device");
+
+        if let Err(e) = res {
+            tracing::debug!("Failed to push asset to device: {e}");
+        }
+
+        Ok(target)
+    }
+
     /// Copy this file to the tmp folder on the android device, returning the path to the copied file
     pub(crate) async fn copy_file_to_android_tmp(
         &self,
         changed_file: &Path,
         bundled_name: &Path,
     ) -> Result<PathBuf> {
-        let target = PathBuf::from("/data/app/~~OE9KIaCNz0l5pwJue6zY8Q==/com.example.SubsecondHarness-pilWFhddpEHdzmzy-khHRA==/lib/arm64/").join(bundled_name);
-        // let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
+        let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
         tracing::debug!("Pushing asset to device: {target:?}");
         let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
             .arg("push")
@@ -996,13 +1025,16 @@ We checked the folder: {}
         tokio::task::spawn(async move {
             let adb = crate::build::android_tools().unwrap().adb;
 
+            // call `adb root` so we can push patches to the device
+            if let Err(e) = Command::new(&adb).arg("root").output().await {
+                tracing::error!("Failed to run `adb root`: {e}");
+            }
+
             let port = devserver_socket.port();
-            if let Err(e) = Command::new("adb")
+            if let Err(e) = Command::new(&adb)
                 .arg("reverse")
                 .arg(format!("tcp:{}", port))
                 .arg(format!("tcp:{}", port))
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
                 .output()
                 .await
             {
@@ -1015,8 +1047,6 @@ We checked the folder: {}
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
                 .output()
                 .await
             {
@@ -1054,8 +1084,6 @@ We checked the folder: {}
                 .arg("start")
                 .arg("-n")
                 .arg(activity_name)
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
                 .output()
                 .await
             {
