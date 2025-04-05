@@ -9,7 +9,10 @@ use std::{
 };
 use tokio::process::Command;
 
-pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
+pub(crate) async fn pre_render_static_routes(
+    server_exe: &Path,
+    base_path: Option<&String>,
+) -> anyhow::Result<()> {
     // Use the address passed in through environment variables or default to localhost:9999. We need
     // to default to a value that is different than the CLI default address to avoid conflicts
     let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
@@ -20,6 +23,11 @@ pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Resul
     // Borrow port and address so we can easily moe them into multiple tasks below
     let address = &address;
     let port = &port;
+    let url = if let Some(base_path) = base_path {
+        format!("http://{address}:{port}/{base_path}/api/static_routes")
+    } else {
+        format!("http://{address}:{port}/api/static_routes")
+    };
 
     tracing::info!("Running SSG at http://{address}:{port}");
 
@@ -42,10 +50,7 @@ pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Resul
     // The server may take a few seconds to start up. Try fetching the route up to 5 times with a one second delay
     const RETRY_ATTEMPTS: usize = 5;
     for i in 0..=RETRY_ATTEMPTS {
-        let request = reqwest_client
-            .post(format!("http://{address}:{port}/api/static_routes"))
-            .send()
-            .await;
+        let request = reqwest_client.post(&url).send().await;
         match request {
             Ok(request) => {
                 routes = Some(request
