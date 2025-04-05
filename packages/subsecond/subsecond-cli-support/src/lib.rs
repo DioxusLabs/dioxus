@@ -27,8 +27,8 @@ use wasmparser::{
 
 use walrus::{
     ir::{dfs_in_order, Visitor},
-    ElementKind, FunctionId, FunctionKind, IdsToIndices, ImportKind, Module, ModuleConfig,
-    RawCustomSection,
+    ElementItems, ElementKind, FunctionId, FunctionKind, IdsToIndices, ImportKind, Module,
+    ModuleConfig, RawCustomSection,
 };
 
 pub mod lift;
@@ -39,6 +39,10 @@ pub fn create_jump_table(
     patch: &Path,
     triple: &Triple,
 ) -> anyhow::Result<JumpTable> {
+    if triple.architecture == target_lexicon::Architecture::Wasm32 {
+        return create_wasm_jump_table(original, patch, triple);
+    }
+
     let obj1_bytes = fs::read(original).context("Could not read original file")?;
     let obj2_bytes = fs::read(patch).context("Could not read patch file")?;
     let obj1 = File::parse(&obj1_bytes as &[u8]).unwrap();
@@ -105,6 +109,79 @@ pub fn create_jump_table(
         new_base_address,
         aslr_reference,
     })
+}
+
+/// In the web, our patchable functions are actually ifuncs
+///
+/// We need to line up the ifuncs from the main module to the ifuncs in the patch.
+fn create_wasm_jump_table(
+    original: &Path,
+    patch: &Path,
+    triple: &Triple,
+) -> anyhow::Result<JumpTable> {
+    let obj1_bytes = fs::read(original).context("Could not read original file")?;
+    let obj2_bytes = fs::read(patch).context("Could not read patch file")?;
+
+    let mod_old = walrus::Module::from_buffer(&obj1_bytes)?;
+    let mod_new = walrus::Module::from_buffer(&obj2_bytes)?;
+
+    let name_to_ifunc_old = collect_func_ifuncs(&mod_old);
+    let name_to_ifunc_new = collect_func_ifuncs(&mod_new);
+
+    let mut map = AddressMap::default();
+    for (name, idx) in name_to_ifunc_new {
+        if let Some(old_idx) = name_to_ifunc_old.get(name) {
+            tracing::info!("Mapping {} from {} to {}", name, old_idx, idx);
+            map.insert(*old_idx as u64, idx as u64);
+        }
+    }
+
+    tracing::info!("Jump table: {:?}", map);
+
+    Ok(JumpTable {
+        map,
+        lib: patch.to_path_buf(),
+        aslr_reference: 0,
+        old_base_address: 0,
+        new_base_address: 0,
+    })
+}
+
+fn collect_func_ifuncs(mod_new: &Module) -> HashMap<&str, i32> {
+    let mut name_to_ifunc_index = HashMap::new();
+
+    for el in mod_new.elements.iter() {
+        let ElementKind::Active { table, offset } = &el.kind else {
+            continue;
+        };
+        let offset = match offset {
+            walrus::ConstExpr::Value(value) => match value {
+                walrus::ir::Value::I32(idx) => *idx,
+                walrus::ir::Value::I64(_) => todo!(),
+                walrus::ir::Value::F32(_) => todo!(),
+                walrus::ir::Value::F64(_) => todo!(),
+                walrus::ir::Value::V128(_) => todo!(),
+            },
+            walrus::ConstExpr::Global(id) => todo!(),
+            walrus::ConstExpr::RefNull(ref_type) => todo!(),
+            walrus::ConstExpr::RefFunc(id) => todo!(),
+        };
+
+        match &el.items {
+            ElementItems::Functions(ids) => {
+                for (idx, id) in ids.iter().enumerate() {
+                    let func = mod_new.funcs.get(*id);
+                    let name = func.name.as_ref().unwrap();
+                    name_to_ifunc_index.insert(name.as_str(), offset + idx as i32);
+                }
+            }
+            ElementItems::Expressions(ref_type, const_exprs) => {
+                panic!("Unsupported element kind: {:?}", ref_type);
+            }
+        }
+    }
+
+    name_to_ifunc_index
 }
 
 /// Resolve the undefined symbols in the incrementals against the original binary, returning an object
@@ -704,8 +781,8 @@ fn get_ifunc_table_length(bytes: &[u8]) -> usize {
         .map(|table| table.elem_segments.iter())
         .flatten()
         .map(|segment| match &module.elements.get(*segment).items {
-            walrus::ElementItems::Functions(ids) => ids.len(),
-            walrus::ElementItems::Expressions(ref_type, const_exprs) => const_exprs.len(),
+            ElementItems::Functions(ids) => ids.len(),
+            ElementItems::Expressions(ref_type, const_exprs) => const_exprs.len(),
         })
         // .map(|table| table.elem_segments.len())
         .max()

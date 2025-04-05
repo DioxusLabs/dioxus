@@ -222,23 +222,25 @@
                 fetch(jump.lib)
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
+                        const pageSize = 64 * 1024; // 64KB
                         const ifunc_length = base.__indirect_function_table.length;
-                        const data_start = Math.ceil((base.memory.buffer.byteLength / 64000) + 1 ) * 64000;
+                        const data_start = Math.ceil((base.memory.buffer.byteLength / pageSize) + 1 ) * pageSize;
                         base.memory.grow(20) // each page is 64kb, let's grow by 1 page
                         // const bss_start = base.memory.buffer.byteLength;
                         // base.memory.grow(3)// each page is 64kb, let's grow by 1 page
                         base.__indirect_function_table.grow(2000);
 
+
                         let imports = {
                             env: {
                                 // __BSS_DATA_START: new WebAssembly.Global({value: "i32", mutable: false }, bss_start),
                                 // __RO_DATA_START: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
+                                __DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
+                                __IFUNC_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ifunc_length + 1),
                                 __indirect_function_table: base.__indirect_function_table,
                                 __stack_pointer: base.__stack_pointer,
                                 __tls_base: base.__tls_base,
                                 memory: base.memory,
-                                __DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
-                                __IFUNC_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ifunc_length + 1),
                             },
                         };
                         for (const key of Object.keys(base)) {
@@ -246,6 +248,7 @@
                         }
                         return WebAssembly.instantiate(bytes, imports);
                     })
+
                     // function pointers correlate directly to exports.table.get(pointer!)
                     //
                     // object.keys(patch_exports) -> gives us names of functions
@@ -284,10 +287,10 @@
                             [...Array(wasmExports.__indirect_function_table.length).keys()].map((i) => {
                                 let entry = wasmExports.__indirect_function_table.get(i);
                                 if (entry === null) {
-                                    return ["abcbac", 0];
+                                    return ["__", 0];
                                 }
                                 if (entry.name === undefined) {
-                                    return ["abcbac", 0];
+                                    return ["__", 0];
                                 }
                                 return [entry.name, i];
                             })
@@ -305,10 +308,6 @@
                                 )
                         );
 
-                        window.jumpTable = jumpTable;
-
-
-
                         let patchList = Object.keys(patchExports).flatMap((key) => {
                             let entry = jumpTable[key];
                             if (entry === undefined) {
@@ -321,11 +320,9 @@
                                 return [];
                             }
 
-                            // console.log("Patching", key, "from", a, "to", b);
-
                             return [a, b];
                         });
-                        console.log("Patching: ", patchList);
+
                         base["__subsecond_wasm_patch"](patchList);
                     });
             }

@@ -4,6 +4,7 @@ use crate::{
     Result, ServeArgs, TraceSrc, Workspace,
 };
 use anyhow::Context;
+use axum::extract::ws::Message as WsMessage;
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -683,8 +684,12 @@ impl AppRunner {
         let new = client.build.patch_exe(res.time_start);
         let triple = client.build.triple.clone();
 
+        tracing::debug!("Patching {} -> {}", original.display(), new.display());
+
         let mut jump_table =
             subsecond_cli_support::create_jump_table(&original, &new, &triple).unwrap();
+
+        tracing::debug!("Jump table: {:#?}", jump_table);
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if client.build.platform == Platform::Android {
@@ -717,10 +722,7 @@ impl AppRunner {
         Ok(jump_table)
     }
 
-    pub(crate) async fn handle_ws_message(
-        &mut self,
-        msg: &axum::extract::ws::Message,
-    ) -> Result<()> {
+    pub(crate) async fn handle_ws_message(&mut self, msg: &WsMessage) -> Result<()> {
         use dioxus_devtools_types::ClientMsg;
 
         let res = serde_json::from_str::<ClientMsg>(

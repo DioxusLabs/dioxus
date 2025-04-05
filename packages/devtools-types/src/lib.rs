@@ -4,6 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
+use subsecond_types::JumpTable;
 
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -41,7 +42,7 @@ pub enum ClientMsg {
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
 pub struct HotReloadMsg {
-    pub jump_table: Option<subsecond_types::JumpTable>,
+    pub jump_table: Option<JumpTable>,
     pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
 }

@@ -430,6 +430,13 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
     }
 }
 
+/// On Android, we can't dlopen libraries that aren't placed inside /data/data/<package_name>/lib/
+///
+/// If the device isn't rooted, then we can't push the library there.
+/// This is a workaround to copy the library to a memfd and then dlopen it.
+///
+/// I haven't tested it on device yet, so if if it doesn't work, then we can simply revert to using
+/// "adb root" and then pushing the library to the /data/data folder instead of the tmp folder.
 #[cfg(target_os = "android")]
 unsafe fn android_memmap_dlopen(file: &Path) -> libloading::Library {
     use std::ffi::{c_void, CStr, CString};
@@ -508,24 +515,71 @@ pub extern "C" fn aslr_reference() -> usize {
     aslr_reference as *const () as usize
 }
 
+// #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
+// pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
+//     let table = serde_wasm_bindgen::from_value::<JumpTable>(table).unwrap_throw();
+//     run_wasm_patch(table).await.unwrap_throw();
+// }
+
 /// Apply the patch using a given jump table.
 ///
 /// Used on WASM platforms where we need async integration to fetch the patch.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
-pub async unsafe fn __subsecond_wasm_patch(pointers: Uint32Array) {
-    use wasm_bindgen::JsValue;
-    // pub async unsafe fn __subsecond_wasm_patch(value: JsValue) {
+pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
+    // pub async unsafe fn __subsecond_wasm_patch(pointers: Uint32Array) {
     use js_sys::Uint32Array;
     use subsecond_types::AddressMap;
     use wasm_bindgen::prelude::*;
+    use wasm_bindgen::JsValue;
+
+    let as_obj: js_sys::Object = value.unchecked_into();
+    let entries = Object::entries(&as_obj);
+
+    let mut map = AddressMap::default();
+    for entry in entries.iter() {
+        let entry = entry.unchecked_into::<js_sys::Array>();
+        web_sys::console::log_1(&format!("e: {:#?}", entry).into());
+
+        let key = entry.get(0);
+        let value = entry.get(1);
+
+        let key = key.as_string();
+        let value = value.as_f64();
+
+        if let Some(value) = value {
+            if let Some(key) = key {
+                if let Ok(key) = key.parse::<u64>() {
+                    map.insert(key, value as u64);
+                }
+            }
+        }
+    }
+
+    web_sys::console::log_1(&format!("Map: {:#?}", map).into());
+    // let keys = Object::keys(&as_obj);
+    // let values = Object::values(&as_obj);
+    // let keys: Vec<u64> = keys
+    //     .iter()
+    //     .map(|f| f.as_string().unwrap().parse().unwrap())
+    //     .collect();
+
+    // let values: Vec<u64> = values.iter().map(|f| f.as_f64().unwrap() as u64).collect();
+
+    // let map = Reflect::get(&as_obj, &"map".into()).unwrap_throw();
+
+    // let mut table = serde_wasm_bindgen::from_value::<JumpTable>(value).unwrap_throw();
+
+    // tracing::info!("Applying patch: {:#?}", table);
 
     let mut table: JumpTable = JumpTable {
         aslr_reference: 0,
         lib: PathBuf::from("patch.wasm"),
-        map: AddressMap::default(),
+        map,
         new_base_address: 0,
         old_base_address: 0,
     };
+
+    unsafe { apply_patch(table) }
 
     // [Log] skipping – "__dso_handle" (patch_console.js, line 1)
     // [Log] skipping – "__data_end" (patch_console.js, line 1)
@@ -537,24 +591,15 @@ pub async unsafe fn __subsecond_wasm_patch(pointers: Uint32Array) {
     // [Log] skipping – "__memory_base" (patch_console.js, line 1)
     // [Log] skipping – "__table_base" (patch_console.js, line 1)
 
-    let mut idx = 0;
-    for _ in 0..pointers.length() {
-        let left = pointers.get_index(idx);
-        let right = pointers.get_index(idx + 1);
-        table.map.insert(left as u64, right as u64);
-        idx += 2
-    }
-
-    unsafe { apply_patch(table) }
-
-    // let table = serde_wasm_bindgen::from_value::<JumpTable>(table).unwrap_throw();
+    // let mut idx = 0;
+    // for _ in 0..pointers.length() {
+    //     let left = pointers.get_index(idx);
+    //     let right = pointers.get_index(idx + 1);
+    //     table.map.insert(left as u64, right as u64);
+    //     idx += 2
+    // }
     // run_wasm_patch(table).await.unwrap_throw();
 }
-// #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
-// pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
-//     let table = serde_wasm_bindgen::from_value::<JumpTable>(table).unwrap_throw();
-//     run_wasm_patch(table).await.unwrap_throw();
-// }
 
 pub async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {
     use js_sys::Reflect;
@@ -564,11 +609,11 @@ pub async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValu
     use wasm_bindgen::JsValue;
     use wasm_bindgen_futures::JsFuture;
 
-    const WASM_PAGE_LENGTH: u32 = 65536;
+    const WASM_PAGE_LENGTH: u32 = 64 * 1024;
 
     let funcs: WebAssembly::Table = wasm_bindgen::function_table().unchecked_into();
     let memory: WebAssembly::Memory = wasm_bindgen::memory().unchecked_into();
-    let m: WebAssembly::Module = wasm_bindgen::module().unchecked_into();
+    let mod_: WebAssembly::Module = wasm_bindgen::module().unchecked_into();
     let exports: Object = wasm_bindgen::exports().unchecked_into();
     let buffer: Uint8Array = memory.buffer().unchecked_into();
 
@@ -595,10 +640,10 @@ pub async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValu
         ("__DATA_OFFSET", 0),
         ("__IFUNC_OFFSET", 0),
     ] {
-        let descripor = Object::new();
-        Reflect::set(&descripor, &"value".into(), &"i32".into())?;
-        Reflect::set(&descripor, &"mutable".into(), &false.into())?;
-        let value = WebAssembly::Global::new(&descripor, &0.into())?;
+        let descriptor = Object::new();
+        Reflect::set(&descriptor, &"value".into(), &"i32".into())?;
+        Reflect::set(&descriptor, &"mutable".into(), &false.into())?;
+        let value = WebAssembly::Global::new(&descriptor, &0.into())?;
         Reflect::set(&env, &name.into(), &value)?;
     }
 

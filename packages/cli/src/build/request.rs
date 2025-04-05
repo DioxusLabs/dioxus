@@ -992,7 +992,7 @@ impl BuildRequest {
         let orig_exe = self.main_exe();
         tracing::debug!("writing patch - orig_exe: {:?}", orig_exe);
 
-        let object_files = args
+        let mut object_files = args
             .iter()
             .filter(|arg| arg.ends_with(".rcgu.o"))
             .sorted()
@@ -1007,8 +1007,11 @@ impl BuildRequest {
         )
         .expect("failed to resolve patch symbols");
 
-        let patch_file = self.main_exe().with_file_name("patch-syms.o");
-        std::fs::write(&patch_file, resolved_patch_bytes)?;
+        if self.platform != Platform::Web {
+            let patch_file = self.main_exe().with_file_name("patch-syms.o");
+            std::fs::write(&patch_file, resolved_patch_bytes)?;
+            object_files.push(patch_file);
+        }
 
         let linker = match self.platform {
             Platform::Web => self.workspace.wasm_ld(),
@@ -1043,9 +1046,7 @@ impl BuildRequest {
         //       we might need to link a new patch file that implements the lookups
         let res = Command::new(linker)
             .args(object_files.iter())
-            .arg(patch_file)
             .args(thin_args)
-            .arg("-v")
             .arg("-o") // is it "-o" everywhere?
             .arg(&self.patch_exe(time_start))
             .output()
@@ -1628,6 +1629,7 @@ impl BuildRequest {
     }
 
     pub fn platform_exe_name(&self) -> String {
+        use convert_case::{Case, Casing};
         match self.platform {
             Platform::MacOS => self.executable_name().to_string(),
             Platform::Ios => self.executable_name().to_string(),
@@ -1639,7 +1641,7 @@ impl BuildRequest {
             // we include the user's rust code as a shared library with a fixed namespacea
             Platform::Android => "libdioxusmain.so".to_string(),
 
-            Platform::Web => unimplemented!("there's no main exe on web"), // this will be wrong, I think, but not important?
+            Platform::Web => format!("{}_bg.wasm", self.executable_name()), // this will be wrong, I think, but not important?
 
             // todo: maybe this should be called AppRun?
             Platform::Linux => self.executable_name().to_string(),
