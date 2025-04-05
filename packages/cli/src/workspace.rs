@@ -28,6 +28,7 @@ static WS: OnceCell<Arc<Workspace>> = OnceCell::new();
 impl Workspace {
     pub async fn current() -> Result<Arc<Workspace>> {
         tracing::debug!("Loading workspace");
+
         let cmd = Cmd::new();
         let builder = krates::Builder::new();
         let krates = builder

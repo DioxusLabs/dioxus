@@ -243,11 +243,10 @@ impl AndroidTools {
         //  - We assume android is always "linux"
         //  - We try to match the architecture unless otherwise specified. This is because
         //    emulators that match the host arch are usually faster.
-        let mut triple = target_lexicon::HOST.clone();
+        let mut triple = "aarch64-linux-android".parse::<Triple>().unwrap();
         triple.operating_system = OperatingSystem::Linux;
         triple.environment = Environment::Android;
-        triple.vendor = Vendor::Unknown;
-        triple.binary_format = BinaryFormat::Unknown;
+        triple.architecture = target_lexicon::HOST.architecture;
 
         // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
         let output = Command::new(&self.adb)

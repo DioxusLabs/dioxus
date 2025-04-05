@@ -105,6 +105,7 @@ impl AppBuilder {
                         mode: BuildMode::Fat,
                     };
                     request.verify_tooling(&ctx).await?;
+                    request.prepare_build_dir()?;
                     request.build(&ctx).await
                 }
             }),

@@ -122,7 +122,6 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                 tracing::info!("Full rebuild: triggered manually");
 
                 builder.rebuild_all();
-
                 builder.clear_hot_reload_changes();
                 builder.clear_cached_rsx();
 

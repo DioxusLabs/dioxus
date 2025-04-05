@@ -2729,9 +2729,7 @@ impl BuildRequest {
     /// - extra scaffolding
     ///
     /// It's not guaranteed that they're different from any other folder
-    fn prepare_build_dir(&self) -> Result<()> {
-        // self.prepare_build_dir()?;
-
+    pub fn prepare_build_dir(&self) -> Result<()> {
         use once_cell::sync::OnceCell;
         use std::fs::{create_dir_all, remove_dir_all};
 
