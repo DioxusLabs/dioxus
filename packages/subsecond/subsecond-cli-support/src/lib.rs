@@ -307,6 +307,28 @@ pub fn resolve_undefined(
         return Ok(vec![]);
     }
 
+    // todo - explore using the dynamic linker instead of known addresses
+    //
+    // obj.add_symbol(Symbol {
+    //     // name: name.as_bytes()[name_offset..].to_vec(),
+    //     name: name.as_bytes().to_vec(),
+    //     value: 0,
+    //     size: 0,
+    //     kind: sym.kind(),
+    //     scope: object::SymbolScope::Dynamic,
+    //     weak: false,
+    //     section: object::write::SymbolSection::Undefined,
+    //     flags: object::SymbolFlags::None,
+    //     // name: name.as_bytes()[name_offset..].to_vec(),
+    //     // value: offset,
+    //     // size: jump_code.len() as u64,
+    //     // scope: SymbolScope::Dynamic,
+    //     // kind: sym.kind(),
+    //     // weak: false,
+    //     // section: SymbolSection::Undefined,
+    //     // flags: object::SymbolFlags::None,
+    // });
+
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
@@ -326,28 +348,6 @@ pub fn resolve_undefined(
             let abs_addr = sym.address() + aslr_offset;
 
             tracing::debug!("Defining: {:?}", name);
-
-            // todo - explore using the dynamic linker instead of known addresses
-            //
-            // obj.add_symbol(Symbol {
-            //     // name: name.as_bytes()[name_offset..].to_vec(),
-            //     name: name.as_bytes().to_vec(),
-            //     value: 0,
-            //     size: 0,
-            //     kind: sym.kind(),
-            //     scope: object::SymbolScope::Dynamic,
-            //     weak: false,
-            //     section: object::write::SymbolSection::Undefined,
-            //     flags: object::SymbolFlags::None,
-            //     // name: name.as_bytes()[name_offset..].to_vec(),
-            //     // value: offset,
-            //     // size: jump_code.len() as u64,
-            //     // scope: SymbolScope::Dynamic,
-            //     // kind: sym.kind(),
-            //     // weak: false,
-            //     // section: SymbolSection::Undefined,
-            //     // flags: object::SymbolFlags::None,
-            // });
 
             if sym.kind() == SymbolKind::Text {
                 let jump_code = match triple.architecture {
@@ -510,11 +510,9 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
 
 /// The incoming module is expecting to initialize its functions at address 1.
 ///
-/// We need to move it to match the base module's ifunc table.
-///
-/// Building with --relocatable also defines data symbols for but they end up at address 0 and need to be relocated when loading.
-/// todo - I think we can make relocations automatica by using the __DATA_OFFSET global
-pub fn move_func_initiailizers(original: &[u8], bytes: &[u8], offset_idx: u64) -> Result<Vec<u8>> {
+/// Since the user can reload the page, killing our ASLR reference, we need to make the patch itself
+/// relocatable.
+pub fn move_func_initiailizers(original: &[u8], bytes: &[u8]) -> Result<Vec<u8>> {
     let mut module = walrus::Module::from_buffer(bytes)?;
 
     let (ifunc_global, _) =

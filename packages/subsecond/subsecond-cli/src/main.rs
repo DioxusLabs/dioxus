@@ -371,15 +371,15 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
-            const WASM_PAGE_SIZE: u64 = 65536;
-            let table_base = 2000 * (aslr_reference + 1);
-            let global_base =
-                ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
-            tracing::info!(
-                "using aslr of table: {} and global: {}",
-                table_base,
-                global_base
-            );
+            // const WASM_PAGE_SIZE: u64 = 65536;
+            // let table_base = 2000 * (aslr_reference + 1);
+            // let global_base =
+            //     ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
+            // tracing::info!(
+            //     "using aslr of table: {} and global: {}",
+            //     table_base,
+            //     global_base
+            // );
             Command::new(wasm_ld().await.unwrap())
                 .args(object_files)
                 .arg("--import-memory")
@@ -388,15 +388,15 @@ async fn fast_build(
                 .arg("--export")
                 .arg("main")
                 .arg("--export-all")
-                // .arg("-z")
-                // .arg("stack-size=1048576")
+                .arg("-z")
+                .arg("stack-size=1048576")
                 .arg("--stack-first")
                 .arg("--allow-undefined")
                 .arg("--no-demangle")
                 .arg("--no-entry")
                 .arg("--emit-relocs")
-                .arg(format!("--table-base={}", table_base))
-                .arg(format!("--global-base={}", global_base))
+                // .arg(format!("--table-base={}", table_base))
+                // .arg(format!("--global-base={}", global_base))
                 .arg("-o")
                 .arg(&output_location)
                 .stdout(Stdio::piped())
@@ -413,10 +413,10 @@ async fn fast_build(
     }
 
     if target.architecture == target_lexicon::Architecture::Wasm32 {
-        // let out_bytes = std::fs::read(&output_location).unwrap();
-        // let original_butes = std::fs::read(&original.output_location).unwrap();
-        // let res_ = move_func_initiailizers(&original_butes, &out_bytes, aslr_reference).unwrap();
-        // std::fs::write(&output_location, res_).unwrap();
+        let out_bytes = std::fs::read(&output_location).unwrap();
+        let original_butes = std::fs::read(&original.output_location).unwrap();
+        let res_ = move_func_initiailizers(&original_butes, &out_bytes).unwrap();
+        std::fs::write(&output_location, res_).unwrap();
     }
 
     Ok(output_location)
