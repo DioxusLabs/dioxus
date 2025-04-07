@@ -9,13 +9,11 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }
 axum = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["full"], optional = true }
+tokio = {workspace = true, features = ["full"], optional = true }
 serde = { version = "1.0.159", features = ["derive"] }
-reqwest = { workspace = true, features = ["json"] }
-http = { workspace = true, optional = true }
 
 [features]
 default = []
-server = ["axum", "dioxus/server", "dep:tokio", "dep:http"]
+server = ["axum", "dioxus/server"]
 web = ["dioxus/web"]
 

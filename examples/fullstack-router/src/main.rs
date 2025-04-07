@@ -8,9 +8,10 @@ use dioxus::prelude::*;
 
 fn main() {
     dioxus::LaunchBuilder::new()
-        .with_cfg(server_only!(
-            ServeConfig::builder().enable_out_of_order_streaming()
-        ))
+        .with_cfg(server_only!(ServeConfig::builder().incremental(
+            IncrementalRendererConfig::default()
+                .invalidate_after(std::time::Duration::from_secs(120)),
+        )))
         .launch(app);
 }
 
@@ -23,97 +24,62 @@ enum Route {
     #[route("/")]
     Home {},
 
-    #[route("/:breed")]
-    Breed { breed: String },
+    #[route("/blog/:id/")]
+    Blog { id: i32 },
+}
+
+#[component]
+fn Blog(id: i32) -> Element {
+    rsx! {
+        Link { to: Route::Home {}, "Go to counter" }
+        table {
+            tbody {
+                for _ in 0..id {
+                    tr {
+                        for _ in 0..id {
+                            td { "hello world!" }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[component]
 fn Home() -> Element {
+    let mut count = use_signal(|| 0);
+    let mut text = use_signal(|| "...".to_string());
+
     rsx! {
-        Link { to: Route::Breed { breed: "hound".to_string() }, "Hound" }
-    }
-}
-
-#[component]
-fn Breed(breed: String) -> Element {
-    rsx! {
-        BreedGallery { breed: "{breed}", slow: false }
-        SuspenseBoundary {
-            fallback: |_| rsx! { "Loading..." },
-            DoesNotSuspend {}
-            BreedGallery { breed, slow: true }
-        }
-    }
-}
-
-#[component]
-fn DoesNotSuspend() -> Element {
-    rsx! { "404" }
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-struct BreedResponse {
-    message: Vec<String>,
-}
-
-#[component]
-fn BreedGallery(breed: ReadOnlySignal<String>, slow: bool) -> Element {
-    // use_server_future is very similar to use_resource, but the value returned from the future
-    // must implement Serialize and Deserialize and it is automatically suspended
-    let response = use_server_future(move || async move {
-        if slow {
-            #[cfg(feature = "server")]
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        }
-        #[cfg(feature = "server")]
-        {
-            use http::StatusCode;
-            let context = server_context();
-            let mut write = context.response_parts_mut();
-            write.status = StatusCode::NOT_FOUND;
-            write.extensions.insert("error???");
-            write.version = http::Version::HTTP_2;
-            write
-                .headers
-                .insert("x-custom-header", http::HeaderValue::from_static("hello"));
-        }
-        // The future will run on the server during SSR and then get sent to the client
-        reqwest::Client::new()
-            .get(format!("https://dog.ceo/api/breed/{breed}/images"))
-            .send()
-            .await
-            // reqwest::Result does not implement Serialize, so we need to map it to a string which
-            // can be serialized
-            .map_err(|err| err.to_string())?
-            .json::<BreedResponse>()
-            .await
-            .map_err(|err| err.to_string())
-        // use_server_future calls `suspend` internally, so you don't need to call it manually, but you
-        // do need to bubble up the suspense variant with `?`
-    })?;
-
-    // If the future was still pending, it would have returned suspended with the `?` above
-    // we can unwrap the None case here to get the inner result
-    let response_read = response.read();
-    let response = response_read.as_ref().unwrap();
-
-    // Then you can just handle the happy path with the resolved future
-    rsx! {
+        Link { to: Route::Blog { id: count() }, "Go to blog" }
         div {
-            display: "flex",
-            flex_direction: "row",
-            match response {
-                Ok(urls) => rsx! {
-                    for image in urls.message.iter().take(3) {
-                        img {
-                            src: "{image}",
-                            width: "100px",
-                            height: "100px",
-                        }
+            h1 { "High-Five counter: {count}" }
+            button { onclick: move |_| count += 1, "Up high!" }
+            button { onclick: move |_| count -= 1, "Down low!" }
+            button {
+                onclick: move |_| async move {
+                    if let Ok(data) = get_server_data().await {
+                        println!("Client received: {}", data);
+                        text.set(data.clone());
+                        post_server_data(data).await.unwrap();
                     }
                 },
-                Err(err) => rsx! { "Failed to fetch response: {err}" },
+                "Run server function!"
             }
-        }
-    }
+            "Server said: {text}"
+                        }
+                    }
+}
+
+#[server(PostServerData)]
+async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+    println!("Server received: {}", data);
+
+    Ok(())
+}
+
+#[server(GetServerData)]
+async fn get_server_data() -> Result<String, ServerFnError> {
+    Ok("Hello from the server!".to_string())
 }
