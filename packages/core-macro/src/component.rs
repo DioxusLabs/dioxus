@@ -225,13 +225,14 @@ impl ComponentBody {
             ..
         } = sig;
 
+        let where_clause = &generics.where_clause;
         let struct_fields = inputs.iter().map(move |f| make_prop_struct_field(f, vis));
         let struct_ident = Ident::new(&format!("{ident}Props"), ident.span());
 
         parse_quote! {
             #[derive(Props, Clone, PartialEq)]
             #[allow(non_camel_case_types)]
-            #vis struct #struct_ident #generics {
+            #vis struct #struct_ident #generics #where_clause {
                 #(#struct_fields),*
             }
         }

@@ -10,4 +10,4 @@ publish = false
 dioxus = { workspace = true }
 dioxus-liveview = { workspace = true, features = ["axum"] }
 tokio = { workspace = true, features = ["full"] }
-axum = { workspace = true, features = ["ws"] }
+axum = { workspace = true, default-features = true, features = ["ws"] }
