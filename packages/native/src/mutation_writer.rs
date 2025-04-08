@@ -391,6 +391,7 @@ impl WriteMutations for MutationWriter<'_> {
                     }
 
                     if name == "src" && !val.is_empty() {
+                        element.node_specific_data = NodeSpecificData::None;
                         queued_image = Some(val.to_string());
                     }
 
