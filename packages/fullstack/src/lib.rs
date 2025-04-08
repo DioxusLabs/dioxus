@@ -10,6 +10,10 @@ pub use once_cell;
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 pub mod server;
 
+#[cfg(feature = "axum_core")]
+#[cfg_attr(docsrs, doc(cfg(feature = "axum_core")))]
+pub mod axum_core;
+
 pub mod document;
 #[cfg(feature = "server")]
 mod render;
@@ -18,6 +22,7 @@ mod streaming;
 
 #[cfg(feature = "server")]
 mod serve_config;
+
 #[cfg(feature = "server")]
 pub use serve_config::*;
 
@@ -32,6 +37,9 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use crate::server::*;
 
+    #[cfg(feature = "axum_core")]
+    pub use crate::axum_core::*;
+
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::render::{FullstackHTMLTemplate, SSRState};
@@ -40,8 +48,8 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
 
-    #[cfg(all(feature = "server", feature = "axum"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "axum"))))]
+    #[cfg(feature = "axum")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use crate::server_context::Axum;
 
     #[cfg(feature = "server")]

@@ -1322,7 +1322,6 @@ checksum = "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f"
 dependencies = [
  "async-trait",
  "axum-core 0.4.5",
- "axum-macros",
  "base64 0.22.1",
  "bytes",
  "futures-util",
@@ -1413,17 +1412,6 @@ dependencies = [
  "tower 0.5.1",
  "tower-layer",
  "tower-service",
-]
-
-[[package]]
-name = "axum-macros"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d123550fa8d071b7255cb0cc04dc302baa6c8c4a79f55701552684d8399bce"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.98",
 ]
 
 [[package]]
@@ -3870,6 +3858,7 @@ name = "dioxus-examples"
 version = "0.6.3"
 dependencies = [
  "async-std",
+ "axum 0.7.9",
  "base64 0.22.1",
  "ciborium",
  "dioxus",
@@ -4139,6 +4128,13 @@ dependencies = [
  "jni",
  "libc",
  "once_cell",
+]
+
+[[package]]
+name = "dioxus-playwright-default-features-disabled-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
 ]
 
 [[package]]
@@ -5255,8 +5251,6 @@ version = "0.1.0"
 dependencies = [
  "axum 0.7.9",
  "dioxus",
- "http 1.2.0",
- "reqwest 0.12.9",
  "serde",
  "tokio",
 ]
@@ -9017,9 +9011,9 @@ dependencies = [
 
 [[package]]
 name = "openssl"
-version = "0.10.68"
+version = "0.10.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6174bc48f102d208783c2c84bf931bb75927a617866870de8a4ea85597f871f5"
+checksum = "fedfea7d58a1f73118430a55da6a286e7b044961736ce96a16a17068ea25e5da"
 dependencies = [
  "bitflags 2.6.0",
  "cfg-if",
@@ -9058,9 +9052,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.104"
+version = "0.9.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45abf306cbf99debc8195b66b7346498d7b10c210de50418b5ccd7ceba08c741"
+checksum = "8288979acd84749c744a9014b4382d42b8f7b2592847b5afb2ed29e5d16ede07"
 dependencies = [
  "cc",
  "libc",
