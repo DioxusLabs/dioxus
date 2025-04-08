@@ -441,17 +441,17 @@ impl DioxusDocument {
 
         doc.inner.set_base_url("dioxus://index.html");
 
-        doc.initial_build();
+        // doc.initial_build();
 
-        doc.inner.print_tree();
+        // doc.inner.print_tree();
 
         doc
     }
 
     pub fn initial_build(&mut self) {
-        let mut writer = MutationWriter::new(&mut self.inner, &mut self.vdom_state);
+        // let mut writer = MutationWriter::new(&mut self.inner, &mut self.vdom_state);
 
-        self.vdom.rebuild(&mut writer);
+        // self.vdom.rebuild(&mut writer);
         // dbg!(self.vdom.rebuild_to_vec());
         // std::process::exit(0);
         // dbg!(writer.state);

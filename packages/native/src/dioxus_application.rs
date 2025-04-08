@@ -1,6 +1,7 @@
 use blitz_renderer_vello::BlitzVelloRenderer;
 use blitz_shell::BlitzApplication;
-use dioxus_core::ScopeId;
+use dioxus_core::{ScopeId, VirtualDom};
+use dioxus_history::{History, MemoryHistory};
 use std::{collections::HashSet, rc::Rc};
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
@@ -8,18 +9,21 @@ use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::WindowId;
 
 use crate::{
-    contexts::DioxusNativeDocument, BlitzShellEvent, DioxusDocument, DioxusNativeEvent,
+    assets::DioxusNativeNetProvider, contexts::DioxusNativeDocument,
+    mutation_writer::MutationWriter, BlitzShellEvent, DioxusDocument, DioxusNativeEvent,
     WindowConfig,
 };
 
 pub struct DioxusNativeApplication {
+    pending_vdom: Option<VirtualDom>,
     inner: BlitzApplication<DioxusDocument, BlitzVelloRenderer>,
     proxy: EventLoopProxy<BlitzShellEvent>,
 }
 
 impl DioxusNativeApplication {
-    pub fn new(proxy: EventLoopProxy<BlitzShellEvent>) -> Self {
+    pub fn new(proxy: EventLoopProxy<BlitzShellEvent>, vdom: VirtualDom) -> Self {
         Self {
+            pending_vdom: Some(vdom),
             inner: BlitzApplication::new(proxy.clone()),
             proxy,
         }
@@ -83,18 +87,52 @@ impl DioxusNativeApplication {
 
 impl ApplicationHandler<BlitzShellEvent> for DioxusNativeApplication {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        tracing::debug!("Injecting document provider into all windows");
+        let vdom = self.pending_vdom.take().unwrap();
+
+        #[cfg(feature = "net")]
+        let net_provider = {
+            let proxy = self.proxy.clone();
+            let net_provider = DioxusNativeNetProvider::shared(proxy);
+            Some(net_provider)
+        };
+
+        #[cfg(not(feature = "net"))]
+        let net_provider = None;
+
+        // Create document + window from the baked virtualdom
+        let doc = DioxusDocument::new(vdom, net_provider);
+        let window = WindowConfig::new(doc);
+
+        // little hack since View::init is not public - fix this once alpha-2 is out
         let old_windows = self.inner.windows.keys().copied().collect::<HashSet<_>>();
+        self.add_window(window);
         self.inner.resumed(event_loop);
         let new_windows = self.inner.windows.keys().cloned().collect::<HashSet<_>>();
 
         // todo(jon): we should actually mess with the pending windows instead of passing along the contexts
         for window_id in new_windows.difference(&old_windows) {
-            let window = self.inner.windows.get(window_id).unwrap();
+            let window = self.inner.windows.get_mut(window_id).unwrap();
             window.doc.vdom.in_runtime(|| {
                 let shared: Rc<dyn dioxus_document::Document> =
                     Rc::new(DioxusNativeDocument::new(self.proxy.clone(), *window_id));
                 ScopeId::ROOT.provide_context(shared);
             });
+
+            // Add history
+            let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
+            window
+                .doc
+                .vdom
+                .in_runtime(|| ScopeId::ROOT.provide_context(history_provider));
+
+            // Queue rebuild
+            let mut writer = MutationWriter::new(&mut window.doc.inner, &mut window.doc.vdom_state);
+            window.doc.vdom.rebuild(&mut writer);
+            drop(writer);
+
+            // And then request redraw
+            window.request_redraw();
         }
     }
 

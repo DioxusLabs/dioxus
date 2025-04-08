@@ -18,15 +18,13 @@ mod event_handler;
 mod keyboard_event;
 mod mutation_writer;
 
-use assets::DioxusNativeNetProvider;
 pub use dioxus_application::DioxusNativeApplication;
 pub use dioxus_document::DioxusDocument;
-use dioxus_history::{History, MemoryHistory};
 pub use event::DioxusNativeEvent;
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
-use dioxus_core::{ComponentFunction, Element, ScopeId, VirtualDom};
-use std::{any::Any, rc::Rc};
+use dioxus_core::{ComponentFunction, Element, VirtualDom};
+use std::any::Any;
 
 type NodeId = usize;
 
@@ -63,33 +61,6 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         .unwrap();
     let _guard = rt.enter();
 
-    #[cfg(feature = "net")]
-    let net_provider = {
-        let proxy = event_loop.create_proxy();
-        let net_provider = DioxusNativeNetProvider::shared(proxy);
-        Some(net_provider)
-    };
-
-    #[cfg(not(feature = "net"))]
-    let net_provider = None;
-
-    // Spin up the virtualdom
-    // We're going to need to hit it with a special waker
-    let mut vdom = VirtualDom::new_with_props(app, props);
-
-    // Add contexts
-    for context in contexts {
-        vdom.insert_any_root_context(context());
-    }
-
-    // Add history
-    let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-    vdom.in_runtime(|| ScopeId::ROOT.provide_context(history_provider));
-
-    // Create document + window from the baked virtualdom
-    let doc = DioxusDocument::new(vdom, net_provider);
-    let window = WindowConfig::new(doc);
-
     // Setup hot-reloading if enabled.
     #[cfg(all(
         feature = "hot-reload",
@@ -108,9 +79,18 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         }
     }
 
+    // Spin up the virtualdom
+    // We're going to need to hit it with a special waker
+    // Note that we are delaying the initialization of window-specific contexts (net provider, document, etc)
+    let mut vdom = VirtualDom::new_with_props(app, props);
+
+    // Add contexts
+    for context in contexts {
+        vdom.insert_any_root_context(context());
+    }
+
     // Create application
-    let mut application = DioxusNativeApplication::new(event_loop.create_proxy());
-    application.add_window(window);
+    let mut application = DioxusNativeApplication::new(event_loop.create_proxy(), vdom);
 
     // Run event loop
     event_loop.run_app(&mut application).unwrap();

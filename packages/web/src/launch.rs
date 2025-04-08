@@ -21,7 +21,6 @@ pub fn launch(
         .into_iter()
         .find_map(|cfg| cfg.downcast::<Config>().ok())
         .unwrap_or_default();
-
     launch_virtual_dom(vdom, platform_config)
 }
 
