@@ -125,7 +125,7 @@ fn index_request(
 /// The arguments here:
 /// - root_name: the root element (by Id) that we stream edits into
 /// - headless: is this page being loaded but invisible? Important because not all windows are visible and the
-///             interpreter can't connect until the window is ready.
+///   interpreter can't connect until the window is ready.
 fn module_loader(root_id: &str, headless: bool) -> String {
     format!(
         r#"

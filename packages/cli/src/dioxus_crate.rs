@@ -686,7 +686,7 @@ impl DioxusCrate {
                 .flatten()
                 .map(|dir| (dir.file_name(), dir.path()))
                 .sorted()
-                .last()
+                .next_back()
                 .map(|(_, path)| path.to_path_buf())
         });
 
