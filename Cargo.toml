@@ -177,7 +177,7 @@ tracing = "0.1.37"
 tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.18", default-features = false }
 toml = "0.8"
-tokio = "1.40"
+tokio = "1.43"
 slab = "0.4.2"
 slotmap = { version = "1.0.7", features = ["serde"] }
 futures = "0.3.31"
@@ -358,7 +358,7 @@ axum = { workspace = true, default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
-tokio = { version = "1.40", default-features = false, features = [
+tokio = { version = "1.43", default-features = false, features = [
     "sync",
     "macros",
     "io-util",
