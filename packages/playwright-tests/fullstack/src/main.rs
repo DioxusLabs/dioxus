@@ -107,6 +107,9 @@ async fn server_error() -> Result<String, ServerFnError> {
 
 #[component]
 fn Errors() -> Element {
+    // Make the suspense boundary below happen during streaming
+    use_hook(commit_initial_chunk);
+
     rsx! {
         // This is a tricky case for suspense https://github.com/DioxusLabs/dioxus/issues/2570
         // Root suspense boundary is already resolved when the inner suspense boundary throws an error.
@@ -132,7 +135,7 @@ fn Errors() -> Element {
 pub fn ThrowsError() -> Element {
     use_server_future(server_error)?
         .unwrap()
-        .map_err(|err| RenderError::Aborted(CapturedError::from_display(err)))?;
+        .map_err(CapturedError::from_display)?;
     rsx! {
         "success"
     }

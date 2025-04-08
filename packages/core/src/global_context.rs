@@ -1,3 +1,4 @@
+use crate::prelude::SuspenseContext;
 use crate::runtime::RuntimeError;
 use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
 use std::future::Future;
@@ -38,6 +39,13 @@ pub fn throw_error(error: impl Into<CapturedError> + 'static) {
     current_scope_id()
         .unwrap_or_else(|e| panic!("{}", e))
         .throw_error(error)
+}
+
+/// Get the suspense context the current scope is in
+pub fn suspense_context() -> Option<SuspenseContext> {
+    current_scope_id()
+        .unwrap_or_else(|e| panic!("{}", e))
+        .suspense_context()
 }
 
 /// Consume context from the current scope

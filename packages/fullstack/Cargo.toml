@@ -25,7 +25,9 @@ generational-box = { workspace = true }
 # Dioxus + SSR
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-isrg = { workspace = true, optional = true }
-dioxus-router = { workspace = true, optional = true }
+dioxus-router = { workspace = true, features = ["streaming"], optional = true }
+dioxus-fullstack-hooks = { workspace = true }
+dioxus-fullstack-protocol = { workspace = true }
 hyper = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 
@@ -83,7 +85,7 @@ devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 document = ["dioxus-web?/document"]
-web = ["dep:dioxus-web", "dep:web-sys"]
+web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web"]
 desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 mobile = ["dep:dioxus-mobile", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 default-tls = ["server_fn/default-tls"]
@@ -103,6 +105,7 @@ axum = [
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",
+    "dioxus-fullstack-hooks/server",
     "dep:tokio",
     "dep:tokio-util",
     "dep:tokio-stream",
