@@ -39,67 +39,67 @@ impl HtmlEventConverter for NativeConverter {
     }
 
     fn convert_animation_data(&self, _event: &PlatformEventData) -> AnimationData {
-        todo!()
+        todo!("todo: convert_animation_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_clipboard_data(&self, _event: &PlatformEventData) -> ClipboardData {
-        todo!()
+        todo!("todo: convert_clipboard_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_composition_data(&self, _event: &PlatformEventData) -> CompositionData {
-        todo!()
+        todo!("todo: convert_composition_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_drag_data(&self, _event: &PlatformEventData) -> DragData {
-        todo!()
+        todo!("todo: convert_drag_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_image_data(&self, _event: &PlatformEventData) -> ImageData {
-        todo!()
+        todo!("todo: convert_image_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_media_data(&self, _event: &PlatformEventData) -> MediaData {
-        todo!()
+        todo!("todo: convert_media_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_mounted_data(&self, _event: &PlatformEventData) -> MountedData {
-        todo!()
+        todo!("todo: convert_mounted_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_pointer_data(&self, _event: &PlatformEventData) -> PointerData {
-        todo!()
+        todo!("todo: convert_pointer_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_scroll_data(&self, _event: &PlatformEventData) -> ScrollData {
-        todo!()
+        todo!("todo: convert_scroll_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_selection_data(&self, _event: &PlatformEventData) -> SelectionData {
-        todo!()
+        todo!("todo: convert_selection_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_toggle_data(&self, _event: &PlatformEventData) -> ToggleData {
-        todo!()
+        todo!("todo: convert_toggle_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_touch_data(&self, _event: &PlatformEventData) -> TouchData {
-        todo!()
+        todo!("todo: convert_touch_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_transition_data(&self, _event: &PlatformEventData) -> TransitionData {
-        todo!()
+        todo!("todo: convert_transition_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_wheel_data(&self, _event: &PlatformEventData) -> WheelData {
-        todo!()
+        todo!("todo: convert_wheel_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_resize_data(&self, _event: &PlatformEventData) -> ResizeData {
-        todo!()
+        todo!("todo: convert_resize_data in dioxus-native. requires support in blitz")
     }
 
     fn convert_visible_data(&self, _event: &PlatformEventData) -> VisibleData {
-        todo!()
+        todo!("todo: convert_visible_data in dioxus-native. requires support in blitz")
     }
 }
 
