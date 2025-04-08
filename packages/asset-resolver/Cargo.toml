@@ -2,11 +2,18 @@
 name = "dioxus-asset-resolver"
 edition = "2021"
 version.workspace = true
+authors = ["Jonathan Kelley", "Dioxus Labs"]
+description = "Cross-platform asset resolver for manganis and dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["web", "desktop", "mobile", "gui", "wasm"]
+rust-version = "1.79.0"
 
 [dependencies]
-http = "1.2"
-urlencoding = "2.1.2"
-infer = "0.16.0"
+http = { workspace = true }
+urlencoding = { workspace = true }
+infer = { workspace = true }
 thiserror = { workspace = true }
 dioxus-cli-config = { workspace = true }
 
