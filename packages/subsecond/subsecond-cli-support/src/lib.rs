@@ -2,11 +2,12 @@ use anyhow::{Context, Result};
 use itertools::Itertools;
 use memmap::{Mmap, MmapOptions};
 use object::{
-    macho,
+    macho::{self, ARM64_RELOC_UNSIGNED, MH_TWOLEVEL},
     read::File,
     write::{MachOBuildVersion, Relocation, StandardSection, Symbol, SymbolSection},
     Architecture, BinaryFormat, Endianness, Object, ObjectSection, ObjectSymbol, ObjectSymbolTable,
-    RelocationTarget, SectionIndex, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
+    RelocationFlags, RelocationTarget, SectionIndex, SectionKind, SymbolFlags, SymbolKind,
+    SymbolScope,
 };
 use std::{cmp::Ordering, ffi::OsStr, fs, ops::Deref, path::PathBuf};
 use std::{
@@ -28,7 +29,7 @@ use wasmparser::{
 use walrus::{
     ir::{dfs_in_order, Visitor},
     ElementItems, ElementKind, FunctionId, FunctionKind, IdsToIndices, ImportKind, Module,
-    ModuleConfig, RawCustomSection,
+    ModuleConfig, RawCustomSection, ValType,
 };
 
 pub mod lift;
@@ -40,7 +41,7 @@ pub fn create_jump_table(
     triple: &Triple,
 ) -> anyhow::Result<JumpTable> {
     if triple.architecture == target_lexicon::Architecture::Wasm32 {
-        return create_wasm_jump_table(original, patch, triple);
+        return create_wasm_jump_table(original, patch);
     }
 
     let obj1_bytes = fs::read(original).context("Could not read original file")?;
@@ -105,7 +106,7 @@ pub fn create_jump_table(
     Ok(JumpTable {
         lib: patch.to_path_buf(),
         map,
-        got: vec![],
+        got: Default::default(),
         old_base_address,
         new_base_address,
         aslr_reference,
@@ -115,11 +116,8 @@ pub fn create_jump_table(
 /// In the web, our patchable functions are actually ifuncs
 ///
 /// We need to line up the ifuncs from the main module to the ifuncs in the patch.
-fn create_wasm_jump_table(
-    original: &Path,
-    patch: &Path,
-    triple: &Triple,
-) -> anyhow::Result<JumpTable> {
+fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpTable> {
+    tracing::info!("jumping {} to {}", original.display(), patch.display());
     let obj1_bytes = fs::read(original).context("Could not read original file")?;
     let obj2_bytes = fs::read(patch).context("Could not read patch file")?;
 
@@ -132,15 +130,26 @@ fn create_wasm_jump_table(
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new {
         if let Some(old_idx) = name_to_ifunc_old.get(name) {
+            // tracing::info!("Mapping {name} from {old_idx} to {idx}");
             map.insert(*old_idx as u64, idx as u64);
         }
     }
 
     tracing::info!("Jump table: {:?}", map);
+    for data in mod_new.data.iter() {
+        tracing::info!("Data: {:?} - {:?}", data.name, data.kind);
+    }
+
+    for global in mod_new.globals.iter() {
+        tracing::info!("Global: {:?} - {:?}", global.name, global.kind);
+    }
+    for el in mod_new.elements.iter() {
+        tracing::info!("Elemenet: {:?} - {:?}", el.name, el.kind);
+    }
 
     Ok(JumpTable {
         map,
-        got: vec![],
+        got: Default::default(),
         lib: patch.to_path_buf(),
         aslr_reference: 0,
         old_base_address: 0,
@@ -164,7 +173,11 @@ fn collect_func_ifuncs(mod_new: &Module) -> HashMap<&str, i32> {
                 walrus::ir::Value::F64(_) => todo!(),
                 walrus::ir::Value::V128(_) => todo!(),
             },
-            walrus::ConstExpr::Global(id) => todo!(),
+            walrus::ConstExpr::Global(id) => {
+                let global = mod_new.globals.get(*id);
+                tracing::info!("refercning global {:?}", global);
+                continue;
+            }
             walrus::ConstExpr::RefNull(ref_type) => todo!(),
             walrus::ConstExpr::RefFunc(id) => todo!(),
         };
@@ -181,10 +194,6 @@ fn collect_func_ifuncs(mod_new: &Module) -> HashMap<&str, i32> {
                 panic!("Unsupported element kind: {:?}", ref_type);
             }
         }
-    }
-
-    for data in mod_new.data.iter() {
-        tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
     }
 
     name_to_ifunc_index
@@ -302,32 +311,8 @@ pub fn resolve_undefined(
     };
 
     if triple.architecture == target_lexicon::Architecture::Wasm32 {
-        // let data = std::fs::read(source_path).unwrap();
-        // return Ok(crate::wasm::resolve_data_syms_file(&data, incrementals));
         return Ok(vec![]);
     }
-
-    // todo - explore using the dynamic linker instead of known addresses
-    //
-    // obj.add_symbol(Symbol {
-    //     // name: name.as_bytes()[name_offset..].to_vec(),
-    //     name: name.as_bytes().to_vec(),
-    //     value: 0,
-    //     size: 0,
-    //     kind: sym.kind(),
-    //     scope: object::SymbolScope::Dynamic,
-    //     weak: false,
-    //     section: object::write::SymbolSection::Undefined,
-    //     flags: object::SymbolFlags::None,
-    //     // name: name.as_bytes()[name_offset..].to_vec(),
-    //     // value: offset,
-    //     // size: jump_code.len() as u64,
-    //     // scope: SymbolScope::Dynamic,
-    //     // kind: sym.kind(),
-    //     // weak: false,
-    //     // section: SymbolSection::Undefined,
-    //     // flags: object::SymbolFlags::None,
-    // });
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
@@ -512,240 +497,71 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
 ///
 /// Since the user can reload the page, killing our ASLR reference, we need to make the patch itself
 /// relocatable.
-pub fn move_func_initiailizers(original: &[u8], bytes: &[u8]) -> Result<Vec<u8>> {
+///
+/// This involves making the ifunc initializers
+pub fn move_func_initiailizers(bytes: &[u8]) -> Result<(Vec<u8>, HashMap<String, u64>)> {
     let mut module = walrus::Module::from_buffer(bytes)?;
 
-    let (ifunc_global, _) =
-        module.add_import_global("env", "__IFUNC_OFFSET", walrus::ValType::I32, false, false);
+    let mut offsets = vec![];
 
-    let (data_global, _) =
-        module.add_import_global("env", "__DATA_OFFSET", walrus::ValType::I32, false, false);
+    let (ifunc_global, _) =
+        module.add_import_global("env", "__IFUNC_OFFSET", ValType::I32, false, false);
+
+    let (ro_data, _) =
+        module.add_import_global("env", "__RO_DATA_OFFSET", ValType::I32, false, false);
+
+    let (bss_data, _) =
+        module.add_import_global("env", "__BSS_DATA_OFFSET", ValType::I32, false, false);
 
     let table = module.tables.iter_mut().next().unwrap();
-    // table.initial = 2;
-    // table.initial = 1700;
-    // table.initial = 0;
-    // table.initial = 1549;
     let segments = table.elem_segments.clone();
 
     for seg in segments {
         if let ElementKind::Active { table, offset } = &mut module.elements.get_mut(seg).kind {
+            tracing::info!("Updating active Segment: {:?}", seg);
             *offset = walrus::ConstExpr::Global(ifunc_global);
         }
     }
 
-    // // We want to accumulate the data from the various datas and write them to a new merged data with a specific initializer
-    // // this initializer will be set by our "dlopen" shim, making our patches entirely relocatable
-    // // This currently assumes the data sections are contiguous... which uhhh I sure hope they are!
-    // let datas = module.data.iter().map(|f| f.id()).collect_vec();
-    // let mut merged_data = vec![];
+    let datas = module.data.iter().map(|f| f.id()).collect::<Vec<_>>();
+    for data in datas {
+        let data = module.data.get_mut(data);
+        if let walrus::DataKind::Active { offset, .. } = &mut data.kind {
+            let orig_offset = match &offset {
+                walrus::ConstExpr::Value(value) => match value {
+                    walrus::ir::Value::I32(val) => *val,
+                    _ => continue,
+                },
+                _ => continue,
+            };
 
-    // for id in datas {
-    //     let data = module.data.get_mut(id);
-    //     merged_data.extend(data.value.split_off(0));
-    // }
+            match data.name.as_deref() {
+                Some(".bss") => {
+                    tracing::info!("Updating bss segment: {:?}", data.name);
+                    *offset = walrus::ConstExpr::Global(bss_data);
+                    offsets.push(("__BSS_DATA_OFFSET".to_string(), orig_offset as u64));
+                }
+                Some(".rodata") => {
+                    tracing::info!("Updating rodata segment: {:?}", data.name);
+                    *offset = walrus::ConstExpr::Global(ro_data);
+                    offsets.push(("__RO_DATA_OFFSET".to_string(), orig_offset as u64));
+                }
+                _ => continue,
+            }
+        }
+    }
 
-    // // create a new data initializer
-    // module.data.add(
-    //     walrus::DataKind::Active {
-    //         memory: module.memories.iter().next().unwrap().id(),
-    //         offset: walrus::ConstExpr::Global(data_global),
-    //     },
-    //     merged_data,
-    // );
+    // Sort by offset order
+    offsets.sort_by(|a, b| a.1.cmp(&b.1));
 
-    // tracing::info!(
-    //     "data {:?} [{} bytes] -> kind {:?} ",
-    //     data.name,
-    //     data.value.len(),
-    //     data.kind
-    // );
-
-    // // this is our symbol, we need to initialize it at a new offset
-    // // maybe we could merge them together and then plop it somewhere?
-    // if data
-    //     .value
-    //     .iter()
-    //     .copied()
-    //     .map(|f| f as usize)
-    //     .sum::<usize>()
-    //     > 0
-    // {
-    // // this is our symbol, move its offset;
-    // match &mut data.kind {
-    //     walrus::DataKind::Active { memory, offset } => match offset {
-    //         walrus::ConstExpr::Value(value) => match value {
-    //             walrus::ir::Value::I32(idx) => {
-    //                 let old = *idx;
-    //                 *idx += (((offset_idx + 1) * 65536) + 2097152) as i32;
-    //                 tracing::warn!("Shifting data initializer from {} to {:?}", old, idx);
-    //             }
-    //             walrus::ir::Value::I64(_) => todo!(),
-    //             walrus::ir::Value::F32(_) => todo!(),
-    //             walrus::ir::Value::F64(_) => todo!(),
-    //             walrus::ir::Value::V128(_) => todo!(),
-    //         },
-    //         walrus::ConstExpr::Global(id) => todo!(),
-    //         walrus::ConstExpr::RefNull(ref_type) => todo!(),
-    //         walrus::ConstExpr::RefFunc(id) => todo!(),
-    //     },
-    //     walrus::DataKind::Passive => {}
-    // }
-    // } else {
-    //     // this isn't our symbol. we leave it at this offset but don't run the initializer
-    //     data.value = vec![];
-    //     data.kind = walrus::DataKind::Passive
-    // }
-
-    let bindgen_funcs = collect_all_wasm_bindgen_funcs(&module);
-
-    // Due to monomorphizations, functions will get merged and multiple names will point to the same function.
-    // Walrus loses this information, so we need to manually parse the names table to get the indices
-    // and names of these functions.
-    let raw_data = parse_bytes_to_data_segment(bytes)?;
-
-    // name -> index
-    // we want to export *all* these functions
-    let all_funcs = raw_data
+    // And then normalize to the first offset
+    let first_offset = offsets.first().map(|f| f.1).unwrap_or(0);
+    let offsets = offsets
         .iter()
-        .flat_map(|sym| match sym {
-            SymbolInfo::Func { flags, index, name } => Some((name.as_deref()?, *index)),
-            // SymbolInfo::Func { flags, index, name } => Some((name.as_deref()?, *index)),
-            _ => None,
-        })
+        .map(|(name, offset)| (name.clone(), offset - first_offset))
         .collect::<HashMap<_, _>>();
 
-    // for func in all_funcs.iter() {
-    //     tracing::info!("Func: {:?}", func);
-    // }
-
-    // let index_to_func = module.funcs.iter().enumerate().collect::<HashMap<_, _>>();
-
-    // let mut already_exported = module
-    //     .exports
-    //     .iter()
-    //     .map(|exp| exp.name.clone())
-    //     .chain(
-    //         bindgen_funcs
-    //             .iter()
-    //             .map(|id| module.funcs.get(*id).name.as_ref().unwrap().clone()),
-    //     )
-    //     .collect::<HashSet<_>>();
-
-    // for (name, index) in all_funcs {
-    //     let func = index_to_func.get(&(index as usize)).unwrap();
-    //     let FunctionKind::Local(local) = &func.kind else {
-    //         continue;
-    //     };
-
-    //     if !already_exported.contains(name) {
-    //         module.exports.add(&name, func.id());
-    //         already_exported.insert(name.to_string());
-    //     }
-    // }
-
-    // let (data_start, _) =
-    //     module.add_import_global("env", "__DATA_START", walrus::ValType::I32, false, false);
-    // // let (data_start, _) =
-    // //     module.add_import_global("env", "__RO_DATA_START", walrus::ValType::I32, false, false);
-    // // let (bss_start, _) = module.add_import_global(
-    // //     "env",
-    // //     "__BSS_DATA_START",
-    // //     walrus::ValType::I32,
-    // //     false,
-    // //     false,
-    // // );
-
-    // for element in module.elements.iter() {
-    //     tracing::info!("Element: {:?}", element);
-    // }
-
-    // for global in module.globals.iter() {
-    //     tracing::info!("Global: {:?}", global);
-    // }
-
-    // for import in module.imports.iter() {
-    //     tracing::info!("Import: {:?}", import);
-    // }
-
-    // let datas = module.data.iter().map(|d| d.id()).collect::<Vec<_>>();
-    // // let smallest_offset = module
-    // //     .data
-    // //     .iter()
-    // //     .flat_map(|d| match d.kind {
-    // //         walrus::DataKind::Active { memory, offset } => match offset {
-    // //             walrus::ConstExpr::Value(value) => match value {
-    // //                 walrus::ir::Value::I32(t) => Some(t),
-    // //                 walrus::ir::Value::I64(t) => panic!(),
-    // //                 walrus::ir::Value::F32(_) => None,
-    // //                 walrus::ir::Value::F64(_) => None,
-    // //                 walrus::ir::Value::V128(_) => None,
-    // //             },
-    // //             walrus::ConstExpr::Global(id) => None,
-    // //             walrus::ConstExpr::RefNull(ref_type) => None,
-    // //             walrus::ConstExpr::RefFunc(id) => None,
-    // //         },
-    // //         walrus::DataKind::Passive => None,
-    // //     })
-    // //     .min()
-    // //     .unwrap();
-
-    // for data in datas {
-    //     let data = module.data.get_mut(data);
-    //     tracing::info!("Data segment {:?}: {:?}", data.name, data.kind);
-    //     match &mut data.kind {
-    //         walrus::DataKind::Active { memory, offset } => {
-    //             // match data.name.as_deref() {
-    //             //     Some(".rodata") => {
-    //             //         // Data start:  1900544 BSS start:  2097152
-
-    //             //         // *offset = walrus::ConstExpr::Value(walrus::ir::Value::I32(1900544));
-    //             //         // *offset = walrus::ConstExpr::Global(data_start);
-    //             //     }
-    //             //     Some(".bss") => {
-    //             //         // *offset = walrus::ConstExpr::Value(walrus::ir::Value::I32(2097152));
-    //             //         // *offset = walrus::ConstExpr::Global(bss_start);
-    //             //         // *offset = walrus::ConstExpr::Global(bss_start);
-    //             //     }
-    //             //     _ => {}
-    //             // }
-    //             // match data.name.as_deref() {
-    //             //     Some(".rodata") => {
-    //             //         *offset = walrus::ConstExpr::Global(data_start);
-    //             //     }
-    //             //     Some(".bss") => {
-    //             //         *offset = walrus::ConstExpr::Global(bss_start);
-    //             //     }
-    //             //     _ => {}
-    //             // }
-
-    //             let orig_offset = match offset {
-    //                 walrus::ConstExpr::Value(value) => match value {
-    //                     walrus::ir::Value::I32(t) => t,
-    //                     walrus::ir::Value::I64(_) => todo!(),
-    //                     walrus::ir::Value::F32(_) => todo!(),
-    //                     walrus::ir::Value::F64(_) => todo!(),
-    //                     walrus::ir::Value::V128(_) => todo!(),
-    //                 },
-    //                 walrus::ConstExpr::Global(id) => todo!(),
-    //                 walrus::ConstExpr::RefNull(ref_type) => todo!(),
-    //                 walrus::ConstExpr::RefFunc(id) => todo!(),
-    //             };
-
-    //             *orig_offset += (((offset_idx + 1) * 65536) + 2097152) as i32;
-    //             tracing::info!("New offset: {:?}", offset);
-    //             let memory = module.memories.get(*memory);
-    //             tracing::info!("Memory: {:?} {:?} ", memory.import, memory.name);
-    //         }
-    //         walrus::DataKind::Passive => {}
-    //     }
-    // }
-
-    // for segment in module.elements.iter() {
-    //     tracing::info!("Segment: {:?}", segment);
-    // }
-
-    Ok(module.emit_wasm())
+    Ok((module.emit_wasm(), offsets))
 }
 
 /// Manually parse the data section from a wasm module

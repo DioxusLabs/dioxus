@@ -107,8 +107,16 @@ async fn main() -> anyhow::Result<()> {
 
         // Assemble the jump table of redirected addresses
         // todo: keep track of this and merge it over time
-        let jump_table =
+        let mut jump_table =
             create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path(), &target).unwrap();
+
+        // Rebase the wasm binary to be relocatable once the jump table is generated
+        if target.architecture == target_lexicon::Architecture::Wasm32 {
+            let out_bytes = std::fs::read(&output_temp).unwrap();
+            let (res_, bases) = move_func_initiailizers(&out_bytes).unwrap();
+            std::fs::write(&output_temp, res_).unwrap();
+            jump_table.got = bases;
+        }
 
         client
             .socket
@@ -360,7 +368,6 @@ async fn fast_build(
             Command::new("cc")
                 .args(object_files)
                 .arg("-Wl,-dylib")
-                // .arg("-Wl,-undefined,dynamic_lookup")
                 .arg("-arch")
                 .arg("arm64")
                 .arg("-o")
@@ -371,15 +378,15 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
-            // const WASM_PAGE_SIZE: u64 = 65536;
-            // let table_base = 2000 * (aslr_reference + 1);
-            // let global_base =
-            //     ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
-            // tracing::info!(
-            //     "using aslr of table: {} and global: {}",
-            //     table_base,
-            //     global_base
-            // );
+            const WASM_PAGE_SIZE: u64 = 65536;
+            let table_base = 2000 * (aslr_reference + 1);
+            let global_base =
+                ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
+            tracing::info!(
+                "using aslr of table: {} and global: {}",
+                table_base,
+                global_base
+            );
             Command::new(wasm_ld().await.unwrap())
                 .args(object_files)
                 .arg("--import-memory")
@@ -388,13 +395,14 @@ async fn fast_build(
                 .arg("--export")
                 .arg("main")
                 .arg("--export-all")
-                .arg("-z")
-                .arg("stack-size=1048576")
-                .arg("--stack-first")
+                // .arg("-z")
+                // .arg("stack-size=1048576")
+                // .arg("--stack-first")
                 .arg("--allow-undefined")
                 .arg("--no-demangle")
                 .arg("--no-entry")
                 .arg("--emit-relocs")
+                .arg("--experimental-pic")
                 // .arg(format!("--table-base={}", table_base))
                 // .arg(format!("--global-base={}", global_base))
                 .arg("-o")
@@ -412,12 +420,7 @@ async fn fast_build(
         tracing::error!("errs: {errs}");
     }
 
-    if target.architecture == target_lexicon::Architecture::Wasm32 {
-        let out_bytes = std::fs::read(&output_location).unwrap();
-        let original_butes = std::fs::read(&original.output_location).unwrap();
-        let res_ = move_func_initiailizers(&original_butes, &out_bytes).unwrap();
-        std::fs::write(&output_location, res_).unwrap();
-    }
+    tracing::info!("fast_build output: {output_location:?}");
 
     Ok(output_location)
 }

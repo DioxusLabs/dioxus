@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 mod nohasher;
 pub use nohasher::AddressMap;
@@ -21,7 +21,7 @@ pub struct JumpTable {
     /// Global offset table required to relocate the data segment
     ///
     /// This is used mainly for WASM to relocate the data segment to the correct address
-    pub got: Vec<(String, u64)>,
+    pub got: HashMap<String, u64>,
 
     /// The location of the aslr reference in the binary, used to calcualte offsets for the jump table
     pub aslr_reference: u64,

@@ -560,7 +560,7 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
         aslr_reference: 0,
         lib: PathBuf::from("patch.wasm"),
         map,
-        got: vec![],
+        got: Default::default(),
         new_base_address: 0,
         old_base_address: 0,
     };
@@ -568,7 +568,7 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
     unsafe { apply_patch(table) }
 }
 
-pub async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {
+async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {
     use js_sys::Reflect;
     use js_sys::Uint32Array;
     use subsecond_types::AddressMap;

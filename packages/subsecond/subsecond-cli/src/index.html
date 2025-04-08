@@ -19,22 +19,32 @@
              * @returns {void} This function does not return a value.
              */
             function loadAndPatch(jump, base) {
+                window.jump = jump;
                 fetch(jump.lib)
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
-
-                        // const bss_start = base.memory.buffer.byteLength;
                         const pageSize = 64 * 1024;
                         const ifunc_length = base.__indirect_function_table.length;
                         const data_start = Math.ceil((base.memory.buffer.byteLength / pageSize) + 1 ) * pageSize;
-                        base.memory.grow(20)
+                        base.memory.grow(20);
                         base.__indirect_function_table.grow(2000);
+
+                        // move the jumptable "to" addresses by the ifunc length
+                        for (let key of Object.keys(jump.map)) {
+                            let entry = jump.map[key];
+                            if (entry === undefined) {
+                                continue;
+                            }
+                            jump.map[key] = entry + ifunc_length;
+                        }
+
+                        const bss_start = data_start + jump.got["__BSS_DATA_OFFSET"];
+                        const ro_start = data_start + jump.got["__RO_DATA_OFFSET"];
 
                         let imports = {
                             env: {
-                                // __BSS_DATA_START: new WebAssembly.Global({value: "i32", mutable: false }, bss_start),
-                                // __RO_DATA_START: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
-                                __DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, data_start),
+                                __BSS_DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, bss_start),
+                                __RO_DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ro_start),
                                 __IFUNC_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ifunc_length + 1),
                                 __indirect_function_table: base.__indirect_function_table,
                                 __stack_pointer: base.__stack_pointer,
@@ -51,7 +61,6 @@
                         window.jump = jump;
                         base["__subsecond_wasm_patch"](jump.map);
                     });
-
             }
 
 
