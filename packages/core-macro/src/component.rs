@@ -227,16 +227,23 @@ impl ComponentBody {
             generics,
             ..
         } = sig;
-        // AngleBracketedGenericArguments
-        let generic_arguments = generics.params.iter().map(make_prop_struct_generics).collect::<Punctuated<_, Token![,]>>();
-        let generic_arguments = if generic_arguments.is_empty() {
-            quote! {}
-        } else {
+
+        let generic_arguments = if !generics.params.is_empty() {
+            let generic_arguments = generics
+                .params
+                .iter()
+                .map(make_prop_struct_generics)
+                .collect::<Punctuated<_, Token![,]>>();
             quote! { <#generic_arguments> }
+        } else {
+            quote! {}
         };
         let where_clause = &generics.where_clause;
         let struct_fields = inputs.iter().map(move |f| make_prop_struct_field(f, vis));
-        let struct_field_idents = inputs.iter().map(make_prop_struct_field_idents).collect::<Vec<_>>();
+        let struct_field_idents = inputs
+            .iter()
+            .map(make_prop_struct_field_idents)
+            .collect::<Vec<_>>();
         let struct_ident = Ident::new(&format!("{ident}Props"), ident.span());
 
         let item_struct = parse_quote! {
@@ -537,9 +544,7 @@ fn make_prop_struct_field_idents(f: &FnArg) -> &Ident {
     match pt.pat.as_ref() {
         // rip off mutability
         // todo: we actually don't want any of the extra bits of the field pattern
-        Pat::Ident(f) => {
-            &f.ident
-        }
+        Pat::Ident(f) => &f.ident,
         _ => unreachable!(),
     }
 }
