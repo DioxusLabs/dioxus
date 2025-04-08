@@ -236,7 +236,6 @@ pub(crate) fn add_server_context(
     }
 }
 
-
 /// State used by [`render_handler`] to render a dioxus component with axum
 #[derive(Clone)]
 pub struct RenderHandleState {
