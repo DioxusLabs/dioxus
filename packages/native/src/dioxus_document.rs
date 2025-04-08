@@ -14,8 +14,7 @@ use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{set_event_converter, FormValue, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
 
-use super::event_handler::{NativeClickData, NativeConverter, NativeFormData};
-use crate::keyboard_event::BlitzKeyboardData;
+use super::event_handler::{BlitzKeyboardData, NativeClickData, NativeConverter, NativeFormData};
 use crate::mutation_writer::{DioxusState, MutationWriter};
 use crate::NodeId;
 
@@ -94,10 +93,10 @@ impl Document for DioxusDocument {
         let mut stop_propagation = false;
 
         match &event.data {
-            DomEventData::MouseMove { .. }
-            | DomEventData::MouseDown { .. }
-            | DomEventData::MouseUp { .. } => {
-                let click_event_data = wrap_event_data(NativeClickData);
+            DomEventData::MouseMove(data)
+            | DomEventData::MouseDown(data)
+            | DomEventData::MouseUp(data) => {
+                let click_event_data = wrap_event_data(NativeClickData(data.clone()));
 
                 for node_id in chain.clone().into_iter() {
                     let node = &self.inner.tree()[node_id];
@@ -117,8 +116,9 @@ impl Document for DioxusDocument {
                     }
                 }
             }
-            DomEventData::Click { .. } => {
-                let click_event_data = wrap_event_data(NativeClickData);
+
+            DomEventData::Click(data) => {
+                let click_event_data = wrap_event_data(NativeClickData(data.clone()));
 
                 for node_id in chain.clone().into_iter() {
                     let node = &self.inner.tree()[node_id];
@@ -212,6 +212,7 @@ impl Document for DioxusDocument {
                     }
                 }
             }
+
             DomEventData::KeyPress(kevent) => {
                 let key_event_data = wrap_event_data(BlitzKeyboardData(kevent.clone()));
 
@@ -277,9 +278,11 @@ impl Document for DioxusDocument {
                     }
                 }
             }
+
+            DomEventData::Hover => {}
+
             // TODO: Implement IME and Hover events handling
             DomEventData::Ime(_) => {}
-            DomEventData::Hover => {}
         }
 
         if !event.cancelable || !prevent_default {

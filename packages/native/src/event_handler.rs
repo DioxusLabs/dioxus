@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use blitz_traits::{BlitzKeyEvent, BlitzMouseButtonEvent, MouseEventButton};
 use dioxus_html::{
     geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
@@ -11,55 +10,34 @@ use dioxus_html::{
     MountedData, MouseData, PlatformEventData, PointerData, ResizeData, ScrollData, SelectionData,
     ToggleData, TouchData, TransitionData, VisibleData, WheelData,
 };
-use keyboard_types::Modifiers;
-
-use super::keyboard_event::BlitzKeyboardData;
-
-#[derive(Clone)]
-pub struct NativeClickData;
-
-impl InteractionLocation for NativeClickData {
-    fn client_coordinates(&self) -> ClientPoint {
-        todo!()
-    }
-
-    fn screen_coordinates(&self) -> ScreenPoint {
-        todo!()
-    }
-
-    fn page_coordinates(&self) -> PagePoint {
-        todo!()
-    }
-}
-impl InteractionElementOffset for NativeClickData {
-    fn element_coordinates(&self) -> ElementPoint {
-        todo!()
-    }
-}
-impl ModifiersInteraction for NativeClickData {
-    fn modifiers(&self) -> Modifiers {
-        todo!()
-    }
-}
-
-impl PointerInteraction for NativeClickData {
-    fn trigger_button(&self) -> Option<MouseButton> {
-        todo!()
-    }
-
-    fn held_buttons(&self) -> MouseButtonSet {
-        todo!()
-    }
-}
-impl HasMouseData for NativeClickData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self as &dyn std::any::Any
-    }
-}
+use dioxus_html::{HasFocusData, HasKeyboardData};
+use keyboard_types::{Code, Key, Location, Modifiers};
+use std::any::Any;
+use std::collections::HashMap;
 
 pub struct NativeConverter {}
 
 impl HtmlEventConverter for NativeConverter {
+    fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
+        event.downcast::<NativeFormData>().unwrap().clone().into()
+    }
+
+    fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {
+        event.downcast::<NativeClickData>().unwrap().clone().into()
+    }
+
+    fn convert_keyboard_data(&self, event: &PlatformEventData) -> KeyboardData {
+        event
+            .downcast::<BlitzKeyboardData>()
+            .unwrap()
+            .clone()
+            .into()
+    }
+
+    fn convert_focus_data(&self, _event: &PlatformEventData) -> FocusData {
+        NativeFocusData {}.into()
+    }
+
     fn convert_animation_data(&self, _event: &PlatformEventData) -> AnimationData {
         todo!()
     }
@@ -76,22 +54,8 @@ impl HtmlEventConverter for NativeConverter {
         todo!()
     }
 
-    fn convert_focus_data(&self, _event: &PlatformEventData) -> FocusData {
-        todo!()
-    }
-
-    fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
-        let o = event.downcast::<NativeFormData>().unwrap().clone();
-        FormData::from(o)
-    }
-
     fn convert_image_data(&self, _event: &PlatformEventData) -> ImageData {
         todo!()
-    }
-
-    fn convert_keyboard_data(&self, event: &PlatformEventData) -> KeyboardData {
-        let data = event.downcast::<BlitzKeyboardData>().unwrap().clone();
-        KeyboardData::from(data)
     }
 
     fn convert_media_data(&self, _event: &PlatformEventData) -> MediaData {
@@ -100,11 +64,6 @@ impl HtmlEventConverter for NativeConverter {
 
     fn convert_mounted_data(&self, _event: &PlatformEventData) -> MountedData {
         todo!()
-    }
-
-    fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {
-        let o = event.downcast::<NativeClickData>().unwrap().clone();
-        MouseData::from(o)
     }
 
     fn convert_pointer_data(&self, _event: &PlatformEventData) -> PointerData {
@@ -165,3 +124,97 @@ impl HasFormData for NativeFormData {
 }
 
 impl HasFileData for NativeFormData {}
+
+#[derive(Clone, Debug)]
+pub(crate) struct BlitzKeyboardData(pub(crate) BlitzKeyEvent);
+
+impl ModifiersInteraction for BlitzKeyboardData {
+    fn modifiers(&self) -> Modifiers {
+        self.0.modifiers
+    }
+}
+
+impl HasKeyboardData for BlitzKeyboardData {
+    fn key(&self) -> Key {
+        self.0.key.clone()
+    }
+
+    fn code(&self) -> Code {
+        self.0.code
+    }
+
+    fn location(&self) -> Location {
+        self.0.location
+    }
+
+    fn is_auto_repeating(&self) -> bool {
+        self.0.is_auto_repeating
+    }
+
+    fn is_composing(&self) -> bool {
+        self.0.is_composing
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self as &dyn Any
+    }
+}
+
+#[derive(Clone)]
+pub struct NativeClickData(pub(crate) BlitzMouseButtonEvent);
+
+impl InteractionLocation for NativeClickData {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.0.x as _, self.0.y as _)
+    }
+
+    // these require blitz to pass them along, or a dom rect
+    fn screen_coordinates(&self) -> ScreenPoint {
+        unimplemented!()
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        unimplemented!()
+    }
+}
+
+impl InteractionElementOffset for NativeClickData {
+    fn element_coordinates(&self) -> ElementPoint {
+        todo!()
+    }
+}
+
+impl ModifiersInteraction for NativeClickData {
+    fn modifiers(&self) -> Modifiers {
+        self.0.mods
+    }
+}
+
+impl PointerInteraction for NativeClickData {
+    fn trigger_button(&self) -> Option<MouseButton> {
+        Some(match self.0.button {
+            MouseEventButton::Main => MouseButton::Primary,
+            MouseEventButton::Auxiliary => MouseButton::Auxiliary,
+            MouseEventButton::Secondary => MouseButton::Secondary,
+            MouseEventButton::Fourth => MouseButton::Fourth,
+            MouseEventButton::Fifth => MouseButton::Fifth,
+        })
+    }
+
+    fn held_buttons(&self) -> MouseButtonSet {
+        dioxus_html::input_data::decode_mouse_button_set(self.0.buttons.bits() as u16)
+    }
+}
+impl HasMouseData for NativeClickData {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self as &dyn std::any::Any
+    }
+}
+
+#[derive(Clone)]
+pub struct NativeFocusData {}
+impl HasFocusData for NativeFocusData {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self as &dyn std::any::Any
+    }
+}
