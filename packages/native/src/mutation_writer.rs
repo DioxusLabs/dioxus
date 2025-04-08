@@ -159,12 +159,6 @@ impl MutationWriter<'_> {
                 // Initialise style data
                 *node.stylo_element_data.borrow_mut() = Some(Default::default());
 
-                // If the node has an "id" attribute, store it in the ID map.
-                // FIXME: implement
-                // if let Some(id_attr) = node.attr(local_name!("id")) {
-                //     self.doc.nodes_to_id.insert(id_attr.to_string(), id);
-                // }
-
                 if let Some(src_attr) = node.attr(local_name!("src")) {
                     crate::assets::fetch_image(self.doc, id, src_attr.to_string());
                 }
@@ -173,6 +167,11 @@ impl MutationWriter<'_> {
                 let href_attr = node.attr(local_name!("href"));
                 if let (Some("stylesheet"), Some(href)) = (rel_attr, href_attr) {
                     crate::assets::fetch_linked_stylesheet(self.doc, id, href.to_string());
+                }
+
+                // If the node has an "id" attribute, store it in the ID map.
+                if let Some(id_attr) = node.attr(local_name!("id")) {
+                    self.doc.nodes_to_id.insert(id_attr.to_string(), id);
                 }
 
                 for &child_id in &child_ids {
