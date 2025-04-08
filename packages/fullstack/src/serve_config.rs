@@ -8,7 +8,9 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::ContextProviders;
+#[allow(unused)]
+pub(crate) type ContextProviders =
+    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
@@ -486,6 +488,8 @@ pub enum StreamingMode {
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) incremental: Option<dioxus_isrg::IncrementalRendererConfig>,
+    // This is used in the axum integration
+    #[allow(unused)]
     pub(crate) context_providers: ContextProviders,
     pub(crate) streaming_mode: StreamingMode,
 }
