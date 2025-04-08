@@ -33,8 +33,13 @@ impl RustcDetails {
     }
 
     pub fn has_wasm32_unknown_unknown(&self) -> bool {
+        self.has_target("wasm32-unknown-unknown")
+    }
+
+    /// Check if a specific target is installed
+    pub fn has_target(&self, target: &str) -> bool {
         self.sysroot
-            .join("lib/rustlib/wasm32-unknown-unknown")
+            .join(format!("lib/rustlib/{}", target))
             .exists()
     }
 }
