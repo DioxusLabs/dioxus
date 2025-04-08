@@ -349,8 +349,6 @@ fn from_template_recursive(
         }
     }
 
-    println!("this {:?}", chain.segments);
-
     Ok(())
 }
 
