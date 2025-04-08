@@ -18,6 +18,7 @@ accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 menu = ["blitz-shell/menu"]
 tracing = ["dep:tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
 hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
+autofocus = []
 
 [dependencies]
 # Blitz dependencies

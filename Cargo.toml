@@ -65,9 +65,9 @@ members = [
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
     "packages/logger",
+    "packages/config-macros",
     "packages/native",
     "packages/asset-resolver",
-    "packages/config-macros",
 
     # Playwright tests
     "packages/playwright-tests/liveview",
@@ -259,6 +259,7 @@ rayon = "1.2.0"
 wasmparser = "0.225.0"
 itertools = "0.14.0"
 macro-string = "0.1.3"
+walkdir = "2.5.0"
 
 # desktop
 wry = { version = "0.50.1", default-features = false }

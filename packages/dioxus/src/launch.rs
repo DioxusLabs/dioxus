@@ -313,7 +313,7 @@ impl LaunchBuilder {
             }
 
             // If there is a base path set, call server functions from that base path
-            #[cfg(feature = "server")]
+            #[cfg(feature = "web")]
             if let Some(base_path) = dioxus_cli_config::web_base_path() {
                 let base_path = base_path.trim_matches('/');
                 set_server_url(format!("{}/{}", get_server_url(), base_path).leak());
@@ -359,7 +359,6 @@ impl LaunchBuilder {
 
                 #[cfg(feature = "document")]
                 {
-                    #[cfg(feature = "fullstack")]
                     use dioxus_fullstack::document;
                     let document = std::rc::Rc::new(document::web::FullstackWebDocument)
                         as std::rc::Rc<dyn crate::prelude::document::Document>;
@@ -383,7 +382,7 @@ impl LaunchBuilder {
             return launch_fn(app, contexts, configs);
         }
 
-        // If we're here, then we have no platform feature enabled and third-party-renderer isa enabled
+        // If we're here, then we have no platform feature enabled and third-party-renderer is enabled
         if cfg!(feature = "third-party-renderer") {
             panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
         }
