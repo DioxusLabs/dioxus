@@ -98,7 +98,7 @@ pub fn init(level: Level) -> Result<(), SetGlobalDefaultError> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let sub = tracing_subscriber::FmtSubscriber::builder()
-            .with_max_level(level.clone())
+            .with_max_level(level)
             .with_env_filter(
                 tracing_subscriber::EnvFilter::builder()
                     .with_default_directive(level.into())
