@@ -108,8 +108,8 @@ impl AppHandle {
             ),
         ];
 
-        if let Some(base_path) = &krate.config.web.app.base_path {
-            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
+        if let Some(base_path) = self.app.build.base_path() {
+            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.to_string()));
         }
 
         // Launch the server if we were given an address to start it on, and the build includes a server. After we

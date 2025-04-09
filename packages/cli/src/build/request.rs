@@ -586,8 +586,9 @@ impl BuildRequest {
         // If this is a release build, bake the base path and title
         // into the binary with env vars
         if self.build.release {
-            if let Some(base_path) = &self.krate.config.web.app.base_path {
-                env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
+            // Only include the base path in the binary if we're building for web or server
+            if let Some(base_path) = self.base_path() {
+                env_vars.push((ASSET_ROOT_ENV, base_path.to_string()));
             }
             env_vars.push((APP_TITLE_ENV, self.krate.config.web.app.title.clone()));
         }
@@ -973,5 +974,26 @@ impl BuildRequest {
         tracing::debug!("app_kotlin_out: {:?}", kotlin_dir);
 
         kotlin_dir
+    }
+
+    /// Get the base path from the config or None if this is not a web or server build
+    pub(crate) fn base_path(&self) -> Option<&str> {
+        self.krate
+            .config
+            .web
+            .app
+            .base_path
+            .as_deref()
+            .filter(|_| matches!(self.build.platform(), Platform::Web | Platform::Server))
+    }
+
+    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
+    pub(crate) fn base_path_or_default(&self) -> &str {
+        let trimmed_path = self.base_path().unwrap_or_default().trim_matches('/');
+        if trimmed_path.is_empty() {
+            "."
+        } else {
+            trimmed_path
+        }
     }
 }
