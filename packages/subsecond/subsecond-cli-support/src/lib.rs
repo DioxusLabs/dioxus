@@ -107,6 +107,7 @@ pub fn create_jump_table(
         map,
         new_base_address,
         aslr_reference,
+        ifunc_count: 0,
     })
 }
 
@@ -125,9 +126,9 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     let name_to_ifunc_new = collect_func_ifuncs(&new);
 
     let mut map = AddressMap::default();
-    for (name, idx) in name_to_ifunc_new {
+    for (name, idx) in name_to_ifunc_new.iter() {
         if let Some(old_idx) = name_to_ifunc_old.get(name) {
-            map.insert(*old_idx as u64, idx as u64);
+            map.insert(*old_idx as u64, *idx as u64);
         }
     }
 
@@ -136,6 +137,7 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
         lib: patch.to_path_buf(),
         aslr_reference: 0,
         new_base_address: 0,
+        ifunc_count: name_to_ifunc_new.len() as u64,
     })
 }
 

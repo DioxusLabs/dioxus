@@ -10,6 +10,7 @@ fn app() -> Element {
     rsx! {
         div { style: "display: flex; flex-direction: column; align-items: center; justify-content: center;",
             h1 { "Apple: {count} ???" }
+            button { onclick: move |_| count += 1, "Incr" }
             button { onclick: move |_| count -= 1, "Decr" }
             img {  width: "300px", src: "https://rustacean.net/assets/rustacean-flat-happy.png" }
         }

@@ -39,4 +39,8 @@ pub struct JumpTable {
     /// While we can generally guess that these values are, it's possible they are different and thus reading
     /// them dynamically is worthwhile.
     pub new_base_address: u64,
+
+    /// The amount of ifuncs this will register. This is used by WASM to know how much space to allocate
+    /// for the ifuncs in the ifunc table
+    pub ifunc_count: u64,
 }

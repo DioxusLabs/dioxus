@@ -548,6 +548,7 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
         map,
         aslr_reference: 0,
         new_base_address: 0,
+        ifunc_count: 0,
     };
 
     unsafe { commit_patch(table) }

@@ -206,7 +206,6 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             build.arg("-Clink-arg=-Wl,-all_load");
         }
 
-        // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
         // we want "all-load", adjustable ifunc table,
         target_lexicon::Architecture::Wasm32 => {
             build.arg("-Clink-arg=--no-gc-sections");

@@ -23,22 +23,33 @@
                 fetch(jump.lib)
                     .then((response) => response.arrayBuffer())
                     .then((bytes) => {
+                        // Expand the memory and table size to accommodate the new data and functions
+                        //
+                        // Normally we wouldn't be able to trust that we are allocating *enough* memory
+                        // for BSS segments, but ld emits them in the binary when using import-memory.
+                        //
+                        // Make sure we align the memory base to the page size
                         const pageSize = 64 * 1024;
-                        const ifunc_length = base.__indirect_function_table.grow(2000);
-                        const data_start = Math.ceil((base.memory.buffer.byteLength / pageSize) + 1 ) * pageSize;
-                        base.memory.grow(20);
+                        const memory_base = Math.ceil((base.memory.buffer.byteLength / pageSize) + 1 ) * pageSize;
+                        base.memory.grow(bytes.byteLength / pageSize);
+
+                        // We grow the ifunc table to accommodate the new functions
+                        // In theory we could just put all the ifuncs in the jump map and use that for our count,
+                        // but there's no guarantee from the jump table that it references "itself"
+                        // We might need a sentinel value for each ifunc in the jump map to indicate that it is
+                        const table_base = base.__indirect_function_table.grow(jump.ifunc_count);
 
                         for (let key of Object.keys(jump.map)) {
                             let entry = jump.map[key];
                             if (entry !== undefined) {
-                                jump.map[key] = entry + ifunc_length;
+                                jump.map[key] = entry + table_base;
                             }
                         }
 
                         let imports = {
                             env: {
-                                __memory_base: data_start,
-                                __table_base: ifunc_length,
+                                __memory_base: memory_base,
+                                __table_base: table_base,
                                 __indirect_function_table: base.__indirect_function_table,
                                 __stack_pointer: base.__stack_pointer,
                                 __tls_base: base.__tls_base,
@@ -52,8 +63,6 @@
 
                         return WebAssembly.instantiate(bytes, imports);
                     }).then((patch) => {
-                        window.patch = patch;
-                        window.jump = jump;
                         patch.instance.exports["__wasm_apply_data_relocs"]();
                         base["__subsecond_wasm_patch"](jump.map);
                     });
