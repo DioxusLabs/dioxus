@@ -50,6 +50,7 @@ fn generic_props_compile() {
     }
 
     #[component]
+    #[allow(clippy::multiple_bound_locations)]
     fn TakesCloneMyBox<T: 'static>(value: MyBox<T>) -> Element
     where
         T: Display,
