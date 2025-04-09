@@ -387,6 +387,10 @@ impl TryInto<ServeConfig> for ServeConfigBuilder {
 
 /// Get the path to the public assets directory to serve static files from
 pub(crate) fn public_path() -> PathBuf {
+    if let Ok(path) = std::env::var("DIOXUS_PUBLIC_PATH") {
+        return PathBuf::from(path);
+    }
+
     // The CLI always bundles static assets into the exe/public directory
     std::env::current_exe()
         .expect("Failed to get current executable path")
