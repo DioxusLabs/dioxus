@@ -6,10 +6,58 @@ use std::any::Any;
 
 use crate::prelude::*;
 
+/// Launch your Dioxus application with the given root component, context and config.
+/// The platform will be determined from cargo features.
+///
+/// For a builder API, see `LaunchBuilder` defined in the `dioxus` crate.
+///
+/// # Feature selection
+///
+/// - `web`: Enables the web platform.
+/// - `desktop`: Enables the desktop platform.
+/// - `mobile`: Enables the mobile (ios + android webview) platform.
+/// - `server`: Enables the server (axum + server-side-rendering) platform.
+/// - `liveview`: Enables the liveview (websocke) platform.
+/// - `native`: Enables the native (wgpu + winit renderer) platform.
+///
+/// Currently `native` is its own platform that is not compatible with desktop or mobile since it
+/// unifies both platforms into one. If "desktop" and "native" are enabled, then the native renderer
+/// will be used.
+///
+/// # Feature priority
+///
+/// If multiple renderers are enabled, the order of priority goes:
+///
+/// 1. liveview
+/// 2. server
+/// 3. native
+/// 4. desktop
+/// 5. mobile
+/// 6. web
+///
+/// However, we don't recommend enabling multiple renderers at the same time due to feature conflicts
+/// and bloating of the binary size.
+///
+/// # Example
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+///
+/// dioxus::launch(app);
+/// fn app() -> Element {
+///     rsx! {
+///         div { "Hello, world!" }
+///     }
+/// }
+/// ```
+pub fn launch(app: fn() -> Element) {
+    #[allow(deprecated)]
+    LaunchBuilder::new().launch(app)
+}
+
 /// A builder for a fullstack app.
 #[must_use]
 pub struct LaunchBuilder {
-    launch_fn: LaunchFn,
+    platform: KnownPlatform,
     contexts: Vec<ContextFn>,
     configs: Vec<Box<dyn Any>>,
 }
@@ -18,6 +66,16 @@ pub type LaunchFn = fn(fn() -> Element, Vec<ContextFn>, Vec<Box<dyn Any>>);
 
 /// A context function is a Send and Sync closure that returns a boxed trait object
 pub type ContextFn = Box<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>;
+
+enum KnownPlatform {
+    Web,
+    Desktop,
+    Mobile,
+    Server,
+    Liveview,
+    Native,
+    Other(LaunchFn),
+}
 
 #[allow(clippy::redundant_closure)] // clippy doesnt doesn't understand our coercion to fn
 impl LaunchBuilder {
@@ -38,9 +96,24 @@ impl LaunchBuilder {
         )
     )]
     pub fn new() -> LaunchBuilder {
+        let platform = if cfg!(feature = "liveview") {
+            KnownPlatform::Liveview
+        } else if cfg!(feature = "server") {
+            KnownPlatform::Server
+        } else if cfg!(feature = "native") {
+            KnownPlatform::Native
+        } else if cfg!(feature = "desktop") {
+            KnownPlatform::Desktop
+        } else if cfg!(feature = "mobile") {
+            KnownPlatform::Mobile
+        } else if cfg!(feature = "web") {
+            KnownPlatform::Web
+        } else {
+            panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.")
+        };
+
         LaunchBuilder {
-            // We can't use the `current_platform::launch` function directly because it may return ! or ()
-            launch_fn: |root, contexts, cfg| current_platform::launch(root, contexts, cfg),
+            platform,
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -51,7 +124,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
     pub fn web() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: web_launch,
+            platform: KnownPlatform::Web,
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -62,7 +135,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
     pub fn desktop() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| dioxus_desktop::launch::launch(root, contexts, cfg),
+            platform: KnownPlatform::Desktop,
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -73,9 +146,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(all(feature = "fullstack", feature = "server"))))]
     pub fn server() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| {
-                dioxus_fullstack::server::launch::launch(root, contexts, cfg)
-            },
+            platform: KnownPlatform::Server,
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -86,7 +157,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
     pub fn mobile() -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| dioxus_mobile::launch_cfg(root, contexts, cfg),
+            platform: KnownPlatform::Mobile,
             contexts: Vec::new(),
             configs: Vec::new(),
         }
@@ -121,14 +192,12 @@ impl LaunchBuilder {
     /// ```
     pub fn custom(launch_fn: LaunchFn) -> LaunchBuilder {
         LaunchBuilder {
-            launch_fn,
+            platform: KnownPlatform::Other(launch_fn),
             contexts: vec![],
             configs: Vec::new(),
         }
     }
-}
 
-impl LaunchBuilder {
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
     ///
     /// # Example
@@ -186,9 +255,7 @@ impl LaunchBuilder {
             .push(Box::new(move || Box::new(state.clone())));
         self
     }
-}
 
-impl LaunchBuilder {
     /// Provide a platform-specific config to the builder.
     ///
     /// # Example
@@ -211,13 +278,28 @@ impl LaunchBuilder {
         self
     }
 
-    fn launch_inner(self, app: fn() -> Element) {
+    /// Launch your application.
+    ///
+    #[allow(clippy::diverging_sub_expression)]
+    pub fn launch(self, app: fn() -> Element) {
+        let Self {
+            platform,
+            contexts,
+            configs,
+        } = self;
+
+        // Make sure to turn on the logger if the user specified the logger feaature
         #[cfg(feature = "logger")]
         dioxus_logger::initialize_default();
 
-        #[cfg(all(feature = "fullstack", any(feature = "desktop", feature = "mobile")))]
+        // Set any flags if we're running under fullstack
+        #[cfg(feature = "fullstack")]
         {
             use dioxus_fullstack::prelude::server_fn::client::{get_server_url, set_server_url};
+
+            // Make sure to set the server_fn endpoint if the user specified the fullstack feature
+            // We only set this on native targets
+            #[cfg(any(feature = "desktop", feature = "mobile", feature = "native"))]
             if get_server_url().is_empty() {
                 let serverurl = format!(
                     "http://{}:{}",
@@ -226,143 +308,85 @@ impl LaunchBuilder {
                     std::env::var("DIOXUS_DEVSERVER_PORT").unwrap_or_else(|_| "8080".to_string())
                 )
                 .leak();
+
                 set_server_url(serverurl);
+            }
+
+            // If there is a base path set, call server functions from that base path
+            #[cfg(feature = "web")]
+            if let Some(base_path) = dioxus_cli_config::base_path() {
+                let base_path = base_path.trim_matches('/');
+                set_server_url(format!("{}/{}", get_server_url(), base_path).leak());
             }
         }
 
-        let cfg = self.configs;
-        (self.launch_fn)(app, self.contexts, cfg);
-    }
+        // If native is specified, we override the webview launcher
+        #[cfg(feature = "native")]
+        if matches!(platform, KnownPlatform::Native) {
+            return dioxus_native::launch_cfg(app, contexts, configs);
+        }
 
-    /// Launch your application.
-    pub fn launch(self, app: fn() -> Element) {
-        self.launch_inner(app);
-    }
-}
+        #[cfg(feature = "mobile")]
+        if matches!(platform, KnownPlatform::Mobile) {
+            return dioxus_mobile::launch_bindings::launch(app, contexts, configs);
+        }
 
-/// Re-export the platform we expect the user wants
-///
-/// If multiple platforms are enabled, we use this priority (from highest to lowest):
-/// - `fullstack`
-/// - `desktop`
-/// - `mobile`
-/// - `web`
-/// - `liveview`
-mod current_platform {
-    #[cfg(all(feature = "fullstack", feature = "server"))]
-    pub use dioxus_fullstack::server::launch::*;
+        #[cfg(feature = "desktop")]
+        if matches!(platform, KnownPlatform::Desktop) {
+            return dioxus_desktop::launch::launch(app, contexts, configs);
+        }
 
-    #[cfg(all(
-        feature = "desktop",
-        not(all(feature = "fullstack", feature = "server"))
-    ))]
-    pub use dioxus_desktop::launch::*;
+        #[cfg(feature = "server")]
+        if matches!(platform, KnownPlatform::Server) {
+            return dioxus_fullstack::server::launch::launch(app, contexts, configs);
+        }
 
-    #[cfg(all(
-        feature = "mobile",
-        not(feature = "desktop"),
-        not(all(feature = "fullstack", feature = "server"))
-    ))]
-    pub use dioxus_mobile::launch_bindings::*;
+        #[cfg(feature = "web")]
+        if matches!(platform, KnownPlatform::Web) {
+            // If the server feature is enabled, launch the client with hydration enabled
+            #[cfg(feature = "fullstack")]
+            {
+                let platform_config = configs
+                    .into_iter()
+                    .find_map(|cfg| cfg.downcast::<dioxus_web::Config>().ok())
+                    .unwrap_or_default()
+                    .hydrate(true);
 
-    #[cfg(all(
-        feature = "web",
-        not(all(feature = "fullstack", feature = "server")),
-        not(all(feature = "server")),
-        not(feature = "desktop"),
-        not(feature = "mobile"),
-    ))]
-    pub fn launch(
-        root: fn() -> dioxus_core::Element,
-        contexts: Vec<super::ContextFn>,
-        platform_config: Vec<Box<dyn std::any::Any>>,
-    ) {
-        super::web_launch(root, contexts, platform_config);
-    }
+                let mut vdom = dioxus_core::VirtualDom::new(app);
+                for context in contexts {
+                    vdom.insert_any_root_context(context());
+                }
 
-    #[cfg(all(
-        feature = "liveview",
-        not(all(feature = "fullstack", feature = "server")),
-        not(all(feature = "server")),
-        not(feature = "desktop"),
-        not(feature = "mobile"),
-        not(feature = "web"),
-    ))]
-    pub use dioxus_liveview::launch::*;
+                #[cfg(feature = "document")]
+                {
+                    use dioxus_fullstack::document;
+                    let document = std::rc::Rc::new(document::web::FullstackWebDocument)
+                        as std::rc::Rc<dyn crate::prelude::document::Document>;
+                    vdom.provide_root_context(document);
+                }
 
-    #[cfg(not(any(
-        feature = "liveview",
-        all(feature = "fullstack", feature = "server"),
-        all(feature = "server"),
-        feature = "desktop",
-        feature = "mobile",
-        feature = "web",
-    )))]
-    pub fn launch(
-        root: fn() -> dioxus_core::Element,
-        contexts: Vec<super::ContextFn>,
-        platform_config: Vec<Box<dyn std::any::Any>>,
-    ) {
-        #[cfg(feature = "third-party-renderer")]
-        panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
+                return dioxus_web::launch::launch_virtual_dom(vdom, platform_config);
+            }
+
+            #[cfg(not(any(feature = "fullstack")))]
+            return dioxus_web::launch::launch(app, contexts, configs);
+        }
+
+        #[cfg(feature = "liveview")]
+        if matches!(platform, KnownPlatform::Liveview) {
+            return dioxus_liveview::launch::launch(app, contexts, configs);
+        }
+
+        // If the platform is not one of the above, then we assume it's a custom platform
+        if let KnownPlatform::Other(launch_fn) = platform {
+            return launch_fn(app, contexts, configs);
+        }
+
+        // If we're here, then we have no platform feature enabled and third-party-renderer is enabled
+        if cfg!(feature = "third-party-renderer") {
+            panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
+        }
 
         panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.")
     }
-}
-
-pub fn launch(app: fn() -> Element) {
-    #[allow(deprecated)]
-    LaunchBuilder::new().launch(app)
-}
-
-#[cfg(feature = "web")]
-fn web_launch(
-    root: fn() -> dioxus_core::Element,
-    contexts: Vec<super::ContextFn>,
-    platform_config: Vec<Box<dyn std::any::Any>>,
-) {
-    // If the server feature is enabled, launch the client with hydration enabled
-    #[cfg(feature = "fullstack")]
-    {
-        let platform_config = platform_config
-            .into_iter()
-            .find_map(|cfg| cfg.downcast::<dioxus_web::Config>().ok())
-            .unwrap_or_default()
-            .hydrate(true);
-
-        // If there is a base path set, call server functions from that base path
-        if let Some(base_path) = dioxus_cli_config::web_base_path() {
-            let base_path = base_path.trim_matches('/');
-            crate::prelude::server_fn::client::set_server_url(
-                format!(
-                    "{}/{}",
-                    crate::prelude::server_fn::client::get_server_url(),
-                    base_path
-                )
-                .leak(),
-            );
-        }
-
-        let factory = move || {
-            let mut vdom = dioxus_core::VirtualDom::new(root);
-            for context in contexts {
-                vdom.insert_any_root_context(context());
-            }
-
-            #[cfg(feature = "document")]
-            {
-                #[cfg(feature = "fullstack")]
-                use dioxus_fullstack::document;
-                let document = std::rc::Rc::new(document::web::FullstackWebDocument)
-                    as std::rc::Rc<dyn crate::prelude::document::Document>;
-                vdom.provide_root_context(document);
-            }
-            vdom
-        };
-
-        dioxus_web::launch::launch_virtual_dom(factory(), platform_config)
-    }
-
-    #[cfg(not(any(feature = "fullstack")))]
-    dioxus_web::launch::launch(root, contexts, platform_config);
 }

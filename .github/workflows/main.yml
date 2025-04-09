@@ -39,7 +39,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0 # todo(jon): cargo-cache wipes incremental artifacts, but we eventually want to cache them
   RUST_BACKTRACE: 1
-  rust_nightly: nightly-2024-10-20
+  rust_nightly: nightly-2025-04-07
 
 jobs:
   check-msrv:
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.84.0
+      - uses: dtolnay/rust-toolchain@1.86.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -73,7 +73,7 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
           version: 1.0
-      - uses: dtolnay/rust-toolchain@1.84.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -92,7 +92,7 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
           version: 1.0
-      - uses: dtolnay/rust-toolchain@1.84.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -107,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.84.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
@@ -152,7 +152,7 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
           version: 1.0
-      - uses: dtolnay/rust-toolchain@1.84.0
+      - uses: dtolnay/rust-toolchain@1.86.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -168,7 +168,7 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
           version: 1.0
-      - uses: dtolnay/rust-toolchain@1.84.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -237,7 +237,7 @@ jobs:
           - {
               target: aarch64-apple-darwin,
               os: macos-latest,
-              toolchain: "1.84.0",
+              toolchain: "1.86.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -245,7 +245,7 @@ jobs:
           - {
               target: x86_64-apple-darwin,
               os: macos-13,
-              toolchain: "1.84.0",
+              toolchain: "1.86.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -253,7 +253,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
-              toolchain: "1.84.0",
+              toolchain: "1.86.0",
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
@@ -261,7 +261,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: ubuntu-latest,
-              toolchain: "1.84.0",
+              toolchain: "1.86.0",
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
@@ -302,7 +302,7 @@ jobs:
     name: "cargo test | windows"
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.84.0
+      - uses: dtolnay/rust-toolchain@1.86.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -335,7 +335,7 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@1.84.0
+  #     - uses: dtolnay/rust-toolchain@1.86.0
   #     - uses: Swatinem/rust-cache@v2
   #       with:
   #         cache-all-crates: "true"

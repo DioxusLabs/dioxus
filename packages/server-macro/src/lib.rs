@@ -37,7 +37,7 @@ use syn::{
 ///
 /// You can any combination of the following named arguments:
 /// - `name`: sets the identifier for the server function’s type, which is a struct created
-///    to hold the arguments (defaults to the function identifier in PascalCase)
+///   to hold the arguments (defaults to the function identifier in PascalCase)
 /// - `prefix`: a prefix at which the server function handler will be mounted (defaults to `/api`)
 /// - `endpoint`: specifies the exact path at which the server function handler will be mounted,
 ///   relative to the prefix (defaults to the function name followed by unique hash)
