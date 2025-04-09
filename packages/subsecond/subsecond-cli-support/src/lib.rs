@@ -273,94 +273,103 @@ pub fn resolve_undefined(
     let aslr_offset = match triple.architecture {
         target_lexicon::Architecture::Wasm32 => 0,
         _ => {
-            aslr_reference
-                - symbol_table
-                    .get("_aslr_reference")
-                    .unwrap_or_else(|| {
-                        symbol_table
-                            .get("aslr_reference")
-                            .expect("failed to find aslr_reference")
-                    })
-                    .address()
+            let aslr_ref = symbol_table.get("_aslr_reference").unwrap_or_else(|| {
+                symbol_table
+                    .get("aslr_reference")
+                    .expect("failed to find aslr_reference")
+            });
+            aslr_reference - aslr_ref.address()
         }
     };
-
-    if triple.architecture == target_lexicon::Architecture::Wasm32 {
-        return Ok(vec![]);
-    }
 
     // we need to assemble a PLT/GOT so direct calls to the patch symbols work
     // for each symbol we either write the address directly (as a symbol) or create a PLT/GOT entry
     let text_section = obj.section_id(StandardSection::Text);
     for name in undefined_symbols {
-        if let Some(sym) = symbol_table.get(name.as_str()) {
-            if sym.is_undefined() {
-                tracing::debug!("Skipping undefined symbol {name}");
-                continue;
-            }
+        let Some(sym) = symbol_table.get(name.as_str()) else {
+            tracing::error!("Symbol not found: {}", name);
+            continue;
+        };
 
-            let name_offset = match triple.operating_system {
-                target_lexicon::OperatingSystem::Darwin(_) => 1,
-                target_lexicon::OperatingSystem::IOS(_) => 1,
-                _ => 0,
+        if sym.is_undefined() {
+            tracing::debug!("Skipping undefined symbol {name}");
+            continue;
+        }
+
+        let name_offset = match triple.operating_system {
+            target_lexicon::OperatingSystem::Darwin(_) => 1,
+            target_lexicon::OperatingSystem::IOS(_) => 1,
+            _ => 0,
+        };
+
+        let abs_addr = sym.address() + aslr_offset;
+
+        tracing::debug!("Defining: {:?}", name);
+
+        if sym.kind() == SymbolKind::Text {
+            let jump_code = match triple.architecture {
+                target_lexicon::Architecture::X86_64 => {
+                    // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
+                    // Then the 64-bit absolute address
+                    let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
+                                                                             // Append the 64-bit address
+                    code.extend_from_slice(&abs_addr.to_le_bytes());
+                    code
+                }
+                target_lexicon::Architecture::X86_32(_) => {
+                    // For 32-bit Intel, use JMP instruction with absolute address
+                    let mut code = vec![0xE9]; // jmp rel32
+                    let rel_addr = (abs_addr as i32 - 5) as i32; // Relative address (offset from next instruction)
+                    code.extend_from_slice(&rel_addr.to_le_bytes());
+                    code
+                }
+                target_lexicon::Architecture::Aarch64(_) => {
+                    // For ARM64, we load the address into a register and branch
+                    let mut code = Vec::new();
+                    // LDR X16, [PC, #0]  ; Load from the next instruction
+                    code.extend_from_slice(&[0x50, 0x00, 0x00, 0x58]);
+                    // BR X16            ; Branch to the address in X16
+                    code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
+                    // Store the 64-bit address
+                    code.extend_from_slice(&abs_addr.to_le_bytes());
+                    code
+                }
+                target_lexicon::Architecture::Arm(_) => {
+                    // For 32-bit ARM, use LDR PC, [PC, #-4] to load the address and branch
+                    let mut code = Vec::new();
+                    // LDR PC, [PC, #-4] ; Load the address into PC (branching to it)
+                    code.extend_from_slice(&[0x04, 0xF0, 0x1F, 0xE5]);
+                    // Store the 32-bit address
+                    code.extend_from_slice(&(abs_addr as u32).to_le_bytes());
+                    code
+                }
+                // Add other architectures as needed
+                _ => todo!(),
             };
 
-            let abs_addr = sym.address() + aslr_offset;
-
-            tracing::debug!("Defining: {:?}", name);
-
-            if sym.kind() == SymbolKind::Text {
-                let jump_code = match triple.architecture {
-                    target_lexicon::Architecture::X86_64 => {
-                        // Use JMP instruction to absolute address: FF 25 followed by 32-bit offset
-                        // Then the 64-bit absolute address
-                        let mut code = vec![0xFF, 0x25, 0x00, 0x00, 0x00, 0x00]; // jmp [rip+0]
-                                                                                 // Append the 64-bit address
-                        code.extend_from_slice(&abs_addr.to_le_bytes());
-                        code
-                    }
-                    target_lexicon::Architecture::Aarch64(_) => {
-                        // For ARM64, we load the address into a register and branch
-                        let mut code = Vec::new();
-                        // LDR X16, [PC, #0]  ; Load from the next instruction
-                        code.extend_from_slice(&[0x50, 0x00, 0x00, 0x58]);
-                        // BR X16            ; Branch to the address in X16
-                        code.extend_from_slice(&[0x00, 0x02, 0x1F, 0xD6]);
-                        // Store the 64-bit address
-                        code.extend_from_slice(&abs_addr.to_le_bytes());
-                        code
-                    }
-                    // Add other architectures as needed
-                    _ => todo!(),
-                };
-
-                // Add the jump code to the text section
-                let offset = obj.append_section_data(text_section, &jump_code, 8);
-
-                obj.add_symbol(Symbol {
-                    name: name.as_bytes()[name_offset..].to_vec(),
-                    value: offset,
-                    size: jump_code.len() as u64,
-                    scope: SymbolScope::Linkage,
-                    kind: SymbolKind::Text,
-                    weak: false,
-                    section: SymbolSection::Section(text_section),
-                    flags: object::SymbolFlags::None,
-                });
-            } else {
-                obj.add_symbol(Symbol {
-                    name: name.as_bytes()[name_offset..].to_vec(),
-                    value: abs_addr,
-                    size: 0,
-                    scope: SymbolScope::Linkage,
-                    kind: sym.kind(),
-                    weak: sym.is_weak(),
-                    section: SymbolSection::Absolute,
-                    flags: object::SymbolFlags::None,
-                });
-            }
+            // Add the jump code to the text section
+            let offset = obj.append_section_data(text_section, &jump_code, 8);
+            obj.add_symbol(Symbol {
+                name: name.as_bytes()[name_offset..].to_vec(),
+                value: offset,
+                size: jump_code.len() as u64,
+                scope: SymbolScope::Linkage,
+                kind: SymbolKind::Text,
+                weak: false,
+                section: SymbolSection::Section(text_section),
+                flags: object::SymbolFlags::None,
+            });
         } else {
-            tracing::error!("Symbol not found: {}", name);
+            obj.add_symbol(Symbol {
+                name: name.as_bytes()[name_offset..].to_vec(),
+                value: abs_addr,
+                size: 0,
+                scope: SymbolScope::Linkage,
+                kind: sym.kind(),
+                weak: sym.is_weak(),
+                section: SymbolSection::Absolute,
+                flags: object::SymbolFlags::None,
+            });
         }
     }
 

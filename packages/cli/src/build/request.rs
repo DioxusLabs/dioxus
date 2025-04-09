@@ -999,15 +999,14 @@ impl BuildRequest {
             .map(|arg| PathBuf::from(arg))
             .collect::<Vec<_>>();
 
-        let resolved_patch_bytes = subsecond_cli_support::resolve_undefined(
-            &orig_exe,
-            &object_files,
-            &self.triple,
-            aslr_reference,
-        )
-        .expect("failed to resolve patch symbols");
-
         if self.platform != Platform::Web {
+            let resolved_patch_bytes = subsecond_cli_support::resolve_undefined(
+                &orig_exe,
+                &object_files,
+                &self.triple,
+                aslr_reference,
+            )
+            .expect("failed to resolve patch symbols");
             let patch_file = self.main_exe().with_file_name("patch-syms.o");
             std::fs::write(&patch_file, resolved_patch_bytes)?;
             object_files.push(patch_file);

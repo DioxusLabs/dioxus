@@ -97,7 +97,7 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Fast reloading... ");
 
         let started = Instant::now();
-        let output_temp = match fast_build(&result, &target, client.aslr_reference).await {
+        let out = match fast_build(&result, &target, client.aslr_reference).await {
             Ok(output_temp) => output_temp,
             Err(e) => {
                 tracing::warn!("Fast build failed: {e}");
@@ -108,14 +108,14 @@ async fn main() -> anyhow::Result<()> {
         // Assemble the jump table of redirected addresses
         // todo: keep track of this and merge it over time
         let jump_table =
-            create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path(), &target).unwrap();
+            create_jump_table(fat_exe.as_std_path(), out.as_std_path(), &target).unwrap();
 
         // Rebase the wasm binary to be relocatable once the jump table is generated
         if target.architecture == target_lexicon::Architecture::Wasm32 {
             let old_bytes = std::fs::read(&fat_exe).unwrap();
-            let new_bytes = std::fs::read(&output_temp).unwrap();
+            let new_bytes = std::fs::read(&out).unwrap();
             let res_ = satisfy_got_imports(&old_bytes, &new_bytes).unwrap();
-            std::fs::write(&output_temp, res_).unwrap();
+            std::fs::write(&out, res_).unwrap();
         }
 
         client
@@ -127,11 +127,9 @@ async fn main() -> anyhow::Result<()> {
 
         if target.architecture == target_lexicon::Architecture::Wasm32 {
             let _ = std::fs::copy(
-                output_temp.as_std_path(),
-                static_folder().join(output_temp.file_name().unwrap()),
+                out.as_std_path(),
+                static_folder().join(out.file_name().unwrap()),
             );
-
-            client.aslr_reference += 1;
         }
 
         tracing::info!("Patching complete in {}ms", started.elapsed().as_millis())
@@ -206,15 +204,11 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
         // usually just ld64 - uses your `cc`
         target_lexicon::Architecture::Aarch64(_) => {
             build.arg("-Clink-arg=-Wl,-all_load");
-
-            // todo: explore using dynamic linker instead of known addresses
-            //
-            // build.arg("-Clink-arg=-Wl,-export_dynamic");
         }
 
         // /Users/jonkelley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld
+        // we want "all-load", adjustable ifunc table,
         target_lexicon::Architecture::Wasm32 => {
-            // we want "all-load", adjustable ifunc table,
             build.arg("-Clink-arg=--no-gc-sections");
             build.arg("-Clink-arg=--growable-table");
             build.arg("-Clink-arg=--whole-archive");
