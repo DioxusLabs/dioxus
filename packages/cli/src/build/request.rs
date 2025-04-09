@@ -1092,33 +1092,18 @@ impl BuildRequest {
             // wasm32-unknown-unknown
             // use wasm-ld (gnu-lld)
             OperatingSystem::Unknown if self.platform == Platform::Web => {
-                const WASM_PAGE_SIZE: u64 = 65536;
-                let table_base = 2000 * (aslr_reference + 1);
-                let global_base =
-                    ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
-                tracing::info!(
-                    "using aslr of table: {} and global: {}",
-                    table_base,
-                    global_base
-                );
-
                 args.extend([
-                    // .arg("-z")
-                    // .arg("stack-size=1048576")
                     "--import-memory".to_string(),
                     "--import-table".to_string(),
                     "--growable-table".to_string(),
                     "--export".to_string(),
                     "main".to_string(),
                     "--export-all".to_string(),
-                    "--stack-first".to_string(),
                     "--allow-undefined".to_string(),
                     "--no-demangle".to_string(),
                     "--no-entry".to_string(),
-                    "--emit-relocs".to_string(),
-                    // todo: we need to modify the post-processing code
-                    format!("--table-base={}", table_base).to_string(),
-                    format!("--global-base={}", global_base).to_string(),
+                    "--pie".to_string(),
+                    "--experimental-pic".to_string(),
                 ]);
             }
 
@@ -1126,12 +1111,7 @@ impl BuildRequest {
             // aarch64-apple-ios
             // aarch64-apple-darwin
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX(_) | OperatingSystem::Darwin(_) => {
-                args.extend([
-                    "-Wl,-dylib".to_string(),
-                    // "-Wl,-export_dynamic".to_string(),
-                    // "-Wl,-unexported_symbol,_main".to_string(),
-                    // "-Wl,-undefined,dynamic_lookup".to_string(),
-                ]);
+                args.extend(["-Wl,-dylib".to_string()]);
 
                 match triple.architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
@@ -1371,6 +1351,7 @@ impl BuildRequest {
                         cargo_args.push("-Clink-arg=--export=__stack_pointer".into());
                         cargo_args.push("-Clink-arg=--export=__heap_base".into());
                         cargo_args.push("-Clink-arg=--export=__data_end".into());
+                        cargo_args.push("-Crelocation-model=pic".into());
                     }
 
                     _ => {}
@@ -2445,6 +2426,14 @@ impl BuildRequest {
         // Prepare any work dirs
         std::fs::create_dir_all(&bindgen_outdir)?;
 
+        // Lift the internal functions to exports
+        if ctx.mode == BuildMode::Fat {
+            let unprocessed = std::fs::read(prebindgen)?;
+            let all_exported_bytes =
+                subsecond_cli_support::prepare_wasm_base_module(&unprocessed).unwrap();
+            std::fs::write(&prebindgen, all_exported_bytes)?;
+        }
+
         // Prepare our configuration
         //
         // we turn off debug symbols in dev mode but leave them on in release mode (weird!) since
@@ -2457,7 +2446,9 @@ impl BuildRequest {
             || self.debug_symbols
             || self.wasm_split
             || !self.release
-            || will_wasm_opt;
+            || will_wasm_opt
+            || ctx.mode == BuildMode::Fat;
+        let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -2482,8 +2473,8 @@ impl BuildRequest {
             .keep_lld_sections(true)
             .out_name(self.executable_name())
             .out_dir(&bindgen_outdir)
-            .remove_name_section(!will_wasm_opt)
-            .remove_producers_section(!will_wasm_opt)
+            .remove_name_section(!keep_names)
+            .remove_producers_section(!keep_names)
             .run()
             .await
             .context("Failed to generate wasm-bindgen bindings")?;

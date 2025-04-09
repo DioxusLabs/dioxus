@@ -698,6 +698,22 @@ impl AppRunner {
                 .await?;
         }
 
+        // Rebase the wasm binary to be relocatable once the jump table is generated
+        if triple.architecture == target_lexicon::Architecture::Wasm32 {
+            let old_bytes = std::fs::read(&original).unwrap();
+            let new_bytes = std::fs::read(&jump_table.lib).unwrap();
+            let res_ = subsecond_cli_support::satisfy_got_imports(&old_bytes, &new_bytes).unwrap();
+            std::fs::write(&jump_table.lib, res_).unwrap();
+
+            // make sure we use the dir relative to the public dir
+            let public_dir = client.build.root_dir();
+            jump_table.lib = jump_table
+                .lib
+                .strip_prefix(&public_dir)
+                .unwrap()
+                .to_path_buf();
+        }
+
         let changed_files = match &res.mode {
             BuildMode::Thin { changed_files, .. } => changed_files.clone(),
             _ => vec![],
@@ -718,6 +734,8 @@ impl AppRunner {
 
         // Save this patch
         self.client.patches.push(jump_table.clone());
+
+        tracing::info!("jump table: {:#?}", jump_table);
 
         Ok(jump_table)
     }
