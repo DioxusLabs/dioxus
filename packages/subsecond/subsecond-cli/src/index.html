@@ -61,10 +61,11 @@
                             imports.env[key] = base[key];
                         }
 
+
                         return WebAssembly.instantiate(bytes, imports);
                     }).then((patch) => {
                         patch.instance.exports["__wasm_apply_data_relocs"]();
-                        base["__subsecond_wasm_patch"](jump.map);
+                        base["__subsecond_wasm_patch"](jump);
                     });
             }
 
@@ -79,6 +80,7 @@
                         if (window.wasmExports) {
                             jump.lib = jump.lib.split('/').pop();
                             console.log("Patching jump table with:", jump);
+                            // window.wasmExports["__subsecond_wasm_patch"](jump);
                             loadAndPatch(jump, window.wasmExports);
                         } else {
                             console.error("wasmExports is not initialized yet.");

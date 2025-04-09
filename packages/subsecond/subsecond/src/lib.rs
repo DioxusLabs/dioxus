@@ -209,13 +209,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use js_sys::{
-    ArrayBuffer, Object, Reflect, Uint32Array, Uint8Array,
-    WebAssembly::{self, Module},
-};
 pub use subsecond_macro::hot;
 pub use subsecond_types::JumpTable;
-use wasm_bindgen::UnwrapThrowExt;
 
 // todo: if there's a reference held while we run our patch, this gets invalidated. should probably
 // be a pointer to a jump table instead, behind a cell or something. I believe Atomic + relaxed is basically a no-op
@@ -370,21 +365,21 @@ pub fn register_handler(handler: Arc<dyn Fn() + Send + Sync + 'static>) {
 ///
 /// This function will load the library and thus allocates. In cannot be used when the program is
 /// stopped (ie in a signal handler).
-pub unsafe fn apply_patch(mut jump_table: JumpTable) {
+pub unsafe fn apply_patch(mut table: JumpTable) {
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {
         // on android we try to cirumvent permissions issues by copying the library to a memmap and then libloading that
         #[cfg(target_os = "android")]
-        let lib = Box::leak(Box::new(android_memmap_dlopen(&jump_table.lib)));
+        let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)));
 
         #[cfg(not(target_os = "android"))]
-        let lib = Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()));
+        let lib = Box::leak(Box::new(libloading::Library::new(&table.lib).unwrap()));
 
         // Use the `aslr_offset` symbol as a sentinel for the current executable. This is basically a
         // cross-platform version of `__mh_execute_header` on macOS that sets a reference point for the
         // jump table.
-        let old_offset = aslr_reference() - jump_table.aslr_reference as usize;
+        let old_offset = aslr_reference() - table.aslr_reference as usize;
 
         // Use the `__rust_alloc` symbol as a sentinel for the loaded library. Might want to move away
         // from this at some point, or make it configurable
@@ -399,11 +394,11 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
                 .unwrap()
                 .try_as_raw_ptr()
                 .unwrap()
-                .wrapping_byte_sub(jump_table.new_base_address as usize) as usize
+                .wrapping_byte_sub(table.new_base_address as usize) as usize
         };
 
         // Modify the jump table to be relative to the base address of the loaded library
-        jump_table.map = jump_table
+        table.map = table
             .map
             .iter()
             .map(|(k, v)| {
@@ -413,14 +408,133 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
                 )
             })
             .collect();
+
+        // commit_patch(table);
     };
 
-    commit_patch(jump_table);
+    // On wasm, we need to download the module, compile it, and then run it.
+    // This requires
+
+    // #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(async move {
+        use js_sys::{
+            ArrayBuffer, Object, Reflect, Uint32Array, Uint8Array,
+            WebAssembly::{self, Memory, Module, Table},
+        };
+        use subsecond_types::AddressMap;
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsValue;
+        use wasm_bindgen::UnwrapThrowExt;
+        use wasm_bindgen_futures::JsFuture;
+        use web_sys::console;
+
+        let funcs: Table = wasm_bindgen::function_table().unchecked_into();
+        let memory: Memory = wasm_bindgen::memory().unchecked_into();
+        let exports: Object = wasm_bindgen::exports().unchecked_into();
+        let buffer: Uint8Array = memory.buffer().unchecked_into();
+
+        // Start the fetch of the module
+        let response = web_sys::window()
+            .unwrap_throw()
+            .fetch_with_str(&table.lib.to_str().unwrap());
+
+        // Wait for the fetch to complete - we need the wasm module size in bytes to reserve in the memory
+        let response: web_sys::Response = JsFuture::from(response).await.unwrap().unchecked_into();
+        let dl_bytes: ArrayBuffer = JsFuture::from(response.array_buffer().unwrap())
+            .await
+            .unwrap()
+            .unchecked_into();
+
+        // Expand the memory and table size to accommodate the new data and functions
+        //
+        // Normally we wouldn't be able to trust that we are allocating *enough* memory
+        // for BSS segments, but ld emits them in the binary when using import-memory.
+        //
+        // Make sure we align the memory base to the page size
+        const PAGE_SIZE: u32 = 64 * 1024;
+        let page_count = (buffer.length() as f64 / PAGE_SIZE as f64).ceil() as u32;
+        let memory_base = (page_count + 1) * PAGE_SIZE;
+
+        // We need to grow the memory to accommodate the new module
+        memory.grow(20);
+        // memory.grow((dl_bytes.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32);
+
+        // We grow the ifunc table to accommodate the new functions
+        // In theory we could just put all the ifuncs in the jump map and use that for our count,
+        // but there's no guarantee from the jump table that it references "itself"
+        // We might need a sentinel value for each ifunc in the jump map to indicate that it is
+        let ifunc_count = 2000;
+        let table_base = funcs.grow(ifunc_count).unwrap();
+        // let table_base = funcs.grow(table.ifunc_count as u32 + 100).unwrap() + 1;
+
+        // Adjust the jump table to be relative to the new base address
+        for v in table.map.values_mut() {
+            *v += table_base as u64;
+        }
+
+        // Build up the import object
+        //
+        // let imports = {
+        //     env: {
+        //         memory: base.memory,
+        //         __tls_base: base.__tls_base,
+        //         __stack_pointer: base.__stack_pointer,
+        //         __indirect_function_table: base.__indirect_function_table,
+        //         __memory_base: memory_base,
+        //         __table_base: table_base,
+        //        ..base_exports
+        //     },
+        // };
+        let env = Object::new();
+
+        // Move memory, __tls_base, __stack_pointer, __indirect_function_table, and all exports over
+        for key in Object::keys(&exports) {
+            Reflect::set(&env, &key, &Reflect::get(&exports, &key).unwrap()).unwrap();
+        }
+
+        // Set the memory and table in the imports
+        // Following this patern: Global.new({ value: "i32", mutable: false }, value)
+        for (name, value) in [("__table_base", table_base), ("__memory_base", memory_base)] {
+            let descriptor = Object::new();
+            Reflect::set(&descriptor, &"value".into(), &"i32".into()).unwrap();
+            Reflect::set(&descriptor, &"mutable".into(), &false.into()).unwrap();
+            let value = WebAssembly::Global::new(&descriptor, &value.into()).unwrap();
+            Reflect::set(&env, &name.into(), &value.into()).unwrap();
+        }
+
+        // Set the memory and table in the imports
+        let imports = Object::new();
+        Reflect::set(&imports, &"env".into(), &env).unwrap();
+
+        // Download the module, returning { module, instance }
+        let result_object = JsFuture::from(WebAssembly::instantiate_module(
+            dl_bytes.unchecked_ref(),
+            &imports,
+        ))
+        .await
+        .unwrap();
+
+        // We need to run the data relocations
+        let res: Object = result_object.unchecked_into();
+        let instance: Object = Reflect::get(&res, &"instance".into())
+            .unwrap()
+            .unchecked_into();
+        let exports: Object = Reflect::get(&instance, &"exports".into())
+            .unwrap()
+            .unchecked_into();
+        let func = Reflect::get(&exports, &"__wasm_apply_data_relocs".into())
+            .unwrap()
+            .unchecked_into::<js_sys::Function>();
+        func.call0(&JsValue::undefined()).unwrap();
+
+        // And then commit the jump table
+        unsafe { commit_patch(table) };
+    });
 }
 
-unsafe fn commit_patch(jump_table: JumpTable) {
+unsafe fn commit_patch(table: JumpTable) {
     // Update runtime state
-    APP_JUMP_TABLE = Some(jump_table);
+    APP_JUMP_TABLE = Some(table);
     CHANGED = true;
     HOTRELOAD_HANDLERS
         .lock()
@@ -520,15 +634,34 @@ pub extern "C" fn aslr_reference() -> usize {
 ///
 /// Used on WASM platforms where we need async integration to fetch the patch.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
-pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
+pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
+    use js_sys::{
+        ArrayBuffer, Object, Reflect, Uint32Array, Uint8Array,
+        WebAssembly::{self, Memory, Module, Table},
+    };
     use subsecond_types::AddressMap;
     use wasm_bindgen::prelude::*;
+    use wasm_bindgen::prelude::*;
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen::UnwrapThrowExt;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::console;
 
-    let as_obj: js_sys::Object = value.unchecked_into();
-    let entries = Object::entries(&as_obj);
+    let as_obj: js_sys::Object = table.unchecked_into();
+    let ifunc_count = Reflect::get(&as_obj, &"ifunc_count".into())
+        .unwrap()
+        .as_f64()
+        .unwrap() as u64;
+    let lib_url = Reflect::get(&as_obj, &"lib".into())
+        .unwrap()
+        .as_string()
+        .unwrap();
+    let map_obj = Reflect::get(&as_obj, &"map".into())
+        .unwrap()
+        .unchecked_into::<js_sys::Object>();
 
     let mut map = AddressMap::default();
-    for entry in entries.iter() {
+    for entry in Object::entries(&map_obj).iter() {
         let entry = entry.unchecked_into::<js_sys::Array>();
         let key = entry.get(0);
         let value = entry.get(1);
@@ -544,64 +677,19 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
     }
 
     let table: JumpTable = JumpTable {
-        lib: PathBuf::from("patch.wasm"),
         map,
+        ifunc_count,
+        lib: lib_url.into(),
         aslr_reference: 0,
         new_base_address: 0,
-        ifunc_count: 0,
     };
 
-    unsafe { commit_patch(table) }
-}
+    console::log_1(&format!("Applying patch: {:#?}", table).into());
 
-async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {
-    use js_sys::Reflect;
-    use js_sys::Uint32Array;
-    use subsecond_types::AddressMap;
-    use wasm_bindgen::prelude::*;
-    use wasm_bindgen::JsValue;
-    use wasm_bindgen_futures::JsFuture;
-
-    const WASM_PAGE_LENGTH: u32 = 64 * 1024;
-
-    let funcs: WebAssembly::Table = wasm_bindgen::function_table().unchecked_into();
-    let memory: WebAssembly::Memory = wasm_bindgen::memory().unchecked_into();
-    let mod_: WebAssembly::Module = wasm_bindgen::module().unchecked_into();
-    let exports: Object = wasm_bindgen::exports().unchecked_into();
-    let buffer: Uint8Array = memory.buffer().unchecked_into();
-
-    let data_start = memory.grow(3) * WASM_PAGE_LENGTH;
-    let func_start = funcs.grow(2000)?;
-    let bss_start = memory.grow(3) * WASM_PAGE_LENGTH;
-
-    let imports = Object::new();
-    let download = web_sys::window()
-        .unwrap_throw()
-        .fetch_with_str(&table.lib.to_str().unwrap_throw());
-
-    let env = Object::new();
-
-    // Move exports over
-    for key in Object::keys(&exports) {
-        Reflect::set(&env, &key, &Reflect::get(&exports, &key)?)?;
+    // apply_patch(table);
+    unsafe {
+        commit_patch(table);
     }
-
-    // Set the memory and table in the imports
-    for (name, value) in [("__DATA_OFFSET", 0), ("__IFUNC_OFFSET", 0)] {
-        let descriptor = Object::new();
-        Reflect::set(&descriptor, &"value".into(), &"i32".into())?;
-        Reflect::set(&descriptor, &"mutable".into(), &false.into())?;
-        let value = WebAssembly::Global::new(&descriptor, &0.into())?;
-        Reflect::set(&env, &name.into(), &value)?;
-    }
-
-    // Set the memory and table in the imports
-    let imports = Object::new();
-    Reflect::set(&imports, &"env".into(), &env)?;
-
-    let module = JsFuture::from(WebAssembly::instantiate_streaming(&download, &imports)).await?;
-
-    todo!()
 }
 
 /// A trait that enables types to be hot-patched.
