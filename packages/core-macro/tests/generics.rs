@@ -30,6 +30,34 @@ fn generic_props_compile() {
         rsx! {}
     }
 
+    #[component]
+    fn TakesCloneArc<T: PartialEq + 'static>(value: std::sync::Arc<T>) -> Element {
+        rsx! {}
+    }
+
+    struct MyBox<T>(std::marker::PhantomData<T>);
+
+    impl<T: Display> Clone for MyBox<T> {
+        fn clone(&self) -> Self {
+            MyBox(std::marker::PhantomData)
+        }
+    }
+
+    impl<T: Display> PartialEq for MyBox<T> {
+        fn eq(&self, _: &Self) -> bool {
+            true
+        }
+    }
+
+    #[component]
+    #[allow(clippy::multiple_bound_locations)]
+    fn TakesCloneMyBox<T: 'static>(value: MyBox<T>) -> Element
+    where
+        T: Display,
+    {
+        rsx! {}
+    }
+
     #[derive(Props, Clone, PartialEq)]
     struct TakesCloneManualProps<T: Clone + PartialEq + 'static> {
         value: T,
