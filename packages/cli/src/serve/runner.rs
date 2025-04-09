@@ -1,7 +1,7 @@
 use super::{AppBuilder, ServeUpdate, WebServer, SELF_IP};
 use crate::{
-    AddressArguments, BuildArtifacts, BuildId, BuildMode, BuildRequest, Platform, ReloadKind,
-    Result, ServeArgs, TraceSrc, Workspace,
+    AddressArguments, BuildArtifacts, BuildId, BuildMode, BuildRequest, Platform, Result,
+    ServeArgs, TraceSrc, Workspace,
 };
 use anyhow::Context;
 use axum::extract::ws::Message as WsMessage;
