@@ -554,7 +554,7 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
         }
     }
 
-    web_sys::console::log_1(&format!("Map: {:#?}", map).into());
+    // web_sys::console::log_1(&format!("Map: {:#?}", map).into());
 
     let mut table: JumpTable = JumpTable {
         aslr_reference: 0,
