@@ -1,0 +1,3 @@
+[application]
+# resource (public) file folder
+asset_dir = "assets"
