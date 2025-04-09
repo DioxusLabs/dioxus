@@ -38,16 +38,9 @@
                             jump.map[key] = entry + ifunc_length;
                         }
 
-                        // const bss_start = data_start + jump.got["__BSS_DATA_OFFSET"];
-                        // const ro_start = data_start + jump.got["__RO_DATA_OFFSET"];
-
-                        console.log("Ifunc length: ", ifunc_length);
 
                         let imports = {
                             env: {
-                                // __BSS_DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, bss_start),
-                                // __RO_DATA_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ro_start),
-                                // __IFUNC_OFFSET: new WebAssembly.Global({value: "i32", mutable: false }, ifunc_length + 1),
                                 __memory_base: data_start,
                                 __table_base: ifunc_length,
                                 __indirect_function_table: base.__indirect_function_table,
