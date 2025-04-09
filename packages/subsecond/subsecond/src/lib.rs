@@ -413,25 +413,21 @@ pub unsafe fn apply_patch(mut table: JumpTable) {
     };
 
     // On wasm, we need to download the module, compile it, and then run it.
-    // This requires
-
-    // #[cfg(target_arch = "wasm32")]
+    #[cfg(target_arch = "wasm32")]
     wasm_bindgen_futures::spawn_local(async move {
         use js_sys::{
-            ArrayBuffer, Object, Reflect, Uint32Array, Uint8Array,
-            WebAssembly::{self, Memory, Module, Table},
+            ArrayBuffer, Object, Reflect,
+            WebAssembly::{self, Memory, Table},
         };
-        use subsecond_types::AddressMap;
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsValue;
         use wasm_bindgen::UnwrapThrowExt;
         use wasm_bindgen_futures::JsFuture;
-        use web_sys::console;
 
         let funcs: Table = wasm_bindgen::function_table().unchecked_into();
         let memory: Memory = wasm_bindgen::memory().unchecked_into();
         let exports: Object = wasm_bindgen::exports().unchecked_into();
-        let buffer: Uint8Array = memory.buffer().unchecked_into();
+        let buffer: ArrayBuffer = memory.buffer().unchecked_into();
 
         // Start the fetch of the module
         let response = web_sys::window()
@@ -452,20 +448,17 @@ pub unsafe fn apply_patch(mut table: JumpTable) {
         //
         // Make sure we align the memory base to the page size
         const PAGE_SIZE: u32 = 64 * 1024;
-        let page_count = (buffer.length() as f64 / PAGE_SIZE as f64).ceil() as u32;
+        let page_count = (buffer.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32;
         let memory_base = (page_count + 1) * PAGE_SIZE;
 
         // We need to grow the memory to accommodate the new module
-        memory.grow(20);
-        // memory.grow((dl_bytes.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32);
+        memory.grow((dl_bytes.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32);
 
         // We grow the ifunc table to accommodate the new functions
         // In theory we could just put all the ifuncs in the jump map and use that for our count,
         // but there's no guarantee from the jump table that it references "itself"
         // We might need a sentinel value for each ifunc in the jump map to indicate that it is
-        let ifunc_count = 2000;
-        let table_base = funcs.grow(ifunc_count).unwrap();
-        // let table_base = funcs.grow(table.ifunc_count as u32 + 100).unwrap() + 1;
+        let table_base = funcs.grow(table.ifunc_count as u32).unwrap();
 
         // Adjust the jump table to be relative to the new base address
         for v in table.map.values_mut() {
@@ -527,7 +520,6 @@ pub unsafe fn apply_patch(mut table: JumpTable) {
             .unchecked_into::<js_sys::Function>();
         func.call0(&JsValue::undefined()).unwrap();
 
-        // And then commit the jump table
         unsafe { commit_patch(table) };
     });
 }
@@ -544,6 +536,12 @@ unsafe fn commit_patch(table: JumpTable) {
         .for_each(|handler| {
             handler();
         });
+}
+
+#[inline(never)]
+#[no_mangle]
+pub extern "C" fn aslr_reference() -> usize {
+    aslr_reference as *const () as usize
 }
 
 /// On Android, we can't dlopen libraries that aren't placed inside /data/data/<package_name>/lib/
@@ -624,28 +622,14 @@ unsafe fn android_memmap_dlopen(file: &Path) -> libloading::Library {
     lib
 }
 
-#[inline(never)]
-#[no_mangle]
-pub extern "C" fn aslr_reference() -> usize {
-    aslr_reference as *const () as usize
-}
-
 /// Apply the patch using a given jump table.
 ///
 /// Used on WASM platforms where we need async integration to fetch the patch.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
-    use js_sys::{
-        ArrayBuffer, Object, Reflect, Uint32Array, Uint8Array,
-        WebAssembly::{self, Memory, Module, Table},
-    };
+    use js_sys::{Object, Reflect};
     use subsecond_types::AddressMap;
     use wasm_bindgen::prelude::*;
-    use wasm_bindgen::prelude::*;
-    use wasm_bindgen::JsValue;
-    use wasm_bindgen::UnwrapThrowExt;
-    use wasm_bindgen_futures::JsFuture;
-    use web_sys::console;
 
     let as_obj: js_sys::Object = table.unchecked_into();
     let ifunc_count = Reflect::get(&as_obj, &"ifunc_count".into())
@@ -684,12 +668,7 @@ pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
         new_base_address: 0,
     };
 
-    console::log_1(&format!("Applying patch: {:#?}", table).into());
-
-    // apply_patch(table);
-    unsafe {
-        commit_patch(table);
-    }
+    apply_patch(table);
 }
 
 /// A trait that enables types to be hot-patched.

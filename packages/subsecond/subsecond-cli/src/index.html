@@ -39,6 +39,9 @@
                         // We might need a sentinel value for each ifunc in the jump map to indicate that it is
                         const table_base = base.__indirect_function_table.grow(jump.ifunc_count);
 
+                        console.log("Memory base:", memory_base);
+                        console.log("Table base:", table_base);
+
                         for (let key of Object.keys(jump.map)) {
                             let entry = jump.map[key];
                             if (entry !== undefined) {
@@ -80,8 +83,8 @@
                         if (window.wasmExports) {
                             jump.lib = jump.lib.split('/').pop();
                             console.log("Patching jump table with:", jump);
-                            // window.wasmExports["__subsecond_wasm_patch"](jump);
-                            loadAndPatch(jump, window.wasmExports);
+                            window.wasmExports["__subsecond_wasm_patch"](jump);
+                            // loadAndPatch(jump, window.wasmExports);
                         } else {
                             console.error("wasmExports is not initialized yet.");
                         }
