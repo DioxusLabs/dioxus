@@ -18,14 +18,6 @@ pub struct JumpTable {
     /// you will need to cast to `usize` before using them.
     pub map: AddressMap,
 
-    /// Global offset table required to relocate the data segment
-    ///
-    /// This is used mainly for WASM to relocate the data segment to the correct address
-    pub got: HashMap<String, u64>,
-
-    /// The location of the aslr reference in the binary, used to calcualte offsets for the jump table
-    pub aslr_reference: u64,
-
     /// the address of the base address of the old original binary
     ///
     /// machos: this is the address of the `_mh_execute_header` symbol usually at 0x100000000 and loaded near 0x100000000
@@ -35,7 +27,7 @@ pub struct JumpTable {
     ///
     /// While we can generally guess that these values are, it's possible they are different and thus reading
     /// them dynamically is worthwhile.
-    pub old_base_address: u64,
+    pub aslr_reference: u64,
 
     /// the address of the base address of the new binary
     ///

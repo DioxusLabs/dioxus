@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
     let app = launch_app(&fat_exe, &target)?;
 
     // Wait for the websocket to come up
-    let mut client = wait_for_ws(9393, &target).await?.unwrap();
+    let mut client = wait_for_ws(9393).await?.unwrap();
     tracing::info!("Client connected");
 
     // Watch the source folder for changes
@@ -107,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
 
         // Assemble the jump table of redirected addresses
         // todo: keep track of this and merge it over time
-        let mut jump_table =
+        let jump_table =
             create_jump_table(fat_exe.as_std_path(), output_temp.as_std_path(), &target).unwrap();
 
         // Rebase the wasm binary to be relocatable once the jump table is generated
@@ -115,10 +115,7 @@ async fn main() -> anyhow::Result<()> {
             let old_bytes = std::fs::read(&fat_exe).unwrap();
             let new_bytes = std::fs::read(&output_temp).unwrap();
             let res_ = satisfy_got_imports(&old_bytes, &new_bytes).unwrap();
-            // let (res_, bases) = move_func_initiailizers(&out_bytes).unwrap();
-            // let (res_, bases) = move_func_initiailizers(&out_bytes).unwrap();
             std::fs::write(&output_temp, res_).unwrap();
-            // jump_table.got = bases;
         }
 
         client
@@ -382,27 +379,7 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
-            // .arg("--export-all")
-            // .arg("-z")
-            // .arg("stack-size=1048576")
-            // .arg("--stack-first")
-            // .arg("--emit-relocs")
-            // .arg("--no-gc-sections")
-            // .arg("--experimental-pic")
-            // .arg(format!("--table-base={}", table_base))
-            // .arg(format!("--global-base={}", global_base))
-            // .arg("--no-gc-sections")
-            // .arg("--error-limit=0")
-
-            const WASM_PAGE_SIZE: u64 = 65536;
-            let table_base = 2000 * (aslr_reference + 1);
-            let global_base =
-                ((aslr_reference * WASM_PAGE_SIZE * 3) + (WASM_PAGE_SIZE * 32)) as i32;
-            tracing::info!(
-                "using aslr of table: {} and global: {}",
-                table_base,
-                global_base
-            );
+            // do not add "--emit-relocs"! this causes ld to segfault
             Command::new(wasm_ld().await.unwrap())
                 .args(object_files)
                 .arg("--import-memory")
@@ -411,13 +388,9 @@ async fn fast_build(
                 .arg("--export")
                 .arg("main")
                 .arg("--export-all")
-                // .arg("-z")
-                // .arg("stack-size=1048576")
-                // .arg("--stack-first")
                 .arg("--allow-undefined")
                 .arg("--no-demangle")
                 .arg("--no-entry")
-                // .arg("--emit-relocs")
                 .arg("--pie")
                 .arg("--experimental-pic")
                 .arg("-o")
@@ -632,11 +605,7 @@ struct WsClient {
     socket: WebSocketStream<tokio::net::TcpStream>,
 }
 
-async fn wait_for_ws(port: u16, target: &Triple) -> anyhow::Result<Option<WsClient>> {
-    // if target.architecture == target_lexicon::Architecture::Wasm32 {
-    //     return Ok(None);
-    // }
-
+async fn wait_for_ws(port: u16) -> anyhow::Result<Option<WsClient>> {
     let addr = format!("127.0.0.1:{}", port);
     let try_socket = TcpListener::bind(&addr).await;
     let listener = try_socket.expect("Failed to bind");

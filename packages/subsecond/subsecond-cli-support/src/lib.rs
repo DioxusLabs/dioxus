@@ -32,7 +32,6 @@ use walrus::{
     ModuleConfig, RawCustomSection, ValType,
 };
 
-pub mod lift;
 pub mod partial;
 
 pub fn create_jump_table(
@@ -66,6 +65,12 @@ pub fn create_jump_table(
         .map(|s| (s.name(), s.address()))
         .collect::<HashMap<_, _>>();
 
+    for (new_name, new_addr) in new_name_to_addr.iter() {
+        if let Some(old_addr) = old_name_to_addr.get(new_name) {
+            map.insert(*old_addr, *new_addr);
+        }
+    }
+
     // on windows there is no symbol so we leave the old address as 0
     // on wasm there is no ASLR so we leave the old address as 0
     let mut old_base_address = 0;
@@ -88,12 +93,6 @@ pub fn create_jump_table(
         _ => {}
     }
 
-    for (new_name, new_addr) in new_name_to_addr {
-        if let Some(old_addr) = old_name_to_addr.get(new_name) {
-            map.insert(*old_addr, new_addr);
-        }
-    }
-
     let aslr_reference = old_name_to_addr
         .get("aslr_reference")
         .unwrap_or_else(|| {
@@ -106,8 +105,6 @@ pub fn create_jump_table(
     Ok(JumpTable {
         lib: patch.to_path_buf(),
         map,
-        got: Default::default(),
-        old_base_address,
         new_base_address,
         aslr_reference,
     })
@@ -121,84 +118,55 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     let obj1_bytes = fs::read(original).context("Could not read original file")?;
     let obj2_bytes = fs::read(patch).context("Could not read patch file")?;
 
-    let mod_old = walrus::Module::from_buffer(&obj1_bytes)?;
-    let mod_new = walrus::Module::from_buffer(&obj2_bytes)?;
+    let old = walrus::Module::from_buffer(&obj1_bytes)?;
+    let new = walrus::Module::from_buffer(&obj2_bytes)?;
 
-    let name_to_ifunc_old = collect_func_ifuncs(&mod_old);
-    let name_to_ifunc_new = collect_func_ifuncs(&mod_new);
-
-    // tracing::info!("Old ifuncs: {:?}", name_to_ifunc_old);
-    tracing::info!("New ifuncs: {:?}", name_to_ifunc_new);
+    let name_to_ifunc_old = collect_func_ifuncs(&old);
+    let name_to_ifunc_new = collect_func_ifuncs(&new);
 
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new {
         if let Some(old_idx) = name_to_ifunc_old.get(name) {
-            tracing::info!("Mapping {name} from {old_idx} to {idx}");
             map.insert(*old_idx as u64, idx as u64);
         }
     }
 
-    // tracing::info!("Jump table: {:?}", map);
-    // for data in mod_new.data.iter() {
-    //     tracing::info!("Data: {:?} - {:?}", data.name, data.kind);
-    // }
-
-    // for global in mod_new.globals.iter() {
-    //     tracing::info!("Global: {:?} - {:?}", global.name, global.kind);
-    // }
-    // for el in mod_new.elements.iter() {
-    //     tracing::info!("Elemenet: {:?} - {:?}", el.name, el.kind);
-    // }
-
     Ok(JumpTable {
         map,
-        got: Default::default(),
         lib: patch.to_path_buf(),
         aslr_reference: 0,
-        old_base_address: 0,
         new_base_address: 0,
     })
 }
 
-fn collect_func_ifuncs(mod_new: &Module) -> HashMap<&str, i32> {
-    tracing::info!("Collecting ifuncs from module");
+fn collect_func_ifuncs(m: &Module) -> HashMap<&str, i32> {
     let mut name_to_ifunc_index = HashMap::new();
 
-    for el in mod_new.elements.iter() {
-        tracing::info!("Element: {:?}", el);
-        let ElementKind::Active { table, offset } = &el.kind else {
-            tracing::info!("Skipping element: {:?}", el.kind);
+    for el in m.elements.iter() {
+        let ElementKind::Active { offset, .. } = &el.kind else {
             continue;
         };
 
         let offset = match offset {
+            // Handle explicit offsets
             walrus::ConstExpr::Value(value) => match value {
                 walrus::ir::Value::I32(idx) => *idx,
-                walrus::ir::Value::I64(_) => todo!(),
-                walrus::ir::Value::F32(_) => todo!(),
-                walrus::ir::Value::F64(_) => todo!(),
-                walrus::ir::Value::V128(_) => todo!(),
+                walrus::ir::Value::I64(idx) => *idx as i32,
+                _ => continue,
             },
-            walrus::ConstExpr::Global(id) => {
-                let global = mod_new.globals.get(*id);
-                tracing::info!("refercning global {:?}", global);
-                // continue;
-                0
-            }
-            walrus::ConstExpr::RefNull(ref_type) => todo!(),
-            walrus::ConstExpr::RefFunc(id) => todo!(),
+
+            // Globals are usually imports and thus don't add a specific offset
+            // ie the ifunc table is offset by a global, so we don't need to push the offset out
+            walrus::ConstExpr::Global(_) => 0,
+
+            walrus::ConstExpr::RefNull(_) => continue,
+            walrus::ConstExpr::RefFunc(_) => continue,
         };
 
-        match &el.items {
-            ElementItems::Functions(ids) => {
-                for (idx, id) in ids.iter().enumerate() {
-                    let func = mod_new.funcs.get(*id);
-                    let name = func.name.as_ref().unwrap();
-                    name_to_ifunc_index.insert(name.as_str(), offset + idx as i32);
-                }
-            }
-            ElementItems::Expressions(ref_type, const_exprs) => {
-                panic!("Unsupported element kind: {:?}", ref_type);
+        if let ElementItems::Functions(ids) = &el.items {
+            for (idx, id) in ids.iter().enumerate() {
+                let name = m.funcs.get(*id).name.as_ref().unwrap();
+                name_to_ifunc_index.insert(name.as_str(), offset + idx as i32);
             }
         }
     }
@@ -601,75 +569,4 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<Vec<SymbolInfo>> {
     }
 
     Ok(symbols)
-}
-
-fn get_ifunc_table_length(bytes: &[u8]) -> usize {
-    let module = walrus::Module::from_buffer(bytes).unwrap();
-    module
-        .tables
-        .iter()
-        .map(|table| table.elem_segments.iter())
-        .flatten()
-        .map(|segment| match &module.elements.get(*segment).items {
-            ElementItems::Functions(ids) => ids.len(),
-            ElementItems::Expressions(ref_type, const_exprs) => const_exprs.len(),
-        })
-        // .map(|table| table.elem_segments.len())
-        .max()
-        .unwrap_or(1)
-}
-
-#[test]
-fn print_data_sections() {
-    let base: PathBuf = "/Users/jonkelley/Development/dioxus/packages/subsecond/subsecond-harness/static/main_bg.wasm".into();
-    let patch: PathBuf = "/Users/jonkelley/Development/dioxus/packages/subsecond/subsecond-harness/static/patch-1742923392809.wasm".into();
-    let base_bytes = fs::read(&base).unwrap();
-    let patch_bytes = fs::read(&patch).unwrap();
-
-    let base_module = Module::from_buffer(&base_bytes).unwrap();
-    let raw_data = parse_bytes_to_data_segment(&base_bytes).unwrap();
-
-    let base_data_syms: HashMap<&str, _> = raw_data
-        .iter()
-        .flat_map(|f| match f {
-            SymbolInfo::Data {
-                flags,
-                name,
-                symbol,
-            } => Some((*name, symbol)),
-            SymbolInfo::Func { flags, index, name } => None,
-            SymbolInfo::Global { flags, index, name } => None,
-            SymbolInfo::Section { flags, section } => None,
-            SymbolInfo::Event { flags, index, name } => None,
-            SymbolInfo::Table { flags, index, name } => None,
-        })
-        .collect();
-
-    let patch_data_syms: HashMap<&str, _> = raw_data
-        .iter()
-        .flat_map(|f| match f {
-            SymbolInfo::Data {
-                flags,
-                name,
-                symbol,
-            } => match symbol {
-                Some(sym) => Some((*name, symbol)),
-                None => Some((*name, symbol)),
-            },
-            SymbolInfo::Func { flags, index, name } => None,
-            SymbolInfo::Global { flags, index, name } => None,
-            SymbolInfo::Section { flags, section } => None,
-            SymbolInfo::Event { flags, index, name } => None,
-            SymbolInfo::Table { flags, index, name } => None,
-        })
-        .collect();
-
-    println!("undefined patch data: {:?}", patch_data_syms);
-    for (sym, _def) in patch_data_syms {
-        if base_data_syms.contains_key(sym) {
-            if sym.contains("signal") || sym.contains("Signal") {
-                println!("zero-init sym: {sym}");
-            }
-        }
-    }
 }

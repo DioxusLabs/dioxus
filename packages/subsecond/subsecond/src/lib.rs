@@ -376,7 +376,7 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
     {
         // on android we try to cirumvent permissions issues by copying the library to a memmap and then libloading that
         #[cfg(target_os = "android")]
-        let lib = { Box::leak(Box::new(android_memmap_dlopen(&jump_table.lib))) };
+        let lib = Box::leak(Box::new(android_memmap_dlopen(&jump_table.lib)));
 
         #[cfg(not(target_os = "android"))]
         let lib = Box::leak(Box::new(libloading::Library::new(&jump_table.lib).unwrap()));
@@ -415,19 +415,21 @@ pub unsafe fn apply_patch(mut jump_table: JumpTable) {
             .collect();
     };
 
+    commit_patch(jump_table);
+}
+
+unsafe fn commit_patch(jump_table: JumpTable) {
     // Update runtime state
-    unsafe {
-        APP_JUMP_TABLE = Some(jump_table);
-        CHANGED = true;
-        HOTRELOAD_HANDLERS
-            .lock()
-            .unwrap()
-            .clone()
-            .iter()
-            .for_each(|handler| {
-                handler();
-            });
-    }
+    APP_JUMP_TABLE = Some(jump_table);
+    CHANGED = true;
+    HOTRELOAD_HANDLERS
+        .lock()
+        .unwrap()
+        .clone()
+        .iter()
+        .for_each(|handler| {
+            handler();
+        });
 }
 
 /// On Android, we can't dlopen libraries that aren't placed inside /data/data/<package_name>/lib/
@@ -463,8 +465,7 @@ unsafe fn android_memmap_dlopen(file: &Path) -> libloading::Library {
     }
 
     use memmap2::MmapAsRawDesc;
-    use std::os::unix::prelude::FromRawFd;
-    use std::os::unix::prelude::IntoRawFd;
+    use std::os::unix::prelude::{FromRawFd, IntoRawFd};
 
     let contents = std::fs::read(file).unwrap();
     let mut mfd = memfd::MemfdOptions::default()
@@ -515,22 +516,13 @@ pub extern "C" fn aslr_reference() -> usize {
     aslr_reference as *const () as usize
 }
 
-// #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
-// pub async unsafe fn __subsecond_wasm_patch(table: wasm_bindgen::JsValue) {
-//     let table = serde_wasm_bindgen::from_value::<JumpTable>(table).unwrap_throw();
-//     run_wasm_patch(table).await.unwrap_throw();
-// }
-
 /// Apply the patch using a given jump table.
 ///
 /// Used on WASM platforms where we need async integration to fetch the patch.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
-    // pub async unsafe fn __subsecond_wasm_patch(pointers: Uint32Array) {
-    use js_sys::Uint32Array;
     use subsecond_types::AddressMap;
     use wasm_bindgen::prelude::*;
-    use wasm_bindgen::JsValue;
 
     let as_obj: js_sys::Object = value.unchecked_into();
     let entries = Object::entries(&as_obj);
@@ -538,13 +530,10 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
     let mut map = AddressMap::default();
     for entry in entries.iter() {
         let entry = entry.unchecked_into::<js_sys::Array>();
-
         let key = entry.get(0);
         let value = entry.get(1);
-
         let key = key.as_string();
         let value = value.as_f64();
-
         if let Some(value) = value {
             if let Some(key) = key {
                 if let Ok(key) = key.parse::<u64>() {
@@ -554,18 +543,14 @@ pub async unsafe fn __subsecond_wasm_patch(value: wasm_bindgen::JsValue) {
         }
     }
 
-    // web_sys::console::log_1(&format!("Map: {:#?}", map).into());
-
-    let mut table: JumpTable = JumpTable {
-        aslr_reference: 0,
+    let table: JumpTable = JumpTable {
         lib: PathBuf::from("patch.wasm"),
         map,
-        got: Default::default(),
+        aslr_reference: 0,
         new_base_address: 0,
-        old_base_address: 0,
     };
 
-    unsafe { apply_patch(table) }
+    unsafe { commit_patch(table) }
 }
 
 async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {
@@ -601,12 +586,7 @@ async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {
     }
 
     // Set the memory and table in the imports
-    for (name, value) in [
-        ("__BSS_DATA_START", 0),
-        ("__RO_DATA_START", 0),
-        ("__DATA_OFFSET", 0),
-        ("__IFUNC_OFFSET", 0),
-    ] {
+    for (name, value) in [("__DATA_OFFSET", 0), ("__IFUNC_OFFSET", 0)] {
         let descriptor = Object::new();
         Reflect::set(&descriptor, &"value".into(), &"i32".into())?;
         Reflect::set(&descriptor, &"mutable".into(), &false.into())?;
@@ -620,75 +600,6 @@ async fn run_wasm_patch(table: JumpTable) -> Result<(), wasm_bindgen::JsValue> {
 
     let module = JsFuture::from(WebAssembly::instantiate_streaming(&download, &imports)).await?;
 
-    // let mut idx = 0;
-    // for _ in 0..pointers.length() {
-    //     let left = pointers.get_index(idx);
-    //     let right = pointers.get_index(idx + 1);
-    //     table.map.insert(left as u64, right as u64);
-    //     idx += 2
-    // }
-
-    //     window.patch = patch;
-
-    // // We're going to match up export to export and then ifunc entry to ifunc entry
-    // // We're going to build a map of old -> new ifunc entries
-    // const patchExports = patch.instance.exports;
-
-    // let nameToNativeMain = Object.fromEntries(
-    //     Object.keys(wasmExports).map((key) => [key, wasmExports[key].name]).filter(([key, name]) => name !== undefined)
-    // );
-
-    // let nameToNativePatch = Object.fromEntries(
-    //     Object.keys(patchExports).map((key) => [key, patchExports[key].name]).filter(([key, name]) => name !== undefined)
-    // );
-
-    // let nativeToIndex = Object.fromEntries(
-    //     [...Array(wasmExports.__indirect_function_table.length).keys()].map((i) => {
-    //         let entry = wasmExports.__indirect_function_table.get(i);
-    //         if (entry === null) {
-    //             return ["abcbac", 0];
-    //         }
-    //         if (entry.name === undefined) {
-    //             return ["abcbac", 0];
-    //         }
-    //         return [entry.name, i];
-    //     })
-    // );
-
-    // let jumpTable = Object.fromEntries(
-    //     Object.entries(nameToNativePatch)
-    //         .map(([fnName, nativeName]) => {
-    //             let oldIndex = nativeToIndex[nameToNativeMain[fnName]];
-    //             let newIndex = nativeToIndex[nativeName];
-    //             return [fnName, [oldIndex, newIndex]];
-    //         })
-    //         .filter(([name, [oldIndex, newIndex]]) =>
-    //             oldIndex !== undefined && newIndex !== undefined
-    //         )
-    // );
-
-    // window.jumpTable = jumpTable;
-
-    // let patchList = Object.keys(patchExports).flatMap((key) => {
-    //     let entry = jumpTable[key];
-    //     if (entry === undefined) {
-    //         return [];
-    //     }
-    //     let a = entry[0];
-    //     let b = entry[1];
-
-    //     if (a === undefined || b === undefined) {
-    //         return [];
-    //     }
-
-    //     // console.log("Patching", key, "from", a, "to", b);
-
-    //     return [a, b];
-    // });
-    // console.log("Patching: ", patchList);
-    // base["__subsecond_wasm_patch"](patchList);
-
-    // unsafe { apply_patch(table) }
     todo!()
 }
 
