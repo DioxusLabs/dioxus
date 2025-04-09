@@ -506,35 +506,24 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
 ///
 /// It doesn't seem like we can compile the base module to export these, sadly, so we're going
 /// to manually satisfy them here, removing their need to be imported.
+///
+/// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md
 pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>> {
     let old: walrus::Module = walrus::Module::from_buffer(old_bytes)?;
     let mut new: walrus::Module = walrus::Module::from_buffer(new_bytes)?;
 
-    let func_map = old
-        .funcs
-        .iter()
-        .map(|f| {
-            let name = f.name.as_ref().unwrap().as_str();
-            (name, f.id())
-        })
-        .collect::<HashMap<_, _>>();
-
     let ifunc_map = collect_func_ifuncs(&old);
     let global_map = collect_global_map(&old);
-
-    tracing::info!("Global map: {:?}", global_map);
 
     let mut mems = vec![];
     let mut funcs = vec![];
 
+    // Collect the GOT func/mem entries
     for t in new.imports.iter() {
-        if t.module == "GOT.func" {
-            let old_func = ifunc_map.get(t.name.as_str()).unwrap();
-            funcs.push((t.id(), *old_func));
-        }
-
-        if t.module == "GOT.mem" {
-            mems.push(t.id());
+        match t.module.as_str() {
+            "GOT.func" => funcs.push((t.id(), *ifunc_map.get(t.name.as_str()).unwrap())),
+            "GOT.mem" => mems.push(t.id()),
+            _ => {}
         }
     }
 
@@ -550,11 +539,11 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
         new.imports.delete(imp_id);
     }
 
-    // The got mem entries exist, but are hidden. we need to bind to their address directly
+    // The got mem entries exist, but are hidden. we need to bind to their address directly, and
+    // remove the "GOT.data.internal" name
     for mem in mems {
         let imp = new.imports.get(mem);
         let name = format!("GOT.data.internal.{}", imp.name);
-
         let val = global_map.get(name.as_str()).unwrap();
         let global_id = match imp.kind {
             ImportKind::Global(id) => id,
@@ -563,67 +552,7 @@ pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>
         new.globals.get_mut(global_id).kind =
             walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(*val)));
         new.imports.delete(mem);
-        // new.imports.get_mut(mem).module = "GOT.data.internal".to_string();
     }
-
-    // let mut offsets = vec![];
-
-    // let (ifunc_global, _) =
-    //     module.add_import_global("env", "__IFUNC_OFFSET", ValType::I32, false, false);
-
-    // let (ro_data, _) =
-    //     module.add_import_global("env", "__RO_DATA_OFFSET", ValType::I32, false, false);
-
-    // let (bss_data, _) =
-    //     module.add_import_global("env", "__BSS_DATA_OFFSET", ValType::I32, false, false);
-
-    // let table = module.tables.iter_mut().next().unwrap();
-    // let segments = table.elem_segments.clone();
-
-    // for seg in segments {
-    //     if let ElementKind::Active { table, offset } = &mut module.elements.get_mut(seg).kind {
-    //         tracing::info!("Updating active Segment: {:?}", seg);
-    //         *offset = walrus::ConstExpr::Global(ifunc_global);
-    //     }
-    // }
-
-    // let datas = module.data.iter().map(|f| f.id()).collect::<Vec<_>>();
-    // for data in datas {
-    //     let data = module.data.get_mut(data);
-    //     if let walrus::DataKind::Active { offset, .. } = &mut data.kind {
-    //         let orig_offset = match &offset {
-    //             walrus::ConstExpr::Value(value) => match value {
-    //                 walrus::ir::Value::I32(val) => *val,
-    //                 _ => continue,
-    //             },
-    //             _ => continue,
-    //         };
-
-    //         match data.name.as_deref() {
-    //             Some(".bss") => {
-    //                 tracing::info!("Updating bss segment: {:?}", data.name);
-    //                 *offset = walrus::ConstExpr::Global(bss_data);
-    //                 offsets.push(("__BSS_DATA_OFFSET".to_string(), orig_offset as u64));
-    //             }
-    //             Some(".rodata") => {
-    //                 tracing::info!("Updating rodata segment: {:?}", data.name);
-    //                 *offset = walrus::ConstExpr::Global(ro_data);
-    //                 offsets.push(("__RO_DATA_OFFSET".to_string(), orig_offset as u64));
-    //             }
-    //             _ => continue,
-    //         }
-    //     }
-    // }
-
-    // // Sort by offset order
-    // offsets.sort_by(|a, b| a.1.cmp(&b.1));
-
-    // // And then normalize to the first offset
-    // let first_offset = offsets.first().map(|f| f.1).unwrap_or(0);
-    // let offsets = offsets
-    //     .iter()
-    //     .map(|(name, offset)| (name.clone(), offset - first_offset))
-    //     .collect::<HashMap<_, _>>();
 
     Ok(new.emit_wasm())
 }
