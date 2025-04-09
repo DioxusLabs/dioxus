@@ -10,7 +10,7 @@ use notify::{
 use object::{write::Object, Architecture};
 use serde::Deserialize;
 use std::{collections::HashMap, env, ffi::OsStr, path::PathBuf, process::Stdio, time::SystemTime};
-use subsecond_cli_support::{create_jump_table, move_func_initiailizers};
+use subsecond_cli_support::{create_jump_table, satisfy_got_imports};
 use target_lexicon::{Environment, Triple};
 use tokio::{
     io::AsyncBufReadExt,
@@ -112,10 +112,13 @@ async fn main() -> anyhow::Result<()> {
 
         // Rebase the wasm binary to be relocatable once the jump table is generated
         if target.architecture == target_lexicon::Architecture::Wasm32 {
-            let out_bytes = std::fs::read(&output_temp).unwrap();
-            let (res_, bases) = move_func_initiailizers(&out_bytes).unwrap();
+            let old_bytes = std::fs::read(&fat_exe).unwrap();
+            let new_bytes = std::fs::read(&output_temp).unwrap();
+            let res_ = satisfy_got_imports(&old_bytes, &new_bytes).unwrap();
+            // let (res_, bases) = move_func_initiailizers(&out_bytes).unwrap();
+            // let (res_, bases) = move_func_initiailizers(&out_bytes).unwrap();
             std::fs::write(&output_temp, res_).unwrap();
-            jump_table.got = bases;
+            // jump_table.got = bases;
         }
 
         client
@@ -224,6 +227,7 @@ async fn initial_build(target: &Triple) -> anyhow::Result<CargoOutputResult> {
             build.arg("-Clink-arg=--export=__stack_pointer");
             build.arg("-Clink-arg=--export=__heap_base");
             build.arg("-Clink-arg=--export=__data_end");
+            build.arg("-Crelocation-model=pic");
         }
 
         _ => {}
@@ -378,6 +382,18 @@ async fn fast_build(
                 .await?
         }
         target_lexicon::Architecture::Wasm32 => {
+            // .arg("--export-all")
+            // .arg("-z")
+            // .arg("stack-size=1048576")
+            // .arg("--stack-first")
+            // .arg("--emit-relocs")
+            // .arg("--no-gc-sections")
+            // .arg("--experimental-pic")
+            // .arg(format!("--table-base={}", table_base))
+            // .arg(format!("--global-base={}", global_base))
+            // .arg("--no-gc-sections")
+            // .arg("--error-limit=0")
+
             const WASM_PAGE_SIZE: u64 = 65536;
             let table_base = 2000 * (aslr_reference + 1);
             let global_base =
@@ -401,10 +417,9 @@ async fn fast_build(
                 .arg("--allow-undefined")
                 .arg("--no-demangle")
                 .arg("--no-entry")
-                .arg("--emit-relocs")
+                // .arg("--emit-relocs")
+                .arg("--pie")
                 .arg("--experimental-pic")
-                // .arg(format!("--table-base={}", table_base))
-                // .arg(format!("--global-base={}", global_base))
                 .arg("-o")
                 .arg(&output_location)
                 .stdout(Stdio::piped())

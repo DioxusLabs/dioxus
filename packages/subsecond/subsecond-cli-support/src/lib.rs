@@ -127,25 +127,28 @@ fn create_wasm_jump_table(original: &Path, patch: &Path) -> anyhow::Result<JumpT
     let name_to_ifunc_old = collect_func_ifuncs(&mod_old);
     let name_to_ifunc_new = collect_func_ifuncs(&mod_new);
 
+    // tracing::info!("Old ifuncs: {:?}", name_to_ifunc_old);
+    tracing::info!("New ifuncs: {:?}", name_to_ifunc_new);
+
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new {
         if let Some(old_idx) = name_to_ifunc_old.get(name) {
-            // tracing::info!("Mapping {name} from {old_idx} to {idx}");
+            tracing::info!("Mapping {name} from {old_idx} to {idx}");
             map.insert(*old_idx as u64, idx as u64);
         }
     }
 
-    tracing::info!("Jump table: {:?}", map);
-    for data in mod_new.data.iter() {
-        tracing::info!("Data: {:?} - {:?}", data.name, data.kind);
-    }
+    // tracing::info!("Jump table: {:?}", map);
+    // for data in mod_new.data.iter() {
+    //     tracing::info!("Data: {:?} - {:?}", data.name, data.kind);
+    // }
 
-    for global in mod_new.globals.iter() {
-        tracing::info!("Global: {:?} - {:?}", global.name, global.kind);
-    }
-    for el in mod_new.elements.iter() {
-        tracing::info!("Elemenet: {:?} - {:?}", el.name, el.kind);
-    }
+    // for global in mod_new.globals.iter() {
+    //     tracing::info!("Global: {:?} - {:?}", global.name, global.kind);
+    // }
+    // for el in mod_new.elements.iter() {
+    //     tracing::info!("Elemenet: {:?} - {:?}", el.name, el.kind);
+    // }
 
     Ok(JumpTable {
         map,
@@ -162,9 +165,12 @@ fn collect_func_ifuncs(mod_new: &Module) -> HashMap<&str, i32> {
     let mut name_to_ifunc_index = HashMap::new();
 
     for el in mod_new.elements.iter() {
+        tracing::info!("Element: {:?}", el);
         let ElementKind::Active { table, offset } = &el.kind else {
+            tracing::info!("Skipping element: {:?}", el.kind);
             continue;
         };
+
         let offset = match offset {
             walrus::ConstExpr::Value(value) => match value {
                 walrus::ir::Value::I32(idx) => *idx,
@@ -176,7 +182,8 @@ fn collect_func_ifuncs(mod_new: &Module) -> HashMap<&str, i32> {
             walrus::ConstExpr::Global(id) => {
                 let global = mod_new.globals.get(*id);
                 tracing::info!("refercning global {:?}", global);
-                continue;
+                // continue;
+                0
             }
             walrus::ConstExpr::RefNull(ref_type) => todo!(),
             walrus::ConstExpr::RefFunc(id) => todo!(),
@@ -493,75 +500,149 @@ fn collect_all_wasm_bindgen_funcs(module: &Module) -> HashSet<FunctionId> {
     acc.funcs
 }
 
-/// The incoming module is expecting to initialize its functions at address 1.
+/// According to the dylink spec, there will be two sets of entries:
+/// - got.func: functions in the indirect function table
+/// - got.mem: data objects in the data segments
 ///
-/// Since the user can reload the page, killing our ASLR reference, we need to make the patch itself
-/// relocatable.
-///
-/// This involves making the ifunc initializers
-pub fn move_func_initiailizers(bytes: &[u8]) -> Result<(Vec<u8>, HashMap<String, u64>)> {
-    let mut module = walrus::Module::from_buffer(bytes)?;
+/// It doesn't seem like we can compile the base module to export these, sadly, so we're going
+/// to manually satisfy them here, removing their need to be imported.
+pub fn satisfy_got_imports(old_bytes: &[u8], new_bytes: &[u8]) -> Result<Vec<u8>> {
+    let old: walrus::Module = walrus::Module::from_buffer(old_bytes)?;
+    let mut new: walrus::Module = walrus::Module::from_buffer(new_bytes)?;
 
-    let mut offsets = vec![];
+    let func_map = old
+        .funcs
+        .iter()
+        .map(|f| {
+            let name = f.name.as_ref().unwrap().as_str();
+            (name, f.id())
+        })
+        .collect::<HashMap<_, _>>();
 
-    let (ifunc_global, _) =
-        module.add_import_global("env", "__IFUNC_OFFSET", ValType::I32, false, false);
+    let ifunc_map = collect_func_ifuncs(&old);
+    let global_map = collect_global_map(&old);
 
-    let (ro_data, _) =
-        module.add_import_global("env", "__RO_DATA_OFFSET", ValType::I32, false, false);
+    tracing::info!("Global map: {:?}", global_map);
 
-    let (bss_data, _) =
-        module.add_import_global("env", "__BSS_DATA_OFFSET", ValType::I32, false, false);
+    let mut mems = vec![];
+    let mut funcs = vec![];
 
-    let table = module.tables.iter_mut().next().unwrap();
-    let segments = table.elem_segments.clone();
+    for t in new.imports.iter() {
+        if t.module == "GOT.func" {
+            let old_func = ifunc_map.get(t.name.as_str()).unwrap();
+            funcs.push((t.id(), *old_func));
+        }
 
-    for seg in segments {
-        if let ElementKind::Active { table, offset } = &mut module.elements.get_mut(seg).kind {
-            tracing::info!("Updating active Segment: {:?}", seg);
-            *offset = walrus::ConstExpr::Global(ifunc_global);
+        if t.module == "GOT.mem" {
+            mems.push(t.id());
         }
     }
 
-    let datas = module.data.iter().map(|f| f.id()).collect::<Vec<_>>();
-    for data in datas {
-        let data = module.data.get_mut(data);
-        if let walrus::DataKind::Active { offset, .. } = &mut data.kind {
-            let orig_offset = match &offset {
-                walrus::ConstExpr::Value(value) => match value {
-                    walrus::ir::Value::I32(val) => *val,
-                    _ => continue,
-                },
-                _ => continue,
-            };
+    // Satisfies the GOT.func imports
+    for (imp_id, val) in funcs {
+        let imp = new.imports.get(imp_id);
+        let global_id = match imp.kind {
+            ImportKind::Global(id) => id,
+            _ => todo!(),
+        };
+        new.globals.get_mut(global_id).kind =
+            walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(val as i32)));
+        new.imports.delete(imp_id);
+    }
 
-            match data.name.as_deref() {
-                Some(".bss") => {
-                    tracing::info!("Updating bss segment: {:?}", data.name);
-                    *offset = walrus::ConstExpr::Global(bss_data);
-                    offsets.push(("__BSS_DATA_OFFSET".to_string(), orig_offset as u64));
-                }
-                Some(".rodata") => {
-                    tracing::info!("Updating rodata segment: {:?}", data.name);
-                    *offset = walrus::ConstExpr::Global(ro_data);
-                    offsets.push(("__RO_DATA_OFFSET".to_string(), orig_offset as u64));
-                }
-                _ => continue,
+    // The got mem entries exist, but are hidden. we need to bind to their address directly
+    for mem in mems {
+        let imp = new.imports.get(mem);
+        let name = format!("GOT.data.internal.{}", imp.name);
+
+        let val = global_map.get(name.as_str()).unwrap();
+        let global_id = match imp.kind {
+            ImportKind::Global(id) => id,
+            _ => todo!(),
+        };
+        new.globals.get_mut(global_id).kind =
+            walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(*val)));
+        new.imports.delete(mem);
+        // new.imports.get_mut(mem).module = "GOT.data.internal".to_string();
+    }
+
+    // let mut offsets = vec![];
+
+    // let (ifunc_global, _) =
+    //     module.add_import_global("env", "__IFUNC_OFFSET", ValType::I32, false, false);
+
+    // let (ro_data, _) =
+    //     module.add_import_global("env", "__RO_DATA_OFFSET", ValType::I32, false, false);
+
+    // let (bss_data, _) =
+    //     module.add_import_global("env", "__BSS_DATA_OFFSET", ValType::I32, false, false);
+
+    // let table = module.tables.iter_mut().next().unwrap();
+    // let segments = table.elem_segments.clone();
+
+    // for seg in segments {
+    //     if let ElementKind::Active { table, offset } = &mut module.elements.get_mut(seg).kind {
+    //         tracing::info!("Updating active Segment: {:?}", seg);
+    //         *offset = walrus::ConstExpr::Global(ifunc_global);
+    //     }
+    // }
+
+    // let datas = module.data.iter().map(|f| f.id()).collect::<Vec<_>>();
+    // for data in datas {
+    //     let data = module.data.get_mut(data);
+    //     if let walrus::DataKind::Active { offset, .. } = &mut data.kind {
+    //         let orig_offset = match &offset {
+    //             walrus::ConstExpr::Value(value) => match value {
+    //                 walrus::ir::Value::I32(val) => *val,
+    //                 _ => continue,
+    //             },
+    //             _ => continue,
+    //         };
+
+    //         match data.name.as_deref() {
+    //             Some(".bss") => {
+    //                 tracing::info!("Updating bss segment: {:?}", data.name);
+    //                 *offset = walrus::ConstExpr::Global(bss_data);
+    //                 offsets.push(("__BSS_DATA_OFFSET".to_string(), orig_offset as u64));
+    //             }
+    //             Some(".rodata") => {
+    //                 tracing::info!("Updating rodata segment: {:?}", data.name);
+    //                 *offset = walrus::ConstExpr::Global(ro_data);
+    //                 offsets.push(("__RO_DATA_OFFSET".to_string(), orig_offset as u64));
+    //             }
+    //             _ => continue,
+    //         }
+    //     }
+    // }
+
+    // // Sort by offset order
+    // offsets.sort_by(|a, b| a.1.cmp(&b.1));
+
+    // // And then normalize to the first offset
+    // let first_offset = offsets.first().map(|f| f.1).unwrap_or(0);
+    // let offsets = offsets
+    //     .iter()
+    //     .map(|(name, offset)| (name.clone(), offset - first_offset))
+    //     .collect::<HashMap<_, _>>();
+
+    Ok(new.emit_wasm())
+}
+
+fn collect_global_map(old: &Module) -> HashMap<&str, i32> {
+    let mut global_map = HashMap::new();
+
+    for global in old.globals.iter() {
+        if let Some(name) = &global.name {
+            if let walrus::GlobalKind::Local(walrus::ConstExpr::Value(walrus::ir::Value::I32(
+                value,
+            ))) = global.kind
+            {
+                global_map.insert(name.as_str(), value);
             }
         }
     }
 
-    // Sort by offset order
-    offsets.sort_by(|a, b| a.1.cmp(&b.1));
-
-    // And then normalize to the first offset
-    let first_offset = offsets.first().map(|f| f.1).unwrap_or(0);
-    let offsets = offsets
-        .iter()
-        .map(|(name, offset)| (name.clone(), offset - first_offset))
-        .collect::<HashMap<_, _>>();
-
-    Ok((module.emit_wasm(), offsets))
+    global_map
 }
 
 /// Manually parse the data section from a wasm module
@@ -607,26 +688,6 @@ fn get_ifunc_table_length(bytes: &[u8]) -> usize {
         // .map(|table| table.elem_segments.len())
         .max()
         .unwrap_or(1)
-}
-
-#[test]
-fn test_prepare_base_module() {
-    prepare_wasm_base_module(include_bytes!("../../data/wasm-1/pre-bindgen.wasm"));
-}
-
-#[test]
-fn ensure_matching() -> Result<()> {
-    let patch = include_bytes!("../../data/wasm-1/patch.wasm");
-    let post_bind = include_bytes!("../../data/wasm-1/post-bindgen.wasm");
-
-    let patch_module = walrus::Module::from_buffer(patch).unwrap();
-    let post_bindgen_module = walrus::Module::from_buffer(post_bind).unwrap();
-
-    for import in patch_module.imports.iter() {
-        println!("Import: {}", import.name);
-    }
-
-    Ok(())
 }
 
 #[test]

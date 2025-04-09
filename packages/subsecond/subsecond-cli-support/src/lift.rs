@@ -22,7 +22,7 @@ use tokio::process::Command;
 
 #[test]
 fn load_object_file() {
-    let data = include_bytes!("../../data/subsecond-harness-fat");
+    // let data = include_bytes!("../../data/subsecond-harness-fat");
     // let object = File::parse(data.deref() as &[u8]).unwrap();
 
     // // We're going to cherrypick our symbols from the object file into the dynamic symbol table
