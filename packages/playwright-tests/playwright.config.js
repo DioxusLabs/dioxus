@@ -103,6 +103,24 @@ module.exports = defineConfig({
       stdout: "pipe",
     },
     {
+      cwd: path.join(process.cwd(), "fullstack-base-path"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --bin fullstack-base-path --force-sequential --platform web --addr "127.0.0.1" --port 4444',
+      port: 4444,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    // {
+    //   cwd: path.join(process.cwd(), "fullstack-base-path"),
+    //   command:
+    //     'cargo run --package dioxus-cli --release -- bundle --bin fullstack-base-path-ssg --force-sequential --platform web --ssg && ../../../target/dx/fullstack-base-path-ssg/release/web/server',
+    //   port: 8080,
+    //   timeout: 50 * 60 * 1000,
+    //   reuseExistingServer: !process.env.CI,
+    //   stdout: "pipe",
+    // },
+    {
       cwd: path.join(process.cwd(), "fullstack-mounted"),
       command:
         'cargo run --package dioxus-cli --release -- serve --force-sequential --platform web --addr "127.0.0.1" --port 7777',
