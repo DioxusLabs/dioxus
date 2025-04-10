@@ -293,13 +293,40 @@ impl BuildRequest {
                 };
             }
 
-            // todo: use the right arch based on the current arch
+            // Determine the appropriate target based on platform and host architecture
             let custom_target = match self.build.platform() {
                 Platform::Web => Some("wasm32-unknown-unknown"),
-                Platform::Ios => match self.build.target_args.device {
-                    Some(true) => Some("aarch64-apple-ios"),
-                    _ => Some("aarch64-apple-ios-sim"),
-                },
+                Platform::Ios => {
+                    // For device builds, always use aarch64-apple-ios
+                    if self.build.target_args.device == Some(true) {
+                        Some("aarch64-apple-ios")
+                    } else {
+                        // For simulator builds, check if a target was explicitly specified
+                        if let Some(target) = self.build.target_args.target.as_deref() {
+                            // If a target was explicitly specified, use it
+                            tracing::info!("Using explicitly specified iOS target: {}", target);
+                            Some(target)
+                        } else {
+                            // Otherwise, detect the host architecture and use the appropriate target
+                            match DioxusCrate::detect_host_arch() {
+                                Some(arch) if arch == "x86_64" => {
+                                    tracing::info!(
+                                        "Detected Intel Mac, using x86_64-apple-ios target"
+                                    );
+                                    Some("x86_64-apple-ios")
+                                }
+                                Some(arch) if arch == "aarch64" => {
+                                    tracing::info!("Detected Apple Silicon Mac, using aarch64-apple-ios-sim target");
+                                    Some("aarch64-apple-ios-sim")
+                                }
+                                _ => {
+                                    tracing::info!("Could not detect host architecture, defaulting to aarch64-apple-ios-sim");
+                                    Some("aarch64-apple-ios-sim")
+                                }
+                            }
+                        }
+                    }
+                }
                 Platform::Android => Some(self.build.target_args.arch().android_target_triplet()),
                 Platform::Server => None,
                 // we're assuming we're building for the native platform for now... if you're cross-compiling

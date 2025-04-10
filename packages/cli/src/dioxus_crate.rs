@@ -664,6 +664,25 @@ impl DioxusCrate {
             .or_else(|| var_or_debug("ANDROID_HOME"))
     }
 
+    /// Detect if the host is running on Apple Silicon (aarch64) or Intel (x86_64) on macOS
+    /// Returns "aarch64" or "x86_64" as a string, or None if detection fails
+    pub(crate) fn detect_host_arch() -> Option<String> {
+        #[cfg(target_os = "macos")]
+        {
+            #[cfg(target_arch = "aarch64")]
+            return Some("aarch64".to_string());
+
+            #[cfg(target_arch = "x86_64")]
+            return Some("x86_64".to_string());
+
+            #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+            return None;
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        return None;
+    }
+
     pub(crate) fn android_ndk(&self) -> Option<PathBuf> {
         // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
         static PATH: once_cell::sync::Lazy<Option<PathBuf>> = once_cell::sync::Lazy::new(|| {

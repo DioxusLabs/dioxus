@@ -1,4 +1,6 @@
-use crate::{wasm_bindgen::WasmBindgen, BuildRequest, Error, Platform, Result, RustcDetails};
+use crate::{
+    wasm_bindgen::WasmBindgen, BuildRequest, DioxusCrate, Error, Platform, Result, RustcDetails,
+};
 use anyhow::{anyhow, Context};
 
 impl BuildRequest {
@@ -67,44 +69,51 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Currently does nothing, but eventually we need to check that the mobile tooling is installed.
+    /// Verify that the required iOS tooling is installed.
     ///
-    /// For ios, this would be just aarch64-apple-ios + aarch64-apple-ios-sim, as well as xcrun and xcode-select
-    ///
-    /// We don't auto-install these yet since we're not doing an architecture check. We assume most users
-    /// are running on an Apple Silicon Mac, but it would be confusing if we installed these when we actually
-    /// should be installing the x86 versions.
-    pub(crate) async fn verify_ios_tooling(&self, _rustc: RustcDetails) -> Result<()> {
-        // open the simulator
-        // _ = tokio::process::Command::new("open")
-        //     .arg("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app")
-        //     .stderr(Stdio::piped())
-        //     .stdout(Stdio::piped())
-        //     .status()
-        //     .await;
+    /// This checks for the appropriate iOS target based on the host architecture:
+    /// - For device builds: aarch64-apple-ios
+    /// - For simulator builds on Intel Macs: x86_64-apple-ios
+    /// - For simulator builds on Apple Silicon Macs: aarch64-apple-ios-sim
+    pub(crate) async fn verify_ios_tooling(&self, rustc: RustcDetails) -> Result<()> {
+        // Check for xcrun and xcode-select
+        let xcrun_output = tokio::process::Command::new("xcrun")
+            .arg("--version")
+            .output()
+            .await;
 
-        // Now xcrun to open the device
-        // todo: we should try and query the device list and/or parse it rather than hardcode this simulator
-        // _ = tokio::process::Command::new("xcrun")
-        //     .args(["simctl", "boot", "83AE3067-987F-4F85-AE3D-7079EF48C967"])
-        //     .stderr(Stdio::piped())
-        //     .stdout(Stdio::piped())
-        //     .status()
-        //     .await;
+        if let Err(e) = xcrun_output {
+            tracing::warn!("xcrun not found: {e}. iOS builds may fail. Make sure Xcode and Xcode Command Line Tools are installed.");
+        }
 
-        // if !rustup
-        //     .installed_toolchains
-        //     .contains(&"aarch64-apple-ios".to_string())
-        // {
-        //     tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
-        // }
+        // Determine which targets we need based on build configuration
+        let mut required_targets = vec!["aarch64-apple-ios"]; // Always needed for device builds
 
-        // if !rustup
-        //     .installed_toolchains
-        //     .contains(&"aarch64-apple-ios-sim".to_string())
-        // {
-        //     tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
-        // }
+        // For simulator builds, determine the appropriate target based on host architecture
+        if self.build.target_args.device != Some(true) {
+            // If a target was explicitly specified, use it
+            if let Some(target) = self.build.target_args.target.as_deref() {
+                required_targets.push(target);
+            } else {
+                // Otherwise, detect the host architecture and use the appropriate target
+                match DioxusCrate::detect_host_arch() {
+                    Some(arch) if arch == "x86_64" => {
+                        required_targets.push("x86_64-apple-ios");
+                    }
+                    _ => {
+                        // Default to aarch64-apple-ios-sim for Apple Silicon or unknown architectures
+                        required_targets.push("aarch64-apple-ios-sim");
+                    }
+                }
+            }
+        }
+
+        // Check if the required targets are installed
+        for target in required_targets {
+            if !rustc.has_target(target) {
+                tracing::warn!("iOS target '{target}' is not installed. Run 'rustup target add {target}' to install it.");
+            }
+        }
 
         Ok(())
     }
