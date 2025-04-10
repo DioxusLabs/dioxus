@@ -19,6 +19,18 @@ To use this dev container locally, make sure Docker is installed and in VSCode i
 
 [Codespaces Setup](https://docs.github.com/en/codespaces/developing-in-codespaces/creating-a-codespace-for-a-repository#creating-a-codespace-for-a-repository)
 
+### Playwright Tests
+The dev container comes with Playwright dependencies pre-installed.
+You can run the tests located in `packages/playwright-tests` by using the VSCode extension or by executing commands such as:
+
+```bash
+# Run all tests
+npx playwright test
+
+# Run tests using the UI mode
+npx playwright test --ui-host=0.0.0.0
+```
+
 ## Troubleshooting
 
 If having difficulty commiting with github, and you use ssh or gpg keys, you may need to ensure that the keys are being shared properly between your host and VSCode.
