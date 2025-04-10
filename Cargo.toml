@@ -108,6 +108,7 @@ members = [
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
     "packages/playwright-tests/fullstack",
+    "packages/playwright-tests/fullstack-base-path",
     "packages/playwright-tests/fullstack-mounted",
     "packages/playwright-tests/fullstack-routing",
     "packages/playwright-tests/suspense-carousel",
