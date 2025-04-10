@@ -140,12 +140,6 @@ impl BuildContext {
         });
     }
 
-    pub(crate) fn status_prerendering_routes(&self) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
-            stage: BuildStage::PrerenderingRoutes {},
-        });
-    }
-
     pub(crate) fn status_installing_tooling(&self) {
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::InstallingTooling {},

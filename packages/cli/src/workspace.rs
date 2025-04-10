@@ -250,6 +250,10 @@ impl Workspace {
                 .unwrap_or_default()
         })
     }
+
+    pub fn workspace_dir(&self) -> PathBuf {
+        self.krates.workspace_root().as_std_path().to_path_buf()
+    }
 }
 
 impl std::fmt::Debug for Workspace {

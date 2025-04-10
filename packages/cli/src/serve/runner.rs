@@ -9,6 +9,7 @@ use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
 use dioxus_core_types::HotReloadingContext;
+use dioxus_devtools_types::ClientMsg;
 use dioxus_devtools_types::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
@@ -219,26 +220,6 @@ impl AppRunner {
         Ok(runner)
     }
 
-    pub fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
-        match id.0 {
-            0 => Some(&self.client),
-            1 => self.server.as_ref(),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn client(&self) -> &AppBuilder {
-        // the client is always the first build
-        // &self.builds[0]
-        &self.client
-    }
-
-    pub(crate) fn server(&self) -> Option<&AppBuilder> {
-        // the server is always the second build, if it exists. We might not always have a "server"
-        // self.builds.get(1)
-        self.server.as_ref()
-    }
-
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
         let client = &mut self.client;
 
@@ -304,6 +285,10 @@ impl AppRunner {
         }
     }
 
+    pub(crate) fn rebuild_all(&mut self) {
+        self.client.rebuild()
+    }
+
     /// Finally "bundle" this app and return a handle to it
     pub(crate) async fn open(
         &mut self,
@@ -362,11 +347,25 @@ impl AppRunner {
         if let Some(server) = self.server.as_mut() {
             server.cleanup().await;
         }
-    }
 
-    /// The name of the app being served, to display
-    pub(crate) fn app_name(&self) -> &str {
-        self.client.build.executable_name()
+        // If the client is running on Android, we need to remove the port forwarding
+        // todo: use the android tools "adb"
+        if matches!(self.client.build.platform, Platform::Android) {
+            use std::process::{Command, Stdio};
+            if let Err(err) = Command::new("adb")
+                .arg("reverse")
+                .arg("--remove")
+                .arg(format!("tcp:{}", self.devserver_port))
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
+                .output()
+            {
+                tracing::error!(
+                    "failed to remove forwarded port {}: {err}",
+                    self.devserver_port
+                );
+            }
+        }
     }
 
     // /// Attempt to hotreload the given files
@@ -436,6 +435,23 @@ impl AppRunner {
     //     }
     // }
 
+    pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
+        match id.0 {
+            0 => Some(&self.client),
+            1 => self.server.as_ref(),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn client(&self) -> &AppBuilder {
+        &self.client
+    }
+
+    /// The name of the app being served, to display
+    pub(crate) fn app_name(&self) -> &str {
+        self.client.build.executable_name()
+    }
+
     /// Get any hot reload changes that have been applied since the last full rebuild
     pub(crate) fn applied_hot_reload_changes(&mut self) -> HotReloadMsg {
         self.applied_hot_reload_message.clone()
@@ -444,26 +460,6 @@ impl AppRunner {
     /// Clear the hot reload changes. This should be called any time a new build is starting
     pub(crate) fn clear_hot_reload_changes(&mut self) {
         self.applied_hot_reload_message = Default::default();
-    }
-
-    /// Store the hot reload changes for any future clients that connect
-    fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
-        let applied = &mut self.applied_hot_reload_message;
-
-        // Merge the assets, unknown files, and templates
-        // We keep the newer change if there is both a old and new change
-        let mut templates: HashMap<TemplateGlobalKey, _> = std::mem::take(&mut applied.templates)
-            .into_iter()
-            .map(|template| (template.key.clone(), template))
-            .collect();
-        let mut assets: HashSet<PathBuf> =
-            std::mem::take(&mut applied.assets).into_iter().collect();
-        for template in &msg.templates {
-            templates.insert(template.key.clone(), template.clone());
-        }
-        assets.extend(msg.assets.iter().cloned());
-        applied.templates = templates.into_values().collect();
-        applied.assets = assets.into_iter().collect();
     }
 
     pub(crate) async fn client_connected(&mut self) {
@@ -491,13 +487,44 @@ impl AppRunner {
         }
     }
 
+    /// Store the hot reload changes for any future clients that connect
+    fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
+        let applied = &mut self.applied_hot_reload_message;
+
+        // Merge the assets, unknown files, and templates
+        // We keep the newer change if there is both a old and new change
+        let mut templates: HashMap<TemplateGlobalKey, _> = std::mem::take(&mut applied.templates)
+            .into_iter()
+            .map(|template| (template.key.clone(), template))
+            .collect();
+        let mut assets: HashSet<PathBuf> =
+            std::mem::take(&mut applied.assets).into_iter().collect();
+        for template in &msg.templates {
+            templates.insert(template.key.clone(), template.clone());
+        }
+        assets.extend(msg.assets.iter().cloned());
+        applied.templates = templates.into_values().collect();
+        applied.assets = assets.into_iter().collect();
+    }
+
+    /// Register the files from the workspace into our file watcher.
+    ///
+    /// This very simply looks for all Rust files in the workspace and adds them to the filemap.
+    ///
+    /// Once the builds complete we'll use the depinfo files to get the actual files that are used,
+    /// making our watcher more accurate. Filling the filemap here is intended to catch any file changes
+    /// in between the first build and the depinfo file being generated.
+    ///
+    /// We don't want watch any registry files since that generally causes a huge performance hit -
+    /// we mostly just care about workspace files and local dependencies.
+    ///
+    /// Dep-info file background:
+    /// https://doc.rust-lang.org/stable/nightly-rustc/cargo/core/compiler/fingerprint/index.html#dep-info-files
     fn load_rsx_filemap(&mut self) {
-        // https://doc.rust-lang.org/stable/nightly-rustc/cargo/core/compiler/fingerprint/index.html#dep-info-files
-        // todo: use depinfo instead
-        self.fill_filemap(self.client.build.crate_dir());
+        self.fill_filemap_from_krate(self.client.build.crate_dir());
 
         for krate in self.all_watched_crates() {
-            self.fill_filemap(krate);
+            self.fill_filemap_from_krate(krate);
         }
     }
 
@@ -510,8 +537,10 @@ impl AppRunner {
     /// Generally this will only be .rs files
     ///
     /// If a file couldn't be parsed, we don't fail. Instead, we save the error.
-    fn fill_filemap(&mut self, path: PathBuf) {
-        for entry in walkdir::WalkDir::new(path).into_iter().flatten() {
+    ///
+    /// todo: There are known bugs here when handling gitignores.
+    fn fill_filemap_from_krate(&mut self, crate_dir: PathBuf) {
+        for entry in walkdir::WalkDir::new(crate_dir).into_iter().flatten() {
             if self
                 .workspace
                 .ignore
@@ -524,47 +553,19 @@ impl AppRunner {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("rs") {
                 if let Ok(contents) = std::fs::read_to_string(&path) {
-                    self.file_map.insert(
-                        path.to_path_buf(),
-                        CachedFile {
-                            contents,
-                            most_recent: None,
-                            templates: Default::default(),
-                        },
-                    );
+                    if let Ok(path) = path.strip_prefix(self.workspace.workspace_dir()) {
+                        self.file_map.insert(
+                            path.to_path_buf(),
+                            CachedFile {
+                                contents,
+                                most_recent: None,
+                                templates: Default::default(),
+                            },
+                        );
+                    }
                 }
             }
         }
-
-        // if self.ignore.matched(&path, path.is_dir()).is_ignore() {
-        //     return;
-        // }
-
-        // // If the file is a .rs file, add it to the filemap
-        // if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-        //     if let Ok(contents) = std::fs::read_to_string(&path) {
-        //         if let Ok(path) = path.strip_prefix(self.krate.workspace_dir()) {
-        //             self.file_map.insert(
-        //                 path.to_path_buf(),
-        //                 CachedFile {
-        //                     contents,
-        //                     most_recent: None,
-        //                     templates: Default::default(),
-        //                 },
-        //             );
-        //         }
-        //     }
-        //     return;
-        // }
-
-        // // If it's not, we'll try to read the directory
-        // if path.is_dir() {
-        //     if let Ok(read_dir) = std::fs::read_dir(&path) {
-        //         for entry in read_dir.flatten() {
-        //             self.fill_filemap(entry.path());
-        //         }
-        //     }
-        // }
     }
 
     /// Try to update the rsx in a file, returning the templates that were hotreloaded
@@ -669,7 +670,7 @@ impl AppRunner {
     /// Removes any cached templates and replaces the contents of the files with the most recent
     ///
     /// todo: we should-reparse the contents so we never send a new version, ever
-    pub fn clear_cached_rsx(&mut self) {
+    pub(crate) fn clear_cached_rsx(&mut self) {
         for cached_file in self.file_map.values_mut() {
             if let Some(most_recent) = cached_file.most_recent.take() {
                 cached_file.contents = most_recent;
@@ -678,7 +679,7 @@ impl AppRunner {
         }
     }
 
-    pub async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
+    pub(crate) async fn patch(&mut self, res: &BuildArtifacts) -> Result<JumpTable> {
         let client = &self.client;
         let original = client.build.main_exe();
         let new = client.build.patch_exe(res.time_start);
@@ -694,7 +695,7 @@ impl AppRunner {
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if client.build.platform == Platform::Android {
             jump_table.lib = client
-                .push_native_library_to_android(&new, &(PathBuf::from(new.file_name().unwrap())))
+                .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
                 .await?;
         }
 
@@ -740,35 +741,61 @@ impl AppRunner {
         Ok(jump_table)
     }
 
+    /// Handles incoming WebSocket messages from the client.
+    ///
+    /// This function processes messages sent by the client over the WebSocket connection. We only
+    /// handle text messages, and we expect them to be in JSON format.
+    ///
+    /// Specifically, it handles the initialization message to set the Address Space Layout Randomization (ASLR) reference offset.
+    ///
+    /// For WebAssembly (Wasm) targets, ASLR is not used, so this value is ignored.
     pub(crate) async fn handle_ws_message(&mut self, msg: &WsMessage) -> Result<()> {
-        use dioxus_devtools_types::ClientMsg;
+        let as_text = msg
+            .to_text()
+            .context("client message not proper encoding")?;
 
-        let res = serde_json::from_str::<ClientMsg>(
-            &msg.to_text()
-                .context("client message not proper encoding")?,
-        );
-
-        // Client logs being errors aren't fatal, but we should still report them them
-        let msg = match res {
-            Ok(msg) => msg,
+        match serde_json::from_str::<ClientMsg>(as_text) {
+            Ok(ClientMsg::Initialize { aslr_reference }) => {
+                tracing::debug!("Setting aslr_reference: {aslr_reference}");
+                self.client.aslr_reference = Some(aslr_reference);
+            }
+            Ok(_client) => {}
             Err(err) => {
                 tracing::error!(dx_src = ?TraceSrc::Dev, "Error parsing message from {}: {}", Platform::Web, err);
-                return Ok(());
             }
         };
-
-        let ClientMsg::Initialize { aslr_reference } = msg else {
-            return Ok(());
-        };
-
-        tracing::debug!("Setting aslr_reference: {aslr_reference}");
-        self.client.aslr_reference = Some(aslr_reference);
 
         Ok(())
     }
 
-    pub fn rebuild_all(&mut self) {
-        self.client.rebuild()
+    fn watch_filesystem(&mut self) {
+        // Watch the folders of the crates that we're interested in
+        for path in self.watch_paths(
+            self.client.build.crate_dir(),
+            self.client.build.crate_package,
+        ) {
+            tracing::debug!("Watching path {path:?}");
+
+            if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
+                handle_notify_error(err);
+            }
+        }
+
+        // Also watch the crates themselves, but not recursively, such that we can pick up new folders
+        for krate in self.all_watched_crates() {
+            tracing::debug!("Watching path {krate:?}");
+            if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
+                handle_notify_error(err);
+            }
+        }
+
+        // Also watch the workspace dir, non recursively, such that we can pick up new folders there too
+        if let Err(err) = self.watcher.watch(
+            &self.workspace.krates.workspace_root().as_std_path(),
+            RecursiveMode::NonRecursive,
+        ) {
+            handle_notify_error(err);
+        }
     }
 
     /// Return the list of paths that we should watch for changes.
@@ -849,7 +876,7 @@ impl AppRunner {
     }
 
     // todo: we need to make sure we merge this for all the running packages
-    pub(crate) fn all_watched_crates(&self) -> Vec<PathBuf> {
+    fn all_watched_crates(&self) -> Vec<PathBuf> {
         let crate_package = self.client().build.crate_package;
         let crate_dir = self.client().build.crate_dir();
 
@@ -881,36 +908,6 @@ impl AppRunner {
         };
 
         server.compiled_crates as f64 / server.expected_crates as f64
-    }
-
-    fn watch_filesystem(&mut self) {
-        // Watch the folders of the crates that we're interested in
-        for path in self.watch_paths(
-            self.client.build.crate_dir(),
-            self.client.build.crate_package,
-        ) {
-            tracing::debug!("Watching path {path:?}");
-
-            if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
-                handle_notify_error(err);
-            }
-        }
-
-        // Also watch the crates themselves, but not recursively, such that we can pick up new folders
-        for krate in self.all_watched_crates() {
-            tracing::debug!("Watching path {krate:?}");
-            if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
-                handle_notify_error(err);
-            }
-        }
-
-        // Also watch the workspace dir, non recursively, such that we can pick up new folders there too
-        if let Err(err) = self.watcher.watch(
-            &self.workspace.krates.workspace_root().as_std_path(),
-            RecursiveMode::NonRecursive,
-        ) {
-            handle_notify_error(err);
-        }
     }
 }
 

@@ -57,7 +57,6 @@ pub enum BuildStage {
     RunningBindgen,
     SplittingBundle,
     OptimizingWasm,
-    PrerenderingRoutes,
     CopyingAssets {
         current: usize,
         total: usize,

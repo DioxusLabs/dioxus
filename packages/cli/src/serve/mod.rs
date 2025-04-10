@@ -149,7 +149,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
             // logging, so we just forward it the tui
             ServeUpdate::WsMessage(msg) => {
                 screen.push_ws_message(Platform::Web, &msg);
-                builder.handle_ws_message(&msg).await;
+                _ = builder.handle_ws_message(&msg).await;
             }
 
             // Wait for logs from the build engine

@@ -524,7 +524,6 @@ impl Output {
             BuildStage::OptimizingWasm {} => lines.push("Optimizing wasm".yellow()),
             BuildStage::SplittingBundle {} => lines.push("Splitting bundle".yellow()),
             BuildStage::CompressingAssets => lines.push("Compressing assets".yellow()),
-            BuildStage::PrerenderingRoutes {} => lines.push("Prerendering static routes".yellow()),
             BuildStage::RunningBindgen {} => lines.push("Running wasm-bindgen".yellow()),
             BuildStage::RunningGradle {} => lines.push("Running gradle assemble".yellow()),
             BuildStage::Bundling {} => lines.push("Bundling app".yellow()),

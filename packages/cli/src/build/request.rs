@@ -361,24 +361,23 @@ pub(crate) static PROFILE_ANDROID: &str = "android-dev";
 pub(crate) static PROFILE_SERVER: &str = "server-dev";
 
 impl BuildRequest {
-    /// Create a new build request
+    /// Create a new build request.
     ///
-    /// This will combine the many inputs here into a single source of truth. Fields will be duplicated
-    /// from the inputs since various things might need to be autodetected.
+    /// This method consolidates various inputs into a single source of truth. It combines:
+    /// - Command-line arguments provided by the user.
+    /// - The crate's `Cargo.toml`.
+    /// - The `dioxus.toml` configuration file.
+    /// - User-specific CLI settings.
+    /// - The workspace metadata.
+    /// - Host-specific details (e.g., Android tools, installed frameworks).
+    /// - The intended target platform.
     ///
-    /// When creating a new build request we need to take into account
-    /// - The user's command line arguments
-    /// - The crate's Cargo.toml
-    /// - The dioxus.toml
-    /// - The user's CliSettings
-    /// - The workspace
-    /// - The host (android tools, installed frameworks, etc)
-    /// - The intended platform
+    /// Fields may be duplicated from the inputs to allow for autodetection and resolution.
     ///
-    /// We will attempt to autodetect a number of things if not provided.
+    /// Autodetection is performed for unspecified fields where possible.
     ///
-    /// We intend to not create new BuildRequests very often. Only when the CLI is invoked and then again
-    /// if the Cargo.toml's change so such an extent that features are added or removed.
+    /// Note: Build requests are typically created only when the CLI is invoked or when significant
+    /// changes are detected in the `Cargo.toml` (e.g., features added or removed).
     pub async fn new(args: &BuildArgs) -> Result<Self> {
         let workspace = Workspace::current().await?;
 
@@ -2705,7 +2704,7 @@ impl BuildRequest {
         Ok(self.root_dir().join(gradle_exec_name))
     }
 
-    pub(crate) fn apk_path(&self) -> PathBuf {
+    pub(crate) fn debug_apk_path(&self) -> PathBuf {
         self.root_dir()
             .join("app")
             .join("build")
@@ -2878,7 +2877,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    pub(crate) async fn verify_web_tooling(&self) -> Result<()> {
+    async fn verify_web_tooling(&self) -> Result<()> {
         // Install target using rustup.
         #[cfg(not(feature = "no-downloads"))]
         if !self.workspace.has_wasm32_unknown_unknown() {
@@ -2916,7 +2915,7 @@ impl BuildRequest {
     /// We don't auto-install these yet since we're not doing an architecture check. We assume most users
     /// are running on an Apple Silicon Mac, but it would be confusing if we installed these when we actually
     /// should be installing the x86 versions.
-    pub(crate) async fn verify_ios_tooling(&self) -> Result<()> {
+    async fn verify_ios_tooling(&self) -> Result<()> {
         // open the simulator
         // _ = tokio::process::Command::new("open")
         //     .arg("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app")
@@ -2953,7 +2952,7 @@ impl BuildRequest {
     ///
     /// will do its best to fill in the missing bits by exploring the sdk structure
     /// IE will attempt to use the Java installed from android studio if possible.
-    pub(crate) async fn verify_android_tooling(&self) -> Result<()> {
+    async fn verify_android_tooling(&self) -> Result<()> {
         let android = crate::build::android_tools().context("Android not installed properly. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation.")?;
 
         let linker = android.android_cc(&self.triple);
@@ -2974,7 +2973,7 @@ impl BuildRequest {
     ///
     /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
     ///     https://tauri.app/start/prerequisites/
-    pub(crate) async fn verify_linux_tooling(&self) -> Result<()> {
+    async fn verify_linux_tooling(&self) -> Result<()> {
         Ok(())
     }
 }

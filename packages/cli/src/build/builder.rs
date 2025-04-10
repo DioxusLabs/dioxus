@@ -89,7 +89,30 @@ pub(crate) struct AppBuilder {
 }
 
 impl AppBuilder {
-    /// Create a new builder and immediately start a build
+    /// Create a new `AppBuilder` and immediately start a build process.
+    ///
+    /// This method initializes the builder with the provided `BuildRequest` and spawns an asynchronous
+    /// task (`build_task`) to handle the build process. The build process involves several stages:
+    ///
+    /// 1. **Tooling Verification**: Ensures that the necessary tools are available for the build.
+    /// 2. **Build Directory Preparation**: Sets up the directory structure required for the build.
+    /// 3. **Build Execution**: Executes the build process asynchronously.
+    /// 4. **Bundling**: Packages the built artifacts into a final bundle.
+    ///
+    /// The `build_task` is a Tokio task that runs the build process in the background. It uses a
+    /// `BuildContext` to manage the build state and communicate progress or errors via a message
+    /// channel (`tx`).
+    ///
+    /// The builder is initialized with default values for various fields, such as the build stage,
+    /// progress metrics, and optional runtime configurations.
+    ///
+    /// # Notes
+    ///
+    /// - The `build_task` is immediately spawned and will run independently of the caller.
+    /// - The caller can use other methods on the `AppBuilder` to monitor the build progress or handle
+    ///   updates (e.g., `wait`, `finish_build`).
+    /// - The build process is designed to be cancellable and restartable using methods like `abort_all`
+    ///   or `rebuild`.
     pub(crate) fn start(request: &BuildRequest) -> Result<Self> {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
@@ -241,44 +264,42 @@ impl AppBuilder {
 
     pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
-        self.abort_all();
-        self.stage = BuildStage::Restarting;
-
-        // This build doesn't have any extra special logging - rebuilds would get pretty noisy
-        let request = self.build.clone();
-        let ctx = BuildContext {
-            tx: self.tx.clone(),
-            mode: BuildMode::Thin {
-                changed_files,
-                direct_rustc: self.artifacts.as_ref().unwrap().direct_rustc.clone(),
-                aslr_reference: self.aslr_reference.unwrap(),
-            },
-        };
-        self.build_task = tokio::spawn(async move { request.build(&ctx).await });
+        self.abort_all(BuildStage::Restarting);
+        self.build_task = tokio::spawn({
+            let request = self.build.clone();
+            let ctx = BuildContext {
+                tx: self.tx.clone(),
+                mode: BuildMode::Thin {
+                    changed_files,
+                    direct_rustc: self.artifacts.as_ref().unwrap().direct_rustc.clone(),
+                    aslr_reference: self.aslr_reference.unwrap(),
+                },
+            };
+            async move { request.build(&ctx).await }
+        });
     }
 
     /// Restart this builder with new build arguments.
     pub(crate) fn rebuild(&mut self) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
-        self.abort_all();
-        self.stage = BuildStage::Restarting;
-
-        // This build doesn't have any extra special logging - rebuilds would get pretty noisy
-        let request = self.build.clone();
-        let ctx = BuildContext {
-            tx: self.tx.clone(),
-            mode: BuildMode::Fat,
-        };
-        self.build_task = tokio::spawn(async move { request.build(&ctx).await });
+        self.abort_all(BuildStage::Restarting);
+        self.build_task = tokio::spawn({
+            let request = self.build.clone();
+            let ctx = BuildContext {
+                tx: self.tx.clone(),
+                mode: BuildMode::Fat,
+            };
+            async move { request.build(&ctx).await }
+        });
     }
 
     /// Shutdown the current build process
     ///
     /// todo: might want to use a cancellation token here to allow cleaner shutdowns
-    pub(crate) fn abort_all(&mut self) {
+    pub(crate) fn abort_all(&mut self, stage: BuildStage) {
         self.build_task.abort();
-        self.stage = BuildStage::Aborted;
+        self.stage = stage;
         self.compiled_crates = 0;
         self.expected_crates = 1;
         self.bundling_progress = 0.0;
@@ -413,9 +434,8 @@ impl AppBuilder {
 
             Platform::Ios => Some(self.open_ios_sim(envs).await?),
 
-            // https://developer.android.com/studio/run/emulator-commandline
             Platform::Android => {
-                self.open_android_sim(devserver_ip, envs).await;
+                self.open_android_sim(false, devserver_ip, envs).await;
                 None
             }
 
@@ -453,23 +473,6 @@ impl AppBuilder {
         if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
             _ = std::fs::remove_file(entropy_app_exe);
         }
-
-        // if matches!(self.platform, Platform::Android) {
-        //     use std::process::{Command, Stdio};
-        //     if let Err(err) = Command::new("adb")
-        //         .arg("reverse")
-        //         .arg("--remove")
-        //         .arg(format!("tcp:{}", self.devserver_port))
-        //         .stderr(Stdio::piped())
-        //         .stdout(Stdio::piped())
-        //         .output()
-        //     {
-        //         tracing::error!(
-        //             "failed to remove forwarded port {}: {err}",
-        //             self.devserver_port
-        //         );
-        //     }
-        // }
     }
 
     /// Kill the app and server exes
@@ -561,6 +564,7 @@ impl AppBuilder {
             let output_path = asset_dir.join(resource.bundled_path());
             // Remove the old asset if it exists
             _ = std::fs::remove_file(&output_path);
+
             // And then process the asset with the options into the **old** asset location. If we recompiled,
             // the asset would be in a new location because the contents and hash have changed. Since we are
             // hotreloading, we need to use the old asset location it was originally written to.
@@ -585,37 +589,11 @@ impl AppBuilder {
         bundled_name
     }
 
-    pub(crate) async fn push_native_library_to_android(
-        &self,
-        changed_file: &Path,
-        bundled_name: &Path,
-    ) -> Result<PathBuf> {
-        // ie - "/data/data/com.example.SubsecondHarness/lib/"
-        // you must be root to do this. `adb root`
-        // let target = PathBuf::from("/data/data/")
-        //     .join(self.build.bundle_identifier())
-        //     .join("files")
-        //     .join("lib")
-        //     .join(bundled_name);
-        let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
-        tracing::debug!("Pushing asset to device: {target:?}");
-
-        let res = tokio::process::Command::new(crate::build::android_tools().unwrap().adb)
-            .arg("push")
-            .arg(&changed_file)
-            .arg(&target)
-            .output()
-            .await
-            .context("Failed to push asset to device");
-
-        if let Err(e) = res {
-            tracing::debug!("Failed to push asset to device: {e}");
-        }
-
-        Ok(target)
-    }
-
     /// Copy this file to the tmp folder on the android device, returning the path to the copied file
+    ///
+    /// When we push patches (.so), the runtime will dlopen the file from the tmp folder by first copying
+    /// it to shared memory. This is a workaround since not all android devices will be rooted and we
+    /// can't drop the file into the `/data/data/com.org.app/lib/` directory.
     pub(crate) async fn copy_file_to_android_tmp(
         &self,
         changed_file: &Path,
@@ -903,7 +881,7 @@ We checked the folder: {}
             })??;
 
         // Parsing this:
-        // 51ADE4986E0033A5DB1C794E0D1473D74FD6F871 "Apple Development: jkelleyrtp@gmail.com (XYZYZY)"
+        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
         let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
             .unwrap()
             .captures(&identities)
@@ -1010,12 +988,48 @@ We checked the folder: {}
         Ok(())
     }
 
+    /// Launch the Android simulator and deploy the application.
+    ///
+    /// This function handles the process of starting the Android simulator, installing the APK,
+    /// forwarding the development server port, and launching the application on the simulator.
+    ///
+    /// The following `adb` commands are executed:
+    ///
+    /// 1. **Enable Root Access**:
+    ///    - `adb root`: Enables root access on the Android simulator, allowing for advanced operations like pushing files to restricted directories.
+    ///
+    /// 2. **Port Forwarding**:
+    ///    - `adb reverse tcp:<port> tcp:<port>`: Forwards the development server port from the host
+    ///      machine to the Android simulator, enabling communication between the app and the dev server.
+    ///
+    /// 3. **APK Installation**:
+    ///    - `adb install -r <apk_path>`: Installs the APK onto the Android simulator. The `-r` flag
+    ///      ensures that any existing installation of the app is replaced.
+    ///
+    /// 4. **Environment Variables**:
+    ///    - Writes environment variables to a `.env` file in the session cache directory.
+    ///    - `adb push <local_env_file> <device_env_file>`: Pushes the `.env` file to the Android device
+    ///      to configure runtime environment variables for the app.
+    ///
+    /// 5. **App Launch**:
+    ///    - `adb shell am start -n <package_name>/<activity_name>`: Launches the app on the Android
+    ///      simulator. The `<package_name>` and `<activity_name>` are derived from the app's configuration.
+    ///
+    /// # Notes
+    ///
+    /// - This function is asynchronous and spawns a background task to handle the simulator setup and app launch.
+    /// - The Android tools (`adb`) must be available in the system's PATH for this function to work.
+    /// - If the app fails to launch, errors are logged for debugging purposes.
+    ///
+    /// # Resources:
+    /// - https://developer.android.com/studio/run/emulator-commandline
     async fn open_android_sim(
         &self,
+        root: bool,
         devserver_socket: SocketAddr,
         envs: Vec<(&'static str, String)>,
     ) {
-        let apk_path = self.build.apk_path();
+        let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
         let full_mobile_app_name = self.build.full_mobile_app_name();
 
@@ -1023,10 +1037,12 @@ We checked the folder: {}
         tokio::task::spawn(async move {
             let adb = crate::build::android_tools().unwrap().adb;
 
-            // // call `adb root` so we can push patches to the device
-            // if let Err(e) = Command::new(&adb).arg("root").output().await {
-            //     tracing::error!("Failed to run `adb root`: {e}");
-            // }
+            // call `adb root` so we can push patches to the device
+            if root {
+                if let Err(e) = Command::new(&adb).arg("root").output().await {
+                    tracing::error!("Failed to run `adb root`: {e}");
+                }
+            }
 
             let port = devserver_socket.port();
             if let Err(e) = Command::new(&adb)
@@ -1107,26 +1123,6 @@ We checked the folder: {}
         entropy_server_exe
     }
 
-    fn server_exe(&mut self) -> Option<PathBuf> {
-        todo!()
-        // let mut server = self.app.server_exe()?;
-
-        // // Create a new entropy server exe if we need to
-        // if cfg!(target_os = "windows") || cfg!(target_os = "linux") {
-        //     // If we already have an entropy server exe, return it - this is useful for re-opening the same app
-        //     if let Some(existing_server) = self.entropy_server_exe.clone() {
-        //         return Some(existing_server);
-        //     }
-
-        //     // Otherwise, create a new entropy server exe and save it for re-opning
-        //     let entropy_server_exe = Self::make_entropy_path(&server);
-        //     self.entropy_server_exe = Some(entropy_server_exe.clone());
-        //     server = entropy_server_exe;
-        // }
-
-        // Some(server)
-    }
-
     fn app_exe(&mut self) -> PathBuf {
         let mut main_exe = self.build.main_exe();
 
@@ -1163,7 +1159,6 @@ We checked the folder: {}
         if self.compile_end.is_none() {
             self.compiled_crates = self.expected_crates;
             self.compile_end = Some(Instant::now());
-            // self.compile_end_server = Some(Instant::now());
         }
     }
 
