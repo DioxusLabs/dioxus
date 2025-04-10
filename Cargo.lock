@@ -4170,6 +4170,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-playwright-fullstack-base-path-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "tokio",
+]
+
+[[package]]
 name = "dioxus-playwright-fullstack-mounted-test"
 version = "0.1.0"
 dependencies = [

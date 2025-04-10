@@ -1,0 +1,24 @@
+[package]
+name = "dioxus-playwright-fullstack-base-path-test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+tokio = { workspace = true, features = ["full"], optional = true }
+
+[features]
+default = []
+server = ["dioxus/server", "dep:tokio"]
+web = ["dioxus/web"]
+
+[[bin]]
+name = "fullstack-base-path"
+path = "src/main.rs"
+
+[[bin]]
+name = "fullstack-base-path-ssg"
+path = "src/ssg.rs"
