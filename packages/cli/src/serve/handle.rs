@@ -113,10 +113,7 @@ impl AppHandle {
             envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
         }
 
-        if let Some(env_filter) = env::var_os("RUST_LOG")
-            .map(|e| e.into_string().ok())
-            .flatten()
-        {
+        if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
             envs.push(("RUST_LOG", env_filter));
         }
 
