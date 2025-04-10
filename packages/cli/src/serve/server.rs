@@ -19,6 +19,7 @@ use axum::{
     routing::{get, get_service},
     Extension, Router,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
@@ -37,6 +38,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use subsecond_cli_support::JumpTable;
+use tokio::process::Command;
 use tower_http::{
     cors::Any,
     services::fs::{ServeDir, ServeFileSystemResponseBody},
@@ -389,7 +391,7 @@ async fn devserver_mainloop(
 
     // If we're using rustls, we need to get the cert/key paths and then set up rustls
     let (cert_path, key_path) = get_rustls(&https_cfg).await?;
-    let rustls = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path).await?;
+    let rustls = RustlsConfig::from_pem_file(cert_path, key_path).await?;
 
     axum_server::from_tcp_rustls(listener, rustls)
         .serve(router.into_make_service())
@@ -627,7 +629,7 @@ async fn get_rustls(web_config: &WebHttpsConfig) -> Result<(String, String)> {
         _ = fs::create_dir("ssl");
     }
 
-    let cmd = tokio::process::Command::new("mkcert")
+    let cmd = Command::new("mkcert")
         .args([
             "-install",
             "-key-file",

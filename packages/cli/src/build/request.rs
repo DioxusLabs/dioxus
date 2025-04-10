@@ -563,6 +563,8 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
+        _ = self.bust_fingerprint(ctx);
+
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(&ctx).await?;
 
@@ -2974,6 +2976,17 @@ impl BuildRequest {
     /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
     ///     https://tauri.app/start/prerequisites/
     async fn verify_linux_tooling(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// "touch" the binary main file to bust the fingerprint, forcing rustc to recompile it.
+    ///
+    /// This prevents rustc from using the cached version of the binary, which can cause issues
+    /// with our hotpatching setup since it uses linker interception.
+    fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
+        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
+            std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;
+        }
         Ok(())
     }
 }
