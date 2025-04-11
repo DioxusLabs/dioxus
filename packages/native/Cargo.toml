@@ -27,6 +27,7 @@ blitz-dom = { version = "0.1.0-alpha.1", default-features = false }
 blitz-net = { version = "0.1.0-alpha.1", optional = true }
 blitz-traits = { version = "0.1.0-alpha.1" }
 blitz-shell = { version = "0.1.0-alpha.1", default-features = false }
+peniko = { version = "0.3.0" }
 # blitz-renderer-vello = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", default-features = false }
 # blitz-dom = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", default-features = false }
 # blitz-net = { git = "https://github.com/dioxuslabs/blitz", rev="c1a7ecf06d1760a268e0046dc0e43f6c796ddc3c", optional = true }
@@ -53,6 +54,13 @@ tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
+
+# wgpu
+wgpu = "23"
+
+[dev-dependencies]
+dioxus = { workspace = true }
+
 
 [package.metadata.docs.rs]
 all-features = true
