@@ -280,10 +280,11 @@ impl AppBuilder {
     }
 
     /// Restart this builder with new build arguments.
-    pub(crate) fn rebuild(&mut self) {
+    pub(crate) fn fat_rebuild(&mut self) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
+
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let ctx = BuildContext {
@@ -528,7 +529,6 @@ impl AppBuilder {
         let mut bundled_name = None;
 
         let Some(artifacts) = self.artifacts.as_ref() else {
-            tracing::debug!("No artifacts to hotreload asset");
             return None;
         };
 

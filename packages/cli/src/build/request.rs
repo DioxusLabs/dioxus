@@ -563,7 +563,9 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
-        _ = self.bust_fingerprint(ctx);
+        // If we forget to do this, then we won't get the linker args since rust skips the full build
+        // We need to make sure to not react to this though, so the filemap must cache it
+        _ = self.bust_fingerprint(&ctx);
 
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(&ctx).await?;
@@ -1087,7 +1089,7 @@ impl BuildRequest {
         let triple = self.triple.clone();
         let mut args = vec![];
 
-        tracing::debug!("original args:\n{}", original_args.join("\n"));
+        tracing::debug!("original args:\n{}", original_args.join(" "));
 
         match triple.operating_system {
             // wasm32-unknown-unknown
@@ -2983,7 +2985,7 @@ impl BuildRequest {
     ///
     /// This prevents rustc from using the cached version of the binary, which can cause issues
     /// with our hotpatching setup since it uses linker interception.
-    fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
+    pub fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
         if !matches!(ctx.mode, BuildMode::Thin { .. }) {
             std::fs::File::open(&self.crate_target.src_path)?.set_modified(SystemTime::now())?;
         }

@@ -77,12 +77,6 @@ pub(crate) struct AppRunner {
     pub(crate) cross_origin_policy: bool,
 }
 
-pub enum HotReloadKind {
-    Rsx(HotReloadMsg),
-    Patch,
-    Full,
-}
-
 pub(crate) struct CachedFile {
     contents: String,
     most_recent: Option<String>,
@@ -285,8 +279,165 @@ impl AppRunner {
         }
     }
 
+    /// Handle the list of changed files from the file watcher, attempting to aggressively prevent
+    /// full rebuilds by hot-reloading RSX and hot-patching Rust code.
+    ///
+    /// This will also handle any assets that are linked in the files, and copy them to the bundle
+    /// and send them to the client.
+    pub(crate) async fn handle_file_change(&mut self, files: &[PathBuf], server: &mut WebServer) {
+        // If we have any changes to the rust files, we need to update the file map
+        let mut templates = vec![];
+
+        // Prepare the hotreload message we need to send
+        let mut assets = Vec::new();
+        let mut needs_full_rebuild = false;
+
+        // We attempt to hotreload rsx blocks without a full rebuild
+        for path in files {
+            // for various assets that might be linked in, we just try to hotreloading them forcefully
+            // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
+            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+                continue;
+            };
+
+            // If it's an asset, we want to hotreload it
+            // todo(jon): don't hardcode this here
+            if let Some(bundled_name) = self.client.hotreload_bundled_asset(&path).await {
+                assets.push(PathBuf::from("/assets/").join(bundled_name));
+            }
+
+            // If it's a rust file, we want to hotreload it using the filemap
+            if ext == "rs" {
+                // And grabout the contents
+                let Ok(new_contents) = std::fs::read_to_string(&path) else {
+                    tracing::debug!("Failed to read rust file while hotreloading: {:?}", path);
+                    continue;
+                };
+
+                // Get the cached file if it exists - ignoring if it doesn't exist
+                let Some(cached_file) = self.file_map.get_mut(path) else {
+                    tracing::debug!("No entry for file in filemap: {:?}", path);
+                    continue;
+                };
+
+                // We assume we can parse the old file and the new file, ignoring untracked rust files
+                let (Ok(old_file), Ok(new_file)) = (
+                    syn::parse_file(&cached_file.contents),
+                    syn::parse_file(&new_contents),
+                ) else {
+                    tracing::debug!("Diff rsx returned not parseable");
+                    continue;
+                };
+
+                // This assumes the two files are structured similarly. If they're not, we can't diff them
+                let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
+                    needs_full_rebuild = true;
+                    break;
+                };
+
+                // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
+                cached_file.most_recent = Some(new_contents);
+
+                for ChangedRsx { old, new } in changed_rsx {
+                    let old_start = old.span().start();
+
+                    let old_parsed = syn::parse2::<CallBody>(old.tokens);
+                    let new_parsed = syn::parse2::<CallBody>(new.tokens);
+                    let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed) else {
+                        continue;
+                    };
+
+                    // Format the template location, normalizing the path
+                    let file_name: String = path
+                        .components()
+                        .map(|c| c.as_os_str().to_string_lossy())
+                        .collect::<Vec<_>>()
+                        .join("/");
+
+                    // Returns a list of templates that are hotreloadable
+                    let results = HotReloadResult::new::<HtmlCtx>(
+                        &old_call_body.body,
+                        &new_call_body.body,
+                        file_name.clone(),
+                    );
+
+                    // If no result is returned, we can't hotreload this file and need to keep the old file
+                    let Some(results) = results else {
+                        needs_full_rebuild = true;
+                        break;
+                    };
+
+                    // Only send down templates that have roots, and ideally ones that have changed
+                    // todo(jon): maybe cache these and don't send them down if they're the same
+                    for (index, template) in results.templates {
+                        if template.roots.is_empty() {
+                            continue;
+                        }
+
+                        // Create the key we're going to use to identify this template
+                        let key = TemplateGlobalKey {
+                            file: file_name.clone(),
+                            line: old_start.line,
+                            column: old_start.column + 1,
+                            index,
+                        };
+
+                        // if the template is the same, don't send its
+                        if cached_file.templates.get(&key) == Some(&template) {
+                            continue;
+                        };
+
+                        cached_file.templates.insert(key.clone(), template.clone());
+                        templates.push(HotReloadTemplateWithLocation { template, key });
+                    }
+                }
+            }
+        }
+
+        // For now, always run a patch instead of rsx hot-reload
+        if needs_full_rebuild {
+            self.client.patch_rebuild(files.to_vec());
+
+            self.clear_hot_reload_changes();
+            self.clear_cached_rsx();
+            server.start_patch().await
+        } else {
+            let msg = HotReloadMsg {
+                templates,
+                assets,
+                ..Default::default()
+            };
+
+            self.add_hot_reload_message(&msg);
+
+            let file = files[0].display().to_string();
+            let file =
+                file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
+
+            // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+            //
+            // Also make sure the builder isn't busy since that might cause issues with hotreloads
+            // https://github.com/DioxusLabs/dioxus/issues/3361
+            if !msg.is_empty() && self.client.can_receive_hotreloads() {
+                tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
+                server.send_hotreload(msg).await;
+            } else {
+                tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+            }
+        }
+
+        // // Strip the prefix before sending it to the filemap
+        // if path.strip_prefix(self.krate.workspace_dir()).is_err() {
+        //     tracing::error!(
+        //         "Hotreloading file outside of the crate directory: {:?}",
+        //         path
+        //     );
+        //     continue;
+        // };
+    }
+
     pub(crate) fn rebuild_all(&mut self) {
-        self.client.rebuild()
+        self.client.fat_rebuild()
     }
 
     /// Finally "bundle" this app and return a handle to it
@@ -367,73 +518,6 @@ impl AppRunner {
             }
         }
     }
-
-    // /// Attempt to hotreload the given files
-    // pub(crate) async fn hotreload(&mut self, modified_files: Vec<PathBuf>) -> HotReloadKind {
-    //     // If we have any changes to the rust files, we need to update the file map
-    //     let mut templates = vec![];
-
-    //     // Prepare the hotreload message we need to send
-    //     let mut assets = Vec::new();
-    //     let mut needs_full_rebuild = false;
-
-    //     // We attempt to hotreload rsx blocks without a full rebuild
-    //     for path in modified_files {
-    //         // for various assets that might be linked in, we just try to hotreloading them forcefully
-    //         // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-    //         let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
-    //             continue;
-    //         };
-
-    //         // If it's a rust file, we want to hotreload it using the filemap
-    //         if ext == "rs" {
-    //             // Strip the prefix before sending it to the filemap
-    //             if path.strip_prefix(self.krate.workspace_dir()).is_err() {
-    //                 tracing::error!(
-    //                     "Hotreloading file outside of the crate directory: {:?}",
-    //                     path
-    //                 );
-    //                 continue;
-    //             };
-
-    //             // And grabout the contents
-    //             let Ok(contents) = std::fs::read_to_string(&path) else {
-    //                 tracing::debug!("Failed to read rust file while hotreloading: {:?}", path);
-    //                 continue;
-    //             };
-
-    //             match self.rsx_changed::<HtmlCtx>(&path, contents) {
-    //                 Some(new) => templates.extend(new),
-    //                 None => needs_full_rebuild = true,
-    //             }
-
-    //             continue;
-    //         }
-
-    //         // Otherwise, it might be an asset and we should look for it in all the running apps
-    //         if let Some(runner) = self.running.as_mut() {
-    //             if let Some(bundled_name) = runner.hotreload_bundled_asset(&path).await {
-    //                 // todo(jon): don't hardcode this here
-    //                 assets.push(PathBuf::from("/assets/").join(bundled_name));
-    //             }
-    //         }
-    //     }
-
-    //     match needs_full_rebuild {
-    //         true => HotReloadKind::Patch,
-    //         false => {
-    //             let msg = HotReloadMsg {
-    //                 templates,
-    //                 assets,
-    //                 ..Default::default()
-    //             };
-
-    //             self.add_hot_reload_message(&msg);
-
-    //             HotReloadKind::Rsx(msg)
-    //         }
-    //     }
-    // }
 
     pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
         match id.0 {
@@ -568,103 +652,6 @@ impl AppRunner {
         }
     }
 
-    /// Try to update the rsx in a file, returning the templates that were hotreloaded
-    ///
-    /// If the templates could not be hotreloaded, this will return an error. This error isn't fatal, per se,
-    /// but it does mean that we could not successfully hotreload the file in-place.
-    ///
-    /// It's expected that the file path you pass in is relative the crate root. We have no way of
-    /// knowing if it's *not*, so we'll assume it is.
-    ///
-    /// This does not do any caching on what intermediate state, like previous hotreloads, so you need
-    /// to do that yourself.
-    pub(crate) fn rsx_changed<Ctx: HotReloadingContext>(
-        &mut self,
-        path: &Path,
-        new_contents: String,
-    ) -> Option<Vec<HotReloadTemplateWithLocation>> {
-        // Get the cached file if it exists - ignoring if it doesn't exist
-        let Some(cached_file) = self.file_map.get_mut(path) else {
-            tracing::debug!("No entry for file in filemap: {:?}", path);
-            return Some(vec![]);
-        };
-
-        // We assume we can parse the old file and the new file
-        // We should just ignore hotreloading files that we can't parse
-        // todo(jon): we could probably keep the old `File` around instead of re-parsing on every hotreload
-        let (Ok(old_file), Ok(new_file)) = (
-            syn::parse_file(&cached_file.contents),
-            syn::parse_file(&new_contents),
-        ) else {
-            tracing::debug!("Diff rsx returned not parseable");
-            return Some(vec![]);
-        };
-
-        // todo(jon): allow server-fn hotreloading
-        let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
-            return None;
-        };
-
-        // Update the most recent version of the file, so when we force a rebuild, we keep operating on the most recent version
-        cached_file.most_recent = Some(new_contents);
-
-        let mut out_templates = vec![];
-        for ChangedRsx { old, new } in changed_rsx {
-            let old_start = old.span().start();
-
-            let old_parsed = syn::parse2::<CallBody>(old.tokens);
-            let new_parsed = syn::parse2::<CallBody>(new.tokens);
-            let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed) else {
-                continue;
-            };
-
-            // Format the template location, normalizing the path
-            let file_name: String = path
-                .components()
-                .map(|c| c.as_os_str().to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("/");
-
-            // Returns a list of templates that are hotreloadable
-            let results = HotReloadResult::new::<Ctx>(
-                &old_call_body.body,
-                &new_call_body.body,
-                file_name.clone(),
-            );
-
-            // If no result is returned, we can't hotreload this file and need to keep the old file
-            let Some(results) = results else {
-                return None;
-            };
-
-            // Only send down templates that have roots, and ideally ones that have changed
-            // todo(jon): maybe cache these and don't send them down if they're the same
-            for (index, template) in results.templates {
-                if template.roots.is_empty() {
-                    continue;
-                }
-
-                // Create the key we're going to use to identify this template
-                let key = TemplateGlobalKey {
-                    file: file_name.clone(),
-                    line: old_start.line,
-                    column: old_start.column + 1,
-                    index,
-                };
-
-                // if the template is the same, don't send its
-                if cached_file.templates.get(&key) == Some(&template) {
-                    continue;
-                };
-
-                cached_file.templates.insert(key.clone(), template.clone());
-                out_templates.push(HotReloadTemplateWithLocation { template, key });
-            }
-        }
-
-        Some(out_templates)
-    }
-
     /// Commit the changes to the filemap, overwriting the contents of the files
     ///
     /// Removes any cached templates and replaces the contents of the files with the most recent
@@ -689,8 +676,6 @@ impl AppRunner {
 
         let mut jump_table =
             subsecond_cli_support::create_jump_table(&original, &new, &triple).unwrap();
-
-        tracing::debug!("Jump table: {:#?}", jump_table);
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if client.build.platform == Platform::Android {
@@ -735,8 +720,6 @@ impl AppRunner {
 
         // Save this patch
         self.client.patches.push(jump_table.clone());
-
-        tracing::info!("jump table: {:#?}", jump_table);
 
         Ok(jump_table)
     }
@@ -908,6 +891,12 @@ impl AppRunner {
         };
 
         server.compiled_crates as f64 / server.expected_crates as f64
+    }
+
+    pub(crate) async fn full_rebuild(&mut self) {
+        self.rebuild_all();
+        self.clear_hot_reload_changes();
+        self.clear_cached_rsx();
     }
 }
 

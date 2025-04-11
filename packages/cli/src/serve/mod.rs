@@ -77,47 +77,8 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                     continue;
                 }
 
-                // For now, always run a patch instead of rsx hot-reload
-                builder.client.patch_rebuild(files);
-                builder.clear_hot_reload_changes();
-                builder.clear_cached_rsx();
-                devserver.start_patch().await
-
-                // let file = files[0].display().to_string();
-                // let file = file.trim_start_matches(&krate.crate_dir().display().to_string());
-
-                // // if change is hotreloadable, hotreload it
-                // // and then send that update to all connected clients
-                // match builder.hotreload(files.clone()).await {
-                //     HotReloadKind::Rsx(hr) => {
-                //         // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
-                //         //
-                //         // Also make sure the builder isn't busy since that might cause issues with hotreloads
-                //         // https://github.com/DioxusLabs/dioxus/issues/3361
-                //         if hr.is_empty() || !builder.can_receive_hotreloads() {
-                //             tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
-                //             continue;
-                //         }
-                //         tracing::info!(dx_src = ?TraceSrc::Dev, "Hotreloading: {}", file);
-                //         devserver.send_hotreload(hr).await;
-                //     }
-                //     HotReloadKind::Patch => {
-                //         if let Some(handle) = builder.running.as_ref() {
-                //             builder.patch_rebuild(
-                //                 args.build_arguments.clone(),
-                //                 handle.app.app.direct_rustc.clone(),
-                //                 files,
-                //                 builder.aslr_reference.unwrap(),
-                //             );
-
-                //             builder.clear_hot_reload_changes();
-                //             builder.clear_cached_rsx();
-
-                //             devserver.start_patch().await
-                //         }
-                //     }
-                //     HotReloadKind::Full {} => todo!(),
-                // }
+                tracing::debug!("Starting hotpatching: {:?}", files);
+                builder.handle_file_change(&files, &mut devserver).await;
             }
 
             ServeUpdate::RequestRebuild => {
@@ -126,10 +87,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                 // `Hotreloading:` to keep the alignment during long edit sessions
                 // `Hot-patching:` to keep the alignment during long edit sessions
                 tracing::info!("Full rebuild: triggered manually");
-
-                builder.rebuild_all();
-                builder.clear_hot_reload_changes();
-                builder.clear_cached_rsx();
+                builder.full_rebuild().await;
 
                 devserver.send_reload_start().await;
                 devserver.start_build().await
