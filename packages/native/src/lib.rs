@@ -9,6 +9,7 @@
 //!  - `menu`: Enables the [`muda`] menubar.
 //!  - `tracing`: Enables tracing support.
 
+mod api;
 mod assets;
 mod contexts;
 mod dioxus_application;
@@ -17,6 +18,7 @@ mod event;
 mod event_handler;
 mod mutation_writer;
 
+pub use api::*;
 pub use dioxus_application::DioxusNativeApplication;
 pub use dioxus_document::DioxusDocument;
 pub use event::DioxusNativeEvent;

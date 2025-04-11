@@ -554,3 +554,17 @@ doc-scrape-examples = true
 [[example]]
 name = "logging"
 doc-scrape-examples = true
+
+
+[patch.crates-io]
+blitz-renderer-vello = { path = "../Projects/blitz/packages/blitz-renderer-vello" }
+blitz-dom = { path = "../Projects/blitz/packages/blitz-dom" }
+blitz-net = { path = "../Projects/blitz/packages/blitz-net" }
+blitz-traits = { path = "../Projects/blitz/packages/blitz-traits" }
+blitz-shell = { path = "../Projects/blitz/packages/blitz-shell" }
+# blitz-renderer-vello = { path = "../Projects/blitz/packages/blitz", default-features = false }
+# blitz-dom = { path = "../Projects/blitz/packages/blitz", default-features = false }
+# blitz-net = { path = "../Projects/blitz/packages/blitz", optional = true }
+# blitz-traits = { path = "../Projects/blitz/packages/blitz" }
+# blitz-shell = { path = "../Projects/blitz/packages/blitz", default-features = false }
+

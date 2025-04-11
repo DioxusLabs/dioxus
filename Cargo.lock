@@ -1532,8 +1532,6 @@ dependencies = [
 [[package]]
 name = "blitz-dom"
 version = "0.1.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eae8889dde80e2aaceec27455c63446ca841cb7217a4f5489691295da922792b"
 dependencies = [
  "accesskit",
  "app_units",
@@ -1566,21 +1564,16 @@ dependencies = [
 [[package]]
 name = "blitz-net"
 version = "0.1.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efc80023b8f6758d7f61bda68440917b72cbe2fe6187cbe1b7837e73b2522dfe"
 dependencies = [
  "blitz-traits",
  "data-url 0.3.1",
  "reqwest 0.12.15",
- "thiserror 1.0.69",
  "tokio",
 ]
 
 [[package]]
 name = "blitz-renderer-vello"
 version = "0.1.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44fdafaf87eb502da99667fad2ae9757d01c8bd83772f6b7b6a78c48c3ab6ff5"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -1601,8 +1594,6 @@ dependencies = [
 [[package]]
 name = "blitz-shell"
 version = "0.1.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef0a6122f3619a746dddd21883edaae5f791d6e9f401dbdf7f7756caa4f69453"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -1619,8 +1610,6 @@ dependencies = [
 [[package]]
 name = "blitz-traits"
 version = "0.1.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9972442314e8bf9dd65af7aee0634a2d575972587d404520c7c6986abbd523d3"
 dependencies = [
  "bitflags 2.9.0",
  "bytes",
@@ -4147,6 +4136,7 @@ dependencies = [
  "blitz-renderer-vello",
  "blitz-shell",
  "blitz-traits",
+ "dioxus",
  "dioxus-asset-resolver",
  "dioxus-cli-config",
  "dioxus-core",
@@ -4156,9 +4146,11 @@ dependencies = [
  "dioxus-html",
  "futures-util",
  "keyboard-types",
+ "peniko",
  "rustc-hash 1.1.0",
  "tokio",
  "tracing",
+ "wgpu 23.0.1",
  "winit",
 ]
 
@@ -13004,8 +12996,6 @@ checksum = "decb57071c4b4d5690a9719fb04a07cf2fab0fa3df99a830ef735192a1a98e5d"
 [[package]]
 name = "stylo_taffy"
 version = "0.1.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6da84b2bae9d25a2156b7cf89acab90683ac4d25dcb3fe1817dc9e77a20ce2f"
 dependencies = [
  "stylo",
  "taffy",

@@ -1,14 +1,15 @@
 use crate::{dioxus_document::qual_name, NodeId};
 use blitz_dom::{
     local_name, namespace_url,
-    node::{Attribute, NodeSpecificData},
+    node::{Attribute, ImageData, NodeSpecificData},
     ns, BaseDocument, ElementNodeData, NodeData, QualName, RestyleHint,
 };
+use blitz_renderer_vello::BlitzVelloRenderer;
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
 };
 use rustc_hash::FxHashMap;
-use std::collections::HashSet;
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 /// The state of the Dioxus integration with the RealDom
 #[derive(Debug)]
@@ -168,11 +169,37 @@ impl MutationWriter<'_> {
                     .collect();
 
                 let id = self.doc.create_node(NodeData::Element(data));
-                let node = self.doc.get_node(id).unwrap();
+                let node = self.doc.get_node_mut(id).unwrap();
 
                 // Initialise style data
                 *node.stylo_element_data.borrow_mut() = Some(Default::default());
 
+                if node.data.downcast_element().unwrap().name.local == local_name!("canvas") {
+                    let width_attr = node.attr(local_name!("width"));
+                    let height_attr = node.attr(local_name!("height"));
+
+                    if let (Some(width), Some(height)) = (width_attr, height_attr) {
+                        let width = width.parse::<u32>().unwrap_or(100);
+                        let height = height.parse::<u32>().unwrap_or(100);
+
+                        match &mut node.data {
+                            NodeData::Element(element_node_data) => {
+                                let texture =
+                                    blitz_dom::node::ImageData::custom_texture(width, height);
+
+                                element_node_data.node_specific_data =
+                                    NodeSpecificData::Image(Box::new(texture.clone()));
+
+                                if let ImageData::CustomTexture(texture) = &texture {
+                                    self.doc.custom_textures.insert(id, texture.clone());
+                                }
+                            }
+                            _ => {}
+                        };
+                    }
+                }
+
+                let node = self.doc.get_node(id).unwrap();
                 if let Some(src_attr) = node.attr(local_name!("src")) {
                     crate::assets::fetch_image(self.doc, id, src_attr.to_string());
                 }
