@@ -300,7 +300,7 @@ impl Bundle {
         Ok(bundles)
     }
 
-    async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
+    pub(crate) async fn pre_render_static_routes(server_exe: &Path) -> anyhow::Result<()> {
         // Use the address passed in through environment variables or default to localhost:9999. We need
         // to default to a value that is different than the CLI default address to avoid conflicts
         let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
@@ -312,19 +312,20 @@ impl Bundle {
         let address = &address;
         let port = &port;
 
-        tracing::info!("Running SSG at http://{address}:{port}");
+        tracing::info!("Running SSG at http://{address}:{port} for {server_exe:?}");
 
         // Run the server executable
         let _child = Command::new(server_exe)
             .env(dioxus_cli_config::SERVER_PORT_ENV, port)
             .env(dioxus_cli_config::SERVER_IP_ENV, address)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            .current_dir(server_exe.parent().unwrap())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .kill_on_drop(true)
             .spawn()?;
 
-        let reqwest_client = reqwest::Client::new();
         // Borrow reqwest_client so we only move the reference into the futures
+        let reqwest_client = reqwest::Client::new();
         let reqwest_client = &reqwest_client;
 
         // Get the routes from the `/static_routes` endpoint
@@ -333,8 +334,13 @@ impl Bundle {
         // The server may take a few seconds to start up. Try fetching the route up to 5 times with a one second delay
         const RETRY_ATTEMPTS: usize = 5;
         for i in 0..=RETRY_ATTEMPTS {
+            tracing::debug!(
+                "Attempting to get static routes from server. Attempt {i} of {RETRY_ATTEMPTS}"
+            );
+
             let request = reqwest_client
                 .post(format!("http://{address}:{port}/api/static_routes"))
+                .body("{}".to_string())
                 .send()
                 .await;
             match request {
@@ -366,12 +372,14 @@ impl Bundle {
             .into_iter()
             .map(|route| async move {
                 tracing::info!("Rendering {route} for SSG");
+
                 // For each route, ping the server to force it to cache the response for ssg
                 let request = reqwest_client
                     .get(format!("http://{address}:{port}{route}"))
                     .header("Accept", "text/html")
                     .send()
                     .await?;
+
                 // If it takes longer than 30 seconds to resolve the route, log a warning
                 let warning_task = tokio::spawn({
                     let route = route.clone();
@@ -380,6 +388,7 @@ impl Bundle {
                         tracing::warn!("Route {route} has been rendering for 30 seconds");
                     }
                 });
+
                 // Wait for the streaming response to completely finish before continuing. We don't use the html it returns directly
                 // because it may contain artifacts of intermediate streaming steps while the page is loading. The SSG app should write
                 // the final clean HTML to the disk automatically after the request completes.
