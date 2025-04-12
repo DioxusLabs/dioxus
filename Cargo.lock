@@ -4390,6 +4390,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-server"
+version = "0.6.3"
+dependencies = [
+ "async-trait",
+ "aws-lc-rs",
+ "axum 0.7.9",
+ "base64 0.22.1",
+ "bytes",
+ "ciborium",
+ "dioxus",
+ "dioxus-cli-config",
+ "dioxus-desktop",
+ "dioxus-devtools",
+ "dioxus-fullstack-hooks",
+ "dioxus-fullstack-protocol",
+ "dioxus-history",
+ "dioxus-interpreter-js",
+ "dioxus-isrg",
+ "dioxus-lib",
+ "dioxus-mobile",
+ "dioxus-router",
+ "dioxus-ssr",
+ "dioxus-web",
+ "dioxus_server_macro",
+ "futures-channel",
+ "futures-util",
+ "generational-box",
+ "http 1.3.1",
+ "hyper 1.6.0",
+ "hyper-rustls 0.27.5",
+ "once_cell",
+ "parking_lot",
+ "pin-project",
+ "rustls 0.23.26",
+ "serde",
+ "server_fn",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower 0.4.13",
+ "tower-http",
+ "tower-layer",
+ "tracing",
+ "tracing-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "dioxus-signals"
 version = "0.6.3"
 dependencies = [

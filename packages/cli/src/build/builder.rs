@@ -382,7 +382,7 @@ impl AppBuilder {
         // Set the env vars that the clients will expect
         // These need to be stable within a release version (ie 0.6.0)
         let mut envs = vec![
-            (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
+            // (dioxus_cli_config::CLI_ENABLED_ENV, "true".to_string()),
             (
                 dioxus_cli_config::DEVSERVER_IP_ENV,
                 devserver_ip.ip().to_string(),
@@ -391,19 +391,19 @@ impl AppBuilder {
                 dioxus_cli_config::DEVSERVER_PORT_ENV,
                 devserver_ip.port().to_string(),
             ),
-            (
-                dioxus_cli_config::SESSION_CACHE_DIR,
-                self.build.session_cache_dir().display().to_string(),
-            ),
+            // (
+            //     dioxus_cli_config::SESSION_CACHE_DIR,
+            //     self.build.session_cache_dir().display().to_string(),
+            // ),
             // unset the cargo dirs in the event we're running `dx` locally
             // since the child process will inherit the env vars, we don't want to confuse the downstream process
             ("CARGO_MANIFEST_DIR", "".to_string()),
             ("RUST_BACKTRACE", "1".to_string()),
         ];
 
-        if let Some(base_path) = &krate.config.web.app.base_path {
-            envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
-        }
+        // if let Some(base_path) = &krate.config.web.app.base_path {
+        //     envs.push((dioxus_cli_config::ASSET_ROOT_ENV, base_path.clone()));
+        // }
 
         // Launch the server if we were given an address to start it on, and the build includes a server. After we
         // start the server, consume its stdout/stderr.
@@ -445,6 +445,7 @@ impl AppBuilder {
 
         // If we have a running process, we need to attach to it and wait for its outputs
         if let Some(mut child) = running_process {
+            tracing::debug!("setting up child process: {:#?}", child);
             let stdout = BufReader::new(child.stdout.take().unwrap());
             let stderr = BufReader::new(child.stderr.take().unwrap());
             self.stdout = Some(stdout.lines());
@@ -456,22 +457,12 @@ impl AppBuilder {
     }
 
     /// Gracefully kill the process and all of its children
+
     ///
     /// Uses the `SIGTERM` signal on unix and `taskkill` on windows.
     /// This complex logic is necessary for things like window state preservation to work properly.
     ///
     /// Also wipes away the entropy executables if they exist.
-    pub(crate) async fn cleanup(&mut self) {
-        // Soft-kill the process by sending a sigkill, allowing the process to clean up
-        self.soft_kill().await;
-
-        // // Wipe out the entropy executables if they exist
-        // if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
-        //     _ = std::fs::remove_file(entropy_app_exe);
-        // }
-    }
-
-    /// Kill the app and server exes
     pub(crate) async fn soft_kill(&mut self) {
         use futures_util::FutureExt;
 
@@ -506,6 +497,11 @@ impl AppBuilder {
             _ = process.wait().fuse() => {}
             _ = tokio::time::sleep(std::time::Duration::from_millis(1000)).fuse() => {}
         };
+
+        // // Wipe out the entropy executables if they exist
+        // if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
+        //     _ = std::fs::remove_file(entropy_app_exe);
+        // }
     }
 
     /// Hotreload an asset in the running app.

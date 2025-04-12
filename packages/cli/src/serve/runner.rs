@@ -474,7 +474,7 @@ impl AppRunner {
             Platform::Server => {
                 tracing::debug!("Opening server build");
                 if let Some(server) = self.server.as_mut() {
-                    server.cleanup().await;
+                    // server.cleanup().await;
 
                     server
                         .open(
@@ -493,26 +493,26 @@ impl AppRunner {
             _ => {
                 tracing::debug!("Opening client build");
 
-                self.client.cleanup().await;
+                // self.client.cleanup().await;
 
-                // Start the new app before we kill the old one to give it a little bit of time
-                let open_browser = self.builds_opened == 0 && self.open_browser;
-                let always_on_top = self.always_on_top;
+                // // Start the new app before we kill the old one to give it a little bit of time
+                // let open_browser = self.builds_opened == 0 && self.open_browser;
+                // let always_on_top = self.always_on_top;
 
-                self.client
-                    .open(
-                        devserver_ip,
-                        displayed_address,
-                        fullstack_address,
-                        open_browser,
-                        always_on_top,
-                    )
-                    .await?;
+                // self.client
+                //     .open(
+                //         devserver_ip,
+                //         displayed_address,
+                //         fullstack_address,
+                //         open_browser,
+                //         always_on_top,
+                //     )
+                //     .await?;
 
-                self.builds_opened += 1;
+                // self.builds_opened += 1;
 
-                // Save the artifacts and clear the patches(?)
-                self.client.artifacts = Some(app);
+                // // Save the artifacts and clear the patches(?)
+                // self.client.artifacts = Some(app);
             }
         }
 
@@ -550,10 +550,10 @@ impl AppRunner {
 
     /// Shutdown all the running processes
     pub(crate) async fn cleanup_all(&mut self) {
-        self.client.cleanup().await;
+        self.client.soft_kill().await;
 
         if let Some(server) = self.server.as_mut() {
-            server.cleanup().await;
+            server.soft_kill().await;
         }
 
         // If the client is running on Android, we need to remove the port forwarding

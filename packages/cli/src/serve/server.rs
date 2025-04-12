@@ -67,7 +67,8 @@ pub(crate) struct WebServer {
     platform: Platform,
 }
 
-pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+// pub const SELF_IP: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 
 impl WebServer {
     /// Start the development server.
@@ -392,7 +393,7 @@ async fn devserver_mainloop(
 
     // If we're using rustls, we need to get the cert/key paths and then set up rustls
     let (cert_path, key_path) = get_rustls(&https_cfg).await?;
-    let rustls = RustlsConfig::from_pem_file(cert_path, key_path).await?;
+    let rustls = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path).await?;
 
     axum_server::from_tcp_rustls(listener, rustls)
         .serve(router.into_make_service())

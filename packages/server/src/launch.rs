@@ -72,36 +72,39 @@ pub fn launch(
             let config = platform_config.as_ref().ok().cloned();
             let dioxus_router =
                 axum::Router::new().serve_dioxus_application(TryIntoResult(platform_config), root);
-            let mut router;
-            match base_path.as_deref() {
-                Some(base_path) => {
-                    let base_path = base_path.trim_matches('/');
-                    // If there is a base path, nest the router under it and serve the root route manually
-                    // Nesting a route in axum only serves /base_path or /base_path/ not both
-                    router = axum::Router::new().nest(&format!("/{base_path}/"), dioxus_router);
-                    async fn root_render_handler(
-                        state: State<RenderHandleState>,
-                        mut request: Request<Body>,
-                    ) -> impl IntoResponse {
-                        // The root of the base path always looks like the root from dioxus fullstack
-                        *request.uri_mut() = "/".parse().unwrap();
-                        render_handler(state, request).await
-                    }
-                    if let Some(cfg) = config {
-                        let ssr_state = SSRState::new(&cfg);
-                        router = router.route(
-                            &format!("/{base_path}"),
-                            axum::routing::method_routing::get(root_render_handler).with_state(
-                                RenderHandleState::new(cfg, root).with_ssr_state(ssr_state),
-                            ),
-                        )
-                    }
-                }
-                None => router = dioxus_router,
-            }
+            let router = dioxus_router;
+            // let mut router;
+            // match base_path.as_deref() {
+            //     Some(base_path) => {
+            //         let base_path = base_path.trim_matches('/');
+            //         // If there is a base path, nest the router under it and serve the root route manually
+            //         // Nesting a route in axum only serves /base_path or /base_path/ not both
+            //         router = axum::Router::new().nest(&format!("/{base_path}/"), dioxus_router);
+            //         async fn root_render_handler(
+            //             state: State<RenderHandleState>,
+            //             mut request: Request<Body>,
+            //         ) -> impl IntoResponse {
+            //             // The root of the base path always looks like the root from dioxus fullstack
+            //             *request.uri_mut() = "/".parse().unwrap();
+            //             render_handler(state, request).await
+            //         }
+            //         if let Some(cfg) = config {
+            //             let ssr_state = SSRState::new(&cfg);
+            //             router = router.route(
+            //                 &format!("/{base_path}"),
+            //                 axum::routing::method_routing::get(root_render_handler).with_state(
+            //                     RenderHandleState::new(cfg, root).with_ssr_state(ssr_state),
+            //                 ),
+            //             )
+            //         }
+            //     }
+            //     None => router = dioxus_router,
+            // }
 
             let router = router.into_make_service();
             let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+
+            tracing::info!("Listening on {address} with listener {listener:?}");
 
             axum::serve(listener, router).await.unwrap();
         });

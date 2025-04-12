@@ -56,6 +56,7 @@
 //! ```
 
 pub mod launch;
+mod router;
 
 use axum::routing::*;
 use dioxus_lib::prelude::Element;

@@ -6,6 +6,20 @@
 
 pub use once_cell;
 
+#[cfg(feature = "server")]
+pub mod server;
+use dioxus_fullstack_protocol::SerializeContextEntry;
+#[cfg(feature = "server")]
+pub use server::ServerDocument;
+
+#[cfg(all(feature = "web", feature = "document"))]
+pub mod web;
+
+#[allow(unused)]
+pub(crate) fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
+    dioxus_fullstack_protocol::serialize_context().create_entry()
+}
+
 #[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 pub mod server;

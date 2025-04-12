@@ -125,7 +125,7 @@ members = [
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled"
-]
+, "packages/server"]
 
 [workspace.package]
 version = "0.6.3"

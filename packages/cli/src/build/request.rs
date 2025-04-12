@@ -1529,14 +1529,14 @@ impl BuildRequest {
             env_vars.push(("CARGO_TARGET_DIR", target_dir.display().to_string()));
         }
 
-        // If this is a release build, bake the base path and title
-        // into the binary with env vars
-        if self.release {
-            if let Some(base_path) = &self.config.web.app.base_path {
-                env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
-            }
-            env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
-        }
+        // // If this is a release build, bake the base path and title
+        // // into the binary with env vars
+        // if self.release {
+        //     if let Some(base_path) = &self.config.web.app.base_path {
+        //         env_vars.push((ASSET_ROOT_ENV, base_path.clone()));
+        //     }
+        //     env_vars.push((APP_TITLE_ENV, self.config.web.app.title.clone()));
+        // }
 
         Ok(env_vars)
     }
