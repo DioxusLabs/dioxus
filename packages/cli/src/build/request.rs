@@ -2004,7 +2004,7 @@ impl BuildRequest {
 
         // We're going to accumulate the platforms that are enabled
         // This will let us create a better warning if multiple platforms are enabled
-        let manually_enabled_platforms = self
+        let manually_enabled_platforms = ws
             .krates
             .get_enabled_features(krate.kid)?
             .iter()
@@ -2171,11 +2171,8 @@ impl BuildRequest {
             .map(|krate| krate.krate.version.to_string())
     }
 
-    pub(crate) fn default_platforms(&self) -> Vec<Platform> {
-        let Some(default) = self.package().features.get("default") else {
-            return Vec::new();
-        };
-        let mut platforms = vec![];
+    pub(crate) fn default_platform(package: &krates::cm::Package) -> Option<Platform> {
+        let default = package.features.get("default")?;
 
         // we only trace features 1 level deep..
         for feature in default.iter() {
@@ -2183,30 +2180,65 @@ impl BuildRequest {
             if feature.starts_with("dioxus/") {
                 let dx_feature = feature.trim_start_matches("dioxus/");
                 let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-                if let Some(auto) = auto {
-                    platforms.push(auto);
+                if auto.is_some() {
+                    return auto;
                 }
             }
 
             // If the user is specifying an internal feature that points to a platform, we can use that
-            let internal_feature = self.package().features.get(feature);
+            let internal_feature = package.features.get(feature);
             if let Some(internal_feature) = internal_feature {
                 for feature in internal_feature {
                     if feature.starts_with("dioxus/") {
                         let dx_feature = feature.trim_start_matches("dioxus/");
                         let auto = Platform::autodetect_from_cargo_feature(dx_feature);
-                        if let Some(auto) = auto {
-                            platforms.push(auto);
+                        if auto.is_some() {
+                            return auto;
                         }
                     }
                 }
             }
         }
 
-        platforms.sort();
-        platforms.dedup();
-        platforms
+        None
     }
+
+    // pub(crate) fn default_platforms(&self) -> Vec<Platform> {
+    //     let Some(default) = self.package().features.get("default") else {
+    //         return Vec::new();
+    //     };
+    //     let mut platforms = vec![];
+
+    //     // we only trace features 1 level deep..
+    //     for feature in default.iter() {
+    //         // If the user directly specified a platform we can just use that.
+    //         if feature.starts_with("dioxus/") {
+    //             let dx_feature = feature.trim_start_matches("dioxus/");
+    //             let auto = Platform::autodetect_from_cargo_feature(dx_feature);
+    //             if let Some(auto) = auto {
+    //                 platforms.push(auto);
+    //             }
+    //         }
+
+    //         // If the user is specifying an internal feature that points to a platform, we can use that
+    //         let internal_feature = self.package().features.get(feature);
+    //         if let Some(internal_feature) = internal_feature {
+    //             for feature in internal_feature {
+    //                 if feature.starts_with("dioxus/") {
+    //                     let dx_feature = feature.trim_start_matches("dioxus/");
+    //                     let auto = Platform::autodetect_from_cargo_feature(dx_feature);
+    //                     if let Some(auto) = auto {
+    //                         platforms.push(auto);
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     platforms.sort();
+    //     platforms.dedup();
+    //     platforms
+    // }
 
     /// Gather the features that are enabled for the package
     fn platformless_features(package: &krates::cm::Package) -> Vec<String> {

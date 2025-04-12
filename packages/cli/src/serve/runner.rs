@@ -456,6 +456,7 @@ impl AppRunner {
         app: BuildArtifacts,
         devserver_ip: SocketAddr,
         fullstack_address: Option<SocketAddr>,
+        displayed_address: Option<SocketAddr>,
     ) -> Result<()> {
         // Add some cute logging
         let time_taken = app.time_end.duration_since(app.time_start).unwrap();
@@ -476,7 +477,13 @@ impl AppRunner {
                     server.cleanup().await;
 
                     server
-                        .open(devserver_ip, fullstack_address, false, false)
+                        .open(
+                            devserver_ip,
+                            displayed_address,
+                            fullstack_address,
+                            false,
+                            false,
+                        )
                         .await?;
 
                     // Save the artifacts and clear the patches(?)
@@ -493,7 +500,13 @@ impl AppRunner {
                 let always_on_top = self.always_on_top;
 
                 self.client
-                    .open(devserver_ip, fullstack_address, open_browser, always_on_top)
+                    .open(
+                        devserver_ip,
+                        displayed_address,
+                        fullstack_address,
+                        open_browser,
+                        always_on_top,
+                    )
                     .await?;
 
                 self.builds_opened += 1;

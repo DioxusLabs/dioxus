@@ -148,6 +148,7 @@ pub(crate) async fn serve_all(args: ServeArgs) -> Result<()> {
                                         bundle,
                                         devserver.devserver_address(),
                                         devserver.proxied_server_address(),
+                                        devserver.displayed_address(),
                                     )
                                     .await
                                     .inspect_err(|e| tracing::error!("Failed to open app: {}", e));

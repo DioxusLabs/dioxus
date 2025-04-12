@@ -12,6 +12,7 @@ use std::{
 };
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
 use tokio::process::Command;
+use walkdir::WalkDir;
 
 use super::*;
 
